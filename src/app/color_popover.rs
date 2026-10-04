@@ -350,7 +350,9 @@ impl App {
         let shown = current.map(|c| palette.rgb(c));
         let fill = crate::appearance::from_rgb(shown.unwrap_or(canvas_theme.background()));
         let anchor = hover_hint(
-            button(
+            reshiki::accessibility::button(
+                "style-color-menu",
+                "Text and object color",
                 row![
                     container(Space::new().width(16).height(16)).style(move |_| {
                         container::Style {
@@ -497,20 +499,26 @@ impl App {
         );
         let input = row![
             text("Color").size(12).style(muted_text),
-            crate::appearance::text_input(
+            reshiki::accessibility::text_input(
+                INPUT,
+                "Custom color: hexadecimal, RGB or OKLCH",
                 "#1F4E79 · 31, 78, 121 · oklch(…)",
                 &self.tab.text_color_input
             )
-            .id(INPUT)
+            .style(crate::appearance::input_style)
             .on_input(Message::TextColor)
             .on_submit(Message::ApplyTextColor)
             .size(12)
             .padding(6)
             .width(Length::Fill),
-            button(text("Apply").size(12))
-                .padding([6, 10])
-                .style(crate::appearance::secondary)
-                .on_press(Message::ApplyTextColor),
+            reshiki::accessibility::button(
+                "style-color-apply",
+                "Apply custom color",
+                text("Apply").size(12)
+            )
+            .padding([6, 10])
+            .style(crate::appearance::secondary)
+            .on_press(Message::ApplyTextColor),
         ]
         .spacing(8)
         .align_y(Alignment::Center);

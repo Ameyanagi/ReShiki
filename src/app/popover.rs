@@ -1,5 +1,5 @@
-//! A menu or panel anchored under a toolbar button, drawn over the rows below
-//! it so that nothing moves. A click outside or Escape dismisses it.
+//! A menu or panel anchored to a toolbar button, drawn over the surrounding
+//! rows so that nothing moves. A click outside or Escape dismisses it.
 use super::Message;
 use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
@@ -9,6 +9,9 @@ use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vect
 
 const GAP: f32 = 4.;
 const MARGIN: f32 = 6.;
+
+#[cfg(test)]
+mod tests;
 
 pub struct Popover<'a> {
     anchor: Element<'a, Message>,
@@ -199,7 +202,6 @@ struct Popup<'a, 'b> {
 
 impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
     fn layout(&mut self, renderer: &Renderer, bounds: Size) -> layout::Node {
-        let top = self.anchor.y + self.anchor.height + GAP;
         let width = (bounds.width - 2. * MARGIN).max(0.);
         let (min, max) = if self.fit_anchor {
             let width = self.anchor.width.min(width);
@@ -209,12 +211,29 @@ impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
         };
         let limits = layout::Limits::new(
             Size::new(min, 0.),
-            Size::new(max, (bounds.height - top - MARGIN).max(0.)),
+            Size::new(max, (bounds.height - 2. * MARGIN).max(0.)),
         );
+        // Measure the actual popup before choosing a side. Constraining it to
+        // the space below first can clip fixed-height menu rows even though
+        // the complete menu fits above its anchor.
         let node = self
             .popup
             .as_widget_mut()
             .layout(self.tree, renderer, &limits);
+        let below = self.anchor.y + self.anchor.height + GAP;
+        let above = self.anchor.y - GAP - node.size().height;
+        let bottom = bounds.height - MARGIN;
+        let top = if below >= MARGIN && below + node.size().height <= bottom {
+            below
+        } else if above >= MARGIN && above + node.size().height <= bottom {
+            above
+        } else {
+            // Neither side alone fits: keep the viewport-sized popup visible.
+            // Content taller than the viewport still needs its own scrolling.
+            below
+                .min(bounds.height - node.size().height - MARGIN)
+                .max(MARGIN)
+        };
         let x = if self.align_end {
             self.anchor.x + self.anchor.width - node.size().width
         } else {
@@ -327,4 +346,55 @@ impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
             .as_widget_mut()
             .overlay(self.tree, layout, renderer, &bounds, Vector::ZERO)
     }
+}
+
+/// A focusable selector with the same field chrome as the existing pick lists.
+/// Its app-owned popup choices share real mouse, keyboard and native actions.
+pub(super) fn choice_anchor(
+    id: &'static str,
+    name: String,
+    label: String,
+    size: f32,
+    padding: impl Into<iced::Padding>,
+    open: bool,
+    message: Message,
+) -> reshiki::accessibility::Button<'static, Message> {
+    reshiki::accessibility::button(
+        id,
+        name,
+        iced::widget::row![
+            iced::widget::text(label).size(size).width(Length::Fill),
+            super::workspace::caret(9.)
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding(padding)
+    .width(Length::Fill)
+    .expanded(open)
+    .on_press(message)
+    .style(move |theme, status| {
+        let hovered = matches!(
+            status,
+            iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed
+        );
+        let field = crate::appearance::dropdown(
+            theme,
+            if open {
+                iced::widget::pick_list::Status::Opened {
+                    is_hovered: hovered,
+                }
+            } else if hovered {
+                iced::widget::pick_list::Status::Hovered
+            } else {
+                iced::widget::pick_list::Status::Active
+            },
+        );
+        iced::widget::button::Style {
+            background: Some(field.background),
+            text_color: field.text_color,
+            border: field.border,
+            ..Default::default()
+        }
+    })
 }

@@ -221,15 +221,20 @@ impl App {
         let Some(handle) = source.handle(false) else {
             return base;
         };
+        let base = reshiki::accessibility::inert(base);
         let close = Message::Assistant(Action::ViewImage(None));
         let popup = container(
             column![
                 row![
                     text("Sent image").size(18),
                     Space::new().width(Length::Fill),
-                    button("Close · Esc")
-                        .on_press(close.clone())
-                        .style(super::workspace::control(false))
+                    reshiki::accessibility::button(
+                        "image-close",
+                        "Close sent image",
+                        "Close · Esc"
+                    )
+                    .on_press(close.clone())
+                    .style(super::workspace::control(false))
                 ]
                 .align_y(Alignment::Center),
                 iced::widget::image::viewer(handle)

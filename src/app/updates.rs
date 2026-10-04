@@ -168,7 +168,7 @@ impl App {
             Action::Restarted(result) => match result {
                 Ok(()) => {
                     self.commit_exit();
-                    return iced::exit();
+                    return self.accessibility_exit();
                 }
                 Err(error) => {
                     self.update_restart_failed(error);

@@ -145,12 +145,13 @@ fn main() -> iced::Result {
     // The inline editor can shape a new font before the drawing reaches the
     // canvas. Install variable-weight aliases before either creates text buffers.
     canvas::prepare_fonts();
-    iced::application(app::App::new, app::App::update, app::App::view)
+    let result = iced::application(app::App::new, app::App::update, app::App::view)
         .default_font(iced::Font::with_name(reshiki::style::ui_font_family()))
         .title(app::App::title)
         .theme(app::App::theme)
         .subscription(app::App::subscription)
         .window(iced::window::Settings {
+            visible: !cfg!(any(target_os = "macos", windows)),
             size: iced::Size::new(1280.0, 820.0),
             min_size: Some(iced::Size::new(1040.0, 680.0)),
             icon: branding::window_icon(),
@@ -159,5 +160,14 @@ fn main() -> iced::Result {
         .exit_on_close_request(false)
         .antialiasing(true)
         .centered()
-        .run()
+        .run();
+    #[cfg(target_os = "macos")]
+    if let Err(error) = reshiki_macos::accessibility::shutdown() {
+        eprintln!("{error}");
+    }
+    #[cfg(windows)]
+    if let Err(error) = reshiki_windows::accessibility::shutdown() {
+        eprintln!("{error}");
+    }
+    result
 }

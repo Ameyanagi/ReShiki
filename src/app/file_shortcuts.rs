@@ -15,13 +15,14 @@ use iced::{Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector, key
 /// Text fields, including those in overlays, follow one rule: Command
 /// shortcuts never type their letter; Enter applies a field and leaves it, so
 /// Undo and Redo then act on the drawing; while a field is focused, Undo and
-/// Redo do nothing.
+/// Redo do nothing, and arrow keys remain in the text field.
 pub fn wrap(
     content: Element<'_, Message>,
     help_open: bool,
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
+    drawing_style_open: bool,
 ) -> Element<'_, Message> {
     Element::new(FileShortcuts {
         content,
@@ -29,6 +30,7 @@ pub fn wrap(
         image_open,
         updates_open,
         atom_text_open,
+        drawing_style_open,
     })
 }
 
@@ -38,6 +40,7 @@ struct FileShortcuts<'a> {
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
+    drawing_style_open: bool,
 }
 
 impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
@@ -122,6 +125,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             return;
         }
         if self.image_open
+            && !activation_event(event)
             && let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event
         {
             if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape)) {
@@ -156,6 +160,32 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             {
                 shell.publish(Message::ToggleHelp);
             }
+            if !matches!(
+                key,
+                keyboard::Key::Named(
+                    keyboard::key::Named::Enter
+                        | keyboard::key::Named::Space
+                        | keyboard::key::Named::Tab
+                )
+            ) {
+                shell.capture_event();
+                return;
+            }
+        }
+        // Cancel the visible style draft before a focused input consumes
+        // Escape only to unfocus. Modal dialogs above keep their own priority.
+        if self.drawing_style_open
+            && matches!(
+                event,
+                Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(keyboard::key::Named::Escape),
+                    ..
+                })
+            )
+        {
+            // Preserve the application's existing menu/dialog cancellation
+            // priority before it reaches the drawing-style draft.
+            shell.publish(Message::Escape);
             shell.capture_event();
             return;
         }
@@ -322,12 +352,13 @@ fn without_command_text(event: &Event) -> Option<Event> {
 struct Fields {
     leave: bool,
     single_line: bool,
+    button: bool,
     focused: bool,
 }
 
 impl Fields {
-    /// Enter that a field applied leaves it; Undo and Redo that nothing
-    /// handled do nothing while a field is focused.
+    /// Enter that a field applied leaves it. Unhandled Undo, Redo and arrow
+    /// keys stay in a focused field instead of changing the drawing.
     fn after(event: &Event, captured: bool) -> Option<Self> {
         let Event::Keyboard(keyboard::Event::KeyPressed {
             key,
@@ -344,10 +375,18 @@ impl Fields {
                 ..Self::default()
             })
         } else {
-            matches!(
+            (matches!(
+                key,
+                keyboard::Key::Named(
+                    keyboard::key::Named::ArrowUp
+                        | keyboard::key::Named::ArrowDown
+                        | keyboard::key::Named::ArrowLeft
+                        | keyboard::key::Named::ArrowRight
+                )
+            ) || matches!(
                 super::shortcuts::key_message(key, modified_key, *modifiers),
                 Some(Message::Undo | Message::Redo)
-            )
+            ))
             .then(Self::default)
         }
     }
@@ -360,6 +399,11 @@ impl Fields {
 }
 
 impl Operation for Fields {
+    fn custom(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn std::any::Any) {
+        if state.is::<reshiki::accessibility::ButtonFocus>() {
+            self.button = true;
+        }
+    }
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
         operate(self);
     }
@@ -369,13 +413,14 @@ impl Operation for Fields {
         self.single_line = true;
     }
     fn focusable(&mut self, _id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
-        if state.is_focused() {
+        if state.is_focused() && !self.button {
             self.focused = true;
             if self.leave && self.single_line {
                 state.unfocus();
             }
         }
         self.single_line = false;
+        self.button = false;
     }
 }
 

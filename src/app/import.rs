@@ -3,7 +3,7 @@ use super::workspace::{caret, hover_hint, muted_text};
 use super::{App, Message};
 use crate::canvas::Tool;
 use iced::widget::canvas::{self, Geometry, Path as Outline, Stroke};
-use iced::widget::{button, column, container, row, stack, text, text_editor, tooltip};
+use iced::widget::{column, container, row, stack, text, text_editor, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Rectangle, Renderer, Task, Theme, mouse};
 use reshiki::document::{Document, Point};
 use reshiki::engine::{ChemistryEngine, LocalEngine, Request};
@@ -40,8 +40,10 @@ const EXAMPLES: [Example; 4] = [
 #[derive(Debug, Clone)]
 pub enum Action {
     Edit(text_editor::Action),
+    ReplaceText(String),
     /// Opens or closes the Insert ▾ menu.
     Menu(bool),
+    ExamplesMenu(bool),
     Choose,
     /// Chosen or dropped files, imported together.
     Files(Vec<PathBuf>),
@@ -71,6 +73,7 @@ pub struct State {
     /// Import format of the text in the box, or None while it is blank.
     format: Option<&'static str>,
     pub menu: bool,
+    pub examples_menu: bool,
     hovered: Vec<PathBuf>,
     dropped: Vec<PathBuf>,
 }
@@ -285,7 +288,25 @@ impl App {
                     self.imports.format = detect(&self.imports.input.text());
                 }
             }
-            Action::Menu(open) => self.imports.menu = open,
+            Action::ReplaceText(value) => {
+                // Use the editor's actual selection/paste path, preserving the
+                // same detection and content semantics as keyboard editing.
+                self.imports.input.perform(text_editor::Action::SelectAll);
+                self.imports
+                    .input
+                    .perform(text_editor::Action::Edit(text_editor::Edit::Paste(
+                        std::sync::Arc::new(value),
+                    )));
+                self.imports.format = detect(&self.imports.input.text());
+            }
+            Action::Menu(open) => {
+                self.imports.menu = open;
+                self.imports.examples_menu = false;
+            }
+            Action::ExamplesMenu(open) => {
+                self.imports.examples_menu = open;
+                self.imports.menu = false;
+            }
             Action::Choose => {
                 return Task::perform(choose(), |paths| Message::Imports(Action::Files(paths)));
             }
@@ -480,19 +501,38 @@ impl App {
             .padding(8)
             .wrapping(text::Wrapping::WordOrGlyph)
             .style(editor_style);
+        let editor = reshiki::accessibility::editor(
+            INPUT,
+            "Structure or reaction to import",
+            state.input.text(),
+            editor,
+            |value| Message::Imports(Action::ReplaceText(value)),
+        );
         let split = |content: Element<'static, Message>, message, left: bool| {
-            button(content)
-                .padding(if left { [6, 12] } else { [6, 7] })
-                .style(move |theme: &Theme, status| {
-                    let mut style = crate::appearance::primary(theme, status);
-                    style.border.radius = if left {
-                        iced::border::Radius::new(6).right(0)
-                    } else {
-                        iced::border::Radius::new(6).left(0)
-                    };
-                    style
-                })
-                .on_press_maybe(ready.then_some(message))
+            reshiki::accessibility::button(
+                if left {
+                    "import-insert"
+                } else {
+                    "import-insert-menu"
+                },
+                if left {
+                    "Insert into drawing"
+                } else {
+                    "More ways to insert"
+                },
+                content,
+            )
+            .padding(if left { [6, 12] } else { [6, 7] })
+            .style(move |theme: &Theme, status| {
+                let mut style = crate::appearance::primary(theme, status);
+                style.border.radius = if left {
+                    iced::border::Radius::new(6).right(0)
+                } else {
+                    iced::border::Radius::new(6).left(0)
+                };
+                style
+            })
+            .on_press_maybe(ready.then_some(message))
         };
         let actions = row![
             container(
@@ -533,32 +573,23 @@ impl App {
         .spacing(8)
         .align_y(Alignment::Center);
         // 11 px keeps the three controls on one line in the 300 px inspector.
-        let field = |label| {
-            button(text(label).size(11))
+        let field = |id, label| {
+            reshiki::accessibility::button(id, label, text(label).size(11))
                 .padding([6, 7])
                 .style(crate::appearance::secondary)
         };
         let files = row![
             hover_hint(
-                field("Choose file…").on_press(Message::Imports(Action::Choose)),
+                field("import-choose-file", "Choose file…")
+                    .on_press(Message::Imports(Action::Choose)),
                 "MOL, RXN, CDXML, CDX, SMILES or pictures · Several files go side by side",
                 tooltip::Position::Top,
             ),
-            field("Paste picture").on_press_maybe(
+            field("import-paste-picture", "Paste picture").on_press_maybe(
                 (reshiki::clipboard::available() && !self.tab.clipboard_busy)
                     .then_some(Message::PastePicture)
             ),
-            crate::appearance::pick_list(EXAMPLES, None::<Example>, |e| Message::Example(e.1))
-                .placeholder("Examples")
-                .text_size(11)
-                .padding([6, 7])
-                .width(Length::Fill)
-                // A command menu, not an empty field.
-                .style(|theme, status| {
-                    let mut style = crate::appearance::dropdown(theme, status);
-                    style.placeholder_color = style.text_color;
-                    style
-                }),
+            self.import_examples_menu(),
         ]
         .spacing(5);
         let hint =
@@ -569,6 +600,42 @@ impl App {
     }
 
     /// Outlines the canvas while files are dragged over the window.
+    fn import_examples_menu(&self) -> Element<'_, Message> {
+        let open = self.imports.examples_menu;
+        let anchor = super::popover::choice_anchor(
+            "import-examples",
+            "Import examples".into(),
+            "Examples".into(),
+            11.,
+            [6, 7],
+            open,
+            Message::Imports(Action::ExamplesMenu(!open)),
+        );
+        let popup = open.then(|| {
+            let items = EXAMPLES.into_iter().enumerate().map(|(index, example)| {
+                reshiki::accessibility::button(
+                    format!("import-example-{index}"),
+                    example.0,
+                    text(example.0).size(12),
+                )
+                .padding([6, 10])
+                .width(Length::Fill)
+                .style(super::workspace::control(false))
+                .on_press(Message::Example(example.1))
+                .into()
+            });
+            container(column(items))
+                .width(170)
+                .padding(5)
+                .style(super::color_popover::surface)
+                .into()
+        });
+        Element::new(
+            super::popover::popover(anchor, popup, Message::Imports(Action::ExamplesMenu(false)))
+                .align_end(),
+        )
+    }
+
     pub(super) fn with_drop_overlay<'a>(
         &'a self,
         base: Element<'a, Message>,
@@ -637,17 +704,21 @@ fn editor_style(theme: &Theme, status: text_editor::Status) -> text_editor::Styl
 
 /// The Insert ▾ menu, floating under its button like the other menus.
 fn insert_menu(
-    anchor: iced::widget::Button<'_, Message>,
+    anchor: reshiki::accessibility::Button<'_, Message>,
     open: bool,
     ready: bool,
 ) -> Element<'_, Message> {
     let popup = open.then(|| {
         container(
-            button(text("Replace drawing").size(12))
-                .width(Length::Fill)
-                .padding([6, 10])
-                .style(super::workspace::control(false))
-                .on_press_maybe(ready.then_some(Message::Import)),
+            reshiki::accessibility::button(
+                "import-replace",
+                "Replace drawing",
+                text("Replace drawing").size(12),
+            )
+            .width(Length::Fill)
+            .padding([6, 10])
+            .style(super::workspace::control(false))
+            .on_press_maybe(ready.then_some(Message::Import)),
         )
         .width(170)
         .padding(5)

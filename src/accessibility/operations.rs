@@ -137,3 +137,51 @@ impl<Message: Clone + Send + 'static> Operation<Message> for Activate<Message> {
         self.message().cloned().map_or(Outcome::None, Outcome::Some)
     }
 }
+
+/// Edit the current enabled field through the same callback as keyboard input.
+pub struct SetValue<Message> {
+    target: String,
+    value: String,
+    matches: usize,
+    message: Option<Message>,
+}
+impl<Message> SetValue<Message> {
+    pub fn new(target: impl Into<String>, value: String) -> Self {
+        Self {
+            target: target.into(),
+            value,
+            matches: 0,
+            message: None,
+        }
+    }
+}
+impl<Message: Clone + Send + 'static> Operation<Message> for SetValue<Message> {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Message>)) {
+        operate(self);
+    }
+    fn custom(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn Any) {
+        if state.is::<super::Foreground>() {
+            self.matches = 0;
+            self.message = None;
+        }
+        if let Some(query) = state.downcast_mut::<super::ValueQuery>()
+            && query.id == self.target
+            && self.value.len() <= 16384
+        {
+            query.value = Some(self.value.clone());
+        }
+        if let Some(action) = state.downcast_ref::<super::LiveValueAction<Message>>()
+            && action.id == self.target
+        {
+            self.matches += 1;
+            self.message = action.message.clone();
+        }
+    }
+    fn finish(&self) -> Outcome<Message> {
+        if self.matches == 1 {
+            self.message.clone().map_or(Outcome::None, Outcome::Some)
+        } else {
+            Outcome::None
+        }
+    }
+}

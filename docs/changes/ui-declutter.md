@@ -1,8 +1,9 @@
 # Less crowded interface (#78)
 
-Resolves the layout and control cleanup requested in
-[issue #78](https://github.com/Ameyanagi/ReShiki/issues/78). The
-[release notes](../changes-0.10.md#less-crowded-interface) describe the
+Implements the layout and control cleanup requested in
+[issue #78](https://github.com/Ameyanagi/ReShiki/issues/78). Its combined desktop
+acceptance remains open; see the [acceptance record](ui-declutter-validation.md).
+The [release notes](../changes-0.10.md#less-crowded-interface) describe the
 changes; this record holds the screenshots and how they were made.
 
 ## Capture
