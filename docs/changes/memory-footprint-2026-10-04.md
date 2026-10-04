@@ -85,6 +85,12 @@ process RSS.
   with 61 ignored, in 217.61 seconds. This recorded memory-run tree excludes the
   later ordinary Arrange regression; that test passed separately on both original
   and candidate implementations and is not added to the 1,206 count.
+- The normal release application build passed; its dependency graph excludes the
+  development allocation-metrics feature.
+- [Three-platform worker captures](https://github.com/Ameyanagi/ReShiki/actions/runs/37198747899)
+  refreshed provenance after the worker source edit. All 13,425 request/response
+  records on each platform remain byte-identical; all 28 source fingerprints and
+  the original input hashes were verified. Strict fixture guards remain enabled.
 
 ## Reproduction
 
