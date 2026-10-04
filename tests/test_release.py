@@ -117,6 +117,105 @@ class ReleaseTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "source does not match"):
                     verify_source(metadata)
 
+    def test_signed_checksum_preserves_provenance_and_follows_archive_verification(self):
+        import sign_release
+
+        for failure in (None, "checksum", "verification"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                unsigned = root / "unsigned"
+                unsigned.mkdir()
+                source = unsigned / "reshiki-1.2.3-macos-arm64.zip"
+                source.write_bytes(b"qualified unsigned archive")
+                unsigned_digest = hashlib.sha256(source.read_bytes()).hexdigest()
+                Path(str(source) + ".sha256").write_text(
+                    f"{unsigned_digest}  {source.name}\n", encoding="ascii"
+                )
+                if failure == "checksum":
+                    source.write_bytes(b"changed unsigned archive")
+                output = root / "dist/releases" / source.name
+                signed_bytes = b"signed archive with notarization fixture"
+                signed_digest = hashlib.sha256(signed_bytes).hexdigest()
+                expected_checksum = f"{signed_digest}  {output.name}\n".encode("ascii")
+                metadata = dict(version="1.2.3", commit="qualified-commit", signed=False)
+                events = []
+
+                def extract(command):
+                    self.assertEqual(command[:4], ["ditto", "-x", "-k", source])
+                    events.append("extract")
+                    folder = command[4] / source.stem
+                    (folder / "ReShiki.app").mkdir(parents=True)
+                    (folder / "build.json").write_text(json.dumps(metadata))
+                    (folder / "README.txt").write_text("This build has no publisher signature.")
+
+                def archive(folder, destination):
+                    events.append("archive")
+                    self.assertEqual(destination, output.with_suffix(""))
+                    self.assertEqual(
+                        json.loads((folder / "build.json").read_text()),
+                        dict(
+                            metadata, signed=True, notarized=True, unsigned_sha256=unsigned_digest
+                        ),
+                    )
+                    self.assertEqual(
+                        (folder / "README.txt").read_text(),
+                        "macOS application signed with Developer ID and notarized by Apple.",
+                    )
+                    output.parent.mkdir(parents=True)
+                    output.write_bytes(signed_bytes)
+                    return output
+
+                def verify(archive_path, *, signed):
+                    events.append("verify")
+                    self.assertEqual(archive_path, output)
+                    self.assertTrue(signed)
+                    self.assertFalse(Path(str(output) + ".sha256").exists())
+                    if failure == "verification":
+                        raise ValueError("fixture archive verification failed")
+
+                def disk_image(folder, destination, *, signed):
+                    events.append("disk image")
+                    self.assertEqual(folder.name, source.stem)
+                    self.assertEqual(destination, output.parent)
+                    self.assertTrue(signed)
+                    self.assertEqual(Path(str(output) + ".sha256").read_bytes(), expected_checksum)
+
+                with (
+                    patch.object(sign_release, "ROOT", root),
+                    patch.object(sign_release, "version", return_value="1.2.3"),
+                    patch.dict(os.environ, {"GITHUB_SHA": "qualified-commit"}),
+                    patch.object(sign_release, "run", side_effect=extract),
+                    patch.object(
+                        sign_release,
+                        "sign_and_notarize",
+                        side_effect=lambda _: events.append("sign"),
+                    ),
+                    patch.object(sign_release, "archive", side_effect=archive),
+                    patch.object(sign_release, "verify_archive", side_effect=verify),
+                    patch.object(sign_release, "mac_disk_image", side_effect=disk_image),
+                ):
+                    if failure:
+                        message = (
+                            "Archive checksum mismatch"
+                            if failure == "checksum"
+                            else "fixture archive verification failed"
+                        )
+                        with self.assertRaisesRegex(ValueError, message):
+                            sign_release.main()
+                        self.assertFalse(Path(str(output) + ".sha256").exists())
+                    else:
+                        sign_release.main()
+                        self.assertEqual(
+                            Path(str(output) + ".sha256").read_bytes(), expected_checksum
+                        )
+                self.assertEqual(
+                    events,
+                    []
+                    if failure == "checksum"
+                    else ["extract", "sign", "archive", "verify"]
+                    + ([] if failure == "verification" else ["disk image"]),
+                )
+
     def test_release_includes_adapted_source_licenses(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "Licenses"

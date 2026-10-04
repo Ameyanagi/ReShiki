@@ -16,6 +16,7 @@ import tomllib
 import zipfile
 from pathlib import Path
 
+from build_inchi_helper import RELEASE_TARGETS
 from check_runtime_dependencies import (
     verify_macos_workers,
     verify_runtime,
@@ -24,14 +25,6 @@ from check_runtime_dependencies import (
 from license_notices import write_notices
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_TARGETS = {
-    "aarch64-apple-darwin": ("macos", "arm64"),
-    "x86_64-apple-darwin": ("macos", "x64"),
-    "x86_64-pc-windows-msvc": ("windows", "x64"),
-    "aarch64-pc-windows-msvc": ("windows", "arm64"),
-    "x86_64-unknown-linux-gnu": ("linux", "x64"),
-    "aarch64-unknown-linux-gnu": ("linux", "arm64"),
-}
 
 
 def run(command, **kwargs):
