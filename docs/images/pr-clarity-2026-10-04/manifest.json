@@ -144,8 +144,10 @@
   ],
   "measurement_file": {
     "file": "pr112-native-rotation-measurements.json",
-    "sha256": "5dba22a0b8c8a91cb4de1135a1f3aa483cdc560bdcdf323fc048874bb687c91c",
-    "bytes": 2276
+    "sha256": "3a529b931710aa27d4b002d0ce3c7fba39a1b9626d18efbda91f779ef3a7a70b",
+    "bytes": 2274,
+    "source_sha256": "5dba22a0b8c8a91cb4de1135a1f3aa483cdc560bdcdf323fc048874bb687c91c",
+    "formatting": "Repository formatter only; JSON values are unchanged."
   },
   "credit": "Original ReShiki contribution authorship and existing fixture notices remain applicable.",
   "fixture_notice": "PR122 uses the documented scientific fixture derived from the installed ChemDraw shortcut sample. Its labels were reconstructed and proprietary page/captions/artwork excluded. The fixture provenance does not infer rightsholder permission or relicense vendor material."
