@@ -11,12 +11,13 @@
     "docs:dev": "bun run --cwd website dev",
     "docs:build": "bun run --cwd website build",
     "docs:check": "bun run --cwd website check",
-    "lint:js": "bun run --bun oxlint --deny-warnings website",
+    "lint:js": "bun run --bun oxlint --deny-warnings website integrations/office",
     "format:check": "bun run --bun oxfmt --check .",
     "format": "bun run --bun oxfmt .",
     "check": "bun run lint:js && bun run format:check && bun run docs:check"
   },
   "devDependencies": {
+    "@xmldom/xmldom": "0.9.12",
     "lefthook": "2.1.14",
     "oxfmt": "0.68.0",
     "oxlint": "1.83.0"

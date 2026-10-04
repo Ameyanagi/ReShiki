@@ -417,6 +417,33 @@ mod tests {
     }
 
     #[test]
+    fn microsoft_365_save_waits_for_receipt_and_failure_cancels_close_without_clearing_dirty() {
+        let (mut app, _) = App::new();
+        let path = PathBuf::from("recovery/drawing.rsk");
+        app.tab.path = Some(path.clone());
+        app.office_path = Some(path);
+        app.office_host = "Microsoft 365";
+        app.tab.doc.add_atom("O", Point::default());
+        let snapshot = app.tab.doc.clone();
+        let saved_before = app.tab.saved.clone();
+        let _ = app.update(Message::Tabs(crate::app::tabs::Action::Close(None)));
+        let task = app.update(Message::Save);
+        assert!(task.units() > 0 && app.file_io.saving);
+        assert!(app.status.contains("waiting for Microsoft 365"));
+        assert!(app.dirty());
+        let _ = app.update(Message::Saved(
+            app.tab.file_epoch,
+            Box::new(snapshot.clone()),
+            Err("Draft saved; Microsoft 365 has not confirmed the update".into()),
+        ));
+        assert!(app.pending.is_none() && !app.file_io.saving);
+        assert_eq!(app.tab.doc, snapshot);
+        assert_eq!(app.tab.saved, saved_before);
+        assert!(app.dirty() && app.error);
+        assert!(!app.status.contains("Drawing updated"));
+    }
+
+    #[test]
     fn stale_save_results_preserve_the_new_documents_pending_action() {
         for result in [
             Ok(Some("old.rsk".into())),
