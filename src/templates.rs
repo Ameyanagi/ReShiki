@@ -23,6 +23,33 @@ pub struct Template {
     #[serde(default)]
     pub anchor: Anchor,
 }
+impl Template {
+    /// Built-in free placements follow the journal size; saved artwork keeps its size.
+    pub fn place(
+        &self,
+        doc: &Document,
+        point: Point,
+        direction: Option<Point>,
+        radius: f32,
+        anchor: Anchor,
+        mode: Connection,
+    ) -> Result<(Document, Vec<u64>), &'static str> {
+        let free_scale = if self.id.starts_with("builtin:") {
+            doc.drawing_style.bond_length_pt / self.document.drawing_style.bond_length_pt
+        } else {
+            1.
+        };
+        place_with_mode_scaled(
+            doc,
+            (&self.document, free_scale),
+            point,
+            direction,
+            radius,
+            anchor,
+            mode,
+        )
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Anchor {
@@ -106,6 +133,19 @@ pub fn place_with_mode(
     anchor: Anchor,
     mode: Connection,
 ) -> Result<(Document, Vec<u64>), &'static str> {
+    place_with_mode_scaled(doc, (part, 1.), point, direction, radius, anchor, mode)
+}
+
+fn place_with_mode_scaled(
+    doc: &Document,
+    source: (&Document, f32),
+    point: Point,
+    direction: Option<Point>,
+    radius: f32,
+    anchor: Anchor,
+    mode: Connection,
+) -> Result<(Document, Vec<u64>), &'static str> {
+    let (part, free_scale) = source;
     if doc.validate().is_err()
         || part.validate().is_err()
         || !point.x.is_finite()
@@ -120,7 +160,7 @@ pub fn place_with_mode(
     let target = doc.nearest(point, radius);
     let bond = target.is_none() && editing::nearest_bond(doc, point, radius).is_some();
     if mode == Connection::Auto || (target.is_none() && !bond) {
-        return place_anchored(doc, part, point, direction, radius, anchor);
+        return place_anchored_scaled(doc, part, point, direction, radius, anchor, free_scale);
     }
     match mode {
         Connection::ShareAtom if target.is_none() => {
@@ -468,6 +508,18 @@ pub fn place_anchored(
     radius: f32,
     anchor: Anchor,
 ) -> Result<(Document, Vec<u64>), &'static str> {
+    place_anchored_scaled(doc, part, point, direction, radius, anchor, 1.)
+}
+
+fn place_anchored_scaled(
+    doc: &Document,
+    part: &Document,
+    point: Point,
+    direction: Option<Point>,
+    radius: f32,
+    anchor: Anchor,
+    free_scale: f32,
+) -> Result<(Document, Vec<u64>), &'static str> {
     if doc.validate().is_err() || part.validate().is_err() {
         return Err("The drawing or template is invalid.");
     }
@@ -499,12 +551,17 @@ pub fn place_anchored(
             .point(part)
             .ok_or("The source attachment point is unavailable")?;
         let mut positioned = part.clone();
-        if let Some(direction) = direction.filter(|p| p.distance(point) > radius) {
-            let angle = (direction.y - point.y)
-                .atan2(direction.x - point.x)
-                .to_degrees();
+        let direction = direction.filter(|p| p.distance(point) > radius);
+        if free_scale != 1. || direction.is_some() {
+            let angle = direction
+                .map(|direction| {
+                    (direction.y - point.y)
+                        .atan2(direction.x - point.x)
+                        .to_degrees()
+                })
+                .unwrap_or(0.);
             let ids = positioned.all_ids();
-            editing::transform_about(&mut positioned, &ids, center, 1., angle);
+            editing::transform_about(&mut positioned, &ids, center, free_scale, angle);
         }
         let ids = editing::append(
             &mut result,

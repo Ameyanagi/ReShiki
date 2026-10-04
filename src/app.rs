@@ -58,6 +58,8 @@ mod shortcuts;
 mod startup;
 mod tabs;
 mod template_library;
+#[cfg(test)]
+mod template_style_evidence;
 mod theme_files;
 mod theme_generator;
 mod tool_button;
@@ -2553,9 +2555,8 @@ impl App {
                 let Some(template) = self.templates.library.get(self.template_index) else {
                     return;
                 };
-                match reshiki::templates::place_with_mode(
+                match template.place(
                     &self.tab.doc,
-                    &template.document,
                     anchor,
                     direction,
                     10.0 / self.tab.camera.zoom,
@@ -4656,6 +4657,45 @@ mod tests {
         let _ = app.update(Message::Redo);
         assert_eq!(app.tab.doc, edited);
         assert_eq!(app.tab.caption, "AA");
+    }
+
+    #[test]
+    fn journal_template_placement_matches_preview_and_has_one_undo_step() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let _ = app.update(Message::QuickDrawingStyle(
+            document_styles::Choice::Journal(reshiki::document_styles::Preset::Nature),
+        ));
+        let before = app.tab.doc.clone();
+        let index = reshiki::templates::LIBRARY
+            .iter()
+            .position(|t| t.name == "Cyclohexane")
+            .unwrap();
+        let _ = app.update(Message::InsertTemplate(index));
+        let point = Point::new(160., 120.);
+        let direction = Some(point.offset(35., 60.));
+        let (preview, ids) = app
+            .templates
+            .library
+            .get(index)
+            .unwrap()
+            .place(
+                &before,
+                point,
+                direction,
+                10. / app.tab.camera.zoom,
+                app.templates.anchor,
+                app.templates.connection,
+            )
+            .unwrap();
+        app.edit(Edit::Template(point, direction));
+        assert_eq!(app.tab.doc, preview);
+        assert_eq!(app.tab.selected, ids);
+        let placed = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, placed);
     }
 
     #[test]

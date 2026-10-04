@@ -221,7 +221,7 @@ impl App {
         let mut content = column![background(self.command_bar()), background(self.style_bar())];
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
             element: &self.element,
-            joining: self.tab.joining.as_ref().map(|s| &s.prepared),
+            joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
             hidden_annotation: self.inline_label_id(),
             bond_drawing: self.tab.bond_drawing,
             chain_drawing: self.tab.chain_drawing,
@@ -258,17 +258,11 @@ impl App {
                 .map(|s| s.mode)
                 .unwrap_or(self.templates.connection),
             template: self
-                .tab
-                .joining
-                .as_ref()
-                .map(|s| (&s.prepared.fragment, s.anchor))
-                .or_else(|| {
-                    self.templates
-                        .library
-                        .get(self.template_index)
-                        .filter(|_| self.tool == Tool::Template)
-                        .map(|t| (&t.document, self.templates.anchor))
-                }),
+                .templates
+                .library
+                .get(self.template_index)
+                .filter(|_| self.tool == Tool::Template)
+                .map(|t| (t, self.templates.anchor)),
         })
         .width(Length::Fill)
         .height(Length::Fill)
