@@ -1,8 +1,14 @@
+use super::workspace::{command, muted_text, section};
 use super::*;
+use iced::widget::{Row, column, row, text, text_editor};
+use iced::{Alignment, Length};
 use reshiki::abbreviations::LabelAlignment;
 use reshiki::palette::{Color as Paint, Palette};
 use reshiki::typography::{Script, StyleChange, TextAlign, TextFormat, TextStyle};
 use std::ops::Range;
+
+#[cfg(test)]
+mod caption_controls_tests;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ColorScope {
@@ -687,6 +693,125 @@ impl App {
             )
         };
     }
+    pub(super) fn text_panel(&self) -> Element<'_, Message> {
+        if self.tab.inline_text.is_some() {
+            return column![
+                section("EDITING ON CANVAS"),
+                text("Select text in the canvas editor, then use the Style toolbar to format it.")
+                    .size(12)
+                    .style(muted_text),
+                row![
+                    command(
+                        "Cancel",
+                        Message::InlineText(super::inline_text::Action::Finish(false))
+                    ),
+                    command(
+                        "Done",
+                        Message::InlineText(super::inline_text::Action::Finish(true))
+                    )
+                ]
+                .spacing(8),
+                self.caption_spacing_control(),
+                self.caption_width_control()
+            ]
+            .spacing(10)
+            .into();
+        }
+        if self.tool == Tool::Text {
+            return column![
+                section("TEXT LABELS"),
+                text(
+                    "Click the canvas to type a new label, or click an existing label to edit it."
+                )
+                .size(12)
+                .style(muted_text),
+                text("Use the Style toolbar for fonts, colors and chemical formulas.")
+                    .size(11)
+                    .style(muted_text),
+            ]
+            .spacing(9)
+            .into();
+        }
+        let selected = self
+            .tab
+            .caption_target
+            .is_some_and(|id| self.tab.selected.contains(&id));
+        column![
+            section(if selected { "EDIT TEXT" } else { "NEW TEXT" }),
+            text(if selected {
+                "Changes appear on the drawing as you type."
+            } else {
+                "Write a label, choose its style, then click to place."
+            })
+            .size(11)
+            .style(muted_text),
+            text_editor(&self.tab.caption_editor)
+                .on_action(Message::CaptionAction)
+                .placeholder("Reaction conditions, labels, notes…")
+                .height(116)
+                .size(14)
+                .padding(10)
+                .key_binding(|key| {
+                    if matches!(key.status, text_editor::Status::Focused { .. })
+                        && key.modifiers.command()
+                        && let iced::keyboard::Key::Character(c) = &key.key
+                    {
+                        let style = self.current_text_style();
+                        let message = match c.as_str() {
+                            "z" => Some(if key.modifiers.shift() {
+                                Message::Redo
+                            } else {
+                                Message::Undo
+                            }),
+                            "b" => Some(Message::TextStyle(StyleChange::Bold(!style.bold))),
+                            "i" => Some(Message::TextStyle(StyleChange::Italic(!style.italic))),
+                            "u" => {
+                                Some(Message::TextStyle(StyleChange::Underline(!style.underline)))
+                            }
+                            _ => None,
+                        };
+                        message
+                            .map(text_editor::Binding::Custom)
+                            .or_else(|| text_editor::Binding::from_key_press(key))
+                    } else {
+                        text_editor::Binding::from_key_press(key)
+                    }
+                }),
+            text("Select part of the text to format it with the Style toolbar.")
+                .size(11)
+                .style(muted_text),
+            self.caption_spacing_control().align_y(Alignment::Center),
+            self.caption_width_control().align_y(Alignment::Center),
+        ]
+        .spacing(9)
+        .into()
+    }
+
+    fn caption_spacing_control(&self) -> Row<'_, Message> {
+        row![
+            text("Line spacing").size(11).width(Length::Fill),
+            crate::appearance::pick_list(
+                [1.0_f32, 1.2, 1.5, 2.0],
+                Some(self.tab.caption_format.line_spacing),
+                Message::TextSpacing
+            )
+            .text_size(12)
+            .padding(5)
+        ]
+    }
+
+    fn caption_width_control(&self) -> Row<'_, Message> {
+        row![
+            text("Wrap width (pt)").size(11).width(Length::Fill),
+            crate::appearance::text_input("Auto", &self.tab.text_width_input)
+                .on_input(Message::TextWidth)
+                .on_submit(Message::ApplyTextWidth)
+                .size(12)
+                .width(72)
+                .padding(6)
+        ]
+    }
+
     pub(super) fn apply_paragraph(
         &mut self,
         alignment: Option<TextAlign>,

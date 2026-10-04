@@ -71,6 +71,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         measure(&format!("gallery_{copies}x_selection_bounds"), 30, || {
             black_box(scene::selection_bounds(black_box(&doc), black_box(&ids)));
         });
+        measure(&format!("gallery_{copies}x_align_left"), 30, || {
+            let mut arranged = doc.clone();
+            editing::arrange(&mut arranged, &ids, editing::Arrange::AlignLeft);
+            black_box(arranged);
+        });
         let mut moved = doc.clone();
         measure(&format!("gallery_{copies}x_translate"), 30, || {
             moved.translate(black_box(&ids), 0.125, -0.125);
@@ -83,5 +88,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             black_box(scene::selection_bounds(&preview, &ids));
         });
     }
+    // Highlight joins make repeated per-object bounds construction visible.
+    let mut highlighted = Document::default();
+    for index in 0..64 {
+        let start = Point::new((index % 8) as f32 * 100., (index / 8) as f32 * 80.);
+        let a = highlighted.add_atom("C", start);
+        let b = highlighted.add_atom("N", start.offset(42., 0.));
+        highlighted.add_bond(a, b, 1, "bold");
+        highlighted.bonds.last_mut().unwrap().highlight =
+            Some(reshiki::palette::Color::Custom([190, 230, 240]));
+    }
+    let ids = highlighted.all_ids();
+    measure("highlighted_64_groups_align_left", 30, || {
+        let mut arranged = highlighted.clone();
+        editing::arrange(&mut arranged, &ids, editing::Arrange::AlignLeft);
+        black_box(arranged);
+    });
     Ok(())
 }

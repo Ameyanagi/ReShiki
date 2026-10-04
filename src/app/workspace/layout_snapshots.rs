@@ -2,6 +2,7 @@
 use super::*;
 use iced::advanced::Renderer as _;
 use iced::advanced::{Layout, layout, mouse, overlay, renderer, renderer::Headless, widget::Tree};
+use iced::widget::text_editor;
 use iced::{Event, Rectangle, Size, Vector};
 use reshiki::document::{Arrow, Document, Point as World};
 use reshiki::graphics::{Graphic, GraphicKind};

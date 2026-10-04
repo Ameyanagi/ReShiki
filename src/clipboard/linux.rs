@@ -1,5 +1,5 @@
 //! Wayland uses the focused GUI owner; X11 retains its persistent worker.
-use super::{CommandRequest, JSON_LIMIT, Packet, Representation};
+use super::{JSON_LIMIT, Packet, Representation, encode_request};
 use serde::Deserialize;
 use std::{process::Stdio, time::Duration};
 use tokio::{
@@ -30,14 +30,7 @@ pub(super) async fn invoke(
     operation: &str,
     representations: &[Representation],
 ) -> Result<Packet, String> {
-    let input = serde_json::to_vec(&CommandRequest {
-        operation,
-        representations,
-    })
-    .map_err(|e| e.to_string())?;
-    if input.len() > JSON_LIMIT {
-        return Err("Clipboard request is too large".into());
-    }
+    let input = encode_request(operation, representations)?;
     if let Some(output) = reshiki_linux::gui_clipboard_request(&input).await? {
         let packet = parse_response(&output)?;
         if operation == "write" && !packet.representations.is_empty() {
