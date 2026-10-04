@@ -209,7 +209,6 @@ fn extent(doc: &Document, ids: &[u64], field: Field) -> Option<f32> {
 fn scale(doc: &mut Document, ids: &[u64], pivot: Point, field: Field, factor: f32, lock: bool) {
     if lock || field == Field::Scale {
         editing::transform_about(doc, ids, pivot, factor, 0.);
-        reshiki::projection::sync_centroids(doc);
     } else {
         let (x, y) = if field == Field::Width {
             (factor, 1.)
