@@ -4,7 +4,7 @@ Validation date: 2026-10-04. Baseline: `81ca82101061ecc201545a3cae8d8257f03254d3
 
 ## Completed portable checks
 
-The following local receipts returned status 0. Their hashes for all seven relevant changed source/Cargo files match this candidate. The unit receipt used a freshly selected candidate InChI helper; the platform protocol and pipe tests all passed.
+The following local receipts returned status 0. Their hashes for all eight relevant changed source/Cargo files match this candidate. The unit receipt used a freshly selected candidate InChI helper; the platform protocol and pipe tests all passed.
 
 | Command                                                             | Result                                                                                         | Receipt                                 |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------- |
