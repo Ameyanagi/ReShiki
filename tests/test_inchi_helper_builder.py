@@ -21,6 +21,57 @@ SPEC.loader.exec_module(BUILDER)
 
 
 class TargetTests(unittest.TestCase):
+    def test_release_and_helper_targets_keep_the_ordered_six_platform_contract(self):
+        expected = (
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+            "aarch64-pc-windows-msvc",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+        )
+        self.assertEqual(BUILDER.SUPPORTED_TARGETS, expected)
+        spec = importlib.util.spec_from_file_location(
+            "release_builder", ROOT / "scripts/build_release.py"
+        )
+        assert spec is not None and spec.loader is not None
+        release = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release)
+        self.assertEqual(tuple(release.RELEASE_TARGETS), expected)
+        for target in expected:
+            self.assertEqual(release.release_platform(target), BUILDER.RELEASE_TARGETS[target])
+        with tempfile.TemporaryDirectory() as temporary:
+            for name in ("build_release.py", "build_inchi_helper.py"):
+                result = subprocess.run(
+                    [sys.executable, "-B", str(ROOT / "scripts" / name), "--help"],
+                    cwd=temporary,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    check=True,
+                )
+                for target in expected:
+                    self.assertIn(target, result.stdout)
+
+    def test_release_and_helper_preserve_their_distinct_invalid_pe_errors(self):
+        from build_release import verify_binary
+
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "malformed.exe"
+            header = bytearray(64)
+            header[:2] = b"MZ"
+            header[60:64] = (1024 * 1024 + 1).to_bytes(4, "little")
+            binary.write_bytes(header)
+            with self.assertRaises(ValueError) as helper_error:
+                BUILDER.verify_executable(binary, "x86_64-pc-windows-msvc")
+            self.assertEqual(str(helper_error.exception), "Invalid native PE header offset")
+            with self.assertRaises(ValueError) as release_error:
+                verify_binary(binary, "windows", "x64")
+            self.assertEqual(
+                str(release_error.exception),
+                f"Expected windows x64 executable, found None: {binary}",
+            )
+
     def check_header(self, data, target):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "helper"

@@ -11,6 +11,25 @@ from rdkit import Chem, rdBase
 
 VERSION = "2026.03.6"
 ROOT = Path(__file__).resolve().parents[1]
+_OPERATIONS = {
+    "AtomAnd": "all",
+    "AtomOr": "any",
+    "BondAnd": "all",
+    "BondOr": "any",
+    "AtomNull": "always",
+    "BondNull": "always",
+    "AtomType": "atom_type",
+    "AtomAtomicNum": "number",
+    "AtomHCount": "hydrogens",
+    "AtomTotalDegree": "degree",
+    "AtomTotalValence": "valence",
+    "AtomFormalCharge": "charge",
+    "AtomIsAliphatic": "aliphatic",
+    "AtomIsAromatic": "aromatic",
+    "BondOrder": "bond_order",
+    "SingleOrAromaticBond": "single_or_aromatic",
+    "BondInRing": "ring_bond",
+}
 
 
 def strings(text):
@@ -24,29 +43,10 @@ class Compiler:
     def expr(self, node):
         result: dict[str, object]
         desc = node["descr"]
-        operations = {
-            "AtomAnd": "all",
-            "AtomOr": "any",
-            "BondAnd": "all",
-            "BondOr": "any",
-            "AtomNull": "always",
-            "BondNull": "always",
-            "AtomType": "atom_type",
-            "AtomAtomicNum": "number",
-            "AtomHCount": "hydrogens",
-            "AtomTotalDegree": "degree",
-            "AtomTotalValence": "valence",
-            "AtomFormalCharge": "charge",
-            "AtomIsAliphatic": "aliphatic",
-            "AtomIsAromatic": "aromatic",
-            "BondOrder": "bond_order",
-            "SingleOrAromaticBond": "single_or_aromatic",
-            "BondInRing": "ring_bond",
-        }
         if desc == "RecursiveStructure":
             result = dict(op="recursive", value=self.molecule(node["subquery"]))
-        elif desc in operations:
-            result = dict(op=operations[desc])
+        elif desc in _OPERATIONS:
+            result = dict(op=_OPERATIONS[desc])
             if "children" in node:
                 result["children"] = [self.expr(c) for c in node["children"]]
             elif "val" in node:

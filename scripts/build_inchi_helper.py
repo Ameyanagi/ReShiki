@@ -13,14 +13,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INCHI_VERSION = "1.07.5"
 
-SUPPORTED_TARGETS = (
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-pc-windows-msvc",
-    "aarch64-pc-windows-msvc",
-    "x86_64-unknown-linux-gnu",
-    "aarch64-unknown-linux-gnu",
-)
+RELEASE_TARGETS = {
+    "aarch64-apple-darwin": ("macos", "arm64"),
+    "x86_64-apple-darwin": ("macos", "x64"),
+    "x86_64-pc-windows-msvc": ("windows", "x64"),
+    "aarch64-pc-windows-msvc": ("windows", "arm64"),
+    "x86_64-unknown-linux-gnu": ("linux", "x64"),
+    "aarch64-unknown-linux-gnu": ("linux", "arm64"),
+}
+SUPPORTED_TARGETS = tuple(RELEASE_TARGETS)
 
 
 def verify_executable(path, target):

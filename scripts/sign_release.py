@@ -6,7 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from build_release import ROOT, archive, run, verify_archive, version
+from build_release import ROOT, archive, checksum, run, verify_archive, version
 from installers import mac_disk_image
 from sign_macos import sign_and_notarize
 
@@ -47,11 +47,7 @@ def main():
         )
         output = archive(folder, ROOT / "dist/releases" / source.stem)
         verify_archive(output, signed=True)
-        with output.open("rb") as stream:
-            digest = hashlib.file_digest(stream, "sha256").hexdigest()
-        Path(str(output) + ".sha256").write_text(
-            f"{digest}  {output.name}\n", encoding="ascii", newline="\n"
-        )
+        checksum(output)
         mac_disk_image(folder, ROOT / "dist/releases", signed=True)
 
 
