@@ -4,6 +4,8 @@
 
 mod gui;
 mod protocol;
+#[cfg(feature = "wayland-qa")]
+mod wayland_qa;
 mod x11;
 
 use std::io::{Read, Write};

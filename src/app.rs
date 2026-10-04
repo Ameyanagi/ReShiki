@@ -60,6 +60,8 @@ mod theme_generator;
 mod tool_button;
 mod typography;
 mod updates;
+#[cfg(all(target_os = "linux", feature = "wayland-qa"))]
+mod wayland_qa;
 #[cfg(windows)]
 mod windows_libreoffice_save;
 mod workspace;
@@ -703,6 +705,8 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, mut message: Message) -> Task<Message> {
+        #[cfg(all(target_os = "linux", feature = "wayland-qa"))]
+        let qa_event = wayland_qa::event(&message);
         // Timer polls belong to the Assistant's drawing before any front-tab
         // focus or menu handling runs.
         if matches!(&message, Message::Assistant(assistant::Action::Poll))
@@ -722,6 +726,10 @@ impl App {
                 tagged(task, self.tab.id)
             }
         };
+        #[cfg(all(target_os = "linux", feature = "wayland-qa"))]
+        if let Some(event) = qa_event {
+            wayland_qa::record(self, event);
+        }
         if self.exit.frozen() {
             return task;
         }

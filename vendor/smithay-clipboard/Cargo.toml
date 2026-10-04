@@ -37,6 +37,7 @@ repository = "https://github.com/smithay/smithay-clipboard"
 [features]
 default = ["dlopen"]
 dlopen = ["wayland-backend/dlopen"]
+wayland-qa = []
 
 [lib]
 name = "smithay_clipboard"
