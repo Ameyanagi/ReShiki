@@ -481,7 +481,7 @@ impl App {
         )))
         .center_x(Length::Fill)
         .center_y(Length::Fill);
-        stack![content, backdrop, dialog].into()
+        reshiki::accessibility::focus_scope(stack![content, backdrop, dialog])
     }
 }
 
