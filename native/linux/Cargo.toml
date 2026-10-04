@@ -5,6 +5,9 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Bounded Linux clipboard selection transport for ReShiki"
 
+[features]
+wayland-qa = ["smithay-clipboard/wayland-qa", "dep:tokio"]
+
 [target.'cfg(target_os = "linux")'.dependencies]
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
@@ -14,3 +17,4 @@ x11rb = "0.13.2"
 raw-window-handle = "=0.6.2"
 # Must resolve to the same patched instance used by Iced/window_clipboard.
 smithay-clipboard = "=0.7.3"
+tokio = { version = "1", optional = true, features = ["time", "macros"] }

@@ -51,6 +51,10 @@ impl Binary {
 
 impl State {
     pub fn request(&mut self, connection: &Connection, operation: Operation) {
+        #[cfg(feature = "wayland-qa")]
+        if matches!(&operation, Operation::Write { .. }) {
+            crate::qa::hold("request", "");
+        }
         if self.client.stopped.load(Ordering::Acquire) {
             operation.fail(unavailable());
             return;
@@ -220,6 +224,12 @@ impl State {
                 .collect()
         });
         for source in ready {
+            #[cfg(feature = "wayland-qa")]
+            if let Some(write) = self.binary.writes.get(&source) {
+                // This offer and generation marker came from the compositor.
+                // Only delivery is delayed; no sync or queued-write substitute.
+                crate::qa::hold("receipt", &write.marker);
+            }
             if let Some(write) = self.binary.writes.remove(&source) {
                 let result = write
                     .completion
