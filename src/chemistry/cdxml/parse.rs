@@ -49,20 +49,7 @@ fn position(node: Node<'_, '_>) -> Result<(Point3, bool)> {
 }
 
 fn predicates(node: Node<'_, '_>) -> Result<()> {
-    for (name, defaults) in [
-        ("RingBondCount", &["Unspecified", "-1"][..]),
-        ("UnsaturatedBonds", &["Unspecified", "0"][..]),
-        ("SubstituentsUpTo", &[][..]),
-        ("SubstituentsExactly", &[][..]),
-        ("FreeSites", &["0"][..]),
-        ("LinkCountLow", &[][..]),
-        ("LinkCountHigh", &[][..]),
-        ("IsotopicAbundance", &["Unspecified", "0"][..]),
-        ("Topology", &["Unspecified", "0"][..]),
-        ("RxnChange", &["no", "0"][..]),
-        ("RxnStereo", &["Unspecified", "0"][..]),
-        ("RxnParticipation", &["Unspecified", "0"][..]),
-    ] {
+    for &(name, defaults) in super::PREDICATES {
         if node.attribute(name).is_some_and(|v| !defaults.contains(&v)) {
             return Err(Error::Unsupported("query or reaction predicate"));
         }

@@ -7,8 +7,11 @@ use super::{
     graph::{Atom, Graph, Valence},
     stereo::{perception::RingKind, wedging},
 };
-use std::{collections::HashSet, fmt::Write};
+use std::collections::{HashMap, HashSet};
+use std::fmt::Write;
 mod read;
+#[cfg(test)]
+mod tests;
 pub(crate) use read::read_reaction;
 pub use read::{FileAnnotations, Imported, ReadError, read};
 
@@ -126,9 +129,15 @@ fn write_part(
     source.graph.validate().map_err(invalid)?;
     source.metadata.validate(&source.graph).map_err(invalid)?;
     let (n, e) = (source.graph.atoms.len(), source.graph.bonds.len());
+    let mut indices = HashMap::new();
     if molecule.rdkit_version != RDKIT_VERSION
         || molecule.ids.len() != n
-        || molecule.ids.iter().collect::<HashSet<_>>().len() != n
+        || if attachments.is_empty() {
+            molecule.ids.iter().collect::<HashSet<_>>().len() != n
+        } else {
+            indices.extend(molecule.ids.iter().enumerate().map(|(i, &id)| (id, i)));
+            indices.len() != n
+        }
         || molecule.positions.len() != n
         || molecule.positions.iter().any(|p| {
             [p.x, p.y, p.z]
@@ -300,10 +309,8 @@ fn write_part(
                     attachment.members.len()
                 );
                 for id in &attachment.members {
-                    let index = molecule
-                        .ids
-                        .iter()
-                        .position(|n| n == id)
+                    let index = indices
+                        .get(id)
                         .ok_or_else(|| invalid("Missing MOL attachment target"))?;
                     write!(line, " {}", index + 1)?;
                 }

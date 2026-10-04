@@ -14,7 +14,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   [Measurements and exact-output checks](changes/memory-footprint-2026-10-04.md)
   · [PR #131](https://github.com/Ameyanagi/ReShiki/pull/131) · @Ameyanagi.
 
-- **Under review — Document and geometry cleanup:** reuse internal drawing
+- **Document and geometry cleanup:** reuse internal drawing
   iterators, owned ring and template data, and bounded editing history while
   preserving drawing output, selection order, geometry and Undo behavior.
   [Validation](changes/document-geometry-cleanup-2026-10-04.md)
@@ -54,7 +54,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   type. Opening a field leaves the drawing and Undo history unchanged.
   [Details](selection-transforms.md) · @Ameyanagi.
 
-- **Under review — Reaction membership on joins:** Joining existing fragments preserves reaction roles, coefficients and references, and rejects conflicting participants atomically.
+- **Reaction membership on joins:** Joining existing fragments preserves reaction roles, coefficients and references, and rejects conflicting participants atomically.
   [Validation and limits](changes/joining-reaction-membership-2026-10-04.md)
   · [PR #137](https://github.com/Ameyanagi/ReShiki/pull/137) · @Ameyanagi.
 
@@ -70,7 +70,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   [Evidence](changes/issue-work-2026-10-02.md#interchange-and-nonvisual-evidence)
   · [Issue #56](https://github.com/Ameyanagi/ReShiki/issues/56) · @Ameyanagi.
 
-- **Under review — Picture and export memory:** Compact stored PNG buffers and reuse owned reflection and export rasters while preserving exact drawing output; measured import latency tradeoffs are documented.
+- **Picture and export memory:** Compact stored PNG buffers and reuse owned reflection and export rasters while preserving exact drawing output; measured import latency tradeoffs are documented.
   [Validation and limits](changes/image-export-memory-2026-10-04.md)
   · [PR #138](https://github.com/Ameyanagi/ReShiki/pull/138) · @Ameyanagi.
 
@@ -97,6 +97,10 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   · [Dimension units image](images/issue-work-2026-10-02/style-units-1280.png)
   · [Native check](changes/issue-work-2026-10-02.md#physical-units-and-retained-input-focus-89)
   · [Issue #89](https://github.com/Ameyanagi/ReShiki/issues/89) · @Ameyanagi.
+
+- **Under review — Native chemistry allocations:** Move owned requests, borrow serialization and ranking data, and share immutable codec defaults while preserving scientific outputs and bounded worker behavior.
+  [Validation and limits](changes/native-chemistry-allocations-2026-10-04.md)
+  · [PR #141](https://github.com/Ameyanagi/ReShiki/pull/141) · @Ameyanagi.
 
 - **Under review — Manual SciFinder handoff:** follow verified molecule-import
   and bounded ChemDoodle reaction-search workflows using ReShiki's prepared

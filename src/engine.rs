@@ -289,8 +289,8 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         {
             let reaction_smiles = format == "rsmi";
             use crate::chemistry::reaction;
-            let document = request.document.clone().ok_or("Missing reaction drawing")?;
-            let selected = request.selected_ids.clone();
+            let document = request.document.take().ok_or("Missing reaction drawing")?;
+            let selected = request.selected_ids.take();
             let output = tokio::task::spawn_blocking(move || {
                 if reaction_smiles {
                     reaction::write_smiles(&document, selected.as_deref())

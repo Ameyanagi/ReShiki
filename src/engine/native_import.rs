@@ -101,7 +101,8 @@ pub async fn execute(
     let request = request.into();
     // Retain the caller snapshot. Large text/document clones and chemical work
     // belong on the blocking executor; only the bounded InChI exchange is async.
-    let prepared = tokio::task::spawn_blocking(move || prepare((*request).clone())).await??;
+    let prepared =
+        tokio::task::spawn_blocking(move || prepare(Arc::unwrap_or_clone(request))).await??;
     let prepared = match prepared {
         Preparation::Complete(prepared) => prepared,
         Preparation::Drawing(document, warnings) => {

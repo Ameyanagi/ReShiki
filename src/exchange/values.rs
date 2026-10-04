@@ -1,5 +1,8 @@
 use super::{Property, Reader, Result, finite};
 
+#[cfg(test)]
+mod tests;
+
 pub(super) fn numeric(kind: &str) -> bool {
     matches!(
         kind,
@@ -82,15 +85,19 @@ pub(super) fn encode_number(p: &Property, value: &str) -> Result<Vec<u8>> {
     if line_height(p.name) && n != 0. && n != 1. {
         n *= 20.;
     }
-    pack_number(kind(p), n)
+    pack_number(kind(p), n, |bytes| Ok(bytes.to_vec()))
 }
 
-pub(super) fn pack_number(kind: &str, n: f64) -> Result<Vec<u8>> {
+pub(super) fn pack_number<T>(
+    kind: &str,
+    n: f64,
+    write: impl FnOnce(&[u8]) -> Result<T>,
+) -> Result<T> {
     if !n.is_finite() {
         return Err("Non-finite drawing value".into());
     }
     if kind == "FLOAT64" {
-        return Ok(n.to_le_bytes().to_vec());
+        return write(&n.to_le_bytes());
     }
     let n = n.round_ties_even();
     macro_rules! pack {
@@ -98,7 +105,7 @@ pub(super) fn pack_number(kind: &str, n: f64) -> Result<Vec<u8>> {
             if n < <$t>::MIN as f64 || n > <$t>::MAX as f64 {
                 return Err("Drawing value exceeds the binary format range".into());
             }
-            Ok((n as $t).to_le_bytes().to_vec())
+            write(&(n as $t).to_le_bytes())
         }};
     }
     match kind {
@@ -211,7 +218,9 @@ pub(super) fn encode_coordinates(value: &str, kind: &str) -> Result<Vec<u8>> {
     reorder(&mut values);
     let mut result = Vec::new();
     for v in values {
-        result.extend(pack_number("INT32", v * 65536.)?);
+        pack_number("INT32", v * 65536., |bytes| {
+            super::append(&mut result, bytes)
+        })?;
     }
     Ok(result)
 }

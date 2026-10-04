@@ -17,7 +17,6 @@ pub(crate) fn style_from_cdx(data: &[u8]) -> Result<String> {
     } else {
         r.take(28)?;
     }
-    let schema = Schema::new();
     let mut tree = Tree {
         name: "CDXML",
         id: 0,
@@ -53,7 +52,7 @@ pub(crate) fn style_from_cdx(data: &[u8]) -> Result<String> {
             };
             let value = r.take(size)?;
             let selected = matches!(tag, 0x100 | 0x80a)
-                || schema.codes.get(&tag).is_some_and(|p| {
+                || SCHEMA.codes.get(&tag).is_some_and(|p| {
                     matches!(
                         p.name,
                         "BondLength"
@@ -77,7 +76,7 @@ pub(crate) fn style_from_cdx(data: &[u8]) -> Result<String> {
     if !matches!(r.remaining, [] | [0, 0]) {
         return Err("Unexpected trailing stationery data".into());
     }
-    let root = convert(&tree, &schema, &mut HashMap::new())?;
+    let root = convert(&tree, &mut HashMap::new())?;
     let mut xml = String::new();
     root.write(&mut xml)?;
     Ok(xml)
@@ -116,7 +115,7 @@ pub fn from_cdx(data: &[u8]) -> Result<String> {
         return Err("Unexpected trailing binary drawing data".into());
     }
     let mut fonts = HashMap::new();
-    let root = convert(&tree, &Schema::new(), &mut fonts)?;
+    let root = convert(&tree, &mut fonts)?;
     let mut xml = String::new();
     root.write(&mut xml)?;
     Ok(xml)
@@ -250,7 +249,7 @@ fn escape(out: &mut String, text: &str, attribute: bool) -> Result<()> {
     }
     Ok(())
 }
-fn convert(tree: &Tree<'_>, schema: &Schema, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
+fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
     let mut el = Element::new(tree.name);
     if tree.id != 0 {
         el.set("id", tree.id);
@@ -286,7 +285,7 @@ fn convert(tree: &Tree<'_>, schema: &Schema, fonts: &mut HashMap<u16, u16>) -> R
         if *tag == 0x100 {
             continue;
         }
-        let Some(p) = schema.codes.get(tag) else {
+        let Some(p) = SCHEMA.codes.get(tag) else {
             if matches!(tree.name, "CDXML" | "page")
                 || tree.name == "n" && matches!(tag, 0x448 | 0x44d)
             {
@@ -375,7 +374,7 @@ fn convert(tree: &Tree<'_>, schema: &Schema, fonts: &mut HashMap<u16, u16>) -> R
                 let id = r.u32()?;
                 let attr = r.u16()?;
                 r.done()?;
-                let p = schema
+                let p = SCHEMA
                     .codes
                     .get(&attr)
                     .ok_or("Unsupported represented property")?;
@@ -402,7 +401,7 @@ fn convert(tree: &Tree<'_>, schema: &Schema, fonts: &mut HashMap<u16, u16>) -> R
             .extend(decode_text(data, fonts, utf8_text.is_some())?);
     }
     for child in &tree.children {
-        el.children.push(convert(child, schema, fonts)?);
+        el.children.push(convert(child, fonts)?);
     }
     Ok(el)
 }
