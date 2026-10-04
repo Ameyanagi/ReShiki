@@ -1,5 +1,8 @@
 use resvg::{tiny_skia, usvg};
 
+#[path = "font_export_103/pdf.rs"]
+mod pdf;
+
 const FAMILY: &str = "ReShiki Font Export Fixture";
 const TTF: &[u8] = include_bytes!("fixtures/font-export-103/variable-default-100.subset.ttf");
 const CFF2: &[u8] = include_bytes!("fixtures/font-export-103/cff2-variable-default-100.subset.otf");
@@ -90,5 +93,17 @@ fn mixed_variable_weights_keep_two_selectable_pdf_font_instances() {
         assert_eq!(syntax.matches("/Subtype /CIDFontType2").count(), 2);
         assert_eq!(syntax.matches("/FontFile2").count(), 2);
         assert!(!syntax.contains("/FontFile3"));
+        let controls = if font == TTF {
+            [
+                include_bytes!("fixtures/font-export-103/static-400.subset.ttf").as_slice(),
+                include_bytes!("fixtures/font-export-103/static-700.subset.ttf").as_slice(),
+            ]
+        } else {
+            [
+                include_bytes!("fixtures/font-export-103/cff-static-400.subset.otf").as_slice(),
+                include_bytes!("fixtures/font-export-103/cff-static-700.subset.otf").as_slice(),
+            ]
+        };
+        pdf::assert_embedded_weights(&pdf, controls);
     }
 }
