@@ -2,6 +2,12 @@
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
+- **Shared graphic, export, Office and release logic:** consolidate graphic-style
+  controls, SVG parsing, Office revision guards and release checksum generation
+  while preserving the existing controls, output settings and error messages.
+  Automated regression checks and rendered graphic-control checks passed.
+  [PR #129](https://github.com/Ameyanagi/ReShiki/pull/129) · @Ameyanagi.
+
 - **Under review — Atom shortcut targeting and growth:** shortcuts recognize
   complete atom labels, dimethyl and saturated rings use a nitrogen target when
   its valence allows, and terminal carbonyls continue the carbon chain before
