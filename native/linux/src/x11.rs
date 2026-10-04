@@ -1,5 +1,6 @@
 use crate::protocol::{
     self, LIMIT, MAX_FORMATS, MAX_TRANSFERS, Offer, Representation, TRANSFER_TIMEOUT,
+    TRANSFER_TOTAL_TIMEOUT,
 };
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use std::{collections::BTreeMap, sync::Arc, time::Instant};
@@ -13,6 +14,36 @@ use x11rb::{
 
 fn error(error: impl std::fmt::Display) -> String {
     format!("X11 clipboard: {error}")
+}
+
+// Other applications may advertise many unsupported targets. Bound their atom
+// list separately from our own offer/MULTIPLE limit (16 KiB, without interning it).
+const MAX_TARGETS: usize = 4096;
+
+struct TransferTiming {
+    idle: Instant,
+    total: Instant,
+}
+
+impl TransferTiming {
+    fn new(now: Instant) -> Self {
+        Self {
+            idle: now + TRANSFER_TIMEOUT,
+            total: now + TRANSFER_TOTAL_TIMEOUT,
+        }
+    }
+
+    fn deadline(&self) -> Instant {
+        self.idle.min(self.total)
+    }
+
+    fn progress(&mut self, now: Instant) -> Result<(), String> {
+        if now >= self.deadline() {
+            return Err("X11 clipboard transfer timed out".into());
+        }
+        self.idle = now + TRANSFER_TIMEOUT;
+        Ok(())
+    }
 }
 
 struct Atoms {
@@ -30,7 +61,7 @@ struct Transfer {
     target: Atom,
     data: Arc<[u8]>,
     offset: usize,
-    deadline: Instant,
+    timing: TransferTiming,
 }
 
 pub struct Clipboard {
@@ -285,7 +316,7 @@ impl Clipboard {
                     target,
                     data,
                     offset: 0,
-                    deadline: Instant::now() + TRANSFER_TIMEOUT,
+                    timing: TransferTiming::new(Instant::now()),
                 });
             }
         }
@@ -353,6 +384,13 @@ impl Clipboard {
         else {
             return;
         };
+        // An event queued during this dispatch batch cannot revive an expired
+        // transfer before serve() reaches its next pruning pass.
+        if self.transfers[index].timing.deadline() <= Instant::now() {
+            self.transfers.remove(index);
+            self.unwatch(window);
+            return;
+        }
         let Some(transfer) = self.transfers.get_mut(index) else {
             return;
         };
@@ -366,7 +404,8 @@ impl Clipboard {
             .connection
             .change_property8(PropMode::REPLACE, window, property, transfer.target, data)
             .map_err(error)
-            .and_then(|cookie| cookie.check().map_err(error));
+            .and_then(|cookie| cookie.check().map_err(error))
+            .and_then(|()| transfer.timing.progress(Instant::now()));
         transfer.offset = end;
         if done || result.is_err() {
             self.transfers.remove(index);
@@ -389,10 +428,10 @@ impl Clipboard {
             let expired: Vec<Window> = self
                 .transfers
                 .iter()
-                .filter(|t| t.deadline <= now)
+                .filter(|t| t.timing.deadline() <= now)
                 .map(|t| t.window)
                 .collect();
-            self.transfers.retain(|t| t.deadline > now);
+            self.transfers.retain(|t| t.timing.deadline() > now);
             for window in expired {
                 self.unwatch(window);
             }
@@ -490,8 +529,9 @@ impl Clipboard {
         if owner == NONE {
             return Ok(None);
         }
-        let deadline = Instant::now() + TRANSFER_TIMEOUT;
-        let targets = self.request_property(self.atoms.targets, MAX_FORMATS * 4, deadline)?;
+        let mut timing = TransferTiming::new(Instant::now());
+        let targets =
+            self.request_property(self.atoms.targets, MAX_TARGETS * 4, timing.deadline())?;
         if targets.type_ != u32::from(AtomEnum::ATOM) || targets.format != 32 {
             return Err("Invalid X11 clipboard TARGETS response".into());
         }
@@ -499,6 +539,7 @@ impl Clipboard {
             .value32()
             .ok_or("Invalid X11 clipboard atom list")?
             .collect();
+        timing.progress(Instant::now())?;
         let mut known = BTreeMap::new();
         for (_, types, _) in protocol::READABLE {
             for mime in *types {
@@ -523,7 +564,7 @@ impl Clipboard {
         if self.owner()? != owner {
             return Err("X11 clipboard changed during the read".into());
         }
-        let reply = self.request_property(target, LIMIT, deadline)?;
+        let reply = self.request_property(target, LIMIT, timing.deadline())?;
         let bytes = if reply.type_ == self.atoms.incr {
             if reply.format != 32
                 || reply.value.len() != 4
@@ -534,6 +575,7 @@ impl Clipboard {
             {
                 return Err("Invalid or oversized X11 incremental transfer".into());
             }
+            timing.progress(Instant::now())?;
             // Do not reserve the untrusted announced size. Grow only for received bytes.
             let mut bytes = Vec::new();
             self.connection
@@ -543,7 +585,7 @@ impl Clipboard {
                 .map_err(error)?;
             self.connection.flush().map_err(error)?;
             loop {
-                if let Event::PropertyNotify(event) = self.wait_event(deadline)?
+                if let Event::PropertyNotify(event) = self.wait_event(timing.deadline())?
                     && event.window == self.window
                     && event.atom == self.atoms.property
                     && event.state == Property::NEW_VALUE
@@ -556,6 +598,7 @@ impl Clipboard {
                     if chunk.type_ != target || chunk.format != 8 {
                         return Err("Invalid X11 incremental clipboard chunk".into());
                     }
+                    timing.progress(Instant::now())?;
                     self.connection
                         .delete_property(self.window, self.atoms.property)
                         .map_err(error)?
@@ -573,6 +616,7 @@ impl Clipboard {
             if reply.type_ != target || reply.format != 8 {
                 return Err("Invalid X11 clipboard format".into());
             }
+            timing.progress(Instant::now())?;
             reply.value
         };
         // A one-shot owner may release CLIPBOARD immediately after sending the
@@ -586,6 +630,36 @@ impl Clipboard {
 mod tests {
     use super::*;
     use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use std::time::Duration;
+
+    #[test]
+    fn incremental_progress_refreshes_only_the_idle_deadline() {
+        let start = Instant::now();
+        let mut timing = TransferTiming::new(start);
+        timing.progress(start + Duration::from_secs(4)).unwrap();
+        assert_eq!(timing.deadline(), start + Duration::from_secs(9));
+        timing.progress(start + Duration::from_secs(8)).unwrap();
+        assert_eq!(timing.deadline(), start + Duration::from_secs(13));
+        for seconds in (12..60).step_by(4) {
+            timing
+                .progress(start + Duration::from_secs(seconds))
+                .unwrap();
+        }
+        assert_eq!(timing.deadline(), start + TRANSFER_TOTAL_TIMEOUT);
+        assert!(timing.progress(start + TRANSFER_TOTAL_TIMEOUT).is_err());
+        assert_eq!(timing.deadline(), start + TRANSFER_TOTAL_TIMEOUT);
+    }
+
+    #[test]
+    fn expired_idle_deadline_cannot_be_revived() {
+        let start = Instant::now();
+        let mut timing = TransferTiming::new(start);
+        let deadline = timing.deadline();
+        assert_eq!(deadline, start + TRANSFER_TIMEOUT);
+        assert!(timing.progress(deadline).is_err());
+        assert_eq!(timing.deadline(), deadline);
+        assert!(timing.progress(deadline + Duration::from_secs(1)).is_err());
+    }
 
     fn image_owner(size: usize) -> Clipboard {
         let mut owner = Clipboard::connect().unwrap();
@@ -599,6 +673,165 @@ mod tests {
             )
             .unwrap();
         owner
+    }
+
+    fn read_offered_targets(count: usize) -> Result<Option<Representation>, String> {
+        let mut owner = image_owner(100);
+        let target = *owner.data.keys().next().unwrap();
+        let mut targets = Vec::new();
+        for index in 1..count {
+            targets.push(
+                owner
+                    .connection
+                    .intern_atom(false, format!("_RESHIKI_TEST_TARGET_{index}").as_bytes())
+                    .unwrap()
+                    .reply()
+                    .unwrap()
+                    .atom,
+            );
+        }
+        // The supported format must be found beyond the outgoing offer limit.
+        targets.push(target);
+        let worker = std::thread::spawn(move || -> Result<(), String> {
+            loop {
+                if let Event::SelectionRequest(request) =
+                    owner.wait_event(Instant::now() + TRANSFER_TIMEOUT)?
+                {
+                    if request.target == owner.atoms.targets {
+                        owner
+                            .connection
+                            .change_property32(
+                                PropMode::REPLACE,
+                                request.requestor,
+                                request.property,
+                                AtomEnum::ATOM,
+                                &targets,
+                            )
+                            .map_err(error)?
+                            .check()
+                            .map_err(error)?;
+                        owner.notify(&request, request.property)?;
+                    } else {
+                        owner.request(request)?;
+                    }
+                    owner.connection.flush().map_err(error)?;
+                    if request.target == target || count > MAX_TARGETS {
+                        return Ok(());
+                    }
+                }
+            }
+        });
+        let result = Clipboard::connect().unwrap().read(true);
+        let served = worker.join().unwrap();
+        if result.is_ok() {
+            served.unwrap();
+        }
+        result
+    }
+
+    #[test]
+    #[ignore = "requires a dedicated X11 server (run under Xvfb)"]
+    fn supported_target_after_many_unknown_targets_is_read() {
+        let result = read_offered_targets(MAX_TARGETS).unwrap().unwrap();
+        assert_eq!(result.kind, "public.png");
+        assert_eq!(STANDARD.decode(result.data).unwrap(), vec![37_u8; 100]);
+    }
+
+    #[test]
+    #[ignore = "requires a dedicated X11 server (run under Xvfb)"]
+    fn oversized_target_list_is_rejected() {
+        let result = read_offered_targets(MAX_TARGETS + 1).unwrap_err();
+        assert!(result.contains("transfer limit"), "{result}");
+    }
+
+    #[test]
+    #[ignore = "requires a dedicated X11 server (run under Xvfb)"]
+    fn incremental_read_accepts_progress_beyond_the_idle_timeout() {
+        let mut owner = image_owner(128);
+        owner.chunk = 16;
+        let worker = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(20);
+            loop {
+                match owner.wait_event(deadline).unwrap() {
+                    Event::SelectionRequest(request) => owner.request(request).unwrap(),
+                    Event::PropertyNotify(event)
+                        if event.state == Property::DELETE
+                            && owner.transfers.iter().any(|transfer| {
+                                transfer.window == event.window && transfer.property == event.atom
+                            }) =>
+                    {
+                        // Nine handshakes exceed five seconds; none is idle that long.
+                        std::thread::sleep(Duration::from_millis(750));
+                        owner.advance(event.window, event.atom);
+                        owner.connection.flush().unwrap();
+                        if owner.transfers.is_empty() {
+                            break;
+                        }
+                    }
+                    Event::DestroyNotify(_) => break,
+                    _ => {}
+                }
+                owner.connection.flush().unwrap();
+            }
+        });
+        let result = Clipboard::connect().unwrap().read(true);
+        worker.join().unwrap();
+        assert_eq!(
+            STANDARD.decode(result.unwrap().unwrap().data).unwrap(),
+            vec![37_u8; 128]
+        );
+    }
+
+    fn read_incremental_slowly(reader: &Clipboard, target: Atom) -> Result<Vec<u8>, String> {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let header = reader.request_property(target, LIMIT, deadline)?;
+        assert_eq!(header.type_, reader.atoms.incr);
+        let mut bytes = Vec::new();
+        loop {
+            // The real owner's serve loop must extend its deadline on each ACK.
+            std::thread::sleep(Duration::from_millis(750));
+            reader
+                .connection
+                .delete_property(reader.window, reader.atoms.property)
+                .map_err(error)?
+                .check()
+                .map_err(error)?;
+            reader.connection.flush().map_err(error)?;
+            loop {
+                if let Event::PropertyNotify(event) = reader.wait_event(deadline)?
+                    && event.window == reader.window
+                    && event.atom == reader.atoms.property
+                    && event.state == Property::NEW_VALUE
+                {
+                    let chunk = reader.property(128_usize.saturating_sub(bytes.len()))?;
+                    if chunk.type_ == NONE {
+                        continue;
+                    }
+                    assert_eq!(chunk.type_, target);
+                    assert_eq!(chunk.format, 8);
+                    if chunk.value.is_empty() {
+                        return Ok(bytes);
+                    }
+                    bytes.extend_from_slice(&chunk.value);
+                    break;
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a dedicated X11 server (run under Xvfb)"]
+    fn incremental_write_accepts_progress_beyond_the_idle_timeout() {
+        let mut owner = image_owner(128);
+        owner.chunk = 16;
+        let target = *owner.data.keys().next().unwrap();
+        let worker = std::thread::spawn(move || owner.serve().unwrap());
+        let reader = Clipboard::connect().unwrap();
+        let result = read_incremental_slowly(&reader, target);
+        drop(reader);
+        let _replacement = image_owner(1);
+        worker.join().unwrap();
+        assert_eq!(result.unwrap(), vec![37_u8; 128]);
     }
 
     #[test]

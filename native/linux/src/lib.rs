@@ -9,7 +9,7 @@ mod x11;
 use std::io::{Read, Write};
 
 pub use gui::{gui_clipboard_request, initialize_clipboard};
-pub use protocol::{JSON_LIMIT, LIMIT};
+pub use protocol::{JSON_LIMIT, LIMIT, TRANSFER_TOTAL_TIMEOUT};
 
 /// Prefer the observed GUI backend, including inherited Wayland socket handles.
 /// The selected transport still verifies connection/protocol readiness.

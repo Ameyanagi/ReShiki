@@ -12,6 +12,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 // around their ink and use 2:1 elliptical caps. Padding stays fixed when the
 // label size changes.
 const KAPPA: f32 = 0.552_284_8;
+// Cubic circle segments overshoot the true radius by at most 0.0273%.
+const CAPSULE_RADIUS_SCALE: f32 = 1.0003;
 
 fn radius(doc: &Document) -> f32 {
     let style = &doc.drawing_style;
@@ -109,8 +111,7 @@ pub(crate) fn bond_bounds(
     }
     let a = doc.atom(bond.a)?.position;
     let b = doc.atom(bond.b)?.position;
-    // The cubic circle approximation can extend 0.0273% beyond its radius.
-    let radius = bond_radius(doc, bond, joins) * 1.0003;
+    let radius = bond_radius(doc, bond, joins) * CAPSULE_RADIUS_SCALE;
     Some((
         Point::new(a.x.min(b.x) - radius, a.y.min(b.y) - radius),
         Point::new(a.x.max(b.x) + radius, a.y.max(b.y) + radius),
@@ -131,6 +132,75 @@ fn capsule(a: Point, b: Point, u: Point, v: Point) -> Vec<PathCommand> {
         PathCommand::Cubic(p(a, -1., -KAPPA), p(a, -KAPPA, -1.), p(a, 0., -1.)),
         PathCommand::Close,
     ]
+}
+
+fn split_polygon(points: &[Point], axis: Point, bound: f32) -> (Vec<Point>, Vec<Point>) {
+    let mut negative = Vec::new();
+    let mut positive = Vec::new();
+    for (a, b) in points
+        .iter()
+        .zip(points.iter().cycle().skip(1))
+        .take(points.len())
+    {
+        let da = a.x * axis.x + a.y * axis.y - bound;
+        let db = b.x * axis.x + b.y * axis.y - bound;
+        if da < 0. {
+            negative.push(*a);
+        } else {
+            positive.push(*a);
+        }
+        if (da < 0.) != (db < 0.) {
+            let t = da / (da - db);
+            let cut = a.offset((b.x - a.x) * t, (b.y - a.y) * t);
+            negative.push(cut);
+            positive.push(cut);
+        }
+    }
+    (negative, positive)
+}
+
+fn clear_labels(commands: Vec<PathCommand>, boxes: &[(Point, Point)]) -> Vec<PathCommand> {
+    if boxes.is_empty() {
+        return commands;
+    }
+    // Subtract glyph boxes from the actual capsule. Moving its round cap would
+    // uncover a diagonal bond's already-contrasted stroke. Per-glyph boxes also
+    // leave the gaps between stacked labels available for their visible bonds.
+    // Only affected capsules use the existing curve tessellation; untouched
+    // native highlights retain their original cubic geometry.
+    let mut paths = crate::graphics::flattened(&commands);
+    for &(lo, hi) in boxes {
+        let mut outside = Vec::new();
+        for mut inside in paths {
+            // Four disjoint pieces outside the rectangle form a transparent
+            // cutout. Keep all pieces in one color path to avoid seam overdraw.
+            for (axis, bound) in [
+                (Point::new(-1., 0.), -lo.x),
+                (Point::new(1., 0.), hi.x),
+                (Point::new(0., -1.), -lo.y),
+                (Point::new(0., 1.), hi.y),
+            ] {
+                let (rest, part) = split_polygon(&inside, axis, bound);
+                if part.len() >= 3 {
+                    outside.push(part);
+                }
+                inside = rest;
+                if inside.len() < 3 {
+                    break;
+                }
+            }
+        }
+        paths = outside;
+    }
+    let mut out = Vec::new();
+    for path in paths {
+        if let Some(first) = path.first() {
+            out.push(PathCommand::Move(*first));
+            out.extend(path.into_iter().skip(1).map(PathCommand::Line));
+            out.push(PathCommand::Close);
+        }
+    }
+    out
 }
 
 fn paths(groups: BTreeMap<Color, Vec<PathCommand>>) -> impl Iterator<Item = Primitive> {
@@ -171,15 +241,37 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
         } else {
             Point::new(radius, 0.)
         };
-        bonds.entry(color).or_default().extend(capsule(
-            a.position,
-            b.position,
-            u,
-            Point::new(-u.y, u.x),
-        ));
-        for id in [bond.a, bond.b] {
+        // Match the text boxes used by scene's bond-stroke clipping. Positioned
+        // scientific symbols have independent geometry and are not text boxes.
+        let boxes: Vec<_> = [a, b]
+            .into_iter()
+            .filter(|atom| atom_color(doc, atom).is_none())
+            .filter(|atom| {
+                crate::atom_labels::visible(atom, doc) || doc.abbreviation(atom.id).is_some()
+            })
+            .flat_map(|atom| crate::scene::atom_label_ink_boxes(atom, doc))
+            .collect();
+        let commands = clear_labels(
+            capsule(a.position, b.position, u, Point::new(-u.y, u.x)),
+            &boxes,
+        );
+        if commands.is_empty() {
+            continue;
+        }
+        bonds.entry(color).or_default().extend(commands);
+        for atom in [a, b] {
+            // A nearby label cutout can remove part of an otherwise covering
+            // bond cap. Retain that endpoint's own halo in this case.
+            if boxes.iter().any(|(lo, hi)| {
+                atom.position.distance(Point::new(
+                    atom.position.x.clamp(lo.x, hi.x),
+                    atom.position.y.clamp(lo.y, hi.y),
+                )) <= radius * CAPSULE_RADIUS_SCALE
+            }) {
+                continue;
+            }
             covered
-                .entry((id, color))
+                .entry((atom.id, color))
                 .and_modify(|r| *r = r.max(radius))
                 .or_insert(radius);
         }

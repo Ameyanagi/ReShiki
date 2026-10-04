@@ -379,6 +379,249 @@ fn automatic_bond_ink_stays_legible_on_exact_highlights_without_mutating_its_col
     }
 }
 
+fn text_ink_boxes(drawing: &[Primitive]) -> Vec<(Point, Point)> {
+    drawing
+        .iter()
+        .flat_map(|primitive| match primitive {
+            Primitive::Text {
+                position,
+                text,
+                size,
+                style,
+                ..
+            } => reshiki::style::text_ink_boxes(text, *size, style)
+                .into_iter()
+                .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y)))
+                .collect(),
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+fn inside_polygon(point: Point, path: &[Point]) -> bool {
+    let mut inside = false;
+    for (a, b) in path
+        .iter()
+        .zip(path.iter().cycle().skip(1))
+        .take(path.len())
+    {
+        if (a.y > point.y) != (b.y > point.y)
+            && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x
+        {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+fn paint_paths(drawing: &[Primitive], canvas: CanvasTheme, rgb: [u8; 3]) -> Vec<Vec<Point>> {
+    drawing
+        .iter()
+        .flat_map(|primitive| match primitive {
+            Primitive::Path {
+                commands,
+                style,
+                filled: true,
+            } if style
+                .fill
+                .is_some_and(|color| canvas.color(color.rgb()) == rgb) =>
+            {
+                reshiki::graphics::flattened(commands)
+            }
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+fn assert_labels_clear(drawing: &[Primitive], paths: &[Vec<Point>]) {
+    let boxes = text_ink_boxes(drawing);
+    assert!(!boxes.is_empty());
+    for (lo, hi) in boxes {
+        for x in [0.1, 0.5, 0.9] {
+            for y in [0.1, 0.5, 0.9] {
+                let point = lo.offset((hi.x - lo.x) * x, (hi.y - lo.y) * y);
+                assert!(
+                    paths.iter().all(|path| !inside_polygon(point, path)),
+                    "bond paint covers a label ink box at {point:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn bond_highlights_clear_endpoint_labels_without_changing_automatic_or_explicit_ink() {
+    for canvas in CanvasTheme::ALL {
+        for margin in [0., Document::default().drawing_style.margin_width_pt] {
+            for destination in [
+                Point::new(-150., 0.),
+                Point::new(150., 0.),
+                Point::new(0., -150.),
+                Point::new(0., 150.),
+                Point::new(100., 100.),
+            ] {
+                for explicit in [None, Some(Color::Ink), Some(Color::Custom([180, 20, 50]))] {
+                    let mut doc = Document {
+                        canvas_theme: canvas,
+                        ..Document::default()
+                    };
+                    doc.drawing_style.margin_width_pt = margin;
+                    let a = doc.add_atom("N", Point::default());
+                    let b = doc.add_atom("C", destination);
+                    let atom = doc.atom_mut(a).unwrap();
+                    atom.label_h = 2;
+                    atom.isotope = 15;
+                    atom.charge = 1;
+                    if let Some(color) = explicit {
+                        atom.display.color_override = true;
+                        atom.text_style = Some(reshiki::typography::TextStyle {
+                            color,
+                            ..Default::default()
+                        });
+                    }
+                    doc.add_bond(a, b, 1, "plain");
+                    let ink = reshiki::canvas_theme::atom_color(&doc, doc.atom(a).unwrap());
+                    let hydrogen =
+                        reshiki::canvas_theme::hydrogen_color(&doc, doc.atom(a).unwrap());
+                    // Dark gray and paper cannot share one WCAG-compliant ink.
+                    doc.bonds[0].highlight = Some(Color::Custom([32; 3]));
+                    let original = doc.clone();
+                    let drawing = scene::primitives(&doc);
+                    let paths = paint_paths(&drawing, canvas, [32; 3]);
+                    assert!(!paths.is_empty(), "the usable bond retains its highlight");
+                    assert_labels_clear(&drawing, &paths);
+                    assert_eq!(
+                        reshiki::canvas_theme::atom_color(&doc, doc.atom(a).unwrap()),
+                        ink
+                    );
+                    assert_eq!(
+                        reshiki::canvas_theme::hydrogen_color(&doc, doc.atom(a).unwrap()),
+                        hydrogen
+                    );
+                    assert_eq!(doc, original);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn diagonal_and_stacked_labels_keep_visible_bond_ink_on_its_highlight() {
+    use reshiki::atom_labels::HydrogenPosition;
+    for hydrogen in [HydrogenPosition::Auto, HydrogenPosition::Above] {
+        let mut doc = Document::default();
+        let a = doc.add_atom("N", Point::default());
+        let b = doc.add_atom("C", Point::new(100., -100.));
+        let atom = doc.atom_mut(a).unwrap();
+        atom.label_h = 2;
+        atom.display.hydrogen_position = hydrogen;
+        doc.add_bond(a, b, 1, "plain");
+        doc.bonds[0].highlight = Some(Color::Custom([32; 3]));
+        let resolved = reshiki::canvas_theme::resolved_document(&doc);
+        let ink = resolved.bonds[0].color.rgb();
+        assert!(reshiki::color_contrast::contrast(ink, [32; 3]) >= 4.5);
+        assert!(reshiki::color_contrast::contrast(ink, [255; 3]) < 4.5);
+        let drawing = scene::primitives(&doc);
+        let paths = paint_paths(&drawing, doc.canvas_theme, [32; 3]);
+        let mut strokes = 0;
+        for primitive in &drawing {
+            if let Primitive::Path {
+                commands,
+                style,
+                filled: false,
+            } = primitive
+                && style.stroke.rgb() == ink
+            {
+                for segment in reshiki::graphics::flattened(commands) {
+                    for pair in segment.windows(2) {
+                        let [a, b] = pair else { unreachable!() };
+                        for t in [0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999] {
+                            let point = a.offset((b.x - a.x) * t, (b.y - a.y) * t);
+                            assert!(
+                                paths.iter().any(|path| inside_polygon(point, path)),
+                                "automatic bond ink is uncovered at {point:?}"
+                            );
+                        }
+                    }
+                }
+                strokes += 1;
+            }
+        }
+        assert_eq!(strokes, 1, "inspect the actual contrasted bond stroke");
+        assert_labels_clear(&drawing, &paths);
+    }
+}
+
+#[test]
+fn endpoint_highlight_clearance_is_transparent_in_export_and_independent_of_bond_order() {
+    for canvas in CanvasTheme::ALL {
+        let mut doc = Document {
+            canvas_theme: canvas,
+            ..Document::default()
+        };
+        let a = doc.add_atom("O", Point::default());
+        let left = doc.add_atom("C", Point::new(-100., 0.));
+        let right = doc.add_atom("C", Point::new(100., 0.));
+        doc.add_bond(a, left, 1, "plain");
+        doc.add_bond(a, right, 1, "plain");
+        doc.bonds[0].highlight = Some(Color::Custom([0; 3]));
+        doc.bonds[1].highlight = Some(Color::Custom([32; 3]));
+        let svg = scene::svg(&doc);
+        let paints = |svg: &str| {
+            let parsed = roxmltree::Document::parse(svg).unwrap();
+            parsed
+                .descendants()
+                .filter(|node| {
+                    node.has_tag_name("path")
+                        && matches!(node.attribute("fill"), Some("rgb(0,0,0)" | "rgb(32,32,32)"))
+                })
+                .map(|node| {
+                    (
+                        node.attribute("fill").unwrap().to_owned(),
+                        node.attribute("d").unwrap().to_owned(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(paints(&svg).len(), 2);
+        doc.bonds.reverse();
+        assert_eq!(
+            paints(&scene::svg(&doc)),
+            paints(&svg),
+            "incident paint order stays deterministic"
+        );
+        let parsed = roxmltree::Document::parse(&svg).unwrap();
+        assert!(!parsed.descendants().any(|node| node.has_tag_name("rect")));
+        let view = numbers(parsed.root_element().attribute("viewBox").unwrap());
+        let boxes = text_ink_boxes(&scene::primitives(&doc));
+        let [(lo, hi)] = boxes.as_slice() else {
+            panic!("expected one O glyph")
+        };
+        let png = reshiki::export::clipboard_drawing(&doc, "png").unwrap();
+        let pixels = image::load_from_memory(&png).unwrap().to_rgba8();
+        let px = (((lo.x + hi.x) / 2. - view[0]) / view[2] * pixels.width() as f32).floor() as u32;
+        let py = (((lo.y + hi.y) / 2. - view[1]) / view[3] * pixels.height() as f32).floor() as u32;
+        assert_eq!(
+            pixels.get_pixel(px, py).0[3],
+            0,
+            "the O counter stays transparent, not an opaque paper-colored mask"
+        );
+    }
+}
+
+#[test]
+fn overlapping_endpoint_labels_still_cut_out_short_bond_highlights() {
+    for distance in [0., 1., 10.] {
+        let mut doc = Document::default();
+        let a = doc.add_atom("O", Point::default());
+        let b = doc.add_atom("N", Point::new(distance, 0.));
+        doc.add_bond(a, b, 1, "plain");
+        doc.bonds[0].highlight = Some(Color::Custom([0; 3]));
+        let drawing = scene::primitives(&doc);
+        assert_labels_clear(&drawing, &paint_paths(&drawing, doc.canvas_theme, [0; 3]));
+    }
+}
+
 #[test]
 fn atom_halo_stays_above_different_incident_bond_colors_in_both_insertion_orders() {
     for canvas in CanvasTheme::ALL {
