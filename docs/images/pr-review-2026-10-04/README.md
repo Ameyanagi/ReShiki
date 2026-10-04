@@ -65,3 +65,19 @@ Historical native macOS capture from production source 783b154 (QA eeb3d67), 104
 ![Native screenshot for PR #121](pr121-ring-tool-macos-783b154.jpg)
 
 SHA-256: `c6ecaa391f8015bd3a6151e4c18a4190117933c307d385603231f80ba28ad7cf`
+
+## PR #127: pr127-word-launch-failure-macos-d8f426f
+
+Native Microsoft Word on macOS with the Office companion from canonical d8f426f: the task pane rejected Word’s launch URL with Invalid request URL. This is the original failure before the Office launch-query fix.
+
+![Native Word task pane for PR #127](pr127-word-launch-failure-macos-d8f426f.jpg)
+
+SHA-256: `a070466c6943247aef3e700ffb1b8ab4e525047a53248990328f7b928b7abc6e`
+
+## PR #127: pr127-word-connected-macos-6ca2ec2
+
+Native Microsoft Word on macOS after companion fix 6ca2ec2 (public aggregate 9a5d830): the task pane displays Connected to Word and its drawing controls. This proves task-pane connection only. Drawing insertion, editing, save/reopen, recovery, and other Office hosts require separate acceptance.
+
+![Native Word task pane for PR #127](pr127-word-connected-macos-6ca2ec2.jpg)
+
+SHA-256: `77bd3732c8d043fb8ba1d1d4e6fd93c8bcdb9a76983c43e1dfe3ffae53dad382`
