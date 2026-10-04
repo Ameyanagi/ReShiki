@@ -57,9 +57,23 @@ and use RXN/reaction SMILES when the receiver supports those features.
 
 See [the SciFinder handoff guide](scifinder-handoff.md) for CAS Draw's molecular
 SMILES field/**Add to Editor** and ChemDoodle's reaction **Open**/**Load** field.
-Direct keyboard paste into the receiving drawing canvas and live acceptance of
-the new ordinary-Copy behavior remain unverified. Local fixtures can be prepared
-without publishing clipboard data or contacting CAS:
+The October 5 check used an optimized arm64 QA build at `f648465` with Edge on
+macOS: ordinary reaction Copy reached ChemDoodle's Open text field, and Load
+showed the complete benzene-to-cyclohexane reaction with correct roles. Direct
+Cmd+V in its drawing canvas inserted an older internal six-atom Cyclohexane
+instead. CAS Draw's canvas did not import the no-arrow two-ring SMILES or MOL
+clipboard data. Real Cmd+V of the two-ring SMILES into its text field followed
+by Add accepted both molecules. Center Structure revealed the complete Benzene
+with three double bonds and Cyclohexane with six single bonds; the screenshot
+showed `C6H12 (84.16) . C6H6 (78.11)`. MOL was checked only for text-field
+delivery, without Add/conversion. No searches were submitted, and
+vertical/reversed layouts remain covered locally rather than by these live
+checks.
+
+[PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) remains a draft while the
+browser integration approach for direct canvas paste is clarified. The guide
+records the exact actions, baseline comparison and limits. Local fixtures can
+be prepared without publishing clipboard data or contacting CAS:
 
 ```sh
 cargo run --locked --example scifinder_clipboard_qa -- /tmp/reshiki-scifinder-clipboard

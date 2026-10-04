@@ -29,6 +29,8 @@ required-environments = [
 ]
 
 [tool.ruff]
+# Python packages live at the project root; src contains Rust modules.
+src = ["."]
 target-version = "py312"
 line-length = 100
 

@@ -48,10 +48,13 @@ Review the Copy status before using the receiving text field.
 
 In CAS Draw, paste molecular SMILES into the text-to-structure field and choose
 **Add to Editor**. For reactions, use ChemDoodle's **Open** text field and
-**Load**, as described below. These are receiving-field routes; direct
-**Cmd/Ctrl+V into either editor's drawing canvas is not established**. Live
-verification of the new ordinary-Copy and aromatic-reaction behavior is pending;
-the October 2 checks below describe the earlier verified routes.
+**Load**, as described below. These are receiving-field routes.
+**Direct Cmd+V into either editor's drawing canvas did not import the ReShiki
+selection in the October 5 checks**. ChemDoodle Open/Load did load the new
+ordinary-Copy reaction JSON. CAS Draw accepted the no-arrow two-ring SMILES
+through its text field and Add; Center Structure revealed both complete rings.
+See the bounded October 5 results below; the October 2 checks describe earlier
+verified search routes.
 
 ## Copy SMILES
 
@@ -147,16 +150,16 @@ establish that every ChemDoodle feature is accepted by SciFinder.
 
 ## Limits to review
 
-| Drawing content                                                                         | Copy/handoff behavior and receiving limits                                                                                                                                       |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A complete ordinary molecule                                                            | Start with SMILES or MOL and inspect CAS's imported structure.                                                                                                                   |
-| Tetrahedral or double-bond stereo                                                       | Locally test identity preservation, then verify the CAS depiction and search settings. Unspecified stereo remains unspecified.                                                   |
-| Defined collapsed abbreviations                                                         | The underlying atoms are exported; abbreviated appearance need not survive. Verify the full graph.                                                                               |
-| Plain text labels, R-groups, query atoms, polymers, variable or multicenter attachments | Outside this workflow. A displayed label is not a defined molecule, and CAS query features do not establish ReShiki query-format compatibility.                                  |
-| Salts, mixtures or multiple disconnected molecules                                      | All selected molecular components are retained. Inspect receiver acceptance; only the initial single-molecule route was verified. Selecting one component changes the substance. |
-| Reactions and schemes                                                                   | Use the bounded ChemDoodle JSON route with explicit or copy-only inferred roles. Molecular MOL/SMILES does not preserve reaction roles.                                          |
-| Coordinate/exotic bonds or MOL V3000                                                    | ReShiki has format-specific handling, but CAS support for every emitted variant has not been verified.                                                                           |
-| Captions, graphics, colors and document layout                                          | These are not an exact molecular identity and are not retained by ordinary molecular identifiers.                                                                                |
+| Drawing content                                                                         | Copy/handoff behavior and receiving limits                                                                                                                                             |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A complete ordinary molecule                                                            | Start with SMILES or MOL and inspect CAS's imported structure.                                                                                                                         |
+| Tetrahedral or double-bond stereo                                                       | Locally test identity preservation, then verify the CAS depiction and search settings. Unspecified stereo remains unspecified.                                                         |
+| Defined collapsed abbreviations                                                         | The underlying atoms are exported; abbreviated appearance need not survive. Verify the full graph.                                                                                     |
+| Plain text labels, R-groups, query atoms, polymers, variable or multicenter attachments | Outside this workflow. A displayed label is not a defined molecule, and CAS query features do not establish ReShiki query-format compatibility.                                        |
+| Salts, mixtures or multiple disconnected molecules                                      | All selected components are retained. The October 5 two-ring SMILES import passed through Add/Center; inspect other salts and mixtures. Selecting one component changes the substance. |
+| Reactions and schemes                                                                   | Use the bounded ChemDoodle JSON route with explicit or copy-only inferred roles. Molecular MOL/SMILES does not preserve reaction roles.                                                |
+| Coordinate/exotic bonds or MOL V3000                                                    | ReShiki has format-specific handling, but CAS support for every emitted variant has not been verified.                                                                                 |
+| Captions, graphics, colors and document layout                                          | These are not an exact molecular identity and are not retained by ordinary molecular identifiers.                                                                                      |
 
 **Copy as** uses selected objects, or the whole drawing when nothing is selected.
 The SMILES/MOL keyboard shortcuts require a selection. For unassigned no-arrow
@@ -201,8 +204,9 @@ Use a separate output directory:
 cargo run --locked --example scifinder_clipboard_qa -- /tmp/reshiki-scifinder-clipboard
 ```
 
-These fixtures exercise local preparation for the new ordinary-Copy behavior;
-they do not establish canvas paste or a new live SciFinder acceptance result.
+These fixtures exercise local preparation for the new ordinary-Copy behavior.
+Their generated text alone does not establish receiving-editor import or
+canvas paste; the separate live checks below record what was actually tested.
 
 For the receiving-application check, start with `ethanol.rsk` in ReShiki and
 compare its copied SMILES with `ethanol.smiles`. In an authorized CAS session,
@@ -243,6 +247,53 @@ system clipboard into ChemDoodle loaded the expected roles, and the selected
 reaction copy completed the same search through the expected ethanol-to-
 acetaldehyde result. Agents, atom maps and reaction stereo were not part of
 this fixture.
+
+## October 5 clipboard and receiving-editor checks
+
+On October 5, 2026, an optimized arm64 QA build from
+`f6484656c34c5edc0bbccfbe535096f8fb157fd2` was checked with Microsoft Edge
+on macOS in the authorized SciFinder session. The public unassigned
+benzene-to-cyclohexane fixture contains 12 atoms, 12 bonds and one forward arrow.
+The baseline comparison used `81e8193deae71af79fae7a0a5bdf823df5de786e`.
+
+| Clipboard source and receiving action                                                         | Observed result                                                                                                                                                                                                               |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Baseline ordinary Cmd+C, then Cmd+V in ChemDoodle's Open text field                           | The field remained empty.                                                                                                                                                                                                     |
+| QA ordinary Cmd+C for the reaction, then Cmd+V in ChemDoodle's Open text field and Load       | The field received JSON identical to the fixture generator output. Load displayed benzene with three double bonds, Cyclohexane with six single bonds, the forward arrow and correct reactant/product labels.                  |
+| QA reaction Copy, then direct Cmd+V in the ChemDoodle canvas                                  | It inserted an older six-atom Cyclohexane from the editor's internal copy state, rather than the 12-atom ReShiki reaction.                                                                                                    |
+| QA ordinary Cmd+C for the no-arrow two-ring fixture, then direct Cmd+V in the CAS Draw canvas | No change: OK, Copy and Paste remained disabled, with no formula displayed.                                                                                                                                                   |
+| The same no-arrow Copy, then Cmd+V in CAS Draw's text field, Add and Center Structure         | The field received `C1CCCCC1.c1ccccc1`. Add accepted both components; Center Structure showed Benzene with three double bonds and Cyclohexane with six single bonds. The screenshot displayed `C6H12 (84.16) . C6H6 (78.11)`. |
+| Existing Copy as MOL shortcut Cmd+Alt+O, then Cmd+V in CAS Draw's text field                  | The field received actual V2000 MOL text with 12 atoms and 12 bonds. This checked clipboard text delivery, not structure conversion.                                                                                          |
+| The same MOL Copy, then direct Cmd+V in the CAS Draw canvas                                   | No change.                                                                                                                                                                                                                    |
+| The same MOL Copy, then direct Cmd+V in the ChemDoodle canvas                                 | It inserted the older internal six-atom Cyclohexane, rather than the 12-atom clipboard structure.                                                                                                                             |
+
+No search was submitted during these October 5 checks. The reaction check
+establishes the Open text field followed by Load for this horizontal aromatic fixture;
+vertical and reversed layouts have local test coverage but were not exercised
+live. For the no-arrow fixture, real Cmd+V supplied `C1CCCCC1.c1ccccc1` to
+CAS Draw's text field, and Add accepted it. The initial canvas view appeared
+blank or off-center. Center Structure then showed both six-membered rings:
+benzene with three double bonds and Cyclohexane with six single bonds. The
+actual screenshot showed `C6H12 (84.16) . C6H6 (78.11)`; an accessibility reading
+that had truncated the formula to `C` was inaccurate. This verifies the
+text-field/Add/Center route for that two-component fixture. The MOL check still
+establishes text-field delivery only; MOL Add/conversion was not tested.
+
+The exact JavaScript loaded by that SciFinder session was also inspected:
+CAS Draw 1.188, the CAS-customized ChemDoodle bundle, EmbeddableCasDraw and
+SciFinder's application wrapper. CAS Draw's canvas keyboard handler prevents
+the browser's default Cmd/Ctrl+V and publishes an internal paste request.
+ChemDoodle's handler calls its internal CopyPasteManager. Both paste managers
+read buffers populated by Copy inside their own editor, and neither SciFinder
+wrapper connects an external clipboard reader to the canvas. Separate clipboard
+references write text or read a Tagify text input; they do not import chemical
+content into these canvases. Receiver JavaScript was kept outside the repository.
+
+For this inspected build, changing ReShiki's clipboard text or MIME formats
+alone cannot satisfy direct canvas Cmd+V. The requested behavior remains
+unresolved, and [PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) remains a
+draft. This diagnosis applies to the inspected build and does not establish
+behavior for every browser or editor release.
 
 ## Direct integration decision
 
