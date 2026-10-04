@@ -614,13 +614,13 @@ pub(super) async fn aromatic_selection(
     mut request: reshiki::engine::Request,
 ) -> Result<reshiki::engine::Response, String> {
     use reshiki::engine::ChemistryEngine;
-    let Some(mut original) = request.document.clone() else {
+    let Some(original) = request.document.as_mut() else {
         return engine.execute(request).await;
     };
     original.validate()?;
     let selected = request.selected_ids.as_deref().unwrap_or_default();
     let atoms: Vec<_> = original.atoms.iter().map(|a| a.id).collect();
-    let scope: Vec<_> = reshiki::editing::groups(&original, &atoms)
+    let scope: Vec<_> = reshiki::editing::groups(original, &atoms)
         .into_iter()
         .filter(|g| g.iter().any(|id| selected.contains(id)))
         .flatten()
@@ -628,11 +628,11 @@ pub(super) async fn aromatic_selection(
     if scope.is_empty() || scope.len() == atoms.len() {
         return engine.execute(request).await;
     }
-    request.document = Some(reshiki::editing::selection(&original, &scope));
+    let fragment = reshiki::editing::selection(original, &scope);
+    let mut original = std::mem::replace(original, fragment);
     let mut response = engine.execute(request).await?;
     let edited = response
         .document
-        .take()
         .ok_or("The ring edit returned no drawing")?;
     for atom in &mut original.atoms {
         if let Some(new) = edited.atom(atom.id) {
@@ -693,6 +693,40 @@ mod tests {
                 .all(|b| b.order == 4)
         );
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn aromatic_request_fallbacks_keep_the_original_request_and_validation_error() {
+        use reshiki::{
+            document::Document,
+            engine::{ChemistryEngine, LocalEngine, Request},
+        };
+        let engine = LocalEngine::default();
+        let mut document = Document::default();
+        let ids = reshiki::editing::ring(&mut document, Default::default(), 6, true, 0.);
+        for selected in [None, Some(vec![]), Some(vec![u64::MAX]), Some(ids)] {
+            let mut request = Request::molecule("aromatic", document.clone());
+            request.selected_ids = selected;
+            let expected = engine.execute(request.clone()).await;
+            let actual = aromatic_selection(engine.clone(), request).await;
+            assert_eq!(
+                serde_json::to_value(actual).unwrap(),
+                serde_json::to_value(expected).unwrap()
+            );
+        }
+        let mut request = Request::molecule("aromatic", document.clone());
+        request.document = None;
+        let expected = engine.execute(request.clone()).await;
+        let actual = aromatic_selection(engine.clone(), request).await;
+        assert_eq!(
+            serde_json::to_value(actual).unwrap(),
+            serde_json::to_value(expected).unwrap()
+        );
+
+        document.atoms[0].position.x = f32::NAN;
+        let expected = document.validate().unwrap_err();
+        let actual = aromatic_selection(engine, Request::molecule("aromatic", document)).await;
+        assert_eq!(actual.unwrap_err(), expected);
     }
 
     #[test]

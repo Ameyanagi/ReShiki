@@ -275,19 +275,18 @@ impl App {
             || self.tab.erase_stroke
             || self.tab.cleanup.is_some()
             || self.tab.inspector_ui.pending.is_some()
+            || (self.tab.selected.is_empty() && self.tab.analysis.is_some())
         {
             return Subscription::none();
         }
         let key = self.property_request_key();
-        if key.atoms.is_empty() || self.property_analysis().is_some() {
-            return Subscription::none();
-        }
-        if self
-            .tab
-            .inspector_ui
-            .properties
-            .as_ref()
-            .is_some_and(|(saved, _)| *saved == key)
+        if key.atoms.is_empty()
+            || self
+                .tab
+                .inspector_ui
+                .properties
+                .as_ref()
+                .is_some_and(|(saved, _)| *saved == key)
         {
             return Subscription::none();
         }
@@ -1690,6 +1689,46 @@ mod tests {
         assert_eq!(subscriptions(&app), 0);
         app.tab.revision += 1;
         assert!(app.property_analysis().is_none());
+    }
+
+    #[test]
+    fn cached_property_errors_stop_polling_until_the_request_key_changes() {
+        let (mut app, _) = App::new();
+        let first = app.tab.doc.add_atom("C", Default::default());
+        let second = app
+            .tab
+            .doc
+            .add_atom("O", reshiki::document::Point::new(42., 0.));
+        app.inspector_open = true;
+        app.inspector_tab = InspectorTab::Properties;
+        let subscriptions = |app: &App| {
+            iced::advanced::subscription::into_recipes(app.properties_subscription()).len()
+        };
+        let key = app.property_request_key();
+        assert_eq!(key.atoms, [first, second]);
+        app.tab.inspector_ui.properties = Some((key, Err("Cannot analyze this drawing".into())));
+        for selected in [vec![], vec![second, first], vec![first, second]] {
+            app.tab.selected = selected;
+            assert_eq!(app.property_request_key().atoms, [first, second]);
+            assert!(app.property_analysis().is_none());
+            assert_eq!(subscriptions(&app), 0, "A cached error must not retry");
+        }
+        app.tab.selected = vec![first];
+        assert_eq!(subscriptions(&app), 1, "A new fragment must calculate");
+        app.tab.selected = vec![first, second];
+        app.tab.revision += 1;
+        assert_eq!(subscriptions(&app), 1, "A revised drawing must calculate");
+        app.tab.inspector_ui.properties =
+            Some((app.property_request_key(), Err("New error".into())));
+        assert_eq!(subscriptions(&app), 0);
+        app.tab.file_epoch += 1;
+        assert_eq!(subscriptions(&app), 1, "A new file must calculate");
+        app.tab.selected = vec![u64::MAX];
+        assert_eq!(
+            subscriptions(&app),
+            0,
+            "Artwork is not a molecular fragment"
+        );
     }
 
     #[test]
