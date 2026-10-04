@@ -14,6 +14,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   explicit drawing hotspot with arrow navigation and marked ring closure.
   [Workflow and supported chemistry](3d-keyboard-drawing.md)
   · [Review evidence](changes/3d-keyboard-review-2026-10-05.md)
+  · [PR #146](https://github.com/Ameyanagi/ReShiki/pull/146)
   · [Issue #48](https://github.com/Ameyanagi/ReShiki/issues/48) · @Ameyanagi.
 
 - **Chemical text alongside ordinary Copy:** prepare molecular

@@ -1,6 +1,6 @@
 # Interactive 3D and keyboard drawing review
 
-Status: under review. Author: @Ameyanagi. Targets [issue #48](https://github.com/Ameyanagi/ReShiki/issues/48).
+Status: under review in [PR #146](https://github.com/Ameyanagi/ReShiki/pull/146). Author: @Ameyanagi. Targets [issue #48](https://github.com/Ameyanagi/ReShiki/issues/48).
 
 Generate an RDKit conformer, relax around fixed or dragged atoms, and choose an editable projection before Apply. Depth fading can be frozen separately from geometry. F8 enables an explicit keyboard drawing hotspot.
 
