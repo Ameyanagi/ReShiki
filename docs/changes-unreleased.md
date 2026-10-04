@@ -2,12 +2,6 @@
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
-- **Under review — Document and geometry cleanup:** reuse internal drawing
-  iterators, owned ring and template data, and bounded editing history while
-  preserving drawing output, selection order, geometry and Undo behavior.
-  [Validation](changes/document-geometry-cleanup-2026-10-04.md)
-  · [PR #135](https://github.com/Ameyanagi/ReShiki/pull/135) · @Ameyanagi.
-
 - **Shared release checks and descriptor preparation:** share
   native target definitions, checksum writing and descriptor query operations
   while preserving supported platforms, checksums and generated chemistry data.
@@ -19,6 +13,12 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   while preserving drawing output and editing behavior.
   [Measurements and exact-output checks](changes/memory-footprint-2026-10-04.md)
   · [PR #131](https://github.com/Ameyanagi/ReShiki/pull/131) · @Ameyanagi.
+
+- **Under review — Document and geometry cleanup:** reuse internal drawing
+  iterators, owned ring and template data, and bounded editing history while
+  preserving drawing output, selection order, geometry and Undo behavior.
+  [Validation](changes/document-geometry-cleanup-2026-10-04.md)
+  · [PR #135](https://github.com/Ameyanagi/ReShiki/pull/135) · @Ameyanagi.
 
 - **Shared import and rendering logic:** share palette parsing,
   clipboard encoding, reference checkout setup and caption controls; borrow
