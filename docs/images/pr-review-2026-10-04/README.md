@@ -113,3 +113,27 @@ Native Excel 16.113.3 on macOS, Office source 6ca2ec2 and ReShiki package cc17b7
 ![Native Excel edit session for PR #127](pr127-excel-ack-confirmed-macos-6ca2ec2.jpg)
 
 SHA-256: `c1ac7cd1b29460c3c91bd69c6e044b995e6076730fdd2cd54b730ef8ac344cb2`
+
+## PR #127: Before: Word rejects the edit
+
+Native Word edit session with Office source 6ca2ec2 and ReShiki package cc17b7a. The edited drawing remains dirty (green dot beside the tab name); the red status retains the recovery draft after Word rejected save-back. The actual rejection is recorded in the accompanying native test receipt. The visible temporary path belongs to this synthetic test. This screenshot does not identify the rejection’s cause.
+
+![Before: Word rejects the edit](pr127-word-save-rejected-macos-6ca2ec2.jpg)
+
+SHA-256: `359e25df47e245c937e40e04f11caea7ad092690e4c187776aacc4b76ab44ce1`
+
+## PR #127: After: Word acknowledges the edit
+
+Native Word edit session with Office source 2fb8f3a and the same ReShiki package cc17b7a. The same synthetic drawing was rotated 15 degrees. Word accepted the update: ReShiki shows a clean tab and “Drawing updated in Office. Save the Office document to keep it.” The saved document was then closed and reopened, and Edit selected drawing restored exactly the acknowledged native data.
+
+![After: Word acknowledges the edit](pr127-word-save-confirmed-macos-2fb8f3a.jpg)
+
+SHA-256: `34a20831cf22cf1d5b18cbd508a6f8e7beabd7da0d2412c28d72cf1918a944b0`
+
+## PR #127: Result: the saved Word document reopens with the edit
+
+Microsoft Word 16.113.3 for Mac after the confirmed update, document save, close and reopen, using Office source 2fb8f3a and ReShiki package cc17b7a. Drawing A retains the update. This is a one-object result: a separate second insertion still rolled back. Word resampled the embedded preview, so exact preview fidelity and the complete A/B acceptance matrix remain open.
+
+![Result: the saved Word document reopens with the edit](pr127-word-reopened-macos-2fb8f3a.jpg)
+
+SHA-256: `bf0f29a94153eaba33659da9ab3971dcbeb75bfe5708493260ed94133e24ce89`
