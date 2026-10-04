@@ -75,6 +75,17 @@ commit hooks passed formatting, linting, type checks, Clippy and all-target,
 all-feature compilation.
 
 Run ordinary Rust regressions with `cargo test --locked --no-default-features`.
+The regular Arrange output regression runs on a fresh checkout without captured
+artifacts, fonts or a GPU. It checks all eight actions against explicit rectangle
+coordinates, reversed tie order, nested groups, duplicate/dangling selections,
+and complete document equality including styles and unselected content:
+
+```sh
+cargo test --locked --no-default-features --lib \
+  editing::arrange_tests::every_arrangement_preserves_explicit_geometry_and_stable_ties \
+  -- --exact
+```
+
 Run the local CPU workloads with
 `cargo run --release --locked --no-default-features --example canvas_performance`.
 The opt-in tests require a headless renderer:
@@ -90,6 +101,12 @@ cargo test --release --locked --no-default-features --bin reshiki \
 cargo test --locked --no-default-features --bin reshiki \
   app::typography::caption_controls_tests::rendered::caption_controls_publish_spacing_width_and_enter_in_both_modes -- --ignored
 ```
+
+The two `canvas::performance` pixel regressions above are self-contained: they
+use the checked-in gallery and need a headless renderer, but no external baseline
+files. They compare cached/fresh rendering after edits, pan/zoom and history,
+drag/commit rendering, and selection markers against an uncached reference.
+They do not reproduce the separate historical all-primitive baseline capture.
 
 For a fresh original/candidate characterization, install the harnesses on the
 original production tree and capture there first. The original primitive call
