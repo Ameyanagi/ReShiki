@@ -96,7 +96,14 @@ pub(super) async fn invoke(
         }
         Ok(packet)
     };
-    tokio::time::timeout(Duration::from_secs(10), request)
+    // Reads may make steady INCR progress beyond the write acknowledgement
+    // timeout. Allow the worker's total transfer budget plus startup/response time.
+    let timeout = if operation == "write" {
+        Duration::from_secs(10)
+    } else {
+        reshiki_linux::TRANSFER_TOTAL_TIMEOUT + Duration::from_secs(5)
+    };
+    tokio::time::timeout(timeout, request)
         .await
         .map_err(|_| "Clipboard operation timed out".to_owned())?
 }

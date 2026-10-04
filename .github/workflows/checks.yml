@@ -100,6 +100,23 @@ jobs:
           dpkg --compare-versions "${reshiki_lo_version#*:}" ge 25.8
       - name: Run all LibreOffice UNO regression tests
         run: /usr/bin/python3 -m unittest discover -s integrations/libreoffice/tests -p 'test_*.py' -v
+  linux-x11:
+    name: Linux X11 clipboard regressions
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the isolated X11 test server and clipboard libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libwayland-dev libxkbcommon-dev pkg-config
+      - run: rustup toolchain install 1.99.0 --profile minimal && rustup default 1.99.0
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        with:
+          shared-key: linux-x11
+      - name: Run native clipboard regressions serially on a private display
+        run: |
+          xvfb-run -a -s '-screen 0 1024x768x24 -nolisten tcp' cargo test -p reshiki-linux --lib --locked --no-default-features x11::tests:: -- --ignored --test-threads=1
   rust:
     needs: scope
     if: needs.scope.outputs.native == 'true'

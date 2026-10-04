@@ -8,7 +8,7 @@ mod x11;
 
 use std::io::{Read, Write};
 
-pub use protocol::{JSON_LIMIT, LIMIT};
+pub use protocol::{JSON_LIMIT, LIMIT, TRANSFER_TOTAL_TIMEOUT};
 
 /// A display is configured; the worker still verifies connection/protocol support.
 pub fn clipboard_available() -> bool {
