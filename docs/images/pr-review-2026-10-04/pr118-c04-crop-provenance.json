@@ -1,0 +1,26 @@
+{
+  "scope": "Native macOS Writer C04; extension 308d841, ReShiki cc17b7a. Same fixed run, not old-versus-new software.",
+  "method": "User-requested exact lossless crops of decoded original JPG pixels; no AI editing, annotation or resizing. Labels remain outside image in Markdown.",
+  "rows": [
+    {
+      "source": "pr118-c04-1-original.jpg",
+      "source_sha256": "c5e081f3fb31b190a26c1bf9ea36cdf29f17439dec89536108cdbd806c03cca2",
+      "source_size": [2560, 1696],
+      "crop_box_left_top_right_bottom": [300, 565, 1830, 1420],
+      "output": "pr118-second-edit-in-reshiki.png",
+      "output_sha256": "16440128c8768262acfd42501ac07f21d4408a6ee0c613020b6be2240f68ea1d",
+      "decoded_pixels_exact_crop": true,
+      "resized_or_repainted": false
+    },
+    {
+      "source": "pr118-c04-2-original.jpg",
+      "source_sha256": "7402383586c277d9b358bb18efefc48041cdb2b644be33ee883cbe072a12183c",
+      "source_size": [4812, 2722],
+      "crop_box_left_top_right_bottom": [1580, 450, 2630, 1310],
+      "output": "pr118-second-edit-in-reopened-writer.png",
+      "output_sha256": "1ff99f152108494421130c07716a47bf3a89101b6b3a286db3d42dab14483340",
+      "decoded_pixels_exact_crop": true,
+      "resized_or_repainted": false
+    }
+  ]
+}

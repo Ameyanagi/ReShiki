@@ -137,3 +137,21 @@ Microsoft Word 16.113.3 for Mac after the confirmed update, document save, close
 ![Result: the saved Word document reopens with the edit](pr127-word-reopened-macos-2fb8f3a.jpg)
 
 SHA-256: `bf0f29a94153eaba33659da9ab3971dcbeb75bfe5708493260ed94133e24ce89`
+
+## PR #118: C04 second edit survives close and reopen
+
+Two matched views from the same native macOS Writer C04 run, using LibreOffice extension `308d841` and ReShiki `cc17b7a`. These are exact crops of the original screenshot pixels, with no resizing, annotation, repainting or AI editing.
+
+**1. Save the second edit in ReShiki.** The caption reads “C04 later edit 2 extended.”
+
+![Second drawing edit saved in ReShiki](pr118-second-edit-in-reshiki.png)
+
+After the editor closed, the test requested Quit again and chose the fresh **Save and Close** option for this Writer window.
+
+**2. Reopen Writer.** The same caption remains above the unchanged Fixture B.
+
+![Reopened Writer retains the second edit and Fixture B](pr118-second-edit-in-reopened-writer.png)
+
+Saved-file inspection separately verified the exact accepted native drawing and unchanged Fixture B data, preview and dimensions. The pictures show the saved states; the action sequence comes from the accepted C04 receipt. They do not establish global Quit consent or other operating systems.
+
+Full originals: [ReShiki](pr118-c04-1-original.jpg), [reopened Writer](pr118-c04-2-original.jpg). [Crop rectangles and SHA-256 hashes](pr118-c04-crop-provenance.json).
