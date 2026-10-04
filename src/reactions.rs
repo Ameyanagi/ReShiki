@@ -2,6 +2,8 @@
 use crate::document::Document;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+#[cfg(test)]
+mod copy_tests;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -144,6 +146,139 @@ pub fn molecules(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
         result.push(ids);
     }
     result
+}
+
+/// Reaction membership for chemical copy only; neither input is changed.
+/// Original explicit roles take precedence, even when selection pruned them.
+pub fn copy_reaction(
+    source: &Document,
+    snapshot: &Document,
+) -> Result<Option<Reaction>, &'static str> {
+    if snapshot.arrows.is_empty() {
+        let selected: HashSet<_> = snapshot.atoms.iter().map(|a| a.id).collect();
+        let mut participants = source
+            .reactions
+            .iter()
+            .flat_map(|reaction| {
+                Role::ALL
+                    .into_iter()
+                    .flat_map(move |role| reaction.participants(role))
+            })
+            .filter(|participant| participant.atoms.iter().any(|id| selected.contains(id)));
+        if let Some(participant) = participants.next()
+            && (participants.next().is_some()
+                || participant.atoms.len() != selected.len()
+                || participant.atoms.iter().any(|id| !selected.contains(id)))
+        {
+            return Err(
+                "Select one complete reaction participant, or the complete reaction with its arrow.",
+            );
+        }
+        return Ok(None);
+    }
+    let [arrow] = snapshot.arrows.as_slice() else {
+        return Err("Select one reaction arrow before copying.");
+    };
+    source.validate().map_err(|_| "Invalid source drawing.")?;
+    snapshot
+        .validate()
+        .map_err(|_| "Invalid copied selection.")?;
+    if !source.arrows.iter().any(|a| a.id == arrow.id) {
+        return Err("The copied arrow is missing from the source drawing.");
+    }
+    let atoms: HashMap<_, _> = snapshot.atoms.iter().map(|a| (a.id, a)).collect();
+    let selected: Vec<_> = snapshot.atoms.iter().map(|a| a.id).collect();
+    let parts = molecules(source, &selected);
+    if parts.iter().map(Vec::len).sum::<usize>() != atoms.len()
+        || parts.iter().flatten().any(|id| !atoms.contains_key(id))
+    {
+        return Err("Select complete molecules and the reaction arrow before copying.");
+    }
+    if let Some(reaction) = source.reactions.iter().find(|r| r.arrow == arrow.id) {
+        let selected: HashSet<_> = snapshot.all_ids().into_iter().collect();
+        if !reaction.ready() || reaction.ids().iter().any(|id| !selected.contains(id)) {
+            return Err("Select the complete defined reaction before copying.");
+        }
+        if Role::ALL
+            .into_iter()
+            .flat_map(|role| reaction.participants(role))
+            .map(|participant| participant.atoms.len())
+            .sum::<usize>()
+            != atoms.len()
+        {
+            return Err("Select only the defined reaction, including all its participants.");
+        }
+        return Ok(Some(reaction.clone()));
+    }
+    let style = arrow.appearance();
+    if arrow.kind != "forward"
+        || arrow.control.is_some()
+        || style.head != crate::arrows::Head::Full
+        || style.tail != crate::arrows::Head::None
+        || style.no_go != crate::arrows::NoGo::None
+        || style.dipole
+    {
+        return Err("Automatic reaction copy needs one straight forward arrow.");
+    }
+    let (dx, dy) = (
+        f64::from(arrow.end.x) - f64::from(arrow.start.x),
+        f64::from(arrow.end.y) - f64::from(arrow.start.y),
+    );
+    let length_squared = dx * dx + dy * dy;
+    if length_squared == 0. {
+        return Err("The reaction arrow needs distinct start and end points.");
+    }
+    if source.reactions.iter().any(|reaction| {
+        Role::ALL
+            .into_iter()
+            .flat_map(|role| reaction.participants(role))
+            .any(|participant| participant.atoms.iter().any(|id| atoms.contains_key(id)))
+    }) {
+        return Err(
+            "Copied molecules have roles on another arrow; select that complete reaction or unassigned molecules.",
+        );
+    }
+    let (mx, my) = (
+        (f64::from(arrow.start.x) + f64::from(arrow.end.x)) * 0.5,
+        (f64::from(arrow.start.y) + f64::from(arrow.end.y)) * 0.5,
+    );
+    // Scale-relative tolerance for ties, independent of orientation and zoom.
+    let tolerance = length_squared * 1e-6;
+    let mut reaction = Reaction::new(arrow.id);
+    for members in parts {
+        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+        for id in &members {
+            let atom = atoms
+                .get(id)
+                .ok_or("Select complete molecules and the reaction arrow before copying.")?;
+            if snapshot.atom_visible(*id) {
+                let side =
+                    (f64::from(atom.position.x) - mx) * dx + (f64::from(atom.position.y) - my) * dy;
+                lo = lo.min(side);
+                hi = hi.max(side);
+            }
+        }
+        let role = if !lo.is_finite() {
+            return Err("A molecule has no visible position; assign reaction roles explicitly.");
+        } else if hi < -tolerance {
+            Role::Reactant
+        } else if lo > tolerance {
+            Role::Product
+        } else {
+            return Err(
+                "A molecule overlaps the arrow midpoint; assign reaction roles explicitly.",
+            );
+        };
+        reaction.participants_mut(role).push(Participant {
+            atoms: members,
+            coefficient: 1,
+        });
+    }
+    if !reaction.ready() {
+        return Err("Select starting materials at the arrow start and products at its end.");
+    }
+    reaction.annotations = snapshot.annotations.iter().map(|a| a.id).collect();
+    Ok(Some(reaction))
 }
 
 pub fn assign(doc: &mut Document, arrow: u64, selected: &[u64], role: Role) -> Result<(), String> {

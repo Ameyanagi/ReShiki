@@ -13,7 +13,8 @@ from pathlib import Path
 from gi.repository import GLib
 
 NATIVE = "application/x-reshiki-drawing+json"
-MIMES = [NATIVE, "image/png", "image/svg+xml"]
+TEXT = "text/plain;charset=utf-8"
+MIMES = [NATIVE, "image/png", "image/svg+xml", TEXT]
 ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -392,6 +393,8 @@ class Session:
         assert graph(original)["atoms"] == ["C", "C", "O"]
         assert len(original["bonds"]) == 2
         assert copied["image/png"]["dimensions"][0] > 0
+        assert "error" not in copied["image/svg+xml"], copied
+        assert Path(copied[TEXT]["file"]).read_text() == "CCO"
 
         sentinel = self.out / "sentinel.txt"
         sentinel.write_text("foreign clipboard owner\n")
@@ -451,6 +454,8 @@ class Session:
         self.app_key("ctrl+a", "selected")
         self.app_key("ctrl+c", "clipboard_written")
         final_copy = self.clipboard()
+        for mime in MIMES:
+            assert "error" not in final_copy[mime], final_copy
         self.save("before-exit.rsk")
         if self.args.compositor == "sway":
             self.run(["swaymsg", f"[pid={self.app.pid}] kill"])
