@@ -2,7 +2,7 @@
 
 Repository path: `docs/changes/native-chemistry-allocations-2026-10-04.md`.
 
-Baseline: `81ca821`; chemistry branch: `refactor/native-chemistry-allocations`. Compilation, unit/reference tests, strict clippy, optimized application-worker verification, and the isolated candidate and matched baseline measurements below passed. Final PR-head provenance will be added after commit. Tested source hashes identify the uncommitted integrated snapshots below.
+Baseline: `81ca821`; chemistry branch: `refactor/native-chemistry-allocations`. Compilation, unit/reference tests, strict clippy, optimized application-worker verification, and the isolated candidate and matched baseline measurements below passed. Published source provenance is recorded below; GitHub checks identify the reviewed PR head. Tested source hashes identify the uncommitted integrated snapshots below.
 
 ## Scope and source budget
 
