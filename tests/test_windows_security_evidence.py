@@ -344,7 +344,7 @@ class SecurityEvidenceTests(unittest.TestCase):
             evidence["file_after"]["sha256"] = "0" * 64
             security.write_json(source, evidence)
             self.assertEqual(security.summarize([source], root / "matrix"), 1)
-            reports = json.loads((root / "matrix/matrix.json").read_text())
+            reports = json.loads((root / "matrix/matrix.json").read_text(encoding="utf-8"))
             self.assertEqual(reports[0]["status"], "incomplete")
             with (root / "matrix/matrix.csv").open(encoding="utf-8-sig", newline="") as stream:
                 self.assertEqual(list(csv.DictReader(stream))[0]["expected_sha256"], DIGEST)
@@ -394,7 +394,9 @@ class SecurityEvidenceTests(unittest.TestCase):
 
             output = root / "matrix"
             self.assertEqual(security.summarize(sources, output), 0)
-            self.assertEqual(json.loads((output / "matrix.json").read_text()), expected_reports)
+            self.assertEqual(
+                json.loads((output / "matrix.json").read_text(encoding="utf-8")), expected_reports
+            )
             self.assertEqual([source.read_bytes() for source in sources], original_bytes)
             with (output / "matrix.csv").open(encoding="utf-8-sig", newline="") as stream:
                 reader = csv.DictReader(stream)
@@ -535,8 +537,8 @@ class SecurityEvidenceTests(unittest.TestCase):
                     patch.object(security, "run_probe", side_effect=probe),
                 ):
                     result = security.collect(args)
-                raw = json.loads((args.output / "evidence.json").read_text())
-                report = json.loads((args.output / "report.json").read_text())
+                raw = json.loads((args.output / "evidence.json").read_text(encoding="utf-8"))
+                report = json.loads((args.output / "report.json").read_text(encoding="utf-8"))
                 self.assertEqual(raw["file_after"]["sha256"], actual)
                 if digest == actual:
                     self.assertEqual(result, 0)
