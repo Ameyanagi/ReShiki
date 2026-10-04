@@ -77,10 +77,12 @@ pub async fn gui_clipboard_request(input: &[u8]) -> Result<Option<Vec<u8>>, Stri
     let request = protocol::parse_request(input)?;
     let response = if request.operation == "write" {
         let offer = protocol::prepare_offer(&request.representations)?;
-        client
-            .write(offer)
-            .await
-            .map_err(|error| error.to_string())?;
+        let write = client.write(offer);
+        #[cfg(feature = "wayland-qa")]
+        let result = crate::wayland_qa::write(write).await;
+        #[cfg(not(feature = "wayland-qa"))]
+        let result = write.await;
+        result.map_err(|error| error.to_string())?;
         Response::empty()
     } else {
         let picture_only = request.operation == "read_picture";
