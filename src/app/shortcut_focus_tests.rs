@@ -652,6 +652,17 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
     let drawing = app.tab.doc.clone();
     let draft = app.assistant.input_text();
     app.updates.open = true;
+    // Enter/Space without a focused modal control must never reach the
+    // drawing's contextual-key or select-recent shortcuts.
+    for (named, code) in [(Named::Enter, Code::Enter), (Named::Space, Code::Space)] {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Named(named), code, Modifiers::empty(), None),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(messages.is_empty(), "{messages:?}");
+    }
     let tab = |modifiers| press(Key::Named(Named::Tab), Code::Tab, modifiers, None);
     let focused = |ui: &mut Ui, app: &App| {
         let snapshot = ui.semantics(app);
@@ -788,6 +799,31 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
             [Message::Updates(updates::Action::Automatic(true))]
         ),
         "The checkbox and its focus wrapper must publish one mouse action: {click_messages:?}"
+    );
+    for expected in ["updates-notes", "updates-close"] {
+        let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
+        assert!(messages.is_empty());
+        assert_eq!(focused(&mut ui, &app), vec![expected]);
+    }
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Updates(updates::Action::Show(false))]
+    ));
+    apply(&mut app, messages);
+    assert!(
+        !app.updates.open,
+        "Enter activates the focused Close button"
     );
     assert_eq!(app.tab.doc, drawing);
     assert_eq!(app.assistant.input_text(), draft);
