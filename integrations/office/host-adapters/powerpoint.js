@@ -18,6 +18,8 @@ import {
   sameOwner,
   scaledSize,
   writeFailure,
+  updatePreflight,
+  retryableUpdateFailure,
 } from "./common.js";
 
 async function shapeAt(context, identity) {
@@ -204,10 +206,13 @@ export function createPowerPointAdapter(PowerPoint, { sessionId }) {
 
     async update(target, envelope) {
       return PowerPoint.run(async (context) => {
-        let before = await readShape(context, target);
-        assertRevision(before.record, target);
-        const attempted = newRecord(envelope, before.identity, before.record.objectId);
-        assertCanAdd(before.records, attempted);
+        let { before, attempted } = await updatePreflight(async () => {
+          const before = await readShape(context, target);
+          assertRevision(before.record, target);
+          const attempted = newRecord(envelope, before.identity, before.record.objectId);
+          assertCanAdd(before.records, attempted);
+          return { before, attempted };
+        });
         let writingPreview = false;
         try {
           before.shape.customXmlParts.add(encodeRecord(attempted));
@@ -232,7 +237,7 @@ export function createPowerPointAdapter(PowerPoint, { sessionId }) {
           assertGeometry(written.geometry, geometry, ["left", "top", "width", "height"]);
           return makeResult(written.record, sessionId);
         } catch (error) {
-          if (!writingPreview) throw error;
+          if (!writingPreview) throw retryableUpdateFailure(error);
           let recoveryError;
           if (writingPreview) {
             try {

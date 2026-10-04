@@ -17,6 +17,8 @@ import {
   scaledSize,
   WORD_TAG_PREFIX,
   writeFailure,
+  updatePreflight,
+  retryableUpdateFailure,
 } from "./common.js";
 import { assertEditableWordPicture } from "./word-ooxml.js";
 
@@ -237,11 +239,14 @@ export function createWordAdapter(Word, { sessionId }) {
 
     async update(target, envelope) {
       return Word.run(async (context) => {
-        let before = await readControl(context, target.contentControlId);
-        assertRevision(before.record, target);
-        await checkEditablePicture(context, before);
-        const attempted = newRecord(envelope, before.identity, before.record.objectId);
-        assertCanAdd(before.records, attempted);
+        let { before, attempted } = await updatePreflight(async () => {
+          const before = await readControl(context, target.contentControlId);
+          assertRevision(before.record, target);
+          await checkEditablePicture(context, before);
+          const attempted = newRecord(envelope, before.identity, before.record.objectId);
+          assertCanAdd(before.records, attempted);
+          return { before, attempted };
+        });
         let writingPicture = false;
         try {
           // Save the complete native data before any preview replacement.
@@ -275,7 +280,7 @@ export function createWordAdapter(Word, { sessionId }) {
           ]);
           return makeResult(written.record, sessionId);
         } catch (error) {
-          if (!writingPicture) throw error;
+          if (!writingPicture) throw retryableUpdateFailure(error);
           let recoveryError;
           if (writingPicture) {
             try {

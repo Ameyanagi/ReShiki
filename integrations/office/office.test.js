@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -223,6 +223,114 @@ test("native exit retains an unread save and lost final ACK is replayable after 
   );
   assert.equal((await f.sessions.poll(first.sessionId, f.clientId)).finished, true);
   assert.equal(await readFile(first.recoveryFile, "utf8"), "last edit");
+});
+
+test("expired pane clients release connection capacity while live panes remain authorized", async (t) => {
+  let now = 1000;
+  const f = await fixture(t, { now: () => now });
+  const clients = [f.clientId];
+  for (let i = 1; i < 32; i++) clients.push(f.sessions.createClient("Word"));
+  assert.throws(() => f.sessions.createClient("Word"), /Too many/);
+  now += 20000;
+  f.sessions.touch(f.clientId);
+  now += 10001;
+  const reopened = f.sessions.createClient("Word");
+  assert.equal(f.sessions.clients.size, 2);
+  assert.equal(f.sessions.touch(f.clientId).host, "Word");
+  assert.equal(f.sessions.touch(reopened).host, "Word");
+  for (const expired of clients.slice(1)) assert.throws(() => f.sessions.touch(expired), /expired/);
+});
+
+test("expired panes release edit reservations and capacity without accepting or deleting drafts", async (t) => {
+  let now = 1000;
+  const f = await fixture(t, { now: () => now });
+  const started = [];
+  for (let i = 0; i < 32; i++)
+    started.push(
+      await f.sessions.start(f.clientId, { ...f.target, objectId: randomUUID() }, f.original),
+    );
+  await nativeSave(f, started[0], "unacknowledged recovery");
+  await f.sessions.poll(started[0].sessionId, f.clientId);
+  const oldTarget = f.sessions.sessions.get(started[0].sessionId).target;
+  now += 30001;
+  const reopened = f.sessions.createClient("Word");
+  await f.sessions.start(reopened, { ...oldTarget, sessionId: randomUUID() }, f.original);
+  assert.equal(f.sessions.sessions.size, 1);
+  assert.equal(await readFile(started[0].recoveryFile, "utf8"), "unacknowledged recovery");
+  for (const old of started) {
+    const directory = path.dirname(old.recoveryFile);
+    assert.equal(JSON.parse(await readFile(path.join(directory, "session.json"))).closed, true);
+    await assert.rejects(readFile(path.join(directory, "ack.json")), /ENOENT/);
+    await assert.rejects(f.sessions.poll(old.sessionId, f.clientId), /expired/);
+    await assert.rejects(f.sessions.poll(old.sessionId, reopened), /Unknown/);
+  }
+});
+
+test("different panes reserve one logical drawing until the first edit ends", async (t) => {
+  const held = deferred(),
+    entered = deferred();
+  const f = await fixture(t, {
+    worker: async (_mode, bytes) => {
+      entered.resolve();
+      await held.promise;
+      return envelope(bytes.toString());
+    },
+  });
+  const otherPane = f.sessions.createClient("Word");
+  const first = f.sessions.start(f.clientId, f.target, f.original);
+  await entered.promise;
+  const otherTarget = { ...f.target, sessionId: randomUUID() };
+  const second = f.sessions.start(otherPane, otherTarget, f.original);
+  const rejected = assert.rejects(second, /already/);
+  held.resolve();
+  const started = await first;
+  await rejected;
+  assert.equal(f.launches.length, 1);
+  await nativeSave(f, started, "edited");
+  const { pending } = await f.sessions.poll(started.sessionId, f.clientId);
+  const ack = ackBody(pending);
+  await f.sessions.acknowledge(started.sessionId, f.clientId, ack);
+  await assert.rejects(
+    f.sessions.start(
+      otherPane,
+      { ...ack.target, sessionId: otherTarget.sessionId },
+      pending.envelope,
+    ),
+    /already/,
+  );
+  await f.sessions.finish(started.sessionId, f.clientId);
+  await f.sessions.start(
+    otherPane,
+    { ...ack.target, sessionId: otherTarget.sessionId },
+    pending.envelope,
+  );
+  assert.equal(f.launches.length, 2);
+});
+
+test("recoverable failed request waits for a new Save and its failure receipt is replayable", async (t) => {
+  const f = await fixture(t);
+  const started = await f.sessions.start(f.clientId, f.target, f.original);
+  await nativeSave(f, started, "edited", "failed-save");
+  const { pending } = await f.sessions.poll(started.sessionId, f.clientId);
+  const failure = { requestId: pending.requestId, error: "Picture locked", retryable: true };
+  await f.sessions.fail(started.sessionId, f.clientId, failure);
+  assert.equal((await f.sessions.poll(started.sessionId, f.clientId)).pending, null);
+  await assert.rejects(
+    readFile(path.join(path.dirname(started.recoveryFile), "ack.json")),
+    /ENOENT/,
+  );
+  await f.sessions.fail(started.sessionId, f.clientId, failure);
+  await nativeSave(f, started, "edited", "retried-save");
+  const retried = (await f.sessions.poll(started.sessionId, f.clientId)).pending;
+  assert.equal(retried.requestId, "retried-save");
+  assert.deepEqual(retried.target, f.target);
+  await f.sessions.fail(started.sessionId, f.clientId, failure);
+  assert.deepEqual((await f.sessions.poll(started.sessionId, f.clientId)).pending, retried);
+  await f.sessions.acknowledge(started.sessionId, f.clientId, ackBody(retried));
+  const receipt = JSON.parse(
+    await readFile(path.join(path.dirname(started.recoveryFile), "ack.json")),
+  );
+  assert.equal(receipt.requestId, "retried-save");
 });
 
 test("concurrent starts reserve logical object and never launch it twice", async (t) => {
@@ -636,7 +744,7 @@ test("manifests declare only the relevant stable host requirement and local HTTP
   assert.throws(() => manifest(HOSTS[0], 0), /port/);
 });
 
-test("setup and HTTPS startup use only supplied localhost certificate/config and refuse overwrite", async (t) => {
+test("setup publishes complete outputs, reuses matching partial runs and refuses conflicting files", async (t) => {
   try {
     execFileSync("openssl", ["version"], { stdio: "ignore" });
   } catch {
@@ -699,8 +807,22 @@ test("setup and HTTPS startup use only supplied localhost certificate/config and
     setup({ ...options, cert: cnOnly, key: cnKey }),
     /subject alternative names/,
   );
-  await setup(options);
+  const conflicting = path.join(directory, "manifests", "excel.xml");
+  await mkdir(path.dirname(conflicting), { recursive: true });
+  await writeFile(conflicting, "existing unrelated manifest");
   await assert.rejects(setup(options), /EEXIST/);
+  assert.equal(await readFile(conflicting, "utf8"), "existing unrelated manifest");
+  await assert.rejects(readFile(path.join(directory, "config.json")), /ENOENT/);
+  const completedWord = await readFile(path.join(directory, "manifests", "word.xml"), "utf8");
+  assert.equal(completedWord, manifest(HOSTS[0], port));
+  await rm(conflicting);
+  // A retry reuses the first complete manifest and finishes the installation.
+  await setup(options);
+  await setup(options);
+  await assert.rejects(setup({ ...options, executable: key }), /EEXIST/);
+  // A legacy interrupted run may already have published the matching config.
+  await rm(path.join(directory, "manifests", "powerpoint.xml"));
+  await setup(options);
   const config = JSON.parse(await readFile(path.join(directory, "config.json")));
   const running = await start(config);
   t.after(

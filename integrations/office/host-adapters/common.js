@@ -340,6 +340,25 @@ export function mayRollback(record, before, attempted) {
   );
 }
 
+// A failure before touching the exact drawing is safe to retry on a new save.
+// Immutable, unreferenced payload records do not change the drawing itself.
+export function retryableUpdateFailure(cause) {
+  return new HostAdapterError(
+    cause.code || "HOST_ERROR",
+    cause.message || String(cause),
+    { ...cause.details, retryable: true },
+    cause,
+  );
+}
+
+export async function updatePreflight(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    throw retryableUpdateFailure(error);
+  }
+}
+
 export function writeFailure(cause, recoveryError, details = {}) {
   return new HostAdapterError(
     recoveryError ? "RECOVERY_REQUIRED" : "HOST_WRITE_FAILED",
@@ -349,6 +368,7 @@ export function writeFailure(cause, recoveryError, details = {}) {
     {
       ...details,
       recoveryRequired: !!recoveryError,
+      retryable: !recoveryError,
       ...(recoveryError ? { recoveryError: String(recoveryError.message || recoveryError) } : {}),
     },
     cause,

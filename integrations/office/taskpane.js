@@ -102,7 +102,7 @@ element("edit").addEventListener("click", () =>
     finish.textContent = "End edit session";
     row.append(finish);
     element("sessions").append(row);
-    const edit = { ...result, node, finish, applied: null, blocked: false };
+    const edit = { ...result, node, finish, applied: null, failed: null, blocked: false };
     edits.set(result.sessionId, edit);
     finish.addEventListener("click", () =>
       action(async () => {
@@ -118,11 +118,14 @@ element("edit").addEventListener("click", () =>
 async function poll() {
   if (stopped) return;
   try {
-    await api("heartbeat");
     await gate.run(async () => {
       controls(true);
       try {
         for (const edit of edits.values()) {
+          if (edit.failed) {
+            await api("fail", { sessionId: edit.sessionId, ...edit.failed });
+            edit.failed = null;
+          }
           if (edit.blocked) continue;
           if (!edit.applied) {
             const { pending, finished } = await api("poll", { sessionId: edit.sessionId });
@@ -134,14 +137,20 @@ async function poll() {
             try {
               await applyPending(edit, pending, adapter);
             } catch (error) {
-              // Never retry a partially committed host operation automatically.
-              edit.blocked = true;
-              edit.node.textContent = `Update not confirmed: ${error.message}\nYour native draft is retained: ${edit.recoveryFile}\nReopen this pane and import the recovery file to recover it as a new drawing.`;
-              await api("fail", {
-                sessionId: edit.sessionId,
+              // Only an untouched target or a verified rollback permits a new
+              // save. An uncertain host write still requires explicit recovery.
+              const retryable = error.details?.retryable === true;
+              edit.blocked = !retryable;
+              edit.node.textContent = `Update not confirmed: ${error.message}\nYour native draft is retained: ${edit.recoveryFile}\n${retryable ? "Resolve the Office error, then save again in ReShiki to retry." : "Reopen this pane and import the recovery file to recover it as a new drawing."}`;
+              edit.failed = {
                 requestId: pending.requestId,
                 error: error.message,
-              }).catch(() => {});
+                retryable,
+              };
+              // Retain the exact failure receipt if its response is lost. A
+              // subsequent poll retries that receipt before another host write.
+              await api("fail", { sessionId: edit.sessionId, ...edit.failed });
+              edit.failed = null;
               continue;
             }
           }
@@ -164,6 +173,18 @@ async function poll() {
     );
   } finally {
     if (!stopped) setTimeout(poll, 500);
+  }
+}
+// This loop must remain independent of the Office operation gate: a host
+// update/readback or acknowledgement may take longer than the pane lease.
+async function heartbeat() {
+  if (stopped) return;
+  try {
+    await api("heartbeat");
+  } catch (error) {
+    status(`Companion heartbeat interrupted: ${error.message}. Native drafts remain in recovery.`);
+  } finally {
+    if (!stopped) setTimeout(heartbeat, 5000);
   }
 }
 window.addEventListener("pagehide", () => {
@@ -200,6 +221,7 @@ try {
   element("actions").hidden = false;
   element("excel-note").hidden = adapter.host !== "Excel";
   controls(false);
+  heartbeat();
   poll();
 } catch (error) {
   stopped = true;
