@@ -448,13 +448,7 @@ def text_runs(text, format):
 
 def cdxml_text_reader(root):
     fonts = {el.get("id"): el.get("name", "Arial") for el in root.findall("./fonttable/font")}
-    colors = [[0, 0, 0], [255, 255, 255]] + (
-        [
-            [round(float(el.get(axis, "0")) * 255) for axis in ("r", "g", "b")]
-            for el in root.findall("./colortable/color")
-        ]
-        or [[255, 255, 255], [0, 0, 0]]
-    )
+    colors = palette(root)
 
     def read(el, defaults=None, atom=False):
         inherited = {**root.attrib, **(defaults or {}), **el.attrib}
