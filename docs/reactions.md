@@ -73,7 +73,7 @@ checks.
 The accepted workflow is ReShiki Cmd+C → Cmd+V into ChemDoodle's Open text
 field → Load. Both complete participants and their reactant/product roles were
 preserved in the tested benzene-to-cyclohexane fixture.
-[PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) is under review for this
+[PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) added this
 workflow; direct canvas paste and CAS reaction integration are outside this
 change. The guide records the exact actions, baseline comparison and limits.
 Local fixtures can be prepared without publishing clipboard data or contacting

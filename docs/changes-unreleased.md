@@ -7,7 +7,7 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
-- **Under review — Chemical text alongside ordinary Copy:** prepare molecular
+- **Chemical text alongside ordinary Copy:** prepare molecular
   SMILES or copy-only reaction JSON without changing the drawing. The accepted
   reaction workflow is ReShiki Cmd+C → ChemDoodle Open text field Cmd+V → Load.
   October 5 Edge/macOS checks preserved both complete participants and their

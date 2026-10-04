@@ -297,20 +297,24 @@ build and does not establish behavior for every browser or editor release.
 The accepted reaction workflow is ReShiki Cmd+C → Cmd+V into ChemDoodle's Open
 text field → Load. It preserved both complete participants and their
 reactant/product roles in the tested benzene-to-cyclohexane fixture.
-[PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) is under review for that
+[PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) added this
 workflow. Direct canvas paste and CAS reaction integration are outside this
 change.
 
 ## Direct integration decision
 
 CAS documents a
-[ChemDraw-specific search integration](https://cas-product-help.zendesk.com/hc/en-us/articles/9894121439245-How-do-I-perform-a-SciFinder-structure-search-within-ChemDraw),
-which requires an authorized SciFinder user. This does not define a public
-structure-query URL or API for arbitrary desktop applications.
+[ChemDraw-specific search integration](https://cas-product-help.zendesk.com/hc/en-us/articles/9894121439245-How-do-I-perform-a-SciFinder-structure-search-within-ChemDraw)
+and publishes a partner-facing
+[Structure Search API developer guide](https://scifinder-n.cas.org/static/api/SFN_API_Developer_Documentation.pdf).
+The API requires a CAS-issued application client ID and interactive OAuth 2.0
+PKCE sign-in by an authorized SciFinder user. ReShiki has no registered CAS
+application client ID. The documented route posts structure data to the
+authenticated API and opens the returned result path; it does not provide a
+generic URL that preloads arbitrary new structures.
 [CAS Connections](https://www.cas.org/solutions/cas-connections) directs customers
 building custom API or MCP integrations to CAS Custom Services; access depends
-on subscriptions and integration arrangements. No applicable ReShiki API
-contract or entitlement has been established.
+on subscriptions and integration arrangements.
 
 For [issue #95](https://github.com/Ameyanagi/ReShiki/issues/95), the useful first
 step is this verified manual route plus accessible SMILES/MOL and bounded
