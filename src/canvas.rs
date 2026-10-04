@@ -313,7 +313,7 @@ fn delocalized_ring_size(tool: Tool, size: u8, modifiers: iced::keyboard::Modifi
 }
 
 pub struct MoleculeCanvas<'a> {
-    pub joining: Option<&'a reshiki::joining::Prepared>,
+    pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
     pub chain_drawing: ChainDrawing,
@@ -329,7 +329,7 @@ pub struct MoleculeCanvas<'a> {
     pub ring_size: u8,
     pub aromatic_ring: bool,
     pub template_connection: reshiki::templates::Connection,
-    pub template: Option<(&'a Document, reshiki::templates::Anchor)>,
+    pub template: Option<(&'a reshiki::templates::Template, reshiki::templates::Anchor)>,
     pub arrow_preset: reshiki::arrows::Preset,
     pub arrow_style: &'a reshiki::arrows::ArrowStyle,
     pub orbital_phase: reshiki::scientific::Phase,
@@ -444,7 +444,7 @@ impl MoleculeCanvas<'_> {
         end: World,
         modifiers: iced::keyboard::Modifiers,
     ) -> (World, Option<World>) {
-        let doc = self.joining.map(|j| &j.base).unwrap_or(self.doc);
+        let doc = self.joining.map(|(j, _)| &j.base).unwrap_or(self.doc);
         let (anchor, direction) = ring_gesture(start, end, true, 10. / self.camera.zoom);
         if !(modifiers.shift() || modifiers.control()) || modifiers.alt() {
             return (anchor, direction);
@@ -1427,7 +1427,7 @@ impl MoleculeCanvas<'_> {
                 .filter(|p| bounds.contains(*p))
                 .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y)),
         );
-        let mut preview = Cow::Borrowed(self.joining.map(|j| &j.base).unwrap_or(self.doc));
+        let mut preview = Cow::Borrowed(self.joining.map(|(j, _)| &j.base).unwrap_or(self.doc));
         let mut ring_selection = None;
         let mut chain_badge = None;
         let mut template_notice = None;
@@ -1705,7 +1705,6 @@ impl MoleculeCanvas<'_> {
             }
         }
         if self.tool == Tool::Template
-            && let Some((template, source_anchor)) = self.template
             && let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
         {
             let end = self
@@ -1716,28 +1715,33 @@ impl MoleculeCanvas<'_> {
             } else {
                 (end, None)
             };
-            let placement = if let Some(joining) = self.joining {
-                joining.place(
-                    anchor,
-                    direction,
-                    10. / self.camera.zoom,
-                    source_anchor,
-                    self.template_connection,
-                )
-            } else {
-                reshiki::templates::place_with_mode(
-                    self.doc,
-                    template,
-                    anchor,
-                    direction,
-                    10. / self.camera.zoom,
-                    source_anchor,
-                    self.template_connection,
-                )
-                .map_err(str::to_owned)
-            };
+            let placement = self
+                .joining
+                .map(|(joining, source_anchor)| {
+                    joining.place(
+                        anchor,
+                        direction,
+                        10. / self.camera.zoom,
+                        source_anchor,
+                        self.template_connection,
+                    )
+                })
+                .or_else(|| {
+                    self.template.map(|(template, source_anchor)| {
+                        template
+                            .place(
+                                self.doc,
+                                anchor,
+                                direction,
+                                10. / self.camera.zoom,
+                                source_anchor,
+                                self.template_connection,
+                            )
+                            .map_err(str::to_owned)
+                    })
+                });
             match placement {
-                Ok((document, ids)) => {
+                Some(Ok((document, ids))) => {
                     template_notice = Some((
                         if self.joining.is_some() {
                             "Move & attach preview · Click or release to join · Escape cancels"
@@ -1759,7 +1763,7 @@ impl MoleculeCanvas<'_> {
                     // placement operation again and retains saved/JACS colors.
                     let existing: std::collections::HashSet<_> = self
                         .joining
-                        .map(|j| &j.base)
+                        .map(|(j, _)| &j.base)
                         .unwrap_or(self.doc)
                         .all_ids()
                         .into_iter()
@@ -1802,7 +1806,7 @@ impl MoleculeCanvas<'_> {
                     }
                     ring_selection = Some(ids);
                 }
-                Err(error) => {
+                Some(Err(error)) => {
                     template_notice = Some((error.to_string(), false));
                     frame.stroke(
                         &Path::circle(self.camera.screen(anchor, bounds), 10.0),
@@ -1811,6 +1815,7 @@ impl MoleculeCanvas<'_> {
                             .with_color(Color::from_rgb8(182, 66, 61)),
                     );
                 }
+                None => {}
             }
         }
         if let (Some(Gesture::Move { start, ids, .. }), Some(p)) = (&state.gesture, state.cursor) {
@@ -4894,7 +4899,7 @@ mod tests {
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
             template: Some((
-                &reshiki::templates::LIBRARY[0].document,
+                &reshiki::templates::LIBRARY[0],
                 reshiki::templates::Anchor::Auto,
             )),
             arrow_preset: Default::default(),
