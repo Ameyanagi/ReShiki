@@ -201,7 +201,7 @@ pub(super) fn decode(bytes: &[u8], remaining: u64) -> Result<DynamicImage, Strin
         super::decode_limited(bytes, Some(image::ImageFormat::Tiff), remaining)?.0
     };
     if associated {
-        let mut rgba = image.to_rgba8();
+        let mut rgba = image.into_rgba8();
         for pixel in rgba.pixels_mut() {
             let [r, g, b, alpha] = &mut pixel.0;
             if *alpha != 0 {

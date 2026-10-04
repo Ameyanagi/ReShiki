@@ -11,6 +11,9 @@ use reshiki::{
 
 mod focus;
 
+#[cfg(test)]
+mod memory_tests;
+
 /// Size of the proportional lock beside H.
 const LOCK: f32 = 20.;
 
@@ -303,15 +306,15 @@ fn size_factor(
     Ok(factor)
 }
 
-fn transformed(
-    source: &Document,
+fn transform_candidate(
+    document: &mut Document,
     selected: &[u64],
     field: Field,
     input: &str,
     lock: bool,
-) -> Result<Document, String> {
-    let ids = source.expand_abbreviation_selection(selected);
-    if reshiki::scene::selection_bounds(source, &ids).is_none() {
+) -> Result<(), String> {
+    let ids = document.expand_abbreviation_selection(selected);
+    if reshiki::scene::selection_bounds(document, &ids).is_none() {
         return Err("Select objects to transform".into());
     }
     let value = input
@@ -320,7 +323,6 @@ fn transformed(
         .ok()
         .filter(|value| value.is_finite())
         .ok_or("Enter a finite number")?;
-    let mut result = source.clone();
     match field {
         Field::Rotation => {
             if value.abs() > 36_000. {
@@ -328,18 +330,18 @@ fn transformed(
             }
             let degrees = value % 360.;
             if degrees != 0. {
-                editing::transform(&mut result, &ids, Transform::Rotate(degrees));
+                editing::transform(document, &ids, Transform::Rotate(degrees));
             }
         }
         Field::TiltX | Field::TiltY => {
             if value.abs() > 85. {
                 return Err("Enter a tilt between −85° and 85° per change".into());
             }
-            if !crate::canvas::tilt::available(source, &ids) {
+            if !crate::canvas::tilt::available(document, &ids) {
                 return Err("Select at least two atoms or a shape to tilt".into());
             }
             editing::transform(
-                &mut result,
+                document,
                 &ids,
                 if field == Field::TiltX {
                     Transform::TiltX(value)
@@ -352,22 +354,21 @@ fn transformed(
             if value <= 0. {
                 return Err("Enter a size or percentage greater than zero".into());
             }
-            let (lo, hi) =
-                reshiki::scene::selection_bounds(source, &ids).ok_or("Select objects to resize")?;
+            let (lo, hi) = reshiki::scene::selection_bounds(document, &ids)
+                .ok_or("Select objects to resize")?;
             let pivot = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
             let factor = if field == Field::Scale {
                 value / 100.
             } else {
-                size_factor(source, &ids, pivot, field, value, lock)?
+                size_factor(document, &ids, pivot, field, value, lock)?
             };
             if !(0.0001..=10_000.).contains(&factor) {
                 return Err("Use a scale from 0.01% to 1000000% per change".into());
             }
-            scale(&mut result, &ids, pivot, field, factor, lock);
+            scale(document, &ids, pivot, field, factor, lock);
         }
     }
-    result.validate()?;
-    Ok(result)
+    document.validate()
 }
 
 impl App {
@@ -466,8 +467,8 @@ impl App {
         };
         let mut document = source.clone();
         for &field in fields {
-            document = transformed(
-                &document,
+            transform_candidate(
+                &mut document,
                 &selected,
                 field,
                 self.tab.numeric_transforms.value(field),
@@ -696,6 +697,18 @@ mod tests {
         engine::{ChemistryEngine, LocalEngine, Request},
         graphics::{Graphic, GraphicKind},
     };
+
+    fn transformed(
+        source: &Document,
+        selected: &[u64],
+        field: Field,
+        input: &str,
+        lock: bool,
+    ) -> Result<Document, String> {
+        let mut candidate = source.clone();
+        transform_candidate(&mut candidate, selected, field, input, lock)?;
+        Ok(candidate)
+    }
 
     pub(super) fn fixture() -> App {
         let (mut app, _) = App::new();

@@ -3,6 +3,8 @@ use super::*;
 use crate::document::{History, Point};
 use anyhow::Context;
 
+mod protocol;
+
 #[path = "../../../tests/support/reference_presentation.rs"]
 mod reference_presentation;
 

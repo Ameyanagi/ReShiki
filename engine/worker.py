@@ -1288,6 +1288,7 @@ def main():
         except Exception as error:
             response = {"id": request.get("id"), "ok": False, "error": str(error)}
         print(json.dumps(response, allow_nan=False), flush=True)
+        del request, response, line
 
 
 if __name__ == "__main__":

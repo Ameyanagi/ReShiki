@@ -483,6 +483,7 @@ impl PythonEngine {
                 .ok_or("Invalid chemistry request envelope")?
                 .insert("id".into(), id.into());
             let mut bytes = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
+            drop(message);
             bytes.push(b'\n');
             worker
                 .input
@@ -490,6 +491,7 @@ impl PythonEngine {
                 .await
                 .map_err(|e| e.to_string())?;
             worker.input.flush().await.map_err(|e| e.to_string())?;
+            drop(bytes);
             let mut line = String::new();
             if worker
                 .output
@@ -500,7 +502,7 @@ impl PythonEngine {
             {
                 return Err("Chemistry worker exited unexpectedly".into());
             }
-            let value: serde_json::Value =
+            let mut value: serde_json::Value =
                 serde_json::from_str(&line).map_err(|e| e.to_string())?;
             if value.get("id").and_then(serde_json::Value::as_u64) != Some(id) {
                 return Err("Chemistry response ID mismatch".into());
@@ -512,11 +514,10 @@ impl PythonEngine {
                     .unwrap_or("Chemistry error")
                     .to_string());
             }
-            let result = value
-                .get("result")
+            Ok(value
+                .get_mut("result")
                 .ok_or("Missing chemistry result")?
-                .clone();
-            Ok(result)
+                .take())
         })
         .await
         .unwrap_or_else(|_| {

@@ -4,6 +4,9 @@
 //! unwinding or recovering inside an allocator would be unsound.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+#[cfg(feature = "allocation-metrics")]
+pub mod allocation_metrics;
+
 /// Dedicated worker exit status for an exhausted allocation budget.
 pub const RESOURCE_EXIT: i32 = 75;
 use std::{
