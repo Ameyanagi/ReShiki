@@ -5,7 +5,7 @@ while preserving existing validation errors, request/ACK ordering, recovery
 behavior and document formats. The baseline is
 `81ca82101061ecc201545a3cae8d8257f03254d3`; the production/test change is
 `d2dfbe26ae7437131c3f29c58a6596376e0f21a2`.
-[PR #134](https://github.com/Ameyanagi/ReShiki/pull/134) is under review.
+[PR #134](https://github.com/Ameyanagi/ReShiki/pull/134) merged after passing CI and code review.
 
 | Change                                                | Preserved contract                                                                                                                                |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |

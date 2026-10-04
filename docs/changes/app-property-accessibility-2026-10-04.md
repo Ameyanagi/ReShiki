@@ -1,7 +1,7 @@
 # Aromatic editing, properties and accessibility ownership
 
 [PR #133](https://github.com/Ameyanagi/ReShiki/pull/133), contributed by
-@Ameyanagi, is under review. Three small changes remove temporary copies while
+@Ameyanagi, merged after passing CI and code review. Three small changes remove temporary copies while
 preserving the existing editing and native accessibility behavior:
 
 - Aromatic editing borrows the owned request drawing to determine its scope,

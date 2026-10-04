@@ -14,18 +14,18 @@ The two intentional correctness fixes add **55** and **12** lines separately.
 Counts exclude tests, test-only wiring, QA/measurement harnesses and docs/assets.
 Runtime helpers/declarations remain production; tests grow separately. LOC is not a performance metric.
 
-| PR                                                    | Change                                         | Production LOC | Public validation                                                                                                                                      |
-| ----------------------------------------------------- | ---------------------------------------------- | -------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [#132](https://github.com/Ameyanagi/ReShiki/pull/132) | Release/descriptor tooling                     |            −10 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/fec0cf476e893807395b9de4d6e6035918a4470b/docs/changes/release-descriptor-tooling-2026-10-04.md)   |
-| [#133](https://github.com/Ameyanagi/ReShiki/pull/133) | Aromatic/properties/accessibility              |             −6 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/4febdaae8abe24abeb4049f431dd52910110261b/docs/changes/app-property-accessibility-2026-10-04.md)   |
-| [#134](https://github.com/Ameyanagi/ReShiki/pull/134) | Office/LibreOffice payloads                    |            −15 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/742d7ffb755b60640fddf52862951bf68c69153b/docs/changes/office-payload-copies-2026-10-04.md)        |
-| [#135](https://github.com/Ameyanagi/ReShiki/pull/135) | Document/geometry/history                      |            −22 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/bc20d0acd21d008ac81548e2abac4acf40a0a812/docs/changes/document-geometry-cleanup-2026-10-04.md)    |
-| [#136](https://github.com/Ameyanagi/ReShiki/pull/136) | Journal-sized free templates (intentional fix) |            +55 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/7b51526ebf50051613eb1694c89f8991bbd341fe/docs/changes/template-journal-size-2026-10-04.md)        |
-| [#137](https://github.com/Ameyanagi/ReShiki/pull/137) | Reaction membership on joins (intentional fix) |            +12 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/151de82cc833dd83099f2a02ecf5661301b92d5b/docs/changes/joining-reaction-membership-2026-10-04.md)  |
-| [#138](https://github.com/Ameyanagi/ReShiki/pull/138) | Picture/export buffers                         |             −5 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/52fde6105768c1a55a4eda467751d0b698bffc31/docs/changes/image-export-memory-2026-10-04.md)          |
-| [#139](https://github.com/Ameyanagi/ReShiki/pull/139) | Native clipboard/print transport               |             −2 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/ac714639f59437de888a0827f36fd9262b3b5061/docs/changes/native-clipboard-transport-2026-10-04.md)   |
-| [#140](https://github.com/Ameyanagi/ReShiki/pull/140) | Canvas preview/cache                           |             −5 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/3df2795d7b653d0cb86087f89a0efd95dbfebf67/docs/changes/canvas-preview-cache-2026-10-04.md)         |
-| [#141](https://github.com/Ameyanagi/ReShiki/pull/141) | Native chemistry allocations                   |              0 | [Evidence](https://github.com/Ameyanagi/ReShiki/blob/e6642659f78960688120c9467ef5cbd697b53291/docs/changes/native-chemistry-allocations-2026-10-04.md) |
+| PR                                                    | Change                                         | Production LOC | Public validation                                      |
+| ----------------------------------------------------- | ---------------------------------------------- | -------------: | ------------------------------------------------------ |
+| [#132](https://github.com/Ameyanagi/ReShiki/pull/132) | Release/descriptor tooling                     |            −10 | [Evidence](release-descriptor-tooling-2026-10-04.md)   |
+| [#133](https://github.com/Ameyanagi/ReShiki/pull/133) | Aromatic/properties/accessibility              |             −6 | [Evidence](app-property-accessibility-2026-10-04.md)   |
+| [#134](https://github.com/Ameyanagi/ReShiki/pull/134) | Office/LibreOffice payloads                    |            −15 | [Evidence](office-payload-copies-2026-10-04.md)        |
+| [#135](https://github.com/Ameyanagi/ReShiki/pull/135) | Document/geometry/history                      |            −22 | [Evidence](document-geometry-cleanup-2026-10-04.md)    |
+| [#136](https://github.com/Ameyanagi/ReShiki/pull/136) | Journal-sized free templates (intentional fix) |            +55 | [Evidence](template-journal-size-2026-10-04.md)        |
+| [#137](https://github.com/Ameyanagi/ReShiki/pull/137) | Reaction membership on joins (intentional fix) |            +12 | [Evidence](joining-reaction-membership-2026-10-04.md)  |
+| [#138](https://github.com/Ameyanagi/ReShiki/pull/138) | Picture/export buffers                         |             −5 | [Evidence](image-export-memory-2026-10-04.md)          |
+| [#139](https://github.com/Ameyanagi/ReShiki/pull/139) | Native clipboard/print transport               |             −2 | [Evidence](native-clipboard-transport-2026-10-04.md)   |
+| [#140](https://github.com/Ameyanagi/ReShiki/pull/140) | Canvas preview/cache                           |             −5 | [Evidence](canvas-preview-cache-2026-10-04.md)         |
+| [#141](https://github.com/Ameyanagi/ReShiki/pull/141) | Native chemistry allocations                   |              0 | [Evidence](native-chemistry-allocations-2026-10-04.md) |
 
 PR #136's final count is +55, not its historical +59: integration with the
 borrowed canvas preview removes four shared initializer lines. Its raw source
