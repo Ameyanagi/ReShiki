@@ -173,6 +173,10 @@ jobs:
       - run: cargo test --workspace --locked --no-default-features
       - name: Test the isolated font export probe
         run: cargo test --locked --manifest-path tools/font-export-probe/Cargo.toml -j 2
+      - name: Test public SciFinder fixtures on a one-megabyte stack
+        run: cargo test --locked --no-default-features --example scifinder_handoff_qa tests::public_fixture_checks_fit_one_megabyte_stack -- --exact
+      - name: Verify public SciFinder handoff fixtures
+        run: cargo run --locked --no-default-features --example scifinder_handoff_qa -- "${{ runner.temp }}/reshiki-scifinder-handoff"
       - name: Install fixture reader dependencies
         run: uv sync --locked
       - name: Check all optional reference tests compile cleanly
