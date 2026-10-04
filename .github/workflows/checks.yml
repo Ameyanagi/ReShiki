@@ -175,6 +175,11 @@ jobs:
         # The headless renderer falls back to TinySkia on Windows. These
         # exercise widget input and layout, not native OS acceptance.
         run: "cargo test --locked --no-default-features --bin reshiki app::context_menu::cascade_tests:: -- --ignored"
+      - name: Test rendered Updates modal keyboard input on Windows
+        if: runner.os == 'Windows'
+        # The Windows renderer includes Tiny Skia when WGPU is unavailable.
+        # This checks widget layout/input; it is not native desktop acceptance.
+        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::updates_ -- --ignored
       - run: cargo test --workspace --locked --no-default-features
       - name: Verify public SciFinder handoff fixtures
         run: cargo run --locked --no-default-features --example scifinder_handoff_qa -- "${{ runner.temp }}/reshiki-scifinder-handoff"
