@@ -372,6 +372,24 @@ mod tests {
             "Derived markers add no independent rotation site"
         );
         assert_eq!(editing::rotation_center(&doc, &ids), None);
+        let camera = Camera::default();
+        let bounds = Rectangle::new(Point::ORIGIN, Size::new(400., 300.));
+        let selection = SelectionBox::new(&doc, &ids, camera, bounds).unwrap();
+        for handle in [Handle::Rotate, Handle::Resize(0), Handle::Edge(0)] {
+            let start = match handle {
+                Handle::Rotate => camera.world(selection.rotation_grip(), bounds),
+                Handle::Resize(i) => selection.corners[i],
+                Handle::Edge(i) => selection.edge_points()[i],
+            };
+            let drag = TransformDrag::new(selection, handle, start, &ids);
+            let end = start.offset(30., -20.);
+            let mut preview = doc.clone();
+            drag.apply(&mut preview, end, false);
+            assert_eq!(
+                preview, before,
+                "Derived-only handles must not preview a temporary edit"
+            );
+        }
         Ok(())
     }
 
