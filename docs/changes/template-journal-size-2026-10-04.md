@@ -118,10 +118,11 @@ an accidental free-placement fallback from passing as attachment evidence.
 The four focused template-style integration tests passed, covering all five
 journal styles, authored chair/Haworth projections, attachments with exact
 serialized results, personal artwork, toolbar size and invalid-input atomicity.
-The application preview/commit and undo regression, existing template history
-regression and template-drag cancellation regression also passed in the
-recorded combined test runs. These are local focused results, not a full-suite
-or cross-platform claim.
+The application regression compares the committed document with the pure
+`Template::place` result and checks undo/redo. It does not execute the canvas
+hover-preview branch. The existing template history and template-drag
+cancellation regressions also passed in the recorded combined test runs. These
+are local focused results, not a full-suite or cross-platform claim.
 
 Published-byte SHA-256 values:
 
@@ -164,9 +165,11 @@ and the first case's UI undo/redo. Native screenshots were observed during CUA
 but were not saved or published; the unmodified renderer pair above remains
 the published visual evidence. No standalone hover-movement API was available,
 so isolated transient-hover routing or appearance was **not independently
-verified**. The app regression validates preview/commit through their shared
-placement route. Native baseline interaction and cross-platform desktop checks
-are not claimed.
+verified**. Source inspection confirms that preview and commit call the same
+placement function, but the current app regression tests only that function and
+commit; a focused test of the canvas hover-preview routing remains a coverage
+gap. Native baseline interaction and cross-platform desktop checks are not
+claimed.
 
 Reusable release caption: Built-in templates placed in empty space now follow
 the current journal drawing size while personal templates keep their saved size.
