@@ -70,6 +70,7 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 pdf-writer = "0.12.1"
 ttf-parser = "0.25"
+swash = "0.2.10"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 semver = "1"
@@ -104,6 +105,9 @@ anyhow = "1"
 [patch.crates-io]
 # Preserve libjpeg's small-component and edge chroma sampling semantics.
 zune-jpeg = { path = "vendor/zune-jpeg" }
+# Preserve requested variable-font weights through SVG and selectable PDF text.
+usvg = { path = "vendor/usvg" }
+svg2pdf = { path = "vendor/svg2pdf" }
 
 # Independent oracle suites explicitly require the development reference.
 

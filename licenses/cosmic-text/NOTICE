@@ -1,0 +1,13 @@
+cosmic-text variable outline scaling adaptation
+==============================================
+
+src/canvas/text_cache/glyphs/variable.rs adapts swash_outline_commands from
+cosmic-text 0.15.0 src/swash.rs under its MIT license.
+https://github.com/pop-os/cosmic-text
+
+Copyright (c) 2022 System76
+Licensed under MIT; see LICENSE in this directory.
+
+ReShiki supplies the requested weight to the variable outline scaler, matching
+cosmic-text shaping and raster rendering. The exact selected face, hinting,
+synthetic italic, color-outline fallback and command representation are retained.
