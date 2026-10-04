@@ -212,6 +212,9 @@ impl App {
     }
 
     fn finish_exit(&mut self) -> Task<Message> {
+        if let Some(task) = self.template_close_warning() {
+            return task;
+        }
         if self.exit.updating {
             self.exit.updating = false;
             // The installer can still fail. Keep results until it confirms

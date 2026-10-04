@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 import time
+import unicodedata
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
@@ -480,12 +481,19 @@ def summarize(paths, output):
                     raise ValueError("Missing version record")
                 row[f"engine_{phase}"] = versions["AMEngineVersion"]
                 row[f"definitions_{phase}"] = versions["AntivirusSignatureVersion"]
-            # Evidence values can be user-controlled paths/messages. Keep CSV cells literal.
+            # Importers may skip leading whitespace/control/format characters.
+            # Prefix the original value; JSON evidence and evaluation stay exact.
             writer.writerow(
                 {
                     key: (
                         "'" + value
-                        if isinstance(value, str) and value.startswith(("=", "+", "-", "@"))
+                        if isinstance(value, str)
+                        and value
+                        and (
+                            value[0] in "=+-@"
+                            or value[0].isspace()
+                            or unicodedata.category(value[0]) in {"Cc", "Cf"}
+                        )
                         else value
                     )
                     for key, value in row.items()

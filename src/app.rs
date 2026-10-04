@@ -790,6 +790,9 @@ impl App {
         if let Message::Templates(template_library::Action::Finished(serial, result)) = message {
             return self.template_finished(serial, result);
         }
+        if let Message::Templates(template_library::Action::WarningAcknowledged(serial)) = message {
+            return self.template_warning_acknowledged(serial);
+        }
         if let Message::Templates(action @ template_library::Action::Imported(_)) = message {
             if let Some(task) = self.template_async(&action) {
                 return task;

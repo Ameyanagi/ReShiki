@@ -50,7 +50,8 @@ impl SelectionBox {
         let (lo, hi) = scene::selection_bounds(doc, ids)?;
         Some(Self {
             corners: [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)],
-            pivot: editing::rotation_center(doc, ids)?,
+            // Derived centroid markers still have a box even without a rotation site.
+            pivot: editing::rotation_center(doc, ids).unwrap_or_else(|| editing::center(doc, ids)),
             camera,
             bounds,
         })
@@ -326,6 +327,53 @@ impl TransformDrag {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn centroid_only_selection_keeps_handles_without_an_independent_rotation_site()
+    -> Result<(), String> {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-60., -40.));
+        let b = doc.add_atom("C", World::new(-20., 0.));
+        let c = doc.add_atom("C", World::new(40., 40.));
+        let d = doc.add_atom("C", World::new(80., 80.));
+        let first = reshiki::projection::add_centroid(&mut doc, &[a, b])?;
+        let second = reshiki::projection::add_centroid(&mut doc, &[c, d])?;
+        let ids = [first, second];
+        let before = doc.clone();
+
+        assert_eq!(editing::rotation_center(&doc, &ids), None);
+        for zoom in [0.5, 1., 3.] {
+            let camera = Camera {
+                center: World::new(30., -15.),
+                zoom,
+            };
+            let bounds = Rectangle::new(Point::new(80., 100.), Size::new(400., 300.));
+            let selection = SelectionBox::new(&doc, &ids, camera, bounds)
+                .ok_or("Two centroid markers must keep their selection box")?;
+            // Marker positions are (-40, -20) and (60, 60).
+            assert_eq!(selection.pivot, World::new(10., 20.));
+            for (i, grip) in selection.grips().into_iter().enumerate() {
+                assert_eq!(selection.hit(grip), Some(Handle::Resize(i)));
+            }
+            for (i, grip) in selection.edge_grips().into_iter().enumerate() {
+                assert_eq!(selection.hit(grip), Some(Handle::Edge(i)));
+            }
+            assert_eq!(
+                selection.hit(selection.rotation_grip()),
+                Some(Handle::Rotate)
+            );
+            assert!(SelectionBox::new(&doc, &[first], camera, bounds).is_none());
+        }
+        assert_eq!(doc, before, "Building and hitting the box must not edit");
+
+        editing::transform(&mut doc, &ids, editing::Transform::Rotate(15.));
+        assert_eq!(
+            doc, before,
+            "Derived markers add no independent rotation site"
+        );
+        assert_eq!(editing::rotation_center(&doc, &ids), None);
+        Ok(())
+    }
 
     #[test]
     fn side_handles_stretch_one_axis_and_match_committed_geometry() -> Result<(), String> {
