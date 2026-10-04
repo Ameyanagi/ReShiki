@@ -383,6 +383,9 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         },
         vector,
     );
+    // Derived markers follow their source atoms in both the drag preview and
+    // the committed document; they cannot retain independent transformed sites.
+    crate::projection::sync_centroids(doc);
 }
 
 /// Stretch the drawing in its plane without reflecting atoms or resizing text.

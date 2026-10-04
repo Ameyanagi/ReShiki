@@ -7,7 +7,15 @@ use reshiki::{
 use serde::Serialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use std::{fs, path::PathBuf};
+use std::{fs, future::Future, path::PathBuf, pin::Pin};
+
+// Construct operation futures in a separate frame before heap-pinning them.
+// An inline Box::pin(operation()) still leaves large temporary futures in the
+// caller's poll frame in debug builds, overflowing Windows' main stack.
+#[inline(never)]
+fn heap_future<F: Future>(make: impl FnOnce() -> F) -> Pin<Box<F>> {
+    Box::pin(make())
+}
 
 // InChI may materialize a stereochemical hydrogen as a separate atom. Compare
 // the heavy graph here; formula and the full InChIKey still check total H,
@@ -70,8 +78,7 @@ async fn reaction_fixture(
 ) -> anyhow::Result<serde_json::Value> {
     let name = "ethanol-oxidation";
     let input = "CCO>>CC=O";
-    let source = engine
-        .request(Request::import("rsmi", input))
+    let source = heap_future(|| engine.request(Request::import("rsmi", input)))
         .await
         .map_err(anyhow::Error::msg)?;
     let document = source.document.context("Missing reaction drawing")?;
@@ -97,13 +104,14 @@ async fn reaction_fixture(
     for format in ["rxn", "rsmi"] {
         let mut request = Request::molecule("export", document.clone());
         request.format = Some(format.into());
-        let exported = engine.request(request).await.map_err(anyhow::Error::msg)?;
+        let exported = heap_future(|| engine.request(request))
+            .await
+            .map_err(anyhow::Error::msg)?;
         let text = exported.output.context("Missing reaction export")?;
         if format == "rxn" {
             ensure!(text.starts_with("$RXN V3000"), "Expected RXN V3000");
         }
-        let restored = engine
-            .request(Request::import(format, &text))
+        let restored = heap_future(|| engine.request(Request::import(format, &text)))
             .await
             .map_err(anyhow::Error::msg)?;
         let roundtrip = reaction_oracle(&restored.document.context("Missing imported reaction")?)?;
@@ -126,11 +134,13 @@ async fn reaction_fixture(
     }
     // Use exactly the same preparation path as the Copy As command. This file
     // is the receiver-test payload, not a separately handcrafted JSON probe.
-    let copied = reshiki::clipboard::prepare_as(
-        engine.clone(),
-        document.clone(),
-        reshiki::clipboard::CopyFormat::ChemDoodleReaction,
-    )
+    let copied = heap_future(|| {
+        reshiki::clipboard::prepare_as(
+            engine.clone(),
+            document.clone(),
+            reshiki::clipboard::CopyFormat::ChemDoodleReaction,
+        )
+    })
     .await
     .map_err(anyhow::Error::msg)?;
     let text = copied.text().context("Missing ChemDoodle clipboard text")?;
@@ -209,7 +219,11 @@ async fn main() -> anyhow::Result<()> {
             .nth(1)
             .context("usage: scifinder_handoff_qa NEW_OUTPUT_DIRECTORY")?,
     );
-    fs::create_dir(&output).context("Choose a new output directory with an existing parent")?;
+    generate_fixtures(&output).await
+}
+
+async fn generate_fixtures(output: &std::path::Path) -> anyhow::Result<()> {
+    fs::create_dir(output).context("Choose a new output directory with an existing parent")?;
     let engine = LocalEngine::default();
     let mut fixtures = Vec::new();
     for (name, input, abbreviate) in [
@@ -218,8 +232,7 @@ async fn main() -> anyhow::Result<()> {
         ("difluoroethene-stereo", "F/C=C/F", false),
         ("defined-abbreviations", "COc1ccc(NC(=O)OC(C)(C)C)cc1", true),
     ] {
-        let response = engine
-            .request(Request::import_smiles(input))
+        let response = heap_future(|| engine.request(Request::import_smiles(input)))
             .await
             .map_err(anyhow::Error::msg)?;
         ensure!(
@@ -233,7 +246,9 @@ async fn main() -> anyhow::Result<()> {
         if abbreviate {
             let mut request = Request::molecule("abbreviate", document.clone());
             request.selected_ids = Some(document.all_ids());
-            let response = engine.request(request).await.map_err(anyhow::Error::msg)?;
+            let response = heap_future(|| engine.request(request))
+                .await
+                .map_err(anyhow::Error::msg)?;
             ensure!(
                 response.warnings.is_empty(),
                 "{name}: {:?}",
@@ -258,7 +273,9 @@ async fn main() -> anyhow::Result<()> {
         for format in ["smiles", "mol", "inchi"] {
             let mut request = Request::molecule("export", document.clone());
             request.format = Some(format.into());
-            let response = engine.request(request).await.map_err(anyhow::Error::msg)?;
+            let response = heap_future(|| engine.request(request))
+                .await
+                .map_err(anyhow::Error::msg)?;
             ensure!(
                 response.warnings.is_empty(),
                 "{name} {format}: {:?}",
@@ -266,8 +283,7 @@ async fn main() -> anyhow::Result<()> {
             );
             let text = response.output.context("Missing exported text")?;
             ensure!(!text.trim().is_empty(), "{name} {format}: empty export");
-            let restored = engine
-                .request(Request::import(format, &text))
+            let restored = heap_future(|| engine.request(Request::import(format, &text)))
                 .await
                 .map_err(anyhow::Error::msg)?;
             ensure!(
@@ -321,7 +337,7 @@ async fn main() -> anyhow::Result<()> {
             "formats": formats
         }));
     }
-    fixtures.push(reaction_fixture(&engine, &output).await?);
+    fixtures.push(reaction_fixture(&engine, output).await?);
     fs::write(
         output.join("manifest.json"),
         serde_json::to_vec_pretty(&json!({
@@ -342,6 +358,32 @@ mod tests {
         document::{Arrow, Point},
         reactions::{Participant, Reaction},
     };
+
+    #[test]
+    fn public_fixture_checks_fit_one_megabyte_stack() -> anyhow::Result<()> {
+        std::env::var_os("RESHIKI_INCHI_HELPER")
+            .context("Set RESHIKI_INCHI_HELPER to the built native helper")?;
+        let directory = tempfile::tempdir()?;
+        let output = directory.path().join("handoff");
+        let thread_output = output.clone();
+        std::thread::Builder::new()
+            .name("one-megabyte-handoff".into())
+            .stack_size(1024 * 1024)
+            .spawn(move || {
+                let fixtures = generate_fixtures(&thread_output);
+                println!(
+                    "Handoff driver future: {} bytes; execution stack: 1048576 bytes",
+                    std::mem::size_of_val(&fixtures)
+                );
+                tokio::runtime::Runtime::new()?.block_on(fixtures)
+            })?
+            .join()
+            .map_err(|_| anyhow::anyhow!("Handoff fixture thread panicked"))??;
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(output.join("manifest.json"))?)?;
+        ensure!(manifest["fixtures"].as_array().context("fixtures")?.len() == 5);
+        Ok(())
+    }
 
     fn reaction() -> Document {
         let mut doc = Document::default();
