@@ -1,0 +1,56 @@
+{
+  "purpose": "Recorded native saved-coordinate comparison for PR112 explanation",
+  "coordinate_unit": "drawing-coordinate units; no screen-pixel measurement",
+  "tolerance": 0.0001,
+  "original": {
+    "source": {
+      "production": "da5751d76db84c809b3562a3523536b459041cb8",
+      "app": "preserved official signed nightly",
+      "platform": "native macOS",
+      "executable_sha256": "2962f3bb8ea82272dda0749bd8fdf6373ab1e7cb882d26f71fc828b6b2a18625"
+    },
+    "sequence": "+15 degrees then -15 degrees through native numeric Rotate field",
+    "max_coordinate_error": 0.8769130283627893,
+    "all_nonposition_document_data_exact": true,
+    "baseline": {
+      "filename": "baseline-nightly.rsk",
+      "bytes": 3089,
+      "sha256": "3ee37c80637f51c084fdda40ec487c3da12a9d54d631cd8043cc414f89477d51"
+    },
+    "result": {
+      "filename": "baseline-nightly-numeric-inverse15.rsk",
+      "bytes": 3093,
+      "sha256": "58a2220e99a914a06800a04c8e2196b74b1b22e8f645ca0d70fad72e7f82cd48"
+    },
+    "source_receipt": {
+      "filename": "native-red-receipt.json",
+      "bytes": 8920,
+      "sha256": "fcdcde3030d5a32364834a1919c454f8711c453c144f79f3560b789b6596d015"
+    }
+  },
+  "historical_fixed_candidate": {
+    "source": {
+      "production": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "qa": "e5339283785b90bf5e01e27ba1d95d8b81181fad",
+      "platform": "native macOS",
+      "executable_sha256": "e2b733f3850916e21ee6158aac8957b1224b8a792f81a70d4747e3737a441c22"
+    },
+    "sequence": "+15 degrees; save and reopen; -15 degrees through native numeric Rotate field",
+    "max_coordinate_error": 4.472135952447042e-6,
+    "six_15_vs_single_90_error": 4.472135956419096e-6,
+    "result": {
+      "filename": "rotation96-inverse-after-reopen.rsk",
+      "bytes": 3087,
+      "sha256": "3ba70d5290525abde343c27a3d299f29af6dcb3478995b333a5df18f1d234dc2"
+    },
+    "source_receipt": {
+      "filename": "rotation96-comparison.json",
+      "bytes": 333,
+      "sha256": "06e335901de14f39588f99e2d2db429f8489dc4b278c32bc0e454dbafbede344"
+    }
+  },
+  "limits": [
+    "Images are genuine original native captures, but are not pixel-aligned.",
+    "Fixed evidence predates the current stacked PR and is not complete interaction/performance acceptance."
+  ]
+}

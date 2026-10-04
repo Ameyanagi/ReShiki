@@ -1,0 +1,152 @@
+{
+  "date": "2026-10-04",
+  "purpose": "Original visual evidence supporting clearer PR111\u2013127 descriptions.",
+  "image_policy": "Original image bytes retained without cropping, annotation, recomposition or generation. Native captures and controlled renderer exports are labeled separately.",
+  "images": [
+    {
+      "filename": "pr112-before-inverse-da5751d.jpg",
+      "bytes": 355799,
+      "sha256": "cbe8e3da487bc31fbceb678cc698f0bd367d481988d1dc86df2b3c8bc944783b",
+      "pr": 112,
+      "caption": "Original signed nightly da5751d, native macOS: selected pyrrole after numeric +15\u00b0 then \u221215\u00b0. Saved positions retain maximum 0.8769130283627893 drawing-coordinate error.",
+      "source": {
+        "production": "da5751d76db84c809b3562a3523536b459041cb8",
+        "app": "preserved official signed nightly",
+        "platform": "native macOS",
+        "executable_sha256": "2962f3bb8ea82272dda0749bd8fdf6373ab1e7cb882d26f71fc828b6b2a18625"
+      },
+      "limits": [
+        "Not pixel-aligned with the fixed candidate capture; use saved-coordinate measurements.",
+        "Screenshot precedes Save As, so its title still names the plus15 file and shows the dirty marker. The saved inverse result is pinned separately."
+      ]
+    },
+    {
+      "filename": "pr112-after-inverse-483e70b.jpg",
+      "bytes": 349888,
+      "sha256": "3759660c5e1f85f4fb82b36547ca3b2fc7eed051a993c15ec608d7126b431d04",
+      "pr": 112,
+      "caption": "Historical fixed candidate 483e70b / QA e533928, native macOS: +15\u00b0 was saved and reopened, then \u221215\u00b0 applied. Maximum saved-coordinate error is 0.000004472135952447042.",
+      "source": {
+        "production": "483e70bf168430eaad76c57ee9739512bffb0c51",
+        "qa": "e5339283785b90bf5e01e27ba1d95d8b81181fad",
+        "platform": "native macOS",
+        "executable_sha256": "e2b733f3850916e21ee6158aac8957b1224b8a792f81a70d4747e3737a441c22"
+      },
+      "limits": [
+        "Historical candidate, not current PR112 head.",
+        "Viewport and panel scroll differ from the original nightly capture.",
+        "Core inverse-rotation result only; separate focused-arrow interaction acceptance was incomplete on this older candidate."
+      ]
+    },
+    {
+      "filename": "pr112-original-start-da5751d.jpg",
+      "bytes": 337612,
+      "sha256": "98ff2af63741fda5da8590c2f0f73f3964b24f4ca676dd49ba30c8c7cc81b369",
+      "pr": 112,
+      "caption": "Original signed nightly da5751d, native macOS: selected pyrrole before the numeric rotations.",
+      "source": {
+        "production": "da5751d76db84c809b3562a3523536b459041cb8",
+        "app": "preserved official signed nightly",
+        "platform": "native macOS",
+        "executable_sha256": "2962f3bb8ea82272dda0749bd8fdf6373ab1e7cb882d26f71fc828b6b2a18625"
+      },
+      "limits": []
+    },
+    {
+      "filename": "pr113-after-native-print-dialog-783b154.jpg",
+      "bytes": 217056,
+      "sha256": "2f85d83259d114ae3244b29619e002eb1812189e394dae65139007578ab7166f",
+      "pr": 113,
+      "caption": "Historical source 783b154 / QA eeb3d67, native macOS direct print-worker replay: all two pages at 100% scale.",
+      "source": {
+        "production": "783b154d6232f960146396c1dc7b594924191895",
+        "qa": "eeb3d67ce398b15b522d992d3f086098a359e9f5",
+        "platform": "native macOS print-worker replay",
+        "executable_sha256": "a0d861750cd1b38e44fa7575eec77d112e0f573fb3d7e1727238f4f06a24bb7f"
+      },
+      "limits": [
+        "After-state illustration only, not a before/failure comparison.",
+        "Does not prove safe construction or invalid-PDF rejection.",
+        "Original parent application Print completion remains unproved.",
+        "Printer model/status is visible in the native dialog; root should review before publication."
+      ]
+    },
+    {
+      "filename": "pr115-pending-unit-input-483e70b.jpg",
+      "bytes": 292452,
+      "sha256": "8bf8db74e8c7338fa6f00a10f0e0f155cfe5139dbd94c5637ae3618ca8470120",
+      "pr": 115,
+      "caption": "Historical source 483e70b / QA e533928, native macOS: the first tab retains an unfinished 5m bond-length entry in a pt-era draft.",
+      "source": {
+        "production": "483e70bf168430eaad76c57ee9739512bffb0c51",
+        "qa": "e5339283785b90bf5e01e27ba1d95d8b81181fad",
+        "platform": "native macOS",
+        "executable_sha256": "e2b733f3850916e21ee6158aac8957b1224b8a792f81a70d4747e3737a441c22"
+      },
+      "limits": [
+        "This is a fixed-build workflow state, not evidence of the old points-only editor.",
+        "The complete recorded sequence changes the preferred unit to mm in a second tab before the first tab finishes its pending entry."
+      ]
+    },
+    {
+      "filename": "pr118-before-silent-close-macos-1c714ca.jpg",
+      "bytes": 713646,
+      "sha256": "4dec867137a558d3a76d52988e62406b0f7076515c1937b9a8f9793005ea3d7a",
+      "pr": 118,
+      "caption": "Native Writer returned to Start Center without a fresh Save/Discard/Cancel choice after the second accepted edit.",
+      "source": "LibreOffice extension 1c714cae67bda85dba882cedf0e5e6807509b58a / ReShiki 783b154",
+      "limits": [
+        "P2 prior Save then intended final Cancel branch, ordinary CmdW. Screenshot shows no document/choice; saved-file inspection separately confirms only edit 1 persisted. No failing-document reopen was performed. Compare to C03 below only with disclosed scenario/build difference."
+      ]
+    },
+    {
+      "filename": "pr122-highlight-renderer-0893e11.png",
+      "bytes": 52619,
+      "sha256": "cbfef8bf1941740a54d20445cd501b8caa779b25c37c33e8d3b70311db12ca2b",
+      "pr": 122,
+      "caption": "Cyan highlight behind OH and yellow highlight behind a bond, with molecular ink visible.",
+      "source": "0893e1140d543571d340555cedb48dd926965f61",
+      "limits": [
+        "Original exported PNG recorded for historical 0893e11; not a desktop screenshot or matched bug comparison. Contains transparency; original bytes must be preserved."
+      ],
+      "fixture_provenance_url": "https://github.com/Ameyanagi/ReShiki/blob/783b154d6232f960146396c1dc7b594924191895/tests/fixtures/structure-highlights/README.md"
+    },
+    {
+      "filename": "pr127-powerpoint-host-updated-macos-6ca2ec2.jpg",
+      "bytes": 507127,
+      "sha256": "a806e42f50662ca664c848c5aa720202782376d432015c6794527aec5ae452e7",
+      "pr": 127,
+      "caption": "PowerPoint for Mac after actual acknowledged native edit; preview updated. Source6ca2ec2/nativecc17; syntheticfixture only; status below fold not claimed visible.",
+      "source": {
+        "companion": "6ca2ec2",
+        "native": "cc17b7a",
+        "platform": "macOS Office 16.113.3"
+      },
+      "limits": [
+        "Workflow after-state; paired host-before images and actual acknowledgement/save/reopen evidence are described in PR127. Not all-platform Office acceptance."
+      ]
+    },
+    {
+      "filename": "pr127-excel-host-updated-macos-6ca2ec2.jpg",
+      "bytes": 432534,
+      "sha256": "2f2b0d0d0b2e23fa8dda26bd3d6ad353c119be4d06ae2eb2b2dd4728d216a3f0",
+      "pr": 127,
+      "caption": "Excel for Mac after actual acknowledged native edit; preview updated. Source6ca2ec2/nativecc17; syntheticfixture only; status below fold not claimed visible.",
+      "source": {
+        "companion": "6ca2ec2",
+        "native": "cc17b7a",
+        "platform": "macOS Office 16.113.3"
+      },
+      "limits": [
+        "Workflow after-state; paired host-before images and actual acknowledgement/save/reopen evidence are described in PR127. Not all-platform Office acceptance."
+      ]
+    }
+  ],
+  "measurement_file": {
+    "file": "pr112-native-rotation-measurements.json",
+    "sha256": "5dba22a0b8c8a91cb4de1135a1f3aa483cdc560bdcdf323fc048874bb687c91c",
+    "bytes": 2276
+  },
+  "credit": "Original ReShiki contribution authorship and existing fixture notices remain applicable.",
+  "fixture_notice": "PR122 uses the documented scientific fixture derived from the installed ChemDraw shortcut sample. Its labels were reconstructed and proprietary page/captions/artwork excluded. The fixture provenance does not infer rightsholder permission or relicense vendor material."
+}
