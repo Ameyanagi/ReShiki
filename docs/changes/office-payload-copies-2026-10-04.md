@@ -100,23 +100,121 @@ commits above. The actual fixture and preview executable still matched their
 captured provenance hashes. This verifies the local evidence named by the
 manifest; the large artifacts are not distributed with the repository.
 
-Reproduce the supported headless setup with matched packages and an isolated
-profile, then run `roundtrip.py` once per selected source/package. Reuse an
-actual preview-worker packet, not a synthetic PNG/native pair:
+For a fresh headless reproduction, first create baseline inputs, then run the
+candidate against them, then read candidate files with the baseline. Use a
+checkout of PR #134 and an actual preview-worker JSON packet; replace
+`/path/to/preview-packet.json` with that existing packet's host path. The source
+trees, extension packages, profiles and output directories are separate.
+From the host checkout, prepare a new isolated container:
 
 ```sh
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -t noble-backports libreoffice-core-nogui python3-uno libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui libreoffice-script-provider-python
-python3 -B integrations/libreoffice/build_extension.py /work/evidence/candidate.oxt
-env SAL_USE_VCLPLUGIN=svp unopkg add --force --suppress-license -env:UserInstallation=file:///work/profiles/candidate /work/evidence/candidate.oxt
-env SAL_USE_VCLPLUGIN=svp libreoffice -env:UserInstallation=file:///work/profiles/candidate --headless --norestore --nodefault --nofirststartwizard '--accept=pipe,name=reshiki-refactor-candidate;urp;StarOffice.ServiceManager'
-python3 -B integrations/libreoffice/tests/roundtrip.py --uno-url 'uno:pipe,name=reshiki-refactor-candidate;urp;StarOffice.ComponentContext' --packet /work/evidence/preview-packet.json --output /work/evidence/candidate-roundtrip --incoming /work/evidence/baseline-roundtrip
+docker run --init --detach --name reshiki-uno-pr134-reproduce --memory 2g --cpus 2 --pids-limit 512 ubuntu:24.04 sleep infinity
+docker exec reshiki-uno-pr134-reproduce mkdir -p /work/baseline /work/candidate /work/evidence /work/profiles
+git archive 81ca82101061ecc201545a3cae8d8257f03254d3 integrations/libreoffice | docker exec -i reshiki-uno-pr134-reproduce tar -x -C /work/baseline
+git archive HEAD integrations/libreoffice | docker exec -i reshiki-uno-pr134-reproduce tar -x -C /work/candidate
+docker cp /path/to/preview-packet.json reshiki-uno-pr134-reproduce:/work/evidence/preview-packet.json
+docker exec -it reshiki-uno-pr134-reproduce bash
 ```
 
-Distribution packages were installed as root inside the dedicated container.
-Extension installation, UNO tests and LibreOffice used the private unprivileged
-`qa` account. The process-start command runs in the background; wait for its UNO
-endpoint before starting the Python harness. The manifest records the
-supplemental driver's exact commands and source hash.
+Run the following inside that container as root. Distribution packages are
+installed as root; extension installation, UNO harnesses and LibreOffice use
+the private unprivileged `qa` account. Verify the extension source hashes before
+building the packages:
+
+| Source                                                          | Expected SHA-256                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `/work/baseline/integrations/libreoffice/extension/reshiki.py`  | `c2de0f37a89e4ae54662fe63a2f32e3c4f5043b70da0cf2a85347e102661a816` |
+| `/work/candidate/integrations/libreoffice/extension/reshiki.py` | `bd282131c4eb87d69c2660f94d28fab6967c5347f0e16c2260c08e64d494a312` |
+
+```sh
+set -eu
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -t noble-backports libreoffice-core-nogui python3-uno libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui libreoffice-script-provider-python
+useradd --create-home --shell /bin/bash qa
+chown -R qa:qa /work
+sha256sum /work/baseline/integrations/libreoffice/extension/reshiki.py /work/candidate/integrations/libreoffice/extension/reshiki.py
+for selected_profile in baseline candidate; do
+  runuser -u qa -- /usr/bin/python3 -B "/work/$selected_profile/integrations/libreoffice/build_extension.py" "/work/evidence/$selected_profile.oxt"
+  runuser -u qa -- env SAL_USE_VCLPLUGIN=svp /usr/bin/unopkg add --force --suppress-license "-env:UserInstallation=file:///work/profiles/$selected_profile" "/work/evidence/$selected_profile.oxt"
+done
+
+# Start one isolated profile and wait at most 30 seconds for its UNO endpoint.
+start_office() {
+  selected_profile=$1
+  runuser -u qa -- env SAL_USE_VCLPLUGIN=svp /usr/bin/libreoffice "-env:UserInstallation=file:///work/profiles/$selected_profile" --headless --norestore --nodefault --nofirststartwizard "--accept=pipe,name=reshiki-refactor-$selected_profile;urp;StarOffice.ServiceManager" > "/work/evidence/$selected_profile-soffice.log" 2>&1 &
+  office_pid=$!
+  runuser -u qa -- /usr/bin/python3 -B - "$selected_profile" <<'PY'
+import sys, time, uno
+ctx = uno.getComponentContext()
+resolver = ctx.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", ctx)
+url = f"uno:pipe,name=reshiki-refactor-{sys.argv[1]};urp;StarOffice.ComponentContext"
+deadline = time.monotonic() + 30
+while True:
+    try:
+        resolver.resolve(url)
+        break
+    except Exception:
+        if time.monotonic() >= deadline:
+            raise
+        time.sleep(0.25)
+PY
+}
+
+# Documents are closed by the harness before stopping its selected process.
+stop_office() {
+  runuser -u qa -- /usr/bin/python3 -B - "$1" <<'PY'
+import sys, uno
+ctx = uno.getComponentContext()
+resolver = ctx.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", ctx)
+remote = resolver.resolve(f"uno:pipe,name=reshiki-refactor-{sys.argv[1]};urp;StarOffice.ComponentContext")
+desktop = remote.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop", remote)
+assert desktop.terminate()
+PY
+  wait "$office_pid"
+}
+
+# 1. No --incoming: create baseline roundtrip-2.odt, .ods and .odp first.
+start_office baseline
+runuser -u qa -- /usr/bin/python3 -B /work/baseline/integrations/libreoffice/tests/roundtrip.py --uno-url 'uno:pipe,name=reshiki-refactor-baseline;urp;StarOffice.ComponentContext' --packet /work/evidence/preview-packet.json --output /work/evidence/baseline-roundtrip
+stop_office baseline
+
+# 2. The candidate reads the baseline files and creates its own roundtrip-2 files.
+start_office candidate
+runuser -u qa -- /usr/bin/python3 -B /work/candidate/integrations/libreoffice/tests/roundtrip.py --uno-url 'uno:pipe,name=reshiki-refactor-candidate;urp;StarOffice.ComponentContext' --packet /work/evidence/preview-packet.json --output /work/evidence/candidate-roundtrip --incoming /work/evidence/baseline-roundtrip
+stop_office candidate
+
+# 3. Reverse direction, using the baseline source and installed baseline profile.
+start_office baseline
+runuser -u qa -- /usr/bin/python3 -B /work/baseline/integrations/libreoffice/tests/roundtrip.py --uno-url 'uno:pipe,name=reshiki-refactor-baseline;urp;StarOffice.ComponentContext' --packet /work/evidence/preview-packet.json --output /work/evidence/baseline-imports-candidate --incoming /work/evidence/candidate-roundtrip
+stop_office baseline
+```
+
+Each `roundtrip.py` run verifies its installed source matches its source tree.
+The first run creates the required `baseline-roundtrip/roundtrip-2.*` files;
+the second creates `candidate-roundtrip/roundtrip-2.*`. The final repository
+harness command imports the latter into `baseline-imports-candidate/imported.*`.
+It is a fresh reproduction of the reverse persistence direction using only the
+repository harness, rather than the recorded supplemental reload driver's
+output.
+
+The recorded 24-file evidence additionally used the retained
+`reload_save_as.py` driver, including this reverse check with the baseline
+process running. Its source SHA-256 is
+`44f93d2cf4c44bfdad55e7a524f51e13ec91119073254b1d0a6c4baf48839b03`;
+copy that driver from the evidence directory to `/work/evidence/` to replay the
+explicit reload/live Save As checks. Unlike `roundtrip.py`, it requires existing
+`roundtrip-2.*` inputs and never creates them:
+
+```sh
+start_office baseline
+runuser -u qa -- /usr/bin/python3 -B /work/evidence/reload_save_as.py --source-tree /work/baseline --uno-url 'uno:pipe,name=reshiki-refactor-baseline;urp;StarOffice.ComponentContext' --packet /work/evidence/preview-packet.json --incoming /work/evidence/candidate-roundtrip --output /work/evidence/baseline-reading-candidate
+stop_office baseline
+```
+
+After the fresh runs and any optional supplemental check, leave the container
+shell, copy out its `/work/evidence/` reports/documents, and stop the new
+`reshiki-uno-pr134-reproduce` container from the host. The original retained
+`reshiki-refactor-uno-20261004` evidence container is separate.
 
 ## Acceptance limits
 
