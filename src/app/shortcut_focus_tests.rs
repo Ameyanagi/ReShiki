@@ -105,6 +105,15 @@ impl Ui {
         find.1.expect("input in the real app view")
     }
 
+    fn semantics(&mut self, app: &App) -> reshiki::accessibility::Snapshot {
+        let mut collect = reshiki::accessibility::Collect::new(self.viewport);
+        self.inspect(
+            app,
+            &mut iced::advanced::widget::operation::black_box(&mut collect),
+        );
+        collect.snapshot().clone()
+    }
+
     fn text(&mut self, app: &App, target: &'static str) -> Rectangle {
         struct Find(&'static str, Option<Rectangle>);
         impl Operation for Find {
@@ -380,5 +389,194 @@ async fn updates_dialog_captures_keys_before_editors_file_commands_and_canvas() 
         "the modal still accepts its mouse controls"
     );
     assert_eq!(app.tab.doc, drawing);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activation() {
+    let mut ui = Ui::new().await;
+    let mut app = assistant_app();
+    let bounds = ui.input(&app, "assistant-input").0;
+    ui.click(&mut app, bounds.center());
+    assert!(ui.input(&app, "assistant-input").1);
+    let drawing = app.tab.doc.clone();
+    let draft = app.assistant.input_text();
+    app.updates.open = true;
+    // Enter/Space without a focused modal control must never reach the
+    // drawing's contextual-key or select-recent shortcuts.
+    for (named, code) in [(Named::Enter, Code::Enter), (Named::Space, Code::Space)] {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Named(named), code, Modifiers::empty(), None),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(messages.is_empty(), "{messages:?}");
+    }
+    let tab = |modifiers| press(Key::Named(Named::Tab), Code::Tab, modifiers, None);
+    let focused = |ui: &mut Ui, app: &App| {
+        let snapshot = ui.semantics(app);
+        assert!(snapshot.duplicate_ids.is_empty());
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .all(|node| node.id.starts_with("updates-"))
+        );
+        snapshot
+            .nodes
+            .into_iter()
+            .filter(|node| node.focused)
+            .map(|node| node.id)
+            .collect::<Vec<_>>()
+    };
+    for expected in [
+        "updates-close",
+        "updates-stable",
+        "updates-nightly",
+        "updates-check",
+        "updates-automatic",
+        "updates-notes",
+        "updates-close",
+    ] {
+        let (status, messages) =
+            ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(messages.is_empty());
+        assert_eq!(focused(&mut ui, &app), vec![expected]);
+    }
+    for expected in ["updates-notes", "updates-automatic"] {
+        let (status, messages) = ui.event(&app, tab(Modifiers::SHIFT), mouse::Cursor::Unavailable);
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(messages.is_empty());
+        assert_eq!(focused(&mut ui, &app), vec![expected]);
+    }
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Updates(updates::Action::Automatic(true))]
+    ));
+    // Dispatch updates the real state, but drop its asynchronous preference
+    // save task: this test never writes user preferences or starts a request.
+    apply(&mut app, messages);
+    let snapshot = ui.semantics(&app);
+    let automatic = snapshot
+        .nodes
+        .iter()
+        .find(|node| node.id == "updates-automatic")
+        .unwrap();
+    assert_eq!(automatic.role, reshiki::accessibility::Role::ToggleButton);
+    assert_eq!(automatic.checked, Some(true));
+    assert!(!automatic.enabled && !automatic.focused);
+    let mut activate = reshiki::accessibility::Activate::<Message>::new("updates-automatic");
+    ui.inspect(
+        &app,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(
+        activate.message().is_none(),
+        "Saving disables every activation path"
+    );
+    for expected in [
+        "updates-close",
+        "updates-check",
+        "updates-notes",
+        "updates-close",
+    ] {
+        let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
+        assert!(messages.is_empty());
+        assert_eq!(focused(&mut ui, &app), vec![expected]);
+    }
+    let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
+    for expected in ["updates-notes", "updates-automatic"] {
+        let (_, messages) = ui.event(&app, tab(Modifiers::SHIFT), mouse::Cursor::Unavailable);
+        assert!(messages.is_empty());
+        assert_eq!(focused(&mut ui, &app), vec![expected]);
+    }
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Space),
+            Code::Space,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(messages.is_empty(), "Space activates on release");
+    let (status, messages) = ui.event(
+        &app,
+        Event::Keyboard(keyboard::Event::KeyReleased {
+            key: Key::Named(Named::Space),
+            modified_key: Key::Named(Named::Space),
+            physical_key: Physical::Code(Code::Space),
+            location: keyboard::Location::Standard,
+            modifiers: Modifiers::empty(),
+        }),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Updates(updates::Action::Automatic(false))]
+    ));
+    apply(&mut app, messages);
+    let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
+    let point = ui.input(&app, "updates-automatic").0.center();
+    let mut click_messages = Vec::new();
+    for event in [
+        mouse::Event::CursorMoved { position: point },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        let (_, messages) = ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(point));
+        click_messages.extend(messages);
+    }
+    assert!(
+        matches!(
+            click_messages.as_slice(),
+            [Message::Updates(updates::Action::Automatic(true))]
+        ),
+        "The checkbox and its focus wrapper must publish one mouse action: {click_messages:?}"
+    );
+    for expected in ["updates-notes", "updates-close"] {
+        let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
+        assert!(messages.is_empty());
+        assert_eq!(focused(&mut ui, &app), vec![expected]);
+    }
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Updates(updates::Action::Show(false))]
+    ));
+    apply(&mut app, messages);
+    assert!(
+        !app.updates.open,
+        "Enter activates the focused Close button"
+    );
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.assistant.input_text(), draft);
     assert!(!app.tab.history.can_undo());
 }

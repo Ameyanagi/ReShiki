@@ -103,9 +103,12 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        // Updates has no text fields. Stop keys before file routing and any
-        // still-focused editor underneath the dialog sees them.
-        if self.updates_open && matches!(event, Event::Keyboard(_) | Event::InputMethod(_)) {
+        // The Updates focus scope owns Tab, Enter and Space. Keep other keys
+        // away from file routing and the focused editor behind the dialog.
+        if self.updates_open
+            && matches!(event, Event::Keyboard(_) | Event::InputMethod(_))
+            && !activation_event(event)
+        {
             if matches!(
                 event,
                 Event::Keyboard(keyboard::Event::KeyPressed {
@@ -168,6 +171,12 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         self.content.as_widget_mut().update(
             tree, event, layout, cursor, renderer, clipboard, shell, viewport,
         );
+        if self.updates_open && activation_event(event) {
+            // An unfocused dialog control may leave activation unhandled.
+            // Capture it here before the drawing's subscription sees it.
+            shell.capture_event();
+            return;
+        }
         if let Some(mut fields) = Fields::after(event, shell.is_event_captured()) {
             self.content
                 .as_widget_mut()
@@ -403,9 +412,59 @@ pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) 
     })
 }
 
+fn activation_event(event: &Event) -> bool {
+    // Control is distinct from Command on macOS, but Control+Tab is still a
+    // document shortcut. Only unmodified or Shift navigation reaches a modal.
+    matches!(event, Event::Keyboard(keyboard::Event::KeyPressed { key: keyboard::Key::Named(keyboard::key::Named::Enter | keyboard::key::Named::Space | keyboard::key::Named::Tab), modifiers, .. }
+        | keyboard::Event::KeyReleased { key: keyboard::Key::Named(keyboard::key::Named::Space), modifiers, .. }) if !modifiers.control() && !modifiers.alt() && !modifiers.logo())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn modal_activation_rejects_control_alt_and_logo_on_every_platform() {
+        use keyboard::{Key, Modifiers, key::Named};
+        for modifiers in [
+            Modifiers::empty(),
+            Modifiers::SHIFT,
+            Modifiers::CTRL,
+            Modifiers::CTRL | Modifiers::SHIFT,
+            Modifiers::ALT,
+            Modifiers::ALT | Modifiers::SHIFT,
+            Modifiers::LOGO,
+            Modifiers::LOGO | Modifiers::SHIFT,
+        ] {
+            let allowed = modifiers.is_empty() || modifiers == Modifiers::SHIFT;
+            for named in [Named::Enter, Named::Space, Named::Tab] {
+                let key = Key::Named(named);
+                let event = Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: key.clone(),
+                    modified_key: key,
+                    physical_key: keyboard::key::Physical::Code(match named {
+                        Named::Enter => keyboard::key::Code::Enter,
+                        Named::Space => keyboard::key::Code::Space,
+                        _ => keyboard::key::Code::Tab,
+                    }),
+                    location: keyboard::Location::Standard,
+                    modifiers,
+                    text: None,
+                    repeat: false,
+                });
+                assert_eq!(activation_event(&event), allowed, "{event:?}");
+            }
+            let event = Event::Keyboard(keyboard::Event::KeyReleased {
+                key: Key::Named(Named::Space),
+                modified_key: Key::Named(Named::Space),
+                physical_key: keyboard::key::Physical::Code(keyboard::key::Code::Space),
+                location: keyboard::Location::Standard,
+                modifiers,
+            });
+            assert_eq!(activation_event(&event), allowed, "{event:?}");
+        }
+    }
+
     #[test]
     fn longer_chords_do_not_trigger_plain_file_commands() {
         use keyboard::{Key, Modifiers};
