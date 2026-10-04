@@ -313,6 +313,15 @@ export function assertRevision(record, target) {
     );
 }
 
+export function assertCurrentRecord(record, previous, target) {
+  assertRevision(record, target);
+  if (record.recordId !== previous.recordId)
+    fail(
+      "REVISION_CONFLICT",
+      "The drawing received another update while this edit was being applied.",
+    );
+}
+
 export function sameEnvelope(a, b) {
   return (
     a.version === b.version &&

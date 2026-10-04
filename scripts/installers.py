@@ -1,6 +1,5 @@
 """Create native installers from the already verified application directory."""
 
-import hashlib
 import json
 import os
 import platform
@@ -11,7 +10,7 @@ import time
 from pathlib import Path
 
 from build_inchi_helper import INCHI_VERSION
-from build_release import ROOT, numeric_version, run, verify_binary, verify_inchi_worker
+from build_release import ROOT, checksum, numeric_version, run, verify_binary, verify_inchi_worker
 from check_runtime_dependencies import verify_macos_workers, verify_payload, verify_runtime
 
 
@@ -34,14 +33,6 @@ class InstallerCheckDirectory(tempfile.TemporaryDirectory):
                     raise
                 time.sleep(min(delay, remaining))
                 delay = min(delay * 2, 0.25)
-
-
-def checksum(output):
-    with output.open("rb") as stream:
-        digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    Path(str(output) + ".sha256").write_text(
-        f"{digest}  {output.name}\n", encoding="ascii", newline="\n"
-    )
 
 
 def inno_compiler():

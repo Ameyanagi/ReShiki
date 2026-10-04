@@ -38,6 +38,14 @@ def run(command, **kwargs):
     return subprocess.run([str(value) for value in command], check=True, **kwargs)
 
 
+def checksum(output):
+    with output.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    Path(str(output) + ".sha256").write_text(
+        f"{digest}  {output.name}\n", encoding="ascii", newline="\n"
+    )
+
+
 def version():
     return tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
 
@@ -363,11 +371,7 @@ def main():
     )
     output = archive(folder, ROOT / "dist/releases" / name)
     verify_archive(output, args.sign)
-    with output.open("rb") as stream:
-        digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    Path(str(output) + ".sha256").write_text(
-        f"{digest}  {output.name}\n", encoding="ascii", newline="\n"
-    )
+    checksum(output)
     print(output)
     if args.installer:
         from installers import build_installer

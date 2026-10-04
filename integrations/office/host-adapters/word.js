@@ -1,5 +1,6 @@
 import {
   assertCanAdd,
+  assertCurrentRecord,
   assertGeometry,
   assertReadback,
   assertRevision,
@@ -254,12 +255,7 @@ export function createWordAdapter(Word, { sessionId }) {
           context.document.customXmlParts.add(encodeRecord(attempted));
           await context.sync();
           const fresh = await readControl(context, target.contentControlId);
-          assertRevision(fresh.record, target);
-          if (fresh.record.recordId !== before.record.recordId)
-            fail(
-              "REVISION_CONFLICT",
-              "The drawing received another update while this edit was being applied.",
-            );
+          assertCurrentRecord(fresh.record, before.record, target);
           before = fresh;
           await checkEditablePicture(context, before);
           const geometry = {

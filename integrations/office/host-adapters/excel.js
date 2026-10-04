@@ -1,5 +1,6 @@
 import {
   assertCanAdd,
+  assertCurrentRecord,
   assertGeometry,
   assertReadback,
   assertRevision,
@@ -343,12 +344,7 @@ export function createExcelAdapter(Excel, { sessionId, Office }) {
 
           // Use the latest placement and user scale; never the selection after editing began.
           const fresh = await readShape(context, target);
-          assertRevision(fresh.record, target);
-          if (fresh.record.recordId !== before.record.recordId)
-            fail(
-              "REVISION_CONFLICT",
-              "The drawing received another update while this edit was being applied.",
-            );
+          assertCurrentRecord(fresh.record, before.record, target);
           before = fresh;
           await checkEditablePicture(context, before, Office);
           expectedGeometry = {
