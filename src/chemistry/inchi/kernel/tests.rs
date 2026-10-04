@@ -2,6 +2,35 @@ use super::*;
 use crate::chemistry::smiles;
 
 #[test]
+#[ignore = "isolated requested-Rust-allocation and callback refresh timing measurement"]
+fn measure_toolkit_refresh() {
+    use crate::allocation_metrics;
+    use std::{hint::black_box, time::Instant};
+    let state = smiles::prepare(&"C".repeat(1024)).unwrap().state;
+    let molecule = to_adapter(&state, vec![], &[]).unwrap();
+    for cached in [false, true] {
+        let mut toolkit = Toolkit {
+            state: cached.then(|| state.clone()),
+            unspecified: vec![],
+        };
+        let baseline = allocation_metrics::reset();
+        let start = Instant::now();
+        for _ in 0..100 {
+            black_box(toolkit.refresh(&molecule).unwrap());
+        }
+        let elapsed = start.elapsed();
+        let snapshot = allocation_metrics::snapshot();
+        println!(
+            "cached={cached} atoms=1024 count=100 elapsed={elapsed:?} allocations={} allocated={} peak_extra={} retained_extra={}",
+            snapshot.allocation_count,
+            snapshot.allocated_bytes,
+            snapshot.peak_bytes.saturating_sub(baseline),
+            snapshot.live_bytes.saturating_sub(baseline)
+        );
+    }
+}
+
+#[test]
 fn rust_kernel_generates_methane_without_reference_dependencies() {
     let imported = read("InChI=1S/CH4/h1H4", output::Options::default()).unwrap();
     let molecule = Molecule::prepare(&imported.state.unwrap(), None).unwrap();

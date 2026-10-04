@@ -264,9 +264,9 @@ impl Toolkit {
             .collect::<Result<Vec<_>, InchiToolkitError>>()?;
         let graph = Graph { atoms, bonds };
         graph.validate().map_err(error)?;
-        let mut state = match &self.state {
-            Some(state) if state.graph == graph => state.clone(),
-            _ => State {
+        let mut state = match (&self.state, graph) {
+            (Some(state), graph) if state.graph == graph => state.clone(),
+            (_, graph) => State {
                 metadata: Metadata::unspecified(&graph),
                 directions: vec![],
                 valences: vec![],
@@ -274,10 +274,9 @@ impl Toolkit {
                 hybridizations: vec![Hybridization::Unspecified; graph.atoms.len()],
                 rings: RingCache::default(),
                 properties: Properties::unspecified(&graph),
-                graph: graph.clone(),
+                graph,
             },
         };
-        state.graph = graph;
         state.directions = molecule
             .bonds()
             .iter()

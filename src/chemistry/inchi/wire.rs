@@ -8,20 +8,28 @@ pub const PROTOCOL: u16 = 3;
 pub use reshiki_process_heap::RESOURCE_EXIT;
 const MAGIC: &[u8; 8] = b"RSHINCHI";
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Request {
-    pub heap_bytes: usize,
-    pub operation: Operation,
-}
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub enum Operation {
-    Generate(Box<kernel::Molecule>),
-    Read {
-        inchi: String,
-        options: output::Options,
-    },
+pub type Request = RequestPayload<Box<kernel::Molecule>>;
+pub type Operation = OperationPayload<Box<kernel::Molecule>>;
+pub use payload::{Operation as OperationPayload, Request as RequestPayload};
+
+mod payload {
+    use super::{Deserialize, Serialize, output};
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct Request<M> {
+        pub heap_bytes: usize,
+        pub operation: Operation<M>,
+    }
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub enum Operation<M> {
+        Generate(M),
+        Read {
+            inchi: String,
+            options: output::Options,
+        },
+    }
 }
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -1,6 +1,38 @@
 use super::*;
 use crate::chemistry::graph::{Atom, Bond};
 
+#[test]
+#[ignore = "isolated requested-Rust-allocation and ranking timing measurement"]
+fn measure_ring_chiral_ranking() {
+    use crate::{allocation_metrics, chemistry::smiles};
+    use std::{hint::black_box, time::Instant};
+    for text in ["CCCCCCCC", "C[C@H]1CCC[C@@H](C)C1", "C1[C@H]2CC[C@@H]1CC2"] {
+        let state = smiles::prepare(text).unwrap().state;
+        let baseline = allocation_metrics::reset();
+        let start = Instant::now();
+        for _ in 0..1000 {
+            black_box(
+                rank(
+                    &state.graph,
+                    &state.rings.atoms,
+                    &state.metadata,
+                    Options::default(),
+                )
+                .unwrap(),
+            );
+        }
+        let elapsed = start.elapsed();
+        let snapshot = allocation_metrics::snapshot();
+        println!(
+            "smiles={text} count=1000 elapsed={elapsed:?} allocations={} allocated={} peak_extra={} retained_extra={}",
+            snapshot.allocation_count,
+            snapshot.allocated_bytes,
+            snapshot.peak_bytes.saturating_sub(baseline),
+            snapshot.live_bytes.saturating_sub(baseline)
+        );
+    }
+}
+
 fn benzene() -> Graph {
     Graph {
         atoms: vec![

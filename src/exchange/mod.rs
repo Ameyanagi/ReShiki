@@ -7,10 +7,13 @@ mod encode;
 mod schema;
 mod values;
 
+#[cfg(test)]
+mod tests;
+
 pub use decode::from_cdx;
 pub(crate) use decode::style_from_cdx;
 pub use encode::{to_cds, to_cdx};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 
 pub const LIMIT: usize = 16 * 1024 * 1024;
 const MAX_OBJECTS: usize = 100_000;
@@ -54,14 +57,10 @@ struct Schema {
     names: HashMap<&'static str, &'static Property>,
     codes: HashMap<u16, &'static Property>,
 }
-impl Schema {
-    fn new() -> Self {
-        Self {
-            names: schema::PROPERTIES.iter().map(|p| (p.name, p)).collect(),
-            codes: schema::PROPERTIES.iter().map(|p| (p.code, p)).collect(),
-        }
-    }
-}
+static SCHEMA: LazyLock<Schema> = LazyLock::new(|| Schema {
+    names: schema::PROPERTIES.iter().map(|p| (p.name, p)).collect(),
+    codes: schema::PROPERTIES.iter().map(|p| (p.code, p)).collect(),
+});
 
 struct Reader<'a> {
     remaining: &'a [u8],

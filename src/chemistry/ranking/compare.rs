@@ -196,7 +196,7 @@ impl Ranker<'_> {
     fn neighbor_swaps(&mut self, atom: usize) -> Result<Vec<(i32, u8)>, String> {
         let mut result = Vec::new();
         let in_ring = *at(&self.ring_counts, atom)? != 0;
-        let bonds = at(&self.bonds, atom)?.clone();
+        let bonds = at(&self.bonds, atom)?;
         self.work.spend(bonds.len())?;
         for edge in bonds {
             let tag = at(&self.metadata.atoms, edge.other)?.chiral_tag;

@@ -34,6 +34,9 @@ mod stereo;
 mod tree;
 mod variables;
 mod xml_guard;
+
+#[cfg(test)]
+mod tests;
 pub(crate) use variables::drawing_variables;
 
 pub use abbreviations::{
@@ -73,6 +76,21 @@ pub enum Error {
     Stereo(String),
 }
 type Result<T> = std::result::Result<T, Error>;
+
+const PREDICATES: &[(&str, &[&str])] = &[
+    ("RingBondCount", &["Unspecified", "-1"]),
+    ("UnsaturatedBonds", &["Unspecified", "0"]),
+    ("SubstituentsUpTo", &[]),
+    ("SubstituentsExactly", &[]),
+    ("FreeSites", &["0"]),
+    ("LinkCountLow", &[]),
+    ("LinkCountHigh", &[]),
+    ("IsotopicAbundance", &["Unspecified", "0"]),
+    ("Topology", &["Unspecified", "0"]),
+    ("RxnChange", &["no", "0"]),
+    ("RxnStereo", &["Unspecified", "0"]),
+    ("RxnParticipation", &["Unspecified", "0"]),
+];
 
 /// Detached unsanitized chemistry. No property-cache or hybridization values
 /// are invented: subsequent preparation computes them after restoring drawing

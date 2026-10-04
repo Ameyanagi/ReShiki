@@ -109,24 +109,10 @@ fn validate(text: &str) -> Result<Tree> {
     let nodes = at(Validation, tree.descendants(0))?;
     // Preserve the original two scans: predicates on any n/b are checked before
     // unsupported object tags, including chemical-looking children in pictures.
-    const PREDICATES: &[(&str, &[&str])] = &[
-        ("RingBondCount", &["Unspecified", "-1"]),
-        ("UnsaturatedBonds", &["Unspecified", "0"]),
-        ("SubstituentsUpTo", &[]),
-        ("SubstituentsExactly", &[]),
-        ("FreeSites", &["0"]),
-        ("LinkCountLow", &[]),
-        ("LinkCountHigh", &[]),
-        ("IsotopicAbundance", &["Unspecified", "0"]),
-        ("Topology", &["Unspecified", "0"]),
-        ("RxnChange", &["no", "0"]),
-        ("RxnStereo", &["Unspecified", "0"]),
-        ("RxnParticipation", &["Unspecified", "0"]),
-    ];
     for &index in &nodes {
         let node = at(Validation, tree.node(index))?;
         if matches!(node.tag.as_str(), "n" | "b") {
-            for &(name, allowed) in PREDICATES {
+            for &(name, allowed) in super::PREDICATES {
                 if node
                     .attr(name)
                     .is_some_and(|value| !allowed.contains(&value))

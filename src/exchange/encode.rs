@@ -34,7 +34,6 @@ fn encode(xml: &str, stationery: bool) -> Result<Vec<u8>> {
         }
     }
     let mut encoder = Encoder {
-        schema: Schema::new(),
         stationery,
         next_id,
         count: 0,
@@ -48,7 +47,6 @@ fn encode(xml: &str, stationery: bool) -> Result<Vec<u8>> {
 }
 struct Encoder {
     stationery: bool,
-    schema: Schema,
     next_id: u64,
     count: usize,
     properties: usize,
@@ -94,10 +92,10 @@ impl Encoder {
             if attr.namespace().is_some() {
                 return Err("Unsupported drawing attribute namespace".into());
             }
-            let p =
-                self.schema.names.get(attr.name()).ok_or_else(|| {
-                    format!("Unsupported binary drawing property: {}", attr.name())
-                })?;
+            let p = SCHEMA
+                .names
+                .get(attr.name())
+                .ok_or_else(|| format!("Unsupported binary drawing property: {}", attr.name()))?;
             // Unlike ordinary implied flags, chemical interpretation defaults
             // to true. An explicit false must survive the binary clipboard.
             if p.kind == "CDXBooleanImplied"
@@ -121,7 +119,9 @@ impl Encoder {
                 ] {
                     let key = format!("{prefix}{suffix}");
                     let value = finite(el.attribute(key.as_str()).unwrap_or(default))?;
-                    data.extend(pack_number("UINT16", (value * scale).round())?);
+                    pack_number("UINT16", (value * scale).round(), |bytes| {
+                        append(&mut data, bytes)
+                    })?;
                 }
                 self.property(code, &data)?;
             }
@@ -137,7 +137,7 @@ impl Encoder {
                 "represent" => {
                     let attr = child
                         .attribute("attribute")
-                        .and_then(|n| self.schema.names.get(n))
+                        .and_then(|n| SCHEMA.names.get(n))
                         .ok_or("Unsupported represented property")?;
                     let mut data = integer::<u32>(
                         child
@@ -246,12 +246,10 @@ fn encode_text(el: Node<'_, '_>) -> Result<Vec<u8>> {
                 &integer::<u16>(span.attribute(key).unwrap_or(default))?.to_le_bytes(),
             )?;
         }
-        append(
-            &mut data,
-            &pack_number(
-                "UINT16",
-                finite(span.attribute("size").unwrap_or("10"))? * 20.,
-            )?,
+        pack_number(
+            "UINT16",
+            finite(span.attribute("size").unwrap_or("10"))? * 20.,
+            |bytes| append(&mut data, bytes),
         )?;
         append(
             &mut data,
@@ -293,7 +291,7 @@ fn encode_colors(el: Node<'_, '_>) -> Result<Vec<u8>> {
             if !(0.0..=1.0).contains(&n) {
                 return Err("Invalid drawing color".into());
             }
-            append(&mut data, &pack_number("UINT16", n * 65535.)?)?;
+            pack_number("UINT16", n * 65535., |bytes| append(&mut data, bytes))?;
         }
     }
     Ok(data)

@@ -8,9 +8,9 @@ pub(super) fn encode(input: &Molecule, heap_bytes: usize) -> Result<Vec<u8>, Err
     input
         .validate()
         .map_err(|_| Error::Input("Invalid molecular graph, annotations or coordinates"))?;
-    let request = wire::Request {
+    let request = wire::RequestPayload {
         heap_bytes,
-        operation: wire::Operation::Generate(Box::new(input.clone())),
+        operation: wire::OperationPayload::Generate(input),
     };
     wire::encode(&request, MAX_REQUEST_BYTES).map_err(|_| Error::Limit("request"))
 }
@@ -109,6 +109,137 @@ mod tests {
         Molecule {
             state: smiles::prepare("C1CCC1").unwrap().state,
             positions: Some(vec![Point3::default(); 4]),
+        }
+    }
+
+    fn owned_encode(input: &Molecule, heap_bytes: usize) -> Result<Vec<u8>, Error> {
+        input
+            .validate()
+            .map_err(|_| Error::Input("Invalid molecular graph, annotations or coordinates"))?;
+        wire::encode(
+            &wire::Request {
+                heap_bytes,
+                operation: wire::Operation::Generate(Box::new(input.clone())),
+            },
+            MAX_REQUEST_BYTES,
+        )
+        .map_err(|_| Error::Limit("request"))
+    }
+
+    #[test]
+    fn borrowed_generation_matches_owned_frames_and_byte_boundaries() {
+        let budget = super::super::DEFAULT_HEAP_BYTES;
+        for text in ["", "c1ccccc1", "N[C@@H](C)C(=O)O", "F/C=C/F", "C.C"] {
+            for coordinates in [false, true] {
+                let state = smiles::prepare(text).unwrap().state;
+                let count = state.graph.atoms.len();
+                let input = Molecule {
+                    state,
+                    positions: coordinates.then(|| {
+                        (0..count)
+                            .map(|i| Point3 {
+                                x: i as f64 * 0.5,
+                                y: -0.,
+                                z: 1e-24,
+                            })
+                            .collect()
+                    }),
+                };
+                let actual = encode(&input, budget).unwrap();
+                assert_eq!(
+                    actual,
+                    owned_encode(&input, budget).unwrap(),
+                    "{text}, coordinates={coordinates}"
+                );
+                let request: wire::Request = wire::decode(&actual, MAX_REQUEST_BYTES).unwrap();
+                request.validate().unwrap();
+                assert_eq!(wire::encode(&request, MAX_REQUEST_BYTES).unwrap(), actual);
+            }
+        }
+        // Structural transport accepts untyped legacy CIP strings. Use one to
+        // exercise the exact byte boundary without constructing a huge graph.
+        let mut input = molecule();
+        input.state.properties.atoms[0].cip_code = Some(String::new());
+        let overhead = encode(&input, budget).unwrap().len();
+        for extra in [0, 1] {
+            input.state.properties.atoms[0].cip_code =
+                Some("R".repeat(MAX_REQUEST_BYTES - overhead + extra));
+            let actual = encode(&input, budget);
+            let expected = owned_encode(&input, budget);
+            if extra == 0 {
+                let actual = actual.unwrap();
+                assert_eq!(actual.len(), MAX_REQUEST_BYTES);
+                assert_eq!(actual, expected.unwrap());
+            } else {
+                assert!(matches!(actual, Err(Error::Limit("request"))));
+                assert!(matches!(expected, Err(Error::Limit("request"))));
+            }
+        }
+    }
+
+    #[test]
+    fn owned_wire_constructors_and_diagnostic_names_are_preserved() {
+        let request = wire::Request {
+            heap_bytes: super::super::DEFAULT_HEAP_BYTES,
+            operation: wire::Operation::Read {
+                inchi: "InChI=1S/CH4/h1H4".into(),
+                options: output::Options::default(),
+            },
+        };
+        request.validate().unwrap();
+        assert!(format!("{request:?}").starts_with("Request {"));
+        let bytes = wire::encode(&"invalid", MAX_REQUEST_BYTES).unwrap();
+        assert!(
+            wire::decode::<wire::Request>(&bytes, MAX_REQUEST_BYTES)
+                .unwrap_err()
+                .contains("struct Request")
+        );
+        let bytes = wire::encode(
+            &serde_json::json!({
+                "heap_bytes": super::super::DEFAULT_HEAP_BYTES,
+                "operation": {"Read": "invalid"}
+            }),
+            MAX_REQUEST_BYTES,
+        )
+        .unwrap();
+        assert!(
+            wire::decode::<wire::Request>(&bytes, MAX_REQUEST_BYTES)
+                .unwrap_err()
+                .contains("struct variant Operation::Read")
+        );
+    }
+
+    #[test]
+    #[ignore = "isolated requested-Rust-allocation and transport timing measurement"]
+    fn measure_borrowed_generation_transport() {
+        use crate::allocation_metrics;
+        use std::{hint::black_box, time::Instant};
+        let state = smiles::prepare(&["C"; 1024].join(".")).unwrap().state;
+        let input = Molecule {
+            state,
+            positions: Some(vec![Point3::default(); 1024]),
+        };
+        let budget = super::super::DEFAULT_HEAP_BYTES;
+        for borrowed in [false, true] {
+            let baseline = allocation_metrics::reset();
+            let start = Instant::now();
+            for _ in 0..20 {
+                black_box(if borrowed {
+                    encode(&input, budget)
+                } else {
+                    owned_encode(&input, budget)
+                })
+                .unwrap();
+            }
+            let elapsed = start.elapsed();
+            let snapshot = allocation_metrics::snapshot();
+            println!(
+                "borrowed={borrowed} count=20 atoms=1024 elapsed={elapsed:?} allocations={} allocated={} peak_extra={} retained_extra={}",
+                snapshot.allocation_count,
+                snapshot.allocated_bytes,
+                snapshot.peak_bytes.saturating_sub(baseline),
+                snapshot.live_bytes.saturating_sub(baseline)
+            );
         }
     }
 

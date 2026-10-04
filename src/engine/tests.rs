@@ -3,6 +3,97 @@ use super::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[tokio::test]
+async fn owned_and_shared_native_imports_preserve_snapshots_and_errors() {
+    for text in ["<CDXML><page id=\"1\"/></CDXML>", "<invalid"] {
+        let request = Request::import("cdxml", text);
+        let expected = serde_json::to_value(&request).unwrap();
+        let source = Arc::new(request.clone());
+        let owned = native_import::execute(request, None).await;
+        let shared = native_import::execute(source.clone(), None).await;
+        match (owned, shared) {
+            (
+                Ok(native_import::Outcome::Complete(owned)),
+                Ok(native_import::Outcome::Complete(shared)),
+            ) => {
+                assert_eq!(
+                    serde_json::to_value(owned).unwrap(),
+                    serde_json::to_value(shared).unwrap()
+                );
+            }
+            (Err(owned), Err(shared)) => assert_eq!(owned.to_string(), shared.to_string()),
+            other => panic!("Owned/shared import outcomes differ: {other:?}"),
+        }
+        assert_eq!(serde_json::to_value(source.as_ref()).unwrap(), expected);
+        assert_eq!(Arc::strong_count(&source), 1);
+    }
+}
+
+#[test]
+#[ignore = "isolated requested-Rust-allocation and transfer timing measurement"]
+fn measure_owned_request_transfers() {
+    use crate::allocation_metrics;
+    use std::{hint::black_box, time::Instant};
+    fn request() -> Request {
+        let mut request = Request::import("cdxml", &"x".repeat(2 * 1024 * 1024));
+        let mut document = Document::default();
+        for i in 0..10_000 {
+            document.add_atom("C", crate::document::Point::new(i as f32, 0.));
+        }
+        request.selected_ids = Some(document.atoms.iter().map(|a| a.id).collect());
+        request.document = Some(document);
+        request
+    }
+    for mode in [
+        "legacy_import",
+        "unique_import",
+        "shared_import",
+        "legacy_export",
+        "moved_export",
+    ] {
+        let mut request = request();
+        if mode.ends_with("import") {
+            let request = Arc::new(request);
+            let caller = (mode == "shared_import").then(|| request.clone());
+            let baseline = allocation_metrics::reset();
+            let start = Instant::now();
+            let prepared = if mode == "legacy_import" {
+                (*request).clone()
+            } else {
+                Arc::unwrap_or_clone(request)
+            };
+            let elapsed = start.elapsed();
+            let snapshot = allocation_metrics::snapshot();
+            black_box((&prepared, &caller));
+            println!(
+                "mode={mode} elapsed={elapsed:?} allocations={} allocated={} peak_extra={} retained_extra={}",
+                snapshot.allocation_count,
+                snapshot.allocated_bytes,
+                snapshot.peak_bytes.saturating_sub(baseline),
+                snapshot.live_bytes.saturating_sub(baseline)
+            );
+        } else {
+            let baseline = allocation_metrics::reset();
+            let start = Instant::now();
+            let (document, selected) = if mode == "legacy_export" {
+                (request.document.clone(), request.selected_ids.clone())
+            } else {
+                (request.document.take(), request.selected_ids.take())
+            };
+            let elapsed = start.elapsed();
+            let snapshot = allocation_metrics::snapshot();
+            black_box((&document, &selected, &request));
+            println!(
+                "mode={mode} elapsed={elapsed:?} allocations={} allocated={} peak_extra={} retained_extra={}",
+                snapshot.allocation_count,
+                snapshot.allocated_bytes,
+                snapshot.peak_bytes.saturating_sub(baseline),
+                snapshot.live_bytes.saturating_sub(baseline)
+            );
+        }
+    }
+}
+
 #[derive(Clone, Default)]
 struct DeferredBackend(Arc<Mutex<Option<serde_json::Value>>>);
 
