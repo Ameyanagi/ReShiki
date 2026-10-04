@@ -8,13 +8,11 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 #[cfg(not(any(windows, target_os = "linux")))]
 use std::{path::PathBuf, process::Stdio, time::Duration};
 #[cfg(not(any(windows, target_os = "linux")))]
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    process::Command,
-};
+use tokio::process::Command;
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -36,21 +34,27 @@ const CDX_TYPES: [&str; 3] = [
 struct Representation {
     #[serde(rename = "type")]
     kind: String,
-    data: String,
+    data: Arc<String>,
 }
 impl Representation {
     fn new(kind: &str, data: &[u8]) -> Self {
         Self {
             kind: kind.into(),
-            data: STANDARD.encode(data),
+            data: STANDARD.encode(data).into(),
         }
+    }
+    fn aliases(kinds: &[&str], data: Arc<String>) -> impl Iterator<Item = Self> {
+        kinds.iter().map(move |kind| Self {
+            kind: (*kind).into(),
+            data: Arc::clone(&data),
+        })
     }
     fn bytes(&self) -> Result<Vec<u8>, String> {
         if self.data.len() > LIMIT.div_ceil(3) * 4 {
             return Err("Clipboard data exceeds 64 MB".into());
         }
         STANDARD
-            .decode(&self.data)
+            .decode(self.data.as_bytes())
             .map_err(|_| "Invalid clipboard encoding".into())
     }
 }
@@ -213,7 +217,7 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
         .kill_on_drop(true)
         .spawn()
         .map_err(|e| format!("Could not start clipboard helper: {e}"))?;
-    let mut stdin = child.stdin.take().ok_or("Clipboard input is unavailable")?;
+    let stdin = child.stdin.take().ok_or("Clipboard input is unavailable")?;
     let stdout = child
         .stdout
         .take()
@@ -223,33 +227,15 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
         .take()
         .ok_or("Clipboard error output is unavailable")?;
     let operation = async {
-        let write = async {
-            stdin.write_all(&input).await.map_err(|e| e.to_string())?;
-            stdin.shutdown().await.map_err(|e| e.to_string())?;
-            drop(stdin);
-            Ok::<_, String>(())
-        };
+        let write = crate::native_process::write(stdin, &input);
         let read = async {
-            let mut output = Vec::new();
-            stdout
-                .take(JSON_LIMIT as u64 + 1)
-                .read_to_end(&mut output)
-                .await
-                .map_err(|e| e.to_string())?;
+            let output = crate::native_process::capture(stdout, JSON_LIMIT + 1).await?;
             if output.len() > JSON_LIMIT {
                 return Err("Clipboard response is too large".into());
             }
             Ok(output)
         };
-        let errors = async {
-            let mut output = Vec::new();
-            stderr
-                .take(65536)
-                .read_to_end(&mut output)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok::<_, String>(output)
-        };
+        let errors = crate::native_process::capture(stderr, 65536);
         let wait = async { child.wait().await.map_err(|e| e.to_string()) };
         let (_, output, errors, status) = tokio::try_join!(write, read, errors, wait)?;
         if !status.success() {
@@ -352,12 +338,7 @@ async fn prepare_copy(
         match editable {
             Ok(data) => {
                 // Include the current and legacy native aliases on one item.
-                for kind in CDX_TYPES {
-                    representations.push(Representation {
-                        kind: kind.into(),
-                        data: data.clone(),
-                    });
-                }
+                representations.extend(Representation::aliases(&CDX_TYPES, data.into()));
                 outcome.external_editable = true;
             }
             Err(error) => outcome
@@ -399,9 +380,10 @@ async fn prepare_copy(
                 if (image_only || !outcome.external_editable) && format == "png" {
                     match image.bytes().and_then(|bytes| embedded_png(&bytes)) {
                         Ok(bytes) => {
-                            for kind in CDX_TYPES {
-                                representations.push(Representation::new(kind, &bytes));
-                            }
+                            representations.extend(Representation::aliases(
+                                &CDX_TYPES,
+                                STANDARD.encode(&bytes).into(),
+                            ));
                             if !image_only {
                                 outcome.notices.push("Other drawing editors will receive a picture; ReShiki retains the editable original".into());
                             }
@@ -616,6 +598,164 @@ async fn paste_packet_with_warnings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Serialize, Deserialize)]
+    struct LegacyRepresentation {
+        #[serde(rename = "type")]
+        kind: String,
+        data: String,
+    }
+    #[derive(Serialize)]
+    struct LegacyRequest<'a> {
+        operation: &'static str,
+        representations: &'a [LegacyRepresentation],
+    }
+
+    #[test]
+    fn cdx_aliases_share_payload_without_changing_serialized_protocol() {
+        let bytes = b"CDX\0exact binary\xffpayload";
+        let encoded: Arc<String> = STANDARD.encode(bytes).into();
+        let representations: Vec<_> = Representation::aliases(&CDX_TYPES, encoded).collect();
+        assert_eq!(
+            representations
+                .iter()
+                .map(|item| item.kind.as_str())
+                .collect::<Vec<_>>(),
+            CDX_TYPES
+        );
+        for item in &representations {
+            assert!(Arc::ptr_eq(&representations[0].data, &item.data));
+            assert_eq!(item.bytes().unwrap(), bytes);
+        }
+        let legacy: Vec<_> = CDX_TYPES
+            .iter()
+            .map(|kind| LegacyRepresentation {
+                kind: (*kind).into(),
+                data: STANDARD.encode(bytes),
+            })
+            .collect();
+        let packet = encode_request("write", &representations).unwrap();
+        assert_eq!(
+            packet,
+            serde_json::to_vec(&LegacyRequest {
+                operation: "write",
+                representations: &legacy,
+            })
+            .unwrap()
+        );
+        let decoded: Packet = serde_json::from_slice(&packet).unwrap();
+        for (before, after) in representations.iter().zip(decoded.representations) {
+            assert_eq!(before.kind, after.kind);
+            assert_eq!(before.bytes().unwrap(), after.bytes().unwrap());
+        }
+    }
+
+    #[test]
+    #[ignore = "process-wide allocation counters: run alone with --test-threads=1 --nocapture"]
+    fn cdx_alias_allocation_metrics() {
+        use crate::allocation_metrics;
+        use std::time::Instant;
+        fn measure<T>(create: impl FnOnce() -> T) -> (T, [usize; 4], std::time::Duration) {
+            let baseline = allocation_metrics::reset();
+            let started = Instant::now();
+            let output = create();
+            let elapsed = started.elapsed();
+            let measured = allocation_metrics::snapshot();
+            (
+                output,
+                [
+                    measured.live_bytes - baseline,
+                    measured.peak_bytes - baseline,
+                    measured.allocated_bytes,
+                    measured.allocation_count,
+                ],
+                elapsed,
+            )
+        }
+        let bytes = vec![0xab; 1024 * 1024];
+        let encoded = STANDARD.encode(&bytes);
+        let (old_editable, old_editable_cost, old_editable_time) = measure(|| {
+            let data = encoded.clone();
+            CDX_TYPES
+                .iter()
+                .map(|kind| LegacyRepresentation {
+                    kind: (*kind).into(),
+                    data: data.clone(),
+                })
+                .collect::<Vec<_>>()
+        });
+        let (shared_editable, shared_editable_cost, shared_editable_time) = measure(|| {
+            Representation::aliases(&CDX_TYPES, encoded.clone().into()).collect::<Vec<_>>()
+        });
+        let (old_image, old_image_cost, old_image_time) = measure(|| {
+            CDX_TYPES
+                .iter()
+                .map(|kind| LegacyRepresentation {
+                    kind: (*kind).into(),
+                    data: STANDARD.encode(&bytes),
+                })
+                .collect::<Vec<_>>()
+        });
+        let (shared_image, shared_image_cost, shared_image_time) = measure(|| {
+            Representation::aliases(&CDX_TYPES, STANDARD.encode(&bytes).into()).collect::<Vec<_>>()
+        });
+        let single_wire = serde_json::to_vec(&LegacyRepresentation {
+            kind: CDX_TYPES[0].into(),
+            data: encoded.clone(),
+        })
+        .unwrap();
+        let (old_read, old_read_cost, old_read_time) =
+            measure(|| serde_json::from_slice::<LegacyRepresentation>(&single_wire).unwrap());
+        let (shared_read, shared_read_cost, shared_read_time) =
+            measure(|| serde_json::from_slice::<Representation>(&single_wire).unwrap());
+        assert_eq!(old_read.data, shared_read.data.as_str());
+        assert!(shared_read_cost[2].saturating_sub(old_read_cost[2]) < 1024);
+        let packet = encode_request("write", &shared_editable).unwrap();
+        assert_eq!(packet, encode_request("write", &shared_image).unwrap());
+        for legacy in [&old_editable, &old_image] {
+            assert_eq!(
+                packet,
+                serde_json::to_vec(&LegacyRequest {
+                    operation: "write",
+                    representations: legacy,
+                })
+                .unwrap()
+            );
+        }
+        for (old, shared) in [
+            (old_editable_cost, shared_editable_cost),
+            (old_image_cost, shared_image_cost),
+        ] {
+            assert!(shared[0] < old[0], "retained bytes: {shared:?} vs {old:?}");
+            assert!(shared[1] < old[1], "peak bytes: {shared:?} vs {old:?}");
+            assert!(shared[2] < old[2], "allocated bytes: {shared:?} vs {old:?}");
+        }
+        println!(
+            "raw={} encoded={} alias_payloads={} wire={}",
+            bytes.len(),
+            encoded.len(),
+            3 * encoded.len(),
+            packet.len()
+        );
+        for (name, cost, elapsed, encodes) in [
+            ("editable-old", old_editable_cost, old_editable_time, 0),
+            (
+                "editable-shared",
+                shared_editable_cost,
+                shared_editable_time,
+                0,
+            ),
+            ("image-old", old_image_cost, old_image_time, 3),
+            ("image-shared", shared_image_cost, shared_image_time, 1),
+            ("single-read-old", old_read_cost, old_read_time, 0),
+            ("single-read-shared", shared_read_cost, shared_read_time, 0),
+        ] {
+            println!(
+                "{name}: retained={} peak={} allocated={} allocations={} encodes={encodes} generation={elapsed:?}",
+                cost[0], cost[1], cost[2], cost[3]
+            );
+        }
+    }
 
     #[test]
     fn typed_text_formats_follow_cheap_markers() {

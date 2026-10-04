@@ -146,17 +146,20 @@ impl Clipboard {
             if let Some(event) = self.connection.poll_for_event().map_err(error)? {
                 return Ok(event);
             }
-            self.wait_io()?;
+            self.wait_io(Some(deadline))?;
         }
     }
 
-    fn wait_io(&self) -> Result<(), String> {
+    fn wait_io(&self, deadline: Option<Instant>) -> Result<(), String> {
         let mut fds = [PollFd::new(self.connection.stream(), PollFlags::IN)];
-        let timeout = Timespec {
-            tv_sec: 0,
-            tv_nsec: 100_000_000,
-        };
-        match poll(&mut fds, Some(&timeout)) {
+        let timeout = deadline.map(|deadline| {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            Timespec {
+                tv_sec: remaining.as_secs() as _,
+                tv_nsec: remaining.subsec_nanos().into(),
+            }
+        });
+        match poll(&mut fds, timeout.as_ref()) {
             Ok(_) | Err(rustix::io::Errno::INTR) => Ok(()),
             Err(e) => Err(error(e)),
         }
@@ -423,6 +426,7 @@ impl Clipboard {
     }
 
     pub fn serve(&mut self) -> Result<(), String> {
+        let mut pending = None;
         while self.owned || !self.transfers.is_empty() {
             let now = Instant::now();
             let expired: Vec<Window> = self
@@ -437,9 +441,11 @@ impl Clipboard {
             }
             // Limit each dispatch batch so a noisy requestor cannot starve deadlines.
             for _ in 0..256 {
-                let Some(event) = self.connection.poll_for_event().map_err(error)? else {
-                    break;
+                let event = match pending.take() {
+                    Some(event) => Some(event),
+                    None => self.connection.poll_for_event().map_err(error)?,
                 };
+                let Some(event) = event else { break };
                 match event {
                     Event::SelectionRequest(request) => {
                         let _ = self.request(request);
@@ -458,7 +464,11 @@ impl Clipboard {
             }
             self.connection.flush().map_err(error)?;
             if self.owned || !self.transfers.is_empty() {
-                self.wait_io()?;
+                // Flush can enqueue events too; never block with a buffered event.
+                pending = self.connection.poll_for_event().map_err(error)?;
+                if pending.is_none() {
+                    self.wait_io(self.transfers.iter().map(|t| t.timing.deadline()).min())?;
+                }
             }
         }
         Ok(())
@@ -659,6 +669,60 @@ mod tests {
         assert!(timing.progress(deadline).is_err());
         assert_eq!(timing.deadline(), deadline);
         assert!(timing.progress(deadline + Duration::from_secs(1)).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires a dedicated X11 server (run under Xvfb)"]
+    fn buffered_events_beyond_dispatch_budget_do_not_wait_for_socket_activity() {
+        let mut owner = image_owner(1);
+        let window = owner.window;
+        let event = ClientMessageEvent::new(32, window, owner.atoms.property, [0_u32; 5]);
+        for _ in 0..4096 {
+            owner
+                .connection
+                .send_event(false, window, EventMask::NO_EVENT, event)
+                .unwrap()
+                .check()
+                .unwrap();
+        }
+        let replacement = image_owner(1);
+        // A round trip buffers the real ownership-loss event behind the noise.
+        owner.connection.get_input_focus().unwrap().reply().unwrap();
+        let (finished, completion) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || finished.send(owner.serve()).unwrap());
+        let result = completion.recv_timeout(Duration::from_secs(1));
+        if result.is_err() {
+            // A regressed batch loop can need another wake for every 256 events.
+            // Join only after completion; a broken loop must not hang the test.
+            for _ in 0..32 {
+                replacement
+                    .connection
+                    .send_event(false, window, EventMask::NO_EVENT, event)
+                    .unwrap()
+                    .check()
+                    .unwrap();
+                if completion.recv_timeout(Duration::from_millis(25)).is_ok() {
+                    worker.join().unwrap();
+                    panic!("buffered event dispatch exceeded one second");
+                }
+            }
+            drop(worker);
+            panic!("buffered event dispatch did not recover after bounded wakeups");
+        }
+        worker.join().unwrap();
+        result.unwrap().unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires a dedicated X11 server (run under Xvfb)"]
+    fn event_wait_honors_deadline_without_an_incoming_event() {
+        let clipboard = Clipboard::connect().unwrap();
+        let started = Instant::now();
+        let deadline = started + Duration::from_millis(30);
+        let result = clipboard.wait_event(deadline).unwrap_err();
+        assert_eq!(result, "X11 clipboard transfer timed out");
+        assert!(Instant::now() >= deadline);
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
 
     fn image_owner(size: usize) -> Clipboard {

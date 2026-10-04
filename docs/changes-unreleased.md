@@ -76,6 +76,10 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   · [Image](images/issue-work-2026-10-02/font-normal-after.png)
   · [Issue #103](https://github.com/Ameyanagi/ReShiki/issues/103) · @Ameyanagi.
 
+- **Under review — Native clipboard transport:** Share ChemDraw alias buffers, release completed Wayland requests and wait for X11 events while preserving formats, pipe bounds and print behavior.
+  [Validation and limits](changes/native-clipboard-transport-2026-10-04.md)
+  · [PR #139](https://github.com/Ameyanagi/ReShiki/pull/139) · @Ameyanagi.
+
 - **Under review — Safer native print and OLE code:** use safe macOS print-info
   construction and encode Windows object descriptors without reading raw struct
   memory. Native contract tests preserve the existing output layout.
