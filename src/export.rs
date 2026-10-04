@@ -1,15 +1,18 @@
 use crate::{document::Document, scene};
 
+fn parse_svg(svg: &str) -> Result<resvg::usvg::Tree, String> {
+    let mut options = resvg::usvg::Options::default();
+    options.fontdb_mut().load_system_fonts();
+    resvg::usvg::Tree::from_str(svg, &options).map_err(|error| error.to_string())
+}
+
 /// Office's SVG importer does not honor the text-before-edge baseline used by
 /// the editor. Resolve fonts and outlines before putting a Windows picture on
 /// the clipboard, retaining the physical size and vector quality.
 #[cfg(any(windows, test))]
 pub(crate) fn clipboard_svg(doc: &Document) -> Result<Vec<u8>, String> {
     doc.validate()?;
-    let mut options = resvg::usvg::Options::default();
-    options.fontdb_mut().load_system_fonts();
-    let tree = resvg::usvg::Tree::from_str(&scene::svg(doc), &options)
-        .map_err(|error| error.to_string())?;
+    let tree = parse_svg(&scene::svg(doc))?;
     let outlined = tree.to_string(&resvg::usvg::WriteOptions::default());
     let (_, contents) = outlined.split_once('>').ok_or("Invalid outlined SVG")?;
     // usvg serializes in CSS pixels. Explicit points plus a matching viewBox
@@ -113,9 +116,7 @@ fn render_drawing(doc: &Document, format: &str, clipboard: bool) -> Result<Figur
             detail: None,
         });
     }
-    let mut options = resvg::usvg::Options::default();
-    options.fontdb_mut().load_system_fonts();
-    let tree = resvg::usvg::Tree::from_str(&svg, &options).map_err(|e| e.to_string())?;
+    let tree = parse_svg(&svg)?;
     match format {
         #[cfg(windows)]
         "emf" => if clipboard {
@@ -263,9 +264,7 @@ pub fn pages_pdf(doc: &Document) -> Result<Vec<u8>, String> {
         .as_ref()
         .ok_or("Set up publication pages before exporting a page PDF.")?;
     let svg = scene::svg_with_background(doc);
-    let mut options = resvg::usvg::Options::default();
-    options.fontdb_mut().load_system_fonts();
-    let tree = resvg::usvg::Tree::from_str(&svg, &options).map_err(|e| e.to_string())?;
+    let tree = parse_svg(&svg)?;
     let (chunk, root) = svg2pdf::to_chunk(&tree, svg2pdf::ConversionOptions::default())
         .map_err(|e| e.to_string())?;
     let mut next = Ref::new(1);
