@@ -23,6 +23,8 @@ mod render_parity_tests;
 pub(crate) mod rotation_gesture_tests;
 mod selection;
 mod smart_guides;
+#[cfg(test)]
+mod template_style_tests;
 mod text_cache;
 pub(crate) use text_cache::prepare_fonts;
 pub(crate) mod tilt;
