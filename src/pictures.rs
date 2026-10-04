@@ -120,7 +120,7 @@ impl Picture {
         Self::import(&bytes)
     }
     fn stored(bytes: Vec<u8>, width: u32, height: u32) -> Self {
-        let png = Bytes::from(bytes);
+        let png = Bytes::from(bytes.into_boxed_slice());
         let handle = Handle::from_bytes(png.clone());
         Self(Arc::new(Data {
             png,
@@ -185,11 +185,12 @@ impl Picture {
         self.0
             .flipped
             .get_or_init(|| {
-                let (pixels, _) = decode(&self.0.png)?;
+                let (mut pixels, _) = decode(&self.0.png)?;
+                pixels.apply_orientation(image::metadata::Orientation::FlipVertical);
                 Ok(Handle::from_rgba(
                     self.width(),
                     self.height(),
-                    pixels.flipv().into_rgba8().into_raw(),
+                    pixels.into_rgba8().into_raw(),
                 ))
             })
             .as_ref()

@@ -95,8 +95,9 @@ pub fn export(picture: &Picture, flip: bool) -> Result<Vec<u8>, String> {
     if !flip {
         return Ok(picture.png().to_vec());
     }
-    let (pixels, _) = super::decode(picture.png())?;
-    Ok(Picture::from_decoded(pixels.flipv())?.png().to_vec())
+    let (mut pixels, _) = super::decode(picture.png())?;
+    pixels.apply_orientation(image::metadata::Orientation::FlipVertical);
+    Ok(Picture::from_decoded(pixels)?.png().to_vec())
 }
 
 #[cfg(feature = "rdkit-reference")]

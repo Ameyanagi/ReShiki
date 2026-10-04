@@ -146,10 +146,7 @@ pub fn definitions() -> Value {
 }
 /// A fixed pixel budget keeps visual inspection inexpensive even on a large canvas.
 pub fn image(document: &Document) -> Result<Vec<u8>, String> {
-    let svg = crate::scene::svg(document);
-    let mut options = resvg::usvg::Options::default();
-    options.fontdb_mut().load_system_fonts();
-    let tree = resvg::usvg::Tree::from_str(&svg, &options).map_err(|e| e.to_string())?;
+    let tree = crate::export::parse_svg(crate::scene::svg(document))?;
     let scale = (1600. / tree.size().width())
         .min(1000. / tree.size().height())
         .min(3.);

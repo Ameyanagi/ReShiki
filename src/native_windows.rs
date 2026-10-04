@@ -87,10 +87,7 @@ pub(crate) fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
         .page_layout
         .as_ref()
         .ok_or("Missing print page layout")?;
-    let svg = scene::svg_with_background(doc);
-    let mut options = usvg::Options::default();
-    options.fontdb_mut().load_system_fonts();
-    let tree = usvg::Tree::from_str(&svg, &options).map_err(|error| error.to_string())?;
+    let tree = crate::export::parse_svg(scene::svg_with_background(doc))?;
     let (drawing_lo, _) = scene::bounds(&scene::primitives(doc));
     let scale = crate::style::DEFAULT.points_per_world();
     let mut primitives = Vec::new();
@@ -127,9 +124,7 @@ pub(crate) fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
 
 pub(crate) fn office_metafile(doc: &Document) -> Result<Vec<u8>, String> {
     doc.validate()?;
-    let mut options = usvg::Options::default();
-    options.fontdb_mut().load_system_fonts();
-    let tree = usvg::Tree::from_str(&scene::svg(doc), &options).map_err(|e| e.to_string())?;
+    let tree = crate::export::parse_svg(scene::svg(doc))?;
     metafile(&tree)
 }
 

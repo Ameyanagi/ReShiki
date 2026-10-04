@@ -9,6 +9,7 @@ use std::{
     alloc::System,
     io::{Cursor, Write},
     path::PathBuf,
+    time::Instant,
 };
 
 #[global_allocator]
@@ -268,4 +269,214 @@ fn picture_public_operations_memory() {
         exchange::import(&associated, "TIFF", 0.37, &mut exchange::Budget::default()).unwrap()
     });
     assert_eq!((picture.width(), picture.height()), (768, 1024));
+}
+
+fn storage_capacity(picture: Picture) -> (usize, usize) {
+    let Handle::Bytes(_, bytes) = picture.handle(false).unwrap() else {
+        panic!("Normal picture handle must contain its encoded PNG");
+    };
+    drop(picture);
+    let storage = bytes
+        .try_into_mut()
+        .expect("The retained handle must be the sole PNG owner");
+    (storage.len(), storage.capacity())
+}
+
+fn timings<T>(name: &str, iterations: usize, mut operation: impl FnMut() -> T) {
+    let mut samples = Vec::with_capacity(iterations);
+    for _ in 0..iterations {
+        let start = Instant::now();
+        let result = std::hint::black_box(operation());
+        samples.push(start.elapsed().as_nanos());
+        drop(result);
+    }
+    samples.sort_unstable();
+    println!(
+        "PICTURE_TIMING,{name},{iterations},{},{},{}",
+        samples[0],
+        samples[iterations / 2],
+        samples[iterations - 1],
+    );
+}
+
+fn noise(width: u32, height: u32) -> RgbaImage {
+    let mut state = 0x9e37_79b9u32;
+    RgbaImage::from_fn(width, height, |_, _| {
+        Rgba(std::array::from_fn(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state as u8
+        }))
+    })
+}
+
+#[test]
+#[ignore = "Opt-in storage capacity and timings; run this binary with --test-threads=1"]
+fn picture_storage_capacity_and_timing() {
+    let stress = png(&raster(2048, 1536));
+    let solid = png(&RgbaImage::from_pixel(2048, 1536, Rgba([180, 50, 55, 127])));
+    let near_limit = png(&noise(2000, 2000));
+    assert!(near_limit.len() <= reshiki::pictures::MAX_BYTES);
+    println!("PICTURE_STORAGE,case,png_len,storage_capacity");
+    println!("PICTURE_TIMING,case/operation,iterations,min_ns,median_ns,max_ns");
+    for (name, source) in [
+        (
+            "transparent_fixture",
+            include_bytes!("fixtures/assistant-images/rhodium-dimer-transparent.png").as_slice(),
+        ),
+        ("rgba_3m", stress.as_slice()),
+        ("solid_3m", solid.as_slice()),
+        ("rgba_near_limit", near_limit.as_slice()),
+    ] {
+        drop(Picture::import(source).unwrap());
+        let picture = observe(&format!("{name}/storage_import"), || {
+            Picture::import(source).unwrap()
+        });
+        let (len, capacity) = storage_capacity(picture);
+        println!("PICTURE_STORAGE,{name},{len},{capacity}");
+        timings(&format!("{name}/import"), 9, || {
+            Picture::import(source).unwrap()
+        });
+        let picture = Picture::import(source).unwrap();
+        let clones: Vec<_> = (0..9).map(|_| picture.clone()).collect();
+        assert!(clones.iter().all(|clone| {
+            clone.handle(false).unwrap().id() == picture.handle(false).unwrap().id()
+        }));
+        drop(clones);
+        timings(&format!("{name}/reflected_export"), 9, || {
+            exchange::export(&picture, true).unwrap()
+        });
+        // Each first reflection needs its own cache; import and destruction are
+        // outside the measured handle operation.
+        let mut first_handle_times = Vec::with_capacity(9);
+        for _ in 0..9 {
+            let picture = Picture::import(source).unwrap();
+            let start = Instant::now();
+            let handle = std::hint::black_box(picture.handle(true).unwrap());
+            first_handle_times.push(start.elapsed().as_nanos());
+            assert_eq!(handle.id(), picture.handle(true).unwrap().id());
+        }
+        first_handle_times.sort_unstable();
+        println!(
+            "PICTURE_TIMING,{name}/first_reflected_handle,9,{},{},{}",
+            first_handle_times[0], first_handle_times[4], first_handle_times[8],
+        );
+    }
+}
+
+fn figure_document() -> reshiki::document::Document {
+    use reshiki::{
+        document::{Annotation, Document, Point},
+        editing::{self, Transform},
+        palette::Color,
+        typography::TextFormat,
+    };
+    let mut document: Document =
+        serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.reshiki")).unwrap();
+    let picture = Picture::import(&png(&raster(7, 5))).unwrap();
+    document
+        .graphics
+        .push(picture.graphic(10_000, Point::new(150., 70.)));
+    editing::transform(&mut document, &[10_000], Transform::Rotate(37.));
+    editing::transform(&mut document, &[10_000], Transform::FlipHorizontal);
+    for (index, bold) in [false, true].into_iter().enumerate() {
+        let mut format = TextFormat::default();
+        format.style.bold = bold;
+        format.style.italic = true;
+        format.style.color = Color::Custom([180, 50, 55]);
+        document.annotations.push(Annotation {
+            id: 10_001 + index as u64,
+            position: Point::new(0., 110. + index as f32 * 40.),
+            text: "HNO 東京".into(),
+            format,
+        });
+    }
+    document
+}
+
+#[test]
+#[ignore = "Pre-change figure bytes; set mode and baseline directory explicitly"]
+fn figure_output_matches_prechange_baseline() {
+    let mode = std::env::var("RESHIKI_PICTURE_MEMORY_MODE").unwrap();
+    assert!(matches!(mode.as_str(), "capture" | "verify"));
+    let directory = PathBuf::from(std::env::var_os("RESHIKI_PICTURE_MEMORY_BASELINE_DIR").unwrap());
+    if mode == "capture" {
+        std::fs::create_dir_all(&directory).unwrap();
+    }
+    let check = |name: &str, bytes: &[u8]| {
+        let path = directory.join(name);
+        if mode == "capture" {
+            let mut output = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .unwrap();
+            output.write_all(bytes).unwrap();
+        } else {
+            assert_eq!(bytes, std::fs::read(&path).unwrap(), "{}", path.display());
+        }
+    };
+    let mut document = figure_document();
+    for theme in reshiki::canvas_theme::CanvasTheme::ALL {
+        document.canvas_theme = theme;
+        for clipboard in [false, true] {
+            for format in ["svg", "png"] {
+                let figure = if clipboard {
+                    reshiki::export::clipboard_figure(&document, format)
+                } else {
+                    reshiki::export::figure(&document, format)
+                }
+                .unwrap();
+                let name = format!("figure-{theme}-{clipboard}.{format}");
+                check(&name, &figure.bytes);
+                check(
+                    &format!("{name}.receipt"),
+                    figure.detail.unwrap_or_default().as_bytes(),
+                );
+                if format == "png" {
+                    let decoded = image::load_from_memory(&figure.bytes).unwrap();
+                    assert!(decoded.width() > 0 && decoded.height() > 0);
+                }
+            }
+        }
+        check(
+            &format!("figure-preview-{theme}.png"),
+            &reshiki::assistant::canvas_tools::image(&document).unwrap(),
+        );
+    }
+    let gallery: reshiki::document::Document =
+        serde_json::from_str(include_str!("../assets/examples/shortcut-examples.rsk")).unwrap();
+    let figure = reshiki::export::figure(&gallery, "png").unwrap();
+    check("figure-gallery.png", &figure.bytes);
+    check("figure-gallery.receipt", figure.detail.unwrap().as_bytes());
+    println!("FIGURE_BASELINE,{mode},{}", directory.display());
+}
+
+#[test]
+#[ignore = "Opt-in figure memory/timings; run this binary with --test-threads=1"]
+fn figure_public_operations_memory_and_timing() {
+    use reshiki::document::{Document, Point};
+    let ordinary = figure_document();
+    let gallery: Document =
+        serde_json::from_str(include_str!("../assets/examples/shortcut-examples.rsk")).unwrap();
+    let picture = Picture::import(&png(&noise(2048, 1536))).unwrap();
+    let mut picture_heavy = Document::default();
+    picture_heavy
+        .graphics
+        .push(picture.graphic(1, Point::default()));
+    for (name, document) in [
+        ("ordinary", ordinary),
+        ("gallery", gallery),
+        ("picture_heavy", picture_heavy),
+    ] {
+        drop(reshiki::export::figure(&document, "png").unwrap());
+        let figure = observe(&format!("figure_{name}/png"), || {
+            reshiki::export::figure(&document, "png").unwrap()
+        });
+        println!("FIGURE_MEMORY_DETAIL,{name},{}", figure.detail.unwrap());
+        timings(&format!("figure_{name}/png"), 5, || {
+            reshiki::export::figure(&document, "png").unwrap()
+        });
+    }
 }
