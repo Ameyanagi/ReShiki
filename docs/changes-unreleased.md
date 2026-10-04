@@ -50,6 +50,10 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   type. Opening a field leaves the drawing and Undo history unchanged.
   [Details](selection-transforms.md) · @Ameyanagi.
 
+- **Under review — Reaction membership on joins:** Joining existing fragments preserves reaction roles, coefficients and references, and rejects conflicting participants atomically.
+  [Validation and limits](changes/joining-reaction-membership-2026-10-04.md)
+  · [PR #137](https://github.com/Ameyanagi/ReShiki/pull/137) · @Ameyanagi.
+
 - **Under review — Stable selection rotation:** repeated rotations no longer
   shift asymmetric molecules such as Pyrrole. Keyboard, numeric and handle
   rotations share a stable center, including mixed drawing selections.
