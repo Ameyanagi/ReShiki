@@ -259,27 +259,20 @@ export function createPowerPointAdapter(PowerPoint, { sessionId }) {
             throw retryableUpdateFailure(error);
           }
           let recoveryError;
-          if (writingPreview) {
-            try {
-              const current = await readShape(context, target, { verifyPreview: false });
-              if (!mayRollback(current.record, before.record, attempted))
-                fail(
-                  "REVISION_CONFLICT",
-                  "Another edit superseded the failed write; it was left untouched.",
-                );
-              applyPreview(current.shape, before.record, before.geometry);
-              await context.sync();
-              const restored = await readShape(context, target);
-              assertReadback(restored.record, before.record);
-              assertGeometry(restored.geometry, before.geometry, [
-                "left",
-                "top",
-                "width",
-                "height",
-              ]);
-            } catch (recovery) {
-              recoveryError = recovery;
-            }
+          try {
+            const current = await readShape(context, target, { verifyPreview: false });
+            if (!mayRollback(current.record, before.record, attempted))
+              fail(
+                "REVISION_CONFLICT",
+                "Another edit superseded the failed write; it was left untouched.",
+              );
+            applyPreview(current.shape, before.record, before.geometry);
+            await context.sync();
+            const restored = await readShape(context, target);
+            assertReadback(restored.record, before.record);
+            assertGeometry(restored.geometry, before.geometry, ["left", "top", "width", "height"]);
+          } catch (recovery) {
+            recoveryError = recovery;
           }
           throw writeFailure(error, recoveryError, { operation: "update", target });
         }

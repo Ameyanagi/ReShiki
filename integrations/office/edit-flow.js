@@ -1,4 +1,5 @@
 import { validateEnvelope } from "./protocol.js";
+import { sameEnvelope } from "./host-adapters/common.js";
 
 // Acquire before the first await so a click and a polling response cannot own
 // Office.run concurrently. The pane disables its controls for the same period.
@@ -19,11 +20,8 @@ export async function applyPending(edit, pending, adapter) {
   if (edit.applied) return;
   const updated = await adapter.update(pending.target, await validateEnvelope(pending.envelope));
   const readback = await adapter.read(updated.target);
-  if (
-    !readback ||
-    JSON.stringify(await validateEnvelope(readback.envelope)) !==
-      JSON.stringify(await validateEnvelope(pending.envelope))
-  )
+  const actual = readback && (await validateEnvelope(readback.envelope));
+  if (!actual || !sameEnvelope(actual, await validateEnvelope(pending.envelope)))
     throw new Error("Office did not read back the expected drawing and preview");
   edit.applied = {
     requestId: pending.requestId,

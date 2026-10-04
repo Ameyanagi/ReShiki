@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, writeFile, rm, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, mkdir, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -95,6 +95,63 @@ test("maximum-size native base64 does not overflow the JavaScript regex stack", 
   assert.equal(decoded.length, LIMITS.nativeBytes);
   assert.equal(decoded[0], 65);
   assert.equal(decoded.at(-1), 65);
+});
+
+test("edit launch preserves binary worker input and writes recovery only after validation", async (t) => {
+  const bytes = Buffer.alloc(1024 * 1024);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = i % 256;
+  const original = await createEnvelope({
+    version: 1,
+    native: bytes.toString("base64"),
+    png: PNG,
+    extent: [100, 200],
+  });
+  const held = deferred(),
+    entered = deferred();
+  const f = await fixture(t, {
+    worker: async (mode, input) => {
+      assert.equal(mode, "--libreoffice-preview");
+      assert.equal(Buffer.isBuffer(input), true);
+      assert.deepEqual(input, bytes);
+      entered.resolve();
+      await held.promise;
+      assert.deepEqual(input, bytes);
+      return original;
+    },
+  });
+  const started = f.sessions.start(f.clientId, targetFor(original.revision), original);
+  await entered.promise;
+  assert.deepEqual(await readdir(f.root), []);
+  assert.deepEqual(f.launches, []);
+  held.resolve();
+  const result = await started;
+  assert.deepEqual(await readFile(result.recoveryFile), bytes);
+  assert.deepEqual(f.launches, [result.recoveryFile]);
+});
+
+test("edit launch rechecks worker revision and pane lease before recovery writes", async (t) => {
+  for (const failure of ["revision", "expired"]) {
+    await t.test(failure, async (t) => {
+      let now = 1000;
+      const f = await fixture(t, {
+        now: () => now,
+        worker: async (_mode, input) => {
+          assert.deepEqual(input, Buffer.from(f.original.native, "base64"));
+          if (failure === "expired") now += 30001;
+          return { ...f.original, revision: "0".repeat(64) };
+        },
+      });
+      await assert.rejects(f.sessions.start(f.clientId, f.target, f.original), {
+        message:
+          failure === "expired"
+            ? "Task pane session expired. Reopen the pane; saved drafts remain in recovery."
+            : "Worker changed the native drawing",
+      });
+      assert.deepEqual(await readdir(f.root), []);
+      assert.deepEqual(f.launches, []);
+      assert.equal(f.sessions.sessions.size, 0);
+    });
+  }
 });
 
 test("native save cannot be ACKed as another request, object, session, revision or container", async (t) => {
@@ -494,6 +551,69 @@ test("changed readback never becomes an applied/ACKable update", async () => {
     /read back/,
   );
   assert.equal(edit.applied, null);
+});
+
+test("readback must match PNG and extent even when native bytes and revision match", async (t) => {
+  const next = await envelope("new");
+  const otherPng =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  for (const [field, value] of [
+    ["png", otherPng],
+    ["extent", [100, 201]],
+  ]) {
+    await t.test(field, async () => {
+      const edit = { applied: null },
+        target = targetFor(next.revision);
+      await assert.rejects(
+        applyPending(
+          edit,
+          { requestId: "one", target, envelope: next },
+          {
+            update: async () => ({ target }),
+            read: async () => ({ target, envelope: { ...next, [field]: value } }),
+          },
+        ),
+        { message: "Office did not read back the expected drawing and preview" },
+      );
+      let acknowledgements = 0;
+      await acknowledgeApplied(edit, async () => acknowledgements++);
+      assert.equal(edit.applied, null);
+      assert.equal(acknowledgements, 0);
+    });
+  }
+});
+
+test("post-update readback and pending validation retain their error and short-circuit order", async (t) => {
+  const next = await envelope("new");
+  for (const [label, readback, message] of [
+    ["missing readback", null, "Office did not read back the expected drawing and preview"],
+    ["invalid readback", { ...next, png: native("invalid PNG") }, "Invalid PNG preview"],
+    ["invalid pending", next, "Invalid drawing extent"],
+    ["mismatch and invalid pending", await envelope("other"), "Invalid drawing extent"],
+  ]) {
+    await t.test(label, async () => {
+      const edit = { applied: null },
+        target = targetFor(next.revision),
+        pending = { requestId: "one", target, envelope: next },
+        calls = [];
+      await assert.rejects(
+        applyPending(edit, pending, {
+          update: async () => {
+            calls.push("update");
+            pending.envelope = { ...next, extent: [0, 1] };
+            return { target };
+          },
+          read: async () => {
+            calls.push("read");
+            return readback && { target, envelope: readback };
+          },
+        }),
+        { message },
+      );
+      assert.deepEqual(calls, ["update", "read"]);
+      assert.equal(edit.applied, null);
+    });
+  }
 });
 
 test("HTTP API rejects hostile Host, missing/null/wrong Origin, token and content type; stale fail is awaited", async (t) => {
