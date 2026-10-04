@@ -10,7 +10,13 @@ The editor keeps the current draft’s dimensions so you can edit and export a r
 
 ## Settings
 
-The main controls set the label font, label size, nominal bond length, and line width. **Advanced stroke settings** exposes bold/wedge width, label clearance, hash spacing, and multiple-bond spacing as a percentage of nominal bond length. Dimensions are publication points, independent of screen zoom. [PNG file export](figure-export.md) uses up to 1200 dpi, reducing resolution for large drawings while retaining physical size.
+The main controls set the label font, label size, nominal bond length, and line width. **Advanced stroke settings** exposes bold/wedge width, label clearance, hash spacing, and multiple-bond spacing as a percentage of nominal bond length. Physical dimensions are independent of screen zoom. [PNG file export](figure-export.md) uses up to 1200 dpi, reducing resolution for large drawings while retaining physical size.
+
+**Dimension units** chooses points (`pt`), millimetres (`mm`), or centimetres (`cm`) for the editor's five physical fields: bond length, line width, bold width, label margin, and hash spacing. A bare number uses the unit shown beside the field. An explicit suffix overrides it: `0.5 cm`, `5mm`, and `14.173228346456693 pt` describe the same bond length. Use a decimal point, with no grouping separators; scientific notation and spaces before the suffix are accepted. Label size always uses points (a bare number or `pt` suffix), and bond spacing remains a percentage. Other tools retain their labeled units.
+
+The preferred unit is remembered across editor sessions and application restarts. Changing it reformats the draft without resizing or dirtying the drawing, changing a preset, or adding an Undo step. Stored styles and drawings continue to use points; old files retain their physical size. The editor preserves exact values while switching units rather than repeatedly converting rounded display text.
+
+Typing updates only the sample preview when the complete draft is valid. Enter validates and formats the current field; it does not apply the draft to the drawing. Moving focus leaves typed text intact. Unfinished entries such as `1e`, `5.`, or `5 m`, unsupported units, and invalid ranges prevent Save and Export. Finish an invalid dimension before changing its displayed unit. Escape or **‹ Properties** discards the draft; a chosen unit preference remains. Drafts in other tabs adopt the preference when revisited, except an unfinished dimension keeps its original unit labels and text until corrected and committed with Enter.
 
 Atom labels without individual font overrides inherit the document style. **Update matching text and strokes** also updates existing captions, atom font overrides, arrows, and graphics whose settings match the old style. Different font families, sizes, and line widths remain unchanged. Colors, bold/italic formatting, and chemical connectivity are retained.
 
