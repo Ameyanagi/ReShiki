@@ -195,6 +195,11 @@ for (const [host, failureLabel] of [
     assert.equal(preview(fake, inserted.target).png, before.png);
     assert.equal(preview(fake, inserted.target).width, before.width);
     assert.equal(preview(fake, inserted.target).height, before.height);
+    const parts = host === "Word" ? fake.state.parts : fake.object(idFrom(inserted.target)).parts;
+    // A preview write may enter Office undo history even after rollback. Keep
+    // both versions rather than treating the failed attempt as private staging.
+    assert.equal(parts.length, 2);
+    assert.equal(fake.state.mutations.includes("part.delete"), false);
   });
 
   test(`${host}: rollback never overwrites a newer coauthor record`, async () => {
@@ -226,6 +231,111 @@ for (const [host, failureLabel] of [
     );
     assert.deepEqual((await adapter.readSelected()).envelope, coauthor.envelope);
     assert.equal(preview(fake, inserted.target).png, coauthor.envelope.png);
+  });
+}
+
+for (const host of ["Word", "PowerPoint"]) {
+  const partsFor = (fake, target) =>
+    host === "Word" ? fake.state.parts : fake.object(idFrom(target)).parts;
+
+  test(`${host}: repeated staging failures preserve the final record slot and all previous versions`, async () => {
+    const fake = fakeOffice(host);
+    const adapter = createHostAdapter(fake.dependencies);
+    const original = await envelope();
+    const inserted = await adapter.insert(original);
+    const parts = partsFor(fake, inserted.target);
+    for (let index = 0; index < STORAGE_LIMITS.records - 2; index++) {
+      parts.push({
+        id: `history-${index}`,
+        xml: encodeRecord(
+          newRecord(original, owner(host, inserted.target), inserted.target.objectId),
+        ),
+      });
+    }
+    const retained = parts.map((part) => part.xml);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      fake.failAfter("part.add");
+      await assert.rejects(
+        adapter.update(inserted.target, await envelope(`failed-${attempt}`)),
+        (error) => error.details.retryable === true,
+      );
+      assert.deepEqual(
+        parts.map((part) => part.xml),
+        retained,
+      );
+      assert.deepEqual((await adapter.read(inserted.target)).envelope, original);
+    }
+    const edited = await envelope("successful retry");
+    const result = await adapter.update(inserted.target, edited);
+    assert.deepEqual((await adapter.read(result.target)).envelope, edited);
+    assert.equal(parts.length, STORAGE_LIMITS.records);
+    assert.deepEqual(
+      parts.slice(0, -1).map((part) => part.xml),
+      retained,
+    );
+  });
+
+  test(`${host}: an applied staging deletion with a failed response permits retry only after readback`, async () => {
+    const fake = fakeOffice(host);
+    const adapter = createHostAdapter(fake.dependencies);
+    const original = await envelope();
+    const inserted = await adapter.insert(original);
+    fake.failAfter("part.add");
+    fake.failAfter("part.delete");
+    await assert.rejects(
+      adapter.update(inserted.target, await envelope("failed")),
+      (error) => error.details.retryable === true,
+    );
+    assert.equal(partsFor(fake, inserted.target).length, 1);
+    assert.deepEqual((await adapter.read(inserted.target)).envelope, original);
+    const edited = await envelope("retry");
+    assert.deepEqual((await adapter.update(inserted.target, edited)).envelope, edited);
+  });
+
+  test(`${host}: unconfirmed staging cleanup retains recovery data and blocks retries`, async () => {
+    const fake = fakeOffice(host);
+    const adapter = createHostAdapter(fake.dependencies);
+    const original = await envelope();
+    const inserted = await adapter.insert(original);
+    fake.failAfter("part.add");
+    fake.beforeBatch(
+      (labels) => labels.includes("part.delete"),
+      () => {
+        throw new Error("Deletion was refused before applying");
+      },
+    );
+    await assert.rejects(
+      adapter.update(inserted.target, await envelope("failed")),
+      (error) =>
+        error.code === "RECOVERY_REQUIRED" &&
+        error.details.recoveryRequired === true &&
+        error.details.retryable === false,
+    );
+    assert.equal(partsFor(fake, inserted.target).length, 2);
+    assert.deepEqual((await adapter.read(inserted.target)).envelope, original);
+  });
+
+  test(`${host}: externally referenced staging data is retained and never deleted`, async () => {
+    const fake = fakeOffice(host);
+    const adapter = createHostAdapter(fake.dependencies);
+    const inserted = await adapter.insert(await envelope());
+    const parts = partsFor(fake, inserted.target);
+    fake.failAfter("part.add", () => {
+      const recordId = parts.at(-1).xml.match(/record-id="([^"]+)"/)[1];
+      if (host === "Word") {
+        // The original still references its original record. A copied control
+        // elsewhere in the document now references the new staged record.
+        fake.copy(idFrom(inserted.target)).tag = `reshiki:${recordId}`;
+      } else {
+        fake.object(idFrom(inserted.target)).tags[0].value = recordId;
+      }
+    });
+    await assert.rejects(
+      adapter.update(inserted.target, await envelope("referenced externally")),
+      (error) => error.code === "RECOVERY_REQUIRED" && error.details.retryable === false,
+    );
+    assert.equal(parts.length, 2);
+    assert.equal(fake.state.mutations.includes("part.delete"), false);
   });
 }
 

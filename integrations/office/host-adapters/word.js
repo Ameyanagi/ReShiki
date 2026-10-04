@@ -3,6 +3,7 @@ import {
   assertGeometry,
   assertReadback,
   assertRevision,
+  discardUnpublishedRecord,
   encodeRecord,
   fail,
   findRecord,
@@ -280,7 +281,28 @@ export function createWordAdapter(Word, { sessionId }) {
           ]);
           return makeResult(written.record, sessionId);
         } catch (error) {
-          if (!writingPicture) throw retryableUpdateFailure(error);
+          if (!writingPicture) {
+            try {
+              await discardUnpublishedRecord(
+                context,
+                context.document.customXmlParts,
+                attempted,
+                async () => {
+                  // Word records are document-scoped. Check copied controls too,
+                  // rather than assuming only the original can reference it.
+                  const controls = context.document.contentControls;
+                  controls.load("items/tag");
+                  await context.sync();
+                  return controls.items.some(
+                    (control) => control.tag === WORD_TAG_PREFIX + attempted.recordId,
+                  );
+                },
+              );
+            } catch (recovery) {
+              throw writeFailure(error, recovery, { operation: "update", target });
+            }
+            throw retryableUpdateFailure(error);
+          }
           let recoveryError;
           if (writingPicture) {
             try {

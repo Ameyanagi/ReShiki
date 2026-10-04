@@ -3,6 +3,7 @@ import {
   assertGeometry,
   assertReadback,
   assertRevision,
+  discardUnpublishedRecord,
   encodeRecord,
   fail,
   findRecord,
@@ -237,7 +238,30 @@ export function createPowerPointAdapter(PowerPoint, { sessionId }) {
           assertGeometry(written.geometry, geometry, ["left", "top", "width", "height"]);
           return makeResult(written.record, sessionId);
         } catch (error) {
-          if (!writingPreview) throw retryableUpdateFailure(error);
+          if (!writingPreview) {
+            try {
+              const current = await shapeAt(context, target);
+              await discardUnpublishedRecord(
+                context,
+                current.shape.customXmlParts,
+                attempted,
+                async () => {
+                  // Copies carry their own shape-scoped parts. Only this exact
+                  // shape can reference the staging part being removed here.
+                  current.shape.tags.load("items/key,items/value");
+                  await context.sync();
+                  return current.shape.tags.items.some(
+                    (tag) =>
+                      tag.key.toUpperCase() === PPT_OBJECT_TAG &&
+                      String(tag.value).toLowerCase() === attempted.recordId,
+                  );
+                },
+              );
+            } catch (recovery) {
+              throw writeFailure(error, recovery, { operation: "update", target });
+            }
+            throw retryableUpdateFailure(error);
+          }
           let recoveryError;
           if (writingPreview) {
             try {

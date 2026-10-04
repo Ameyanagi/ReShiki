@@ -235,6 +235,37 @@ export async function readRecords(context, collection) {
   return records;
 }
 
+// Only call this before queuing a preview/marker write. A published version may
+// still be needed by Office undo even after a verified rollback. This is cleanup
+// of this operation's private staging record, never collection-wide GC.
+export async function discardUnpublishedRecord(context, collection, attempted, isReferenced) {
+  const staged = (await readRecords(context, collection)).filter(
+    (record) => record.recordId === attempted.recordId,
+  );
+  if (!staged.length) return;
+  if (staged.length !== 1)
+    fail("AMBIGUOUS_OBJECT", "The staged drawing has conflicting embedded data; it was retained.");
+  assertReadback(staged[0], attempted);
+  if (await isReferenced())
+    fail(
+      "TARGET_CHANGED",
+      "The staged drawing is now referenced by an Office object; it was retained.",
+    );
+  staged[0].part.delete();
+  try {
+    await context.sync();
+  } catch {
+    // A failed response can follow an applied deletion. Read back before deciding
+    // whether another save is safe; an unconfirmed cleanup blocks retries.
+  }
+  if (
+    (await readRecords(context, collection)).some(
+      (record) => record.recordId === attempted.recordId,
+    )
+  )
+    fail("READBACK_FAILED", "Office did not confirm removal of the unused staged drawing data.");
+}
+
 export function assertCanAdd(records, record) {
   if (
     records.length + 1 > STORAGE_LIMITS.records ||
@@ -341,7 +372,6 @@ export function mayRollback(record, before, attempted) {
 }
 
 // A failure before touching the exact drawing is safe to retry on a new save.
-// Immutable, unreferenced payload records do not change the drawing itself.
 export function retryableUpdateFailure(cause) {
   return new HostAdapterError(
     cause.code || "HOST_ERROR",
