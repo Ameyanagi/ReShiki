@@ -38,11 +38,15 @@ failures and key changes, disabled/re-enabled native IDs, current roles and valu
 limits, and invalid snapshot revocation. Existing gallery-content, undo/redo,
 late-response and accessibility context tests also passed.
 
-Formatting and diff checks passed. The final strict Clippy rerun and clean-checkout
-Linux, macOS and Windows CI are the authoritative checks for the PR; their current
-results are tracked on [PR #133](https://github.com/Ameyanagi/ReShiki/pull/133).
-The local test log and command/source metadata are recorded in
-`/tmp/reshiki-improvements-20261004/evidence/combined-lib-bin.{log,json}`.
+Formatting and diff checks passed. The final strict Clippy rerun remains a
+separate required check. Public CI from clean checkouts for commit
+`43ff4e8b833c2087dc09dc3aebbf927bccff6652` passed on
+[macOS](https://github.com/Ameyanagi/ReShiki/actions/runs/37207865402/job/111452793740),
+[Linux](https://github.com/Ameyanagi/ReShiki/actions/runs/37207865402/job/111452793777)
+and [Windows](https://github.com/Ameyanagi/ReShiki/actions/runs/37207865402/job/111452793728).
+The local run recorded base commit
+`81ca82101061ecc201545a3cae8d8257f03254d3` and combined-candidate diff SHA-256
+`8b78963f46a590f6681fb4d1afaa2856f8be83179383a4ecdee8ce212691499d`.
 
 These automated checks provide behavior evidence for an internal ownership and
 registry change with no intended visible output. No application-wide allocation,
