@@ -42,8 +42,8 @@ fn fixture(element: &str) -> (App, u64, Vec<u64>) {
     (app, target, unrelated)
 }
 
-/// An actual rendered glyph away from the atom center, rather than a hit-test
-/// implementation's own expected rectangle.
+/// Sample a rendered Text run independently of the atom-hit lookup.
+/// Use glyph ink: the line-height midpoint can be blank above a charge mark.
 #[track_caller]
 fn glyph_center(doc: &Document, text: &str) -> Point {
     let runs: Vec<_> = reshiki::scene::primitives(doc)
@@ -62,10 +62,14 @@ fn glyph_center(doc: &Document, text: &str) -> Point {
     runs.iter()
         .find_map(|(position, run, size, style)| {
             run.find(text).map(|start| {
+                let (lo, hi) = reshiki::style::text_ink_boxes(text, *size, style)
+                    .into_iter()
+                    .next()
+                    .expect("Rendered label glyph has ink");
                 position.offset(
                     reshiki::style::styled_text_width(&run[..start], *size, style)
-                        + reshiki::style::styled_text_width(text, *size, style) / 2.,
-                    *size / 2.,
+                        + (lo.x + hi.x) / 2.,
+                    (lo.y + hi.y) / 2.,
                 )
             })
         })
@@ -680,6 +684,77 @@ fn clicked_hydrogen_label_targets_its_atom_after_real_mouse_press_and_release() 
                     assert!(app.tab.doc.bonds.contains(bond), "Original ring is intact");
                 }
                 assert_one_undo(&mut app, &before);
+            }
+        }
+    }
+}
+
+#[test]
+fn stacked_label_empty_corner_keeps_neighbor_click_and_hover_targets() {
+    use crate::canvas::label_click_tests::{click_edits, stacked_label_neighbor, subscript_ink};
+    for zoom in [0.5, 1., 3.] {
+        for click in [false, true] {
+            for shortcut in ["1", "f", "+", "g"] {
+                let (mut app, _) = App::new();
+                app.tab.busy = false;
+                let (doc, nitrogen, oxygen) = stacked_label_neighbor();
+                let point = doc.atom(oxygen).unwrap().position;
+                assert_eq!(doc.nearest(point, 10. / zoom), Some(oxygen));
+                // The visible outer H₂ still belongs to N; only its empty
+                // surrounding rectangle must yield to the neighboring O.
+                assert_eq!(
+                    reshiki::scene::atom_label_hit(&doc, subscript_ink(&doc), 0.),
+                    Some(nitrogen)
+                );
+                app.tab.doc = doc;
+                app.tab.camera.zoom = zoom;
+                app.tab.selected = vec![nitrogen];
+                let before = app.tab.doc.clone();
+                if click {
+                    for edit in click_edits(&app.tab.doc, &[], app.tab.camera, point, false) {
+                        let _ = app.update(Message::Canvas(edit));
+                    }
+                    assert_eq!(app.tab.selected, vec![oxygen]);
+                    assert!(app.tab.hover.is_none());
+                } else {
+                    hover(&mut app, point);
+                }
+                key(&mut app, shortcut);
+                assert!(
+                    !app.error,
+                    "{zoom}, click={click}, {shortcut}: {}",
+                    app.status
+                );
+                let nitrogen_after = app.tab.doc.atom(nitrogen).unwrap();
+                assert_eq!(nitrogen_after.element, "N");
+                assert_eq!(nitrogen_after.explicit_h, 2);
+                assert_eq!(nitrogen_after.charge, 0);
+                assert_eq!(nitrogen_after.position, Point::default());
+                let bonds_at_nitrogen = |doc: &Document| {
+                    doc.bonds
+                        .iter()
+                        .filter(|bond| bond.a == nitrogen || bond.b == nitrogen)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(bonds_at_nitrogen(&app.tab.doc), bonds_at_nitrogen(&before));
+                match shortcut {
+                    "1" => assert!(app.tab.doc.bonds.iter().any(|bond| {
+                        (bond.a == oxygen && before.atom(bond.b).is_none())
+                            || (bond.b == oxygen && before.atom(bond.a).is_none())
+                    })),
+                    "f" => assert_eq!(app.tab.doc.atom(oxygen).unwrap().element, "F"),
+                    "+" => assert_eq!(app.tab.doc.atom(oxygen).unwrap().charge, 1),
+                    "g" => {
+                        assert_eq!(app.tab.selected, vec![oxygen]);
+                        assert_eq!(app.tab.doc, before);
+                        assert!(!app.tab.history.can_undo());
+                    }
+                    _ => unreachable!(),
+                }
+                if shortcut != "g" {
+                    assert_one_undo(&mut app, &before);
+                }
             }
         }
     }

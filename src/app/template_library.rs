@@ -54,6 +54,7 @@ pub enum Action {
     Export,
     Reload,
     Finished(u64, Result<Box<Transaction>, String>),
+    WarningAcknowledged(u64),
 }
 #[derive(Clone)]
 struct Location {
@@ -103,6 +104,10 @@ pub struct State {
     pub notice: Option<String>,
     pub undo: Option<Library>,
     pending: Option<u64>,
+    /// The cleanup notice also needs acknowledgment if this window later exits.
+    close_warning: Option<String>,
+    /// A committed save's warning must be dismissed before close can continue.
+    pending_warning: Option<u64>,
     importing: bool,
     serial: u64,
     pending_context: Option<Context>,
@@ -129,6 +134,8 @@ impl Default for State {
             notice: None,
             undo: None,
             pending: None,
+            close_warning: None,
+            pending_warning: None,
             importing: false,
             serial: 0,
             pending_context: None,
@@ -137,7 +144,7 @@ impl Default for State {
 }
 impl State {
     pub(super) fn pending(&self) -> bool {
-        self.pending.is_some() || self.importing
+        self.pending.is_some() || self.pending_warning.is_some() || self.importing
     }
     fn location(&self, index: usize) -> Location {
         Location {
@@ -518,6 +525,7 @@ impl App {
         state.undo = transaction.undo;
         // A cleanup warning follows the committed shared library, even when
         // its originating drawing is no longer the active editing context.
+        state.close_warning = transaction.release_warning.clone();
         state.notice = transaction.release_warning;
         if !current {
             // The library is shared across drawings, but a completed write must
@@ -656,6 +664,23 @@ impl App {
                     self.error = true;
                 }
             }
+        }
+        Task::none()
+    }
+    pub(super) fn template_close_warning(&mut self) -> Option<Task<Message>> {
+        if self.templates.pending_warning.is_some() {
+            return Some(Task::none());
+        }
+        let warning = self.templates.close_warning.take()?;
+        let serial = self.templates.serial;
+        // Recovery completion and update_front can both try to finish exit.
+        // Keep their gate held until this one native warning is dismissed.
+        self.templates.pending_warning = Some(serial);
+        Some(acknowledge_close_warning(serial, warning))
+    }
+    pub(super) fn template_warning_acknowledged(&mut self, serial: u64) -> Task<Message> {
+        if self.templates.pending_warning == Some(serial) {
+            self.templates.pending_warning = None;
         }
         Task::none()
     }
@@ -876,11 +901,29 @@ impl App {
                     self.apply_library_transaction(transaction);
                 }
             }
-            Action::Finished(..) => {}
+            Action::Finished(..) | Action::WarningAcknowledged(_) => {}
             Action::Import | Action::Export => {}
         }
         Ok(())
     }
+}
+
+/// The inspector notice would disappear on close; retain the successful save
+/// and let its existing close/restart intent continue after a native warning.
+fn acknowledge_close_warning(serial: u64, warning: String) -> Task<Message> {
+    iced::window::latest().then(move |window| {
+        let dialog = rfd::AsyncMessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title("Templates saved with a warning")
+            .set_description(warning.clone())
+            .set_buttons(rfd::MessageButtons::Ok);
+        let acknowledged = move |_| Message::Templates(Action::WarningAcknowledged(serial));
+        match window {
+            Some(id) => iced::window::run(id, move |window| dialog.set_parent(&window).show())
+                .then(move |answer| Task::perform(answer, acknowledged)),
+            None => Task::perform(dialog.show(), acknowledged),
+        }
+    })
 }
 
 /// Mouse buttons used by browsers, including native macOS auxiliary button codes.
@@ -926,37 +969,122 @@ mod navigation_tests {
     }
 
     #[test]
-    fn committed_library_warning_applies_state_without_cancelling_close_or_retrying() {
-        let (mut app, _dir) = persisted_app();
-        let operation = Operation::capture(&app, Action::SaveDetails)
-            .unwrap()
-            .unwrap();
-        let _ = app.update(Message::Templates(Action::SaveDetails));
-        let serial = app.templates.pending.unwrap();
-        let transaction = operation
-            .execute_with_save(save_with_injected_release_warning)
-            .unwrap();
-        let committed = transaction.library.clone();
-        let warning = transaction.release_warning.clone();
-        let _ = app.close_after_recovery(iced::window::Id::unique());
-        assert!(app.exit.closing());
-        let task = app.template_finished(serial, Ok(Box::new(transaction)));
-        assert_eq!(task.units(), 0, "Completion does not schedule a save retry");
-        assert!(
-            app.exit.closing(),
-            "Committed cleanup warning is not a failed save"
-        );
-        assert_eq!(app.templates.library, committed);
-        assert_eq!(
-            Library::load(app.templates.path.as_ref().unwrap()).unwrap(),
-            committed
-        );
-        assert_eq!(app.templates.notice, warning);
-        assert!(app.templates.draft.is_none() && !app.templates.editing);
-        assert!(!app.templates.pending());
-        assert_eq!(app.templates.serial, serial);
-        assert!(!app.error);
-        assert_eq!(app.status, "Template saved to your library");
+    fn committed_library_warning_waits_for_ack_before_close_or_restart_without_retrying() {
+        for restart in [false, true] {
+            let (mut app, _dir) = persisted_app();
+            app.inspector_open = false;
+            let operation = Operation::capture(&app, Action::SaveDetails)
+                .unwrap()
+                .unwrap();
+            let _ = app.update(Message::Templates(Action::SaveDetails));
+            let serial = app.templates.pending.unwrap();
+            let transaction = operation
+                .execute_with_save(save_with_injected_release_warning)
+                .unwrap();
+            let committed = transaction.library.clone();
+            let warning = transaction.release_warning.clone();
+            let path = app.templates.path.clone().unwrap();
+            let committed_bytes = std::fs::read(&path).unwrap();
+            if restart {
+                let _ = app.restart_after_recovery();
+            } else {
+                let _ = app.update(Message::Close(iced::window::Id::unique()));
+            }
+            assert!(app.exit.closing());
+
+            // Use the full update path, which concurrently starts autosave.
+            let task = app.update(Message::Templates(Action::Finished(
+                serial,
+                Ok(Box::new(transaction)),
+            )));
+            assert!(task.units() > 0, "The native warning is scheduled");
+            assert!(app.exit.closing() && !app.exit.committed());
+            assert_eq!(app.templates.pending_warning, Some(serial));
+            assert!(app.templates.close_warning.is_none());
+            assert!(app.templates.pending());
+            assert!(app.templates.pending.is_none(), "The write is finished");
+            assert_eq!(app.templates.library, committed);
+            assert_eq!(Library::load(&path).unwrap(), committed);
+            assert_eq!(app.templates.notice, warning);
+            assert!(app.templates.draft.is_none() && !app.templates.editing);
+            assert!(!app.error);
+            assert_eq!(app.status, "Template saved to your library");
+            assert_eq!(app.start_autosave().units(), 0);
+
+            let _ = app.update(Message::Templates(Action::WarningAcknowledged(
+                serial.wrapping_sub(1),
+            )));
+            let _ = app.update(Message::Templates(Action::Finished(
+                serial,
+                Err("duplicate late result".into()),
+            )));
+            assert_eq!(app.templates.pending_warning, Some(serial));
+            assert!(app.exit.closing() && !app.exit.committed());
+            assert!(!app.error);
+
+            let task = app.update(Message::Templates(Action::WarningAcknowledged(serial)));
+            assert!(task.units() > 0, "Acknowledgment continues the exit");
+            assert!(!app.templates.pending());
+            assert!(!app.exit.closing() && app.exit.frozen());
+            assert_eq!(app.exit.committed(), !restart);
+
+            let _ = app.update(Message::Templates(Action::WarningAcknowledged(serial)));
+            assert!(!app.templates.pending());
+            assert!(!app.exit.closing() && app.exit.frozen());
+            assert_eq!(app.exit.committed(), !restart);
+            assert_eq!(app.templates.library, committed);
+            assert_eq!(app.templates.notice, warning);
+            assert_eq!(app.templates.serial, serial, "No save retry is started");
+            assert!(app.templates.pending.is_none());
+            assert_eq!(std::fs::read(&path).unwrap(), committed_bytes);
+        }
+    }
+
+    #[test]
+    fn committed_library_warning_waits_until_exit_after_an_optional_drawing_question() {
+        for drawing_question in [false, true] {
+            let (mut app, _dir) = persisted_app();
+            let operation = Operation::capture(&app, Action::SaveDetails)
+                .unwrap()
+                .unwrap();
+            let _ = app.update(Message::Templates(Action::SaveDetails));
+            let serial = app.templates.pending.unwrap();
+            if drawing_question {
+                app.tab.doc.add_atom("N", Default::default());
+                app.tab.revision += 1;
+                let _ = app.update(Message::Close(iced::window::Id::unique()));
+                assert!(matches!(
+                    &app.pending,
+                    Some(super::super::Pending::CloseWindow(..))
+                ));
+            }
+            let transaction = operation
+                .execute_with_save(save_with_injected_release_warning)
+                .unwrap();
+            let warning = transaction.release_warning.clone();
+            let _ = app.update(Message::Templates(Action::Finished(
+                serial,
+                Ok(Box::new(transaction)),
+            )));
+            assert_eq!(app.templates.notice, warning);
+            assert_eq!(app.templates.close_warning, warning);
+            assert!(app.templates.pending_warning.is_none());
+            assert!(!app.templates.pending() && !app.exit.frozen());
+            assert!(!app.error);
+
+            // Do not show a second native dialog over the drawing's question.
+            // Its answer, or a later close, reaches the single warning gate.
+            if drawing_question {
+                let _ = app.update(Message::Discard);
+            } else {
+                let _ = app.update(Message::Close(iced::window::Id::unique()));
+            }
+            assert!(app.exit.closing() && !app.exit.committed());
+            assert_eq!(app.templates.pending_warning, Some(serial));
+            let _ = app.update(Message::Templates(Action::WarningAcknowledged(serial)));
+            assert!(app.exit.committed());
+            assert!(!app.templates.pending());
+        }
     }
 
     #[test]
@@ -994,6 +1122,7 @@ mod navigation_tests {
         );
         assert!(app.templates.undo.is_none());
         assert!(app.templates.notice.is_none());
+        assert!(app.templates.close_warning.is_none());
     }
 
     #[test]
@@ -1021,6 +1150,7 @@ mod navigation_tests {
             Err("Library write failed".into()),
         )));
         assert!(!app.exit.frozen() && app.tabs.deferred_results.is_empty());
+        assert!(app.templates.pending_warning.is_none());
         assert!(!app.tabs.background[0].busy);
         assert_eq!(app.tabs.background[0].status, "Chemistry failure");
         assert_eq!(app.status, "Library write failed");

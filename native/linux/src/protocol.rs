@@ -6,6 +6,7 @@ pub const LIMIT: usize = 64 * 1024 * 1024;
 pub const JSON_LIMIT: usize = LIMIT * 2;
 pub const MAX_FORMATS: usize = 128;
 pub const TRANSFER_TIMEOUT: Duration = Duration::from_secs(5);
+pub const TRANSFER_TOTAL_TIMEOUT: Duration = Duration::from_secs(60);
 pub const MAX_TRANSFERS: usize = 16;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

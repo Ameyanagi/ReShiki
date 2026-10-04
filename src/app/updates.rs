@@ -423,14 +423,25 @@ impl App {
                     .on_press_maybe((state.available() && !state.installing && !state.restarting).then_some(msg(if state.channel == Channel::Nightly { Action::Portable } else { Action::Install })))
             ]
             .spacing(10),
-            checkbox(state.automatic)
-                .label("Check automatically")
-                .on_toggle_maybe(
-                    (!state.saving)
-                        .then_some(|enabled| Message::Updates(Action::Automatic(enabled)))
-                )
-                .size(16)
-                .text_size(13),
+            reshiki::accessibility::button(
+                "updates-automatic",
+                "Check automatically",
+                checkbox(state.automatic)
+                    .label("Check automatically")
+                    .on_toggle_maybe(
+                        (!state.saving)
+                            .then_some(|enabled| Message::Updates(Action::Automatic(enabled)))
+                    )
+                    .size(16)
+                    .text_size(13),
+            )
+            .checked(state.automatic)
+            .on_press_maybe((!state.saving).then_some(msg(Action::Automatic(!state.automatic))))
+            .padding(0)
+            .style(|theme, _| button::Style {
+                text_color: theme.palette().text,
+                ..Default::default()
+            }),
             reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
             text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved tabs reopen after restarting." })
                 .size(12)

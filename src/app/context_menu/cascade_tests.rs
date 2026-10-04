@@ -40,7 +40,7 @@ impl Ui {
         }
     }
 
-    fn event(&mut self, app: &mut App, event: Event, cursor: mouse::Cursor) {
+    fn event(&mut self, app: &mut App, event: Event, cursor: mouse::Cursor) -> Vec<Message> {
         let mut messages = Vec::new();
         {
             let mut view = view(app);
@@ -69,10 +69,11 @@ impl Ui {
                 .any(|message| matches!(message, Message::Delete)),
             "Context menu input must not reach the drawing behind it"
         );
-        for message in messages {
+        for message in &messages {
             // Deliberately do not run asynchronous clipboard or I/O tasks.
-            let _ = app.update(message);
+            let _ = app.update(message.clone());
         }
+        messages
     }
 
     fn hover(&mut self, app: &mut App, point: Point) {
@@ -94,21 +95,34 @@ impl Ui {
     }
 
     fn key(&mut self, app: &mut App, key: Named) {
+        self.key_with_modifiers(
+            app,
+            iced::keyboard::Key::Named(key),
+            iced::keyboard::Modifiers::empty(),
+        );
+    }
+
+    fn key_with_modifiers(
+        &mut self,
+        app: &mut App,
+        key: iced::keyboard::Key,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> Vec<Message> {
         self.event(
             app,
             Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: iced::keyboard::Key::Named(key),
-                modified_key: iced::keyboard::Key::Named(key),
+                modified_key: key.clone(),
+                key,
                 physical_key: iced::keyboard::key::Physical::Unidentified(
                     iced::keyboard::key::NativeCode::Unidentified,
                 ),
                 location: iced::keyboard::Location::Standard,
-                modifiers: iced::keyboard::Modifiers::empty(),
+                modifiers,
                 text: None,
                 repeat: false,
             }),
             mouse::Cursor::Unavailable,
-        );
+        )
     }
 
     fn inspect(
@@ -468,6 +482,96 @@ async fn keyboard_navigation_reveals_rows_and_escape_closes_the_whole_cascade() 
     ui.key(&mut app, Named::Escape);
     assert!(app.context_menu.is_none());
     assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer/menu input regression"]
+async fn command_shortcuts_close_the_menu_and_dispatch_copy_undo_and_redo_once() {
+    use iced::keyboard::{Key, Modifiers};
+
+    let mut ui = Ui::new(Size::new(600., 430.)).await;
+    let position = Point::new(15., 15.);
+    let mut app = selected_ring(position);
+    let original = app.tab.doc.clone();
+    let selection = app.tab.selected.clone();
+    let messages = ui.key_with_modifiers(&mut app, Key::Character("c".into()), Modifiers::COMMAND);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::ContextMenu(Action::Run(message))]
+            if matches!(message.as_ref(), Message::Copy(false))
+    ));
+    assert!(app.context_menu.is_none());
+    assert_eq!(app.tab.doc, original);
+    assert_eq!(app.tab.selected, selection);
+    assert!(!app.tab.history.can_undo());
+
+    // Copy's asynchronous work is intentionally not executed by this harness.
+    // Use a fresh app to exercise drawing history independently of that task.
+    let mut app = selected_ring(position);
+    let _ = app.update(Message::Transform(Transform::Rotate(30.)));
+    let rotated = app.tab.doc.clone();
+    assert_ne!(rotated, original);
+    assert!(app.tab.history.can_undo());
+    app.context_menu = Some(State::new(position, Page::Main));
+    let messages = ui.key_with_modifiers(&mut app, Key::Character("z".into()), Modifiers::COMMAND);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::ContextMenu(Action::Run(message))]
+            if matches!(message.as_ref(), Message::Undo)
+    ));
+    assert!(app.context_menu.is_none());
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+    assert!(app.tab.history.can_redo());
+    app.context_menu = Some(State::new(position, Page::Main));
+    let messages = ui.key_with_modifiers(
+        &mut app,
+        Key::Character("Z".into()),
+        Modifiers::COMMAND | Modifiers::SHIFT,
+    );
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::ContextMenu(Action::Run(message))]
+            if matches!(message.as_ref(), Message::Redo)
+    ));
+    assert!(app.context_menu.is_none());
+    assert_eq!(app.tab.doc, rotated);
+    assert_eq!(app.tab.selected, selection);
+    assert!(!app.tab.history.can_redo());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer/menu input regression"]
+async fn typing_ime_and_unbound_shortcuts_stay_inside_the_menu() {
+    use iced::keyboard::{Key, Modifiers};
+
+    let mut ui = Ui::new(Size::new(600., 430.)).await;
+    let mut app = selected_ring(Point::new(15., 15.));
+    let original = app.tab.doc.clone();
+    let selection = app.tab.selected.clone();
+    for (character, modifiers) in [
+        ("n", Modifiers::empty()),
+        ("N", Modifiers::SHIFT),
+        ("b", Modifiers::COMMAND),
+    ] {
+        assert!(
+            ui.key_with_modifiers(&mut app, Key::Character(character.into()), modifiers)
+                .is_empty()
+        );
+        assert!(app.context_menu.is_some());
+    }
+    assert!(
+        ui.event(
+            &mut app,
+            Event::InputMethod(iced::advanced::input_method::Event::Commit("窒素".into())),
+            mouse::Cursor::Unavailable,
+        )
+        .is_empty()
+    );
+    assert!(app.context_menu.is_some());
+    assert_eq!(app.tab.doc, original);
+    assert_eq!(app.tab.selected, selection);
     assert!(!app.tab.history.can_undo());
 }
 
