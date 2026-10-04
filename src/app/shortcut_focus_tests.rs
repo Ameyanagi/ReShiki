@@ -216,6 +216,124 @@ fn assistant_app() -> App {
 
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
+async fn tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner() {
+    use super::palettes;
+    use crate::canvas::Tool;
+    use std::time::{Duration, Instant};
+
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let drawing = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let left_press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let left_release = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
+
+    for tool in [Tool::Ring, Tool::Arrow, app.toolbar.bond] {
+        app.palette = None;
+        app.tool = Tool::Select;
+        let id = format!("tool-{tool:?}");
+        let bounds = ui
+            .semantics(&app)
+            .nodes
+            .into_iter()
+            .find(|node| node.id == id)
+            .expect("tool palette control")
+            .bounds;
+        let cursor = mouse::Cursor::Available(bounds.center());
+        let (status, messages) = ui.event(&app, left_press.clone(), cursor);
+        assert_eq!(status, iced::event::Status::Captured);
+        if palettes::family(tool) == Some(palettes::Family::Bonds) {
+            assert!(
+                matches!(messages.as_slice(),
+                [Message::Palette(palettes::Action::Open(t))] if *t == tool),
+                "{tool:?}: {messages:?}"
+            );
+            apply(&mut app, messages);
+        } else {
+            assert!(messages.is_empty(), "{tool:?}: {messages:?}");
+            let (_, messages) = ui.event(
+                &app,
+                Event::Window(iced::window::Event::RedrawRequested(
+                    Instant::now() + Duration::from_millis(500),
+                )),
+                cursor,
+            );
+            // The first real redraw also measures the drawing viewport.
+            // It is unrelated to the tool's pointer command ownership.
+            let messages: Vec<_> = messages
+                .into_iter()
+                .filter(|message| !matches!(message, Message::Viewport(_)))
+                .collect();
+            assert!(
+                matches!(messages.as_slice(),
+                [Message::Palette(palettes::Action::Open(t))] if *t == tool),
+                "{tool:?}: {messages:?}"
+            );
+            apply(&mut app, messages);
+        }
+        assert!(app.palette.is_some());
+        // Opening the palette makes the background inert, so the real
+        // release must not activate either the canvas or its wrapper.
+        let (_, messages) = ui.event(&app, left_release.clone(), cursor);
+        assert!(messages.is_empty(), "{tool:?}: {messages:?}");
+        apply(&mut app, messages);
+        assert!(app.palette.is_some(), "release must retain the flyout");
+        assert_eq!(app.tool, Tool::Select);
+    }
+
+    app.palette = None;
+    let point = ui.input(&app, "tool-Ring").0.center();
+    let cursor = mouse::Cursor::Available(point);
+    assert!(ui.event(&app, left_press, cursor).1.is_empty());
+    let (_, messages) = ui.event(&app, left_release, cursor);
+    assert!(matches!(messages.as_slice(), [Message::Tool(Tool::Ring)]));
+    apply(&mut app, messages);
+    assert_eq!(app.tool, Tool::Ring);
+    assert!(app.palette.is_none());
+
+    // Pointer focus belongs to the semantic wrapper; its Enter and Space
+    // activation still selects the tool once without invoking the canvas.
+    for event in [
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        Event::Keyboard(keyboard::Event::KeyReleased {
+            key: Key::Named(Named::Space),
+            modified_key: Key::Named(Named::Space),
+            physical_key: Physical::Code(Code::Space),
+            location: keyboard::Location::Standard,
+            modifiers: Modifiers::empty(),
+        }),
+    ] {
+        if matches!(&event, Event::Keyboard(keyboard::Event::KeyReleased { .. })) {
+            let (_, messages) = ui.event(
+                &app,
+                press(
+                    Key::Named(Named::Space),
+                    Code::Space,
+                    Modifiers::empty(),
+                    None,
+                ),
+                mouse::Cursor::Unavailable,
+            );
+            assert!(messages.is_empty());
+        }
+        let (status, messages) = ui.event(&app, event, mouse::Cursor::Unavailable);
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(matches!(messages.as_slice(), [Message::Tool(Tool::Ring)]));
+        apply(&mut app, messages);
+    }
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
 async fn first_escape_cancels_focused_atom_label_without_applying_the_draft() {
     let mut ui = Ui::new().await;
     let (mut app, _) = App::new();
@@ -652,6 +770,17 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
     let drawing = app.tab.doc.clone();
     let draft = app.assistant.input_text();
     app.updates.open = true;
+    // Enter/Space without a focused modal control must never reach the
+    // drawing's contextual-key or select-recent shortcuts.
+    for (named, code) in [(Named::Enter, Code::Enter), (Named::Space, Code::Space)] {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Named(named), code, Modifiers::empty(), None),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(messages.is_empty(), "{messages:?}");
+    }
     let tab = |modifiers| press(Key::Named(Named::Tab), Code::Tab, modifiers, None);
     let focused = |ui: &mut Ui, app: &App| {
         let snapshot = ui.semantics(app);
@@ -788,6 +917,31 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
             [Message::Updates(updates::Action::Automatic(true))]
         ),
         "The checkbox and its focus wrapper must publish one mouse action: {click_messages:?}"
+    );
+    for expected in ["updates-notes", "updates-close"] {
+        let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
+        assert!(messages.is_empty());
+        assert_eq!(focused(&mut ui, &app), vec![expected]);
+    }
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Updates(updates::Action::Show(false))]
+    ));
+    apply(&mut app, messages);
+    assert!(
+        !app.updates.open,
+        "Enter activates the focused Close button"
     );
     assert_eq!(app.tab.doc, drawing);
     assert_eq!(app.assistant.input_text(), draft);

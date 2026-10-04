@@ -106,8 +106,8 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        // Updates has no text fields. Stop keys before file routing and any
-        // still-focused editor underneath the dialog sees them.
+        // The Updates focus scope owns Tab, Enter and Space. Keep other keys
+        // away from file routing and the focused editor behind the dialog.
         if self.updates_open
             && matches!(event, Event::Keyboard(_) | Event::InputMethod(_))
             && !activation_event(event)
@@ -201,6 +201,12 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         self.content.as_widget_mut().update(
             tree, event, layout, cursor, renderer, clipboard, shell, viewport,
         );
+        if self.updates_open && activation_event(event) {
+            // An unfocused dialog control may leave activation unhandled.
+            // Capture it here before the drawing's subscription sees it.
+            shell.capture_event();
+            return;
+        }
         if let Some(mut fields) = Fields::after(event, shell.is_event_captured()) {
             self.content
                 .as_widget_mut()
