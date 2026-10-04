@@ -90,6 +90,10 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   [Evidence](changes/issue-work-2026-10-02.md#interchange-and-nonvisual-evidence)
   · [Issue #107](https://github.com/Ameyanagi/ReShiki/issues/107) · @Ameyanagi.
 
+- **Under review — Built-in template journal size:** Built-in templates inserted in empty space follow the current journal size; personal and attached templates keep their existing geometry.
+  [Validation and limits](changes/template-journal-size-2026-10-04.md)
+  · [PR #136](https://github.com/Ameyanagi/ReShiki/pull/136) · @Ameyanagi.
+
 - **Under review — Physical drawing-style units:** enter dimensions in pt, mm
   or cm while stored styles keep their physical size. Incomplete input retains
   focus so it can be finished before applying.
