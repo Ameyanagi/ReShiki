@@ -1,7 +1,6 @@
 # Document and geometry cleanup
 
-[PR #135](https://github.com/Ameyanagi/ReShiki/pull/135), by @Ameyanagi, is under
-review.
+[PR #135](https://github.com/Ameyanagi/ReShiki/pull/135), by @Ameyanagi, merged after passing CI and code review.
 
 This internal refactor removes repeated allocation, copying, and scanning from
 document editing while preserving drawing output and controls. The branch is

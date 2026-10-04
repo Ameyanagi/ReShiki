@@ -1,7 +1,6 @@
 # Release and descriptor tooling validation
 
-[PR #132](https://github.com/Ameyanagi/ReShiki/pull/132), by @Ameyanagi, is under
-review. The comparison baseline is
+[PR #132](https://github.com/Ameyanagi/ReShiki/pull/132), by @Ameyanagi, merged after passing CI and code review. The comparison baseline is
 `81ca82101061ecc201545a3cae8d8257f03254d3`; the refactored scripts are in
 `526d378fa6081716f317f4c3cd7a090e5fb3482e`.
 
