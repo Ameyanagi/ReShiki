@@ -13,6 +13,8 @@ use sctk::reexports::client::Connection;
 use sctk::reexports::client::backend::Backend;
 
 mod mime;
+#[cfg(feature = "wayland-qa")]
+mod qa;
 pub mod rich;
 mod state;
 mod worker;
