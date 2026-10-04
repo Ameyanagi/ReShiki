@@ -11,6 +11,8 @@ license = "MIT OR Apache-2.0"
 default = []
 # Optional Python/RDKit development oracles, never part of release builds.
 rdkit-reference = []
+# Opt-in state observation for disposable compositor integration tests.
+wayland-qa = ["reshiki-linux/wayland-qa"]
 
 [workspace]
 members = [
