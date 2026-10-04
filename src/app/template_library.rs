@@ -525,7 +525,16 @@ impl App {
         state.undo = transaction.undo;
         // A cleanup warning follows the committed shared library, even when
         // its originating drawing is no longer the active editing context.
-        state.close_warning = transaction.release_warning.clone();
+        if let Some(warning) = &transaction.release_warning {
+            match &mut state.close_warning {
+                Some(previous) if previous != warning => {
+                    previous.push_str("\n\n");
+                    previous.push_str(warning);
+                }
+                Some(_) => {}
+                None => state.close_warning = Some(warning.clone()),
+            }
+        }
         state.notice = transaction.release_warning;
         if !current {
             // The library is shared across drawings, but a completed write must
@@ -1122,7 +1131,58 @@ mod navigation_tests {
         );
         assert!(app.templates.undo.is_none());
         assert!(app.templates.notice.is_none());
-        assert!(app.templates.close_warning.is_none());
+        assert_eq!(
+            app.templates.close_warning.as_deref(),
+            Some("Templates saved; injected lock cleanup warning")
+        );
+    }
+
+    #[test]
+    fn undelivered_cleanup_warning_survives_successful_reload_until_exit_acknowledgment() {
+        for restart in [false, true] {
+            let (mut app, _dir) = persisted_app();
+            app.inspector_open = false;
+            let operation = Operation::capture(&app, Action::SaveDetails)
+                .unwrap()
+                .unwrap();
+            let _ = app.update(Message::Templates(Action::SaveDetails));
+            let serial = app.templates.pending.unwrap();
+            let transaction = operation
+                .execute_with_save(save_with_injected_release_warning)
+                .unwrap();
+            let warning = transaction.release_warning.clone();
+            let _ = app.update(Message::Templates(Action::Finished(
+                serial,
+                Ok(Box::new(transaction)),
+            )));
+            assert_eq!(app.templates.close_warning, warning);
+
+            let reload = Operation::capture(&app, Action::Reload).unwrap().unwrap();
+            let _ = app.update(Message::Templates(Action::Reload));
+            let serial = app.templates.pending.unwrap();
+            let _ = app.update(Message::Templates(Action::Finished(
+                serial,
+                Ok(Box::new(reload.execute().unwrap())),
+            )));
+            assert!(app.templates.notice.is_none());
+            assert_eq!(app.templates.close_warning, warning);
+            let path = app.templates.path.clone().unwrap();
+            let committed_bytes = std::fs::read(&path).unwrap();
+
+            if restart {
+                let _ = app.restart_after_recovery();
+            } else {
+                let _ = app.update(Message::Close(iced::window::Id::unique()));
+            }
+            assert!(app.exit.closing() && !app.exit.committed());
+            assert_eq!(app.templates.pending_warning, Some(serial));
+            let _ = app.update(Message::Templates(Action::WarningAcknowledged(serial)));
+            assert!(!app.templates.pending());
+            assert!(app.templates.close_warning.is_none());
+            assert_eq!(app.exit.committed(), !restart);
+            assert_eq!(std::fs::read(path).unwrap(), committed_bytes);
+            assert_eq!(app.templates.serial, serial, "Exit must not retry a save");
+        }
     }
 
     #[test]
