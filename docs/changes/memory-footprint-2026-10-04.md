@@ -21,6 +21,9 @@ Runtime code has a net line-count change of zero: numeric −2, Rust/Python work
 optional `allocation-metrics` feature wraps the existing allocators only in test
 binaries. Production heap budgeting and application unsafe-code prohibitions are
 unchanged; no third-party dependency was added.
+The Rust/Python worker changes apply to the optional `rdkit-reference` development
+backend, which is excluded from normal releases. The application changes are the
+numeric candidate reuse and consuming picture conversions.
 
 ## Requested allocation observations
 
