@@ -74,7 +74,7 @@ impl Library {
                 return Err("Template descriptions/keywords are too long".into());
             }
             t.document.validate()?;
-            let count = t.document.all_ids().len();
+            let count = t.document.object_ids().count();
             if count == 0 || count > 10000 {
                 return Err("A template must contain 1–10000 drawing objects".into());
             }
@@ -115,11 +115,12 @@ impl Library {
         let mut added = 0;
         for mut t in incoming.templates {
             let favorite = incoming.favorites.contains(&t.id);
+            let original_id = std::mem::take(&mut t.id);
             let equal = next.templates.iter().find(|existing| {
-                let mut content = t.clone();
-                content.id = existing.id.clone();
-                **existing == content
+                t.id.clone_from(&existing.id);
+                **existing == t
             });
+            t.id = original_id;
             let id = if let Some(existing) = equal {
                 existing.id.clone()
             } else {

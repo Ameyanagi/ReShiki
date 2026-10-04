@@ -1,6 +1,6 @@
 use crate::typography::{TextFormat, TextStyle};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Point {
@@ -270,12 +270,7 @@ impl Document {
         }
     }
     pub fn next_id(&self) -> u64 {
-        self.atoms
-            .iter()
-            .map(|a| a.id)
-            .chain(self.annotations.iter().map(|a| a.id))
-            .chain(self.arrows.iter().map(|a| a.id))
-            .chain(self.graphics.iter().map(|a| a.id))
+        self.object_ids()
             .chain(self.groups.iter().map(|a| a.id))
             .max()
             .unwrap_or(0)
@@ -329,46 +324,32 @@ impl Document {
             return;
         }
         self.invalidate_chemistry(&[a, b]);
-        if let Some(bond) = self
+        let previous = self
             .bonds
             .iter_mut()
-            .find(|x| (x.a == a && x.b == b) || (x.a == b && x.b == a))
-        {
-            *bond = Bond {
-                highlight: bond.highlight,
-                ring_arc: false,
-                projection: false,
-                z_order: bond.z_order,
-                indicator: bond.indicator.clone(),
-                cip_label: None,
-                a,
-                b,
-                order,
-                display: display.into(),
-                stereo: None,
-                stereo_atoms: vec![],
-                double_position: bond.double_position,
-                secondary_display: None,
-                color: bond.color,
-            };
+            .find(|x| (x.a == a && x.b == b) || (x.a == b && x.b == a));
+        let retained = previous.as_deref();
+        let fresh = Bond {
+            highlight: retained.and_then(|bond| bond.highlight),
+            ring_arc: false,
+            projection: false,
+            z_order: retained.map_or(0, |bond| bond.z_order),
+            indicator: retained.map_or_else(Default::default, |bond| bond.indicator.clone()),
+            cip_label: None,
+            a,
+            b,
+            order,
+            display: display.into(),
+            stereo: None,
+            stereo_atoms: vec![],
+            double_position: retained.map_or(Default::default(), |bond| bond.double_position),
+            secondary_display: None,
+            color: retained.map_or(Default::default(), |bond| bond.color),
+        };
+        if let Some(bond) = previous {
+            *bond = fresh;
         } else {
-            self.bonds.push(Bond {
-                highlight: None,
-                ring_arc: false,
-                projection: false,
-                z_order: 0,
-                indicator: Default::default(),
-                cip_label: None,
-                a,
-                b,
-                order,
-                display: display.into(),
-                stereo: None,
-                stereo_atoms: vec![],
-                double_position: Default::default(),
-                secondary_display: None,
-                color: Default::default(),
-            });
+            self.bonds.push(fresh);
         }
     }
     pub fn invalidate_chemistry(&mut self, affected: &[u64]) {
@@ -439,13 +420,15 @@ impl Document {
         crate::projection::sync_centroids(self);
     }
     pub fn all_ids(&self) -> Vec<u64> {
+        self.object_ids().collect()
+    }
+    pub(crate) fn object_ids(&self) -> impl Iterator<Item = u64> + '_ {
         self.atoms
             .iter()
             .map(|a| a.id)
             .chain(self.annotations.iter().map(|a| a.id))
             .chain(self.arrows.iter().map(|a| a.id))
             .chain(self.graphics.iter().map(|a| a.id))
-            .collect()
     }
     pub fn validate(&self) -> Result<(), String> {
         crate::projection::validate(self)?;
@@ -481,7 +464,7 @@ impl Document {
         crate::reactions::validate(self)?;
         self.validate_abbreviations()?;
         let mut ids = HashSet::new();
-        for id in self.all_ids() {
+        for id in self.object_ids() {
             if id == 0 || id == u64::MAX || !ids.insert(id) {
                 return Err("Duplicate or zero object ID".into());
             }
@@ -590,8 +573,8 @@ impl Document {
 
 #[derive(Default)]
 pub struct History {
-    undo: Vec<Document>,
-    redo: Vec<Document>,
+    undo: VecDeque<Document>,
+    redo: VecDeque<Document>,
 }
 impl History {
     pub fn commit(&mut self, before: Document, after: &Document) -> bool {
@@ -608,25 +591,25 @@ impl History {
             return false;
         }
         if !continuing || self.undo.is_empty() {
-            self.undo.push(before);
+            self.undo.push_back(before);
         }
         self.redo.clear();
         if self.undo.len() > 100 {
-            self.undo.remove(0);
+            let _ = self.undo.pop_front();
         }
         true
     }
     pub fn undo(&mut self, doc: &mut Document) -> bool {
-        if let Some(prev) = self.undo.pop() {
-            self.redo.push(std::mem::replace(doc, prev));
+        if let Some(prev) = self.undo.pop_back() {
+            self.redo.push_back(std::mem::replace(doc, prev));
             true
         } else {
             false
         }
     }
     pub fn redo(&mut self, doc: &mut Document) -> bool {
-        if let Some(next) = self.redo.pop() {
-            self.undo.push(std::mem::replace(doc, next));
+        if let Some(next) = self.redo.pop_back() {
+            self.undo.push_back(std::mem::replace(doc, next));
             true
         } else {
             false
@@ -643,6 +626,140 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
+        let mut doc = Document::default();
+        doc.add_atom("C", Point::default());
+        doc.add_atom("O", Point::new(42., 0.));
+        doc.atoms[0].id = 10;
+        doc.atoms[1].id = 2;
+        doc.annotations.push(Annotation {
+            id: 7,
+            position: Point::default(),
+            text: "caption".into(),
+            format: Default::default(),
+        });
+        doc.arrows.push(Arrow {
+            id: 6,
+            start: Point::default(),
+            end: Point::new(42., 0.),
+            kind: "forward".into(),
+            control: None,
+            style: None,
+        });
+        doc.graphics.push(crate::graphics::Graphic::dragged(
+            4,
+            crate::graphics::GraphicKind::Rectangle,
+            Point::default(),
+            Point::new(42., 42.),
+            Default::default(),
+            Default::default(),
+            false,
+        ));
+        doc.groups.push(crate::grouping::Group {
+            id: 40,
+            members: vec![10, 7],
+            integral: false,
+        });
+        assert_eq!(doc.all_ids(), [10, 2, 7, 6, 4]);
+        assert_eq!(doc.object_ids().collect::<Vec<_>>(), doc.all_ids());
+        assert_eq!(doc.next_id(), 41);
+        doc.validate().unwrap();
+        doc.groups[0].id = u64::MAX;
+        assert_eq!(doc.next_id(), u64::MAX);
+        assert!(Document::default().all_ids().is_empty());
+        assert_eq!(Document::default().next_id(), 1);
+        doc.groups.clear();
+        doc.atoms[1].id = 10;
+        doc.atoms[0].position.x = f32::NAN;
+        assert_eq!(doc.validate().unwrap_err(), "Duplicate or zero object ID");
+    }
+    #[test]
+    fn replacing_a_bond_keeps_paint_and_indicators_and_resets_chemical_fields() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("O", Point::new(42., 0.));
+        let c = doc.add_atom("C", Point::new(84., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        doc.add_bond(b, c, 1, "plain");
+        let bond = &mut doc.bonds[0];
+        bond.highlight = Some(crate::palette::Color::Custom([10, 20, 30]));
+        bond.z_order = -4;
+        bond.indicator.show = Some(false);
+        bond.indicator.offset = Some(Point::new(3., -2.));
+        bond.indicator.style.bold = true;
+        bond.double_position = crate::bonds::DoublePosition::Right;
+        bond.color = crate::palette::Color::Custom([90, 80, 70]);
+        bond.ring_arc = true;
+        bond.projection = true;
+        bond.cip_label = Some("E".into());
+        bond.stereo = Some("E".into());
+        bond.stereo_atoms = vec![a, c];
+        bond.secondary_display = Some("Dash".into());
+        let old = bond.clone();
+        let untouched = doc.bonds[1].clone();
+        doc.add_bond(b, a, 2, "bold");
+        let replaced = &doc.bonds[0];
+        assert_eq!((replaced.a, replaced.b, replaced.order), (b, a, 2));
+        assert_eq!(replaced.display, "bold");
+        assert_eq!(replaced.highlight, old.highlight);
+        assert_eq!(replaced.z_order, old.z_order);
+        assert_eq!(replaced.indicator, old.indicator);
+        assert_eq!(replaced.double_position, old.double_position);
+        assert_eq!(replaced.color, old.color);
+        assert!(!replaced.ring_arc && !replaced.projection);
+        assert_eq!(replaced.cip_label, None);
+        assert_eq!(replaced.stereo, None);
+        assert!(replaced.stereo_atoms.is_empty());
+        assert_eq!(replaced.stereo_atoms.capacity(), 0);
+        assert_eq!(replaced.secondary_display, None);
+        assert_eq!(doc.bonds.len(), 2);
+        assert_eq!(doc.bonds[1], untouched);
+        let before = doc.clone();
+        for (a, b) in [(a, a), (a, 999), (999, b)] {
+            doc.add_bond(a, b, 1, "plain");
+            assert_eq!(doc, before);
+        }
+    }
+    #[test]
+    fn capped_history_keeps_chronology_noops_and_continuous_gestures() {
+        let mut doc = Document::default();
+        doc.add_atom("C", Point::default());
+        let mut history = History::default();
+        for value in 1..=101 {
+            let before = doc.clone();
+            doc.atoms[0].position.x = value as f32;
+            assert!(history.commit(before, &doc));
+        }
+        for value in (1..101).rev() {
+            assert!(history.undo(&mut doc));
+            assert_eq!(doc.atoms[0].position.x, value as f32);
+        }
+        assert!(!history.undo(&mut doc));
+        assert!(!history.commit(doc.clone(), &doc));
+        assert!(history.can_redo());
+        for value in 2..=101 {
+            assert!(history.redo(&mut doc));
+            assert_eq!(doc.atoms[0].position.x, value as f32);
+        }
+        assert!(!history.redo(&mut doc));
+        assert!(history.undo(&mut doc));
+        let before = doc.clone();
+        doc.atoms[0].position.x = 200.;
+        assert!(history.commit(before, &doc));
+        assert!(!history.can_redo());
+        let before = doc.clone();
+        doc.atoms[0].position.x = 201.;
+        assert!(history.commit_continuing(before, &doc, true));
+        assert!(history.undo(&mut doc));
+        assert_eq!(doc.atoms[0].position.x, 100.);
+        let mut fresh = History::default();
+        let before = doc.clone();
+        doc.atoms[0].position.x = 300.;
+        assert!(fresh.commit_continuing(before.clone(), &doc, true));
+        assert!(fresh.undo(&mut doc));
+        assert_eq!(doc, before);
+    }
     #[test]
     fn newer_drawings_are_reported_before_parsing_and_saves_use_the_current_version() {
         let mut doc = Document::default();

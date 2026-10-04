@@ -129,7 +129,7 @@ impl Graphic {
         } else {
             self.commands()
                 .iter()
-                .flat_map(PathCommand::points)
+                .flat_map(PathCommand::iter_points)
                 .collect()
         }
     }

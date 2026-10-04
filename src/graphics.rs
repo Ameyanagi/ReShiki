@@ -168,11 +168,15 @@ impl PathCommand {
         }
     }
     pub fn points(&self) -> Vec<Point> {
-        match self {
-            Self::Move(p) | Self::Line(p) => vec![*p],
-            Self::Cubic(a, b, c) => vec![*a, *b, *c],
-            Self::Close => vec![],
-        }
+        self.iter_points().collect()
+    }
+    pub(crate) fn iter_points(&self) -> impl Iterator<Item = Point> {
+        let points = match self {
+            Self::Move(p) | Self::Line(p) => [Some(*p), None, None],
+            Self::Cubic(a, b, c) => [Some(*a), Some(*b), Some(*c)],
+            Self::Close => [None, None, None],
+        };
+        points.into_iter().flatten()
     }
 }
 
@@ -434,17 +438,13 @@ impl Graphic {
             .collect()
     }
     pub fn bounds(&self) -> (Point, Point) {
-        let points: Vec<_> = self
-            .commands()
+        let commands = self.commands();
+        let mut points = commands
             .iter()
-            .flat_map(PathCommand::points)
-            .collect();
-        let mut lo = self.origin;
+            .flat_map(PathCommand::iter_points)
+            .peekable();
+        let mut lo = points.peek().copied().unwrap_or(self.origin);
         let mut hi = lo;
-        if let Some(first) = points.first() {
-            lo = *first;
-            hi = *first;
-        }
         for p in points {
             lo.x = lo.x.min(p.x);
             lo.y = lo.y.min(p.y);
@@ -535,7 +535,7 @@ impl Graphic {
         }
         if [self.origin, self.axis_x, self.axis_y]
             .into_iter()
-            .chain(self.path.iter().flat_map(PathCommand::points))
+            .chain(self.path.iter().flat_map(PathCommand::iter_points))
             .any(|p| !p.x.is_finite() || !p.y.is_finite())
         {
             return Err("Non-finite graphic coordinates".into());

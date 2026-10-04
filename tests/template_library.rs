@@ -15,6 +15,68 @@ fn ethanol() -> Document {
     d.add_bond(b, c, 1, "plain");
     d
 }
+
+#[test]
+fn merge_compares_all_content_fields_ignoring_only_identity_and_keeps_first_match() {
+    use reshiki::templates::Template;
+    let entry = Template {
+        id: "first".into(),
+        name: "Ethanol".into(),
+        group: "Reagents".into(),
+        smiles: "CCO".into(),
+        keywords: vec!["alcohol".into()],
+        note: "Reference fragment".into(),
+        document: ethanol(),
+        anchor: Anchor::Atom(2),
+    };
+    let mut second = entry.clone();
+    second.id = "second".into();
+    let mut library = Library {
+        templates: vec![entry.clone(), second],
+        ..Default::default()
+    };
+    let mut imported = entry.clone();
+    imported.id = "incoming".into();
+    let incoming = Library {
+        templates: vec![imported],
+        favorites: vec!["incoming".into()],
+        ..Default::default()
+    };
+    assert_eq!(library.merge(incoming.clone()).unwrap(), 0);
+    assert_eq!(library.favorites, ["first"]);
+    assert_eq!(library.templates[0], entry);
+    assert_eq!(library.merge(incoming).unwrap(), 0);
+    for field in 0..7 {
+        let mut changed = entry.clone();
+        match field {
+            0 => changed.name.push('!'),
+            1 => changed.group.push('!'),
+            2 => changed.smiles.push('!'),
+            3 => changed.keywords.push("new".into()),
+            4 => changed.note.push('!'),
+            5 => changed.document.atoms[0].position.x += 1.,
+            _ => changed.anchor = Anchor::Atom(1),
+        }
+        let mut target = Library::default();
+        let initial = Library {
+            templates: vec![entry.clone()],
+            ..Default::default()
+        };
+        assert_eq!(target.merge(initial).unwrap(), 1);
+        assert_eq!(target.templates.as_slice(), std::slice::from_ref(&entry));
+        let revised = Library {
+            templates: vec![changed],
+            favorites: vec!["first".into()],
+            ..Default::default()
+        };
+        assert_eq!(target.merge(revised.clone()).unwrap(), 1, "field {field}");
+        assert_ne!(target.templates[1].id, "first");
+        assert_eq!(target.favorites, [target.templates[1].id.clone()]);
+        let saved = target.clone();
+        assert_eq!(target.merge(revised).unwrap(), 0, "field {field}");
+        assert_eq!(target, saved);
+    }
+}
 #[tokio::test]
 async fn exact_source_atom_changes_regiochemistry_without_substitution_or_fallback() {
     let part = ethanol();

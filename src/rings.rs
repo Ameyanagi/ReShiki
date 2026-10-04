@@ -206,7 +206,7 @@ impl Drawing {
         let source_id = source.id;
         let origin = source.position;
         let inward = (-origin.y).atan2(-origin.x);
-        let mut positioned = part.clone();
+        let mut positioned = part;
         let all = positioned.all_ids();
         editing::transform_about(
             &mut positioned,
@@ -224,8 +224,7 @@ impl Drawing {
             &positioned,
             Point::new(dest.x - origin.x, dest.y - origin.y),
         );
-        let source_index = part
-            .all_ids()
+        let source_index = all
             .iter()
             .position(|id| *id == source_id)
             .ok_or("The source ring atom is unavailable")?;

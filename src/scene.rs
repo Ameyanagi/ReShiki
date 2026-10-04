@@ -487,7 +487,7 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
                 &mut part
                     .commands
                     .iter()
-                    .flat_map(crate::graphics::PathCommand::points),
+                    .flat_map(crate::graphics::PathCommand::iter_points),
             );
         }
         if let Some((lo, hi)) = text_bounds(&atom_label(atom, doc)) {
@@ -1176,7 +1176,7 @@ pub(crate) fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 let pad = style.width() * 0.5;
                 for p in commands
                     .iter()
-                    .flat_map(crate::graphics::PathCommand::points)
+                    .flat_map(crate::graphics::PathCommand::iter_points)
                 {
                     points.extend([p.offset(-pad, -pad), p.offset(pad, pad)]);
                 }

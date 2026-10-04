@@ -134,19 +134,18 @@ pub(crate) fn ring_stroke(
         return (stroke, Vec::new());
     };
     let paths = flattened(commands);
-    let bounds =
-        commands
-            .iter()
-            .flat_map(PathCommand::points)
-            .fold(None::<(Point, Point)>, |bounds, p| {
-                Some(match bounds {
-                    None => (p, p),
-                    Some((lo, hi)) => (
-                        Point::new(lo.x.min(p.x), lo.y.min(p.y)),
-                        Point::new(hi.x.max(p.x), hi.y.max(p.y)),
-                    ),
-                })
-            });
+    let bounds = commands.iter().flat_map(PathCommand::iter_points).fold(
+        None::<(Point, Point)>,
+        |bounds, p| {
+            Some(match bounds {
+                None => (p, p),
+                Some((lo, hi)) => (
+                    Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                    Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                ),
+            })
+        },
+    );
     let Some((lo, hi)) = bounds else {
         return (stroke, Vec::new());
     };

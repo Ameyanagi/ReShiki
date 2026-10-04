@@ -82,18 +82,16 @@ pub enum Arrange {
 
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     let ids = crate::attachments::selection(doc, ids);
-    let ids = doc.expand_abbreviation_selection(&ids);
-    let ids = ids.as_slice();
+    let ids: HashSet<_> = doc
+        .expand_abbreviation_selection(&ids)
+        .into_iter()
+        .collect();
     let mut part = doc.clone();
     part.reactions
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.groups
         .retain(|g| g.members.iter().all(|id| ids.contains(id)));
-    let removed: Vec<_> = doc
-        .all_ids()
-        .into_iter()
-        .filter(|id| !ids.contains(id))
-        .collect();
+    let removed: Vec<_> = doc.object_ids().filter(|id| !ids.contains(id)).collect();
     if !removed.is_empty() {
         part.delete(&removed);
     }
@@ -422,8 +420,7 @@ fn map_positions(
     convert: impl Fn(Point) -> Point,
     vector: impl Fn(Point) -> Point,
 ) {
-    let ids = doc.expand_abbreviation_selection(ids);
-    let ids = ids.as_slice();
+    let ids: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
     for graphic in &mut doc.graphics {
         if ids.contains(&graphic.id) {
             // Axes are displacements, not translated points. Subtracting two
@@ -618,15 +615,7 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
         .filter_map(|(i, b)| {
             let a = doc.atom(b.a)?.position;
             let z = doc.atom(b.b)?.position;
-            let dx = z.x - a.x;
-            let dy = z.y - a.y;
-            let len = dx * dx + dy * dy;
-            let t = if len > 0.0 {
-                ((p.x - a.x) * dx + (p.y - a.y) * dy) / len
-            } else {
-                0.0
-            };
-            let d = p.distance(a.offset(dx * t.clamp(0.0, 1.0), dy * t.clamp(0.0, 1.0)));
+            let d = crate::graphics::segment_distance(p, a, z);
             (d < r).then_some((i, d))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
@@ -1330,6 +1319,7 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
         points: Vec<Point>,
     }
     let ring = isolated_ring(doc, ids)?;
+    let mut targets = None;
     let mut best: Option<Candidate> = None;
     for (a, b) in ring
         .iter()
@@ -1346,32 +1336,38 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
             continue;
         }
         let midpoint = Point::new((a.x + b.x) / 2.0 + delta.x, (a.y + b.y) / 2.0 + delta.y);
-        for bond in &doc.bonds {
-            if ids.contains(&bond.a)
-                || ids.contains(&bond.b)
-                || bond.order != 1
-                || bond.display != "plain"
-            {
-                continue;
-            }
-            let Some((ta, tb)) = doc.atom(bond.a).zip(doc.atom(bond.b)) else {
-                continue;
-            };
-            if [ta, tb].iter().any(|a| {
-                a.element != "C"
-                    || a.charge != 0
-                    || a.isotope != 0
-                    || a.aromatic
-                    || doc
-                        .bonds
-                        .iter()
-                        .filter(|b| b.a == a.id || b.b == a.id)
-                        .map(|b| b.order as u32)
-                        .sum::<u32>()
-                        > 3
-            }) {
-                continue;
-            }
+        let targets = targets.get_or_insert_with(|| {
+            doc.bonds
+                .iter()
+                .filter_map(|bond| {
+                    if ids.contains(&bond.a)
+                        || ids.contains(&bond.b)
+                        || bond.order != 1
+                        || bond.display != "plain"
+                    {
+                        return None;
+                    }
+                    let (ta, tb) = doc.atom(bond.a).zip(doc.atom(bond.b))?;
+                    if [ta, tb].iter().any(|a| {
+                        a.element != "C"
+                            || a.charge != 0
+                            || a.isotope != 0
+                            || a.aromatic
+                            || doc
+                                .bonds
+                                .iter()
+                                .filter(|b| b.a == a.id || b.b == a.id)
+                                .map(|b| b.order as u32)
+                                .sum::<u32>()
+                                > 3
+                    }) {
+                        return None;
+                    }
+                    Some((ta, tb))
+                })
+                .collect::<Vec<_>>()
+        });
+        for &(ta, tb) in targets.iter() {
             let target_midpoint = Point::new(
                 (ta.position.x + tb.position.x) / 2.0,
                 (ta.position.y + tb.position.y) / 2.0,
@@ -1455,6 +1451,10 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
     }
     Some(ring.into_iter().map(mapped).collect())
 }
+
+#[cfg(test)]
+#[path = "editing/core_tests.rs"]
+mod core_tests;
 
 #[cfg(test)]
 mod tests {

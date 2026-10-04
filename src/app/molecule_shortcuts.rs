@@ -7,15 +7,15 @@ use reshiki::{
     editing,
     reactions::{self, Role},
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Default)]
 pub(super) struct Recent {
     epoch: u64,
     atoms: Vec<u64>,
     edit_atoms: Vec<u64>,
-    undo: Vec<Vec<u64>>,
-    redo: Vec<Vec<u64>>,
+    undo: VecDeque<Vec<u64>>,
+    redo: VecDeque<Vec<u64>>,
 }
 
 impl Recent {
@@ -42,9 +42,9 @@ impl Recent {
         // Mirror History, including nonmolecular edits and continuous gestures.
         if !continuing || self.undo.is_empty() {
             self.edit_atoms.clear();
-            self.undo.push(self.atoms.clone());
+            self.undo.push_back(self.atoms.clone());
             if self.undo.len() > 100 {
-                self.undo.remove(0);
+                let _ = self.undo.pop_front();
             }
         }
         self.redo.clear();
@@ -71,8 +71,8 @@ impl Recent {
         };
         // Loading a document starts a new context even if drawing Undo remains
         // available across an import. Do not infer edits from reused atom IDs.
-        let atoms = source.pop().unwrap_or_default();
-        target.push(std::mem::replace(&mut self.atoms, atoms));
+        let atoms = source.pop_back().unwrap_or_default();
+        target.push_back(std::mem::replace(&mut self.atoms, atoms));
     }
 
     fn selection(&mut self, doc: &Document, epoch: u64) -> Vec<u64> {
@@ -298,6 +298,51 @@ fn reaction_copy(
 mod tests {
     use super::*;
     use iced::keyboard::{Key, Modifiers, key::Named};
+
+    #[test]
+    fn recent_context_matches_history_after_the_101st_edit_and_a_new_branch() {
+        let mut doc = Document::default();
+        let first = doc.add_atom("C", Point::default());
+        let second = doc.add_atom("O", Point::new(100., 0.));
+        let mut history = reshiki::document::History::default();
+        let mut recent = Recent::default();
+        let mut states = vec![(doc.clone(), recent.atoms.clone())];
+        for index in 1..=101 {
+            let before = doc.clone();
+            let id = if index % 2 == 0 { first } else { second };
+            doc.atom_mut(id).unwrap().position.y += 1.;
+            history.commit(before.clone(), &doc);
+            recent.record(&before, &doc, 0, false);
+            states.push((doc.clone(), recent.atoms.clone()));
+        }
+        for index in (1..101).rev() {
+            assert!(history.undo(&mut doc));
+            recent.restore(false, 0);
+            assert_eq!(doc, states[index].0);
+            assert_eq!(recent.atoms, states[index].1);
+        }
+        assert!(!history.undo(&mut doc));
+        recent.record(&doc, &doc, 0, false);
+        assert!(!history.commit(doc.clone(), &doc));
+        assert_eq!(recent.redo.len(), 100);
+        for state in &states[2..] {
+            assert!(history.redo(&mut doc));
+            recent.restore(true, 0);
+            assert_eq!(doc, state.0);
+            assert_eq!(recent.atoms, state.1);
+        }
+        assert!(history.undo(&mut doc));
+        recent.restore(false, 0);
+        let before = doc.clone();
+        doc.atom_mut(second).unwrap().position.y += 10.;
+        history.commit(before.clone(), &doc);
+        recent.record(&before, &doc, 0, false);
+        assert!(!history.can_redo());
+        assert!(recent.redo.is_empty());
+        assert_eq!(recent.atoms, [second]);
+        recent.check_epoch(1);
+        assert!(recent.undo.is_empty() && recent.redo.is_empty() && recent.atoms.is_empty());
+    }
 
     fn chain(doc: &mut Document, x: f32, y: f32) -> Vec<u64> {
         let a = doc.add_atom("C", Point::new(x, y));
