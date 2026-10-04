@@ -65,7 +65,7 @@ fn label_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)> {
     let mut bounds = crate::scene::atom_label_ink_bounds(atom, doc);
     for part in crate::scientific::styled_mark_parts(atom, &doc.drawing_style) {
         let pad = part.style.width() / 2.;
-        for point in part.commands.iter().flat_map(PathCommand::points) {
+        for point in part.commands.iter().flat_map(PathCommand::iter_points) {
             let a = point.offset(-pad, -pad);
             let b = point.offset(pad, pad);
             bounds = Some(bounds.map_or((a, b), |(lo, hi)| {

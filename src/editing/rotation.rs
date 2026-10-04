@@ -65,7 +65,7 @@ fn graphic_anchor(graphic: &Graphic) -> (f64, f64) {
         GraphicKind::Path => {
             // These are stored local coordinates, not bounds rebuilt in world axes.
             // They remain fixed while map_positions transforms the affine frame.
-            let bounds = graphic.path.iter().flat_map(PathCommand::points).fold(
+            let bounds = graphic.path.iter().flat_map(PathCommand::iter_points).fold(
                 None,
                 |bounds: Option<(Point, Point)>, p| {
                     Some(match bounds {

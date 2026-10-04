@@ -17,7 +17,7 @@ pub struct Prepared {
 impl Prepared {
     pub fn new(doc: &Document, selected: &[u64]) -> Result<Self, String> {
         doc.validate()?;
-        let all: HashSet<_> = doc.all_ids().into_iter().collect();
+        let all: HashSet<_> = doc.object_ids().collect();
         if selected.is_empty() || selected.iter().any(|id| !all.contains(id)) {
             return Err("Select the fragment you want to move and attach.".into());
         }
@@ -144,7 +144,7 @@ impl Prepared {
         if originals.len() != ids.len() {
             return Err("The fragment could not be joined.".into());
         }
-        let host: HashSet<_> = self.base.all_ids().into_iter().collect();
+        let host: HashSet<_> = self.base.object_ids().collect();
         let restore: HashMap<_, _> = ids
             .iter()
             .copied()

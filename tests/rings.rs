@@ -206,3 +206,53 @@ fn builtin_chairs_use_the_same_molecular_geometry_as_the_toolbar() {
         assert_eq!(serde_json::from_str::<Document>(&json).unwrap(), t.document);
     }
 }
+
+#[test]
+fn connected_presets_keep_every_source_id_in_order_and_leave_hosts_unchanged() {
+    for preset in Preset::ALL {
+        for alternate in [false, true] {
+            for direction in [None, Some(p(140., 90.))] {
+                let mut host = Document::default();
+                let carbon = host.add_atom("C", p(-42., 0.));
+                let target = host.add_atom("O", p(42., 0.));
+                host.add_bond(carbon, target, 1, "plain");
+                let before = host.clone();
+                let source = preset.document(42., alternate);
+                let (doc, ids) = Drawing {
+                    preset: *preset,
+                    length: 42.,
+                    alternate,
+                    connect: true,
+                }
+                .place(&host, p(42., 0.), direction, 5.)
+                .unwrap();
+                assert_eq!(host, before);
+                assert_eq!(ids.len(), source.all_ids().len() + 1);
+                assert_eq!(*ids.last().unwrap(), target);
+                assert_eq!(
+                    &ids[..ids.len() - 1],
+                    &doc.all_ids()[host.all_ids().len()..]
+                );
+                assert_eq!(&doc.atoms[..host.atoms.len()], &host.atoms);
+                assert_eq!(&doc.bonds[..host.bonds.len()], &host.bonds);
+                let inserted: std::collections::HashSet<_> =
+                    ids[..ids.len() - 1].iter().copied().collect();
+                let connection = doc
+                    .bonds
+                    .iter()
+                    .filter(|b| {
+                        (b.a == target && inserted.contains(&b.b))
+                            || (b.b == target && inserted.contains(&b.a))
+                    })
+                    .count();
+                assert_eq!(connection, 1, "{preset}, alternate {alternate}");
+                doc.validate().unwrap();
+                for (old, new) in source.atoms.iter().zip(&doc.atoms[host.atoms.len()..]) {
+                    assert_eq!(old.element, new.element);
+                    assert_eq!(old.charge, new.charge);
+                    assert_eq!(old.stereo, new.stereo);
+                }
+            }
+        }
+    }
+}

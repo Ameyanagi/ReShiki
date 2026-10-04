@@ -258,3 +258,100 @@ async fn every_shape_survives_chemistry_and_cdxml_as_editable_geometry() {
         }
     }
 }
+
+#[test]
+fn command_points_and_streamed_bounds_keep_control_extents_and_float_bits() {
+    use reshiki::scientific::{OrbitalKind, SymbolKind};
+    let points = [Point::new(-0., 1.), Point::new(2., -3.), Point::new(4., 5.)];
+    for (command, expected) in [
+        (PathCommand::Move(points[0]), vec![points[0]]),
+        (PathCommand::Line(points[1]), vec![points[1]]),
+        (
+            PathCommand::Cubic(points[0], points[1], points[2]),
+            points.to_vec(),
+        ),
+        (PathCommand::Close, vec![]),
+    ] {
+        let actual = command.points();
+        assert_eq!(actual.len(), expected.len());
+        for (a, b) in actual.iter().zip(expected) {
+            assert_eq!(
+                (a.x.to_bits(), a.y.to_bits()),
+                (b.x.to_bits(), b.y.to_bits())
+            );
+        }
+    }
+    let kinds = GraphicKind::DRAWABLE
+        .into_iter()
+        .chain([GraphicKind::Picture, GraphicKind::Path])
+        .chain(SymbolKind::ALL.iter().copied().map(GraphicKind::Symbol))
+        .chain(OrbitalKind::ALL.iter().copied().map(GraphicKind::Orbital));
+    for kind in kinds {
+        let mut graphic = shape(1, kind);
+        for origin in [
+            Point::new(20., 30.),
+            Point::new(-0., 0.),
+            Point::new(1_000_000., -1_000_000.),
+        ] {
+            graphic.origin = origin;
+            graphic.axis_x = Point::new(35., -13.);
+            graphic.axis_y = Point::new(9., 27.);
+            for path in [
+                vec![],
+                vec![PathCommand::Close],
+                vec![
+                    PathCommand::Move(Point::new(-0., 0.)),
+                    PathCommand::Cubic(
+                        Point::new(-2., 3.),
+                        Point::new(4., -5.),
+                        Point::new(6., 7.),
+                    ),
+                    PathCommand::Line(Point::new(-1., 2.)),
+                    PathCommand::Close,
+                ],
+                vec![
+                    PathCommand::Move(Point::new(f32::from_bits(0x7fc0_1234), -0.)),
+                    PathCommand::Line(Point::new(2., 1.)),
+                ],
+            ] {
+                graphic.path = path;
+                // Retain the old collecting bounds algorithm as a test oracle.
+                let points: Vec<_> = graphic
+                    .commands()
+                    .iter()
+                    .flat_map(PathCommand::points)
+                    .collect();
+                let mut lo = points.first().copied().unwrap_or(graphic.origin);
+                let mut hi = lo;
+                for p in points {
+                    lo.x = lo.x.min(p.x);
+                    lo.y = lo.y.min(p.y);
+                    hi.x = hi.x.max(p.x);
+                    hi.y = hi.y.max(p.y);
+                }
+                let pad = if kind == GraphicKind::Picture {
+                    0.
+                } else {
+                    graphic.style.width() * 0.5
+                };
+                let expected = (lo.offset(-pad, -pad), hi.offset(pad, pad));
+                let actual = graphic.bounds();
+                assert_eq!(
+                    [
+                        actual.0.x.to_bits(),
+                        actual.0.y.to_bits(),
+                        actual.1.x.to_bits(),
+                        actual.1.y.to_bits()
+                    ],
+                    [
+                        expected.0.x.to_bits(),
+                        expected.0.y.to_bits(),
+                        expected.1.x.to_bits(),
+                        expected.1.y.to_bits()
+                    ],
+                    "{kind}"
+                );
+            }
+        }
+    }
+}
