@@ -7,8 +7,8 @@ use std::collections::HashSet;
 
 const STEREO: &str =
     "ChemDoodle reaction copy does not yet preserve stereochemistry; use RXN or reaction SMILES.";
-const AROMATIC: &str =
-    "ChemDoodle reaction copy does not yet preserve aromaticity; use RXN or reaction SMILES.";
+const NORMALIZATION: &str =
+    "ChemDoodle reaction copy would require chemical normalization; use RXN or reaction SMILES.";
 
 /// Cheap source checks for the menu. Prepared chemistry is checked again below.
 pub(super) fn reason(doc: &Document) -> Option<&'static str> {
@@ -64,9 +64,6 @@ pub(super) fn reason(doc: &Document) -> Option<&'static str> {
     {
         return Some(STEREO);
     }
-    if doc.atoms.iter().any(|a| a.aromatic) || doc.bonds.iter().any(|b| b.order == 4) {
-        return Some(AROMATIC);
-    }
     if doc.atoms.iter().any(|a| a.radical_electrons != 0) {
         return Some(
             "ChemDoodle reaction copy does not yet preserve radicals; use RXN or reaction SMILES.",
@@ -81,12 +78,19 @@ pub(super) fn reason(doc: &Document) -> Option<&'static str> {
             "ChemDoodle reaction copy does not preserve attachment or centroid atoms; use the native drawing.",
         );
     }
-    if doc.bonds.iter().any(|b| !(1..=3).contains(&b.order)) {
+    if doc.bonds.iter().any(|b| !(1..=4).contains(&b.order)) {
         return Some(
-            "ChemDoodle reaction copy supports ordinary single, double and triple bonds only.",
+            "ChemDoodle reaction copy supports ordinary single, double, triple and valid aromatic bonds only.",
         );
     }
     None
+}
+
+fn atomic_number(symbol: &str) -> Option<usize> {
+    crate::editing::ELEMENTS
+        .iter()
+        .position(|&element| element == symbol)
+        .map(|index| index + 1)
 }
 
 fn molecule(doc: &Document, participant: &Participant) -> Result<(Value, String), String> {
@@ -121,29 +125,68 @@ fn molecule(doc: &Document, participant: &Participant) -> Result<(Value, String)
     {
         return Err(STEREO.into());
     }
-    if state.graph.atoms.iter().any(|a| a.aromatic) || state.graph.bonds.iter().any(|b| b.aromatic)
-    {
-        return Err(AROMATIC.into());
-    }
     if state.graph.atoms.iter().any(|a| a.radical_electrons != 0) {
         return Err("ChemDoodle reaction copy does not yet preserve inferred radicals; use RXN or reaction SMILES.".into());
     }
-    // Do not silently pass through a sanitization that changes the source graph.
-    if fragment.atoms.iter().zip(&state.graph.atoms).any(|(a, b)| {
-        a.charge != i32::from(b.charge) || a.isotope != u32::from(b.isotope) || b.atomic_number == 0
-    }) || fragment
-        .bonds
-        .iter()
-        .zip(&state.graph.bonds)
-        .any(|(a, b)| a.order != b.order)
+    // Aromatic perception may replace valid alternating bonds with order 4.
+    // Keep atom identity, connectivity and every nonaromatic source order.
+    if fragment.atoms.len() != state.graph.atoms.len()
+        || fragment.bonds.len() != state.graph.bonds.len()
+        || !prepared
+            .ids
+            .iter()
+            .copied()
+            .eq(fragment.atoms.iter().map(|a| a.id))
+        || fragment.atoms.iter().zip(&state.graph.atoms).any(|(a, b)| {
+            a.charge != i32::from(b.charge)
+                || a.isotope != u32::from(b.isotope)
+                || b.atomic_number == 0
+                || atomic_number(&a.element) != Some(usize::from(b.atomic_number))
+                || a.aromatic && !b.aromatic
+                || !b.aromatic
+                    && (a.explicit_h != u32::from(b.explicit_hydrogens)
+                        || a.no_implicit != b.no_implicit)
+        })
+        || fragment.bonds.iter().zip(&state.graph.bonds).any(|(a, b)| {
+            prepared.ids.get(b.a) != Some(&a.a)
+                || prepared.ids.get(b.b) != Some(&a.b)
+                || a.order != b.order && !(b.aromatic && matches!(a.order, 1 | 2 | 4))
+        })
     {
-        return Err("ChemDoodle reaction copy would require chemical normalization; use RXN or reaction SMILES.".into());
+        return Err(NORMALIZATION.into());
+    }
+    let kekule = crate::chemistry::document::kekule(&prepared).map_err(|e| e.to_string())?;
+    let graph = &kekule.assignment.graph;
+    if !kekule.success
+        || graph.atoms.iter().any(|a| a.aromatic)
+        || graph
+            .bonds
+            .iter()
+            .any(|b| b.aromatic || !(1..=3).contains(&b.order))
+    {
+        return Err("ChemDoodle reaction copy could not assign valid Kekulé bonds; use RXN or reaction SMILES.".into());
+    }
+    if graph.atoms.len() != state.graph.atoms.len()
+        || graph.bonds.len() != state.graph.bonds.len()
+        || kekule.cache.len() != graph.atoms.len()
+        || state.valences.len() != graph.atoms.len()
+        || graph
+            .atoms
+            .iter()
+            .zip(&kekule.cache)
+            .zip(state.graph.atoms.iter().zip(&state.valences))
+            .any(|((a, cache), (before, valence))| {
+                u32::from(a.explicit_hydrogens) + cache.implicit_hydrogens
+                    != u32::from(before.explicit_hydrogens) + valence.implicit_hydrogens
+            })
+    {
+        return Err(NORMALIZATION.into());
     }
     let atoms: Vec<_> = fragment
         .atoms
         .iter()
-        .zip(&state.graph.atoms)
-        .zip(&state.valences)
+        .zip(&graph.atoms)
+        .zip(&kekule.cache)
         .map(|((source, atom), valence)| {
             let mut value = serde_json::Map::from_iter([
                 ("i".into(), json!(format!("a{}", source.id))),
@@ -163,8 +206,7 @@ fn molecule(doc: &Document, participant: &Participant) -> Result<(Value, String)
             Value::Object(value)
         })
         .collect();
-    let bonds: Vec<_> = state
-        .graph
+    let bonds: Vec<_> = graph
         .bonds
         .iter()
         .map(|bond| json!({"b": bond.a, "e": bond.b, "o": bond.order}))
@@ -206,6 +248,9 @@ pub(super) fn write(doc: &Document) -> Result<String, String> {
     }))
     .map_err(|error| error.to_string())
 }
+
+#[cfg(test)]
+mod aromatic_tests;
 
 #[cfg(test)]
 mod tests {
@@ -309,7 +354,7 @@ mod tests {
         cases.push((no_go, "forward arrow"));
         let mut aromatic = source.clone();
         aromatic.atoms[0].aromatic = true;
-        cases.push((aromatic, "aromaticity"));
+        cases.push((aromatic, "aromatic"));
         for (doc, message) in cases {
             let error = prepare_as(Default::default(), doc, CopyFormat::ChemDoodleReaction)
                 .await

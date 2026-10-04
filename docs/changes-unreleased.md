@@ -7,6 +7,13 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
+- **Under review — Chemical text alongside ordinary Copy:** copy complete
+  molecules as SMILES for CAS Draw's input field, or a clear single-arrow
+  reaction as ChemDoodle JSON for Open/Load. Reaction roles follow the arrow's
+  start and end without changing the drawing; validated aromatic reactions are
+  supported. Direct paste into the web drawing canvas remains unverified.
+  [Workflow and limits](scifinder-handoff.md) · @Ameyanagi.
+
 - **Shared release checks and descriptor preparation:** share
   native target definitions, checksum writing and descriptor query operations
   while preserving supported platforms, checksums and generated chemistry data.

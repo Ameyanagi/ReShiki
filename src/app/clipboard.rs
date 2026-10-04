@@ -24,6 +24,19 @@ impl App {
             return Task::none();
         }
         let snapshot = reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
+        let snapshot = if format.is_chemical() {
+            match reshiki::clipboard::chemical_snapshot(&self.tab.doc, &snapshot) {
+                Ok(std::borrow::Cow::Owned(chemical)) => chemical,
+                Ok(std::borrow::Cow::Borrowed(_)) => snapshot,
+                Err(reason) => {
+                    self.status = reason.into();
+                    self.error = true;
+                    return Task::none();
+                }
+            }
+        } else {
+            snapshot
+        };
         if let Some(reason) = format.unavailable_reason(&snapshot) {
             self.status = reason.into();
             self.error = true;
@@ -146,12 +159,22 @@ impl App {
             vec![]
         };
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
+        let reaction = if image_only {
+            Ok(None)
+        } else {
+            reshiki::reactions::copy_reaction(&self.tab.doc, &snapshot)
+        };
         self.native_copy_busy = true;
         self.tab.clipboard_busy = true;
         self.error = false;
         self.status = "Preparing clipboard…".into();
         Task::perform(
-            reshiki::clipboard::copy(self.engine.clone(), snapshot, image_only),
+            reshiki::clipboard::copy_with_reaction(
+                self.engine.clone(),
+                snapshot,
+                image_only,
+                reaction,
+            ),
             move |result| Message::ClipboardWritten {
                 epoch,
                 revision,
@@ -227,8 +250,17 @@ impl App {
         } else {
             "Copied · editable in ReShiki; picture in other apps"
         };
+        let action = match outcome.chemical_format {
+            Some(CopyFormat::Smiles) => {
+                format!("{action} · SMILES text copied for structure input")
+            }
+            Some(CopyFormat::ChemDoodleReaction) => {
+                format!("{action} · Reaction JSON copied for ChemDoodle Open")
+            }
+            _ => action.to_owned(),
+        };
         self.status = if outcome.notices.is_empty() {
-            action.to_owned()
+            action
         } else {
             format!("{action} · Review details\n{}", outcome.notices.join("\n"))
         };
@@ -468,6 +500,7 @@ mod tests {
         Ok(CopyOutcome {
             external_editable: true,
             image_only: false,
+            chemical_format: None,
             notices: vec![],
         })
     }
@@ -534,6 +567,7 @@ mod tests {
             Ok(CopyOutcome {
                 external_editable: false,
                 image_only: false,
+                chemical_format: None,
                 notices: vec!["Unsupported projected wedge style".into()],
             }),
         );

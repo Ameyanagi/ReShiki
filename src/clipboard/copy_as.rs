@@ -3,6 +3,7 @@
 use super::{CDX_TYPES, LIMIT, Representation};
 use crate::{document::Document, engine::LocalEngine, export};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use std::borrow::Cow;
 mod chemdoodle;
 
 const TEXT: &str = "public.utf8-plain-text";
@@ -80,6 +81,10 @@ impl CopyFormat {
         matches!(self, Self::Mol | Self::Smiles | Self::Inchi)
     }
 
+    pub fn is_chemical(self) -> bool {
+        self.is_molecular() || self.is_reaction()
+    }
+
     /// Availability of a clipboard transport, separate from conversion support.
     pub fn available(self) -> bool {
         super::available() || !matches!(self, Self::Png | Self::Pdf | Self::Cdx)
@@ -147,12 +152,29 @@ pub fn selection_or_drawing(doc: &Document, selected: &[u64]) -> Document {
     }
 }
 
+/// Chemical formats may infer one clear reaction without changing the drawing.
+/// Inspect the source as well, since selection can prune incomplete explicit roles.
+pub fn chemical_snapshot<'a>(
+    source: &Document,
+    snapshot: &'a Document,
+) -> Result<Cow<'a, Document>, &'static str> {
+    let Some(reaction) = crate::reactions::copy_reaction(source, snapshot)? else {
+        return Ok(Cow::Borrowed(snapshot));
+    };
+    if snapshot.reactions.as_slice() == std::slice::from_ref(&reaction) {
+        return Ok(Cow::Borrowed(snapshot));
+    }
+    let mut chemical = snapshot.clone();
+    chemical.reactions = vec![reaction];
+    Ok(Cow::Owned(chemical))
+}
+
 #[derive(Debug, Clone)]
 pub struct PreparedCopy {
     pub format: CopyFormat,
     pub notices: Vec<String>,
     representations: Vec<Representation>,
-    text: Option<String>,
+    pub(super) text: Option<String>,
 }
 impl PreparedCopy {
     /// Also usable for an explicit text-only handoff on platforms without the

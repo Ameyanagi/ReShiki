@@ -116,6 +116,63 @@ mod tests {
     }
 
     #[test]
+    fn copy_as_menu_and_command_share_inference_and_explicit_selection_guards() {
+        use reshiki::clipboard::CopyFormat;
+        let (mut app, _) = App::new();
+        let reactant = app.tab.doc.add_atom("O", World::default());
+        let product = app.tab.doc.add_atom("O", World::new(240., 0.));
+        let arrow = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
+            arrow,
+            World::new(90., 0.),
+            World::new(150., 0.),
+            Default::default(),
+            Default::default(),
+        ));
+        app.tab.selected = app.tab.doc.all_ids();
+        let enabled = |app: &App, format| {
+            app.context_entries(Page::CopyAs).iter().any(|entry| {
+                matches!(entry, Entry::Item { action: Action::Run(message), enabled: true, .. }
+                if matches!(message.as_ref(), Message::CopyAs(value) if *value == format))
+            })
+        };
+        assert!(enabled(&app, CopyFormat::ChemDoodleReaction));
+        assert!(enabled(&app, CopyFormat::Rxn));
+        assert!(!enabled(&app, CopyFormat::Smiles));
+        let original = app.tab.doc.clone();
+        let selection = app.tab.selected.clone();
+        assert!(app.copy_as(CopyFormat::ChemDoodleReaction).units() > 0);
+        assert_eq!(app.tab.doc, original);
+        assert_eq!(app.tab.selected, selection);
+        assert!(!app.tab.history.can_undo());
+        app.copy_as_busy = false;
+        app.tab.clipboard_busy = false;
+        app.tab.doc.reactions = vec![
+            reshiki::reactions::copy_reaction(&original, &original)
+                .unwrap()
+                .unwrap(),
+        ];
+        app.tab.selected = vec![reactant, arrow];
+        let explicit = app.tab.doc.clone();
+        assert!(!enabled(&app, CopyFormat::Smiles));
+        assert!(!enabled(&app, CopyFormat::ChemDoodleReaction));
+        assert!(enabled(&app, CopyFormat::Cdxml));
+        for format in [CopyFormat::Smiles, CopyFormat::ChemDoodleReaction] {
+            assert_eq!(app.copy_as(format).units(), 0);
+            assert!(app.error);
+            assert!(app.status.contains("complete defined reaction"));
+        }
+        assert_eq!(app.tab.doc, explicit);
+        assert!(!app.tab.history.can_undo());
+        app.tab.selected = vec![reactant, product];
+        assert!(!enabled(&app, CopyFormat::Smiles));
+        assert_eq!(app.copy_as(CopyFormat::Smiles).units(), 0);
+        assert!(app.status.contains("participant"));
+        app.tab.selected = vec![product];
+        assert!(enabled(&app, CopyFormat::Smiles));
+    }
+
+    #[test]
     fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), String> {
         let (mut app, _) = App::new();
         app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
@@ -629,8 +686,9 @@ impl App {
                 entries
             }
             Page::CopyAs => {
-                use reshiki::clipboard::{CopyFormat, selection_or_drawing};
+                use reshiki::clipboard::{CopyFormat, chemical_snapshot, selection_or_drawing};
                 let snapshot = selection_or_drawing(&self.tab.doc, &self.tab.selected);
+                let chemical = chemical_snapshot(&self.tab.doc, &snapshot);
                 let busy = self.clipboard_working();
                 let mut entries = vec![Hint(if self.tab.selected.is_empty() {
                     "Copy as · whole drawing"
@@ -645,7 +703,14 @@ impl App {
                     ) {
                         entries.push(Separator);
                     }
-                    let reason = format.unavailable_reason(&snapshot);
+                    let reason = if format.is_chemical() {
+                        match &chemical {
+                            Ok(doc) => format.unavailable_reason(doc),
+                            Err(reason) => Some(*reason),
+                        }
+                    } else {
+                        format.unavailable_reason(&snapshot)
+                    };
                     entries.push(command(
                         format.label(),
                         Message::CopyAs(format),
