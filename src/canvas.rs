@@ -28,6 +28,7 @@ pub(crate) use text_cache::prepare_fonts;
 pub(crate) mod tilt;
 use selection::{Handle, SelectionBox, TransformDrag};
 use smart_guides::{Axis, Guide};
+use std::borrow::Cow;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tool {
@@ -1426,7 +1427,7 @@ impl MoleculeCanvas<'_> {
                 .filter(|p| bounds.contains(*p))
                 .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y)),
         );
-        let mut preview = self.joining.map(|j| &j.base).unwrap_or(self.doc).clone();
+        let mut preview = Cow::Borrowed(self.joining.map(|j| &j.base).unwrap_or(self.doc));
         let mut ring_selection = None;
         let mut chain_badge = None;
         let mut template_notice = None;
@@ -1440,7 +1441,7 @@ impl MoleculeCanvas<'_> {
                 Point::new(p.x - bounds.x, p.y - bounds.y),
                 state.modifiers.shift(),
             );
-            tilt::apply(&mut preview, &drag.ids, x, y);
+            tilt::apply(preview.to_mut(), &drag.ids, x, y);
             ring_selection = Some(drag.ids.clone());
             template_notice = Some((
                 format!("3D tilt · X {x:+.0}° · Y {y:+.0}° · Shift snaps · Escape cancels"),
@@ -1486,7 +1487,7 @@ impl MoleculeCanvas<'_> {
             };
             match placement {
                 Ok((doc, ids)) => {
-                    preview = doc;
+                    preview = Cow::Owned(doc);
                     ring_selection = Some(ids);
                     chain_badge = Some((
                         endpoint,
@@ -1531,7 +1532,7 @@ impl MoleculeCanvas<'_> {
                         attach: self.attach_symbols,
                     };
                     if let Ok(id) = drawing.place(
-                        &mut preview,
+                        preview.to_mut(),
                         *start,
                         end,
                         state.modifiers.shift(),
@@ -1541,7 +1542,7 @@ impl MoleculeCanvas<'_> {
                     }
                 } else {
                     let id = preview.next_id();
-                    preview.graphics.push(
+                    preview.to_mut().graphics.push(
                         Graphic::dragged(
                             id,
                             kind,
@@ -1557,7 +1558,7 @@ impl MoleculeCanvas<'_> {
                 }
             }
             if let Some(Gesture::AtomMark { id, index }) = &state.gesture
-                && let Some(a) = preview.atom_mut(*id)
+                && let Some(a) = preview.to_mut().atom_mut(*id)
                 && let Some(mark) = a.marks.get_mut(*index)
             {
                 mark.offset = World::new(end.x - a.position.x, end.y - a.position.y);
@@ -1572,7 +1573,7 @@ impl MoleculeCanvas<'_> {
                 } else {
                     end
                 };
-                if let Some(a) = preview.arrows.iter_mut().find(|a| a.id == *id) {
+                if let Some(a) = preview.to_mut().arrows.iter_mut().find(|a| a.id == *id) {
                     a.edit_handle(*index, end);
                 }
             }
@@ -1586,7 +1587,7 @@ impl MoleculeCanvas<'_> {
                     self.bond_drawing.fixed_angles && !state.modifiers.alt(),
                 );
                 let id = preview.next_id();
-                preview.arrows.push(reshiki::document::Arrow::new(
+                preview.to_mut().arrows.push(reshiki::document::Arrow::new(
                     id,
                     *start,
                     end,
@@ -1598,12 +1599,12 @@ impl MoleculeCanvas<'_> {
                 && let Some(anchor) = owner.anchor(&preview)
             {
                 owner.set_offset(
-                    &mut preview,
+                    preview.to_mut(),
                     Some(World::new(end.x - anchor.x, end.y - anchor.y)),
                 );
             }
             if let Some(Gesture::GraphicPoint { id, index }) = &state.gesture
-                && let Some(g) = preview.graphics.iter_mut().find(|g| g.id == *id)
+                && let Some(g) = preview.to_mut().graphics.iter_mut().find(|g| g.id == *id)
             {
                 g.edit_point(*index, end);
             }
@@ -1612,7 +1613,7 @@ impl MoleculeCanvas<'_> {
             let end = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            drag.apply(&mut preview, end, state.modifiers.shift());
+            drag.apply(preview.to_mut(), end, state.modifiers.shift());
             ring_selection = Some(drag.ids.clone());
         }
         if let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
@@ -1639,7 +1640,7 @@ impl MoleculeCanvas<'_> {
                     let (anchor, direction) = ring_gesture(*start, end, *attached, radius);
                     match placement(anchor, direction) {
                         Ok((doc, ids)) => {
-                            preview = doc;
+                            preview = Cow::Owned(doc);
                             ring_selection = Some(ids);
                         }
                         Err(reason) => rejection = Some(reason),
@@ -1674,8 +1675,8 @@ impl MoleculeCanvas<'_> {
             };
             match drawing.place(self.doc, anchor, direction, 10. / self.camera.zoom) {
                 Ok((doc, ids)) => {
-                    preview = doc;
-                    for b in &mut preview.bonds {
+                    preview = Cow::Owned(doc);
+                    for b in &mut preview.to_mut().bonds {
                         if self.doc.atom(b.a).is_none() || self.doc.atom(b.b).is_none() {
                             b.color = reshiki::palette::Color::Palette(
                                 reshiki::palette::Hue::Teal,
@@ -1753,7 +1754,7 @@ impl MoleculeCanvas<'_> {
                         },
                         true,
                     ));
-                    preview = document;
+                    preview = Cow::Owned(document);
                     // Tint only transient objects. Commit calls the same pure
                     // placement operation again and retains saved/JACS colors.
                     let existing: std::collections::HashSet<_> = self
@@ -1765,12 +1766,12 @@ impl MoleculeCanvas<'_> {
                         .collect();
                     use reshiki::palette::{Color as Paint, Hue, Row};
                     let tint = Paint::Palette(Hue::Teal, Row::Strong);
-                    for atom in &mut preview.atoms {
+                    for atom in &mut preview.to_mut().atoms {
                         if !existing.contains(&atom.id) {
                             atom.text_style.get_or_insert_with(Default::default).color = tint;
                         }
                     }
-                    for group in &mut preview.abbreviations {
+                    for group in &mut preview.to_mut().abbreviations {
                         if !existing.contains(&group.anchor)
                             && let Some(style) = &mut group.label_style
                         {
@@ -1778,12 +1779,12 @@ impl MoleculeCanvas<'_> {
                             group.label_color_override = true;
                         }
                     }
-                    for bond in &mut preview.bonds {
+                    for bond in &mut preview.to_mut().bonds {
                         if !existing.contains(&bond.a) || !existing.contains(&bond.b) {
                             bond.color = tint;
                         }
                     }
-                    for label in &mut preview.annotations {
+                    for label in &mut preview.to_mut().annotations {
                         if !existing.contains(&label.id) {
                             label.format.style.color = tint;
                             for span in &mut label.format.spans {
@@ -1791,7 +1792,7 @@ impl MoleculeCanvas<'_> {
                             }
                         }
                     }
-                    for graphic in &mut preview.graphics {
+                    for graphic in &mut preview.to_mut().graphics {
                         if !existing.contains(&graphic.id) {
                             graphic.style.stroke = tint;
                             if graphic.style.fill.is_some() {
@@ -1822,21 +1823,21 @@ impl MoleculeCanvas<'_> {
                 ring_selection = Some(ids.clone());
             } else if self.copies(state.modifiers) {
                 let part = state.scene.borrow_mut().copy(self.doc, ids);
-                ring_selection = Some(reshiki::editing::append(&mut preview, &part, delta));
+                ring_selection = Some(reshiki::editing::append(preview.to_mut(), &part, delta));
                 smart = guides;
             } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
                 // Moving every object cannot change their relative geometry,
                 // chemical labels, crossing gaps or ring attachment targets.
-                preview.translate(ids, delta.x, delta.y);
+                preview.to_mut().translate(ids, delta.x, delta.y);
                 ring_selection = Some(ids.clone());
                 translation = Some(delta);
             } else if let Some(snapped) =
-                reshiki::editing::snap_ring(&mut preview, ids, delta, 14.0 / self.camera.zoom)
+                reshiki::editing::snap_ring(preview.to_mut(), ids, delta, 14.0 / self.camera.zoom)
             {
                 // Fusing onto a ring wins over the guides, on release too.
                 ring_selection = Some(snapped);
             } else {
-                preview.translate(ids, delta.x, delta.y);
+                preview.to_mut().translate(ids, delta.x, delta.y);
                 ring_selection = Some(ids.clone());
                 smart = guides;
             }
@@ -1889,7 +1890,7 @@ impl MoleculeCanvas<'_> {
                 direction,
             ) {
                 Ok((doc, ids)) => {
-                    preview = doc;
+                    preview = Cow::Owned(doc);
                     ring_selection = Some(ids);
                 }
                 Err(reason) => rejection = Some(reason),
@@ -1946,7 +1947,7 @@ impl MoleculeCanvas<'_> {
                     reshiki::editing::add_bonded_atom(self.doc, *id, end, target, self.element)
                 };
                 if let Ok((drawing, added)) = result {
-                    preview = drawing;
+                    preview = Cow::Owned(drawing);
                     ring_selection = Some(vec![*id, added]);
                 }
             }
@@ -1990,13 +1991,13 @@ impl MoleculeCanvas<'_> {
                         if let Ok((drawing, added)) =
                             reshiki::projection::growth::place(self.doc, id, endpoint, "C", preset)
                         {
-                            preview = drawing;
+                            preview = Cow::Owned(drawing);
                             ring_selection = Some(vec![id, added]);
                         }
                     } else {
-                        let a = id.unwrap_or_else(|| preview.add_atom("C", origin));
-                        let z = target.unwrap_or_else(|| preview.add_atom("C", end));
-                        preset.place(&mut preview, a, z);
+                        let a = id.unwrap_or_else(|| preview.to_mut().add_atom("C", origin));
+                        let z = target.unwrap_or_else(|| preview.to_mut().add_atom("C", end));
+                        preset.place(preview.to_mut(), a, z);
                         ring_selection = Some(vec![a, z]);
                     }
                 } else {
@@ -2009,12 +2010,12 @@ impl MoleculeCanvas<'_> {
                 }
             }
         }
-        preview
-            .annotations
-            .retain(|a| Some(a.id) != self.hidden_annotation);
+        if let Some(id) = self.hidden_annotation {
+            preview.to_mut().annotations.retain(|a| a.id != id);
+        }
         let selected = ring_selection.as_deref().unwrap_or(self.selected);
         let cached_camera = (self.hidden_annotation.is_none()
-            && (translation.is_some() || preview == *self.doc))
+            && (translation.is_some() || *preview == *self.doc))
             .then(|| {
                 let delta = translation.unwrap_or_default();
                 Camera {
@@ -2023,15 +2024,11 @@ impl MoleculeCanvas<'_> {
                 }
             });
         if let Some(camera) = cached_camera {
-            let markers = state.scene.borrow_mut().markers(self.doc, selected);
+            let (markers, scene) = state.scene.borrow_mut().render(self.doc, selected);
             markers.draw(frame, camera, bounds, true);
-        } else {
-            markers::Markers::new(&preview, selected).draw(frame, self.camera, bounds, true);
-        }
-        if let Some(camera) = cached_camera {
-            let scene = state.scene.borrow_mut().primitives(self.doc);
             draw_primitives(frame, &scene, camera, bounds, 0.);
         } else {
+            markers::Markers::new(&preview, selected).draw(frame, self.camera, bounds, true);
             draw_document(frame, &preview, self.camera, bounds);
         }
         // Editing aids stay out of the shared scene used by figure/Office export.
@@ -2167,8 +2164,6 @@ impl MoleculeCanvas<'_> {
                     );
                 }
             }
-        }
-        if self.tool == Tool::EditPoints {
             for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
                 if graphic.kind == reshiki::graphics::GraphicKind::Arc {
                     for p in graphic.edit_points() {
@@ -3067,7 +3062,6 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
 pub struct PreviewState(std::cell::RefCell<Option<PreviewCache>>);
 struct PreviewCache {
     document: Document,
-    dark: bool,
     size: iced::Size,
     geometry: Vec<<Geometry as iced::advanced::graphics::cache::Cached>::Cache>,
 }
@@ -3085,7 +3079,6 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
         use iced::advanced::graphics::cache::Cached;
         let mut cache = state.0.borrow_mut();
         if let Some(cached) = cache.as_ref()
-            && cached.dark == self.0.canvas_theme.is_dark()
             && cached.size == bounds.size()
             && &cached.document == self.0
         {
@@ -3111,7 +3104,6 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
         let result = geometry.iter().map(Cached::load).collect();
         *cache = Some(PreviewCache {
             document: self.0.clone(),
-            dark: self.0.canvas_theme.is_dark(),
             size: bounds.size(),
             geometry,
         });

@@ -78,18 +78,21 @@ impl SceneCache {
         self.copy = None;
     }
 
-    pub fn primitives(&mut self, doc: &Document) -> Rc<[Primitive]> {
-        self.document(doc);
-        self.scene
-            .get_or_insert_with(|| scene::primitives(doc).into())
-            .clone()
-    }
-
-    pub fn markers(&mut self, doc: &Document, ids: &[u64]) -> Rc<super::markers::Markers> {
+    pub fn render(
+        &mut self,
+        doc: &Document,
+        ids: &[u64],
+    ) -> (Rc<super::markers::Markers>, Rc<[Primitive]>) {
         self.selected(doc, ids);
-        self.markers
+        let markers = self
+            .markers
             .get_or_insert_with(|| Rc::new(super::markers::Markers::new(doc, ids)))
-            .clone()
+            .clone();
+        let scene = self
+            .scene
+            .get_or_insert_with(|| scene::primitives(doc).into())
+            .clone();
+        (markers, scene)
     }
 
     pub fn selection(
@@ -126,14 +129,12 @@ mod tests {
     }
 
     fn check(cache: &mut SceneCache, doc: &Document, ids: &[u64]) {
+        let (markers, primitives) = cache.render(doc, ids);
         assert_eq!(
-            format!("{:?}", cache.primitives(doc)),
+            format!("{primitives:?}"),
             format!("{:?}", scene::primitives(doc)),
         );
-        assert_eq!(
-            *cache.markers(doc, ids),
-            super::super::markers::Markers::new(doc, ids)
-        );
+        assert_eq!(*markers, super::super::markers::Markers::new(doc, ids));
         for (zoom, x, width) in [(1., 0., 400.), (0.5, 150., 800.), (2., -20., 300.)] {
             let camera = Camera {
                 center: Point::new(x, -15.),
@@ -153,10 +154,10 @@ mod tests {
         let mut doc = drawing();
         let ids = doc.all_ids();
         check(&mut cache, &doc, &ids);
-        let first = cache.primitives(&doc);
-        let markers = cache.markers(&doc, &ids);
-        assert!(Rc::ptr_eq(&markers, &cache.markers(&doc, &ids)));
-        assert!(Rc::ptr_eq(&first, &cache.primitives(&doc)));
+        let first = cache.render(&doc, &ids).1;
+        let markers = cache.render(&doc, &ids).0;
+        assert!(Rc::ptr_eq(&markers, &cache.render(&doc, &ids).0));
+        assert!(Rc::ptr_eq(&first, &cache.render(&doc, &ids).1));
         // The UI may mutate the same document allocation without changing IDs.
         let before = doc.clone();
         doc.atoms[0].position.x -= 25.;
@@ -167,8 +168,8 @@ mod tests {
         let mut history = History::default();
         assert!(history.commit(before, &doc));
         check(&mut cache, &doc, &ids);
-        assert!(!Rc::ptr_eq(&first, &cache.primitives(&doc)));
-        assert!(!Rc::ptr_eq(&markers, &cache.markers(&doc, &ids)));
+        assert!(!Rc::ptr_eq(&first, &cache.render(&doc, &ids).1));
+        assert!(!Rc::ptr_eq(&markers, &cache.render(&doc, &ids).0));
         assert!(history.undo(&mut doc));
         check(&mut cache, &doc, &ids);
         assert!(history.redo(&mut doc));
@@ -178,7 +179,7 @@ mod tests {
         doc.atoms[0].element = "Cl".into();
         check(&mut cache, &doc, &ids);
         check(&mut cache, &Document::default(), &[]);
-        assert!(cache.primitives(&Document::default()).is_empty());
+        assert!(cache.render(&Document::default(), &[]).1.is_empty());
     }
 
     #[test]
@@ -186,11 +187,11 @@ mod tests {
         let doc = drawing();
         let ids = doc.all_ids();
         let mut cache = SceneCache::default();
-        let scene = cache.primitives(&doc);
+        let scene = cache.render(&doc, &ids).1;
         for selection in [&ids[..], &ids[..1], &ids[1..], &[][..], &ids[..]] {
             check(&mut cache, &doc, selection);
             assert_eq!(cache.whole_document(&doc, selection), selection == ids);
-            assert!(Rc::ptr_eq(&scene, &cache.primitives(&doc)));
+            assert!(Rc::ptr_eq(&scene, &cache.render(&doc, selection).1));
         }
         assert!(!cache.whole_document(&doc, &[ids[0], ids[0], 999]));
         assert!(!cache.whole_document(&Document::default(), &[]));

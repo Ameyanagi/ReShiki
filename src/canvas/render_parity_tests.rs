@@ -353,3 +353,167 @@ async fn renderer_matches_captured_baseline() {
         }
     }
 }
+
+#[tokio::test]
+#[ignore = "Text-placement baseline/candidate pixels; requires a renderer and artifact directory"]
+async fn text_placement_matches_captured_baseline() {
+    let directory = std::path::PathBuf::from(
+        std::env::var("RESHIKI_CANVAS_PIXELS")
+            .expect("Set RESHIKI_CANVAS_PIXELS to the baseline artifact directory"),
+    );
+    let capture = std::env::var("RESHIKI_CANVAS_CAPTURE_BASELINE").as_deref() == Ok("1");
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        backend.as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    let bounds = Rectangle::with_size(iced::Size::new(640., 400.));
+    let mut primitives = mixed_primitives();
+    for (index, family) in ["Arial", "Times New Roman", "Courier New"]
+        .into_iter()
+        .enumerate()
+    {
+        primitives.insert(
+            index * 2 + 1,
+            Primitive::Text {
+                position: World::new(
+                    79.123 + index as f32 * 91.317,
+                    61.731 + index as f32 * 66.193,
+                ),
+                text: "AV office fi α β 日本語 العربية 🧪\nSecond line".into(),
+                size: 17.317,
+                color: [127, 45, 190],
+                style: TextStyle {
+                    family: family.into(),
+                    bold: index == 0,
+                    italic: index == 1,
+                    underline: true,
+                    ..Default::default()
+                },
+            },
+        );
+    }
+    let _allocations = load_pictures(
+        &renderer,
+        primitives.iter().filter_map(|primitive| match primitive {
+            Primitive::Picture(graphic) => Some(graphic.clone()),
+            _ => None,
+        }),
+    );
+    let views = [
+        Camera {
+            center: World::new(320., 200.),
+            zoom: 1.,
+        },
+        Camera {
+            center: World::new(318.371, 198.619),
+            zoom: 0.455,
+        },
+        Camera {
+            center: World::new(306.127, 184.913),
+            zoom: 1.25,
+        },
+    ];
+    let metadata = serde_json::json!({
+        "renderer": renderer.name(), "width": 640, "height": 400,
+        "font": reshiki::style::ui_font_family(), "fixture": format!("{primitives:?}"),
+        "views": views.map(|camera| [camera.center.x, camera.center.y, camera.zoom]),
+    });
+    let metadata_path = directory.join("text_placement_metadata.json");
+    if capture {
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            &metadata_path,
+            serde_json::to_vec_pretty(&metadata).unwrap(),
+        )
+        .unwrap();
+    } else {
+        let expected: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&metadata_path).unwrap()).unwrap();
+        assert_eq!(
+            metadata, expected,
+            "Use the same renderer, fonts and fixtures"
+        );
+    }
+    for theme in CanvasTheme::ALL {
+        for rulers in [false, true] {
+            let paper = guides::Guides {
+                rulers,
+                ..Default::default()
+            }
+            .paper(bounds);
+            let offset = Vector::new(paper.x, paper.y);
+            for (index, camera) in views.into_iter().enumerate() {
+                let cache = std::cell::RefCell::new(text_cache::TextCache::default());
+                let mut render = |cached| {
+                    renderer.reset(bounds);
+                    let mut frame =
+                        layered::Frame::clipped(&renderer, paper, offset).with_canvas(theme);
+                    if cached {
+                        frame = frame.with_text_cache(&cache);
+                    }
+                    frame.fill_rectangle(Point::ORIGIN, paper.size(), Color::WHITE);
+                    draw_primitives(&mut frame, &primitives, camera, paper, 0.6);
+                    for geometry in frame.finish() {
+                        renderer.draw_geometry(geometry);
+                    }
+                    Headless::screenshot(&mut renderer, iced::Size::new(640, 400), 1., Color::WHITE)
+                };
+                let pixels = render(true);
+                assert_same_pixels("Text placement cold/warm", &pixels, &render(true));
+                assert_same_pixels("Text placement cached/fresh", &pixels, &render(false));
+                check_pixels(
+                    &directory,
+                    &format!("text_placement_{theme:?}_{rulers}_{index}"),
+                    &pixels,
+                    capture,
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "Preview cache theme/viewport pixels; requires a headless renderer"]
+async fn drawing_preview_matches_fresh_theme_and_size() {
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        backend.as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    let mut doc = routing_document();
+    let _allocations = load_pictures(&renderer, doc.graphics.iter().cloned());
+    let state = PreviewState::default();
+    for theme in CanvasTheme::ALL {
+        doc.canvas_theme = theme;
+        for size in [iced::Size::new(640., 400.), iced::Size::new(596.5, 361.25)] {
+            let bounds = Rectangle::with_size(size);
+            let mut render = |state| {
+                renderer.reset(bounds);
+                for geometry in DrawingPreview(&doc).draw(
+                    state,
+                    &renderer,
+                    &Theme::Light,
+                    bounds,
+                    mouse::Cursor::Unavailable,
+                ) {
+                    renderer.draw_geometry(geometry);
+                }
+                Headless::screenshot(&mut renderer, iced::Size::new(640, 400), 1., Color::WHITE)
+            };
+            let pixels = render(&state);
+            assert_same_pixels("Preview cold/warm", &pixels, &render(&state));
+            assert_same_pixels(
+                "Preview warmed/fresh theme and viewport",
+                &pixels,
+                &render(&PreviewState::default()),
+            );
+        }
+    }
+}
