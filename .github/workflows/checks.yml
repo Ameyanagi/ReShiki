@@ -148,6 +148,11 @@ jobs:
       - name: Check the native application without reference dependencies
         run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
       - run: cargo check --workspace --all-targets --locked --no-default-features
+      - name: Test rendered numeric-field focus on Windows
+        if: runner.os == 'Windows'
+        # The Windows renderer includes Tiny Skia when WGPU is unavailable.
+        # This checks widget layout/input; it is not native desktop acceptance.
+        run: cargo test --locked --no-default-features --bin reshiki app::numeric_transforms::focus::tests::handle_shortcut_focuses_selects_and_reveals_the_field_in_both_window_sizes -- --exact --ignored
       - run: cargo test --workspace --locked --no-default-features
       - name: Install fixture reader dependencies
         run: uv sync --locked
