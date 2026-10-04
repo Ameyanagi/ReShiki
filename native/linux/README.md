@@ -76,3 +76,45 @@ app-exit lifetime. Run this on GNOME and another Wayland compositor; Xvfb and
 unit tests do not establish those GUI results. Tests also cover command-owner
 lifetime, registry replacement, cancelled requests, memory limits, short binary
 reads/writes, zero writes, interrupted calls and partial-read expiry.
+
+### Disposable GNOME and Sway integration
+
+The `Wayland clipboard` workflow runs the actual application under GNOME Shell
+46/Mutter 46 and Sway on Ubuntu 24.04. GNOME uses its nested Wayland compositor
+inside a private Xvfb server; Sway uses a headless output. Clients have `DISPLAY`
+unset and Xwayland is disabled. A new D-Bus session and isolated runtime/config/
+data directories keep these checks separate from any existing desktop.
+
+```sh
+cargo build --locked --no-default-features --features wayland-qa --bin reshiki
+bash scripts/wayland_clipboard_qa.sh gnome target/debug/reshiki artifacts/wayland-qa/gnome
+bash scripts/wayland_clipboard_qa.sh sway target/debug/reshiki artifacts/wayland-qa/sway
+```
+
+The script requires a new output directory and the workflow's compositor, GTK4,
+input and Mesa packages. It sends real compositor keyboard events for Copy,
+Cut, Copy Image, Paste, Save and Undo. A separate focused GTK window reads exact
+native JSON/PNG/SVG bytes and publishes foreign clipboard items on a real F12
+event. Saved native drawings verify deletion, restoration and editable paste.
+
+The default-off `wayland-qa` feature observes normal App updates and offers two
+one-shot scheduling delays in the existing owner worker: before write submission
+and after the focused data device receives the actual generation marker, before
+delivery to the caller. No hook supplies an acknowledgement, serial or MIME.
+The GUI remains responsive; Save while the receipt is held proves Cut has not
+deleted the selection. Cancellation drops the real request; focus loss before
+submission and cancellation/replacement after publication retain the correct
+source or foreign owner. A six-second watchdog bounds a lost test controller;
+the normal five-second request deadline is neither extended nor frozen.
+
+Artifacts retain protocol traces with nonzero input serials, real receipt
+markers, package versions, executable SHA-256, independent payload hashes and
+saved drawings. Default/release builds do not enable `wayland-qa`.
+
+App-exit checks create a fresh receiver to avoid a previous consumer's cache.
+Sway without a clipboard manager loses the selection. Mutter's built-in manager
+can preserve one preferred standard image/text MIME, so GNOME checks its exact
+surviving bytes separately from the unavailable private drawing/receipt MIME.
+These tests establish the standard Wayland path and the tested compositor's
+manager behavior; third-party clipboard-manager extensions retain their own
+desktop-specific persistence policy.
