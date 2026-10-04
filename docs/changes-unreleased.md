@@ -49,6 +49,10 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   [Evidence](changes/issue-work-2026-10-02.md#interchange-and-nonvisual-evidence)
   · [Issue #56](https://github.com/Ameyanagi/ReShiki/issues/56) · @Ameyanagi.
 
+- **Under review — Picture and export memory:** Compact stored PNG buffers and reuse owned reflection and export rasters while preserving exact drawing output; measured import latency tradeoffs are documented.
+  [Validation and limits](changes/image-export-memory-2026-10-04.md)
+  · [PR #138](https://github.com/Ameyanagi/ReShiki/pull/138) · @Ameyanagi.
+
 - **Under review — Variable-font export weights:** normal and bold labels keep
   their requested weight in SVG rendering and selectable-text PDFs.
   [Matched before/after](changes/issue-work-2026-10-02.md#variable-font-weight-103)
