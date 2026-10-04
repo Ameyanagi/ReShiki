@@ -10,10 +10,11 @@ use objc2_app_kit::{
 };
 use objc2_core_graphics::CGContext;
 use objc2_foundation::{
-    MainThreadMarker, NSDictionary, NSNumber, NSPoint, NSRange, NSRect, NSSize, NSString, NSURL,
+    MainThreadMarker, NSNumber, NSPoint, NSRange, NSRect, NSSize, NSString, NSURL,
 };
 use objc2_pdf_kit::{PDFDisplayBox, PDFDocument, PDFPage};
 use serde::{Deserialize, Serialize};
+use std::io::Read;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -122,6 +123,14 @@ impl PublicationPrintView {
     }
 }
 
+fn has_pdf_header(reader: impl Read) -> std::io::Result<bool> {
+    // Permit a header starting anywhere in the first 1024 bytes, including
+    // a marker that straddles that boundary, without reading the whole file.
+    let mut prefix = Vec::with_capacity(1028);
+    reader.take(1028).read_to_end(&mut prefix)?;
+    Ok(prefix.windows(5).any(|bytes| bytes == b"%PDF-"))
+}
+
 pub(crate) fn load_snapshot(
     request: &Request,
     _main: MainThreadMarker,
@@ -132,6 +141,13 @@ pub(crate) fn load_snapshot(
     let metadata =
         std::fs::metadata(&request.path).map_err(|_| "Could not read the print snapshot")?;
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > 128 * 1024 * 1024 {
+        return Err("Could not read the print snapshot".into());
+    }
+    // Obvious non-PDF input does not need to initialize PDFKit. Files with a
+    // header still pass through its existing document and page validation.
+    let file =
+        std::fs::File::open(&request.path).map_err(|_| "Could not read the print snapshot")?;
+    if !has_pdf_header(file).map_err(|_| "Could not read the print snapshot")? {
         return Err("Could not read the print snapshot".into());
     }
     let url = NSURL::fileURLWithPath(&NSString::from_str(&request.path));
@@ -189,9 +205,7 @@ pub(crate) fn print_operation(
 ) -> Retained<NSPrintOperation> {
     let size = snapshot.page_size;
     let count = snapshot.pages.len();
-    // SAFETY: An empty dictionary contains no incorrectly typed attributes.
-    let info =
-        unsafe { NSPrintInfo::initWithDictionary(NSPrintInfo::alloc(), &NSDictionary::new()) };
+    let info = NSPrintInfo::new();
     info.setOrientation(NSPaperOrientation::Portrait);
     info.setPaperSize(NSSize::new(
         size.width.min(size.height),
@@ -266,4 +280,26 @@ pub fn execute(input: &[u8]) -> Result<Vec<u8>, String> {
         completed: operation.runOperation(),
     })
     .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn snapshot_header_preflight_is_bounded_and_accepts_a_leading_prefix() -> std::io::Result<()> {
+        use super::has_pdf_header;
+        use std::io::Cursor;
+
+        for offset in [0, 16, 1023, 1024] {
+            let mut bytes = vec![b' '; offset];
+            bytes.extend_from_slice(b"%PDF-1.7\n");
+            bytes.extend_from_slice(&[0; 4096]);
+            let mut reader = Cursor::new(bytes);
+            assert_eq!(has_pdf_header(&mut reader)?, offset < 1024);
+            assert_eq!(reader.position(), 1028, "only the bounded prefix is read");
+        }
+        for bytes in [b"This is not a PDF".as_slice(), b"%PDF", b""] {
+            assert!(!has_pdf_header(bytes)?);
+        }
+        Ok(())
+    }
 }
