@@ -144,6 +144,107 @@ fn explicit_roles_coefficients_agents_and_annotations_override_geometry() {
 }
 
 #[test]
+fn unassigned_arrow_rejects_other_reaction_members_even_when_roles_would_match() {
+    for reversed in [false, true] {
+        let (mut doc, left, right) = horizontal();
+        let explicit_arrow = doc.arrows[0].id;
+        assign(&mut doc, explicit_arrow, &left, Role::Reactant).unwrap();
+        assign(&mut doc, explicit_arrow, &right, Role::Product).unwrap();
+        let unassigned = doc.add_atom("N", Point::new(150., -100.));
+        let mut arrow = doc.arrows[0].clone();
+        arrow.id = doc.next_id();
+        if reversed {
+            std::mem::swap(&mut arrow.start, &mut arrow.end);
+        }
+        let copied_arrow = arrow.id;
+        doc.arrows.push(arrow);
+        doc.validate().unwrap();
+        let before = doc.clone();
+        let ids: Vec<_> = left
+            .iter()
+            .copied()
+            .chain([unassigned, copied_arrow])
+            .collect();
+        let snapshot = editing::selection(&doc, &ids);
+        let snapshot_before = snapshot.clone();
+        assert!(snapshot.reactions.is_empty());
+        assert_eq!(
+            copy_reaction(&doc, &snapshot),
+            Err(
+                "Copied molecules have roles on another arrow; select that complete reaction or unassigned molecules."
+            )
+        );
+        assert_eq!(doc, before);
+        assert_eq!(snapshot, snapshot_before);
+        // The existing no-arrow policy still permits one complete participant.
+        assert_eq!(
+            copy_reaction(&doc, &editing::selection(&doc, &left)),
+            Ok(None)
+        );
+    }
+}
+
+#[test]
+fn matching_explicit_arrow_wins_over_other_arrows_membership_and_geometry() {
+    let (mut doc, left, right) = horizontal();
+    let arrow = doc.arrows[0].id;
+    assign(&mut doc, arrow, &right, Role::Reactant).unwrap();
+    assign(&mut doc, arrow, &left, Role::Product).unwrap();
+    let mut other = doc.arrows[0].clone();
+    other.id = doc.next_id();
+    let other_arrow = other.id;
+    doc.arrows.push(other);
+    assign(&mut doc, other_arrow, &left, Role::Reactant).unwrap();
+    assign(&mut doc, other_arrow, &right, Role::Product).unwrap();
+    doc.validate().unwrap();
+    let before = doc.clone();
+    let ids: Vec<_> = left.iter().chain(&right).copied().chain([arrow]).collect();
+    let snapshot = editing::selection(&doc, &ids);
+    let snapshot_before = snapshot.clone();
+    assert_eq!(
+        copy_reaction(&doc, &snapshot),
+        Ok(Some(doc.reactions[0].clone()))
+    );
+    assert_eq!(doc, before);
+    assert_eq!(snapshot, snapshot_before);
+}
+
+#[test]
+fn independent_unassigned_arrow_still_infers_beside_an_explicit_reaction() {
+    let (mut doc, left, right) = horizontal();
+    let explicit_arrow = doc.arrows[0].id;
+    assign(&mut doc, explicit_arrow, &left, Role::Reactant).unwrap();
+    assign(&mut doc, explicit_arrow, &right, Role::Product).unwrap();
+    let reactant = doc.add_atom("N", Point::new(-50., 160.));
+    let product = doc.add_atom("O", Point::new(150., 160.));
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(0., 160.),
+        Point::new(100., 160.),
+        Default::default(),
+        Default::default(),
+    ));
+    doc.validate().unwrap();
+    let before = doc.clone();
+    let snapshot = editing::selection(&doc, &[reactant, product, arrow]);
+    let snapshot_before = snapshot.clone();
+    assert!(snapshot.reactions.is_empty());
+    let mut expected = Reaction::new(arrow);
+    expected.reactants.push(Participant {
+        atoms: vec![reactant],
+        coefficient: 1,
+    });
+    expected.products.push(Participant {
+        atoms: vec![product],
+        coefficient: 1,
+    });
+    assert_eq!(copy_reaction(&doc, &snapshot), Ok(Some(expected)));
+    assert_eq!(doc, before);
+    assert_eq!(snapshot, snapshot_before);
+}
+
+#[test]
 fn pruned_partial_explicit_roles_never_trigger_geometric_inference() {
     let (mut doc, left, right) = horizontal();
     let arrow = doc.arrows[0].id;

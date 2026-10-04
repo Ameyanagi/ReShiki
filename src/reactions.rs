@@ -228,6 +228,16 @@ pub fn copy_reaction(
     if length_squared == 0. {
         return Err("The reaction arrow needs distinct start and end points.");
     }
+    if source.reactions.iter().any(|reaction| {
+        Role::ALL
+            .into_iter()
+            .flat_map(|role| reaction.participants(role))
+            .any(|participant| participant.atoms.iter().any(|id| atoms.contains_key(id)))
+    }) {
+        return Err(
+            "Copied molecules have roles on another arrow; select that complete reaction or unassigned molecules.",
+        );
+    }
     let (mx, my) = (
         (f64::from(arrow.start.x) + f64::from(arrow.end.x)) * 0.5,
         (f64::from(arrow.start.y) + f64::from(arrow.end.y)) * 0.5,
