@@ -81,3 +81,35 @@ Native Microsoft Word on macOS after companion fix 6ca2ec2 (public aggregate 9a5
 ![Native Word task pane for PR #127](pr127-word-connected-macos-6ca2ec2.jpg)
 
 SHA-256: `77bd3732c8d043fb8ba1d1d4e6fd93c8bcdb9a76983c43e1dfe3ffae53dad382`
+
+## PR #127: pr127-powerpoint-reopened-macos-6ca2ec2
+
+Native PowerPoint 16.113.3 on macOS, Office source 6ca2ec2 and ReShiki package cc17b7a. PowerPoint for Mac: the saved test deck reopened with drawing A and the ReShiki task pane connected. Baseline host UI before native edit; drawing B is on slide 2. Does not by itself prove native payload or ACK. The saved-package inspection remains REVIEW_REQUIRED; these images do not establish the full Office acceptance matrix.
+
+![Native PowerPoint edit session for PR #127](pr127-powerpoint-reopened-macos-6ca2ec2.jpg)
+
+SHA-256: `62e167907e93e2a32677fb5f382bb73723ac13fdd2d51dc213eaa48873213809`
+
+## PR #127: pr127-powerpoint-ack-confirmed-macos-6ca2ec2
+
+Native PowerPoint 16.113.3 on macOS, Office source 6ca2ec2 and ReShiki package cc17b7a. PowerPoint edit session: ReShiki shows the rotated drawing with a clean tab and “Drawing updated in Office” after the actual host acknowledged the save. Original native UI capture tied to PowerPoint session 173c4489-73c2-48e9-8e0f-64dd093eee14 by the sealed receipt. Host save/reopen and B checks are separate recorded evidence. The saved-package inspection remains REVIEW_REQUIRED; these images do not establish the full Office acceptance matrix.
+
+![Native PowerPoint edit session for PR #127](pr127-powerpoint-ack-confirmed-macos-6ca2ec2.jpg)
+
+SHA-256: `8c77da0926b08f9b49eb169ad052f62b1fef0b957bf73a80d2d4cfc68f4a7346`
+
+## PR #127: pr127-excel-reopened-macos-6ca2ec2
+
+Native Excel 16.113.3 on macOS, Office source 6ca2ec2 and ReShiki package cc17b7a. Excel for Mac: the saved test workbook reopened on Sheet1 with drawing A and the ReShiki task pane connected. Baseline host UI before native edit; drawing B is on Sheet2. Does not by itself prove native payload or ACK. The saved-package inspection remains REVIEW_REQUIRED; these images do not establish the full Office acceptance matrix.
+
+![Native Excel edit session for PR #127](pr127-excel-reopened-macos-6ca2ec2.jpg)
+
+SHA-256: `e6e37176bbf42081b2c5826f06233e1b81bff89e356424515f299490f8e5bc6c`
+
+## PR #127: pr127-excel-ack-confirmed-macos-6ca2ec2
+
+Native Excel 16.113.3 on macOS, Office source 6ca2ec2 and ReShiki package cc17b7a. Excel edit session: ReShiki shows the rotated drawing with a clean tab and “Drawing updated in Office” after the actual host acknowledged the save. Original native UI capture tied to Excel session 7c6c0365-193d-41bd-8818-bccc67830d8c by the sealed receipt. Host save/reopen and B checks are separate recorded evidence. The saved-package inspection remains REVIEW_REQUIRED; these images do not establish the full Office acceptance matrix.
+
+![Native Excel edit session for PR #127](pr127-excel-ack-confirmed-macos-6ca2ec2.jpg)
+
+SHA-256: `c1ac7cd1b29460c3c91bd69c6e044b995e6076730fdd2cd54b730ef8ac344cb2`
