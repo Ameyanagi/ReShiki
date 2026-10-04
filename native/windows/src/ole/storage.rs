@@ -98,6 +98,32 @@ pub(super) fn global(bytes: &[u8]) -> CResult<STGMEDIUM> {
     std::mem::forget(memory);
     Ok(result)
 }
+
+const OBJECT_DESCRIPTOR_HEADER_SIZE: usize = 52;
+// The clipboard header uses the Win32 field layout on both x64 and ARM64.
+const _: [(); OBJECT_DESCRIPTOR_HEADER_SIZE] = [(); std::mem::size_of::<OBJECTDESCRIPTOR>()];
+const _: [(); 16] = [(); std::mem::size_of::<GUID>()];
+
+fn descriptor_header_bytes(descriptor: &OBJECTDESCRIPTOR) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(OBJECT_DESCRIPTOR_HEADER_SIZE);
+    bytes.extend_from_slice(&descriptor.cbSize.to_le_bytes());
+    // COM GUIDs store the first three integer fields in little-endian order,
+    // followed by data4 unchanged; neither whole-u128 byte order matches this.
+    bytes.extend_from_slice(&descriptor.clsid.data1.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.clsid.data2.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.clsid.data3.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.clsid.data4);
+    bytes.extend_from_slice(&descriptor.dwDrawAspect.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.sizel.cx.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.sizel.cy.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.pointl.x.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.pointl.y.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.dwStatus.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.dwFullUserTypeName.to_le_bytes());
+    bytes.extend_from_slice(&descriptor.dwSrcOfCopy.to_le_bytes());
+    bytes
+}
+
 fn write_stream(storage: &IStorage, name: PCWSTR, bytes: &[u8]) -> CResult<()> {
     unsafe {
         let stream = storage.CreateStream(
@@ -316,7 +342,7 @@ impl Drawing {
     }
     pub fn descriptor(&self) -> CResult<STGMEDIUM> {
         let label: Vec<_> = "ReShiki drawing".encode_utf16().chain(Some(0)).collect();
-        let header_size = std::mem::size_of::<OBJECTDESCRIPTOR>();
+        let header_size = OBJECT_DESCRIPTOR_HEADER_SIZE;
         let descriptor = OBJECTDESCRIPTOR {
             cbSize: (header_size + label.len() * 2) as u32,
             clsid: CLSID,
@@ -327,14 +353,7 @@ impl Drawing {
             dwFullUserTypeName: header_size as u32,
             dwSrcOfCopy: 0,
         };
-        // OBJECTDESCRIPTOR is a POD Win32 structure, initialized in full.
-        let mut bytes = unsafe {
-            std::slice::from_raw_parts(
-                (&descriptor as *const OBJECTDESCRIPTOR).cast::<u8>(),
-                header_size,
-            )
-        }
-        .to_vec();
+        let mut bytes = descriptor_header_bytes(&descriptor);
         bytes.extend(label.into_iter().flat_map(u16::to_le_bytes));
         global(&bytes)
     }
@@ -343,6 +362,131 @@ impl Drawing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::mem::{align_of, offset_of, size_of};
+    use windows::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
+
+    #[test]
+    fn object_descriptor_header_matches_windows_abi() {
+        assert_eq!(size_of::<OBJECTDESCRIPTOR>(), 52);
+        assert_eq!(align_of::<OBJECTDESCRIPTOR>(), 4);
+        assert_eq!(
+            [
+                offset_of!(OBJECTDESCRIPTOR, cbSize),
+                offset_of!(OBJECTDESCRIPTOR, clsid),
+                offset_of!(OBJECTDESCRIPTOR, dwDrawAspect),
+                offset_of!(OBJECTDESCRIPTOR, sizel),
+                offset_of!(OBJECTDESCRIPTOR, pointl),
+                offset_of!(OBJECTDESCRIPTOR, dwStatus),
+                offset_of!(OBJECTDESCRIPTOR, dwFullUserTypeName),
+                offset_of!(OBJECTDESCRIPTOR, dwSrcOfCopy),
+            ],
+            [0, 4, 20, 24, 32, 40, 44, 48]
+        );
+        assert_eq!(size_of::<GUID>(), 16);
+        assert_eq!(align_of::<GUID>(), 4);
+        assert_eq!(
+            [
+                offset_of!(GUID, data1),
+                offset_of!(GUID, data2),
+                offset_of!(GUID, data3),
+                offset_of!(GUID, data4),
+            ],
+            [0, 4, 6, 8]
+        );
+        assert_eq!((size_of::<SIZE>(), align_of::<SIZE>()), (8, 4));
+        assert_eq!((offset_of!(SIZE, cx), offset_of!(SIZE, cy)), (0, 4));
+        assert_eq!((size_of::<POINTL>(), align_of::<POINTL>()), (8, 4));
+        assert_eq!((offset_of!(POINTL, x), offset_of!(POINTL, y)), (0, 4));
+    }
+
+    #[test]
+    fn object_descriptor_header_preserves_field_order_and_signed_values() {
+        // Distinct field bytes expose swaps and omissions independently of the
+        // production metadata; signed geometry must retain its exact bit pattern.
+        let descriptor = OBJECTDESCRIPTOR {
+            cbSize: 0x04030201,
+            clsid: GUID::from_values(0x08070605, 0x0a09, 0x0c0b, [13, 14, 15, 16, 17, 18, 19, 20]),
+            dwDrawAspect: 0x18171615,
+            sizel: SIZE {
+                cx: i32::MIN,
+                cy: -1,
+            },
+            pointl: POINTL { x: -2, y: i32::MAX },
+            dwStatus: 0x2c2b2a29,
+            dwFullUserTypeName: 0x302f2e2d,
+            dwSrcOfCopy: 0x34333231,
+        };
+        let expected: [u8; 52] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            0, 0, 0, 128, 255, 255, 255, 255, 254, 255, 255, 255, 255, 255, 255, 127, 41, 42, 43,
+            44, 45, 46, 47, 48, 49, 50, 51, 52,
+        ];
+        assert_eq!(descriptor_header_bytes(&descriptor), expected);
+    }
+
+    #[test]
+    fn object_descriptor_getdata_returns_expected_clipboard_bytes() {
+        let _apartment = Apartment::new().unwrap();
+        let data: IDataObject = super::super::object::ClipboardObject {
+            drawing: Drawing {
+                extent: SIZE { cx: 2540, cy: 1270 },
+                ..Drawing::default()
+            },
+            formats: BTreeMap::new(),
+        }
+        .into();
+        let id = clipboard::format("Object Descriptor").unwrap();
+        let format = format_etc(id, TYMED_HGLOBAL);
+        // SAFETY: The local IDataObject and complete FORMATETC remain live on
+        // this STA. GetData transfers the returned medium to our release guard.
+        assert_eq!(unsafe { data.QueryGetData(&format) }, S_OK);
+        let medium = Medium(unsafe { data.GetData(&format) }.unwrap());
+        assert_eq!(medium.0.tymed, TYMED_HGLOBAL.0 as u32);
+        assert!(medium.0.pUnkForRelease.is_none());
+
+        // Independent wire fixture: 52-byte header, our COM GUID, 25.4 × 12.7 mm
+        // extent, and 16 UTF-16LE code units including the label's terminal NUL.
+        let expected: [u8; 84] = [
+            0x54, 0, 0, 0, 0x7e, 0x2b, 0xac, 0x3b, 0xa2, 0x73, 0x3a, 0x4f, 0x9c, 0xe7, 0x5e, 0x9b,
+            0x43, 0x8c, 0x59, 0xb4, 1, 0, 0, 0, 0xec, 9, 0, 0, 0xf6, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0x10, 0, 0, 0, 0x34, 0, 0, 0, 0, 0, 0, 0, b'R', 0, b'e', 0, b'S', 0, b'h', 0, b'i',
+            0, b'k', 0, b'i', 0, b' ', 0, b'd', 0, b'r', 0, b'a', 0, b'w', 0, b'i', 0, b'n', 0,
+            b'g', 0, 0, 0,
+        ];
+        let bytes = {
+            struct Unlock(HGLOBAL);
+            impl Drop for Unlock {
+                fn drop(&mut self) {
+                    // SAFETY: This guard owns one successful lock and drops
+                    // before the surrounding Medium releases the allocation.
+                    unsafe {
+                        let _ = GlobalUnlock(self.0);
+                    }
+                }
+            }
+
+            // SAFETY: The checked medium tag selects hGlobal. Medium retains
+            // ownership until after this block has copied and unlocked its data.
+            let memory = unsafe { medium.0.u.hGlobal };
+            // GlobalSize may include allocation rounding beyond cbSize.
+            assert!(unsafe { GlobalSize(memory) } >= expected.len());
+            // SAFETY: memory is the live allocation owned by Medium.
+            let pointer = unsafe { GlobalLock(memory) };
+            assert!(!pointer.is_null());
+            let _unlock = Unlock(memory);
+            // SAFETY: The allocation is locked, and GlobalSize bounds this
+            // byte range. Copying finishes before the lock and owner drop.
+            unsafe { std::slice::from_raw_parts(pointer.cast::<u8>(), expected.len()) }.to_vec()
+        };
+        assert_eq!(bytes, expected);
+        // SAFETY: The same live object and valid structure are used on this STA;
+        // the unsupported medium must be rejected before allocating any output.
+        assert_eq!(
+            unsafe { data.QueryGetData(&format_etc(id, TYMED_ISTORAGE)) },
+            DV_E_FORMATETC
+        );
+    }
+
     #[test]
     fn compound_storage_retains_drawing_and_offline_presentation() {
         let _apartment = Apartment::new().unwrap();
