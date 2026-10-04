@@ -205,6 +205,16 @@ export function fakeOffice(host, { contentControlIds = [] } = {}) {
               true,
             );
           },
+          delete() {
+            enqueue(
+              "part.delete",
+              () => {
+                const index = parts.indexOf(data);
+                if (index !== -1) parts.splice(index, 1);
+              },
+              true,
+            );
+          },
         });
       return {
         getByNamespace(namespace) {
@@ -399,13 +409,16 @@ export function fakeOffice(host, { contentControlIds = [] } = {}) {
     if (host === "Word") {
       context.document = {
         customXmlParts: xmlParts(state.parts),
-        contentControls: {
-          getByIdOrNullObject(id) {
-            return controlProxy(
-              state.objects.find((item) => live(item) && item.id === id) || { ...nullObject },
-            );
+        contentControls: Object.assign(
+          collection(() => state.objects, controlProxy, "controls"),
+          {
+            getByIdOrNullObject(id) {
+              return controlProxy(
+                state.objects.find((item) => live(item) && item.id === id) || { ...nullObject },
+              );
+            },
           },
-        },
+        ),
         getSelection() {
           return {
             contentControls: collection(() => [], controlProxy, "selection.controls"),
