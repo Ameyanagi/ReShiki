@@ -25,7 +25,8 @@
     "Immutable per-source MIME buffers and bounded nonblocking transfers",
     "No ext/wlr data-control protocol",
     "Omit upstream example-only target/dev-dependencies so fork unit tests run from the locked parent workspace without adding Wayland targets to every platform's workspace checks; original example and manifest retained",
-    "Rust 1.88 minimum for edition-2024 let chains; exact existing futures-channel/rustix versions; upstream foreign-display lifetime boundary retained"
+    "Rust 1.88 minimum for edition-2024 let chains; exact existing futures-channel/rustix versions; upstream foreign-display lifetime boundary retained",
+    "Default-off wayland-qa one-shot scheduling delays before write submission and after a real generation-matched compositor receipt; no injected result, serial or MIME; watchdog bounds test shutdown while the production five-second deadline continues"
   ],
   "local_rust_version": "1.88.0"
 }
