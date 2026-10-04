@@ -2,6 +2,12 @@
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
+- **Under review — Shared import and rendering logic:** share palette parsing,
+  clipboard encoding, reference checkout setup and caption controls; borrow
+  canvas primitives and batch Arrange bounds while preserving existing output.
+  [Validation and local measurements](changes/refactor-shared-core-2026-10-04.md)
+  · [PR #130](https://github.com/Ameyanagi/ReShiki/pull/130) · @Ameyanagi.
+
 - **Shared graphic, export, Office and release logic:** consolidate graphic-style
   controls, SVG parsing, Office revision guards and release checksum generation
   while preserving the existing controls, output settings and error messages.
