@@ -2,6 +2,14 @@
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
+- **Under review — Office and LibreOffice payload handling:** reuse drawing
+  bytes and stored XML lengths while preserving document data, validation and
+  recovery behavior. Office regressions and Linux headless Writer/Calc/Impress
+  reopen, reload and Save As checks passed; desktop and cross-platform
+  acceptance remains separate.
+  [Validation and limits](changes/office-payload-copies-2026-10-04.md)
+  · [PR #134](https://github.com/Ameyanagi/ReShiki/pull/134) · @Ameyanagi.
+
 - **Under review — Shared release checks and descriptor preparation:** share
   native target definitions, checksum writing and descriptor query operations
   while preserving supported platforms, checksums and generated chemistry data.
