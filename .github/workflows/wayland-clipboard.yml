@@ -1,0 +1,81 @@
+name: Wayland clipboard
+on:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "src/**"
+      - "crates/**"
+      - "native/linux/**"
+      - "vendor/smithay-clipboard/**"
+      - "vendor/iced/**"
+      - "tests/fixtures/ui-ethanol.reshiki"
+      - "scripts/wayland_clipboard_qa.sh"
+      - ".github/workflows/wayland-clipboard.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "src/**"
+      - "crates/**"
+      - "native/linux/**"
+      - "vendor/smithay-clipboard/**"
+      - "vendor/iced/**"
+      - "tests/fixtures/ui-ethanol.reshiki"
+      - "scripts/wayland_clipboard_qa.sh"
+      - ".github/workflows/wayland-clipboard.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wayland-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  clipboard:
+    name: Real ${{ matrix.compositor }} Wayland clipboard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        compositor: [gnome, sway]
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install private compositor, software renderer and independent receiver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gnome-shell sway wtype xdotool xvfb xauth dbus-x11 \
+            python3-gi gir1.2-gtk-4.0 mesa-vulkan-drivers fonts-dejavu-core \
+            libegl1-mesa-dev libwayland-dev libxkbcommon-dev libfontconfig1-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libx11-xcb-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libudev-dev pkg-config
+      - run: rustup toolchain install 1.99.0 --profile minimal && rustup default 1.99.0
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        with:
+          shared-key: wayland-qa
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.3"
+          python-version: "3.12"
+      - name: Check the compositor harness
+        run: |
+          uv run --locked ruff check native/linux/tests/gtk_receiver.py native/linux/tests/wayland_session.py
+          uv run --locked ruff format --check native/linux/tests/gtk_receiver.py native/linux/tests/wayland_session.py
+          bash -n scripts/wayland_clipboard_qa.sh
+          cargo tree --locked --no-default-features -e features | /usr/bin/python3 -c 'import sys; assert "wayland-qa" not in sys.stdin.read()'
+      - name: Build the GUI with default-off compositor observation and delay hooks
+        run: cargo build --locked --no-default-features --features wayland-qa --bin reshiki
+      - name: Exercise real input, clipboard transfer, cancellation and owner exit
+        run: bash scripts/wayland_clipboard_qa.sh ${{ matrix.compositor }} target/debug/reshiki artifacts/wayland-qa/${{ matrix.compositor }}
+      - name: Retain protocol traces, MIME bytes, saved drawings and package provenance
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wayland-${{ matrix.compositor }}
+          path: artifacts/wayland-qa/${{ matrix.compositor }}/
+          if-no-files-found: error
