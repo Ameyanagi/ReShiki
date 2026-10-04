@@ -75,6 +75,13 @@ commit hooks passed formatting, linting, type checks, Clippy and all-target,
 all-feature compilation.
 
 Run ordinary Rust regressions with `cargo test --locked --no-default-features`.
+The palette refactor changed the worker source fingerprint. The existing
+[three-platform capture workflow](https://github.com/Ameyanagi/ReShiki/actions/runs/37198080707)
+refreshed fixture provenance only after requiring unchanged responses. Each
+platform's 13,425 decompressed request/response records remain byte-identical;
+all 28 current source fingerprints were verified before adopting the captures.
+The strict source and record checksum guards remain unchanged.
+
 The regular Arrange output regression runs on a fresh checkout without captured
 artifacts, fonts or a GPU. It checks all eight actions against explicit rectangle
 coordinates, reversed tie order, nested groups, duplicate/dangling selections,
