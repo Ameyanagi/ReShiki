@@ -3,8 +3,9 @@
 import "./xml-dom.js";
 import { wordPictureXml } from "./word-xml.js";
 
-export function fakeOffice(host) {
+export function fakeOffice(host, { contentControlIds = [] } = {}) {
   let serial = 0;
+  const wordIds = [...contentControlIds];
   const state = {
     host,
     objects: [],
@@ -19,7 +20,10 @@ export function fakeOffice(host) {
     failures: [],
     containerId: "container-1",
   };
-  const nextId = () => (host === "Word" ? ++serial : `shape-${++serial}`);
+  const nextId = () => {
+    const generated = ++serial;
+    return host === "Word" ? (wordIds.shift() ?? generated) : `shape-${generated}`;
+  };
   const nullObject = { isNullObject: true };
   const live = (item) => item && !item.deleted;
   const shapeDefaults = () => ({

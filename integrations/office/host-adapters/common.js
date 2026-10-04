@@ -51,7 +51,9 @@ export function owner(host, identity) {
   for (const key of keys) {
     const value = identity[key];
     if (key === "contentControlId") {
-      if (!Number.isSafeInteger(value) || value < 0)
+      // OOXML content-control IDs include signed 32-bit values. Keep the host's
+      // numeric ID unchanged; signed/unsigned aliases must never select a target.
+      if (!Number.isSafeInteger(value) || value < -2147483648)
         fail("INVALID_TARGET", "Invalid Word content-control identifier.");
     } else if (typeof value !== "string" || !value || value.length > 512) {
       fail("INVALID_TARGET", `Invalid Office ${key}.`);
