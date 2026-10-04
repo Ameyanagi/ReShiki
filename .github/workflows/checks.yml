@@ -253,7 +253,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "14.0"
       RESHIKI_GEOMETRY_NATIVE_TESTS: "1"
       # Match the geometry archive's MSVC /MT runtime to Rust's static CRT.
-      RUSTFLAGS: ${{ runner.os == 'Windows' && '-C target-feature=+crt-static' || '' }}
+      RUSTFLAGS: ${{ endsWith(matrix.target, '-pc-windows-msvc') && '-C target-feature=+crt-static' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the Linux C++ toolchain
