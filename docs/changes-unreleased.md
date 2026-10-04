@@ -3,6 +3,7 @@
 Review checks for the completed allocation and correctness audit are listed in
 [the audit review checklist](changes/audit-review-2026-10-04.md).
 [PR #142](https://github.com/Ameyanagi/ReShiki/pull/142) · @Ameyanagi.
+Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/pull/143) · @Ameyanagi.
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 

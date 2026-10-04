@@ -38,8 +38,8 @@ failures and key changes, disabled/re-enabled native IDs, current roles and valu
 limits, and invalid snapshot revocation. Existing gallery-content, undo/redo,
 late-response and accessibility context tests also passed.
 
-Formatting and diff checks passed. The final strict Clippy rerun remains a
-separate required check. Public CI from clean checkouts for commit
+Formatting and diff checks passed. Strict Clippy also passed in the completed
+public CI below. Public CI from clean checkouts for commit
 `43ff4e8b833c2087dc09dc3aebbf927bccff6652` passed on
 [macOS](https://github.com/Ameyanagi/ReShiki/actions/runs/37207865402/job/111452793740),
 [Linux](https://github.com/Ameyanagi/ReShiki/actions/runs/37207865402/job/111452793777)
