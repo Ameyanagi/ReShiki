@@ -13,7 +13,8 @@ the journal command retains its established document-formatting behavior.
 
 This is an intentional behavior fix, separate from the behavior-preserving
 refactors: production source grows by **59 physical lines**. Focused tests and
-optional renderer evidence add 466 lines, including their test-only wiring.
+optional renderer evidence add 756 lines, including their test-only wiring.
+The actual canvas hover tests account for 290 of those lines.
 
 ## Matched before and after
 
@@ -130,6 +131,98 @@ Published-byte SHA-256 values:
 - After PNG: `ce97ad660fc63eb9a15b72109e48be2192d292e3052b0e9e71d22cc24b2f4cc7`
 - ACS reference fixture: `978539961782461de235eaddf593e6d1ae7cd8d3f0840d45426350ad4f466216`
 
+## Actual canvas hover draw proof
+
+The focused [canvas tests](../../src/canvas/template_style_tests.rs) execute
+`MoleculeCanvas::update` with a cursor-movement event, then the actual
+`MoleculeCanvas::draw` hover branch and a headless screenshot. The expected
+Nature template is a personal copy of the authored Cyclohexane whose atom x/y
+coordinates are multiplied manually by the Nature/ACS nominal bond-length
+ratio. Each reference bond is independently checked against the Nature nominal
+world length. No placement or transform helper computes the expected geometry.
+This avoids using `Template::place` as the geometry oracle for its own preview.
+
+The comparison uses a 640 × 400 canvas at zoom 2 for free insertion and zoom 1
+for attachment. It requires nonblank drawing and compares exact RGBA pixels in
+the top 352 rows, excluding only the bottom status notice. The attachment oracle
+is a frozen set of 12 atom coordinates and 13 bond edges copied from the baseline
+native result, rendered without a template placement input and with matching
+preview tint/selection. Its source capture,
+`attached_nature_control-after_insert.reshiki`, has SHA-256
+`d2a40700e3879ac7df7b08dd5b186452375b3ab4b0aab6f901c6f73bb812329f`.
+
+The identical test module ran on baseline and candidate through an adapter that
+only borrows the source document or template; it does not size either one.
+Its SHA-256 is
+`7a33a7c7234d5a9b7d861029aa200964730038ea74ae95dd996aa15a27dd01d1`.
+Both tests are opt-in because they require a real headless renderer. The commands
+below executed them: **no test was skipped**. Renderer initialization fails the
+test if the requested backend is unavailable.
+
+| Source and backend                 | Nature hover pixels versus independent reference | ACS/personal/attachment control test |
+| ---------------------------------- | ------------------------------------------------ | ------------------------------------ |
+| Baseline, WGPU                     | Fails: 8,302 different pixels                    | Pass                                 |
+| Baseline, TinySkia                 | Fails: 8,504 different pixels                    | Pass                                 |
+| Standalone corrected fix, WGPU     | Pass: zero different pixels                      | Pass                                 |
+| Standalone corrected fix, TinySkia | Pass: zero different pixels                      | Pass                                 |
+| Integrated corrected source, WGPU  | Pass: zero different pixels                      | Pass                                 |
+
+Baseline actual/reference ink bounds are 186 × 164 / 144 × 128 pixels on both
+backends. Corrected actual/reference bounds are both 144 × 128. These bounds
+include the canvas selection aids; the failure is the exact drawing-pixel
+comparison, not an assumed image-width threshold. Equality is checked within
+each backend, without assuming WGPU and TinySkia produce identical pixels.
+
+The separate control test compares ACS built-in/personal pixels exactly,
+checks that the personal ACS template retains its size in Nature (ink extents
+within two pixels of the ACS drawing, allowing journal stroke-width changes),
+and compares attached hover pixels exactly with the frozen baseline geometry.
+It passes even on the unfixed baseline, so the Nature failure is isolated from
+the controls.
+
+Recorded hover-test source provenance:
+
+- Baseline production HEAD: `81ca82101061ecc201545a3cae8d8257f03254d3`,
+  with QA additions only; recorded diff SHA-256
+  `7764d9bf91462aca283486f6c6cd5c1bdbbc5efa3a11484a5f1981e403b42a58`.
+- Standalone candidate HEAD: `c03556166f3ad9154628c782238399e163c7b602`,
+  plus the test module and registration; recorded diff SHA-256
+  `666f0f4c6440e270baf166208e799f4a0d7c4ebd7318f4e1f9e57a7cbd7f4602`.
+- Integrated candidate: baseline HEAD plus recorded diff SHA-256
+  `93fb06e28e827d7c9f8d8c6963b523bbb878ab0163cc27d4ad8bf794adbb57a5`.
+
+Local command/provenance receipts and logs are
+`template-hover-baseline-wgpu-fixed`, `template-hover-candidate-wgpu`,
+`template-hover-baseline-tiny-enabled`,
+`template-hover-candidate-tiny-enabled` and
+`template-hover-integrated-wgpu` (each has `.json` and `.log`). They record the
+renderer name and the expected baseline failure or two candidate passes.
+Earlier attempts without the TinySkia feature and an initial assertion about
+ink extents are excluded from this proof.
+
+Run the two actual draw tests with WGPU:
+
+```sh
+RESHIKI_PERF_RENDERER=wgpu \
+  cargo test --locked --bin reshiki canvas::template_style_tests:: \
+  -- --ignored --nocapture --test-threads=1
+```
+
+Run the same tests with TinySkia, explicitly enabling that backend:
+
+```sh
+RESHIKI_PERF_RENDERER=tiny-skia \
+  cargo test --locked --features iced/tiny-skia --bin reshiki \
+  canvas::template_style_tests:: -- --ignored --nocapture --test-threads=1
+```
+
+The failing baseline test is
+`canvas::template_style_tests::nature_builtin_hover_matches_independent_scaled_geometry`;
+the independently passing control is
+`canvas::template_style_tests::acs_personal_and_attached_hover_keep_legacy_geometry`.
+These checks cover actual canvas hover rendering; the app unit regression above
+still checks only committed placement and history.
+
 ## Native desktop verification
 
 Candidate native checks completed on macOS 26.5.1 arm64 at **100% zoom**
@@ -164,12 +257,11 @@ The native checks establish candidate menu/library ordering, pointer insertion
 and the first case's UI undo/redo. Native screenshots were observed during CUA
 but were not saved or published; the unmodified renderer pair above remains
 the published visual evidence. No standalone hover-movement API was available,
-so isolated transient-hover routing or appearance was **not independently
-verified**. Source inspection confirms that preview and commit call the same
-placement function, but the current app regression tests only that function and
-commit; a focused test of the canvas hover-preview routing remains a coverage
-gap. Native baseline interaction and cross-platform desktop checks are not
-claimed.
+so native transient-hover appearance was **not independently verified** by
+pointer interaction. The actual draw tests above separately verify canvas hover
+routing and pixels against independent geometry, while the app unit regression
+checks committed placement and history. Native baseline interaction and
+cross-platform desktop checks are not claimed.
 
 Reusable release caption: Built-in templates placed in empty space now follow
 the current journal drawing size while personal templates keep their saved size.
