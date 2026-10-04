@@ -184,3 +184,7 @@ Every work-budget charge, validation order, protocol/error variant/message, heap
 ## Deferred work
 
 Callback caching remains deferred. The pinned dependency can change graph fields, cached valence, stereo, and cleanup state; unchanged counts or assumed callback sequencing do not establish safe reuse. No invalidation guard was weakened. A later proposal needs a complete mutation/invalidation proof and a separate LOC/retention estimate.
+
+## Published source
+
+[PR #141](https://github.com/Ameyanagi/ReShiki/pull/141) publishes chemistry source commit `ee7ebed62043bca7b9b53e23cacd25de1dabc0d2` on base `aa4f85c595cff7771570c2f9d943948f3df1a961`. Its binary Git source patch (`git diff --binary aa4f85c595cff7771570c2f9d943948f3df1a961 ee7ebed62043bca7b9b53e23cacd25de1dabc0d2 -- src`) has SHA-256 `aa965263934b4d816851ea340bf27a4d44e0099fa0b581ec1f1244f720a2220a`. The commit rebase changes no chemistry source bytes from the tested candidate; other merged refactors were also present in the integrated validation snapshot. Subsequent release-note/provenance edits are documentation only. GitHub checks and the PR record identify the final reviewed head.
