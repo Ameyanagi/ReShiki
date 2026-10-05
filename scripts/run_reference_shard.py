@@ -33,7 +33,12 @@ TARGET_SECONDS = {
 DEFAULT_SECONDS = 20
 # Non-root integration targets need a package-qualified command. Keep their
 # assignment explicit so a new workspace test can never silently disappear.
-WORKSPACE_TARGET_SHARDS = {("reshiki-macos", "native_print"): 0}
+# Shard 0 exists for every --count, so an assignment can never fall outside it.
+WORKSPACE_TARGET_SHARDS = {
+    ("reshiki-macos", "native_print"): 0,
+    ("reshiki-geometry", "c60"): 0,
+    ("reshiki-geometry", "embedding"): 0,
+}
 
 
 def integration_targets(metadata: object) -> list[str]:
