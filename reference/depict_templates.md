@@ -134,6 +134,6 @@ Windows capture uses the pinned x64 wheel's Python from an x64 MSVC developer
 prompt, with the same isolated source and Boost headers:
 
 ```bat
-python tests\build_depict_windows_oracle.py --component templates ^
+python reference\build_depict_windows_oracle.py --component templates ^
   --rdkit-source F:\isolated\rdkit --boost-include F:\isolated\boost185
 ```

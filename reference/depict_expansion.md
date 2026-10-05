@@ -167,7 +167,7 @@ original exported native methods. The input JSONL hash pins the unchanged Linux
 corpus; no cases are filtered or regenerated from Windows-specific chemistry.
 
 ```bat
-python tests\build_depict_expansion_windows_oracle.py ^
+python reference\build_depict_expansion_windows_oracle.py ^
   --rdkit-source F:\isolated\rdkit --boost-include F:\isolated\boost185
 ```
 

@@ -148,7 +148,7 @@ The five changed companion fixtures retain their full native provenance.
 Run from an x64 MSVC developer prompt, with the pinned wheel and Boost 1.85:
 
 ```bat
-python tests\build_depict_windows_oracle.py --component geometry ^
+python reference\build_depict_windows_oracle.py --component geometry ^
   --rdkit-source F:\reference\rdkit --boost-include F:\reference\boost185 ^
   --fma3 0 ^
   --output tests\fixtures\depict-geometry-windows-no-fma3-native.json.gz

@@ -99,7 +99,7 @@ Windows generation uses the pinned x64 wheel's Python in an x64 MSVC developer
 prompt, for each of `geometry`, `rings`, `attachment`, `seeds`:
 
 ```bat
-python tests\build_depict_windows_oracle.py --component seeds ^
+python reference\build_depict_windows_oracle.py --component seeds ^
   --rdkit-source F:\isolated\rdkit --boost-include F:\isolated\boost185
 ```
 
