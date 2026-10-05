@@ -282,6 +282,11 @@ jobs:
         run: |
           set -euo pipefail
           uv run --no-project --python 3.12 python ../scripts/release_downloads.py --directory . --repository "$GH_REPO" --tag "$RELEASE_TAG" --notes notes.md
+          highlights="../.github/release-notes/$RELEASE_TAG.md"
+          if [[ -f "$highlights" ]]; then
+            cat "$highlights" notes.md > release-notes.md
+            mv release-notes.md notes.md
+          fi
           args=(--latest)
           if [[ "$RELEASE_TAG" == *-* ]]; then args=(--prerelease --latest=false); fi
           gh release create "$RELEASE_TAG" --verify-tag --generate-notes --notes-file notes.md "${args[@]}" *.zip *.tar.gz *.dmg *-setup.exe SHA256SUMS
