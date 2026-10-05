@@ -20,6 +20,7 @@ from pathlib import Path
 from build_inchi_helper import RELEASE_TARGETS
 from check_runtime_dependencies import (
     verify_macos_workers,
+    verify_payload,
     verify_runtime,
     verify_single_executable,
 )
@@ -287,18 +288,72 @@ def verify_geometry_response(response, field, version):
         raise ValueError(f"Packaged geometry worker did not optimize ethanol with {field}")
 
 
-def verify_geometry_worker(binary, version):
+def geometry_payload_inventory(directory):
+    """Record every relocated entry and file byte before launching a worker."""
+    inventory = {}
+    for entry in Path(directory).rglob("*"):
+        relative = str(entry.relative_to(directory))
+        if entry.is_symlink():
+            inventory[relative] = ("symlink", os.readlink(entry))
+        elif entry.is_dir():
+            inventory[relative] = ("directory",)
+        elif entry.is_file():
+            with entry.open("rb") as stream:
+                inventory[relative] = ("file", hashlib.file_digest(stream, "sha256").hexdigest())
+        else:
+            raise ValueError(f"Unexpected entry in geometry package: {relative}")
+    return inventory
+
+
+def verify_geometry_worker(binary, version, *, signed=False):
     """Launch the sole relocated executable without Python or chemistry libraries."""
     binary = Path(binary).resolve(strict=True)
     verify_geometry_dependencies(binary)
+    source_app = None
+    if signed and platform.system() == "Darwin":
+        if (
+            binary.parent.name != "MacOS"
+            or binary.parent.parent.name != "Contents"
+            or binary.parents[2].suffix != ".app"
+        ):
+            raise ValueError("Signed macOS geometry verification requires a standard .app bundle")
+        source_app = binary.parents[2]
+        run(["codesign", "--verify", "--deep", "--strict", source_app], timeout=30)
+        verify_payload(source_app)
+        verify_single_executable(binary, source_app)
+        source_inventory = geometry_payload_inventory(source_app)
     with tempfile.TemporaryDirectory(prefix="ReShiki geometry distribution ") as temporary:
         root = Path(temporary)
         isolated = root / "Only executable"
         isolated.mkdir()
-        executable = isolated / binary.name
-        shutil.copy2(binary, executable)
+        copied_app = None
+        if source_app is not None:
+            # A Developer ID bundle signature binds the executable to Info.plist.
+            # Relocate its unchanged bundle instead of detaching the signed Mach-O.
+            copied_app = isolated / source_app.name
+            run(["ditto", source_app, copied_app], timeout=120)
+            executable = copied_app / binary.relative_to(source_app)
+            if geometry_payload_inventory(copied_app) != source_inventory:
+                raise ValueError("Relocated signed geometry bundle bytes or entries changed")
+            run(["codesign", "--verify", "--deep", "--strict", copied_app], timeout=30)
+            verify_payload(isolated)
+            verify_single_executable(executable, isolated)
+        else:
+            executable = isolated / binary.name
+            shutil.copy2(binary, executable)
+        with binary.open("rb") as source, executable.open("rb") as copied:
+            source_sha256 = hashlib.file_digest(source, "sha256").hexdigest()
+            copied_sha256 = hashlib.file_digest(copied, "sha256").hexdigest()
+        print(
+            json.dumps(
+                dict(geometry_source_sha256=source_sha256, geometry_copy_sha256=copied_sha256)
+            )
+        )
+        if copied_sha256 != source_sha256:
+            raise ValueError("Relocated geometry executable bytes changed")
         empty_path = root / "Empty PATH"
         empty_path.mkdir()
+        initial_inventory = geometry_payload_inventory(root)
         environment = dict(os.environ)
         for key in (
             "VIRTUAL_ENV",
@@ -351,13 +406,13 @@ def verify_geometry_worker(binary, version):
                 timeout=120,
             ).stdout
             verify_geometry_response(response, field, version)
-        # The worker has no need to stage sources, data, interpreters, or libraries.
-        if (
-            sorted(root.iterdir()) != sorted([isolated, empty_path])
-            or list(isolated.iterdir()) != [executable]
-            or any(empty_path.iterdir())
-        ):
+        # Signed bundle metadata must remain intact; workers cannot stage payloads.
+        if geometry_payload_inventory(root) != initial_inventory:
             raise ValueError("Packaged geometry worker created an unexpected runtime payload")
+        if copied_app is not None:
+            verify_payload(root)
+            verify_single_executable(executable, root)
+            run(["codesign", "--verify", "--deep", "--strict", copied_app], timeout=30)
     print(
         "Rust MMFF94 and UFF passed from the sole relocated executable without Python or RDKit libraries."
     )
@@ -493,7 +548,7 @@ def verify_archive(archive_path, signed=False):
         verify_inchi_worker(binary, metadata["inchi"]["version"])
         verify_single_executable(binary, folder)
         verify_runtime(binary, folder)
-        verify_geometry_worker(binary, metadata["geometry"]["version"])
+        verify_geometry_worker(binary, metadata["geometry"]["version"], signed=signed)
         if platform.system() == "Darwin":
             verify_macos_workers(binary)
             run(["codesign", "--verify", "--deep", "--strict", app])

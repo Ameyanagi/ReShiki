@@ -132,6 +132,23 @@ class GeometrySourceTests(unittest.TestCase):
 
 class GeometryWorkerTests(unittest.TestCase):
     @staticmethod
+    def signed_bundle(root):
+        app = root / "ReShiki.app"
+        binary = app / "Contents/MacOS/reshiki"
+        binary.parent.mkdir(parents=True)
+        binary.write_bytes(b"\xcf\xfa\xed\xfeapplication fixture")
+        for relative, content in (
+            ("Contents/Info.plist", b"signed bundle metadata"),
+            ("Contents/_CodeSignature/CodeResources", b"sealed resources"),
+            ("Contents/Resources/icon.icns", b"icon fixture"),
+            ("Contents/Resources/Licenses/RDKIT-LICENSE", b"parameter attribution"),
+        ):
+            entry = app / relative
+            entry.parent.mkdir(parents=True, exist_ok=True)
+            entry.write_bytes(content)
+        return binary.resolve()
+
+    @staticmethod
     def geometry(field="MMFF94"):
         return dict(
             coordinates=[
@@ -281,6 +298,7 @@ class GeometryWorkerTests(unittest.TestCase):
                     },
                 ),
                 patch("build_release.verify_geometry_dependencies") as dependencies,
+                patch("build_release.platform.system", return_value="Linux"),
                 patch("build_release.run", side_effect=run),
             ):
                 build_release.verify_geometry_worker(binary, "2026.03.6")
@@ -311,10 +329,238 @@ class GeometryWorkerTests(unittest.TestCase):
 
                     with (
                         patch("build_release.verify_geometry_dependencies"),
+                        patch("build_release.platform.system", return_value="Linux"),
                         patch("build_release.run", side_effect=run),
                         self.assertRaises((ValueError, subprocess.SubprocessError)),
                     ):
                         build_release.verify_geometry_worker(binary, "2026.03.6")
+
+    def test_signed_mac_bundle_relocation_keeps_metadata_bytes_and_both_isolated_probes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = self.signed_bundle(Path(temporary))
+            source_app = binary.parents[2]
+            original = build_release.geometry_payload_inventory(source_app)
+            signatures = []
+            fields = []
+            copies = []
+
+            def run(command, **kwargs):
+                if command[0] == "codesign":
+                    self.assertEqual(command[1:4], ["--verify", "--deep", "--strict"])
+                    app = Path(command[4])
+                    self.assertEqual(build_release.geometry_payload_inventory(app), original)
+                    signatures.append(app)
+                    return subprocess.CompletedProcess(command, 0)
+                if command[0] == "ditto":
+                    self.assertEqual(Path(command[1]), source_app)
+                    destination = Path(command[2])
+                    self.assertNotEqual(destination, source_app)
+                    shutil.copytree(source_app, destination, symlinks=True)
+                    copies.append(destination)
+                    return subprocess.CompletedProcess(command, 0)
+                executable = Path(command[0])
+                self.assertEqual(command[1:], ["--geometry-worker"])
+                self.assertEqual(executable, copies[0] / "Contents/MacOS/reshiki")
+                self.assertEqual(executable.read_bytes(), binary.read_bytes())
+                self.assertEqual(list(executable.parent.iterdir()), [executable])
+                self.assertEqual(list(copies[0].parent.iterdir()), [copies[0]])
+                self.assertEqual(
+                    sorted(kwargs["cwd"].iterdir()),
+                    sorted([copies[0].parent, Path(kwargs["env"]["PATH"])]),
+                )
+                self.assertFalse(any(Path(kwargs["env"]["PATH"]).iterdir()))
+                for key in (
+                    "PYTHONPATH",
+                    "PYTHONHOME",
+                    "DYLD_LIBRARY_PATH",
+                    "DYLD_INSERT_LIBRARIES",
+                ):
+                    self.assertNotIn(key, kwargs["env"])
+                for prefix in ("RESHIKI", "MORUNO"):
+                    for key in (
+                        "PYTHON",
+                        "REFERENCE_PYTHON",
+                        "UV",
+                        "ROOT",
+                        "RUNTIME_DIR",
+                        "DATA_DIR",
+                    ):
+                        self.assertFalse(Path(kwargs["env"][f"{prefix}_{key}"]).exists())
+                field = json.loads(kwargs["input"][16:])["operation"]["field"]
+                fields.append(field)
+                return subprocess.CompletedProcess(command, 0, stdout=self.reply(field))
+
+            with (
+                patch("build_release.platform.system", return_value="Darwin"),
+                patch("build_release.verify_geometry_dependencies"),
+                patch("build_release.run", side_effect=run),
+            ):
+                build_release.verify_geometry_worker(binary, "2026.03.6", signed=True)
+            self.assertEqual(fields, ["MMFF94", "UFF"])
+            self.assertEqual(len(copies), 1)
+            self.assertEqual(signatures, [source_app, copies[0], copies[0]])
+            self.assertEqual(build_release.geometry_payload_inventory(source_app), original)
+            self.assertFalse(copies[0].exists())
+
+    def test_signed_mac_admission_rejects_detached_executable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "reshiki"
+            binary.touch()
+            with (
+                patch("build_release.platform.system", return_value="Darwin"),
+                patch("build_release.verify_geometry_dependencies"),
+                patch("build_release.run") as run,
+                self.assertRaisesRegex(ValueError, "standard .app bundle"),
+            ):
+                build_release.verify_geometry_worker(binary, "2026.03.6", signed=True)
+            run.assert_not_called()
+
+    def test_unsigned_mac_bundle_keeps_bare_executable_admission(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = self.signed_bundle(Path(temporary))
+            fields = []
+
+            def run(command, **kwargs):
+                executable = Path(command[0])
+                self.assertEqual(command[1:], ["--geometry-worker"])
+                self.assertEqual(list(executable.parent.iterdir()), [executable])
+                self.assertNotEqual(executable, binary)
+                self.assertEqual(executable.read_bytes(), binary.read_bytes())
+                field = json.loads(kwargs["input"][16:])["operation"]["field"]
+                fields.append(field)
+                return subprocess.CompletedProcess(command, 0, stdout=self.reply(field))
+
+            with (
+                patch("build_release.platform.system", return_value="Darwin"),
+                patch("build_release.verify_geometry_dependencies"),
+                patch("build_release.run", side_effect=run),
+            ):
+                build_release.verify_geometry_worker(binary, "2026.03.6")
+            self.assertEqual(fields, ["MMFF94", "UFF"])
+
+    def test_signed_mac_admission_rejects_side_executable_or_python_before_copying(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = self.signed_bundle(Path(temporary))
+            for relative, content, message in (
+                (
+                    "Contents/MacOS/geometry-helper",
+                    b"\xcf\xfa\xed\xfehelper",
+                    "only the application executable",
+                ),
+                ("Contents/Resources/python.exe", b"interpreter", "Python chemistry payload"),
+            ):
+                with self.subTest(relative=relative):
+                    payload = binary.parents[2] / relative
+                    payload.write_bytes(content)
+                    with (
+                        patch("build_release.platform.system", return_value="Darwin"),
+                        patch("build_release.verify_geometry_dependencies"),
+                        patch("build_release.run") as run,
+                        self.assertRaisesRegex(ValueError, message),
+                    ):
+                        build_release.verify_geometry_worker(binary, "2026.03.6", signed=True)
+                    self.assertEqual(run.call_count, 1)
+                    self.assertEqual(run.call_args.args[0][0], "codesign")
+                    payload.unlink()
+
+    def test_signed_mac_copy_must_preserve_all_bundle_bytes_and_entries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = self.signed_bundle(Path(temporary))
+            for fault in ("executable", "metadata", "extra_payload"):
+                with self.subTest(fault=fault):
+                    calls = []
+
+                    def run(command, **_kwargs):
+                        calls.append(command)
+                        if command[0] == "ditto":
+                            destination = Path(command[2])
+                            shutil.copytree(command[1], destination)
+                            if fault == "executable":
+                                (destination / "Contents/MacOS/reshiki").write_bytes(b"changed")
+                            elif fault == "metadata":
+                                (destination / "Contents/Info.plist").write_bytes(b"changed")
+                            else:
+                                (destination / "Contents/Resources/worker.py").touch()
+                        return subprocess.CompletedProcess(command, 0)
+
+                    with (
+                        patch("build_release.platform.system", return_value="Darwin"),
+                        patch("build_release.verify_geometry_dependencies"),
+                        patch("build_release.run", side_effect=run),
+                        self.assertRaisesRegex(ValueError, "bundle bytes or entries changed"),
+                    ):
+                        build_release.verify_geometry_worker(binary, "2026.03.6", signed=True)
+                    self.assertEqual([command[0] for command in calls], ["codesign", "ditto"])
+
+    def test_signed_mac_signature_failure_is_fatal_without_retry_or_resigning(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = self.signed_bundle(Path(temporary))
+            for failed_verification in (1, 2, 3):
+                with self.subTest(failed_verification=failed_verification):
+                    signatures = 0
+                    fields = []
+                    failure = subprocess.CalledProcessError(1, ["codesign", "--verify"])
+
+                    def run(command, **kwargs):
+                        nonlocal signatures
+                        if command[0] == "codesign":
+                            self.assertEqual(command[1:4], ["--verify", "--deep", "--strict"])
+                            signatures += 1
+                            if signatures == failed_verification:
+                                raise failure
+                        elif command[0] == "ditto":
+                            shutil.copytree(command[1], command[2])
+                        else:
+                            self.assertEqual(command[1:], ["--geometry-worker"])
+                            field = json.loads(kwargs["input"][16:])["operation"]["field"]
+                            fields.append(field)
+                            return subprocess.CompletedProcess(command, 0, stdout=self.reply(field))
+                        return subprocess.CompletedProcess(command, 0)
+
+                    with (
+                        patch("build_release.platform.system", return_value="Darwin"),
+                        patch("build_release.verify_geometry_dependencies"),
+                        patch("build_release.run", side_effect=run),
+                        self.assertRaises(subprocess.CalledProcessError) as raised,
+                    ):
+                        build_release.verify_geometry_worker(binary, "2026.03.6", signed=True)
+                    self.assertIs(raised.exception, failure)
+                    self.assertEqual(signatures, failed_verification)
+                    self.assertEqual(fields, ["MMFF94", "UFF"] if failed_verification == 3 else [])
+
+    def test_signed_mac_workers_cannot_create_or_modify_relocated_payload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = self.signed_bundle(Path(temporary))
+            for fault in ("outside_bundle", "side_executable", "python", "metadata"):
+                with self.subTest(fault=fault):
+
+                    def run(command, **kwargs):
+                        if command[0] == "ditto":
+                            shutil.copytree(command[1], command[2])
+                        elif command[0] != "codesign":
+                            executable = Path(command[0])
+                            app = executable.parents[2]
+                            if fault == "outside_bundle":
+                                (kwargs["cwd"] / "helper").write_bytes(b"\x7fELFhelper")
+                            elif fault == "side_executable":
+                                executable.with_name("helper").write_bytes(
+                                    b"\xcf\xfa\xed\xfehelper"
+                                )
+                            elif fault == "python":
+                                (app / "Contents/Resources/python.exe").touch()
+                            else:
+                                (app / "Contents/Info.plist").write_bytes(b"changed")
+                            field = json.loads(kwargs["input"][16:])["operation"]["field"]
+                            return subprocess.CompletedProcess(command, 0, stdout=self.reply(field))
+                        return subprocess.CompletedProcess(command, 0)
+
+                    with (
+                        patch("build_release.platform.system", return_value="Darwin"),
+                        patch("build_release.verify_geometry_dependencies"),
+                        patch("build_release.run", side_effect=run),
+                        self.assertRaisesRegex(ValueError, "unexpected runtime payload"),
+                    ):
+                        build_release.verify_geometry_worker(binary, "2026.03.6", signed=True)
 
     def test_import_audit_rejects_chemistry_and_windows_redistributable_libraries(self):
         with tempfile.TemporaryDirectory() as temporary:
