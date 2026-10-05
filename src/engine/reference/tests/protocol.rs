@@ -14,6 +14,8 @@ async fn fixture_engine() -> anyhow::Result<PythonEngine> {
     let mut child = Command::new(python)
         .arg("-u")
         .arg(root.join("tests/worker_exchange_fixture.py"))
+        // Match the production worker: Windows pipes otherwise use the ANSI code page.
+        .env("PYTHONUTF8", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
