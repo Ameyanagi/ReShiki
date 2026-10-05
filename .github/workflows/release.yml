@@ -145,6 +145,9 @@ jobs:
       - name: Test chemistry and packaging on this platform
         if: matrix.native_only != true
         run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+      - name: Test the RDKit reference worker and oracles on this platform
+        if: matrix.native_only != true
+        run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
       - name: Build Intel native helper boundary fixtures
         if: matrix.native_only == true
         run: uv run --no-project --isolated --python 3.12 python scripts/build_inchi_helper.py --target ${{ matrix.target }}

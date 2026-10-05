@@ -202,7 +202,7 @@ fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
     });
     let mut command = Command::new(python);
     command
-        .arg(root.join("tests/depict_rings_reference.py"))
+        .arg(root.join("reference/depict_rings_reference.py"))
         .arg("--fixture")
         .arg(
             root.join("tests/fixtures")

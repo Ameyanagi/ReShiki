@@ -73,7 +73,7 @@ async fn standalone_kernel_matches_original_native_generation() -> anyhow::Resul
         ".venv/bin/python"
     });
     let mut process = Command::new(python)
-        .arg(root.join("tests/inchi_generator_reference.py"))
+        .arg(root.join("reference/inchi_generator_reference.py"))
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;

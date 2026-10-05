@@ -79,7 +79,7 @@ fn compare_reference(suite: &str) -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut command = Command::new(python);
-    command.arg(root.join("tests/reaction_smiles_reference.py"));
+    command.arg(root.join("reference/reaction_smiles_reference.py"));
     if suite != "bare" {
         command.arg(format!("--{suite}"));
     }

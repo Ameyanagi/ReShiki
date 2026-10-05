@@ -71,7 +71,7 @@ fn original_native_bonds_keep_wide_values_until_document_conversion() -> anyhow:
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/cdxml_native_bonds_reference.py"))
+    .arg(root.join("reference/cdxml_native_bonds_reference.py"))
     .env("PYTHONUTF8", "1")
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())

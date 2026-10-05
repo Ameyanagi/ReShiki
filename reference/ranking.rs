@@ -33,7 +33,7 @@ fn canonical_ranking_and_ranked_kekule_match_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/ranking_reference.py"))
+        .arg(root.join("reference/ranking_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

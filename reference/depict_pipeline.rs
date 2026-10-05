@@ -206,7 +206,7 @@ fn complete_layout_matches_public_native_api() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut command = Command::new(python);
-    command.arg(root.join("tests/depict_pipeline_reference.py"));
+    command.arg(root.join("reference/depict_pipeline_reference.py"));
     if let Some(fixture) = std::env::var_os("RESHIKI_DEPICT_PIPELINE_REFERENCE") {
         command.arg("--fixture").arg(fixture);
     } else {
@@ -228,7 +228,7 @@ fn complete_layout_matches_public_native_api() -> anyhow::Result<()> {
         provenance["commit"] == "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
         "Native source revision changed"
     );
-    let observer = std::fs::read(root.join("tests/depict_pipeline_reference.py"))?;
+    let observer = std::fs::read(root.join("reference/depict_pipeline_reference.py"))?;
     anyhow::ensure!(
         provenance["observer_sha256"] == format!("{:x}", Sha256::digest(observer)),
         "Reference observer changed; recapture expected results"

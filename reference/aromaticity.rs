@@ -25,7 +25,7 @@ fn aromaticity_and_hydrogen_adjustment_match_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/aromaticity_reference.py"))
+        .arg(root.join("reference/aromaticity_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

@@ -25,7 +25,7 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/smarts_reference.py"))
+    .arg(root.join("reference/smarts_reference.py"))
     .env("PYTHONUTF8", "1")
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())

@@ -89,7 +89,7 @@ async fn complete_cleanup_matches_original_worker_and_captured_layouts() -> anyh
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cleanup_reference.py"))
+        .arg(root.join("reference/cleanup_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

@@ -113,7 +113,7 @@ fn cdxml_bond_appearance_matches_original_helper() -> anyhow::Result<()> {
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/cdxml_bonds_reference.py"))
+    .arg(root.join("reference/cdxml_bonds_reference.py"))
     .env("PYTHONUTF8", "1")
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())

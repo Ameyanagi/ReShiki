@@ -62,7 +62,7 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/reaction_drawing_reference.py"))
+        .arg(root.join("reference/reaction_drawing_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

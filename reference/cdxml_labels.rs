@@ -106,7 +106,7 @@ fn label_patches_and_callback_order_match_original_reader() -> anyhow::Result<()
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/cdxml_labels_reference.py"))
+    .arg(root.join("reference/cdxml_labels_reference.py"))
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())
     .spawn()?;

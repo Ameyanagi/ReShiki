@@ -263,7 +263,7 @@ fn native_initial_orchestration_and_merge_stages() -> anyhow::Result<()> {
     } else {
         ".venv/bin/python"
     }));
-    command.arg(root.join("tests/depict_expansion_reference.py"));
+    command.arg(root.join("reference/depict_expansion_reference.py"));
     if let Some(fixture) = depict_windows::fixture("expansion")? {
         command
             .arg("--fixture")

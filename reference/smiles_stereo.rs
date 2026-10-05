@@ -79,7 +79,7 @@ fn stereo_traversal_matches_complete_native_output() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/smiles_stereo_reference.py"))
+        .arg(root.join("reference/smiles_stereo_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

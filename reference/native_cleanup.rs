@@ -73,7 +73,7 @@ fn python() -> PathBuf {
 }
 fn original_cases() -> anyhow::Result<Vec<Case>> {
     let mut child = Command::new(python())
-        .arg(root().join("tests/cleanup_reference.py"))
+        .arg(root().join("reference/cleanup_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -154,10 +154,10 @@ fn compare(actual: Response, mut expected: Response, name: &str) -> anyhow::Resu
 async fn isolated(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> {
     let directory = tempfile::tempdir()?;
     let guard = directory.path().join("guard");
-    std::fs::create_dir_all(guard.join("engine"))?;
+    std::fs::create_dir_all(guard.join("reference/engine"))?;
     std::fs::write(
-        guard.join("engine/worker.py"),
-        include_str!("../tests/native_routing_guard.py"),
+        guard.join("reference/engine/worker.py"),
+        include_str!("native_routing_guard.py"),
     )?;
     let fixture = directory.path().join("cases.json");
     std::fs::write(&fixture, serde_json::to_vec(&serde_json::to_value(cases)?)?)?;

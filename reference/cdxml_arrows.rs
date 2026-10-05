@@ -96,7 +96,7 @@ fn arrows_match_original_helpers_and_document_boundaries() -> anyhow::Result<()>
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/cdxml_arrows_reference.py"))
+    .arg(root.join("reference/cdxml_arrows_reference.py"))
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())
     .spawn()?;

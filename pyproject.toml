@@ -29,7 +29,7 @@ required-environments = [
 ]
 
 [tool.ruff]
-# Python packages live at the project root; src contains Rust modules.
+# Python packages live in reference/; src contains Rust modules.
 src = ["."]
 target-version = "py312"
 line-length = 100
@@ -37,15 +37,19 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["engine"]
+
 [tool.ruff.lint.per-file-ignores]
 # Worker/test entry points establish their local module search path first.
-"engine/worker.py" = ["E402"]
+"reference/engine/worker.py" = ["E402"]
+"reference/*.py" = ["E402"]
 "tests/*.py" = ["E402"]
 "scripts/regenerate_templates.py" = ["E402"]
 
 [tool.ty.environment]
 python-version = "3.12"
-extra-paths = ["scripts"]
+extra-paths = ["scripts", "reference"]
 
 [tool.ty.src]
-include = ["engine", "scripts"]
+include = ["reference/engine", "scripts"]

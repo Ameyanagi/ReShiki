@@ -77,7 +77,7 @@ fn atom_and_bond_symbols_match_native_writers() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/smiles_symbols_reference.py"))
+        .arg(root.join("reference/smiles_symbols_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

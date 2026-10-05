@@ -26,7 +26,7 @@ impl NativeDrawingStyle {
         static DEFAULT: OnceLock<std::result::Result<NativeDrawingStyle, String>> = OnceLock::new();
         DEFAULT
             .get_or_init(|| {
-                serde_json::from_str(include_str!("../../../../engine/drawing_style.json"))
+                serde_json::from_str(include_str!("../../../../assets/drawing_style.json"))
                     .map_err(|error| error.to_string())
             })
             .as_ref()

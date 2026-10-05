@@ -59,7 +59,7 @@ fn full_writer_matches_native_molecular_output() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/smiles_write_reference.py"))
+        .arg(root.join("reference/smiles_write_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

@@ -13,7 +13,7 @@ async fn fixture_engine() -> anyhow::Result<PythonEngine> {
     let python = reference_python(root, explicit)?;
     let mut child = Command::new(python)
         .arg("-u")
-        .arg(root.join("tests/worker_exchange_fixture.py"))
+        .arg(root.join("reference/worker_exchange_fixture.py"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

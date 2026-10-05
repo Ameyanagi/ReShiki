@@ -85,7 +85,7 @@ fn descriptors_and_atom_contributions_match_rdkit() -> TestResult {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/descriptors_reference.py"))
+        .arg(root.join("reference/descriptors_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

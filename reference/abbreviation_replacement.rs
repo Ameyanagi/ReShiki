@@ -61,7 +61,7 @@ fn math_diagnostic(case: &Case, geometry: &Value) -> anyhow::Result<String> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/abbreviation_replacement_reference.py"))
+        .arg(root.join("reference/abbreviation_replacement_reference.py"))
         .arg("--math")
         .env("PYTHONUTF8", "1")
         .stdin(Stdio::piped())
@@ -133,7 +133,7 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/abbreviation_replacement_reference.py"))
+        .arg(root.join("reference/abbreviation_replacement_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -268,7 +268,7 @@ async fn replacement_uses_the_actual_request_and_response_numeric_contract() -> 
         ".venv/bin/python"
     });
     let mut oracle = Command::new(python)
-        .arg(root.join("tests/abbreviation_replacement_reference.py"))
+        .arg(root.join("reference/abbreviation_replacement_reference.py"))
         .arg("--wire")
         .env("PYTHONUTF8", "1")
         .stdin(Stdio::piped())

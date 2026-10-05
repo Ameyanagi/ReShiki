@@ -23,7 +23,7 @@ fn coordinate_bits_match_native_cx_reader() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cx_coordinate_reference.py"))
+        .arg(root.join("reference/cx_coordinate_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

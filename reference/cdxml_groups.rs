@@ -30,7 +30,7 @@ fn logical_groups_match_original_reader() -> anyhow::Result<()> {
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/cdxml_groups_reference.py"))
+    .arg(root.join("reference/cdxml_groups_reference.py"))
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())
     .spawn()?;

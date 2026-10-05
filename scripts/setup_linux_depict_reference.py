@@ -171,7 +171,7 @@ def build(source, boost, directory, compiler, environment):
         else:
             builder = f"build_depict_{component}_oracle.py"
             extra = []
-        command = [sys.executable, str(ROOT / "tests" / builder), *common, *extra]
+        command = [sys.executable, str(ROOT / "reference" / builder), *common, *extra]
         print(f"Building live {component} observer", flush=True)
         subprocess.run(command, check=True, cwd=ROOT, env=environment, timeout=600)
         binary = ROOT / "artifacts" / f"depict-{component}-oracle"

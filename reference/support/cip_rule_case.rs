@@ -163,7 +163,7 @@ pub fn check(script: &str, artifact: &str, minimum: usize) -> anyhow::Result<()>
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests").join(script))
+        .arg(root.join("reference").join(script))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

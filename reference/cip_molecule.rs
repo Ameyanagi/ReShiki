@@ -56,7 +56,7 @@ fn molecule_preparation_matches_native_cipmol() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cip_molecule_reference.py"))
+        .arg(root.join("reference/cip_molecule_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

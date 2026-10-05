@@ -33,7 +33,7 @@ async fn guarded_script(
     }));
     command
         .arg("-u")
-        .arg(root.join("tests").join(script))
+        .arg(root.join("reference").join(script))
         .arg(record)
         .env("PYTHONUTF8", "1")
         .stdin(Stdio::piped())
@@ -418,8 +418,8 @@ fn reference_interpreter_requires_an_explicit_path_or_checkout_environment() -> 
         reference_python(root, Some(explicit.clone())),
         Err(ReferenceError::MissingWorker(_))
     ));
-    std::fs::create_dir(root.join("engine"))?;
-    std::fs::write(root.join("engine/worker.py"), b"# test worker")?;
+    std::fs::create_dir_all(root.join("reference/engine"))?;
+    std::fs::write(root.join(WORKER), b"# test worker")?;
     assert_eq!(reference_python(root, Some(explicit.clone()))?, explicit);
     assert!(matches!(
         reference_python(root, None),

@@ -104,7 +104,7 @@ fn invalid_geometry_and_unicode_ranges_return_safely() {
 fn bundled_data_parses_and_retains_jacs_defaults() {
     assert!(templates::builtin_error().is_none());
     let style: reshiki::style::DrawingStyle =
-        serde_json::from_str(include_str!("../engine/drawing_style.json")).unwrap();
+        serde_json::from_str(include_str!("../assets/drawing_style.json")).unwrap();
     assert_eq!(style.font_family, "Arial");
     assert_eq!(style.font_size_pt, 10.);
     assert_eq!(style.bond_length_pt, 14.4);

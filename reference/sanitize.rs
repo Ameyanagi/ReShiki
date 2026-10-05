@@ -28,7 +28,7 @@ fn complete_pipeline_matches_independent_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/sanitize_reference.py"))
+        .arg(root.join("reference/sanitize_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

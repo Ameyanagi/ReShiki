@@ -52,7 +52,7 @@ fn hydrogen_removal_matches_native_operation() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/hydrogen_removal_reference.py"))
+        .arg(root.join("reference/hydrogen_removal_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

@@ -39,7 +39,7 @@ fn selected_aromatic_displays_match_reference_without_changing_identity() -> any
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/aromatic_display_reference.py"))
+        .arg(root.join("reference/aromatic_display_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

@@ -28,7 +28,7 @@ fn jpeg_chroma_edges_match_independent_libjpeg() -> anyhow::Result<()> {
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/jpeg_reference.py"))
+    .arg(root.join("reference/jpeg_reference.py"))
     .env("PYTHONUTF8", "1")
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())

@@ -118,7 +118,7 @@ fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
         root.join(".venv/bin/python")
     };
     let mut command = Command::new(python);
-    command.arg(root.join("tests/depict_geometry_reference.py"));
+    command.arg(root.join("reference/depict_geometry_reference.py"));
     command.arg("--fixture").arg(
         root.join("tests/fixtures")
             .join(depict_linux::fixture(fixture)?),

@@ -38,7 +38,7 @@ fn double_bond_geometry_matches_independent_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/bond_geometry_reference.py"))
+        .arg(root.join("reference/bond_geometry_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

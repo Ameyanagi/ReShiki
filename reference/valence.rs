@@ -29,7 +29,7 @@ fn valence_hydrogens_and_radicals_match_rdkit() -> TestResult {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/valence_reference.py"))
+        .arg(root.join("reference/valence_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

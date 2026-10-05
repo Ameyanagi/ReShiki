@@ -27,7 +27,7 @@ fn agrees_with_rdkit_for_every_isotope_templates_and_hydrogen_representations() 
         ".venv/bin/python"
     });
     let output = Command::new(python)
-        .arg(root.join("tests/properties_reference.py"))
+        .arg(root.join("reference/properties_reference.py"))
         .env("PYTHONUTF8", "1")
         .output()?;
     assert!(

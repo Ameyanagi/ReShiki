@@ -108,7 +108,7 @@ fn python_reference_detection_and_validation_match() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/abbreviation_detection_reference.py"))
+        .arg(root.join("reference/abbreviation_detection_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

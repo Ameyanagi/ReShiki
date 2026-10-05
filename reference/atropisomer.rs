@@ -33,7 +33,7 @@ fn axial_stereo_matches_native_file_perception() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/atropisomer_reference.py"))
+        .arg(root.join("reference/atropisomer_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

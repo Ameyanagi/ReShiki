@@ -55,7 +55,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/molfile_import_reference.py"))
+        .arg(root.join("reference/molfile_import_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

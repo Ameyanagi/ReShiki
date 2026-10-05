@@ -71,7 +71,7 @@ fn native_precision_styles_text_and_document_conversion_match_original_functions
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/cdxml_presentation_reference.py"))
+    .arg(root.join("reference/cdxml_presentation_reference.py"))
     .env("PYTHONUTF8", "1")
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())

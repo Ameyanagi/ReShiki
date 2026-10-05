@@ -61,7 +61,7 @@ fn compare_reference(queries: bool) -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut command = Command::new(python);
-    command.arg(root.join("tests/reaction_import_reference.py"));
+    command.arg(root.join("reference/reaction_import_reference.py"));
     if queries {
         command.arg("--queries");
     }

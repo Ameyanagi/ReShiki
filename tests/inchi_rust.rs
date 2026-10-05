@@ -69,7 +69,7 @@ fn patched_generation_matches_the_official_1075_kernel() -> anyhow::Result<()> {
         capture["capture_sha256"],
         format!(
             "{:x}",
-            Sha256::digest(include_bytes!("inchi_kernel_reference.py"))
+            Sha256::digest(include_bytes!("../reference/inchi_kernel_reference.py"))
         )
     );
     assert_eq!(

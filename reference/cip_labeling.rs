@@ -89,7 +89,7 @@ fn complete_labeling_matches_public_native_api() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cip_labeling_reference.py"))
+        .arg(root.join("reference/cip_labeling_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

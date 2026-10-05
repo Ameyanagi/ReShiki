@@ -52,7 +52,7 @@ fn document_preparation_matches_independent_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/document_preparation_reference.py"))
+        .arg(root.join("reference/document_preparation_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

@@ -110,7 +110,7 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/cdxml_preparation_reference.py"))
+    .arg(root.join("reference/cdxml_preparation_reference.py"))
     .env("PYTHONUTF8", "1")
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())

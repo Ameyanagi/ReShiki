@@ -27,7 +27,7 @@ impl Default for DrawingStyle {
     }
 }
 pub static DEFAULT: LazyLock<DrawingStyle> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../engine/drawing_style.json")).unwrap_or_else(|_| {
+    serde_json::from_str(include_str!("../assets/drawing_style.json")).unwrap_or_else(|_| {
         DrawingStyle {
             name: "JACS / ACS".into(),
             font_family: "Arial".into(),

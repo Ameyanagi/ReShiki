@@ -67,7 +67,7 @@ def build(source, boost, directory, environment):
             binary = ROOT / "artifacts/depict-collision-oracle.exe"
         print(f"Building live x64 {component} observer", flush=True)
         subprocess.run(
-            [sys.executable, str(ROOT / "tests" / builder), *common, *extra],
+            [sys.executable, str(ROOT / "reference" / builder), *common, *extra],
             check=True,
             cwd=ROOT,
             env=environment,
@@ -79,7 +79,7 @@ def build(source, boost, directory, environment):
             subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "tests/depict_collision_reference.py"),
+                    str(ROOT / "reference/depict_collision_reference.py"),
                     "--oracle",
                     str(binary),
                     "--rdkit-source",
@@ -140,7 +140,7 @@ def module_version(path):
 def crt_evidence(directory, environment):
     """Observe Python's loaded CRT and a separately compiled /MD process."""
     python = subprocess.check_output(
-        [sys.executable, str(ROOT / "tests/depict_windows_profile.py"), "--observe"],
+        [sys.executable, str(ROOT / "reference/depict_windows_profile.py"), "--observe"],
         env=environment,
         text=True,
     )

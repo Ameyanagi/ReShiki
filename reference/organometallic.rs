@@ -30,7 +30,7 @@ fn metal_cleanup_and_fast_cycles_match_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/organometallic_reference.py"))
+        .arg(root.join("reference/organometallic_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

@@ -32,7 +32,7 @@ fn kekule_assignment_matches_independent_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/kekulize_reference.py"))
+        .arg(root.join("reference/kekulize_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

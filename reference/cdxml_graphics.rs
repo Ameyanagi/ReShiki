@@ -113,7 +113,7 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/cdxml_graphics_reference.py"))
+    .arg(root.join("reference/cdxml_graphics_reference.py"))
     .env("PYTHONUTF8", "1")
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())

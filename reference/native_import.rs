@@ -231,16 +231,16 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn mol_import_matches_complete_original_responses() -> anyhow::Result<()> {
-    reference_cases("mol", "tests/molfile_engine_reference.py").await
+    reference_cases("mol", "reference/molfile_engine_reference.py").await
 }
 #[tokio::test]
 async fn rxn_import_matches_complete_original_responses() -> anyhow::Result<()> {
-    reference_cases("rxn", "tests/reaction_engine_reference.py").await
+    reference_cases("rxn", "reference/reaction_engine_reference.py").await
 }
 #[tokio::test]
 async fn drawing_and_coordinate_reactions_match_complete_original_responses() -> anyhow::Result<()>
 {
-    reference_cases("cdxml", "tests/native_import_reference.py").await
+    reference_cases("cdxml", "reference/native_import_reference.py").await
 }
 
 const MOLECULE: &str = "<CDXML BondLength='14.4'><page id='10'><fragment id='7000'><n id='1' p='0 0'/><n id='2' p='14.4 0' Element='8'/><b id='3' B='1' E='2'/></fragment></page></CDXML>";
@@ -395,7 +395,7 @@ async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result
 
 #[tokio::test]
 async fn layouts_match_complete_original_import_responses() -> anyhow::Result<()> {
-    reference_cases("layout", "tests/native_import_layout_reference.py").await
+    reference_cases("layout", "reference/native_import_layout_reference.py").await
 }
 
 #[tokio::test]

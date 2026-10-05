@@ -21,7 +21,7 @@ fn run(mode: &str, input: &str) -> anyhow::Result<Vec<u8>> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cdx_reference.py"))
+        .arg(root.join("reference/cdx_reference.py"))
         .arg(mode)
         .env("PYTHONUTF8", "1")
         .stdin(Stdio::piped())

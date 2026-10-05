@@ -24,7 +24,7 @@ fn legacy_atom_priorities_match_independent_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cip_ranking_reference.py"))
+        .arg(root.join("reference/cip_ranking_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

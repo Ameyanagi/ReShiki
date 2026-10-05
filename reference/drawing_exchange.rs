@@ -26,7 +26,7 @@ impl Oracle {
             ".venv/bin/python"
         });
         let mut child = Command::new(python)
-            .arg(root.join("tests/drawing_exchange_reference.py"))
+            .arg(root.join("reference/drawing_exchange_reference.py"))
             .env("PYTHONUTF8", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

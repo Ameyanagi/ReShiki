@@ -58,7 +58,7 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/molfile_drawing_reference.py"))
+        .arg(root.join("reference/molfile_drawing_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

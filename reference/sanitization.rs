@@ -25,7 +25,7 @@ fn functional_group_cleanup_matches_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/sanitization_reference.py"))
+        .arg(root.join("reference/sanitization_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

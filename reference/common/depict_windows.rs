@@ -18,7 +18,7 @@ pub fn fixture(stage: &str) -> anyhow::Result<Option<String>> {
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut command = Command::new(root.join(".venv/Scripts/python.exe"));
-    command.arg(root.join("tests/depict_windows_profile.py"));
+    command.arg(root.join("reference/depict_windows_profile.py"));
     let required = std::env::var("RESHIKI_TEST_WINDOWS_MATH_PROFILE").ok();
     if let Some(profile) = required.as_deref() {
         command.arg("--fma3").arg(match profile {

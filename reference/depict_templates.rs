@@ -162,7 +162,7 @@ fn builtin_templates_match_direct_native_order_and_construction() -> anyhow::Res
     } else {
         ".venv/bin/python"
     }));
-    command.arg(root.join("tests/depict_templates_reference.py"));
+    command.arg(root.join("reference/depict_templates_reference.py"));
     let windows_fixture = depict_windows::fixture("templates")?;
     let fixture = if let Some(fixture) = windows_fixture.as_deref() {
         fixture

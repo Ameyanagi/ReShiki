@@ -67,7 +67,7 @@ for code, name in [
     schema[code] = (name, kind, enum)
 # Current clipboard text uses the same style-run layout with UTF-8 text.
 schema[0x709] = ("UTF8Text", "CDXString", {})
-output = ROOT / "engine/cdx_schema.py"
+output = ROOT / "reference/engine/cdx_schema.py"
 output.write_text(
     '"""Published CDX numeric schema. Regenerate with scripts/regenerate_cdx_schema.py.\n'
     'Source: https://bobhanson.github.io/IUPAC-FAIRSpec/cdx_sdk/TableOfProperties.htm\n"""\n\n'

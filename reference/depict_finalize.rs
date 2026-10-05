@@ -269,7 +269,7 @@ fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
     };
     let mut command = Command::new(python);
     command
-        .arg(root.join("tests/depict_finalize_reference.py"))
+        .arg(root.join("reference/depict_finalize_reference.py"))
         .arg("--fixture")
         .arg(root.join("tests/fixtures").join(fixture));
     let live = baseline && std::env::var_os("RESHIKI_DEPICT_FINALIZE_ORACLE").is_some();

@@ -30,7 +30,7 @@ fn literal_rank_properties_follow_native_lazy_reads() -> anyhow::Result<()> {
         return Ok(());
     }
     let mut process = Command::new(python)
-        .arg(root.join("tests/depict_rank_properties_reference.py"))
+        .arg(root.join("reference/depict_rank_properties_reference.py"))
         .stdout(Stdio::piped())
         .spawn()?;
     let lines = BufReader::new(process.stdout.take().context("Missing oracle output")?).lines();

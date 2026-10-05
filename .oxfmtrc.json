@@ -9,7 +9,7 @@
     "vendor/usvg/**",
     "vendor/svg2pdf/**",
     "vendor/smithay-clipboard/**",
-    "engine/cdx_schema.py",
+    "reference/engine/cdx_schema.py",
     "website/.astro/**",
     "website/dist/**",
     "website/src/content/docs/reference/**",

@@ -244,7 +244,7 @@ async fn complete_aromatic_responses_match_original_worker() -> anyhow::Result<(
     // This existing independent corpus includes full/partial selections,
     // individual fused rings, both toggle directions and abbreviation failures.
     let mut child = Command::new(python)
-        .arg(root.join("tests/aromatic_display_reference.py"))
+        .arg(root.join("reference/aromatic_display_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

@@ -4,9 +4,9 @@ on:
   pull_request:
     paths:
       - .github/workflows/abbreviation-geometry.yml
-      - engine/abbreviations.py
+      - reference/engine/abbreviations.py
       - src/chemistry/abbreviations/presets.json
-      - tests/abbreviation_replacement_reference.py
+      - reference/abbreviation_replacement_reference.py
 permissions:
   contents: read
 jobs:
@@ -46,7 +46,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
       - name: Capture geometry on the matching host
-        run: uv run --locked python tests/abbreviation_replacement_reference.py --write-geometry --target-arch ${{ matrix.arch }}
+        run: uv run --locked python reference/abbreviation_replacement_reference.py --write-geometry --target-arch ${{ matrix.arch }}
       - name: Record capture provenance
         shell: bash
         run: |

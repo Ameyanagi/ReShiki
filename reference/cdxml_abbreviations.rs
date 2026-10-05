@@ -48,7 +48,7 @@ fn flattening_matches_original_python_tree_and_metadata() -> anyhow::Result<()> 
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cdxml_abbreviations_reference.py"))
+        .arg(root.join("reference/cdxml_abbreviations_reference.py"))
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;

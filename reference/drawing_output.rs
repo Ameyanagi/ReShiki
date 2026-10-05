@@ -57,7 +57,7 @@ fn drawing_state_and_editable_document_match_native_reference() -> anyhow::Resul
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/drawing_output_reference.py"))
+        .arg(root.join("reference/drawing_output_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

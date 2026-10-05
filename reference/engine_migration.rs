@@ -11,22 +11,22 @@ mod reference_presentation;
 
 #[tokio::test]
 async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult {
-    import_responses("mol", "tests/molfile_engine_reference.py").await
+    import_responses("mol", "reference/molfile_engine_reference.py").await
 }
 
 #[tokio::test]
 async fn rust_smiles_import_preserves_complete_reference_responses() -> TestResult {
-    import_responses("smiles", "tests/smiles_engine_reference.py").await
+    import_responses("smiles", "reference/smiles_engine_reference.py").await
 }
 
 #[tokio::test]
 async fn rust_rxn_import_preserves_complete_reference_responses() -> TestResult {
-    import_responses("rxn", "tests/reaction_engine_reference.py").await
+    import_responses("rxn", "reference/reaction_engine_reference.py").await
 }
 
 #[tokio::test]
 async fn rust_reaction_smiles_import_preserves_complete_reference_responses() -> TestResult {
-    import_responses("rsmi", "tests/reaction_smiles_engine_reference.py").await
+    import_responses("rsmi", "reference/reaction_smiles_engine_reference.py").await
 }
 
 #[tokio::test]

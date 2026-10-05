@@ -385,10 +385,10 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let temp = tempfile::tempdir()?;
     let guard = temp.path().join("guard");
-    std::fs::create_dir_all(guard.join("engine"))?;
+    std::fs::create_dir_all(guard.join("reference/engine"))?;
     std::fs::write(
-        guard.join("engine/worker.py"),
-        include_str!("../tests/native_routing_guard.py"),
+        guard.join("reference/engine/worker.py"),
+        include_str!("native_routing_guard.py"),
     )?;
     let fixture = temp.path().join("cases.json");
     let responses = temp.path().join("responses.json");

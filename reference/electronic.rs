@@ -26,7 +26,7 @@ fn electronic_state_matches_independent_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/electronic_reference.py"))
+        .arg(root.join("reference/electronic_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

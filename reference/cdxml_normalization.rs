@@ -49,7 +49,7 @@ fn normalization_matches_original_worker_and_direct_native_parser() -> anyhow::R
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cdxml_normalization_reference.py"))
+        .arg(root.join("reference/cdxml_normalization_reference.py"))
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;

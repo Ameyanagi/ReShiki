@@ -92,13 +92,14 @@ jobs:
           version: "0.12.3"
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
-      - run: uv run --locked ruff check engine scripts tests
-      - run: uv run --locked ruff format --check engine scripts tests
+      - run: uv run --locked ruff check reference scripts tests
+      - run: uv run --locked ruff format --check reference scripts tests
       - run: uv run --locked ty check
       - name: Install Rust for native macOS clipboard and printing checks
         if: runner.os == 'macOS'
         run: rustup toolchain install 1.99.0 --profile minimal && rustup default 1.99.0
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+      - run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
       - run: uv run --locked python scripts/check_reference_dependencies.py
   libreoffice-uno:
     name: LibreOffice UNO regressions
@@ -376,7 +377,7 @@ jobs:
       - name: Restore the historical template inputs used by the captured requests
         run: uv run --locked python -c "import gzip,pathlib; pathlib.Path('assets/templates.json').write_bytes(gzip.decompress(pathlib.Path('tests/fixtures/aromatic-template-inputs.json.gz').read_bytes()))"
       - name: Capture original worker responses on this platform
-        run: uv run --locked python tests/native_aromatic_reference.py --requests tests/fixtures/native-aromatic-${{ matrix.fixture }}.json.gz --output artifacts/native-aromatic-${{ matrix.fixture }}.json.gz
+        run: uv run --locked python reference/native_aromatic_reference.py --requests tests/fixtures/native-aromatic-${{ matrix.fixture }}.json.gz --output artifacts/native-aromatic-${{ matrix.fixture }}.json.gz
       - name: Require every recorded request and response to remain unchanged
         run: uv run --locked python -c "import gzip,json; old=json.loads(gzip.open('tests/fixtures/native-aromatic-${{ matrix.fixture }}.json.gz','rt').readline()); new=json.loads(gzip.open('artifacts/native-aromatic-${{ matrix.fixture }}.json.gz','rt').readline()); assert old['records_sha256']==new['records_sha256'], 'Responses changed; review the differences before accepting new fixtures'"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

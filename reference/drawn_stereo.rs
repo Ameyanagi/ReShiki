@@ -39,7 +39,7 @@ fn drawn_stereo_matches_independent_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/drawn_stereo_reference.py"))
+        .arg(root.join("reference/drawn_stereo_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

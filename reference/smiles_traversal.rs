@@ -89,7 +89,7 @@ fn ranked_walk_matches_complete_native_strings_and_output_order() -> anyhow::Res
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/smiles_traversal_reference.py"))
+        .arg(root.join("reference/smiles_traversal_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

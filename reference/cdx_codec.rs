@@ -69,7 +69,7 @@ fn matches_python_reference_for_native_files_all_properties_and_charsets() -> Te
         ".venv/bin/python"
     });
     let output = Command::new(python)
-        .arg(root.join("tests/cdx_reference.py"))
+        .arg(root.join("reference/cdx_reference.py"))
         .env("PYTHONUTF8", "1")
         .output()?;
     assert!(

@@ -52,7 +52,7 @@ fn extended_smiles_matches_native_import() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/smiles_read_reference.py"))
+        .arg(root.join("reference/smiles_read_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

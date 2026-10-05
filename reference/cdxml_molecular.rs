@@ -57,7 +57,7 @@ fn molecular_cdxml_matches_direct_native_reader() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cdxml_molecular_reference.py"))
+        .arg(root.join("reference/cdxml_molecular_reference.py"))
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;

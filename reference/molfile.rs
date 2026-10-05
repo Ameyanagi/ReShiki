@@ -38,7 +38,7 @@ fn molecular_file_output_matches_native_writers() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/molfile_reference.py"))
+        .arg(root.join("reference/molfile_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

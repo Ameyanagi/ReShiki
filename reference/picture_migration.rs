@@ -25,7 +25,7 @@ fn pixel_normalization_matches_pillow() -> TestResult {
         ".venv/bin/python"
     });
     let output = Command::new(python)
-        .arg(root.join("tests/picture_reference.py"))
+        .arg(root.join("reference/picture_reference.py"))
         .env("PYTHONUTF8", "1")
         .output()?;
     assert!(

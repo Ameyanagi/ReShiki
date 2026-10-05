@@ -13,6 +13,8 @@ use tokio::{
 mod colors;
 mod reaction;
 
+const WORKER: &str = "reference/engine/worker.py";
+
 struct Worker {
     _child: Child,
     input: ChildStdin,
@@ -63,7 +65,7 @@ fn reference_python(
     root: &std::path::Path,
     explicit: Option<PathBuf>,
 ) -> Result<PathBuf, ReferenceError> {
-    let worker = root.join("engine/worker.py");
+    let worker = root.join(WORKER);
     if !worker.is_file() {
         return Err(ReferenceError::MissingWorker(worker));
     }
@@ -94,7 +96,7 @@ impl PythonEngine {
         let mut command = Command::new(python);
         command
             .arg("-u")
-            .arg(root.join("engine/worker.py"))
+            .arg(root.join(WORKER))
             .env("PYTHONDONTWRITEBYTECODE", "1")
             .env("PYTHONUTF8", "1");
         // A GUI launch on Windows must not open a console for the local worker.

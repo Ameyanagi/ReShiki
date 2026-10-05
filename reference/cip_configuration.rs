@@ -232,7 +232,7 @@ fn configuration_evaluation_matches_independent_native_apis() -> anyhow::Result<
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cip_configuration_reference.py"))
+        .arg(root.join("reference/cip_configuration_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

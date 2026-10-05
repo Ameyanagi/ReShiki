@@ -52,7 +52,7 @@ fn smiles_chemistry_matches_native_import() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/smiles_prepare_reference.py"))
+        .arg(root.join("reference/smiles_prepare_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

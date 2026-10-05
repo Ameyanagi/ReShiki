@@ -194,7 +194,7 @@ fn corpus() -> anyhow::Result<Vec<Case>> {
     }));
     let windows_fixture = depict_windows::fixture("collision")?;
     command
-        .arg(root.join("tests/depict_collision_reference.py"))
+        .arg(root.join("reference/depict_collision_reference.py"))
         .arg("--fixture")
         .arg(
             root.join("tests/fixtures")

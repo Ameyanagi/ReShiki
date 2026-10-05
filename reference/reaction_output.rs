@@ -38,7 +38,7 @@ fn output_matches_reference(format: &str) -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/reaction_output_reference.py"))
+        .arg(root.join("reference/reaction_output_reference.py"))
         .args((format == "rsmi").then_some("--smiles"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())

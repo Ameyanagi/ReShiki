@@ -40,7 +40,7 @@ fn spatial_stereo_matches_native_atom_perception() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/spatial_stereo_reference.py"))
+        .arg(root.join("reference/spatial_stereo_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

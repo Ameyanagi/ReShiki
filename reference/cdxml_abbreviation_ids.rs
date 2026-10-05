@@ -97,7 +97,7 @@ fn associated_records_match_original_read_exactly() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cdxml_abbreviation_ids_reference.py"))
+        .arg(root.join("reference/cdxml_abbreviation_ids_reference.py"))
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;

@@ -36,7 +36,7 @@ fn ring_order_matches_rdkit_examples_permutations_dense_graphs_and_nci() -> Test
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/ring_perception_reference.py"))
+        .arg(root.join("reference/ring_perception_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

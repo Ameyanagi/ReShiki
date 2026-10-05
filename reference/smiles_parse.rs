@@ -52,7 +52,7 @@ fn smiles_graph_matches_native_reader() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/smiles_parse_reference.py"))
+        .arg(root.join("reference/smiles_parse_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

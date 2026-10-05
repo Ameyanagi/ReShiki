@@ -101,7 +101,7 @@ fn expansion_and_rerooting_match_native_rdkit() -> anyhow::Result<()> {
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/cip_digraph_reference.py"))
+        .arg(root.join("reference/cip_digraph_reference.py"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

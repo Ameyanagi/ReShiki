@@ -138,7 +138,7 @@ mod tests {
             ".venv/bin/python"
         });
         let output = std::process::Command::new(python)
-            .arg(root.join("tests/cleanup_numeric_reference.py"))
+            .arg(root.join("reference/cleanup_numeric_reference.py"))
             .output()?;
         anyhow::ensure!(
             output.status.success(),

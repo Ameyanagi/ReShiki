@@ -78,7 +78,7 @@ fn mark_patches_match_original_reader() -> anyhow::Result<()> {
     } else {
         ".venv/bin/python"
     }))
-    .arg(root.join("tests/cdxml_marks_reference.py"))
+    .arg(root.join("reference/cdxml_marks_reference.py"))
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())
     .spawn()?;

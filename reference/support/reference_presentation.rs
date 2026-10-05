@@ -64,7 +64,7 @@ pub fn compare_export(actual: &Value, expected: &mut Value) -> anyhow::Result<()
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/reference_presentation.py"))
+        .arg(root.join("reference/reference_presentation.py"))
         .env("PYTHONUTF8", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

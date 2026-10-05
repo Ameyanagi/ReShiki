@@ -15,7 +15,7 @@ fn native_geometry_diagnostic() -> anyhow::Result<String> {
         ".venv/bin/python"
     });
     let output = std::process::Command::new(python)
-        .arg(root.join("tests/abbreviation_replacement_reference.py"))
+        .arg(root.join("reference/abbreviation_replacement_reference.py"))
         .arg("--geometry")
         .env("PYTHONUTF8", "1")
         .output()?;
