@@ -311,3 +311,8 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
   Python UTF-8 mode on Windows. These CI and test changes preserve the
   application runtime and the required release checks.
   [PR #158](https://github.com/Ameyanagi/ReShiki/pull/158) · @Ameyanagi.
+
+- **Release preparation:** update the version, release documentation and
+  publication highlights while retaining the merged application code and
+  excluding the ongoing refactoring branches.
+  [PR #185](https://github.com/Ameyanagi/ReShiki/pull/185) · @Ameyanagi.
