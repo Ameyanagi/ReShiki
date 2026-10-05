@@ -2360,3 +2360,68 @@ fn new_document_invalidates_inflight_import_even_when_empty() {
     });
     assert!(app.tab.doc.atoms.is_empty());
 }
+
+#[test]
+fn ring_tool_click_commits_exactly_one_history_step() {
+    // The Ring click re-enters edit() with Edit::Ring, which commits on its own;
+    // the click handler must not add a second step for the same change.
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::New);
+    app.tab.history = History::default();
+    let blank = app.tab.doc.clone();
+    app.tool = Tool::Ring;
+    app.edit(Edit::Click(Point::new(120., 80.)));
+    assert!(!app.tab.doc.atoms.is_empty());
+    assert!(app.tab.history.undo(&mut app.tab.doc));
+    assert_eq!(app.tab.doc, blank);
+    assert!(
+        !app.tab.history.can_undo(),
+        "one ring click is one undo step"
+    );
+}
+
+#[test]
+fn dotted_click_reports_the_drag_hint_without_editing_or_dropping_redo() {
+    use reshiki::bonds::BondPreset;
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::New);
+    app.tab.history = History::default();
+    app.tool = Tool::Atom;
+    app.edit(Edit::Click(Point::default()));
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.history.can_redo());
+    let before = app.tab.doc.clone();
+    app.tool = Tool::StyledBond(BondPreset::Dotted);
+    app.edit(Edit::Click(Point::new(42., 0.)));
+    assert!(app.error);
+    assert_eq!(
+        app.status,
+        "Drag from a bonded explicit H to an existing acceptor"
+    );
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    assert!(app.tab.history.can_redo(), "a rejected click keeps redo");
+}
+
+#[test]
+fn text_click_on_an_existing_label_selects_it_without_a_history_step() {
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::New);
+    let label = app.tab.doc.next_id();
+    let position = Point::new(0., 60.);
+    app.tab.doc.annotations.push(Annotation {
+        id: label,
+        position,
+        text: "Label".into(),
+        format: Default::default(),
+    });
+    app.tab.history = History::default();
+    let before = app.tab.doc.clone();
+    app.tab.caption = "New text".into();
+    app.tool = Tool::Text;
+    app.edit(Edit::Click(position));
+    assert_eq!(app.tab.selected, [label]);
+    assert_eq!(app.tab.doc, before, "no second label is placed");
+    assert_eq!(app.tool, Tool::Text);
+    assert!(!app.tab.history.can_undo());
+}
