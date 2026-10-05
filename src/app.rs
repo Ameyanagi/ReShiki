@@ -708,26 +708,6 @@ impl App {
             Message::FilePrepared,
         )
     }
-    /// Opens a recovery draft in a new tab, or in the tab in front if it is an
-    /// unchanged empty Untitled drawing.
-    fn restore(&mut self, candidate: Candidate) {
-        self.target_tab();
-        let before = self.tab.doc.clone();
-        self.tab.doc = candidate.snapshot.document;
-        self.tab.doc.version = self.tab.doc.version.max(15);
-        self.sync_drawing_defaults();
-        self.tab.styles.editor = None;
-        self.theme_library.editor = None;
-        self.tab.path = None;
-        self.tab.untitled_name = None;
-        self.tab.saved = Document::default();
-        self.tab.file_epoch = self.next_epoch();
-        self.changed(before);
-        self.tab.revision = self.tab.revision.wrapping_add(1);
-        self.fit();
-        self.tab.selected.clear();
-        self.recover_candidate(candidate.path);
-    }
     fn display_document(&self) -> &Document {
         if let Some(session) =
             self.tab.optimization.as_ref().filter(|session| {
@@ -1271,42 +1251,9 @@ impl App {
             Message::ApplyElement => self.apply_custom_element(),
             Message::CopyImage => return self.copy_native(false, true),
             Message::CopyAs(format) => return self.copy_as(format),
-            Message::Copy(cut) => {
-                if self.clipboard_working() {
-                    self.status = "A clipboard operation is already in progress".into();
-                    return Task::none();
-                }
-                if reshiki::clipboard::available() {
-                    return self.copy_native(cut, false);
-                }
-                if self.tab.selected.is_empty() {
-                    self.status = "Select objects to copy".into();
-                    return Task::none();
-                }
-                let selection = editing::selection(&self.tab.doc, &self.tab.selected);
-                if let Ok(json) = serde_json::to_string(&selection.current()) {
-                    if cut {
-                        let before = self.tab.doc.clone();
-                        self.tab.doc.delete(&self.tab.selected);
-                        self.tab.selected.clear();
-                        self.changed(before);
-                    }
-                    self.status = if cut {
-                        "Selection cut"
-                    } else {
-                        "Selection copied"
-                    }
-                    .into();
-                    return iced::clipboard::write(format!("{}{json}", editing::CLIPBOARD_PREFIX));
-                }
-            }
+            Message::Copy(cut) => return self.copy_selection(cut),
             Message::PastePicture => return self.paste_native(true),
-            Message::Paste => {
-                if reshiki::clipboard::available() {
-                    return self.paste_native(false);
-                }
-                return iced::clipboard::read().map(Message::Pasted);
-            }
+            Message::Paste => return self.paste_clipboard(),
             Message::Duplicate => self.duplicate_selection(),
             Message::Transform(transform) => self.transform_selection(transform),
             Message::NumericTransform(action) => return self.numeric_transform_action(action),
@@ -1317,25 +1264,8 @@ impl App {
             Message::Tick => self.request_drafts(),
             Message::Autosaved(..) => {} // Handled before editor/modal guards.
             Message::Restore if self.pending.is_some() => {}
-            Message::Restore => {
-                // Oldest first, so the latest draft ends up in front.
-                let candidates = std::mem::take(&mut self.recovered);
-                let count = candidates.len();
-                for candidate in candidates.into_iter().rev() {
-                    self.restore(candidate);
-                }
-                self.status = match count {
-                    0 => return Task::none(),
-                    1 => "Recovered drawing · Save to keep a new copy".into(),
-                    n => format!("Recovered {n} drawings as tabs · Save them to keep new copies"),
-                };
-            }
-            Message::DismissRecovery => {
-                self.recovered.clear();
-                if self.status.is_empty() {
-                    self.status = READY.into();
-                }
-            }
+            Message::Restore => self.restore_recovered(),
+            Message::DismissRecovery => self.dismiss_recovery(),
             Message::Canvas(Edit::BeginTransform(field)) => {
                 return self.begin_numeric_transform(field);
             }
@@ -1412,15 +1342,7 @@ impl App {
             Message::SelectAll => self.select_all_objects(),
             Message::Charge(delta) => self.change_charge(delta),
             Message::ApplyIsotope => self.apply_isotope(),
-            Message::CopySmiles => {
-                if self.clipboard_working() {
-                    self.status = "A clipboard operation is already in progress".into();
-                    return Task::none();
-                }
-                if let Some(a) = self.property_analysis() {
-                    return iced::clipboard::write(a.smiles.clone());
-                }
-            }
+            Message::CopySmiles => return self.copy_smiles(),
             // Tabs wait while the save dialog asks about the tab in front.
             Message::New | Message::Open if self.pending.is_some() => {}
             Message::New => return self.new_document(),
@@ -1440,103 +1362,15 @@ impl App {
                 .discard();
             }
             Message::Cancel => self.pending = None,
-            Message::Discard => {
-                self.front_pending();
-                match self.pending.take() {
-                    Some(Pending::CloseTab(id)) if id == self.tab.id => {
-                        return self.close_active_tab();
-                    }
-                    Some(Pending::CloseWindow(window, id, mut discarded)) => {
-                        discarded.push(id);
-                        return self.close_window(window, discarded);
-                    }
-                    _ => {}
-                }
-            }
+            Message::Discard => return self.discard_pending(),
             #[cfg(target_os = "macos")]
             Message::MacFiles(_) => {}
-            Message::Opened(file) => {
-                if let Some((path, contents)) = file {
-                    return Task::perform(
-                        files::prepare_contents(path, contents),
-                        Message::FilePrepared,
-                    );
-                }
-            }
+            Message::Opened(file) => return files::open_contents(file),
             Message::FilePrepared(..) => {}
-            Message::Save | Message::SaveAs => {
-                if matches!(message, Message::Save) {
-                    self.front_pending();
-                }
-                let office_host = (self.office_document() && matches!(message, Message::Save))
-                    .then_some(self.office_host);
-                let (path, suggested_name) =
-                    self.drawing_save_target(matches!(message, Message::SaveAs));
-                if self.file_io.saving {
-                    // Only this tab's own save can go on with the dialog's action.
-                    if self.file_io.saving_tab != Some(self.tab.id) {
-                        self.pending = None;
-                    }
-                    self.status = "A document save is already in progress".into();
-                    return Task::none();
-                }
-                self.file_io.saving = true;
-                self.file_io.saving_tab = Some(self.tab.id);
-                if office_host == Some("Microsoft 365") {
-                    self.status = "Saving recovery draft and waiting for Microsoft 365 to confirm the drawing update…".into();
-                    self.error = false;
-                }
-                let snapshot = std::sync::Arc::new(self.tab.doc.clone());
-                let save_snapshot = std::sync::Arc::clone(&snapshot);
-                let epoch = self.tab.file_epoch;
-                return Task::perform(
-                    async move {
-                        let path = if let Some(p) = path {
-                            p
-                        } else {
-                            let extension = reshiki::compatibility::NATIVE_EXTENSION;
-                            let Some(path) =
-                                files::save_path("Save drawing", &suggested_name, extension).await
-                            else {
-                                return Ok(None);
-                            };
-                            path
-                        };
-                        let save_path = path.clone();
-                        tokio::task::spawn_blocking(move || {
-                            let bytes = save_snapshot.file_json()?;
-                            if office_host == Some("Microsoft 365") {
-                                reshiki::office_addin::save(&save_path, &bytes)?;
-                            } else {
-                                #[cfg(windows)]
-                                windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
-                                #[cfg(not(windows))]
-                                reshiki::storage::write_atomic(&save_path, &bytes)?;
-                            }
-                            Ok::<_, String>(())
-                        })
-                        .await
-                        .map_err(|error| error.to_string())??;
-                        Ok(Some(path))
-                    },
-                    move |result| {
-                        Message::Saved(
-                            epoch,
-                            Box::new(std::sync::Arc::unwrap_or_clone(snapshot)),
-                            result,
-                        )
-                    },
-                );
-            }
+            Message::Save => return self.save_drawing(false),
+            Message::SaveAs => return self.save_drawing(true),
             Message::Saved(..) => {}
-            Message::Export(format) => {
-                if ["svg", "pdf", "png"].contains(&format) || cfg!(windows) && format == "emf" {
-                    return self.export_figure(format, false);
-                }
-                let mut request = Request::molecule("export", self.tab.doc.clone());
-                request.format = Some(format.into());
-                return self.run(request, Job::Export(format));
-            }
+            Message::Export(format) => return self.export_drawing(format),
             Message::FigureExported(result) => self.figure_exported(result),
             message @ (Message::EngineDone { .. }
             | Message::ClipboardWritten { .. }
@@ -1581,58 +1415,13 @@ impl App {
                 revision,
                 result,
             } => self.clipboard_read(epoch, revision, *result),
-            Message::Pasted(contents) => {
-                if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
-                    if let Some(json) = editing::clipboard_json(&contents) {
-                        match Document::from_json(json.as_bytes()) {
-                            Ok(part) => {
-                                let part = reshiki::canvas_theme::for_native_paste(
-                                    part,
-                                    self.tab.doc.canvas_theme,
-                                );
-                                let center = editing::center(&part, &part.all_ids());
-                                let before = self.tab.doc.clone();
-                                self.tab.selected = editing::append(
-                                    &mut self.tab.doc,
-                                    &part,
-                                    Point::new(
-                                        self.tab.camera.center.x - center.x + 24.0,
-                                        self.tab.camera.center.y - center.y + 24.0,
-                                    ),
-                                );
-                                self.changed(before);
-                                self.tool = Tool::Select;
-                                self.status = "Selection pasted".into();
-                            }
-                            Err(e) => {
-                                self.status = format!("Could not paste: {e}");
-                                self.error = true;
-                            }
-                        }
-                    } else {
-                        return self.run(input_request(&contents), Job::Insert);
-                    }
-                }
-            }
+            Message::Pasted(contents) => return self.pasted(contents),
             Message::EngineDone {
                 revision,
                 kind,
                 result,
             } => return self.engine_done(revision, kind, *result),
-            Message::Exported(result) => match result {
-                Ok(Some(path)) => {
-                    self.status = format!(
-                        "Exported {}",
-                        path.file_name().unwrap_or_default().to_string_lossy()
-                    );
-                    self.error = false;
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    self.status = e;
-                    self.error = true;
-                }
-            },
+            Message::Exported(result) => self.structure_exported(result),
             _ => {}
         }
         Task::none()

@@ -1,5 +1,6 @@
-use super::Message;
+use super::{Job, Message, Pending};
 use iced::Task;
+use reshiki::engine::Request;
 use std::path::PathBuf;
 
 const SAVE: &str = "Save";
@@ -155,6 +156,13 @@ pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, St
     Some((path, result))
 }
 
+pub(super) fn open_contents(file: Option<(PathBuf, Result<Vec<u8>, String>)>) -> Task<Message> {
+    if let Some((path, contents)) = file {
+        return Task::perform(prepare_contents(path, contents), Message::FilePrepared);
+    }
+    Task::none()
+}
+
 impl super::App {
     pub(super) fn drawing_save_target(&self, save_as: bool) -> (Option<PathBuf>, String) {
         let path = if save_as { None } else { self.tab.path.clone() };
@@ -275,6 +283,109 @@ impl super::App {
             }
         }
         iced::Task::none()
+    }
+
+    pub(super) fn save_drawing(&mut self, save_as: bool) -> Task<Message> {
+        if !save_as {
+            self.front_pending();
+        }
+        let office_host = (self.office_document() && !save_as).then_some(self.office_host);
+        let (path, suggested_name) = self.drawing_save_target(save_as);
+        if self.file_io.saving {
+            // Only this tab's own save can go on with the dialog's action.
+            if self.file_io.saving_tab != Some(self.tab.id) {
+                self.pending = None;
+            }
+            self.status = "A document save is already in progress".into();
+            return Task::none();
+        }
+        self.file_io.saving = true;
+        self.file_io.saving_tab = Some(self.tab.id);
+        if office_host == Some("Microsoft 365") {
+            self.status = "Saving recovery draft and waiting for Microsoft 365 to confirm the drawing update…".into();
+            self.error = false;
+        }
+        let snapshot = std::sync::Arc::new(self.tab.doc.clone());
+        let save_snapshot = std::sync::Arc::clone(&snapshot);
+        let epoch = self.tab.file_epoch;
+        Task::perform(
+            async move {
+                let path = if let Some(p) = path {
+                    p
+                } else {
+                    let extension = reshiki::compatibility::NATIVE_EXTENSION;
+                    let Some(path) = save_path("Save drawing", &suggested_name, extension).await
+                    else {
+                        return Ok(None);
+                    };
+                    path
+                };
+                let save_path = path.clone();
+                tokio::task::spawn_blocking(move || {
+                    let bytes = save_snapshot.file_json()?;
+                    if office_host == Some("Microsoft 365") {
+                        reshiki::office_addin::save(&save_path, &bytes)?;
+                    } else {
+                        #[cfg(windows)]
+                        super::windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
+                        #[cfg(not(windows))]
+                        reshiki::storage::write_atomic(&save_path, &bytes)?;
+                    }
+                    Ok::<_, String>(())
+                })
+                .await
+                .map_err(|error| error.to_string())??;
+                Ok(Some(path))
+            },
+            move |result| {
+                Message::Saved(
+                    epoch,
+                    Box::new(std::sync::Arc::unwrap_or_clone(snapshot)),
+                    result,
+                )
+            },
+        )
+    }
+
+    pub(super) fn discard_pending(&mut self) -> Task<Message> {
+        self.front_pending();
+        match self.pending.take() {
+            Some(Pending::CloseTab(id)) if id == self.tab.id => {
+                return self.close_active_tab();
+            }
+            Some(Pending::CloseWindow(window, id, mut discarded)) => {
+                discarded.push(id);
+                return self.close_window(window, discarded);
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    pub(super) fn export_drawing(&mut self, format: &'static str) -> Task<Message> {
+        if ["svg", "pdf", "png"].contains(&format) || cfg!(windows) && format == "emf" {
+            return self.export_figure(format, false);
+        }
+        let mut request = Request::molecule("export", self.tab.doc.clone());
+        request.format = Some(format.into());
+        self.run(request, Job::Export(format))
+    }
+
+    pub(super) fn structure_exported(&mut self, result: Result<Option<PathBuf>, String>) {
+        match result {
+            Ok(Some(path)) => {
+                self.status = format!(
+                    "Exported {}",
+                    path.file_name().unwrap_or_default().to_string_lossy()
+                );
+                self.error = false;
+            }
+            Ok(None) => {}
+            Err(e) => {
+                self.status = e;
+                self.error = true;
+            }
+        }
     }
 }
 

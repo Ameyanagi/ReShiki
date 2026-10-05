@@ -1,7 +1,10 @@
 //! Ordered recovery operations. Only one worker may touch a tab's draft file.
 use super::{App, Message, document_tab::DocumentTab, document_tab::TabId};
 use iced::Task;
-use reshiki::{document::Document, recovery::Recovery};
+use reshiki::{
+    document::Document,
+    recovery::{Candidate, Recovery},
+};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -395,6 +398,48 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    pub(super) fn restore_recovered(&mut self) {
+        // Oldest first, so the latest draft ends up in front.
+        let candidates = std::mem::take(&mut self.recovered);
+        let count = candidates.len();
+        for candidate in candidates.into_iter().rev() {
+            self.restore(candidate);
+        }
+        self.status = match count {
+            0 => return,
+            1 => "Recovered drawing · Save to keep a new copy".into(),
+            n => format!("Recovered {n} drawings as tabs · Save them to keep new copies"),
+        };
+    }
+
+    pub(super) fn dismiss_recovery(&mut self) {
+        self.recovered.clear();
+        if self.status.is_empty() {
+            self.status = super::READY.into();
+        }
+    }
+
+    /// Opens a recovery draft in a new tab, or in the tab in front if it is an
+    /// unchanged empty Untitled drawing.
+    fn restore(&mut self, candidate: Candidate) {
+        self.target_tab();
+        let before = self.tab.doc.clone();
+        self.tab.doc = candidate.snapshot.document;
+        self.tab.doc.version = self.tab.doc.version.max(15);
+        self.sync_drawing_defaults();
+        self.tab.styles.editor = None;
+        self.theme_library.editor = None;
+        self.tab.path = None;
+        self.tab.untitled_name = None;
+        self.tab.saved = Document::default();
+        self.tab.file_epoch = self.next_epoch();
+        self.changed(before);
+        self.tab.revision = self.tab.revision.wrapping_add(1);
+        self.fit();
+        self.tab.selected.clear();
+        self.recover_candidate(candidate.path);
     }
 }
 

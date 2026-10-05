@@ -1,4 +1,4 @@
-use super::{App, Message, Point, Tool, editing};
+use super::{App, Document, Job, Message, Point, Tool, editing, input_request};
 use iced::Task;
 use reshiki::clipboard::{CopyFormat, CopyOutcome, PasteOutcome, PreparedCopy};
 
@@ -341,6 +341,90 @@ impl App {
             self.status.push_str(" · ");
             self.status.push_str(&outcome.warnings.join(" · "));
         }
+    }
+
+    pub(super) fn copy_selection(&mut self, cut: bool) -> Task<Message> {
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        if reshiki::clipboard::available() {
+            return self.copy_native(cut, false);
+        }
+        if self.tab.selected.is_empty() {
+            self.status = "Select objects to copy".into();
+            return Task::none();
+        }
+        let selection = editing::selection(&self.tab.doc, &self.tab.selected);
+        if let Ok(json) = serde_json::to_string(&selection.current()) {
+            if cut {
+                let before = self.tab.doc.clone();
+                self.tab.doc.delete(&self.tab.selected);
+                self.tab.selected.clear();
+                self.changed(before);
+            }
+            self.status = if cut {
+                "Selection cut"
+            } else {
+                "Selection copied"
+            }
+            .into();
+            return iced::clipboard::write(format!("{}{json}", editing::CLIPBOARD_PREFIX));
+        }
+        Task::none()
+    }
+
+    pub(super) fn paste_clipboard(&mut self) -> Task<Message> {
+        if reshiki::clipboard::available() {
+            return self.paste_native(false);
+        }
+        iced::clipboard::read().map(Message::Pasted)
+    }
+
+    pub(super) fn copy_smiles(&mut self) -> Task<Message> {
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        if let Some(a) = self.property_analysis() {
+            return iced::clipboard::write(a.smiles.clone());
+        }
+        Task::none()
+    }
+
+    pub(super) fn pasted(&mut self, contents: Option<String>) -> Task<Message> {
+        if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
+            if let Some(json) = editing::clipboard_json(&contents) {
+                match Document::from_json(json.as_bytes()) {
+                    Ok(part) => {
+                        let part = reshiki::canvas_theme::for_native_paste(
+                            part,
+                            self.tab.doc.canvas_theme,
+                        );
+                        let center = editing::center(&part, &part.all_ids());
+                        let before = self.tab.doc.clone();
+                        self.tab.selected = editing::append(
+                            &mut self.tab.doc,
+                            &part,
+                            Point::new(
+                                self.tab.camera.center.x - center.x + 24.0,
+                                self.tab.camera.center.y - center.y + 24.0,
+                            ),
+                        );
+                        self.changed(before);
+                        self.tool = Tool::Select;
+                        self.status = "Selection pasted".into();
+                    }
+                    Err(e) => {
+                        self.status = format!("Could not paste: {e}");
+                        self.error = true;
+                    }
+                }
+            } else {
+                return self.run(input_request(&contents), Job::Insert);
+            }
+        }
+        Task::none()
     }
 }
 
