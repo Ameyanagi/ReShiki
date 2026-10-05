@@ -1,5 +1,9 @@
 # Release builds and macOS signing
 
+See the [Code signing policy](code-signing-policy.md) for current platform signing
+status and the proposed SignPath Foundation process. Windows signing is pending;
+the workflow described below currently publishes unsigned Windows packages.
+
 The Release builds workflow produces signed macOS disk images, Windows x64/ARM64 setup programs, and portable packages for all six targets. macOS supports Apple Silicon and Intel; Windows and Linux support x64 and ARM64. Each package has one Rust application executable; InChI and macOS clipboard/printing run in isolated modes of that executable. Drawing and chemistry work offline without Python, RDKit or uv.
 
 Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.rsk` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs native chemistry, and checks uninstallation. Upgrades remove the old app-owned worker while preserving user drawings and caches.

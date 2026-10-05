@@ -7,6 +7,13 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
+- **Signing and privacy policies:** document the current signing
+  status, proposed SignPath process, local processing, and optional online data
+  handling. Windows downloads remain unsigned while the application and signing
+  setup are pending.
+  [Code signing policy](code-signing-policy.md) · [Privacy policy](privacy-policy.md)
+  · [PR #151](https://github.com/Ameyanagi/ReShiki/pull/151) · @Ameyanagi.
+
 - **Embedded ChemDraw paste on Windows:** normal Paste reads
   supported chemical data from embedded Office objects instead of choosing
   their presentation image. Paste picture retains its explicit image behavior.

@@ -118,6 +118,8 @@ export default defineConfig({
             { label: "Build and test", slug: "developer/development" },
             { label: "Architecture", slug: "developer/architecture" },
             { label: "Release and signing", slug: "developer/releasing" },
+            { label: "Code signing policy", slug: "developer/code-signing-policy" },
+            { label: "Privacy policy", slug: "developer/privacy-policy" },
             { label: "ReShiki 0.3.0", slug: "developer/changes-0.3" },
             { label: "ReShiki 0.4.0", slug: "developer/changes-0.4" },
             { label: "ReShiki 0.5.0", slug: "developer/changes-0.5" },
