@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::inline_text;
+use reshiki::document::Annotation;
 
 fn selected_caption() -> App {
     let (mut app, _) = App::new();

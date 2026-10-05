@@ -1,7 +1,7 @@
 use crate::canvas::{self, Camera, Edit, Tool};
 use iced::{Color, Element, Subscription, Task, Theme};
 use reshiki::{
-    document::{Annotation, Arrow, Document, History, Point},
+    document::{Arrow, Document, History, Point},
     editing::{self, Arrange, Transform},
     engine::{Analysis, LocalEngine, Request, Response},
     graphics::{BracketSides, Graphic, GraphicChange},
@@ -19,6 +19,7 @@ mod atom_labels;
 mod atom_text;
 mod autosave;
 mod bond_edits;
+mod canvas_edit;
 mod cleanup;
 mod clipboard;
 mod color_popover;
@@ -936,71 +937,9 @@ impl App {
                 points,
                 source,
                 target,
-            } => {
-                match reshiki::chains::place(
-                    &self.tab.doc,
-                    &points,
-                    source,
-                    target,
-                    10.0 / self.tab.camera.zoom,
-                ) {
-                    Ok((doc, ids)) => {
-                        self.tab.doc = doc;
-                        self.tab.selected = ids;
-                    }
-                    Err(error) => {
-                        self.status = error;
-                        self.error = true;
-                        return;
-                    }
-                }
-            }
+            } => return self.place_chain(&points, source, target, before),
             Edit::Graphic(start, end, constrain) => {
-                if let Tool::Graphic(kind) = self.tool {
-                    if matches!(
-                        kind,
-                        reshiki::graphics::GraphicKind::Symbol(_)
-                            | reshiki::graphics::GraphicKind::Orbital(_)
-                    ) {
-                        let drawing = reshiki::scientific::Drawing {
-                            kind,
-                            style: self.tab.graphic_style.clone(),
-                            phase: self.tab.orbital_phase,
-                            flipped: self.tab.phase_flipped,
-                            attach: self.tab.attach_symbols,
-                        };
-                        match drawing.place(
-                            &mut self.tab.doc,
-                            start,
-                            end,
-                            constrain,
-                            10. / self.tab.camera.zoom,
-                        ) {
-                            Ok(id) => self.tab.selected = vec![id],
-                            Err(error) => {
-                                self.status = error;
-                                self.error = true;
-                                return;
-                            }
-                        }
-                    } else {
-                        let id = self.tab.doc.next_id();
-                        self.tab.doc.graphics.push(
-                            Graphic::dragged(
-                                id,
-                                kind,
-                                start,
-                                end,
-                                self.tab.graphic_style.clone(),
-                                self.tab.bracket_sides,
-                                constrain,
-                            )
-                            .with_arc(self.tab.arc_editor.geometry),
-                        );
-                        self.tab.selected = vec![id];
-                    }
-                    self.tool = Tool::Select;
-                }
+                return self.place_graphic(start, end, constrain, before);
             }
             Edit::AtomIndicator(owner, p) => {
                 if let Some(anchor) = owner.anchor(&self.tab.doc) {
@@ -1029,64 +968,7 @@ impl App {
                 self.sync_arc();
             }
             Edit::Template(anchor, direction) => {
-                if let Some(state) = &self.tab.joining {
-                    if state.revision != self.tab.revision || state.epoch != self.tab.file_epoch {
-                        self.cancel_join();
-                        self.status = "The drawing changed. Start Move & attach again.".into();
-                        self.error = true;
-                        return;
-                    }
-                    match state.prepared.place(
-                        anchor,
-                        direction,
-                        10. / self.tab.camera.zoom,
-                        state.anchor,
-                        state.mode,
-                    ) {
-                        Ok((document, selected)) => {
-                            self.tab.doc = document;
-                            self.tab.selected = selected;
-                            self.tab.joining = None;
-                            self.tool = Tool::Select;
-                            self.changed(before);
-                            self.status =
-                                "Fragments joined · Undo restores their original positions".into();
-                            self.sync_typography();
-                        }
-                        Err(error) => {
-                            self.status = error;
-                            self.error = true;
-                        }
-                    }
-                    return;
-                }
-                if self.tool != Tool::Template {
-                    return;
-                }
-                let Some(template) = self.templates.library.get(self.template_index) else {
-                    return;
-                };
-                match template.place(
-                    &self.tab.doc,
-                    anchor,
-                    direction,
-                    10.0 / self.tab.camera.zoom,
-                    self.templates.anchor,
-                    self.templates.connection,
-                ) {
-                    Ok((document, selected)) => {
-                        self.tab.doc = document;
-                        self.tab.selected = selected;
-                        if !self.templates.repeat {
-                            self.tool = Tool::Select;
-                        }
-                    }
-                    Err(error) => {
-                        self.status = error.into();
-                        self.error = true;
-                        return;
-                    }
-                }
+                return self.place_template(anchor, direction, before);
             }
             Edit::Transform {
                 ids,
@@ -1106,44 +988,20 @@ impl App {
                 self.tab.selected = ids;
             }
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
-                let drawing = reshiki::rings::Drawing {
-                    preset,
-                    length: self.tab.bond_drawing.length,
-                    alternate,
-                    connect,
-                };
-                match drawing.place(&self.tab.doc, anchor, direction, 10. / self.tab.camera.zoom) {
-                    Ok((doc, ids)) => {
-                        self.tab.doc = doc;
-                        self.tab.selected = ids;
-                    }
-                    Err(error) => {
-                        self.status = error.into();
-                        self.error = true;
-                        return;
-                    }
-                }
+                return self
+                    .place_ring_preset(preset, anchor, direction, connect, alternate, before);
             }
-            Edit::Ring(anchor, direction) | Edit::DelocalizedRing(anchor, direction, _) => {
-                let (size, aromatic) = match edit {
-                    Edit::DelocalizedRing(_, _, size) => (size, true),
-                    _ => (self.ring_size, self.aromatic_ring),
-                };
-                match editing::ring_oriented(
-                    &mut self.tab.doc,
+            Edit::Ring(anchor, direction) => {
+                return self.place_ring(
                     anchor,
-                    size,
-                    aromatic,
-                    10.0 / self.tab.camera.zoom,
                     direction,
-                ) {
-                    Ok(ids) => self.tab.selected = ids,
-                    Err(error) => {
-                        self.status = error.into();
-                        self.error = true;
-                        return;
-                    }
-                }
+                    self.ring_size,
+                    self.aromatic_ring,
+                    before,
+                );
+            }
+            Edit::DelocalizedRing(anchor, direction, size) => {
+                return self.place_ring(anchor, direction, size, true, before);
             }
             Edit::Select(ids) | Edit::SelectAt(ids, _) => {
                 let inspector_width = self.inspector_width();
@@ -1194,283 +1052,9 @@ impl App {
                     at.y + (self.tab.camera.center.y - at.y) * ratio,
                 );
             }
-            Edit::PlaneBond(start, end) => {
-                let preset = self
-                    .tool
-                    .bond_preset()
-                    .unwrap_or(reshiki::bonds::BondPreset::Single);
-                if preset == reshiki::bonds::BondPreset::Dotted {
-                    self.status = "Drag from a bonded explicit H to an existing acceptor".into();
-                    self.error = true;
-                    return;
-                }
-                let element = if self.tool == Tool::Atom {
-                    self.element.as_str()
-                } else {
-                    "C"
-                };
-                match reshiki::projection::growth::place(&self.tab.doc, start, end, element, preset)
-                {
-                    Ok((doc, id)) => {
-                        self.tab.doc = doc;
-                        self.tab.selected = vec![id];
-                    }
-                    Err(error) => {
-                        self.status = error;
-                        self.error = true;
-                        return;
-                    }
-                }
-            }
-            Edit::Bond(start, end, a, b) => {
-                if self.tool.bond_preset() == Some(reshiki::bonds::BondPreset::Dotted)
-                    && !a.zip(b).is_some_and(|(a, b)| {
-                        reshiki::bonds::hydrogen_endpoints(&self.tab.doc, a, b)
-                    })
-                {
-                    self.status =
-                        "Drag from a bonded explicit H to an existing N, O, F or S acceptor".into();
-                    self.error = true;
-                    return;
-                }
-                if self.tool == Tool::Atom {
-                    let result = a
-                        .ok_or_else(|| "Start the drag on an existing atom".to_string())
-                        .and_then(|id| {
-                            editing::add_bonded_atom(&self.tab.doc, id, end, b, &self.element)
-                        });
-                    match result {
-                        Ok((doc, id)) => {
-                            self.tab.doc = doc;
-                            self.tab.selected = vec![id];
-                        }
-                        Err(error) => {
-                            self.status = error;
-                            self.error = true;
-                            return;
-                        }
-                    }
-                } else if self.tool == Tool::Arrow {
-                    self.place_arrow(start, end);
-                } else {
-                    let a = a.unwrap_or_else(|| self.tab.doc.add_atom("C", start));
-                    let b = b.unwrap_or_else(|| self.tab.doc.add_atom("C", end));
-                    if let Some(preset) = self.tool.bond_preset() {
-                        preset.place(&mut self.tab.doc, a, b);
-                    } else {
-                        let (order, display) = self.bond_style();
-                        self.tab.doc.add_bond(a, b, order, display);
-                    }
-                    self.tab.selected = vec![b];
-                }
-            }
-            Edit::Click(p) => {
-                let hit = canvas::hit_object(&self.tab.doc, p, 10.0 / self.tab.camera.zoom);
-                match self.tool {
-                    Tool::Atom => {
-                        if let Some(id) = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom) {
-                            self.tab.doc.invalidate_chemistry(&[id]);
-                            if let Some(a) = self.tab.doc.atom_mut(id) {
-                                a.element = self.element.clone();
-                                a.display.variable = None;
-                                a.explicit_h = 0;
-                                a.no_implicit = false;
-                                a.charge = 0;
-                                a.isotope = 0;
-                            }
-                            self.tab.selected = vec![id];
-                        } else {
-                            let id = self.tab.doc.add_atom(&self.element, p);
-                            self.tab.selected = vec![id];
-                        }
-                    }
-                    tool if tool.bond_preset() == Some(reshiki::bonds::BondPreset::Dotted) => {
-                        self.status =
-                            "Drag from a bonded explicit H to an existing acceptor".into();
-                        self.error = true;
-                        return;
-                    }
-                    Tool::Bond(_) | Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => {
-                        let atom = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom);
-                        let bond = self
-                            .tab
-                            .doc
-                            .bonds
-                            .iter()
-                            .find(|b| {
-                                self.tab
-                                    .doc
-                                    .atom(b.a)
-                                    .zip(self.tab.doc.atom(b.b))
-                                    .is_some_and(|(a, z)| {
-                                        canvas::distance_to_segment(p, a.position, z.position)
-                                            < 7.0 / self.tab.camera.zoom
-                                    })
-                            })
-                            .cloned();
-                        if let Some(b) = bond.filter(|_| atom.is_none()) {
-                            let shift_double = self.tool.bond_preset().is_some_and(|preset| {
-                                use reshiki::bonds::BondPreset as P;
-                                matches!(
-                                    preset,
-                                    P::Double | P::BoldDouble | P::DashedDouble | P::DoubleDashed
-                                ) && P::of(&b) == Some(preset)
-                            });
-                            if shift_double {
-                                let position =
-                                    reshiki::scene::effective_double_position(&self.tab.doc, &b)
-                                        .cycled();
-                                if let Some(bond) = self
-                                    .tab
-                                    .doc
-                                    .bonds
-                                    .iter_mut()
-                                    .find(|bond| bond.a == b.a && bond.b == b.b)
-                                {
-                                    bond.double_position = position;
-                                }
-                                self.tab.selected = vec![b.a, b.b];
-                                self.changed(before);
-                                self.status = format!(
-                                    "Double bond: {position} · Click again to shift its lines"
-                                );
-                                return;
-                            }
-                            let reverse = self.tool.bond_preset().is_some_and(|p| {
-                                use reshiki::bonds::BondPreset as P;
-                                matches!(
-                                    p,
-                                    P::Wedge
-                                        | P::HashedWedge
-                                        | P::HollowWedge
-                                        | P::Hashed
-                                        | P::Bold
-                                        | P::Dative
-                                        | P::Dashed
-                                ) && P::of(&b) == Some(p)
-                            });
-                            let (order, display) = if self.tool == Tool::Bond(2) {
-                                (2, "plain")
-                            } else if matches!(self.tool, Tool::Bond(_)) {
-                                (
-                                    match b.order {
-                                        1 => 2,
-                                        2 => 3,
-                                        _ => 1,
-                                    },
-                                    "plain",
-                                )
-                            } else {
-                                self.bond_style()
-                            };
-                            if let Some(preset) = self
-                                .tool
-                                .bond_preset()
-                                .filter(|p| p.preserves_chemistry(&b))
-                            {
-                                preset.place(&mut self.tab.doc, b.a, b.b);
-                            } else {
-                                self.tab.doc.add_bond(b.a, b.b, order, display);
-                                self.apply_current_bond_preset(b.a, b.b);
-                            }
-                            if reverse
-                                && let Some(bond) = self
-                                    .tab
-                                    .doc
-                                    .bonds
-                                    .iter_mut()
-                                    .find(|bond| bond.a == b.a && bond.b == b.b)
-                            {
-                                bond.reverse();
-                            }
-                            self.tab.selected = vec![b.a, b.b];
-                        } else {
-                            let (order, display) = self.bond_style();
-                            let a = atom.unwrap_or_else(|| self.tab.doc.add_atom("C", p));
-                            let Some(start) = self.tab.doc.atom(a).map(|a| a.position) else {
-                                self.status = "The bond's starting atom is unavailable".into();
-                                self.error = true;
-                                return;
-                            };
-                            if let Some(endpoint) =
-                                reshiki::projection::growth::Plane::at(&self.tab.doc, a)
-                                    .and_then(|plane| plane.outward(self.tab.bond_drawing.length))
-                            {
-                                let preset = self
-                                    .tool
-                                    .bond_preset()
-                                    .unwrap_or(reshiki::bonds::BondPreset::Single);
-                                match reshiki::projection::growth::place(
-                                    &self.tab.doc,
-                                    a,
-                                    endpoint,
-                                    "C",
-                                    preset,
-                                ) {
-                                    Ok((doc, id)) => {
-                                        self.tab.doc = doc;
-                                        self.tab.selected = vec![id];
-                                    }
-                                    Err(error) => {
-                                        self.status = error;
-                                        self.error = true;
-                                        return;
-                                    }
-                                }
-                            } else {
-                                let end =
-                                    editing::bond_extension(&self.tab.doc, start, Some(a), order);
-                                let ratio = self.tab.bond_drawing.length
-                                    / reshiki::style::DEFAULT.bond_length_world;
-                                let end = start
-                                    .offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
-                                let b = self.tab.doc.add_atom("C", end);
-                                self.tab.doc.add_bond(a, b, order, display);
-                                self.apply_current_bond_preset(a, b);
-                                self.tab.selected = vec![b];
-                            }
-                        }
-                    }
-                    Tool::Ring => {
-                        return self.edit(Edit::Ring(p, None));
-                    }
-                    Tool::Text => {
-                        if let Some(label) =
-                            hit.filter(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id))
-                        {
-                            self.tab.selected = vec![label];
-                            self.sync_typography();
-                            return;
-                        }
-                        if !self.tab.caption.trim().is_empty() {
-                            let id = self.tab.doc.next_id();
-                            self.tab.doc.annotations.push(Annotation {
-                                id,
-                                position: p,
-                                text: self.tab.caption.clone(),
-                                format: self.tab.caption_format.clone(),
-                            });
-                            self.tab.selected = vec![id];
-                            self.tab.caption_target = Some(id);
-                            self.tool = Tool::Select;
-                        }
-                    }
-                    Tool::Arrow => {
-                        if let Some(id) =
-                            hit.filter(|id| self.tab.doc.arrows.iter().any(|a| a.id == *id))
-                        {
-                            self.apply_arrow_tool(id);
-                        } else {
-                            let length = self.tab.doc.drawing_style.bond_length_world * 2.;
-                            self.place_arrow(p, p.offset(length, 0.));
-                        }
-                    }
-                    Tool::Erase => {
-                        reshiki::erasing::stroke(&mut self.tab.doc, p, p, 7. / self.tab.camera.zoom)
-                    }
-                    _ => self.tab.selected = hit.into_iter().collect(),
-                }
-            }
+            Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
+            Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
+            Edit::Click(p) => return self.canvas_click(p, before),
         }
         self.changed(before);
     }

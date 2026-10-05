@@ -1,4 +1,5 @@
 use super::*;
+use reshiki::document::Annotation;
 
 #[test]
 fn selected_wrapper_typography_and_color_leave_internal_atom_and_bond_styles_untouched() {
