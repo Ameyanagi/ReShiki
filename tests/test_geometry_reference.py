@@ -96,6 +96,33 @@ def molecule_request(smiles, field="MMFF94"):
     return molecule, request
 
 
+def native_fixture_request(name):
+    """Reconstruct the exact native graph with RDKit, retaining original H atoms."""
+    directory = Path(__file__).resolve().parents[1] / "native" / "geometry" / "tests" / "fixtures"
+    request = json.loads((directory / name).read_text())
+    builder = Chem.RWMol()
+    for record in request["atoms"]:
+        atom = Chem.Atom(record["atomic_number"])
+        atom.SetIsotope(record["isotope"])
+        atom.SetFormalCharge(record["charge"])
+        atom.SetNumExplicitHs(record["explicit_h"])
+        atom.SetNoImplicit(record["no_implicit"])
+        atom.SetIsAromatic(record["aromatic"])
+        atom.SetNumRadicalElectrons(record["radical"])
+        atom.SetChiralTag(Chem.ChiralType.values[record["chiral_tag"]])
+        builder.AddAtom(atom)
+    for record in request["bonds"]:
+        builder.AddBond(record["a"], record["b"], Chem.BondType.values[record["order"]])
+        bond = builder.GetBondBetweenAtoms(record["a"], record["b"])
+        bond.SetIsAromatic(record["aromatic"])
+        if record["stereo_atoms"]:
+            bond.SetStereoAtoms(*record["stereo_atoms"])
+        bond.SetStereo(Chem.BondStereo.values[record["stereo"]])
+    molecule = builder.GetMol()
+    Chem.SanitizeMol(molecule)
+    return molecule, request
+
+
 def reference_field(molecule, coordinates, field):
     """Construct separately through RDKit's public Python chemistry APIs."""
     calculation = Chem.AddHs(Chem.Mol(molecule))
@@ -240,6 +267,97 @@ class GeometryReferenceTests(unittest.TestCase):
                     value for x, y, z in original["gradient"] for value in (-y, x, z)
                 ]
                 self.assert_gradient(moved["gradient"], rotated_gradient)
+
+    def test_complete_c60_generation_and_existing_xyz_match_independent_force_fields(self):
+        fixture_directory = (
+            Path(__file__).resolve().parents[1] / "native" / "geometry" / "tests" / "fixtures"
+        )
+        request = json.loads((fixture_directory / "c60-request.json").read_text())
+        reference = json.loads((fixture_directory / "c60-reference.json").read_text())
+        self.assertEqual(reference["rdkit_version"], VERSION)
+        molecule = Chem.MolFromInchi(reference["source_inchi"])
+        self.assertIsNotNone(molecule)
+        self.assertEqual(molecule.GetNumAtoms(), 60)
+        self.assertEqual(molecule.GetNumBonds(), 90)
+        # The reference is independently reconstructed from the user's InChI,
+        # keeping the captured graph's original insertion order and indices.
+        for captured, bond in zip(request["bonds"], molecule.GetBonds(), strict=True):
+            self.assertEqual(captured["a"], bond.GetBeginAtomIdx())
+            self.assertEqual(captured["b"], bond.GetEndAtomIdx())
+            self.assertEqual(captured["order"], int(bond.GetBondType()))
+        for field in FIELDS:
+            with self.subTest(field=field):
+                request["field"] = field
+                request["coordinates"] = []
+                generated = self.solve(request)
+                self.assertTrue(generated["converged"])
+                self.assertEqual(len(generated["coordinates"]), 60)
+                self.assertEqual(generated["hydrogen_parents"], [])
+                evaluated = self.assert_parity(molecule, request, generated["coordinates"])
+                self.assert_energy(generated["energy"], evaluated["energy"])
+                request["coordinates"] = reference["coordinates"]
+                _, initial = reference_field(molecule, reference["coordinates"], field)
+                reused = self.solve(request)
+                self.assertTrue(reused["converged"])
+                self.assertTrue(
+                    any(
+                        "reused existing original-atom 3D coordinates" in line
+                        for line in reused["diagnostics"]
+                    ),
+                    reused["diagnostics"],
+                )
+                self.assert_energy(reused["initial_energy"], initial.CalcEnergy())
+                self.assert_parity(molecule, request, reused["coordinates"])
+
+    def test_native_import_embedding_regressions_match_official_force_fields(self):
+        cases = (
+            ("taxol70-request.json", ("MMFF94s",), 70, 43, 8),
+            ("user-c36-request.json", FIELDS, 36, 24, 1),
+        )
+        for fixture, fields, original_count, added_h, conformers in cases:
+            for field in fields:
+                with self.subTest(fixture=fixture, field=field):
+                    molecule, request = native_fixture_request(fixture)
+                    self.assertEqual(molecule.GetNumAtoms(), original_count)
+                    request.update(field=field, conformers=conformers)
+                    source = copy.deepcopy(request)
+                    generated = self.solve(request)
+                    self.assertEqual(len(generated["coordinates"]), original_count + added_h)
+                    self.assertLessEqual(generated["energy"], generated["initial_energy"] + 1e-6)
+                    self.assertEqual(request, source)
+                    calculation, _ = reference_field(molecule, generated["coordinates"], field)
+                    parents = [
+                        calculation.GetAtomWithIdx(i).GetNeighbors()[0].GetIdx()
+                        for i in range(original_count, calculation.GetNumAtoms())
+                    ]
+                    self.assertEqual(generated["hydrogen_parents"], parents)
+                    self.assertEqual(
+                        [
+                            i
+                            for i in range(original_count)
+                            if calculation.GetAtomWithIdx(i).GetAtomicNum() == 1
+                        ],
+                        list(range(62, 70)) if original_count == 70 else [],
+                    )
+                    # Independent 3D stereo assignment must recover every
+                    # original specified configuration in the same index order.
+                    Chem.AssignAtomChiralTagsFromStructure(
+                        calculation, confId=0, replaceExistingTags=True
+                    )
+                    for index, record in enumerate(request["atoms"]):
+                        if record["chiral_tag"]:
+                            self.assertEqual(
+                                int(calculation.GetAtomWithIdx(index).GetChiralTag()),
+                                record["chiral_tag"],
+                                index,
+                            )
+                    if original_count == 36:
+                        self.assertTrue(generated["converged"])
+                        self.assertFalse(
+                            any("cage-ETDG" in line for line in generated["diagnostics"])
+                        )
+                    evaluated = self.assert_parity(molecule, request, generated["coordinates"])
+                    self.assert_energy(generated["energy"], evaluated["energy"])
 
     def test_fixed_original_and_temporary_hydrogen_stay_exact_in_relaxation(self):
         for field in FIELDS:

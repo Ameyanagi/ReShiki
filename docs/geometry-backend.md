@@ -116,6 +116,27 @@ and process deadline bound each detached calculation. Live relaxation also
 pauses after 50 batches for unchanged physical constraints or eight batches
 without meaningful energy improvement; the preview remains editable.
 
+`Generate` accepts either no coordinates or one XYZ coordinate per original
+atom as a candidate starting geometry. The worker checks physical geometry and
+intrinsic three-dimensionality, adds temporary hydrogen coordinates, then
+validates specified stereo before minimizing. Invalid or planar candidates fall back to
+generation. A conservative fullerene topology check identifies closed carbon
+cages; a bounded ETKDG trial can fall back to distance geometry without basic
+planarity constraints. Cage coordinates must remain inside a supported
+near-convex envelope, checked before seed reuse and after generation or
+relaxation, including final Apply validation. This is an engineering admission
+policy, not a proof that other fullerene shapes are chemically invalid. The
+final chosen force field, geometry checks, and stereo checks remain mandatory.
+Failed ensembles dominated by ETKDG planarity rejections may use the same
+alternate initialization. An embedding timeout may retry with a single
+conformer. Recovery permits at most three embedding calls, including any cage
+trial, with a ten-second embedding deadline per call; the enclosing worker
+deadline remains enforced. Successful ordinary ensembles keep their existing
+settings. Initialization choices and reduced sampling are recorded in
+diagnostics. Reused starting geometry is
+centered during minimization and returned to its original position, keeping
+optimization independent of where the structure was drawn.
+
 ## Independent development oracle
 
 After building the app, the locked development RDKit environment compares

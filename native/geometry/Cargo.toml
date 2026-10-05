@@ -9,3 +9,6 @@ description = "Bounded Rust MMFF/UFF and ETKDG geometry solver"
 serde = { version = "1", features = ["derive"] }
 # The reviewed force-field API commit is pinned before this change is shipped.
 cosmolkit-core = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "252a1f3d6480fc4a0abcd51d76707f51f69b4406" }
+
+[dev-dependencies]
+serde_json = "1"

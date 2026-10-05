@@ -16,6 +16,7 @@ pub const MAX_CONFORMERS: u32 = 32;
 pub const MAX_ITERATIONS: u32 = 10_000;
 // Keep deterministic seeded sampling isolated from concurrent solver calls.
 static SOLVER_OPERATION: Mutex<()> = Mutex::new(());
+mod cage;
 mod solver;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,7 +73,8 @@ pub struct Request {
     pub bonds: Vec<BondInput>,
     pub field: ForceField,
     pub operation: Operation,
-    /// Empty for Generate; otherwise full original+added-H coordinates.
+    /// Generate accepts either no coordinates or an optional original-atom 3D
+    /// starting geometry. Relax/Evaluate require original+added-H coordinates.
     pub coordinates: Vec<[f64; 3]>,
     pub fixed_atoms: Vec<usize>,
     pub conformers: u32,
@@ -153,13 +155,17 @@ impl Request {
             }
         }
         if self.coordinates.len() > MAX_COORDINATES
-            || !self.coordinates.iter().all(valid_coordinate)
+            || (self.operation != Operation::Generate
+                && !self.coordinates.iter().all(valid_coordinate))
         {
             return Err("Invalid geometry coordinate input".into());
         }
         match self.operation {
-            Operation::Generate if !self.coordinates.is_empty() || !self.fixed_atoms.is_empty() => {
-                return Err("Geometry generation cannot receive coordinates or fixed atoms".into());
+            Operation::Generate if !self.fixed_atoms.is_empty() => {
+                return Err("Geometry generation cannot receive fixed atoms".into());
+            }
+            Operation::Generate if !self.coordinates.is_empty() && self.coordinates.len() != n => {
+                return Err("Geometry generation seed requires original-atom coordinates".into());
             }
             Operation::Relax | Operation::Evaluate if self.coordinates.len() < n => {
                 return Err("Geometry operation requires original and added-H coordinates".into());
@@ -360,6 +366,72 @@ mod tests {
             borane.field = field;
             assert!(solve(&borane).unwrap_err().contains("MMFF parameters"));
         }
+    }
+
+    #[test]
+    fn generation_seed_contract_and_invalid_geometry_fallback_are_bounded() {
+        let mut request = ethanol(ForceField::UFF);
+        request.coordinates = vec![[0., 0., 0.]; 2];
+        assert!(request.validate().unwrap_err().contains("original-atom"));
+        request.coordinates = vec![[0., 0., 0.]; 3];
+        request.fixed_atoms = vec![0];
+        assert!(request.validate().unwrap_err().contains("fixed atoms"));
+        request.fixed_atoms.clear();
+        for invalid in [
+            vec![[0., 0., 0.]; 3],
+            vec![[f64::NAN, 0., 0.]; 3],
+            vec![[0., 0., 0.], [1.5, 0., 1.5], [2., 1., 3.]],
+        ] {
+            request.coordinates = invalid;
+            let generated = solve(&request).unwrap();
+            assert_eq!(generated.hydrogen_parents, [0, 0, 0, 1, 1, 2]);
+            assert_eq!(generated.coordinates.len(), 9);
+            assert!(
+                generated.diagnostics[0].starts_with("existing original-atom coordinates ignored:")
+            );
+            assert!(generated.diagnostics[0].len() < 600);
+            assert!(
+                generated
+                    .diagnostics
+                    .iter()
+                    .any(|line| line.contains("Rust ETKDGv3"))
+            );
+        }
+    }
+
+    #[test]
+    fn existing_3d_seed_adds_temporary_hydrogens_and_preserves_tetrahedral_stereo() {
+        let mut request = molecule(
+            &[6, 9, 17, 35],
+            &[(0, 1, 1), (0, 2, 1), (0, 3, 1)],
+            ForceField::MMFF94s,
+        );
+        request.atoms[0].chiral_tag = 1;
+        let embedded = solve(&request).unwrap();
+        request.coordinates = embedded.coordinates[..request.atoms.len()].to_vec();
+        let seeded = solve(&request).unwrap();
+        assert_eq!(seeded.hydrogen_parents, [0]);
+        assert_eq!(seeded.coordinates.len(), 5);
+        assert!(seeded.diagnostics[0].starts_with("initialization=existing-3d;"));
+        assert!(seeded.energy <= seeded.initial_energy + 1e-6);
+        evaluate(&request, seeded.coordinates.clone());
+        let repeated = solve(&request).unwrap();
+        close(seeded.energy, repeated.energy, 1e-8, 0.);
+        for (first, second) in seeded.coordinates.iter().zip(repeated.coordinates) {
+            for axis in 0..3 {
+                close(first[axis], second[axis], 1e-8, 0.);
+            }
+        }
+        for point in &mut request.coordinates {
+            point[2] = -point[2];
+        }
+        let corrected = solve(&request).unwrap();
+        assert!(
+            corrected.diagnostics[0].starts_with("existing original-atom coordinates ignored:")
+        );
+        assert!(corrected.diagnostics[0].contains("tetrahedral stereo"));
+        evaluate(&request, corrected.coordinates);
+        assert_eq!(request.atoms[0].chiral_tag, 1);
     }
 
     #[test]

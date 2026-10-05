@@ -20,6 +20,53 @@ fn conformer(prepared: &Prepared) -> Conformer {
         hydrogen_parents: vec![],
     }
 }
+
+#[test]
+fn generation_offers_retained_depth_in_physical_units_without_mutating_the_source() {
+    let mut source = ethanol();
+    source.atom_mut(89).unwrap().depth = 17.;
+    let original = source.clone();
+    let prepared = Prepared::new(&source, &[3]).unwrap();
+    let request = prepared
+        .native_request(
+            ForceField::Mmff94s,
+            reshiki_geometry::Operation::Generate,
+            None,
+            &[],
+            500,
+        )
+        .unwrap();
+    assert_eq!(request.coordinates.len(), 3);
+    for (coordinates, id) in request.coordinates.iter().zip(prepared.ids()) {
+        let atom = source.atom(*id).unwrap();
+        assert_eq!(
+            *coordinates,
+            [
+                f64::from(atom.position.x) / prepared.units,
+                -f64::from(atom.position.y) / prepared.units,
+                f64::from(atom.depth) / prepared.units,
+            ]
+        );
+    }
+    assert!(request.fixed_atoms.is_empty());
+    assert_eq!(source, original);
+
+    // A flat drawing translated in depth still needs a generated conformer.
+    for atom in &mut source.atoms {
+        atom.depth = 17.;
+    }
+    let prepared = Prepared::new(&source, &[]).unwrap();
+    let request = prepared
+        .native_request(
+            ForceField::Mmff94s,
+            reshiki_geometry::Operation::Generate,
+            None,
+            &[],
+            500,
+        )
+        .unwrap();
+    assert!(request.coordinates.is_empty());
+}
 fn identity(doc: &Document) -> String {
     let molecule = molecular::prepare(doc).unwrap();
     crate::chemistry::smiles::write::write(&molecule.state, Default::default())
