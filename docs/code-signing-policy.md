@@ -53,11 +53,8 @@ explicit approval; a passing build alone will not approve signing. SignPath will
 hold the certificate's private key. No private signing key will be checked into
 ReShiki's repository or distributed with the application.
 
-The application review must also clarify Foundation's treatment of the existing
-`hexf-parse` dependency under CC0-1.0 and other third-party data notices, and review
-the installer privacy-disclosure and update-check opt-out requirements. This page
-does not assert that every existing third-party license is OSI-approved or that
-all onboarding requirements are already complete.
+Before enabling signing, review the installer privacy-disclosure and update-check
+opt-out requirements with SignPath Foundation.
 
 Unsigned development builds may continue to be published with their signing
 status clearly identified. A build will only be described as signed after its
