@@ -87,11 +87,11 @@ The [0.10.0 validation record](release-0.10.0-validation.md) records the complet
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
-3. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.9.0` for version `0.9.0`.
+3. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.11.0` for version `0.11.0`.
 
 ```sh
-git tag -a v0.9.0 -m "ReShiki 0.9.0"
-git push origin v0.9.0
+git tag -a v0.11.0 -m "ReShiki 0.11.0"
+git push origin v0.11.0
 ```
 
 A `v*` tag triggers builds. A mismatched version or a tagged commit outside `main` fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual **Release builds** runs never publish a release; **Nightly builds** runs publish prereleases from `main`.
