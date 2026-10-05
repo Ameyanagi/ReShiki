@@ -151,7 +151,43 @@ class NativeRuntimeTests(unittest.TestCase):
             self.assertEqual(helper.call_args.args[0].name, "reshiki.exe")
             self.assertEqual(check.call_args.args[0].parent, check.call_args.args[1])
             self.assertEqual(check.call_count, 1)
-            geometry.assert_called_once_with(check.call_args.args[0], "2026.03.6")
+            geometry.assert_called_once_with(check.call_args.args[0], "2026.03.6", signed=False)
+
+    def test_signed_mac_archive_preserves_bundle_for_geometry_admission(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary) / "package.zip"
+            metadata = {
+                "platform": "macos",
+                "architecture": "arm64",
+                "inchi": {"version": "1.07.5"},
+                "geometry": {"version": "2026.03.6"},
+            }
+            with zipfile.ZipFile(archive, "w") as stream:
+                stream.writestr("package/build.json", json.dumps(metadata))
+                stream.writestr(
+                    "package/ReShiki.app/Contents/MacOS/reshiki", b"\xcf\xfa\xed\xfebinary"
+                )
+
+            def run(command, **_kwargs):
+                if command[:3] == ["ditto", "-x", "-k"]:
+                    with zipfile.ZipFile(command[3]) as stream:
+                        stream.extractall(command[4])
+
+            with (
+                patch("build_release.platform.system", return_value="Darwin"),
+                patch("build_release.run", side_effect=run),
+                patch("build_release.verify_binary"),
+                patch("build_release.verify_inchi_worker"),
+                patch("build_release.verify_runtime"),
+                patch("build_release.verify_macos_workers"),
+                patch("sign_macos.verify_app") as signature,
+                patch("build_release.verify_geometry_worker") as geometry,
+            ):
+                build_release.verify_archive(archive, signed=True)
+            signature.assert_called_once()
+            geometry.assert_called_once_with(
+                signature.call_args.args[0] / "Contents/MacOS/reshiki", "2026.03.6", signed=True
+            )
 
     def test_windows_upgrade_cleanup_is_scoped_to_the_app(self):
         script = (build_release.ROOT / "packaging/windows/reshiki.iss").read_text()
