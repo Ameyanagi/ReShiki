@@ -21,7 +21,17 @@ flowchart LR
 | `src/document.rs`                              | Atoms, bonds, text, arrows, stable object IDs, validation, undo/redo snapshots |
 | `src/scene.rs`                                 | Toolkit-independent lines, polygons, labels and SVG serialization              |
 | `src/canvas.rs`                                | Hit testing, pointer gestures, snapping, camera and previews                   |
-| `src/app.rs`                                   | Desktop controls, asynchronous requests, selection and file workflows          |
+| `src/app.rs`                                   | App state, messages, lifecycle, update entry points and the root view          |
+| `src/app/gates.rs`                             | Ordered modal gates that run before message dispatch                           |
+| `src/app/dispatch.rs`                          | Message dispatch table: one handler per message variant                        |
+| `src/app/canvas_edit/`                         | Canvas gesture dispatch, direct manipulation, placement and clicks             |
+| `src/app/bond_edits.rs`                        | Bond drawing settings and edits to selected bonds                              |
+| `src/app/atom_edits.rs`                        | Element, charge, isotope, radical and mark edits to selected atoms             |
+| `src/app/ring_edits.rs`                        | Ring tool settings and the selected ring's aromaticity                         |
+| `src/app/selection_edits.rs`                   | Selection, grouping, framing and arrangement commands                          |
+| `src/app/history.rs`                           | Undo and redo of drawing history                                               |
+| `src/app/view_settings.rs`                     | Window, camera and view-aid preferences                                        |
+| `src/app/engine_jobs.rs`                       | Chemistry engine requests and the handling of their results                    |
 | `src/app/workspace.rs`                         | Command bar, context row, compact palette, inspector and status bar            |
 | `src/app/icons.rs`                             | Original vector tool and command icons                                         |
 | `src/engine.rs`                                | Chemistry interface, native routing and response validation                    |

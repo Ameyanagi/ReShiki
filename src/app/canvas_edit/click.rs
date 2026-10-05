@@ -5,7 +5,7 @@ use reshiki::document::{Annotation, Document, Point};
 use reshiki::editing;
 
 impl App {
-    pub(in crate::app) fn canvas_click(&mut self, p: Point, before: Document) {
+    pub(super) fn canvas_click(&mut self, p: Point, before: Document) {
         let hit = canvas::hit_object(&self.tab.doc, p, 10.0 / self.tab.camera.zoom);
         match self.tool {
             Tool::Atom => {

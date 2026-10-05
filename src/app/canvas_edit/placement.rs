@@ -6,7 +6,7 @@ use reshiki::editing;
 use reshiki::graphics::Graphic;
 
 impl App {
-    pub(in crate::app) fn place_chain(
+    pub(super) fn place_chain(
         &mut self,
         points: &[Point],
         source: Option<u64>,
@@ -32,7 +32,7 @@ impl App {
         }
         self.changed(before);
     }
-    pub(in crate::app) fn place_graphic(
+    pub(super) fn place_graphic(
         &mut self,
         start: Point,
         end: Point,
@@ -86,7 +86,7 @@ impl App {
         }
         self.changed(before);
     }
-    pub(in crate::app) fn place_template(
+    pub(super) fn place_template(
         &mut self,
         anchor: Point,
         direction: Option<Point>,
@@ -152,7 +152,7 @@ impl App {
         }
         self.changed(before);
     }
-    pub(in crate::app) fn place_ring_preset(
+    pub(super) fn place_ring_preset(
         &mut self,
         preset: reshiki::rings::Preset,
         anchor: Point,
@@ -180,7 +180,7 @@ impl App {
         }
         self.changed(before);
     }
-    pub(in crate::app) fn place_ring(
+    pub(super) fn place_ring(
         &mut self,
         anchor: Point,
         direction: Option<Point>,
@@ -205,7 +205,7 @@ impl App {
         }
         self.changed(before);
     }
-    pub(in crate::app) fn place_plane_bond(
+    pub(super) fn place_plane_bond(
         &mut self,
         start: u64,
         end: reshiki::projection::growth::Endpoint,
@@ -238,7 +238,7 @@ impl App {
         }
         self.changed(before);
     }
-    pub(in crate::app) fn place_bond(
+    pub(super) fn place_bond(
         &mut self,
         start: Point,
         end: Point,
