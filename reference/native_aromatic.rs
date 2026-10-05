@@ -344,8 +344,8 @@ fn serialize_aromatic_requests() -> anyhow::Result<()> {
     let mut hashes = BTreeMap::new();
     for name in [
         "reference/native_aromatic.rs",
-        "src/engine.rs",
-        "src/engine/reference.rs",
+        "crates/io/src/engine.rs",
+        "crates/io/src/engine/reference.rs",
         "crates/model/src/document.rs",
         "crates/model/src/typography.rs",
         "crates/model/src/style.rs",

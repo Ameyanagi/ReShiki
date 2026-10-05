@@ -3647,6 +3647,7 @@ dependencies = [
  "reshiki-chemistry",
  "reshiki-depict-math",
  "reshiki-geometry",
+ "reshiki-io",
  "reshiki-linux",
  "reshiki-macos",
  "reshiki-model",
@@ -3697,6 +3698,29 @@ dependencies = [
  "cosmolkit-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "reshiki-io"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "directories-next",
+ "pdf-writer",
+ "png 0.17.16",
+ "reshiki-geometry",
+ "reshiki-model",
+ "reshiki-process-heap",
+ "reshiki-windows",
+ "resvg 0.45.1",
+ "roxmltree 0.20.0",
+ "serde",
+ "serde_json",
+ "svg2pdf",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]

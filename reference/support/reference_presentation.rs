@@ -57,7 +57,13 @@ pub fn compare_export(actual: &Value, expected: &mut Value) -> anyhow::Result<()
     } else {
         return Ok(());
     };
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // The root crate's reference targets and reshiki-io (crates/io) both
+    // include this file; resolve the checkout that holds the oracle.
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest
+        .ancestors()
+        .find(|dir| dir.join("reference/reference_presentation.py").is_file())
+        .unwrap_or(manifest);
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
     } else {

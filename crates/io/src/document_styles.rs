@@ -178,14 +178,18 @@ impl Preset {
     }
     fn json(self) -> &'static str {
         match self {
-            Self::Jacs => include_str!("../presets/drawing/acs-guidance.reshiki-style"),
-            Self::Nature => include_str!("../presets/drawing/nature-publisher.reshiki-style"),
-            Self::Rsc => include_str!("../presets/drawing/rsc-guidance.reshiki-style"),
+            Self::Jacs => include_str!("../../../presets/drawing/acs-guidance.reshiki-style"),
+            Self::Nature => include_str!("../../../presets/drawing/nature-publisher.reshiki-style"),
+            Self::Rsc => include_str!("../../../presets/drawing/rsc-guidance.reshiki-style"),
             Self::Angewandte => {
-                include_str!("../presets/drawing/angewandte-publisher.reshiki-style")
+                include_str!("../../../presets/drawing/angewandte-publisher.reshiki-style")
             }
-            Self::Synthesis => include_str!("../presets/drawing/synthesis-guidance.reshiki-style"),
-            Self::Presentation => include_str!("../presets/drawing/presentation.reshiki-style"),
+            Self::Synthesis => {
+                include_str!("../../../presets/drawing/synthesis-guidance.reshiki-style")
+            }
+            Self::Presentation => {
+                include_str!("../../../presets/drawing/presentation.reshiki-style")
+            }
         }
     }
     pub fn style(self) -> DrawingStyle {

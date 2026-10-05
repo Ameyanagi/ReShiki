@@ -10,7 +10,11 @@ license = "MIT OR Apache-2.0"
 [features]
 default = []
 # Optional Python/RDKit development oracles, never part of release builds.
-rdkit-reference = ["reshiki-chemistry/rdkit-reference", "reshiki-model/rdkit-reference"]
+rdkit-reference = [
+  "reshiki-chemistry/rdkit-reference",
+  "reshiki-model/rdkit-reference",
+  "reshiki-io/rdkit-reference",
+]
 # Opt-in state observation for disposable compositor integration tests.
 wayland-qa = ["reshiki-linux/wayland-qa"]
 
@@ -22,10 +26,11 @@ members = [
   "native/geometry",
   "crates/chemistry",
   "crates/depict-math",
+  "crates/io",
   "crates/model",
   "crates/process-heap",
 ]
-default-members = [".", "crates/chemistry", "crates/model"]
+default-members = [".", "crates/chemistry", "crates/io", "crates/model"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 reshiki-macos = { path = "native/macos" }
@@ -52,6 +57,7 @@ cosmolkit-inchi = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSM
 reshiki-depict-math = { path = "crates/depict-math" }
 reshiki-chemistry = { path = "crates/chemistry" }
 reshiki-model = { path = "crates/model" }
+reshiki-io = { path = "crates/io" }
 iced = { version = "0.14", default-features = false, features = [
   "canvas",
   "tokio",

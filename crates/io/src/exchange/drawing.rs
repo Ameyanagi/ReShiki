@@ -13,7 +13,7 @@ mod labels;
 mod ligands;
 mod objects;
 mod tree;
-pub(crate) use clipboard::write as write_clipboard;
+pub use clipboard::write as write_clipboard;
 use tree::{Key, Tree};
 
 #[derive(Debug, thiserror::Error)]

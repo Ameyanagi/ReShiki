@@ -1,0 +1,44 @@
+[package]
+name = "reshiki-io"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Exchange formats, chemistry engine, export and recovery for ReShiki"
+
+[features]
+default = []
+# Optional Python/RDKit development oracles, never part of release builds.
+rdkit-reference = ["reshiki-model/rdkit-reference"]
+
+[dependencies]
+reshiki-model = { path = "../model" }
+reshiki-geometry = { path = "../../native/geometry" }
+reshiki-process-heap = { path = "../process-heap" }
+base64 = "0.22"
+directories-next = "2"
+pdf-writer = "0.12.1"
+png = "0.17"
+resvg = "0.45"
+roxmltree = "0.20"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = [
+  "process",
+  "fs",
+  "io-util",
+  "sync",
+  "time",
+  "rt-multi-thread",
+  "macros",
+] }
+
+[target.'cfg(windows)'.dependencies]
+reshiki-windows = { path = "../../native/windows" }
+
+[dev-dependencies]
+anyhow = "1"
+reshiki-process-heap = { path = "../process-heap", features = ["allocation-metrics"] }

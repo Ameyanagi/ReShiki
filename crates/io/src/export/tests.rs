@@ -100,7 +100,7 @@ fn clipboard_is_transparent_and_files_keep_canvas_background() {
 #[test]
 fn office_clipboard_svg_outlines_text_without_moving_or_resizing_it() {
     let doc: Document = serde_json::from_str(include_str!(
-        "../../tests/fixtures/ui-drawn-ethanol.reshiki"
+        "../../../../tests/fixtures/ui-drawn-ethanol.reshiki"
     ))
     .unwrap();
     let svg = String::from_utf8(clipboard_svg(&doc).unwrap()).unwrap();
@@ -146,7 +146,7 @@ fn office_clipboard_svg_outlines_text_without_moving_or_resizing_it() {
 #[test]
 fn vector_pdf_and_png_contain_real_drawing_data() {
     let d: Document = serde_json::from_str(include_str!(
-        "../../tests/fixtures/ui-drawn-ethanol.reshiki"
+        "../../../../tests/fixtures/ui-drawn-ethanol.reshiki"
     ))
     .unwrap();
     let pdf = drawing(&d, "pdf").unwrap();

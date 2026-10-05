@@ -2,11 +2,11 @@
 use super::super::{PythonEngine, Worker, reference_python};
 use anyhow::Context;
 use serde_json::{Value, json};
-use std::{path::Path, process::Stdio, time::Duration};
+use std::{process::Stdio, time::Duration};
 use tokio::{io::BufReader, process::Command};
 
 async fn fixture_engine() -> anyhow::Result<PythonEngine> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = &crate::repository_root();
     let explicit = crate::compatibility::environment("REFERENCE_PYTHON")
         .or_else(|| crate::compatibility::environment("PYTHON"))
         .map(std::path::PathBuf::from);

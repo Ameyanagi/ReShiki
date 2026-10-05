@@ -88,7 +88,7 @@ impl PythonEngine {
     async fn spawn() -> Result<Worker, String> {
         let root = crate::compatibility::environment("ROOT")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+            .unwrap_or_else(crate::repository_root);
         let explicit = crate::compatibility::environment("REFERENCE_PYTHON")
             .or_else(|| crate::compatibility::environment("PYTHON"));
         let python = reference_python(&root, explicit.map(PathBuf::from))

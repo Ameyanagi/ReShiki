@@ -27,26 +27,21 @@ pub use reshiki_model::{
     storage, style, templates, theme_files, theme_generator, typography,
 };
 
+#[cfg(windows)]
+use reshiki_io::native_windows;
+pub use reshiki_io::{
+    chemistry, cleanup, compatibility, document_styles, engine, exchange, export, geometry,
+    recovery, template_library,
+};
+
 pub mod accessibility;
 pub mod assistant;
-pub mod chemistry;
-pub mod cleanup;
 pub mod clipboard;
-pub mod compatibility;
-pub mod document_styles;
-pub mod engine;
-pub mod exchange;
-pub mod export;
-pub mod geometry;
 pub mod hotkeys;
 pub mod keyboard_drawing;
 pub mod libreoffice;
 #[cfg(not(windows))]
 pub(crate) mod native_process;
-#[cfg(windows)]
-mod native_windows;
 pub mod office_addin;
 pub mod printing;
-pub mod recovery;
-pub mod template_library;
 pub mod updates;

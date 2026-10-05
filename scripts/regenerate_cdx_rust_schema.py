@@ -24,11 +24,11 @@ def main():
             f"kind: {json.dumps(kind)}, variants: &[{variants}] }},"
         )
     lines.append("];")
-    (root / "src/exchange/schema.rs").write_text("\n".join(lines) + "\n")
+    (root / "crates/io/src/exchange/schema.rs").write_text("\n".join(lines) + "\n")
 
     # Use the exact historical codepages, not their similarly named WHATWG
     # variants. Store Unicode scalars as u32; 0xffffffff marks undefined bytes.
-    target = root / "src/exchange/charsets"
+    target = root / "crates/io/src/exchange/charsets"
     target.mkdir(exist_ok=True)
     for charset, encoding in [
         (10000, "mac_roman"),

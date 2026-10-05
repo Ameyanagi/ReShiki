@@ -44,9 +44,9 @@ class ReferenceFeatures(unittest.TestCase):
     def test_reference_path_literals_exist(self):
         sources = [
             *(ROOT / "reference").rglob("*.rs"),
-            ROOT / "src/engine/reference.rs",
-            *(ROOT / "src/engine/reference").rglob("*.rs"),
-            ROOT / "src/chemistry/cleanup/numeric.rs",
+            ROOT / "crates/io/src/engine/reference.rs",
+            *(ROOT / "crates/io/src/engine/reference").rglob("*.rs"),
+            ROOT / "crates/io/src/chemistry/cleanup/numeric.rs",
             *(ROOT / "tests").glob("*.rs"),
             *(ROOT / "scripts").glob("*.py"),
         ]

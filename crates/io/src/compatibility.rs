@@ -2,7 +2,7 @@
 use std::{ffi::OsString, io::Write, path::PathBuf};
 
 /// Prefer the current setting; retain explicit overrides from older installations.
-pub(crate) fn environment(suffix: &str) -> Option<OsString> {
+pub fn environment(suffix: &str) -> Option<OsString> {
     std::env::var_os(format!("RESHIKI_{suffix}"))
         .or_else(|| std::env::var_os(format!("MORUNO_{suffix}")))
 }
@@ -16,7 +16,7 @@ pub fn is_native_extension(extension: &str) -> bool {
         .any(|native| extension.eq_ignore_ascii_case(native))
 }
 
-pub(crate) fn data_directory() -> Result<PathBuf, String> {
+pub fn data_directory() -> Result<PathBuf, String> {
     if let Some(path) = environment("DATA_DIR") {
         return Ok(PathBuf::from(path));
     }

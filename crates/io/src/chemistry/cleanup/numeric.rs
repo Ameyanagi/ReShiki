@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn original_python_orientation_and_numeric_primitives_match_exactly() -> anyhow::Result<()> {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root = &crate::repository_root();
         let python = root.join(if cfg!(windows) {
             ".venv/Scripts/python.exe"
         } else {
@@ -215,7 +215,7 @@ mod windows_tests {
     #[test]
     fn windows_emulated_cleanup_preserves_the_original_sine_rounding() -> anyhow::Result<()> {
         let capture: Capture = serde_json::from_value(serde_json::from_str(include_str!(
-            "../../../tests/fixtures/cleanup-windows-trigonometry.json"
+            "../../../../../tests/fixtures/cleanup-windows-trigonometry.json"
         ))?)?;
         anyhow::ensure!(capture.header["rdkit"] == crate::chemistry::RDKIT_VERSION);
         let original = capture

@@ -5,7 +5,7 @@ use anyhow::Context;
 
 mod protocol;
 
-#[path = "../../../reference/support/reference_presentation.rs"]
+#[path = "../../../../../reference/support/reference_presentation.rs"]
 mod reference_presentation;
 
 async fn guarded(
@@ -25,7 +25,7 @@ async fn guarded_script(
     script: &str,
     inject: Option<&str>,
 ) -> anyhow::Result<LocalEngine<PythonEngine>> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = &crate::repository_root();
     let mut command = Command::new(root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
     } else {

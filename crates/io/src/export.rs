@@ -1,6 +1,6 @@
 use crate::{document::Document, scene};
 
-pub(crate) fn parse_svg(svg: String) -> Result<resvg::usvg::Tree, String> {
+pub fn parse_svg(svg: String) -> Result<resvg::usvg::Tree, String> {
     let mut options = resvg::usvg::Options::default();
     options.fontdb_mut().load_system_fonts();
     resvg::usvg::Tree::from_str(&svg, &options).map_err(|error| error.to_string())
@@ -10,7 +10,7 @@ pub(crate) fn parse_svg(svg: String) -> Result<resvg::usvg::Tree, String> {
 /// the editor. Resolve fonts and outlines before putting a Windows picture on
 /// the clipboard, retaining the physical size and vector quality.
 #[cfg(any(windows, test))]
-pub(crate) fn clipboard_svg(doc: &Document) -> Result<Vec<u8>, String> {
+pub fn clipboard_svg(doc: &Document) -> Result<Vec<u8>, String> {
     doc.validate()?;
     let tree = parse_svg(scene::svg(doc))?;
     let outlined = tree.to_string(&resvg::usvg::WriteOptions::default());

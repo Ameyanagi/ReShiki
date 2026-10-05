@@ -176,7 +176,7 @@ mod tests {
     }
     #[test]
     fn old_dark_drafts_convert_their_colors_once() {
-        let bytes = include_bytes!("../tests/fixtures/palette/legacy-dark.rsk");
+        let bytes = include_bytes!("../../../tests/fixtures/palette/legacy-dark.rsk");
         let old: Document = serde_json::from_slice(bytes).unwrap();
         let dir = tempfile::tempdir().unwrap();
         let store = Recovery::in_directory(dir.path()).unwrap();

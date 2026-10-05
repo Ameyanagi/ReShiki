@@ -81,7 +81,7 @@ fn collect(
     Ok(())
 }
 
-pub(crate) fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
+pub fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
     doc.validate()?;
     let layout = doc
         .page_layout
@@ -122,7 +122,7 @@ pub(crate) fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-pub(crate) fn office_metafile(doc: &Document) -> Result<Vec<u8>, String> {
+pub fn office_metafile(doc: &Document) -> Result<Vec<u8>, String> {
     doc.validate()?;
     let tree = crate::export::parse_svg(scene::svg(doc))?;
     metafile(&tree)
@@ -161,9 +161,10 @@ mod tests {
 
     #[test]
     fn windows_print_keeps_vector_text_page_offsets_and_physical_size() {
-        let mut doc: Document =
-            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.reshiki"))
-                .unwrap();
+        let mut doc: Document = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/ui-drawn-ethanol.reshiki"
+        ))
+        .unwrap();
         doc.page_layout = Some(crate::pages::Layout {
             columns: 2,
             ..crate::pages::Layout::around(&doc)

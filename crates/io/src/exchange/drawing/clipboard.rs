@@ -2,7 +2,7 @@
 //! File export stays strict; the native clipboard keeps the complete original.
 use super::*;
 
-pub(crate) fn write(source: &Document) -> Result<(String, Vec<String>)> {
+pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
     source.validate().map_err(invalid)?;
     let haworth = crate::haworth::interchange::export_bonds(source).map_err(invalid)?;
     let mut document = source.clone();
