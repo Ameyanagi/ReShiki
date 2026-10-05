@@ -1,44 +1,46 @@
-Pinned native geometry core
-===========================
+Rust geometry backend and parameter data
+=======================================
 
-ReShiki includes a geometry-only, statically linked source slice of RDKit
-2026.03.6 from https://github.com/rdkit/rdkit at revision
-0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985. Original source files, copyright
-headers, parameter tables and experimental torsion data are preserved in
-native/geometry/vendor/rdkit-geometry-2026.03.6.tar.gz. The adjacent manifest
-records every file SHA-256. These files retain their upstream BSD-3-Clause
-terms; see RDKIT-LICENSE.
+ReShiki's geometry worker uses cosmolkit-core 0.3.0 from the COSMolKit Rust
+implementation, https://github.com/Ameyanagi/COSMolKit.git. The complete Git
+revision is pinned in native/geometry/Cargo.toml and Cargo.lock and recorded
+in each release's build.json. COSMolKit retains its MIT license and the
+copyright of the COSMolKit Contributors; its complete terms are included
+by the Rust dependency notice supplements and consolidated distribution.
+The geometry adapter and worker integration are original ReShiki code.
 
-This core contains ETKDGv3 distance-geometry embedding, the MMFF94 and
-MMFF94s force fields, the Universal Force Field (UFF), their atom typing and
-parameter data, and their graph, geometry, optimizer and matching support.
-The geometry interface and build integration are original ReShiki code.
-The native source slice is not the existing ReShiki Rust chemistry engine.
+COSMolKit implements distance-geometry embedding, MMFF94, MMFF94s, UFF,
+atom typing, energy/gradient evaluation, and optimization in Rust. Its Rust
+build script reads embedded RDKit parameter/torsion/atomic data to generate
+Rust constants. Files named Params.cpp and atomic_data.cpp are data sources
+for that generator; no C++ solver or Boost headers are compiled or linked.
+Python is used only by separate developer/reference tests. The application
+runs from its own executable without a Python or RDKit runtime or downloads.
 
-The MMFF parameter data in Code/ForceField/MMFF/Params.cpp preserve:
+COSMolKit identifies the parameter/reference origin as RDKit 2026.03.1,
+revision 351f8f378f8ad6bbd517980c38896e66bf907af8. The independent ReShiki
+comparison reference is RDKit 2026.03.6, revision
+0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985, https://github.com/rdkit/rdkit.
+This reference version is retained in the worker protocol's version field;
+it does not identify the Rust backend or original parameter-source revision.
+Exact SHA-256 values for
+COSMolKit's embedded data are audited by scripts/geometry_source.py and
+recorded in release build.json. UFF, atomic data, ETKDGv2, small-ring and
+macrocycle torsion files match that RDKit reference. The MMFF source adds
+an Id header, and the legacy torsion-v1 file repeats its first pattern.
+
+Original RDKit source/data notices remain applicable under BSD-3-Clause; see
+RDKIT-LICENSE. The embedded source files preserve:
+Copyright (C) 2013 Paolo Tosco
+Copyright (C) 2004-2006 Rational Discovery LLC
+Copyright (C) 2004-2021 Greg Landrum and other RDKit contributors
+Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors
+All Rights Reserved
+
+The MMFF parameter data additionally preserve:
 Copyright (c) Merck and Co., Inc., 1994, 1995, 1996
 All Rights Reserved
 and, for MMFF94s-specific tables:
 Copyright (c) Merck and Co., Inc., 1994,1995,1996,1997,1998,1999
-The original notices remain in the data and source archive. This notice
-does not replace, modify or relicense those upstream notices.
-
-Boost 1.92.0 headers are statically compiled into this core. The checked
-source slice is native/geometry/vendor/boost-geometry-1.92.0.tar.gz.
-The initial capture uses the unmodified installed Homebrew Boost headers;
-every copied file is individually checksum pinned. Homebrew identifies the
-upstream source as:
-https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-b2-nodocs.tar.xz
-SHA-256 ea7b982002cc9dfbe59b0b217b206f470dc75f3de0bb2973d844118934d82411
-That upstream archive checksum identifies the original source release;
-the checked source-slice checksum is separately recorded in the manifest.
-Boost files preserve their original authors' notices and BSL-1.0 terms;
-see BOOST-LICENSE. No compiled Boost library is linked.
-
-The build preserves conditional platform headers and expands modules that
-compute include filenames, so it does not rely on the developer's installed
-headers. The generated export/configuration headers describe static linking
-and the selected upstream geometry options. The unused SMILES JSON settings
-translation unit is excluded; no numerical geometry implementation is
-substituted or approximated. Neither Python nor a downloaded executable is
-part of this native core or its runtime.
+All Rights Reserved
+This notice does not replace, modify, or relicense those original notices.

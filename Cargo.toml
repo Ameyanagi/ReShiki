@@ -46,7 +46,7 @@ iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 reshiki-geometry = { path = "native/geometry" }
 accesskit = "=0.24.1"
 reshiki-process-heap = { path = "crates/process-heap" }
-cosmolkit-inchi = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "3a437849dcd28319b1a3cdf02d7897a7ee200cb2" }
+cosmolkit-inchi = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "252a1f3d6480fc4a0abcd51d76707f51f69b4406" }
 reshiki-depict-math = { path = "crates/depict-math" }
 iced = { version = "0.14", default-features = false, features = [
   "canvas",

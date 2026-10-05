@@ -1,293 +1,150 @@
-"""Audit/recreate the checked-in offline RDKit geometry source archives.
+"""Audit the locked Rust geometry dependency and embedded parameter provenance.
 
-Normal builds only consume these archives. Refreshing explicitly requires the
-pinned upstream checkout and Boost include tree; this script never downloads.
+This script reads checked-in Cargo pins and, optionally, an existing COSMolKit
+checkout. It never fetches sources or compiles the RDKit reference data.
 """
 
 import argparse
-import gzip
 import hashlib
-import io
 import json
 import re
 import subprocess
-import tarfile
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VENDOR = Path("native/geometry/vendor")
+GEOMETRY_MANIFEST = Path("native/geometry/Cargo.toml")
+COSMOLKIT_VERSION = "0.3.0"
+COSMOLKIT_REPOSITORY = "https://github.com/Ameyanagi/COSMolKit.git"
 RDKIT_VERSION = "2026.03.6"
 RDKIT_REVISION = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
-BOOST_VERSION = "1.92.0"
-BOOST_UPSTREAM_ARCHIVE = {
-    "url": "https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-b2-nodocs.tar.xz",
-    "sha256": "ea7b982002cc9dfbe59b0b217b206f470dc75f3de0bb2973d844118934d82411",
+PARAMETER_REFERENCE_VERSION = "2026.03.1"
+PARAMETER_REFERENCE_REVISION = "351f8f378f8ad6bbd517980c38896e66bf907af8"
+PARAMETER_ROOT = Path("crates/cosmolkit-core/src/chemistry/forcefield/rdkit")
+# Exact bytes audited in the pinned COSMolKit checkout, not C++ build inputs.
+PARAMETER_SHA256 = {
+    "ForceField/MMFF/Params.cpp": "91af3ffd45515712bb787d2c14c4a1c890367fc15e1a71b1d1782a60a0e34b7f",
+    "ForceField/UFF/Params.cpp": "c2e3fedb28233258a5277dcfddd0e163c55bd4cc9e83b2e242fefb0cb96f787e",
+    "GraphMol/atomic_data.cpp": "7f9cee6e430b60d303a0a7fa9e33c45e5c529ee204f86afeab6a20f68b6b0631",
+    "GraphMol/ForceFieldHelpers/CrystalFF/torsionPreferences_v1.in": "8af25175470dbfc82714dcf54115cccd741ef65463096703a67799c4340d98be",
+    "GraphMol/ForceFieldHelpers/CrystalFF/torsionPreferences_v2.in": "c1c1ff3d93b9629d1e71502daa02257c9968ca4788478d4970f81e457a37d8e5",
+    "GraphMol/ForceFieldHelpers/CrystalFF/torsionPreferences_smallrings.in": "28124c740e9aba1ec835fa9cef8f095258f0b94f5829dda2b995e99bbd1b5efb",
+    "GraphMol/ForceFieldHelpers/CrystalFF/torsionPreferences_macrocycles.in": "0a11044bbcdddf842b505e4baa0b4878e1fcc0725fa7c99dd82ff462938eab6e",
 }
-LIBRARIES = frozenset(
-    """DistGeomHelpers MolAlign ForceFieldHelpers SubstructMatch
-GraphMol DistGeometry Alignment MolTransforms SmilesParse GenericGroups
-RDGeometryLib DataStructs RDGeneral EigenSolvers ForceField Optimizer Trajectory""".split()
-)
-GENERATED_PARSERS = (
-    "lex.yysmiles.cpp",
-    "lex.yysmarts.cpp",
-    "smiles.tab.cpp",
-    "smiles.tab.hpp",
-    "smarts.tab.cpp",
-    "smarts.tab.hpp",
-)
-LITERAL_INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
-MACRO_INCLUDE = re.compile(r'^\s*#\s*include\s+([^<"\s].*)', re.MULTILINE)
 
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def metadata(root=ROOT):
-    vendor = Path(root) / VENDOR
-    manifest = json.loads((vendor / "source-manifest.json").read_text())
-    return {
-        "version": manifest["rdkit"]["version"],
-        "revision": manifest["rdkit"]["revision"],
-        "boost_version": manifest["boost"]["version"],
-        "manifest_sha256": digest(vendor / "source-manifest.json"),
-        "archives": {name: record["sha256"] for name, record in manifest["archives"].items()},
-        "runtime": "self-process-static-core",
-    }
-
-
-def verify(root=ROOT):
-    vendor = Path(root) / VENDOR
-    manifest = json.loads((vendor / "source-manifest.json").read_text())
+def dependency(root=ROOT):
+    root = Path(root)
+    manifest = tomllib.loads((root / GEOMETRY_MANIFEST).read_text())
+    required = manifest["dependencies"]["cosmolkit-core"]
     if (
-        manifest["rdkit"]["version"] != RDKIT_VERSION
-        or manifest["rdkit"]["revision"] != RDKIT_REVISION
+        not isinstance(required, dict)
+        or required.get("version") != "=" + COSMOLKIT_VERSION
+        or required.get("git") != COSMOLKIT_REPOSITORY
+        or not re.fullmatch(r"[0-9a-f]{40}", required.get("rev", ""))
     ):
-        raise ValueError("Geometry source does not match the pinned RDKit release")
-    if manifest["boost"]["version"] != BOOST_VERSION:
-        raise ValueError("Geometry source does not match the pinned Boost headers")
-    for name, record in manifest["archives"].items():
-        archive = vendor / name
-        if archive.stat().st_size != record["bytes"] or digest(archive) != record["sha256"]:
-            raise ValueError(f"Geometry source archive changed: {name}")
-        found = {}
-        with tarfile.open(archive, "r:gz") as stream:
-            for member in stream:
-                path = Path(member.name)
-                if not member.isfile() or path.is_absolute() or ".." in path.parts:
-                    raise ValueError(f"Unsafe geometry archive member: {member.name}")
-                if member.name in found or member.name not in record["files"]:
-                    raise ValueError(f"Unexpected geometry archive member: {member.name}")
-                content = stream.extractfile(member)
-                if content is None:
-                    raise ValueError(f"Missing geometry archive contents: {member.name}")
-                with content:
-                    data = content.read()
-                found[member.name] = hashlib.sha256(data).hexdigest()
-        if found != record["files"]:
-            raise ValueError(f"Geometry source contents changed: {name}")
-    return metadata(root)
-
-
-def library_sources(code):
-    libraries = {}
-    exports = set()
-    for cmake in sorted(code.rglob("CMakeLists.txt")):
-        for body in re.findall(r"rdkit_library\s*\(([^)]+)\)", cmake.read_text()):
-            words = body.split()
-            exports.add(words[0])
-            if words[0] not in LIBRARIES:
-                continue
-            stop = words.index("LINK_LIBRARIES") if "LINK_LIBRARIES" in words else len(words)
-            libraries[words[0]] = [
-                (cmake.parent / word).relative_to(code).as_posix()
-                for word in words[1:stop]
-                if word.endswith(".cpp") and word != "SmilesJSONParsers.cpp"
-            ]
-    if set(libraries) != LIBRARIES:
-        raise ValueError("Pinned RDKit geometry library closure changed")
-    return libraries, sorted(exports)
-
-
-def include_closure(code, boost, roots):
-    """Preserve literal conditional includes and macro-owning Boost modules.
-
-    Expanding a module for computed #include names keeps its platform/compiler
-    alternatives, instead of capturing only headers used by the current host.
-    Missing legacy/optional includes are recorded, never silently synthesized.
-    """
-    # These libraries compute filenames in #define expansion, including local
-    # and forward iteration headers that never appear as literal #include lines.
-    computed_modules = {"preprocessor", "mpl"}
-    pending = list(roots)
-    pending.extend(
-        p for module in computed_modules for p in (boost / module).rglob("*") if p.is_file()
-    )
-    seen, expanded, missing = set(), computed_modules.copy(), set()
-    while pending:
-        path = pending.pop()
-        if path in seen:
-            continue
-        seen.add(path)
-        source = path.read_text(errors="strict")
-        if path.is_relative_to(boost) and MACRO_INCLUDE.search(source):
-            module = path.relative_to(boost).parts[0]
-            directory = boost / module
-            if directory.is_dir() and module not in expanded:
-                expanded.add(module)
-                pending.extend(p for p in directory.rglob("*") if p.is_file())
-        for include in LITERAL_INCLUDE.findall(source):
-            if include.startswith("boost/"):
-                candidate = boost / include[6:]
-                if candidate.is_file():
-                    pending.append(candidate)
-                else:
-                    missing.add(include)
-                continue
-            for candidate in (path.parent / include, code / include):
-                candidate = candidate.resolve()
-                if not candidate.is_relative_to(code) and not candidate.is_relative_to(boost):
-                    continue
-                if candidate.is_file():
-                    pending.append(candidate)
-                    break
-                template = candidate.with_name(candidate.name + ".cmake")
-                if template.is_file():
-                    pending.append(template)
-                    break
-    return seen, sorted(expanded), sorted(missing)
-
-
-def archive_sources(destination, paths):
-    hashes, uncompressed = {}, 0
-    with destination.open("wb") as raw:
-        with gzip.GzipFile(
-            filename="", mode="wb", fileobj=raw, compresslevel=9, mtime=0
-        ) as compressed:
-            with tarfile.open(fileobj=compressed, mode="w", format=tarfile.USTAR_FORMAT) as stream:
-                for name, source in sorted(paths.items()):
-                    content = source.read_bytes()
-                    info = tarfile.TarInfo(name)
-                    info.size, info.mode = len(content), 0o644
-                    info.mtime, info.uid, info.gid = 0, 0, 0
-                    stream.addfile(info, io.BytesIO(content))
-                    hashes[name] = hashlib.sha256(content).hexdigest()
-                    uncompressed += len(content)
-    return {
-        "sha256": digest(destination),
-        "bytes": destination.stat().st_size,
-        "source_bytes": uncompressed,
-        "files": hashes,
-    }
-
-
-def refresh(rdkit, boost_include, root=ROOT):
-    rdkit, boost_include = Path(rdkit).resolve(), Path(boost_include).resolve()
-    revision = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=rdkit, check=True, capture_output=True, text=True
-    ).stdout.strip()
-    if revision != RDKIT_REVISION:
-        raise ValueError("Supply the exact pinned upstream RDKit checkout")
-    subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", "Code"], cwd=rdkit, check=True)
-    code, boost = rdkit / "Code", boost_include / "boost"
-    if "#define BOOST_VERSION 109200" not in (boost / "version.hpp").read_text():
-        raise ValueError("Supply Boost 1.92.0 headers")
-    libraries, exports = library_sources(code)
-    roots = []
-    for sources in libraries.values():
-        roots.extend(
-            code / (name + ".cmake" if name == "RDGeneral/versions.cpp" else name)
-            for name in sources
+        raise ValueError(
+            "Geometry Cargo dependency must pin the exact COSMolKit version and Git revision"
         )
-    roots.extend(code / "GraphMol/SmilesParse" / (name + ".cmake") for name in GENERATED_PARSERS)
-    roots.extend(code / "RDGeneral" / name for name in ("versions.h.cmake", "RDConfig.h.cmake"))
-    roots.extend(
-        code / "GraphMol/ForceFieldHelpers" / name
-        for name in ("FFConvenience.h", "UFF/UFF.h", "MMFF/MMFF.h")
+    lock = tomllib.loads((root / "Cargo.lock").read_text())
+    packages = [p for p in lock["package"] if p["name"] == "cosmolkit-core"]
+    revision = required["rev"]
+    source = f"git+{COSMOLKIT_REPOSITORY}?rev={revision}#{revision}"
+    if (
+        len(packages) != 1
+        or packages[0]["version"] != COSMOLKIT_VERSION
+        or packages[0].get("source") != source
+    ):
+        raise ValueError("Geometry Cargo dependency does not match the locked COSMolKit revision")
+    return dict(
+        name="cosmolkit-core",
+        version=COSMOLKIT_VERSION,
+        repository=COSMOLKIT_REPOSITORY,
+        revision=revision,
+        source=source,
     )
-    paths, modules, missing = include_closure(code, boost, roots)
-    vendor = Path(root) / VENDOR
-    vendor.mkdir(parents=True, exist_ok=True)
-    archives = {}
-    archives["rdkit-geometry-2026.03.6.tar.gz"] = archive_sources(
-        vendor / "rdkit-geometry-2026.03.6.tar.gz",
-        {
-            "rdkit/Code/" + p.relative_to(code).as_posix(): p
-            for p in paths
-            if p.is_relative_to(code)
+
+
+def metadata(root=ROOT):
+    root = Path(root)
+    backend = dependency(root)
+    return {
+        # Retained wire field: this is the independent RDKit reference version.
+        "version": RDKIT_VERSION,
+        "revision": backend["revision"],
+        "backend": backend,
+        "implementation": "Rust",
+        "parameter_reference": {
+            "name": "RDKit",
+            "version": PARAMETER_REFERENCE_VERSION,
+            "revision": PARAMETER_REFERENCE_REVISION,
+            "repository": "https://github.com/rdkit/rdkit",
         },
-    )
-    archives["boost-geometry-1.92.0.tar.gz"] = archive_sources(
-        vendor / "boost-geometry-1.92.0.tar.gz",
-        {
-            "boost/boost/" + p.relative_to(boost).as_posix(): p
-            for p in paths
-            if p.is_relative_to(boost)
-        },
-    )
-    manifest = {
-        "format": 1,
-        "rdkit": {
+        "comparison_reference": {
+            "name": "RDKit",
             "version": RDKIT_VERSION,
             "revision": RDKIT_REVISION,
             "repository": "https://github.com/rdkit/rdkit",
-            "libraries": libraries,
-            "export_macros": exports,
-            "omitted": ["GraphMol/SmilesParse/SmilesJSONParsers.cpp"],
         },
-        "boost": {
-            "version": BOOST_VERSION,
-            "upstream_archive": BOOST_UPSTREAM_ARCHIVE,
-            "capture": "Installed unmodified Homebrew Boost headers; individually SHA-256 pinned",
-            "expanded_macro_include_modules": modules,
-            "unavailable_optional_or_legacy_includes": missing,
+        "parameter_data": {
+            "repository_path": PARAMETER_ROOT.as_posix(),
+            "files_sha256": PARAMETER_SHA256,
+            "capture": "COSMolKit embedded data; MMFF adds an Id header, legacy torsion-v1 repeats one row",
         },
-        "archives": archives,
+        "cargo_manifest_sha256": digest(root / GEOMETRY_MANIFEST),
+        "cargo_lock_sha256": digest(root / "Cargo.lock"),
+        "runtime": "self-process-rust-core",
+        "runtime_python": False,
+        "runtime_downloads": False,
     }
-    (vendor / "source-manifest.json").write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
-    )
-    hashes = "\n".join(
-        f'set({"RDKIT" if name.startswith("rdkit") else "BOOST"}_SOURCE_SHA256 "{record["sha256"]}")'
-        for name, record in archives.items()
-    )
-    (vendor / "source-hashes.cmake").write_text(hashes + "\n")
-    sources = [name for group in libraries.values() for name in group]
-    sources.extend(
-        "GraphMol/SmilesParse/" + name for name in GENERATED_PARSERS if name.endswith(".cpp")
-    )
-    lines = [
-        "# Sources and export names from the exact pinned upstream CMake library closure.",
-        "set(RDKIT_GEOMETRY_SOURCES",
-    ]
-    for name in sorted(sources):
-        base = (
-            "GENERATED_CODE"
-            if name == "RDGeneral/versions.cpp" or name.split("/")[-1] in GENERATED_PARSERS
-            else "RDKIT_CODE"
-        )
-        lines.append(f'  "${{{base}}}/{name}"')
-    lines.extend([")", "set(RDKIT_EXPORT_NAMES " + " ".join(exports) + ")", ""])
-    (Path(root) / "native/geometry/cpp/sources.cmake").write_text("\n".join(lines))
-    return verify(root)
+
+
+def verify_parameters(core):
+    for name, expected in PARAMETER_SHA256.items():
+        if digest(Path(core) / "src/chemistry/forcefield/rdkit" / name) != expected:
+            raise ValueError(f"Geometry parameter data changed: {name}")
+
+
+def verify(root=ROOT, cosmolkit_source=None, cargo_metadata=None):
+    root = Path(root)
+    result = metadata(root)
+    geometry = root / "native/geometry"
+    for obsolete in ("build.rs", "cpp", "vendor"):
+        if (geometry / obsolete).exists():
+            raise ValueError(f"Obsolete native geometry build input remains: {obsolete}")
+    if cosmolkit_source is not None:
+        source = Path(cosmolkit_source).resolve()
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=source, check=True, capture_output=True, text=True
+        ).stdout.strip()
+        if revision != result["revision"]:
+            raise ValueError("COSMolKit checkout does not match the locked geometry revision")
+        verify_parameters(source / "crates/cosmolkit-core")
+    if cargo_metadata is not None:
+        packages = [p for p in cargo_metadata["packages"] if p["name"] == "cosmolkit-core"]
+        if (
+            len(packages) != 1
+            or packages[0]["version"] != COSMOLKIT_VERSION
+            or packages[0].get("source") != result["backend"]["source"]
+        ):
+            raise ValueError("Resolved COSMolKit source does not match the geometry Cargo pin")
+        verify_parameters(Path(packages[0]["manifest_path"]).parent)
+    return result
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refresh", action="store_true")
-    parser.add_argument("--rdkit-source", type=Path)
-    parser.add_argument("--boost-include", type=Path)
+    parser.add_argument(
+        "--cosmolkit-source",
+        type=Path,
+        help="Audit parameter bytes in an existing checkout; never downloads",
+    )
     args = parser.parse_args()
-    if args.refresh:
-        if not args.rdkit_source or not args.boost_include:
-            parser.error("--refresh requires --rdkit-source and --boost-include")
-        result = refresh(args.rdkit_source, args.boost_include)
-    else:
-        if args.rdkit_source or args.boost_include:
-            parser.error("Source paths only apply to --refresh")
-        result = verify()
-    print(json.dumps(result, indent=2))
+    print(json.dumps(verify(cosmolkit_source=args.cosmolkit_source), indent=2))
 
 
 if __name__ == "__main__":

@@ -162,7 +162,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux libraries
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake g++ binutils libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
       - run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
       - run: rustup default 1.99.0
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
@@ -175,8 +175,6 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
-      - name: Require the native geometry build tools
-        run: cmake --version
       - name: Build the Rust helper and test executable
         run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.target }}
       - name: Select the helper for runtime integration tests
@@ -226,7 +224,7 @@ jobs:
       - name: Replay complete aromatic response fixtures
         run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
   geometry:
-    name: Native geometry (${{ matrix.target }})
+    name: Rust geometry (${{ matrix.target }})
     needs: scope
     if: needs.scope.outputs.native == 'true'
     timeout-minutes: 45
@@ -251,14 +249,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: "14.0"
-      RESHIKI_GEOMETRY_NATIVE_TESTS: "1"
-      # Match the geometry archive's MSVC /MT runtime to Rust's static CRT.
+      # Keep the packaged Windows executable independent of redistributable CRT DLLs.
       RUSTFLAGS: ${{ endsWith(matrix.target, '-pc-windows-msvc') && '-C target-feature=+crt-static' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install the Linux C++ toolchain
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake g++ binutils
       - name: Select the matching native Rust host
         run: rustup set default-host ${{ matrix.target }}
       - run: rustup toolchain install 1.99.0 --profile minimal --target ${{ matrix.target }}
@@ -271,10 +265,8 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
-      - name: Require the native geometry build tools
-        run: cmake --version
-      - name: Test the offline geometry crate with vendored source
-        run: cargo test --locked -p reshiki-geometry --target ${{ matrix.target }}
+      - name: Test the Rust geometry crate with the locked COSMolKit source
+        run: cargo test --locked -p reshiki-geometry --features cosmolkit-core/op-contracts-strict --target ${{ matrix.target }}
   reference:
     needs: scope
     if: needs.scope.outputs.live == 'true'
@@ -301,7 +293,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux libraries
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake g++ binutils libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
       - run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
       - run: rustup default 1.99.0
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
@@ -317,8 +309,6 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.platform.msvc_arch }}
-      - name: Require the native geometry build tools
-        run: cmake --version
       - name: Build the Rust helper and test executable
         run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.platform.target }}
       - name: Select the helper for runtime integration tests

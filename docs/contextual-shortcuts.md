@@ -19,7 +19,12 @@ The canvas fills the drawing area. Rulers reserve only their top and left gutter
 
 ## How to read the keys
 
-Lowercase and uppercase are different: **m** inserts Me at an atom; **M** means **Shift+m** and inserts MgBr. In the default mode, keys depend on what is under the pointer. A single selected atom, or a selected bond's two endpoints, can also provide the target. A hovered target takes precedence. Clear the selection and move to empty canvas before choosing a tool. **Keyboard drawing (F8)** instead uses an explicit hotspot, as described below.
+Lowercase and uppercase are different: **m** inserts Me at an atom; **M**
+means **Shift+m** and inserts MgBr. In Select/Lasso, mouse and keyboard drawing
+work together by default. Actual mouse motion or a click chooses an atom,
+bond, or empty-position hotspot; keyboard navigation and editing keep their
+new target while the pointer stays still. **F8** toggles this behavior for the
+current tab. Other drawing tools suspend it and retain their usual shortcuts.
 
 An atom's visible label is part of its target, including the hydrogen count,
 isotope and charge. Hovering the `₂` in NH₂ targets that nitrogen. **g**, **?**
@@ -27,48 +32,78 @@ and **/** refresh the target's property fields just as clicking to select it doe
 
 Text fields keep ordinary typing, and Cmd/Ctrl shortcuts never type their letter into a field. Enter applies a field and leaves it, so **Cmd/Ctrl+Z** then undoes the drawing; while a field is still focused, Undo and Redo do nothing. **Cmd** means Command on macOS; **Ctrl** is the corresponding modifier on Windows and Linux. **Alt** is Option on macOS. Uppercase letters in modified shortcuts, such as **Cmd/Ctrl+C**, do not imply Shift unless it is written explicitly.
 
-## Keyboard drawing without pointer hover
+## Mouse and keyboard drawing by default
 
-Press unmodified **F8**, or choose **Keyboard drawing** from the Select/Lasso
-context row or its **⋯** menu. The marker and row show the active hotspot.
-A selected atom starts at that atom; a selected bond's two endpoints start at
-that bond. Otherwise the nearest visible atom or bond to the view centre is
-used. On an empty drawing, the starting position is the view centre.
+In Select/Lasso, the marker and context row show the active hotspot without
+requiring F8. A single selected atom or bond's two selected endpoints provide
+an initial target; otherwise the nearest visible atom or bond to the view
+centre is used. Blank drawings initially start at the view centre. Move the
+pointer or click to transfer the hotspot to an atom, bond, or empty position.
+After a keyboard step, a stationary pointer does not steal its new target.
 
-| Key                     | Result in Keyboard drawing                                                   |
-| ----------------------- | ---------------------------------------------------------------------------- |
-| Arrow                   | Navigate atom → bond → atom in the chosen direction                          |
-| Shift+arrow             | Navigate atom → atom or bond → bond, skipping the other kind                 |
-| 1 at an atom            | Extend a chain; the new endpoint becomes active                              |
-| 0 at an atom            | Add a branch; its origin remains active                                      |
-| Enter at an atom        | Edit its label, including after a ring selected several atoms                |
-| [ / ]                   | Mark an atom / connect the active atom to the marked atom with a single bond |
-| F8 / Escape / Done (F8) | Leave Keyboard drawing                                                       |
+| Key                           | Result with keyboard drawing on                                              |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| Arrow                         | Navigate atom → bond → atom in the chosen direction                          |
+| Shift+arrow                   | Navigate atom → atom or bond → bond, skipping the other kind                 |
+| 1 at an atom                  | Extend a chain; the new endpoint becomes active                              |
+| 0 at an atom                  | Add a branch; its origin remains active                                      |
+| v                             | Attach/fuse a three-member ring, or seed one at an empty hotspot             |
+| l                             | Enter Cl at an atom or empty hotspot; place the double line left at a bond   |
+| Enter at an atom              | Edit its label, including after a ring selected several atoms                |
+| [ / ]                         | Mark an atom / connect the active atom to the marked atom with a single bond |
+| F8 / Keyboard drawing control | Turn keyboard drawing off for this tab; classic arrow nudging returns        |
+| F8 when off                   | Turn it back on and return to Select                                         |
+| Escape                        | Ordinary cancel/return to Select; preserve this tab's on/off choice          |
 
-The atom and bond tables below apply to the active hotspot. On an empty
-drawing, an atom letter creates the first atom, **1** creates a C–C bond,
-and **3 / 6 / 7** starts phenyl / a six-member / a five-member ring.
-Ring attachment keeps the attachment hotspot. Use arrows to choose a bond
-before changing its order or fusing a ring; arrows only navigate.
+The existing atom and bond tables below apply to the hotspot. On empty canvas,
+an atom letter creates the first atom, **1** creates a C–C bond, and **3 / 6 / 7**
+starts phenyl / a six-member / a five-member ring. On a new blank drawing,
+**n → 1 → 1** makes an N–C–C chain without F8. Ring attachment keeps its
+attachment hotspot; use arrows to choose a bond before changing its order or
+fusing a ring. Navigation does not edit the drawing.
 
-For a branch, navigate back to the desired atom and press **0**. For ring
-closure, navigate to the first endpoint, press **[**, navigate to the second,
-and press **]**. Rejected connections do not change the drawing. Each committed
-edit is an Undo step, and Undo/Redo restore the corresponding hotspot and mark.
+With hotspot drawing on, contextual chemistry takes priority: **v** draws a
+three-member ring, and **l** enters Cl at an atom or empty hotspot (or positions
+the double line at a bond). Choose **Select** or **Lasso** with the tool buttons;
+**Escape** cancels the current operation or returns to Select. Escape preserves
+the tab's keyboard drawing preference.
 
-Pointer hover does not change the active hotspot. Text fields and label drafts
-retain their typing and caret keys; finish or cancel them to resume drawing.
-Cmd/Ctrl and Alt shortcuts keep their existing actions, and **Shift+3–8** still
-chooses ring tools. Outside this mode, the default pointer/selection shortcuts
-and arrow nudges are unchanged. This is ReShiki's keyboard contract, informed
-by ChemDraw rather than an exact emulation.
+**Enter** uses the hotspot while keyboard drawing is on: an atom opens its
+label draft, while a bond or empty position opens Properties. It does not
+contract a multi-atom selection. Turn keyboard drawing off with F8 to use
+classic Enter for **Contract selection**, or to edit the label of a fully
+selected existing abbreviation.
 
-See [3D optimization and keyboard drawing](3d-keyboard-drawing.md) for a complete
-workflow, force-field choices, pins, rotation, and retained depth appearance.
+For a branch, navigate back to the desired atom and press **0**. For closure,
+press **[** at one endpoint, navigate to the other, and press **]**. Rejected
+connections do not change the drawing. Committed edits are Undo steps, and
+Undo/Redo restore their hotspot and mark.
+
+F8/Off is a per-tab opt-out that survives tool and tab changes; new tabs start
+on. Other drawing tools suspend the hotspot and clear a pending mark. Returning
+to Select/Lasso resumes it automatically unless opted out. Text fields, label
+drafts, and dialogs retain their typing and caret keys. Cmd/Ctrl and Alt keep
+their modified commands, and **Shift+3–8** still chooses ring tools. Escape
+preserves the on/off preference.
+
+With keyboard drawing off, classic contextual keys use hover or selection,
+and arrows nudge the selection by 1 / 10 drawing units. Clear the selection
+and point to empty canvas to use **v / l** as Select/Lasso tool aliases;
+their chemical actions still apply at classic atom or bond targets.
+
+ChemDraw remains the reference for contextual chemistry, rather than an exact
+compatibility promise. The [ChemDraw 21 manual](https://chem.beloit.edu/classes/programs/ChemDraw_21_manual.pdf)
+describes contextual arrow navigation with selection tools and assigns **F8**
+to **View → Reduce** (zoom out). ReShiki's per-tab F8 toggle, default hotspot
+lifecycle, empty-canvas seeding, branch focus, and **[ / ]** connection commands
+follow the ReShiki contract above.
+
+See [3D optimization and keyboard drawing](3d-keyboard-drawing.md) for reviewer
+steps, force-field choices, pins, rotation, and retained depth appearance.
 
 ## Two quick ring gestures
 
-- Choose **Benzene** in Rings (or press **j** over empty canvas). A normal click places alternating bonds. Hold **Cmd** on Mac or **Ctrl** on Windows/Linux while clicking or dragging to place the circle form. This modifier also works with regular rings and cyclopentadiene; it leaves chairs and Haworth projections unchanged.
+- Choose **Benzene** in Rings (or, with keyboard drawing off, press **j** over empty canvas). A normal click places alternating bonds. Hold **Cmd** on Mac or **Ctrl** on Windows/Linux while clicking or dragging to place the circle form. This modifier also works with regular rings and cyclopentadiene; it leaves chairs and Haworth projections unchanged.
 - With Select, click inside an existing aromatic ring (or select all its atoms), move the pointer off its atoms and bonds, then press lowercase **a** to toggle circle / alternating bonds. Over an atom or bond, **a** attaches a ring even if the previous ring was automatically selected. The modifier shortcut **Cmd/Ctrl+Alt+K** remains available. The display change preserves molecular identity.
 
 ## Add an element with a bond
@@ -122,7 +157,10 @@ chain direction and oxygen occupies the other side. The hotspot moves to that
 new carbon so another growth key continues the chain. At an internal carbon,
 **2** adds only oxygen and keeps the hotspot on the existing carbon.
 
-With multiple atoms selected, **Enter** opens **Contract selection** so you can name the fragment.
+With keyboard drawing off and multiple atoms selected, **Enter** opens
+**Contract selection** so you can name the fragment. A fully selected existing
+abbreviation opens its label draft instead. With keyboard drawing on, Enter
+uses the active hotspot as described above.
 
 ## At a bond
 
@@ -144,6 +182,15 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 
 ## On empty canvas: choose a tool
 
+These classic tool-selection mappings apply when keyboard drawing is off or
+another drawing tool is active. In the default Select/Lasso behavior, supported
+atom and growth/ring keys instead seed a drawing at the empty hotspot as
+explained above; in particular, **v / l** retain their contextual chemistry.
+Keys without a contextual chemistry action, such as **X / t / T / G**, still
+choose their drawing tools with keyboard drawing on. To use the complete
+classic empty-canvas table, turn keyboard drawing off, clear the selection,
+and move to empty canvas.
+
 | Key            | Tool or action                                                 |
 | -------------- | -------------------------------------------------------------- |
 | Space or v / l | Select / lasso                                                 |
@@ -159,7 +206,7 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Element key    | Select its atom tool when there is no contextual edit          |
 | Escape         | Cancel the current operation / return to selection             |
 
-**R** can also convert a selected complete 3–8 member ring. This changes its bonds; it is different from changing an aromatic ring's circle representation. Benzene starts with alternating bonds.
+With keyboard drawing off, or with the hotspot on empty canvas, **R** can also convert a selected complete 3–8 member ring. This changes its bonds; it is different from changing an aromatic ring's circle representation. Benzene starts with alternating bonds.
 
 **Shift+3–8** selects the corresponding saturated ring size without editing the
 drawing or its selection. The unshifted digit shortcuts retain their atom,
@@ -188,31 +235,31 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 
 ## Selection and drawing constraints
 
-| Keys or gesture             | Action                                                                                    |
-| --------------------------- | ----------------------------------------------------------------------------------------- |
-| Cmd/Ctrl+A / Shift+A        | Select all / invert selection                                                             |
-| Cmd/Ctrl+G / Shift+G        | Group / ungroup                                                                           |
-| Cmd/Ctrl+Shift+D            | Duplicate                                                                                 |
-| Cmd/Ctrl+Shift+Right        | Add a reaction arrow and a copy of the selected molecule to its right                     |
-| Space with Select active    | Select the whole most recently edited molecule                                            |
-| Cmd/Ctrl+J                  | Join selected atoms or bonds                                                              |
-| Cmd/Ctrl+Shift+K            | Preview cleanup                                                                           |
-| Cmd/Ctrl+L / E              | Toggle fixed bond length / fixed angles                                                   |
-| Option/Alt-drag             | Temporarily draw or move freely, without bond constraints or smart guides                 |
-| Drag an object              | Snap its edges, center and gaps to other objects on screen (smart guides)                 |
-| Cmd/Ctrl-drag               | Drag a copy, leaving the original in place; the copy snaps to guides too                  |
-| Shift-drag                  | Move horizontally or vertically only; guides snap along that axis                         |
-| Cmd/Ctrl+Shift-drag         | Drag a copy along one axis, snapping along it                                             |
-| Cmd/Ctrl+Alt+K              | Toggle a selected aromatic ring's circle / alternating bonds; Windows also supports Alt+K |
-| Cmd/Ctrl+[ / ]              | Send crossing bonds behind / bring forward                                                |
-| Cmd/Ctrl+/                  | Fit drawing                                                                               |
-| Cmd/Ctrl+;                  | Toggle rulers                                                                             |
-| Cmd/Ctrl+Alt+X              | Toggle crosshair                                                                          |
-| Delete or Backspace         | Delete selection                                                                          |
-| Arrow / Shift+arrow         | Nudge 1 / 10 drawing units; nudges never snap                                             |
-| Double-click an atom        | Select its molecule                                                                       |
-| Shift-click                 | Add to or toggle the selection                                                            |
-| Side handle / corner handle | Resize one axis / resize proportionally                                                   |
+| Keys or gesture                            | Action                                                                                    |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Cmd/Ctrl+A / Shift+A                       | Select all / invert selection                                                             |
+| Cmd/Ctrl+G / Shift+G                       | Group / ungroup                                                                           |
+| Cmd/Ctrl+Shift+D                           | Start 3D optimization (MMFF94, MMFF94s, or UFF); preview before Apply                     |
+| Cmd/Ctrl+Shift+Right                       | Add a reaction arrow and a copy of the selected molecule to its right                     |
+| Space with Select active                   | Select the whole most recently edited molecule                                            |
+| Cmd/Ctrl+J                                 | Join selected atoms or bonds                                                              |
+| Cmd/Ctrl+Shift+K                           | Preview cleanup                                                                           |
+| Cmd/Ctrl+L / E                             | Toggle fixed bond length / fixed angles                                                   |
+| Option/Alt-drag                            | Temporarily draw or move freely, without bond constraints or smart guides                 |
+| Drag an object                             | Snap its edges, center and gaps to other objects on screen (smart guides)                 |
+| Cmd/Ctrl-drag                              | Drag a copy, leaving the original in place; the copy snaps to guides too                  |
+| Shift-drag                                 | Move horizontally or vertically only; guides snap along that axis                         |
+| Cmd/Ctrl+Shift-drag                        | Drag a copy along one axis, snapping along it                                             |
+| Cmd/Ctrl+Alt+K                             | Toggle a selected aromatic ring's circle / alternating bonds; Windows also supports Alt+K |
+| Cmd/Ctrl+[ / ]                             | Send crossing bonds behind / bring forward                                                |
+| Cmd/Ctrl+/                                 | Fit drawing                                                                               |
+| Cmd/Ctrl+;                                 | Toggle rulers                                                                             |
+| Cmd/Ctrl+Alt+X                             | Toggle crosshair                                                                          |
+| Delete or Backspace                        | Delete selection                                                                          |
+| Arrow / Shift+arrow (keyboard drawing off) | Nudge 1 / 10 drawing units; nudges never snap                                             |
+| Double-click an atom                       | Select its molecule                                                                       |
+| Shift-click                                | Add to or toggle the selection                                                            |
+| Side handle / corner handle                | Resize one axis / resize proportionally                                                   |
 
 **Cmd/Ctrl+Shift+Right** completes partial atom/bond selections to whole molecules, preserves selected groups and their captions, and selects the product copy. Each press creates a new forward arrow with explicit reactant/product assignments in one Undo step. Repeating the shortcut extends the scheme from the new product. Select molecular objects without existing arrows; make room on the right if another molecule, caption, arrow or foreground graphic occupies the destination. Background graphics remain in place and do not block the shortcut.
 

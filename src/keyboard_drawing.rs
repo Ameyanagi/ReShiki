@@ -214,6 +214,10 @@ struct Snapshot {
 /// made outside keyboard mode, so Undo never leaves a deleted active atom.
 pub struct State {
     enabled: bool,
+    suspended: bool,
+    initialized: bool,
+    automatic_blank: bool,
+    pointer: Option<Point>,
     epoch: u64,
     current: Snapshot,
     undo: VecDeque<Snapshot>,
@@ -223,7 +227,11 @@ pub struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
+            suspended: false,
+            initialized: false,
+            automatic_blank: false,
+            pointer: None,
             epoch: 0,
             current: Snapshot {
                 target: Target::Blank(Point::default()),
@@ -240,6 +248,9 @@ impl State {
     pub fn enabled(&self) -> bool {
         self.enabled
     }
+    pub fn active(&self) -> bool {
+        self.enabled && !self.suspended
+    }
     pub fn target(&self) -> Target {
         self.current.target
     }
@@ -248,7 +259,7 @@ impl State {
     }
 
     pub fn marker_point(&self, doc: &Document) -> Option<Point> {
-        self.enabled.then(|| {
+        self.active().then(|| {
             self.current
                 .target
                 .point(doc)
@@ -284,20 +295,35 @@ impl State {
     }
 
     pub fn hint() -> &'static str {
-        "Arrows: atom → bond → atom · Shift+arrows: skip · Digits/letters: draw · Enter: label · [: mark atom · ]: close ring · F8/Esc: leave"
+        "Mouse or arrows: choose hotspot · Shift+arrows: skip · Digits/letters: draw · Enter: label · [: mark · ]: connect · F8: off for arrow nudging"
     }
 
     fn check_epoch(&mut self, epoch: u64) {
         if self.epoch != epoch {
+            let enabled = self.enabled;
             *self = Self {
                 epoch,
+                enabled,
                 ..Self::default()
             };
         }
     }
 
     pub fn enter(&mut self, doc: &Document, selected: &[u64], center: Point, epoch: u64) {
+        self.enabled = true;
+        self.initialized = false;
+        self.ensure_target(doc, selected, center, epoch);
+    }
+
+    /// Initialize newly opened documents and resume after a tool change while
+    /// retaining the user's explicit F8 preference.
+    pub fn ensure_target(&mut self, doc: &Document, selected: &[u64], center: Point, epoch: u64) {
         self.check_epoch(epoch);
+        if self.initialized && !self.suspended && !self.automatic_blank {
+            self.reconcile(doc, epoch);
+            return;
+        }
+        self.suspended = false;
         let target = match selected {
             [id] if visible_atom(doc, *id) => Some(Target::Atom(*id)),
             [a, b]
@@ -325,8 +351,19 @@ impl State {
             })
         })
         .unwrap_or(Target::Blank(center));
-        self.enabled = true;
         self.set_target(target, doc);
+        self.automatic_blank = matches!(target, Target::Blank(_));
+    }
+
+    /// Molecular keyboard shortcuts are suspended while a pointer drawing
+    /// tool is in use. Returning to selection resolves a fresh target.
+    pub fn suspend(&mut self) {
+        self.suspended = true;
+        self.initialized = false;
+        self.automatic_blank = false;
+        self.current.target = Target::Blank(self.current.position);
+        self.current.marked = None;
+        self.pointer = None;
     }
 
     pub fn leave(&mut self) {
@@ -335,10 +372,33 @@ impl State {
     }
 
     pub fn set_target(&mut self, target: Target, doc: &Document) {
+        self.initialized = true;
+        self.automatic_blank = false;
         self.current.target = target;
         if let Some(position) = target.point(doc) {
             self.current.position = position;
         }
+    }
+
+    /// Only new pointer coordinates transfer ownership from the keyboard.
+    /// A click may force the transfer even when the pointer stayed still.
+    pub fn pointer_target(
+        &mut self,
+        point: Point,
+        target: Target,
+        doc: &Document,
+        clicked: bool,
+    ) -> bool {
+        if !clicked && self.pointer == Some(point) {
+            return false;
+        }
+        self.pointer = Some(point);
+        self.set_target(target, doc);
+        true
+    }
+
+    pub fn pointer_left(&mut self) {
+        self.pointer = None;
     }
 
     pub fn mark(&mut self, id: u64) {
@@ -406,6 +466,7 @@ impl State {
         if let Some(snapshot) = source.pop_back() {
             destination.push_back(self.current);
             self.current = snapshot;
+            self.automatic_blank = false;
         }
         self.reconcile(doc, epoch);
     }
@@ -554,7 +615,39 @@ mod tests {
         state.restore(true, &after, 7);
         assert!(matches!(state.target(), Target::Blank(_)));
         state.reconcile(&before, 8);
-        assert!(!state.enabled());
+        assert!(state.enabled());
         assert_eq!(state.marked(), None);
+    }
+
+    #[test]
+    fn pointer_handoff_requires_motion_or_click_and_opt_out_survives_tool_suspension() {
+        let (doc, a, b, _) = chain();
+        let mut state = State::default();
+        assert!(state.enabled());
+        state.ensure_target(&doc, &[a], Point::default(), 0);
+        let point = doc.atom(a).unwrap().position;
+        assert!(state.pointer_target(point, Target::Atom(a), &doc, false));
+        assert!(state.move_target(&doc, Direction::Right, false));
+        assert_eq!(state.target(), Target::Bond(a, b));
+        assert!(!state.pointer_target(point, Target::Atom(a), &doc, false));
+        assert_eq!(state.target(), Target::Bond(a, b));
+        assert!(state.pointer_target(point, Target::Atom(a), &doc, true));
+        assert_eq!(state.target(), Target::Atom(a));
+        state.suspend();
+        assert!(state.enabled());
+        assert!(!state.active());
+        state.ensure_target(&doc, &[b], Point::default(), 0);
+        assert!(state.active());
+        assert_eq!(state.target(), Target::Atom(b));
+        state.leave();
+        state.suspend();
+        state.ensure_target(&doc, &[a], Point::default(), 0);
+        assert!(!state.active());
+        assert!(!state.enabled());
+        state.reconcile(&doc, 1);
+        assert!(
+            !state.enabled(),
+            "File epoch changes must not undo the explicit preference"
+        );
     }
 }

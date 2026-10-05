@@ -1,24 +1,22 @@
-//! Geometry-only RDKit bridge. Native chemistry never replaces the editor graph.
+//! Geometry-only Rust solver. Calculations never replace the editor graph.
 //! Coordinates are in angstroms, energies in kcal/mol, and gradients in
 //! kcal/mol/angstrom. Call this synchronous API only in the disposable worker.
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeSet,
-    ffi::{CStr, c_char, c_void},
-    sync::Mutex,
-};
+use std::{collections::BTreeSet, sync::Mutex};
 
+/// Version of the independent force-field reference, not a runtime dependency.
 pub const RDKIT_VERSION: &str = "2026.03.6";
+pub const COSMOLKIT_VERSION: &str = "0.3.0";
 pub const MAX_ATOMS: usize = 512;
 pub const MAX_COORDINATES: usize = 4096;
 pub const MAX_BONDS: usize = 2048;
 pub const MAX_CONFORMERS: u32 = 32;
 pub const MAX_ITERATIONS: u32 = 10_000;
-// Upstream's numeric eigen solver seeds the process-global RDGeneral RNG.
-// No native objects escape this API; serialize calls to protect that state.
-static NATIVE_OPERATION: Mutex<()> = Mutex::new(());
+// Keep deterministic seeded sampling isolated from concurrent solver calls.
+static SOLVER_OPERATION: Mutex<()> = Mutex::new(());
+mod solver;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::upper_case_acronyms)] // Preserve the scientific force-field names.
@@ -51,8 +49,9 @@ pub struct AtomInput {
     pub chiral_tag: u32,
 }
 
-/// `order` and `stereo` are RDKit enum values. Supported orders are 1 single,
-/// 2 double, 3 triple, 12 aromatic, and 17 dative (native domain checks apply).
+/// `order` and `stereo` use RDKit enum values. The solver supports 1 single,
+/// 2 double, 3 triple, and 12 aromatic. The wire recognizes 17 dative so the
+/// solver can report that coordination bonds are unsupported.
 /// Stereo is 0 none, 1 unspecified, 2 Z, 3 E, 4 cis, or 5 trans. Its two
 /// reference atom indices refer to neighbors of a and b, respectively.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -165,6 +164,9 @@ impl Request {
             Operation::Relax | Operation::Evaluate if self.coordinates.len() < n => {
                 return Err("Geometry operation requires original and added-H coordinates".into());
             }
+            Operation::Evaluate if !self.fixed_atoms.is_empty() => {
+                return Err("Energy evaluation does not accept fixed atoms".into());
+            }
             _ => (),
         }
         let fixed: BTreeSet<_> = self.fixed_atoms.iter().copied().collect();
@@ -177,230 +179,15 @@ impl Request {
     }
 }
 
-#[repr(C)]
-struct NativeAtom {
-    atomic_number: u32,
-    isotope: u32,
-    charge: i32,
-    explicit_h: u32,
-    no_implicit: u32,
-    aromatic: u32,
-    radical: u32,
-    chiral_tag: u32,
-}
-#[repr(C)]
-struct NativeBond {
-    a: u32,
-    b: u32,
-    order: u32,
-    aromatic: u32,
-    stereo: u32,
-    stereo_atoms: [u32; 2],
-}
-#[repr(C)]
-struct NativeRequest {
-    abi_version: u32,
-    operation: u32,
-    field: u32,
-    conformers: u32,
-    seed: i32,
-    max_iterations: u32,
-    atoms: *const NativeAtom,
-    atom_count: usize,
-    bonds: *const NativeBond,
-    bond_count: usize,
-    coordinates: *const f64,
-    coordinate_count: usize,
-    fixed_atoms: *const u32,
-    fixed_atom_count: usize,
-}
-#[repr(C)]
-struct NativeResponse {
-    owner: *mut c_void,
-    coordinates: *const f64,
-    gradient: *const f64,
-    hydrogen_parents: *const u32,
-    atom_count: usize,
-    original_count: usize,
-    initial_energy: f64,
-    energy: f64,
-    converged: u32,
-    field: u32,
-    diagnostics: *const c_char,
-    error: *const c_char,
-}
-
-unsafe extern "C" {
-    fn rsh_geometry_solve(request: *const NativeRequest, output: *mut NativeResponse) -> i32;
-    fn rsh_geometry_free(output: *mut NativeResponse);
-}
-
-struct OwnedResponse(NativeResponse);
-impl Drop for OwnedResponse {
-    fn drop(&mut self) {
-        // SAFETY: the result is initialized once by the native bridge; this is
-        // its sole owner and only the matching C++ bridge frees its allocations.
-        unsafe { rsh_geometry_free(&mut self.0) };
-    }
-}
-
-fn field_value(field: ForceField) -> u32 {
-    match field {
-        ForceField::MMFF94 => 0,
-        ForceField::MMFF94s => 1,
-        ForceField::UFF => 2,
-    }
-}
-
-/// Execute one geometry operation. Native storage stays in C++; all returned
-/// values are copied and checked before releasing its opaque owner.
+/// Execute one bounded operation using COSMolKit's Rust force fields and
+/// distance geometry. Only owned data leaves the disposable worker.
 pub fn solve(request: &Request) -> Result<Response, String> {
     request.validate()?;
-    let _native_guard = NATIVE_OPERATION
+    let _guard = SOLVER_OPERATION
         .lock()
-        .map_err(|_| "Native geometry lock poisoned")?;
-    let atoms: Vec<_> = request
-        .atoms
-        .iter()
-        .map(|a| NativeAtom {
-            atomic_number: a.atomic_number,
-            isotope: a.isotope,
-            charge: a.charge,
-            explicit_h: a.explicit_h,
-            no_implicit: u32::from(a.no_implicit),
-            aromatic: u32::from(a.aromatic),
-            radical: a.radical,
-            chiral_tag: a.chiral_tag,
-        })
-        .collect();
-    let bonds: Vec<_> = request
-        .bonds
-        .iter()
-        .map(|b| NativeBond {
-            a: b.a as u32,
-            b: b.b as u32,
-            order: b.order,
-            aromatic: u32::from(b.aromatic),
-            stereo: b.stereo,
-            stereo_atoms: b
-                .stereo_atoms
-                .map(|p| p.map(|i| i as u32))
-                .unwrap_or([u32::MAX; 2]),
-        })
-        .collect();
-    let fixed: Vec<u32> = request.fixed_atoms.iter().map(|&i| i as u32).collect();
-    let input = NativeRequest {
-        abi_version: 1,
-        operation: match request.operation {
-            Operation::Generate => 0,
-            Operation::Relax => 1,
-            Operation::Evaluate => 2,
-        },
-        field: field_value(request.field),
-        conformers: request.conformers,
-        seed: request.seed,
-        max_iterations: request.max_iterations,
-        atoms: atoms.as_ptr(),
-        atom_count: atoms.len(),
-        bonds: bonds.as_ptr(),
-        bond_count: bonds.len(),
-        coordinates: request.coordinates.as_ptr().cast(),
-        coordinate_count: request.coordinates.len(),
-        fixed_atoms: fixed.as_ptr(),
-        fixed_atom_count: fixed.len(),
-    };
-    // SAFETY: a zeroed native output is the documented initial state. All
-    // fields are pointers or scalar numbers for which zero is a valid value.
-    let mut output = OwnedResponse(unsafe { std::mem::zeroed() });
-    // SAFETY: all input slices are validated and alive for the call; the native
-    // entry point catches exceptions and retains its output until free above.
-    let status = unsafe { rsh_geometry_solve(&input, &mut output.0) };
-    let out = &output.0;
-    if status != 0 {
-        return Err(if out.error.is_null() {
-            "Native geometry operation failed".into()
-        } else {
-            // SAFETY: the bridge guarantees an owned, NUL-terminated message.
-            unsafe { CStr::from_ptr(out.error) }
-                .to_string_lossy()
-                .into_owned()
-        });
-    }
-    if out.owner.is_null()
-        || out.coordinates.is_null()
-        || out.original_count != atoms.len()
-        || out.atom_count < out.original_count
-        || out.atom_count > MAX_COORDINATES
-        || out.field != field_value(request.field)
-        || (out.atom_count > out.original_count && out.hydrogen_parents.is_null())
-        || out.converged > 1
-        || !out.initial_energy.is_finite()
-        || !out.energy.is_finite()
-        || (request.operation != Operation::Generate && out.atom_count != request.coordinates.len())
-        || (request.operation == Operation::Evaluate && out.gradient.is_null())
-    {
-        return Err("Invalid native geometry response".into());
-    }
-    // SAFETY: native result owns exactly atom_count coordinate triples, checked
-    // above. f64 triples have identical layout and alignment on both sides.
-    let coordinates =
-        unsafe { std::slice::from_raw_parts(out.coordinates.cast::<[f64; 3]>(), out.atom_count) }
-            .to_vec();
-    if !coordinates.iter().all(valid_coordinate) {
-        return Err("Nonfinite or out-of-range native geometry coordinates".into());
-    }
-    let hydrogen_count = out.atom_count - out.original_count;
-    let hydrogen_parents = if hydrogen_count == 0 {
-        Vec::new()
-    } else {
-        // SAFETY: bridge owns one parent index for each appended H, as checked
-        // against the coordinate count above; this copy outlives native storage.
-        unsafe { std::slice::from_raw_parts(out.hydrogen_parents, hydrogen_count) }
-            .iter()
-            .map(|&i| i as usize)
-            .collect::<Vec<_>>()
-    };
-    if hydrogen_parents.iter().any(|&i| i >= out.original_count) {
-        return Err("Invalid native geometry hydrogen parent".into());
-    }
-    for &i in &request.fixed_atoms {
-        if coordinates[i] != request.coordinates[i] {
-            return Err("Native geometry moved a fixed atom".into());
-        }
-    }
-    let gradient = if out.gradient.is_null() {
-        None
-    } else {
-        // SAFETY: a nonnull gradient has the same checked count as coordinates.
-        let values =
-            unsafe { std::slice::from_raw_parts(out.gradient.cast::<[f64; 3]>(), out.atom_count) }
-                .to_vec();
-        if values.iter().flatten().any(|x| !x.is_finite()) {
-            return Err("Nonfinite native geometry gradient".into());
-        }
-        Some(values)
-    };
-    let diagnostics = if out.diagnostics.is_null() {
-        Vec::new()
-    } else {
-        // SAFETY: the bridge guarantees an owned, NUL-terminated message.
-        unsafe { CStr::from_ptr(out.diagnostics) }
-            .to_string_lossy()
-            .lines()
-            .map(str::to_owned)
-            .collect()
-    };
-    Ok(Response {
-        coordinates,
-        hydrogen_parents,
-        original_count: out.original_count,
-        initial_energy: out.initial_energy,
-        energy: out.energy,
-        gradient,
-        converged: out.converged != 0,
-        field: request.field,
-        diagnostics,
-    })
+        .map_err(|_| "Geometry solver lock poisoned")?;
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| solver::solve(request)))
+        .map_err(|_| "Rust geometry solver panicked".to_owned())?
 }
 
 #[cfg(test)]
@@ -443,8 +230,53 @@ mod tests {
         }
     }
 
+    fn molecule(numbers: &[u32], edges: &[(usize, usize, u32)], field: ForceField) -> Request {
+        let mut request = ethanol(field);
+        request.atoms = numbers
+            .iter()
+            .map(|&atomic_number| AtomInput {
+                atomic_number,
+                isotope: 0,
+                charge: 0,
+                explicit_h: 0,
+                no_implicit: false,
+                aromatic: false,
+                radical: 0,
+                chiral_tag: 0,
+            })
+            .collect();
+        request.bonds = edges
+            .iter()
+            .map(|&(a, b, order)| BondInput {
+                a,
+                b,
+                order,
+                aromatic: order == 12,
+                stereo: 0,
+                stereo_atoms: None,
+            })
+            .collect();
+        request.max_iterations = 1000;
+        request
+    }
+
+    fn evaluate(request: &Request, coordinates: Vec<[f64; 3]>) -> Response {
+        let mut evaluation = request.clone();
+        evaluation.operation = Operation::Evaluate;
+        evaluation.coordinates = coordinates;
+        evaluation.fixed_atoms.clear();
+        solve(&evaluation).unwrap()
+    }
+
+    fn close(actual: f64, expected: f64, absolute: f64, relative: f64) {
+        assert!(
+            (actual - expected).abs() <= absolute + relative * expected.abs(),
+            "actual={actual}, expected={expected}"
+        );
+    }
+
     #[test]
-    fn native_results_copy_hydrogen_mapping_and_gradient_for_every_field() {
+    fn rust_results_preserve_hydrogen_mapping_and_gradient_for_every_field() {
         for field in [ForceField::MMFF94, ForceField::MMFF94s, ForceField::UFF] {
             let mut request = ethanol(field);
             let generated = solve(&request).unwrap();
@@ -459,43 +291,234 @@ mod tests {
             let gradient = evaluated.gradient.unwrap();
             assert_eq!(gradient.len(), request.coordinates.len());
             let step = 1e-5;
-            request.coordinates[0][0] += step;
-            let plus = solve(&request).unwrap().energy;
-            request.coordinates[0][0] -= 2.0 * step;
-            let minus = solve(&request).unwrap().energy;
-            let numerical = (plus - minus) / (2.0 * step);
-            assert!(
-                (numerical - gradient[0][0]).abs() < 1e-4,
-                "{field:?}: numerical {numerical}, native {}",
-                gradient[0][0]
+            for (index, force) in gradient.iter().enumerate() {
+                for (axis, &analytic) in force.iter().enumerate() {
+                    let mut plus = request.coordinates.clone();
+                    let mut minus = plus.clone();
+                    plus[index][axis] += step;
+                    minus[index][axis] -= step;
+                    let numerical = (evaluate(&request, plus).energy
+                        - evaluate(&request, minus).energy)
+                        / (2.0 * step);
+                    close(analytic, numerical, 2e-5, 2e-6);
+                }
+            }
+
+            let transformed = request
+                .coordinates
+                .iter()
+                .map(|&[x, y, z]| [-y + 6.5, x - 2.0, z + 1.25])
+                .collect();
+            let rotated = evaluate(&request, transformed);
+            close(rotated.energy, evaluated.energy, 1e-7, 1e-9);
+            let rotated_gradient = rotated.gradient.unwrap();
+            for (original, rotated) in gradient.iter().zip(rotated_gradient) {
+                let expected = [-original[1], original[0], original[2]];
+                for axis in 0..3 {
+                    close(rotated[axis], expected[axis], 1e-6, 1e-8);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rust_relax_keeps_original_and_added_hydrogen_fixed() {
+        for field in [ForceField::MMFF94, ForceField::MMFF94s, ForceField::UFF] {
+            let mut request = ethanol(field);
+            request.coordinates = solve(&request).unwrap().coordinates;
+            request.operation = Operation::Relax;
+            request.max_iterations = 20;
+            request.fixed_atoms = vec![0, 3];
+            request.coordinates[0][0] += 0.04;
+            let result = solve(&request).unwrap();
+            for &i in &request.fixed_atoms {
+                assert_eq!(result.coordinates[i], request.coordinates[i]);
+            }
+            assert!(result.energy <= result.initial_energy + 1e-6);
+        }
+    }
+
+    #[test]
+    fn seeded_sampling_is_repeatable_and_does_not_substitute_force_fields() {
+        for field in [ForceField::MMFF94, ForceField::MMFF94s, ForceField::UFF] {
+            let request = ethanol(field);
+            let first = solve(&request).unwrap();
+            let repeated = solve(&request).unwrap();
+            assert_eq!(first.field, field);
+            close(first.energy, repeated.energy, 1e-8, 0.);
+            for (first, repeated) in first.coordinates.iter().zip(repeated.coordinates) {
+                for axis in 0..3 {
+                    close(first[axis], repeated[axis], 1e-8, 0.);
+                }
+            }
+        }
+        let mut borane = molecule(&[5], &[], ForceField::UFF);
+        let supported = solve(&borane).unwrap();
+        assert_eq!(supported.field, ForceField::UFF);
+        assert_eq!(supported.hydrogen_parents, [0, 0, 0]);
+        for field in [ForceField::MMFF94, ForceField::MMFF94s] {
+            borane.field = field;
+            assert!(solve(&borane).unwrap_err().contains("MMFF parameters"));
+        }
+    }
+
+    #[test]
+    fn aromatic_hydrogens_and_amide_variant_parameters_are_preserved() {
+        let mut benzene = molecule(
+            &[6; 6],
+            &[
+                (0, 1, 12),
+                (1, 2, 12),
+                (2, 3, 12),
+                (3, 4, 12),
+                (4, 5, 12),
+                (5, 0, 12),
+            ],
+            ForceField::MMFF94,
+        );
+        for atom in &mut benzene.atoms {
+            atom.aromatic = true;
+        }
+        for field in [ForceField::MMFF94, ForceField::MMFF94s, ForceField::UFF] {
+            benzene.field = field;
+            let result = solve(&benzene).unwrap();
+            assert_eq!(result.coordinates.len(), 12);
+            assert_eq!(result.hydrogen_parents, [0, 1, 2, 3, 4, 5]);
+            assert!(result.energy <= result.initial_energy + 1e-6);
+        }
+
+        let mut amide = molecule(
+            &[6, 6, 8, 7],
+            &[(0, 1, 1), (1, 2, 2), (1, 3, 1)],
+            ForceField::MMFF94,
+        );
+        let mut displaced = solve(&amide).unwrap().coordinates;
+        // Displace nitrogen normal to the carbonyl plane, independent of the
+        // embedded conformer's orientation, to exercise the improper terms.
+        let a: [f64; 3] = std::array::from_fn(|i| displaced[0][i] - displaced[1][i]);
+        let b: [f64; 3] = std::array::from_fn(|i| displaced[2][i] - displaced[1][i]);
+        let normal = [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ];
+        let length = normal.iter().map(|x| x * x).sum::<f64>().sqrt();
+        assert!(length > 1e-8);
+        for (coordinate, direction) in displaced[3].iter_mut().zip(normal) {
+            *coordinate += 0.5 * direction / length;
+        }
+        let mmff94 = evaluate(&amide, displaced.clone()).energy;
+        amide.field = ForceField::MMFF94s;
+        let mmff94s = evaluate(&amide, displaced).energy;
+        assert!((mmff94 - mmff94s).abs() > 1e-3);
+    }
+
+    #[test]
+    fn tetrahedral_stereo_with_implicit_and_original_isotope_hydrogen_is_checked() {
+        for tag in [1, 2] {
+            let mut request = molecule(
+                &[6, 9, 17, 35],
+                &[(0, 1, 1), (0, 2, 1), (0, 3, 1)],
+                ForceField::MMFF94s,
             );
+            request.atoms[0].chiral_tag = tag;
+            let generated = solve(&request).unwrap();
+            assert_eq!(generated.hydrogen_parents, [0]);
+            evaluate(&request, generated.coordinates.clone());
+            request.operation = Operation::Evaluate;
+            request.coordinates = generated.coordinates;
+            for point in &mut request.coordinates {
+                point[2] = -point[2];
+            }
+            assert!(solve(&request).unwrap_err().contains("tetrahedral stereo"));
+            for point in &mut request.coordinates {
+                point[2] = 0.;
+            }
+            assert!(solve(&request).is_err());
+        }
+        // Explicit deuterium is an original atom, not a disposable calculation H.
+        let mut original_hydrogen = molecule(
+            &[1, 6, 9, 17, 35],
+            &[(0, 1, 1), (1, 2, 1), (1, 3, 1), (1, 4, 1)],
+            ForceField::MMFF94,
+        );
+        original_hydrogen.atoms[0].isotope = 2;
+        original_hydrogen.atoms[0].no_implicit = true;
+        original_hydrogen.atoms[1].chiral_tag = 1;
+        let result = solve(&original_hydrogen).unwrap();
+        assert_eq!(result.original_count, 5);
+        assert_eq!(result.coordinates.len(), 5);
+        assert!(result.hydrogen_parents.is_empty());
+        evaluate(&original_hydrogen, result.coordinates);
+    }
+
+    #[test]
+    fn e_z_and_cis_trans_references_reject_inversion_and_degeneracy() {
+        for stereo in [2, 3, 4, 5] {
+            let mut request = molecule(
+                &[6, 6, 6, 6],
+                &[(0, 1, 1), (1, 2, 2), (2, 3, 1)],
+                ForceField::MMFF94,
+            );
+            request.bonds[1].stereo = stereo;
+            request.bonds[1].stereo_atoms = Some([0, 3]);
+            let generated = solve(&request).unwrap();
+            evaluate(&request, generated.coordinates.clone());
+            request.operation = Operation::Evaluate;
+            request.coordinates = generated.coordinates;
+            // Rotate one designated substituent by 180 degrees around the bond.
+            let axis: [f64; 3] =
+                std::array::from_fn(|i| request.coordinates[2][i] - request.coordinates[1][i]);
+            let reference: [f64; 3] =
+                std::array::from_fn(|i| request.coordinates[3][i] - request.coordinates[2][i]);
+            let axis2: f64 = axis.iter().map(|x| x * x).sum();
+            let projection: f64 =
+                axis.iter().zip(reference).map(|(a, b)| a * b).sum::<f64>() / axis2;
+            request.coordinates[3] = std::array::from_fn(|i| {
+                request.coordinates[2][i] + 2. * projection * axis[i] - reference[i]
+            });
+            assert!(solve(&request).is_err());
+            request.coordinates[0] = request.coordinates[1];
+            assert!(solve(&request).is_err());
         }
     }
 
     #[test]
-    fn native_relax_keeps_original_and_added_hydrogen_fixed() {
+    fn evaluation_rejects_collapsed_stretched_and_overlapping_geometry() {
         let mut request = ethanol(ForceField::MMFF94);
-        request.coordinates = solve(&request).unwrap().coordinates;
-        request.operation = Operation::Relax;
-        request.fixed_atoms = vec![0, 3];
-        request.coordinates[0][0] += 0.04;
-        let result = solve(&request).unwrap();
-        for &i in &request.fixed_atoms {
-            assert_eq!(result.coordinates[i], request.coordinates[i]);
-        }
-        assert!(result.energy <= result.initial_energy + 1e-6);
+        let generated = solve(&request).unwrap();
+        request.operation = Operation::Evaluate;
+        request.coordinates = generated.coordinates.clone();
+        request.coordinates[0][0] += 10.;
+        assert!(solve(&request).is_err());
+        request.coordinates = generated.coordinates.clone();
+        request.coordinates[0] = request.coordinates[1];
+        assert!(solve(&request).is_err());
+        request.coordinates = generated.coordinates;
+        request.coordinates[3] = request.coordinates[8];
+        assert!(solve(&request).is_err());
+        request.fixed_atoms.push(0);
+        assert!(solve(&request).unwrap_err().contains("fixed atoms"));
     }
 
     #[test]
-    fn invalid_requests_fail_before_native_and_native_domain_errors_are_owned() {
+    fn invalid_requests_and_domain_errors_leave_solver_usable() {
         let mut request = ethanol(ForceField::UFF);
         request.bonds[0].a = usize::MAX;
         assert!(solve(&request).unwrap_err().contains("bond"));
         let mut request = ethanol(ForceField::MMFF94);
         request.atoms[0].atomic_number = 30;
         assert!(!solve(&request).unwrap_err().is_empty());
-        // A failed native result has already been freed; a subsequent operation
-        // must still succeed and return valid storage through the same ABI.
+        let mut request = ethanol(ForceField::UFF);
+        request.atoms[0].radical = 1;
+        assert!(solve(&request).unwrap_err().contains("radicals"));
+        let mut request = ethanol(ForceField::UFF);
+        request.bonds[0].order = 17;
+        assert!(solve(&request).unwrap_err().contains("coordination"));
+        let mut request = ethanol(ForceField::UFF);
+        request.bonds.pop();
+        assert!(solve(&request).unwrap_err().contains("connected"));
+        // A domain failure must not poison subsequent solver operations.
         assert!(solve(&ethanol(ForceField::MMFF94)).is_ok());
     }
 }

@@ -202,8 +202,7 @@ impl App {
             self.imports.menu || self.imports.examples_menu,
             self.style_menu.is_some() || self.tab.inspector_ui.menu_open(),
         );
-        let state = &mut self.accessibility;
-        let keyboard_target = self.tab.keyboard_drawing.enabled().then(|| {
+        let keyboard_target = self.keyboard_drawing_active().then(|| {
             format!(
                 "{} · {:?}",
                 self.tab.keyboard_drawing.active_label(&self.tab.doc),
@@ -215,6 +214,7 @@ impl App {
             .optimization
             .as_ref()
             .map(super::optimization::Session::accessibility_context);
+        let state = &mut self.accessibility;
         let identity_changed = state.context.as_ref().is_none_or(|context| {
             (context.document.0, context.document.1) != (document.0, document.1)
                 || context.selected != self.tab.selected

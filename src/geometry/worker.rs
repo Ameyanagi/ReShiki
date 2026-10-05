@@ -1,4 +1,4 @@
-//! Framed self-executable worker. Native C++ is reachable only from this process.
+//! Framed self-executable worker. Rust geometry runs only in this process.
 use super::{client, wire};
 use std::io::{self, Read, Write};
 fn operation() -> Result<reshiki_geometry::Response, String> {

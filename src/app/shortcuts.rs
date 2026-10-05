@@ -117,7 +117,7 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
         Message::Copy(cut) => (command, if *cut { "X" } else { "C" }),
         Message::Paste => (command, "V"),
         Message::CopyImage => (shift, "C"),
-        Message::Duplicate => (shift, "D"),
+        Message::Optimization(super::optimization::Action::Begin) => (shift, "D"),
         Message::SelectAll => (command, "A"),
         Message::InvertSelection => (shift, "A"),
         Message::Group => (command, "G"),
@@ -215,7 +215,7 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
                 "k" => Message::Clean,
                 "h" => Message::Transform(Transform::FlipVertical),
                 "v" => Message::Transform(Transform::FlipHorizontal),
-                "d" => Message::Duplicate,
+                "d" => Message::Optimization(super::optimization::Action::Begin),
                 "e" => Message::Inspector(InspectorTab::Export),
                 "c" => Message::CopyImage,
                 _ => return None,
@@ -302,7 +302,9 @@ impl App {
             Action::Rulers => return self.update(Message::Rulers(!self.guides.rulers)),
             Action::Crosshair => return self.update(Message::Crosshair(!self.guides.crosshair)),
             Action::Nudge(x, y) => {
-                if self.tab.keyboard_drawing.enabled()
+                self.sync_keyboard_drawing();
+                if self.tool.selects()
+                    && self.tab.keyboard_drawing.active()
                     && let Some(direction) = reshiki::keyboard_drawing::Direction::from_delta(x, y)
                 {
                     return self.keyboard_drawing_action(
@@ -427,7 +429,8 @@ impl App {
     }
 
     pub(super) fn context_key(&mut self, key: &str) -> Task<Message> {
-        if self.tab.keyboard_drawing.enabled() {
+        self.sync_keyboard_drawing();
+        if self.tool.selects() && self.tab.keyboard_drawing.active() {
             return self.keyboard_context_key(key);
         }
         let point = self
@@ -514,16 +517,7 @@ impl App {
     ) -> Task<Message> {
         // Hover attachment wins even when placement automatically selected the
         // previous ring. Only an unpointed selection gives `a` a display action.
-        if key == "a"
-            && !explicit
-            && !pointed
-            && reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some()
-            && self.tab.doc.bonds.iter().any(|b| {
-                self.tab.selected.contains(&b.a)
-                    && self.tab.selected.contains(&b.b)
-                    && matches!(b.order, 2 | 4)
-            })
-        {
+        if key == "a" && !explicit && !pointed && self.aromatic_display_selection() {
             return self.update(Message::AromaticDisplay);
         }
         if key == "g" {
@@ -642,10 +636,14 @@ impl App {
             self.commit_hotkey(result, "Ring attached");
             return Task::none();
         }
-        if explicit {
-            self.status = format!("No drawing shortcut for {key}");
-            self.error = false;
-            return Task::none();
+        self.empty_context_key(key)
+    }
+
+    /// Keys without a contextual chemistry action keep their ordinary drawing
+    /// tool behavior, including Text, chain and graphic shortcuts.
+    pub(super) fn empty_context_key(&mut self, key: &str) -> Task<Message> {
+        if ["/", "?", "=", "Enter"].contains(&key) {
+            return self.update(Message::Inspector(InspectorTab::Properties));
         }
         // No contextual action: select a drawing tool. Preserve useful nonconflicting aliases.
         let tool = match key {
@@ -682,6 +680,15 @@ impl App {
             return self.update(Message::Element(label.into()));
         }
         Task::none()
+    }
+
+    pub(super) fn aromatic_display_selection(&self) -> bool {
+        reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some()
+            && self.tab.doc.bonds.iter().any(|bond| {
+                self.tab.selected.contains(&bond.a)
+                    && self.tab.selected.contains(&bond.b)
+                    && matches!(bond.order, 2 | 4)
+            })
     }
 }
 
@@ -952,6 +959,12 @@ mod tests {
     #[test]
     fn stale_hover_and_empty_cleanup_do_not_modify_the_drawing() {
         let (mut app, _) = App::new();
+        // Verify the classic hover epoch guard. Hybrid mode intentionally
+        // initializes a fresh visible hotspot when the file epoch changes.
+        let _ = app.update(Message::KeyboardDrawing(
+            super::super::keyboard_drawing::Action::Leave,
+        ));
+        assert!(!app.tab.keyboard_drawing.enabled());
         app.tab.busy = false;
         app.tab.doc = Document::default();
         app.tab.doc.add_atom("C", Point::default());
@@ -1030,6 +1043,43 @@ mod compatibility_tests {
     }
 
     #[test]
+    fn primary_shift_d_starts_a_detached_3d_preview_instead_of_duplicating() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = Document::from_json(include_bytes!(
+            "../../tests/fixtures/geometry/adamantane.rsk"
+        ))
+        .unwrap();
+        app.tab.selected = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+        let original = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let modifiers = primary() | Modifiers::SHIFT;
+        let message = key_message(&key("d"), &key("D"), modifiers).unwrap();
+        assert!(matches!(
+            message,
+            Message::Optimization(super::super::optimization::Action::Begin)
+        ));
+        let _ = app.update(message.clone());
+        assert!(app.tab.optimization.is_some());
+        assert_eq!(app.tab.doc, original);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.tab.history.can_undo());
+        let serial = app.tab.optimization_serial;
+        let _ = app.update(message);
+        assert_eq!(app.tab.optimization_serial, serial);
+        assert_eq!(app.tab.doc, original);
+        let _ = app.update(Message::Optimization(
+            super::super::optimization::Action::Cancel,
+        ));
+        assert!(app.tab.optimization.is_none());
+        assert_eq!(app.tab.doc, original);
+        assert!(matches!(
+            key_message(&key("d"), &key("d"), primary()),
+            Some(Message::Shortcut(Action::CopyText("cdxml")))
+        ));
+    }
+
+    #[test]
     fn displayed_shortcuts_are_the_keys_that_run_their_commands() {
         let mut messages = vec![
             Message::Undo,
@@ -1038,7 +1088,7 @@ mod compatibility_tests {
             Message::Copy(true),
             Message::Paste,
             Message::CopyImage,
-            Message::Duplicate,
+            Message::Optimization(super::super::optimization::Action::Begin),
             Message::SelectAll,
             Message::InvertSelection,
             Message::Group,
@@ -1092,6 +1142,7 @@ mod compatibility_tests {
             assert_eq!(format!("{actual:?}"), format!("{:?}", Some(message)));
         }
         assert_eq!(label(&Message::Transform(Transform::Rotate(180.))), None);
+        assert_eq!(label(&Message::Duplicate), None);
         let label = |message| label(&message).unwrap_or_default();
         let edit_label = || Message::AtomText(crate::app::atom_text::Action::Begin(None));
         let (command, alt) = (Modifiers::COMMAND, Modifiers::ALT);
@@ -1197,6 +1248,12 @@ mod compatibility_tests {
     #[test]
     fn numeric_hotkeys_distinguish_hovered_bond_atom_and_blank_canvas() -> Result<(), String> {
         let (mut app, _) = App::new();
+        // This compatibility contract uses classic hover/selection routing:
+        // Hover(None) leaves no target, unlike the independent hybrid hotspot.
+        let _ = app.update(Message::KeyboardDrawing(
+            super::super::keyboard_drawing::Action::Leave,
+        ));
+        assert!(!app.tab.keyboard_drawing.enabled());
         app.tab.doc = Document::default();
         let a = app.tab.doc.add_atom("C", Point::default());
         let b = app.tab.doc.add_atom("C", Point::new(42., 0.));

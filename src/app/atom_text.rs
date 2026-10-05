@@ -394,6 +394,12 @@ mod tests {
     #[test]
     fn defining_and_renaming_a_group_keeps_chemistry_and_invalid_drafts() -> Result<(), String> {
         let (mut app, _) = App::new();
+        // This exercises classic selection-based Enter; hybrid Enter edits
+        // its explicit atom/bond hotspot instead of contracting a selection.
+        let _ = app.update(Message::KeyboardDrawing(
+            crate::app::keyboard_drawing::Action::Leave,
+        ));
+        assert!(!app.tab.keyboard_drawing.enabled());
         let n = app.tab.doc.add_atom("N", Point::default());
         let a = app.tab.doc.add_atom("C", Point::new(42., 0.));
         let b = app.tab.doc.add_atom("O", Point::new(84., 0.));

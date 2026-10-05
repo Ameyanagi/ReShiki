@@ -357,6 +357,11 @@ impl Prepared {
         }
         let mut fixed_atoms: Vec<_> = fixed.into_iter().collect();
         fixed_atoms.sort_unstable();
+        // Evaluation uses the pinned coordinates, but has no fixed degrees of
+        // freedom. Omit them before validation, which rejects Evaluate pins.
+        if operation == reshiki_geometry::Operation::Evaluate {
+            fixed_atoms.clear();
+        }
         let request = reshiki_geometry::Request {
             atoms,
             bonds,

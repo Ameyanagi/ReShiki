@@ -439,6 +439,7 @@ impl App {
         };
         let task = app.open_startup(startup);
         let update_check = app.update_action(updates::Action::Check(false));
+        app.sync_keyboard_drawing();
         (app, Task::batch([task, update_check]))
     }
     pub fn title(&self) -> String {
@@ -742,6 +743,10 @@ impl App {
         if let Message::Accessibility(action) = message {
             return self.accessibility_action(action);
         }
+        let keyboard_before = (
+            self.tab.keyboard_drawing.target(),
+            self.tab.keyboard_drawing.marked(),
+        );
         let controls_unchanged = matches!(
             &message,
             Message::Canvas(
@@ -749,7 +754,13 @@ impl App {
             )
         );
         let task = self.update_routed(message);
-        if controls_unchanged {
+        if controls_unchanged
+            && keyboard_before
+                == (
+                    self.tab.keyboard_drawing.target(),
+                    self.tab.keyboard_drawing.marked(),
+                )
+        {
             task
         } else {
             Task::batch([task, self.accessibility_refresh()])
@@ -803,6 +814,20 @@ impl App {
             return self.mac_file_action(action);
         }
         let previous = self.inspector_tab;
+        let pointer_selection = match &message {
+            Message::Canvas(Edit::Select(_)) => Some(
+                self.tab
+                    .hover
+                    .filter(|(_, epoch)| *epoch == self.tab.file_epoch)
+                    .map(|(point, _)| point),
+            ),
+            Message::Canvas(Edit::Click(point) | Edit::SelectAt(_, point)) => Some(Some(*point)),
+            _ => None,
+        };
+        let message = match message {
+            Message::Canvas(Edit::SelectAt(ids, _)) => Message::Canvas(Edit::Select(ids)),
+            message => message,
+        };
         let opening_transform = matches!(&message, Message::Canvas(Edit::BeginTransform(_)));
         let refresh_dimensions = matches!(
             &message,
@@ -813,6 +838,18 @@ impl App {
         } else {
             self.update_inner(message)
         };
+        if background {
+            // A background result belongs to this document, but the selected
+            // tool belongs to the front tab. Only discard stale targets here.
+            self.tab
+                .keyboard_drawing
+                .reconcile(&self.tab.doc, self.tab.file_epoch);
+        } else {
+            self.sync_keyboard_drawing();
+        }
+        if let Some(point) = pointer_selection {
+            self.keyboard_pointer_selection(point);
+        }
         let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
         self.sync_numeric_transforms();
         if refresh_dimensions {
@@ -1001,8 +1038,6 @@ impl App {
                 self.inline_action(inline_text::Action::Finish(false))
             } else if self.tab.optimization.is_some() {
                 self.optimization_action(optimization::Action::Cancel)
-            } else if self.tab.keyboard_drawing.enabled() {
-                self.keyboard_drawing_action(keyboard_drawing::Action::Leave)
             } else {
                 self.update(Message::Tool(Tool::Select))
             };
@@ -2438,6 +2473,7 @@ impl App {
         }
         if let Edit::Hover(point) = edit {
             self.tab.hover = point.map(|p| (p, self.tab.file_epoch));
+            self.keyboard_pointer_hover(point);
             return;
         }
         if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
@@ -2689,7 +2725,7 @@ impl App {
                     }
                 }
             }
-            Edit::Select(ids) => {
+            Edit::Select(ids) | Edit::SelectAt(ids, _) => {
                 let inspector_width = self.inspector_width();
                 self.tab.selected = ids;
                 self.sync_typography();

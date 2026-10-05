@@ -89,6 +89,112 @@ fn stable_order_full_component_and_target_only_patch_keep_unrelated_drawing_exac
 }
 
 #[test]
+fn energy_evaluation_applies_pin_coordinates_without_fixed_degrees_of_freedom() {
+    let source = ethanol();
+    let prepared = Prepared::new(&source, &[3]).unwrap();
+    let conf = conformer(&prepared);
+    let before = conf.positions.clone();
+    let pins = [Pin {
+        atom: 1,
+        position: Point3 {
+            x: 1.2,
+            y: -0.7,
+            z: 0.5,
+        },
+    }];
+    assert_ne!(conf.positions[1], pins[0].position);
+    for field in [ForceField::Mmff94, ForceField::Mmff94s, ForceField::Uff] {
+        let relax = prepared
+            .native_request(
+                field,
+                reshiki_geometry::Operation::Relax,
+                Some(&conf),
+                &pins,
+                20,
+            )
+            .unwrap();
+        let evaluate = prepared
+            .native_request(
+                field,
+                reshiki_geometry::Operation::Evaluate,
+                Some(&conf),
+                &pins,
+                1,
+            )
+            .expect("Evaluation applies pin coordinates without relaxation constraints");
+        assert_eq!(relax.fixed_atoms, [1]);
+        assert!(evaluate.fixed_atoms.is_empty());
+        assert_eq!(evaluate.coordinates, relax.coordinates);
+        assert_eq!(evaluate.coordinates[1], [1.2, -0.7, 0.5]);
+        for (index, position) in before.iter().enumerate().filter(|(index, _)| *index != 1) {
+            assert_eq!(
+                evaluate.coordinates[index],
+                [position.x, position.y, position.z]
+            );
+        }
+        evaluate.validate().unwrap();
+        // Cross the same serialization boundary used by Client::evaluate.
+        let frame = wire::encode(
+            &wire::Request {
+                heap_bytes: Limits::default().heap_bytes,
+                operation: evaluate,
+            },
+            wire::MAX_REQUEST_BYTES,
+        )
+        .unwrap();
+        let decoded: wire::Request = wire::decode(&frame, wire::MAX_REQUEST_BYTES).unwrap();
+        decoded.operation.validate().unwrap();
+        assert!(decoded.operation.fixed_atoms.is_empty());
+        assert_eq!(decoded.operation.coordinates, relax.coordinates);
+    }
+    assert_eq!(conf.positions, before);
+    assert_eq!(prepared.source(), &source);
+}
+
+#[test]
+fn energy_evaluation_still_rejects_invalid_duplicate_and_absent_pins() {
+    let prepared = Prepared::new(&ethanol(), &[3]).unwrap();
+    let conf = conformer(&prepared);
+    let valid = Pin {
+        atom: 1,
+        position: Point3::default(),
+    };
+    for pins in [
+        vec![valid.clone(), valid.clone()],
+        vec![Pin {
+            atom: conf.positions.len(),
+            position: Point3::default(),
+        }],
+        vec![Pin {
+            atom: 1,
+            position: Point3 {
+                x: f64::NAN,
+                y: 0.,
+                z: 0.,
+            },
+        }],
+        vec![Pin {
+            atom: 1,
+            position: Point3 {
+                x: 1_000_001.,
+                y: 0.,
+                z: 0.,
+            },
+        }],
+    ] {
+        for operation in [
+            reshiki_geometry::Operation::Relax,
+            reshiki_geometry::Operation::Evaluate,
+        ] {
+            assert!(matches!(
+                prepared.native_request(ForceField::Mmff94s, operation, Some(&conf), &pins, 20),
+                Err(Error::Coordinates(_))
+            ));
+        }
+    }
+}
+
+#[test]
 fn physical_scale_tracks_style_and_retained_y_depth() {
     for length in [14.4, 28.8] {
         let mut source = ethanol();

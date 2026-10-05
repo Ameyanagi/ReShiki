@@ -153,7 +153,7 @@ def verify_inchi_worker(binary, version):
 
 
 def verify_geometry_dependencies(binary):
-    """Reject chemistry shared libraries and redistributable Windows C++ runtimes."""
+    """Reject external chemistry/Python libraries and Windows CRT redistributables."""
     binary = Path(binary).resolve(strict=True)
     system = platform.system()
     if system == "Darwin":
@@ -186,6 +186,7 @@ def verify_geometry_dependencies(binary):
         name = dependency.replace("\\", "/").rsplit("/", 1)[-1].lower()
         if (
             "rdkit" in name
+            or "cosmolkit" in name
             or "boost" in name
             or "python" in name
             or (
@@ -358,11 +359,13 @@ def verify_geometry_worker(binary, version):
         ):
             raise ValueError("Packaged geometry worker created an unexpected runtime payload")
     print(
-        "MMFF94 and UFF passed from the sole relocated executable without Python or RDKit libraries."
+        "Rust MMFF94 and UFF passed from the sole relocated executable without Python or RDKit libraries."
     )
 
 
 def notices(destination):
+    from geometry_source import verify as verify_geometry_source
+
     metadata = json.loads(
         run(
             ["cargo", "metadata", "--format-version", "1", "--locked"],
@@ -371,6 +374,7 @@ def notices(destination):
             text=True,
         ).stdout
     )
+    verify_geometry_source(ROOT, cargo_metadata=metadata)
     write_notices(ROOT, destination, metadata)
 
 
@@ -545,7 +549,7 @@ def main():
         shutil.copy2(build / binary_name, folder / binary_name)
         notices(folder / "Licenses")
     from build_inchi_helper import INCHI_VERSION, dependency
-    from geometry_source import metadata as geometry_metadata
+    from geometry_source import verify as geometry_metadata
 
     metadata = dict(
         version=version(),
@@ -553,7 +557,7 @@ def main():
         architecture=arch,
         rust_target=target,
         inchi=dict(version=INCHI_VERSION, dependency=dependency(ROOT), runtime="self-process"),
-        geometry=dict(geometry_metadata(ROOT), runtime="self-process", linkage="static"),
+        geometry=dict(geometry_metadata(ROOT), linkage="static"),
         signed=args.sign,
         notarized=args.sign,
         commit=os.environ.get("GITHUB_SHA", "local"),

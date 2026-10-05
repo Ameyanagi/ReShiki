@@ -16,45 +16,118 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import build_release
 import geometry_source
+from license_notices import THIRD_PARTY_FILE, write_notices
 
 
 class GeometrySourceTests(unittest.TestCase):
-    def test_checked_in_archives_pin_versions_contents_and_cmake_hashes(self):
+    def test_rust_dependency_pin_and_parameter_reference_provenance(self):
         provenance = geometry_source.verify()
         self.assertEqual(provenance["version"], "2026.03.6")
-        self.assertEqual(provenance["revision"], "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985")
-        self.assertEqual(provenance["boost_version"], "1.92.0")
+        self.assertEqual(provenance["backend"]["name"], "cosmolkit-core")
+        self.assertEqual(provenance["backend"]["version"], "0.3.0")
+        self.assertRegex(provenance["revision"], "^[0-9a-f]{40}$")
+        self.assertEqual(provenance["revision"], provenance["backend"]["revision"])
+        self.assertEqual(provenance["implementation"], "Rust")
+        self.assertEqual(provenance["runtime"], "self-process-rust-core")
+        self.assertFalse(provenance["runtime_python"])
+        self.assertFalse(provenance["runtime_downloads"])
+        self.assertEqual(provenance["parameter_reference"]["version"], "2026.03.1")
         self.assertEqual(
-            set(provenance["archives"]),
-            {"rdkit-geometry-2026.03.6.tar.gz", "boost-geometry-1.92.0.tar.gz"},
+            provenance["parameter_reference"]["revision"],
+            "351f8f378f8ad6bbd517980c38896e66bf907af8",
         )
-        vendor = geometry_source.ROOT / geometry_source.VENDOR
-        hashes = (vendor / "source-hashes.cmake").read_text()
-        for digest in provenance["archives"].values():
-            self.assertIn(digest, hashes)
-        manifest_bytes = (vendor / "source-manifest.json").read_bytes()
-        self.assertEqual(provenance["manifest_sha256"], hashlib.sha256(manifest_bytes).hexdigest())
-        manifest = json.loads(manifest_bytes)
-        self.assertEqual(set(manifest["rdkit"]["libraries"]), geometry_source.LIBRARIES)
-        for record in manifest["archives"].values():
-            self.assertTrue(record["files"])
-            self.assertFalse(
-                any(name.endswith((".dll", ".so", ".dylib", ".py")) for name in record["files"])
+        self.assertEqual(provenance["comparison_reference"]["version"], "2026.03.6")
+        self.assertEqual(
+            provenance["comparison_reference"]["revision"],
+            "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        )
+        self.assertEqual(len(provenance["parameter_data"]["files_sha256"]), 7)
+        self.assertNotIn("archives", provenance)
+        self.assertNotIn("boost_version", provenance)
+        for key, name in (
+            ("cargo_manifest_sha256", geometry_source.GEOMETRY_MANIFEST),
+            ("cargo_lock_sha256", Path("Cargo.lock")),
+        ):
+            self.assertEqual(
+                provenance[key],
+                hashlib.sha256((geometry_source.ROOT / name).read_bytes()).hexdigest(),
             )
 
-    def test_changed_archive_fails_offline_without_replacing_source(self):
+    def test_changed_git_pin_fails_offline_without_replacing_source(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            vendor = root / geometry_source.VENDOR
-            shutil.copytree(geometry_source.ROOT / geometry_source.VENDOR, vendor)
-            source = vendor / "rdkit-geometry-2026.03.6.tar.gz"
-            original = source.read_bytes()
-            source.write_bytes(b"changed source archive")
-            with self.assertRaisesRegex(ValueError, "Geometry source archive changed"):
+            manifest = root / geometry_source.GEOMETRY_MANIFEST
+            manifest.parent.mkdir(parents=True)
+            shutil.copy2(geometry_source.ROOT / geometry_source.GEOMETRY_MANIFEST, manifest)
+            lock = root / "Cargo.lock"
+            original = (geometry_source.ROOT / "Cargo.lock").read_text()
+            revision = geometry_source.dependency()["revision"]
+            changed = original.replace(revision, "0" * 40)
+            self.assertNotEqual(changed, original)
+            lock.write_text(changed)
+            with self.assertRaisesRegex(ValueError, "locked COSMolKit revision"):
                 geometry_source.verify(root)
-            self.assertEqual(source.read_bytes(), b"changed source archive")
-            source.write_bytes(original)
+            self.assertEqual(lock.read_text(), changed)
+            lock.write_text(original)
             self.assertEqual(geometry_source.verify(root), geometry_source.metadata(root))
+            (manifest.parent / "cpp").mkdir()
+            with self.assertRaisesRegex(ValueError, "Obsolete native geometry build input"):
+                geometry_source.verify(root)
+
+    def test_resolved_parameter_bytes_and_source_revision_are_checked(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            core = Path(temporary)
+            source = core / "src/chemistry/forcefield/rdkit/ForceField/UFF/Params.cpp"
+            source.parent.mkdir(parents=True)
+            original = b"embedded parameter fixture"
+            source.write_bytes(original)
+            package = dict(
+                name="cosmolkit-core",
+                version="0.3.0",
+                source=geometry_source.dependency()["source"],
+                manifest_path=str(core / "Cargo.toml"),
+            )
+            with patch(
+                "geometry_source.PARAMETER_SHA256",
+                {
+                    "ForceField/UFF/Params.cpp": hashlib.sha256(original).hexdigest(),
+                },
+            ):
+                geometry_source.verify(cargo_metadata={"packages": [package]})
+                source.write_bytes(b"changed parameter data")
+                with self.assertRaisesRegex(ValueError, "Geometry parameter data changed"):
+                    geometry_source.verify(cargo_metadata={"packages": [package]})
+                self.assertEqual(source.read_bytes(), b"changed parameter data")
+                package["source"] = "unreviewed source"
+                with self.assertRaisesRegex(ValueError, "Resolved COSMolKit source"):
+                    geometry_source.verify(cargo_metadata={"packages": [package]})
+
+    def test_geometry_data_and_new_rust_crate_licenses_survive_aggregation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "output"
+            packages = []
+            for name in ("cosmolkit-core", "cosmolkit-macros", "cosmolkit-ringdecomposer"):
+                source = Path(temporary) / name
+                source.mkdir()
+                (source / "Cargo.toml").write_text(f'name = "{name}"\nlicense = "MIT"\n')
+                packages.append(
+                    dict(
+                        name=name,
+                        version="0.3.0",
+                        license="MIT",
+                        manifest_path=str(source / "Cargo.toml"),
+                    )
+                )
+            write_notices(geometry_source.ROOT, output, {"packages": packages})
+            content = (output / THIRD_PARTY_FILE).read_bytes()
+            for name in ("NOTICE", "RDKIT-LICENSE"):
+                self.assertIn(
+                    (geometry_source.ROOT / "licenses/geometry" / name).read_bytes(), content
+                )
+            for package in packages:
+                self.assertIn(f"DEPENDENCY: {package['name']}@0.3.0".encode(), content)
+            self.assertIn(b"Copyright (c) 2026 COSMolKit Contributors", content)
+            self.assertFalse((geometry_source.ROOT / "licenses/geometry/BOOST-LICENSE").exists())
 
 
 class GeometryWorkerTests(unittest.TestCase):
@@ -251,6 +324,7 @@ class GeometryWorkerTests(unittest.TestCase):
                 for name in (
                     "system",
                     "RDKitGraphMol",
+                    "cosmolkit_core",
                     "boost_thread",
                     "python312",
                     "vcruntime140",
@@ -281,8 +355,15 @@ class GeometryWorkerTests(unittest.TestCase):
     def test_packaged_application_worker_executes_when_supplied_for_validation(self):
         binary = os.environ.get("RESHIKI_TEST_PACKAGED_APP")
         if binary is None:
+            if os.environ.get("RESHIKI_REQUIRE_GEOMETRY_APP") == "1":
+                self.fail("Required geometry admission needs RESHIKI_TEST_PACKAGED_APP")
             self.skipTest("Optional independently built application")
         build_release.verify_geometry_worker(Path(binary), "2026.03.6")
+
+    def test_required_release_admission_cannot_skip_a_missing_application(self):
+        with patch.dict(os.environ, {"RESHIKI_REQUIRE_GEOMETRY_APP": "1"}, clear=True):
+            with self.assertRaisesRegex(AssertionError, "Required geometry admission"):
+                self.test_packaged_application_worker_executes_when_supplied_for_validation()
 
 
 if __name__ == "__main__":

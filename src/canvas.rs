@@ -155,6 +155,8 @@ pub enum Edit {
     ArrowHandle(u64, usize, World),
     ArrowClick(u64),
     Select(Vec<u64>),
+    /// Preserve the exact mouse position for a keyboard hotspot handoff.
+    SelectAt(Vec<u64>, World),
     RelaxDragStart {
         session: u64,
         atom: u64,
@@ -373,6 +375,14 @@ fn rgb(c: [u8; 3]) -> Color {
 }
 
 impl MoleculeCanvas<'_> {
+    fn pointer_selection(&self, ids: Vec<u64>, point: World) -> Edit {
+        if self.keyboard_target.is_some() {
+            Edit::SelectAt(ids, point)
+        } else {
+            Edit::Select(ids)
+        }
+    }
+
     /// Ctrl/Cmd drags place a copy with the selection tools; Edit Points only moves points.
     fn copies(&self, modifiers: iced::keyboard::Modifiers) -> bool {
         self.tool.selects() && command_held(modifiers)
@@ -600,6 +610,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         // Iced may dispatch a batch with the final cursor position. Preserve the
         // position carried by each motion event so fast drags retain their origin.
         let was_inside = state.cursor.is_some_and(|p| bounds.contains(p));
+        let pointer_moved = matches!(event, Event::Mouse(mouse::Event::CursorMoved { position }) if state.cursor != Some(*position));
         if let Event::Mouse(mouse::Event::CursorMoved { position }) = event {
             state.cursor = Some(*position);
         }
@@ -1023,6 +1034,9 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     return Some(Action::request_redraw().and_capture());
                 }
                 if inside || was_inside {
+                    if self.keyboard_target.is_some() && !pointer_moved {
+                        return Some(Action::request_redraw());
+                    }
                     let hover = if inside && state.gesture.is_none() {
                         point.map(|p| self.camera.world(p, bounds))
                     } else {
@@ -1272,7 +1286,8 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                             .find(|g| g.contains(&atom))
                                             .unwrap_or(ids);
                                     return Some(
-                                        Action::publish(Edit::Select(connected)).and_capture(),
+                                        Action::publish(self.pointer_selection(connected, p))
+                                            .and_capture(),
                                     );
                                 }
                                 state.last_click = Some((now, atom));
@@ -1325,6 +1340,10 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     Gesture::Pan { .. } | Gesture::Erase { .. } => {
                         return Some(Action::request_redraw());
                     }
+                };
+                let edit = match edit {
+                    Edit::Select(ids) => self.pointer_selection(ids, p),
+                    edit => edit,
                 };
                 Some(Action::publish(edit).and_capture())
             }
@@ -5258,6 +5277,86 @@ mod tests {
         assert!(
             matches!(pointer_gesture(&canvas, Point::new(179.0, 150.0), Point::new(209.0, 170.0)), Edit::Move(ids, 30.0, 20.0) if ids == vec![a, b])
         );
+    }
+
+    #[test]
+    fn keyboard_click_preserves_world_point_and_stationary_screen_motion_does_not_handoff() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-21., 0.));
+        let b = doc.add_atom("C", World::new(21., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let mut canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: Some(World::default()),
+            element: "C",
+            joining: None,
+            hidden_annotation: None,
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+            doc: &doc,
+            selected: &[],
+            tool: Tool::Select,
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.,
+            },
+            grid: false,
+            guides: Default::default(),
+            smart_guides: true,
+            ring_size: 6,
+            aromatic_ring: false,
+            template_connection: reshiki::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_constrain: false,
+            graphic_arc: Default::default(),
+            graphic_style: &GraphicStyle::default(),
+            bracket_sides: BracketSides::Both,
+        };
+        assert!(
+            matches!(pointer_gesture(&canvas, Point::new(200., 150.), Point::new(200., 150.)), Edit::SelectAt(ids, point) if ids == vec![a, b] && point == World::default())
+        );
+        let blank_screen = Point::new(50., 50.);
+        assert!(
+            matches!(pointer_gesture(&canvas, blank_screen, blank_screen), Edit::SelectAt(ids, point) if ids.is_empty() && point == World::new(-150., -100.))
+        );
+        let mut state = State::default();
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+        let screen = Point::new(200., 150.);
+        let cursor = mouse::Cursor::Available(screen);
+        let motion = Event::Mouse(mouse::Event::CursorMoved { position: screen });
+        let first = canvas
+            .update(&mut state, &motion, bounds, cursor)
+            .unwrap()
+            .into_inner()
+            .0;
+        assert!(matches!(first, Some(Edit::Hover(Some(point))) if point == World::default()));
+        canvas.camera.center = World::new(100., 100.);
+        let stationary = canvas
+            .update(&mut state, &motion, bounds, cursor)
+            .unwrap()
+            .into_inner()
+            .0;
+        assert!(
+            stationary.is_none(),
+            "A camera change at the same physical pointer must not publish a new hotspot"
+        );
+        let next = Point::new(201., 150.);
+        let moved = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::CursorMoved { position: next }),
+                bounds,
+                mouse::Cursor::Available(next),
+            )
+            .unwrap()
+            .into_inner()
+            .0;
+        assert!(matches!(moved, Some(Edit::Hover(Some(point))) if point == World::new(101., 100.)));
     }
 
     #[test]

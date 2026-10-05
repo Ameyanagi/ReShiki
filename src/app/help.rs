@@ -97,7 +97,6 @@ impl App {
                 (label(Message::Group), "Group"),
                 (label(Message::Ungroup), "Ungroup"),
                 (label(Message::InvertSelection), "Invert selection"),
-                (label(Message::Duplicate), "Duplicate"),
                 (
                     "Drag an object".into(),
                     "Snap to other objects' edges, centers and equal gaps (smart guides)",
@@ -207,6 +206,10 @@ impl App {
                 (keys(command, "P"), "Print"),
                 (keys(command, "J"), "Join selected atoms / bonds"),
                 (keys(command | shift, "K"), "Clean up"),
+                (
+                    label(Message::Optimization(super::optimization::Action::Begin)),
+                    "Generate an optimized 3D conformer",
+                ),
                 (
                     format!("{} / {}", keys(command, "L"), keys(command, "E")),
                     "Fixed bond length / angles",

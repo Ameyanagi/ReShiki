@@ -483,6 +483,20 @@ impl App {
     }
 
     pub(super) fn properties_panel(&self) -> Element<'_, Message> {
+        if self.tab.optimization.is_some() {
+            return column![
+                card(container(self.optimization_panel()).padding(12)),
+                text("Apply or cancel the preview to edit other properties.")
+                    .size(11)
+                    .style(muted_text),
+            ]
+            .spacing(10)
+            .into();
+        }
+        self.ordinary_properties_panel()
+    }
+
+    fn ordinary_properties_panel(&self) -> Element<'_, Message> {
         let selected: HashSet<_> = self.tab.selected.iter().copied().collect();
         let mut body = column![
             text(if self.tab.selected.is_empty() {

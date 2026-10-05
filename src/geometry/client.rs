@@ -121,16 +121,18 @@ impl Client {
         field: ForceField,
         pins: &[Pin],
     ) -> Result<Optimized, Error> {
-        let mut request = prepared.native_request(
-            field,
-            reshiki_geometry::Operation::Evaluate,
+        self.execute(
+            prepared.native_request(
+                field,
+                reshiki_geometry::Operation::Evaluate,
+                Some(conformer),
+                pins,
+                1,
+            )?,
+            prepared.ids().len(),
             Some(conformer),
-            pins,
-            1,
-        )?;
-        request.fixed_atoms.clear();
-        self.execute(request, prepared.ids().len(), Some(conformer))
-            .await
+        )
+        .await
     }
     async fn execute(
         &self,

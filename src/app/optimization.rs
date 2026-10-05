@@ -2,9 +2,9 @@
 //!
 //! Worker requests own immutable snapshots. Pointer motion replaces one pending
 //! target, and Apply is the only operation that writes the committed document.
-use super::{App, Message, document_tab::TabId};
+use super::{App, InspectorTab, Message, document_tab::TabId};
 use crate::canvas::{Edit, Tool, optimization::Context};
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{Space, column, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::geometry::{
@@ -14,6 +14,48 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 const BATCH_ITERATIONS: u32 = 20;
+const MAX_RELAXATION_BATCHES: u32 = 50;
+const MAX_STAGNANT_BATCHES: u32 = 8;
+const ENERGY_PROGRESS_ABSOLUTE: f64 = 1e-6;
+const ENERGY_PROGRESS_RELATIVE: f64 = 1e-8;
+
+fn preview_control(
+    id: &'static str,
+    name: &'static str,
+    label: &'static str,
+    action: Action,
+    enabled: bool,
+    checked: Option<bool>,
+    hint: &'static str,
+) -> Element<'static, Message> {
+    let primary = matches!(action, Action::Apply) || checked == Some(true);
+    let fill = matches!(
+        action,
+        Action::Apply | Action::Cancel | Action::Start | Action::Stop
+    );
+    let value = match &action {
+        Action::Field(field) => Some(field.to_string()),
+        _ => None,
+    };
+    let mut control = reshiki::accessibility::button(id, name, text(label).size(12))
+        .on_press_maybe(enabled.then_some(Message::Optimization(action)))
+        .padding([7, 8])
+        .style(if primary {
+            crate::appearance::primary
+        } else {
+            crate::appearance::secondary
+        });
+    if let Some(checked) = checked {
+        control = control.checked(checked);
+    }
+    if let Some(value) = value {
+        control = control.value(value);
+    }
+    if fill {
+        control = control.width(Length::Fill);
+    }
+    super::workspace::hover_hint(control, hint, tooltip::Position::Left).into()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Key {
@@ -60,12 +102,97 @@ enum Work {
     Apply,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RelaxationPause {
+    Stalled,
+    Limit,
+}
+
+impl RelaxationPause {
+    fn phase(self) -> &'static str {
+        match self {
+            Self::Stalled => "Paused · No progress",
+            Self::Limit => "Paused · Not converged",
+        }
+    }
+
+    fn status(self) -> &'static str {
+        match self {
+            Self::Stalled => {
+                "Relaxation paused: no further energy improvement · Preview retained · Edit targets or pins, or press Start to retry"
+            }
+            Self::Limit => {
+                "Relaxation paused before convergence · Preview retained · Edit targets or pins, or press Start to retry"
+            }
+        }
+    }
+}
+
+/// Bounded work for physical constraints, independent of per-request keys and
+/// view changes. Only the latest fixed-point snapshot is retained.
+#[derive(Default)]
+struct Relaxation {
+    field: Option<ForceField>,
+    pins: Vec<Pin>,
+    batches: u32,
+    best_energy: Option<f64>,
+    stagnant_batches: u32,
+    paused: Option<RelaxationPause>,
+}
+
+impl Relaxation {
+    fn matches(&self, field: ForceField, pins: &[Pin]) -> bool {
+        self.field == Some(field)
+            && self.pins.len() == pins.len()
+            && self.pins.iter().zip(pins).all(|(before, after)| {
+                before.atom == after.atom && before.position == after.position
+            })
+    }
+
+    fn update(&mut self, field: ForceField, pins: Vec<Pin>) -> bool {
+        if self.matches(field, &pins) {
+            return false;
+        }
+        *self = Self {
+            field: Some(field),
+            pins,
+            ..Self::default()
+        };
+        true
+    }
+
+    fn completed(&mut self, result: &Optimized) -> Option<RelaxationPause> {
+        if result.converged {
+            return None;
+        }
+        let best = self.best_energy.unwrap_or(result.initial_energy);
+        let tolerance = ENERGY_PROGRESS_ABSOLUTE + ENERGY_PROGRESS_RELATIVE * best.abs();
+        if result.energy < best - tolerance {
+            self.best_energy = Some(result.energy);
+            self.stagnant_batches = 0;
+        } else {
+            // Compare against the best energy, so small improvements can add
+            // up across batches instead of repeatedly resetting the baseline.
+            self.best_energy = Some(best);
+            self.stagnant_batches = self.stagnant_batches.saturating_add(1);
+        }
+        if self.batches >= MAX_RELAXATION_BATCHES {
+            Some(RelaxationPause::Limit)
+        } else if self.stagnant_batches >= MAX_STAGNANT_BATCHES {
+            Some(RelaxationPause::Stalled)
+        } else {
+            None
+        }
+    }
+}
+
 struct Flight {
     key: Key,
     work: Work,
     handle: iced::task::Handle,
     drag: Option<(u64, Point3)>,
     pins: Vec<Pin>,
+    field: ForceField,
 }
 
 #[derive(Clone, Copy)]
@@ -102,6 +229,7 @@ pub(super) struct Session {
     energy: Option<f64>,
     iterations: u64,
     converged: bool,
+    relaxation: Relaxation,
     notice: Option<String>,
     depth_enhancement: bool,
     depth_scopes: Vec<reshiki::depth_appearance::Scope>,
@@ -258,6 +386,9 @@ impl Session {
         self.drag_original_energy = None;
         self.running = false;
         self.pending = false;
+        // Explicit Stop remains stopped after later edits. Automatic pauses
+        // retain their reason so changed constraints can resume live work.
+        self.relaxation.paused = None;
         if self.phase != Phase::Failed {
             self.phase = Phase::Paused;
         }
@@ -306,20 +437,57 @@ impl Session {
             handle: handle.abort_on_drop(),
             drag,
             pins: fixed,
+            field,
         });
+        if work == Work::Relax {
+            self.relaxation.batches = self.relaxation.batches.saturating_add(1);
+        }
         task
     }
 
+    fn sync_relaxation(&mut self) {
+        let resume = self.relaxation.paused.is_some();
+        let pins = self.constraints();
+        if self.relaxation.update(self.field, pins) && resume {
+            self.running = true;
+            self.pending = true;
+            self.phase = Phase::Running;
+        }
+    }
+
+    fn pause_relaxation(&mut self, reason: RelaxationPause) {
+        self.running = false;
+        self.pending = false;
+        self.phase = Phase::Paused;
+        self.relaxation.paused = Some(reason);
+    }
+
     fn next(&mut self) -> Task<Message> {
+        self.sync_relaxation();
         if self.conformer.is_some()
             && self.phase != Phase::Applying
             && self.running
             && (!self.converged || self.pending)
         {
+            if self.flight.is_none() && self.relaxation.batches >= MAX_RELAXATION_BATCHES {
+                self.pause_relaxation(RelaxationPause::Limit);
+                return Task::none();
+            }
             self.dispatch(Work::Relax)
         } else {
             Task::none()
         }
+    }
+
+    fn next_with_status(&mut self, status: &mut String) -> Task<Message> {
+        let was_paused = self.relaxation.paused.is_some();
+        let task = self.next();
+        if was_paused && self.running {
+            *status = "Relaxation resumed for the edited targets · Preview retained".into();
+        } else if let Some(reason) = self.relaxation.paused {
+            *status = reason.status().into();
+        }
+        task
     }
 }
 
@@ -330,6 +498,21 @@ impl Drop for Session {
 }
 
 impl App {
+    fn show_optimization_properties(&mut self) -> Task<Message> {
+        let old_width = self.inspector_width();
+        self.inspector_open = true;
+        self.inspector_tab = InspectorTab::Properties;
+        // Keep the molecule at the same screen position when the right panel
+        // appears; its resize notification must not trigger another Fit.
+        let width_change = old_width - self.inspector_width();
+        self.tab.camera.center.x += width_change / (2. * self.tab.camera.zoom);
+        self.viewport.width += width_change;
+        iced::widget::operation::snap_to(
+            "inspector-content",
+            iced::widget::operation::RelativeOffset::START,
+        )
+    }
+
     pub(super) fn cancel_optimization(&mut self) {
         self.tab.optimization_serial = self.tab.optimization_serial.wrapping_add(1);
         self.tab.optimization = None;
@@ -355,6 +538,9 @@ impl App {
 
     pub(super) fn optimization_gate(&mut self, message: &Message) -> Option<Task<Message>> {
         self.tab.optimization.as_ref()?;
+        if matches!(message, Message::Inspector(InspectorTab::Properties)) {
+            return Some(self.show_optimization_properties());
+        }
         if matches!(message, Message::Escape) {
             self.cancel_optimization();
             self.status = "3D preview cancelled · Drawing unchanged".into();
@@ -479,6 +665,7 @@ impl App {
                 energy: None,
                 iterations: 0,
                 converged: false,
+                relaxation: Relaxation::default(),
                 notice: None,
                 depth_enhancement: true,
                 depth_scopes: self.tab.doc.depth_appearance.clone(),
@@ -488,7 +675,7 @@ impl App {
             self.tool = Tool::Select;
             self.status = "Generating stereo-preserving 3D · MMFF94s".into();
             self.error = false;
-            return task;
+            return Task::batch([task, self.show_optimization_properties()]);
         }
         if matches!(action, Action::Cancel) {
             self.cancel_optimization();
@@ -602,6 +789,16 @@ impl App {
                 }
                 return Task::none();
             }
+            session.sync_relaxation();
+            if flight.work == Work::Relax
+                && session.relaxation.matches(flight.field, &flight.pins)
+                && let Some(reason) = session.relaxation.completed(&result)
+            {
+                session.pause_relaxation(reason);
+                self.status = reason.status().into();
+                self.error = false;
+                return Task::none();
+            }
             session.phase = if session.running {
                 Phase::Running
             } else {
@@ -614,7 +811,7 @@ impl App {
             }
             .into();
             self.error = false;
-            return session.next();
+            return session.next_with_status(&mut self.status);
         }
         if session.phase == Phase::Applying {
             return Task::none();
@@ -630,7 +827,9 @@ impl App {
                 session.pending = true;
                 session.phase = Phase::Running;
                 session.notice = None;
-                return session.next();
+                session.relaxation = Relaxation::default();
+                self.status = "Relaxing 3D preview…".into();
+                return session.next_with_status(&mut self.status);
             }
             Action::Stop => {
                 session.pause();
@@ -661,7 +860,7 @@ impl App {
                     Phase::Paused
                 };
                 session.pending = true;
-                return session.next();
+                return session.next_with_status(&mut self.status);
             }
             Action::PinSelected => {
                 if let Some(conformer) = session.effective_conformer() {
@@ -716,7 +915,7 @@ impl App {
         if let Err(error) = session.render() {
             session.notice = Some(error);
         }
-        session.next()
+        session.next_with_status(&mut self.status)
     }
 
     pub(super) fn optimization_edit(&mut self, edit: Edit) -> Option<Task<Message>> {
@@ -817,42 +1016,24 @@ impl App {
         if let Err(error) = session.render() {
             session.notice = Some(error);
         }
-        Some(session.next())
+        Some(session.next_with_status(&mut self.status))
     }
 
-    pub(super) fn optimization_bar(&self) -> Element<'_, Message> {
+    pub(super) fn optimization_panel(&self) -> Element<'_, Message> {
         let Some(session) = &self.tab.optimization else {
             return Space::new().into();
         };
         let ready = session.conformer.is_some() && session.phase != Phase::Applying;
         let editable = session.phase != Phase::Applying;
-        let command = |id: &'static str,
-                       name: &'static str,
-                       label: &'static str,
-                       action: Action,
-                       enabled: bool| {
-            reshiki::accessibility::button(id, name, text(label).size(12))
-                .on_press_maybe(enabled.then_some(Message::Optimization(action)))
-                .style(crate::appearance::secondary)
-        };
-        let field = |id: &'static str, label: &'static str, field: ForceField| {
-            reshiki::accessibility::button(
-                id,
-                format!("Use {label} force field"),
-                text(label).size(12),
-            )
-            .on_press_maybe(editable.then_some(Message::Optimization(Action::Field(field))))
-            .checked(session.field == field)
-            .value(field.to_string())
-            .style(if session.field == field {
-                crate::appearance::primary
-            } else {
-                crate::appearance::secondary
-            })
-        };
         let phase = match session.phase {
             Phase::Preparing => "Generating 3D…",
-            Phase::Paused => "3D preview",
+            Phase::Paused if session.relaxation.paused.is_some() => session
+                .relaxation
+                .paused
+                .map_or("Paused", RelaxationPause::phase),
+            Phase::Paused if session.pending => "Paused · Ready to relax",
+            Phase::Paused if session.converged => "Paused · Converged",
+            Phase::Paused => "Paused",
             Phase::Running if session.converged && session.flight.is_none() => {
                 "Live relaxation ready"
             }
@@ -871,57 +1052,123 @@ impl App {
                 }
                 .into()
             });
-        let mut bar = column![
-            row![
-                text(phase).size(13),
-                row![
-                    field("optimization.field.mmff94", "MMFF94", ForceField::Mmff94),
-                    field("optimization.field.mmff94s", "MMFF94s", ForceField::Mmff94s),
-                    field("optimization.field.uff", "UFF", ForceField::Uff),
-                ].spacing(4),
-                command("optimization.run", if session.running { "Stop relaxation" } else if session.conformer.is_none() { "Generate 3D" } else { "Start relaxation" },
-                    if session.running { "Stop" } else if session.conformer.is_none() { "Generate" } else { "Start" },
-                    if session.running { Action::Stop } else { Action::Start },
-                    session.phase != Phase::Applying && (ready || session.flight.is_none())),
-                command("optimization.cancel", "Cancel 3D preview", "Cancel", Action::Cancel, true),
-                command("optimization.apply", "Apply 3D projection", "Apply", Action::Apply, ready && session.phase != Phase::Failed).style(crate::appearance::primary),
-            ].spacing(8).align_y(Alignment::Center).width(Length::Fill).wrap(),
+        let field = |id, name, label, field| {
+            preview_control(
+                id,
+                name,
+                label,
+                Action::Field(field),
+                editable,
+                Some(session.field == field),
+                "Choose the force field used to relax this molecule",
+            )
+        };
+        fn section<'a>(
+            title: &'static str,
+            controls: Element<'a, Message>,
+        ) -> Element<'a, Message> {
+            column![
+                text(title).size(11).style(super::workspace::muted_text),
+                controls
+            ]
+            .spacing(5)
+            .into()
+        }
+        let mut panel = column![
+            text("3D preview").size(14),
+            text(phase).size(12),
             text(format!("{} pinned · {energy}", session.pins.len()))
                 .size(11).style(super::workspace::muted_text),
-            row![
+            section("Force field & relaxation", column![
                 row![
-                    command("optimization.pin-selected", "Pin selected atoms", "Pin selected", Action::PinSelected, ready && !self.tab.selected.is_empty()),
-                    command("optimization.unpin-selected", "Unpin selected atoms", "Unpin selected", Action::UnpinSelected, ready && !self.tab.selected.is_empty()),
-                    command("optimization.clear-pins", "Clear all atom pins", "Clear pins", Action::ClearPins, ready && !session.pins.is_empty()),
-                ].spacing(6).align_y(Alignment::Center),
+                    field("optimization.field.mmff94", "Use MMFF94 force field", "MMFF94", ForceField::Mmff94),
+                    field("optimization.field.mmff94s", "Use MMFF94s force field", "MMFF94s", ForceField::Mmff94s),
+                    field("optimization.field.uff", "Use UFF force field", "UFF", ForceField::Uff),
+                ].spacing(4).align_y(Alignment::Center).width(Length::Fill).wrap(),
+                preview_control("optimization.run", if session.running { "Stop relaxation" } else if session.conformer.is_none() { "Generate 3D" } else { "Start relaxation" },
+                    if session.running { "Stop relaxation" } else if session.conformer.is_none() { "Generate 3D" } else { "Start relaxation" },
+                    if session.running { Action::Stop } else { Action::Start },
+                    editable && (ready || session.flight.is_none()), None,
+                    "Start or pause relaxation; the preview stays editable until you Apply or Cancel"),
+            ].spacing(6).into()),
+            section("Pins", row![
+                preview_control("optimization.pin-selected", "Pin selected atoms", "Pin selected", Action::PinSelected, ready && !self.tab.selected.is_empty(), None,
+                    "Hold selected atoms at their current 3D positions during relaxation"),
+                preview_control("optimization.unpin-selected", "Unpin selected atoms", "Unpin", Action::UnpinSelected, ready && !self.tab.selected.is_empty(), None,
+                    "Release selected atoms so they can move and be dragged"),
+                preview_control("optimization.clear-pins", "Clear all atom pins", "Clear pins", Action::ClearPins, ready && !session.pins.is_empty(), None,
+                    "Release every pinned atom in this preview"),
+            ].spacing(6).align_y(Alignment::Center).width(Length::Fill).wrap().into()),
+            section("View", column![
                 row![
-                    command("optimization.rotate-left", "Rotate projection left", "↶", Action::Rotate(0., -15.), ready),
-                    command("optimization.rotate-right", "Rotate projection right", "↷", Action::Rotate(0., 15.), ready),
-                    command("optimization.tilt-up", "Tilt projection up", "Tilt up", Action::Rotate(15., 0.), ready),
-                    command("optimization.tilt-down", "Tilt projection down", "Tilt down", Action::Rotate(-15., 0.), ready),
-                    command("optimization.roll", "Roll projection clockwise", "Roll", Action::Roll(15.), ready),
-                ].spacing(6).align_y(Alignment::Center),
-                row![
-                    command("optimization.show-original", "Show original drawing", "Show original", Action::ShowOriginal(!session.original), editable)
-                        .checked(session.original)
-                        .style(if session.original { crate::appearance::primary } else { crate::appearance::secondary }),
-                    command("optimization.automatic-depth", "Automatic depth appearance", "Automatic depth", Action::DepthEnhancement(!session.depth_enhancement), editable)
-                        .checked(session.depth_enhancement)
-                        .style(if session.depth_enhancement { crate::appearance::primary } else { crate::appearance::secondary }),
-                    command("optimization.clear-depth", "Clear depth appearance", "Clear depth paint", Action::ClearDepthAppearance, ready),
-                ].spacing(6).align_y(Alignment::Center),
-            ].spacing(14).align_y(Alignment::Center).width(Length::Fill).wrap().vertical_spacing(6),
-            text("Shift-click to select; pin atoms to hold them. Drag unpinned atoms or use Tilt to rotate.")
+                    preview_control("optimization.rotate-left", "Rotate projection left", "↶", Action::Rotate(0., -15.), ready, None, "Rotate the view left by 15°; the molecule's energy and pins stay fixed"),
+                    preview_control("optimization.rotate-right", "Rotate projection right", "↷", Action::Rotate(0., 15.), ready, None, "Rotate the view right by 15°; the molecule's energy and pins stay fixed"),
+                    preview_control("optimization.tilt-up", "Tilt projection up", "Tilt up", Action::Rotate(15., 0.), ready, None, "Tilt the view up by 15°"),
+                    preview_control("optimization.tilt-down", "Tilt projection down", "Tilt down", Action::Rotate(-15., 0.), ready, None, "Tilt the view down by 15°"),
+                    preview_control("optimization.roll", "Roll projection clockwise", "Roll", Action::Roll(15.), ready, None, "Roll the view clockwise by 15°"),
+                ].spacing(4).align_y(Alignment::Center).width(Length::Fill).wrap().vertical_spacing(5),
+                preview_control("optimization.show-original", "Show original drawing", "Show original", Action::ShowOriginal(!session.original), editable, Some(session.original),
+                    "Compare with the original drawing without discarding this preview"),
+            ].spacing(5).into()),
+            section("Depth appearance", row![
+                preview_control("optimization.automatic-depth", "Automatic depth appearance", "Automatic depth", Action::DepthEnhancement(!session.depth_enhancement), editable, Some(session.depth_enhancement),
+                    "Update depth shading as you rotate; turn off to keep the current shading"),
+                preview_control("optimization.clear-depth", "Clear depth appearance", "Clear depth", Action::ClearDepthAppearance, ready, None,
+                    "Restore original ink while retaining the 3D projection"),
+            ].spacing(6).align_y(Alignment::Center).width(Length::Fill).wrap().into()),
+            text("Shift-click selects atoms to pin. Unpin to drag; use the Tilt tool to rotate freely.")
                 .size(11).style(super::workspace::muted_text),
-        ].spacing(6);
-        if let Some(notice) = &session.notice {
-            bar = bar.push(text(notice).size(11));
+        ].spacing(10).width(Length::Fill);
+        if session.phase == Phase::Preparing {
+            panel = panel.push(
+                text("Building the preview. Apply becomes available when it is ready.")
+                    .size(11)
+                    .style(super::workspace::muted_text),
+            );
+        } else if let Some(reason) = session.relaxation.paused {
+            panel = panel.push(
+                text(reason.status())
+                    .size(11)
+                    .style(super::workspace::muted_text),
+            );
         }
-        container(bar)
-            .width(Length::Fill)
-            .padding([8, 12])
-            .style(super::workspace::panel)
-            .into()
+        if let Some(notice) = &session.notice {
+            panel = panel.push(text(notice).size(11).style(crate::appearance::text_color(
+                iced::Color::from_rgb8(182, 66, 61),
+            )));
+        }
+        panel.into()
+    }
+
+    pub(super) fn optimization_footer(&self) -> Element<'_, Message> {
+        let Some(session) = &self.tab.optimization else {
+            return Space::new().into();
+        };
+        let ready = session.conformer.is_some()
+            && !matches!(session.phase, Phase::Applying | Phase::Failed);
+        row![
+            preview_control(
+                "optimization.cancel",
+                "Cancel 3D preview",
+                "Cancel",
+                Action::Cancel,
+                true,
+                None,
+                "Discard the preview and keep the original drawing"
+            ),
+            preview_control(
+                "optimization.apply",
+                "Apply 3D projection",
+                "Apply",
+                Action::Apply,
+                ready,
+                None,
+                "Keep this projection as one editable, undoable change"
+            ),
+        ]
+        .spacing(8)
+        .width(Length::Fill)
+        .into()
     }
 }
 
@@ -982,6 +1229,27 @@ mod tests {
         (app, a, b, original)
     }
 
+    fn complete_live(app: &mut App, energy: f64, converged: bool) -> Task<Message> {
+        let session = app.tab.optimization.as_ref().unwrap();
+        let flight = session.flight.as_ref().unwrap();
+        assert_eq!(flight.work, Work::Relax);
+        let key = flight.key;
+        let mut computed = result(session);
+        computed.initial_energy = energy + 1.;
+        computed.energy = energy;
+        computed.converged = converged;
+        app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(computed))))
+    }
+
+    fn stall_live(app: &mut App) {
+        for _ in 0..=MAX_STAGNANT_BATCHES {
+            let _ = complete_live(app, 1., false);
+        }
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert_eq!(session.relaxation.paused, Some(RelaxationPause::Stalled));
+        assert!(session.flight.is_none());
+    }
+
     fn preview_controls(running: bool) -> [(&'static str, Action); 17] {
         [
             (
@@ -997,8 +1265,6 @@ mod tests {
                 "optimization.run",
                 if running { Action::Stop } else { Action::Start },
             ),
-            ("optimization.cancel", Action::Cancel),
-            ("optimization.apply", Action::Apply),
             ("optimization.pin-selected", Action::PinSelected),
             ("optimization.unpin-selected", Action::UnpinSelected),
             ("optimization.clear-pins", Action::ClearPins),
@@ -1013,6 +1279,8 @@ mod tests {
                 Action::DepthEnhancement(false),
             ),
             ("optimization.clear-depth", Action::ClearDepthAppearance),
+            ("optimization.cancel", Action::Cancel),
+            ("optimization.apply", Action::Apply),
         ]
     }
 
@@ -1050,6 +1318,74 @@ mod tests {
         let applied = app.tab.doc.clone();
         assert_ne!(applied, original);
         assert_eq!(applied.atom(unrelated.id), Some(&unrelated));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, applied);
+    }
+
+    #[test]
+    fn applying_after_live_drag_stop_and_depth_freeze_retains_pins_and_is_one_edit() {
+        let (mut app, pinned, dragged, original) = prepared_preview();
+        let _ = app.optimization_action(Action::Rotate(25., -35.));
+        let _ = app.optimization_action(Action::PinSelected);
+        let session = app.tab.optimization.as_ref().unwrap();
+        let pin = session.pins[&pinned];
+        let id = session.id;
+        let target = session
+            .preview
+            .atom(dragged)
+            .unwrap()
+            .position
+            .offset(2., 1.);
+        let _ = app.optimization_action(Action::Start);
+        let _ = app.optimization_edit(Edit::RelaxDragStart {
+            session: id,
+            atom: dragged,
+        });
+        let _ = app.optimization_edit(Edit::RelaxDragTarget {
+            session: id,
+            atom: dragged,
+            target,
+        });
+        let _ = app.optimization_edit(Edit::RelaxDragEnd {
+            session: id,
+            atom: dragged,
+            target: Some(target),
+        });
+        let _ = app.optimization_action(Action::Stop);
+        let _ = app.optimization_action(Action::DepthEnhancement(false));
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert_eq!(session.pins.get(&pinned), Some(&pin));
+        assert!(session.flight.is_none());
+        let coordinates = session.effective_conformer().unwrap().positions;
+        let frozen = session.preview.depth_appearance.clone();
+        assert!(!frozen.is_empty());
+        assert!(frozen.iter().all(|scope| !scope.automatic));
+        let projected_pin = session.frame.as_ref().unwrap().project(pin);
+        let _ = app.optimization_action(Action::Apply);
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert_eq!(session.phase, Phase::Applying);
+        assert_eq!(
+            session.effective_conformer().unwrap().positions,
+            coordinates
+        );
+        assert_eq!(session.pins.get(&pinned), Some(&pin));
+        let flight = session.flight.as_ref().unwrap();
+        assert_eq!(flight.work, Work::Apply);
+        assert_eq!(flight.pins.len(), 1);
+        assert_eq!(flight.pins[0].atom, session.prepared.index(pinned).unwrap());
+        assert_eq!(flight.pins[0].position, pin);
+        assert_eq!(app.tab.doc, original, "Apply waits for its energy check");
+        assert!(!app.tab.history.can_undo());
+        finish(&mut app);
+        assert!(app.tab.optimization.is_none());
+        assert!(!app.error);
+        let applied = app.tab.doc.clone();
+        assert_eq!(applied.depth_appearance, frozen);
+        assert_eq!(applied.atom(pinned).unwrap().position, projected_pin.0);
+        assert_eq!(applied.atom(pinned).unwrap().depth, projected_pin.1);
         let _ = app.update(Message::Undo);
         assert_eq!(app.tab.doc, original);
         assert!(!app.tab.history.can_undo());
@@ -1154,18 +1490,21 @@ mod tests {
 
     #[test]
     fn exact_pin_violation_is_rejected_without_replacing_the_preview() {
-        let (mut app, a, _, original) = prepared_preview();
-        let preview = app.tab.optimization.as_ref().unwrap().preview.clone();
-        let _ = app.optimization_action(Action::Start);
-        let session = app.tab.optimization.as_ref().unwrap();
-        let key = session.flight.as_ref().unwrap().key;
-        let mut invalid = result(session);
-        invalid.conformer.positions[session.prepared.index(a).unwrap()].x += 0.01;
-        let _ = app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(invalid))));
-        assert_eq!(app.tab.doc, original);
-        assert_eq!(app.tab.optimization.as_ref().unwrap().preview, preview);
-        assert_eq!(app.tab.optimization.as_ref().unwrap().phase, Phase::Failed);
-        assert!(app.error);
+        for action in [Action::Start, Action::Apply] {
+            let (mut app, a, _, original) = prepared_preview();
+            let preview = app.tab.optimization.as_ref().unwrap().preview.clone();
+            let _ = app.optimization_action(action);
+            let session = app.tab.optimization.as_ref().unwrap();
+            let key = session.flight.as_ref().unwrap().key;
+            let mut invalid = result(session);
+            invalid.conformer.positions[session.prepared.index(a).unwrap()].x += 0.01;
+            let _ = app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(invalid))));
+            assert_eq!(app.tab.doc, original);
+            assert_eq!(app.tab.optimization.as_ref().unwrap().preview, preview);
+            assert_eq!(app.tab.optimization.as_ref().unwrap().phase, Phase::Failed);
+            assert!(!app.tab.history.can_undo());
+            assert!(app.error);
+        }
     }
 
     #[test]
@@ -1311,6 +1650,192 @@ mod tests {
     }
 
     #[test]
+    fn improving_nonconverged_batches_stop_at_the_budget_and_apply_is_one_undoable_edit() {
+        let (mut app, _, _, original) = prepared_preview();
+        let _ = app.optimization_action(Action::ClearPins);
+        let _ = app.optimization_action(Action::Start);
+        let running_context = app
+            .tab
+            .optimization
+            .as_ref()
+            .unwrap()
+            .accessibility_context();
+        for batch in 1..=MAX_RELAXATION_BATCHES {
+            let task = complete_live(&mut app, 1000. - f64::from(batch), false);
+            let session = app.tab.optimization.as_ref().unwrap();
+            assert_eq!(app.tab.doc, original);
+            assert!(!app.tab.history.can_undo());
+            if batch < MAX_RELAXATION_BATCHES {
+                assert!(task.units() > 0);
+                assert!(session.running);
+                assert!(session.flight.is_some());
+            } else {
+                assert_eq!(task.units(), 0);
+                assert!(!session.running);
+                assert!(session.flight.is_none());
+                assert_eq!(session.phase, Phase::Paused);
+                assert_eq!(session.relaxation.paused, Some(RelaxationPause::Limit));
+                assert_ne!(running_context, session.accessibility_context());
+            }
+        }
+        assert!(app.status.contains("paused before convergence"));
+        assert!(!app.error);
+        let session = app.tab.optimization.as_mut().unwrap();
+        assert_eq!(session.next().units(), 0);
+        let preview = session.preview.clone();
+        let _ = app.optimization_action(Action::Apply);
+        assert_eq!(
+            app.tab.optimization.as_ref().unwrap().phase,
+            Phase::Applying
+        );
+        assert_eq!(app.tab.doc, original);
+        finish(&mut app);
+        assert!(app.tab.optimization.is_none());
+        assert_eq!(app.tab.doc, preview);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, preview);
+    }
+
+    #[test]
+    fn stalled_nonconverged_batches_pause_after_multiple_batches_and_cancel_keeps_the_drawing() {
+        let (mut app, _, _, original) = prepared_preview();
+        let _ = app.optimization_action(Action::Start);
+        assert!(complete_live(&mut app, 1., false).units() > 0);
+        for _ in 1..MAX_STAGNANT_BATCHES {
+            assert!(complete_live(&mut app, 1., false).units() > 0);
+        }
+        assert_eq!(complete_live(&mut app, 1., false).units(), 0);
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert_eq!(session.phase, Phase::Paused);
+        assert_eq!(session.relaxation.paused, Some(RelaxationPause::Stalled));
+        assert_eq!(session.relaxation.batches, MAX_STAGNANT_BATCHES + 1);
+        assert!(app.status.contains("no further energy improvement"));
+        assert!(session.notice.is_none());
+        assert!(!app.error);
+        assert_eq!(app.tab.doc, original);
+        let _ = app.optimization_action(Action::Cancel);
+        assert!(app.tab.optimization.is_none());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+    }
+
+    #[test]
+    fn small_cumulative_energy_improvements_keep_live_relaxation_active() {
+        let (mut app, _, _, original) = prepared_preview();
+        let _ = app.optimization_action(Action::Start);
+        let _ = complete_live(&mut app, 1., false);
+        for batch in 1..=2 * MAX_STAGNANT_BATCHES {
+            // Each step is below the progress threshold, but two successive
+            // steps make meaningful progress against the retained baseline.
+            assert!(complete_live(&mut app, 1. - f64::from(batch) * 6e-7, false).units() > 0);
+        }
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert!(session.running);
+        assert!(session.relaxation.paused.is_none());
+        assert!(session.flight.is_some());
+        let _ = app.optimization_action(Action::Stop);
+        assert_eq!(app.tab.doc, original);
+    }
+
+    #[test]
+    fn real_pin_and_field_changes_resume_a_paused_budget_while_noop_edits_and_rotation_do_not() {
+        for action in [
+            Action::PinSelected,
+            Action::UnpinSelected,
+            Action::ClearPins,
+            Action::Field(ForceField::Uff),
+        ] {
+            let (mut app, _, b, original) = prepared_preview();
+            let _ = app.optimization_action(Action::Start);
+            stall_live(&mut app);
+            assert_eq!(app.optimization_action(Action::Rotate(15., 25.)).units(), 0);
+            assert_eq!(
+                app.optimization_action(Action::Field(ForceField::Mmff94s))
+                    .units(),
+                0
+            );
+            assert_eq!(app.optimization_action(Action::PinSelected).units(), 0);
+            let session = app.tab.optimization.as_ref().unwrap();
+            assert!(!session.running);
+            assert_eq!(session.relaxation.batches, MAX_STAGNANT_BATCHES + 1);
+            if matches!(action, Action::PinSelected) {
+                app.tab.selected = vec![b];
+            }
+            assert!(app.optimization_action(action).units() > 0);
+            let session = app.tab.optimization.as_ref().unwrap();
+            assert!(session.running);
+            assert_eq!(session.phase, Phase::Running);
+            assert_eq!(session.relaxation.batches, 1);
+            assert_eq!(session.relaxation.stagnant_batches, 0);
+            assert!(session.relaxation.best_energy.is_none());
+            assert!(session.relaxation.paused.is_none());
+            assert!(session.flight.is_some());
+            assert_eq!(app.tab.doc, original);
+        }
+    }
+
+    #[test]
+    fn changed_drag_targets_resume_and_an_older_flight_does_not_consume_the_new_budget() {
+        let (mut app, a, _, original) = prepared_preview();
+        let _ = app.optimization_action(Action::ClearPins);
+        let _ = app.optimization_action(Action::Start);
+        stall_live(&mut app);
+        let id = app.tab.optimization.as_ref().unwrap().id;
+        let _ = app.optimization_edit(Edit::RelaxDragStart {
+            session: id,
+            atom: a,
+        });
+        let session = app.tab.optimization.as_ref().unwrap();
+        let key = session.flight.as_ref().unwrap().key;
+        let mut older = result(session);
+        older.converged = false;
+        let _ = app.optimization_edit(Edit::RelaxDragTarget {
+            session: id,
+            atom: a,
+            target: Point::new(10., 15.),
+        });
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert_eq!(session.relaxation.batches, 0);
+        assert_eq!(session.flight.as_ref().unwrap().key, key);
+        let task = app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(older))));
+        assert!(task.units() > 0);
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert_eq!(session.relaxation.batches, 1);
+        assert_eq!(session.relaxation.stagnant_batches, 0);
+        assert!(session.relaxation.best_energy.is_none());
+        stall_live(&mut app);
+        let task = app
+            .optimization_edit(Edit::RelaxDragTarget {
+                session: id,
+                atom: a,
+                target: Point::new(20., 15.),
+            })
+            .unwrap();
+        assert!(task.units() > 0);
+        assert_eq!(app.tab.optimization.as_ref().unwrap().relaxation.batches, 1);
+        let _ = app.optimization_action(Action::Stop);
+        let _ = app.optimization_edit(Edit::RelaxDragStart {
+            session: id,
+            atom: a,
+        });
+        let task = app
+            .optimization_edit(Edit::RelaxDragTarget {
+                session: id,
+                atom: a,
+                target: Point::new(25., 15.),
+            })
+            .unwrap();
+        assert_eq!(task.units(), 0);
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert!(!session.running);
+        assert!(session.flight.is_none());
+        assert_eq!(app.tab.doc, original);
+    }
+
+    #[test]
     fn stop_retains_visual_drag_targets_without_dispatch_and_start_uses_the_latest_target() {
         let (mut app, a, _, original) = prepared_preview();
         let _ = app.optimization_action(Action::ClearPins);
@@ -1380,7 +1905,10 @@ mod tests {
             })
             .unwrap();
         assert!(task.units() > 0);
-        assert!(app.tab.optimization.as_ref().unwrap().flight.is_some());
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert!(session.flight.is_some());
+        assert_eq!(session.relaxation.batches, 1);
+        assert_eq!(session.relaxation.stagnant_batches, 0);
     }
 
     #[test]
@@ -1463,75 +1991,205 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    #[ignore = "Opt-in real renderer semantics and keyboard checks"]
-    async fn preview_controls_publish_native_actions_and_tab_enter_dispatches_the_same_actions() {
-        use iced::advanced::{
-            Layout, Shell, clipboard, layout, mouse,
-            renderer::Headless,
-            widget::{Operation, Tree, operation},
-        };
+    struct PreviewUi {
+        renderer: iced::Renderer,
+        cache: iced_runtime::user_interface::Cache,
+        size: iced::Size,
+    }
+
+    impl PreviewUi {
+        async fn new(size: iced::Size) -> Self {
+            use iced::advanced::renderer::Headless;
+            Self {
+                renderer: <iced::Renderer as Headless>::new(
+                    iced::Font::with_name(reshiki::style::ui_font_family()),
+                    iced::Pixels(16.),
+                    None,
+                )
+                .await
+                .unwrap(),
+                cache: iced_runtime::user_interface::Cache::new(),
+                size,
+            }
+        }
+
+        fn operate<T: 'static>(
+            &mut self,
+            app: &App,
+            operation: &mut dyn iced::advanced::widget::Operation<T>,
+        ) {
+            let mut ui = iced_runtime::UserInterface::build(
+                app.view(),
+                self.size,
+                std::mem::take(&mut self.cache),
+                &mut self.renderer,
+            );
+            ui.operate(
+                &self.renderer,
+                &mut iced::advanced::widget::operation::black_box(operation),
+            );
+            self.cache = ui.into_cache();
+        }
+
+        fn snapshot(&mut self, app: &App) -> reshiki::accessibility::Snapshot {
+            let mut collect =
+                reshiki::accessibility::Collect::new(iced::Rectangle::with_size(self.size));
+            self.operate(app, &mut collect);
+            let snapshot = collect.snapshot().clone();
+            assert!(snapshot.duplicate_ids.is_empty());
+            snapshot
+        }
+
+        fn focus(&mut self, app: &App, id: &str) {
+            use iced::advanced::widget::{Operation, operation};
+            let mut operation: Box<dyn Operation> =
+                Box::new(reshiki::accessibility::FocusControl::new(id));
+            loop {
+                self.operate(app, operation.as_mut());
+                match operation.finish() {
+                    operation::Outcome::Chain(next) => operation = next,
+                    _ => break,
+                }
+            }
+        }
+
+        fn event(
+            &mut self,
+            app: &App,
+            event: iced::Event,
+            cursor: iced::mouse::Cursor,
+        ) -> (iced::event::Status, Vec<Message>) {
+            let mut ui = iced_runtime::UserInterface::build(
+                app.view(),
+                self.size,
+                std::mem::take(&mut self.cache),
+                &mut self.renderer,
+            );
+            let mut messages = Vec::new();
+            let (_, statuses) = ui.update(
+                &[event],
+                cursor,
+                &mut self.renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut messages,
+            );
+            self.cache = ui.into_cache();
+            (statuses[0], messages)
+        }
+
+        fn settle(&mut self, app: &mut App) {
+            for _ in 0..3 {
+                let (_, messages) = self.event(
+                    app,
+                    iced::Event::Window(iced::window::Event::RedrawRequested(
+                        std::time::Instant::now(),
+                    )),
+                    iced::mouse::Cursor::Unavailable,
+                );
+                if messages.is_empty() {
+                    break;
+                }
+                for message in messages {
+                    let _ = app.update(message);
+                }
+            }
+        }
+
+        fn canvas_bounds(&self, app: &App) -> iced::Rectangle {
+            use iced::advanced::{Layout, layout, widget::Tree};
+            fn canvas(layout: Layout<'_>, size: iced::Size) -> Option<iced::Rectangle> {
+                if layout.bounds().size() == size && layout.children().next().is_none() {
+                    return Some(layout.bounds());
+                }
+                layout.children().find_map(|child| canvas(child, size))
+            }
+            let mut view = app.view();
+            let mut tree = Tree::new(view.as_widget());
+            let node = view.as_widget_mut().layout(
+                &mut tree,
+                &self.renderer,
+                &layout::Limits::new(self.size, self.size),
+            );
+            canvas(Layout::new(&node), app.viewport).expect("actual canvas layout")
+        }
+    }
+
+    fn preview_key(named: iced::keyboard::key::Named, repeat: bool) -> iced::Event {
         use iced::keyboard::{
             self, Key, Modifiers,
             key::{Code, Named, Physical},
         };
-        use iced::{Event, Rectangle, Size};
+        iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key: Key::Named(named),
+            modified_key: Key::Named(named),
+            physical_key: Physical::Code(if named == Named::Tab {
+                Code::Tab
+            } else {
+                Code::Enter
+            }),
+            location: keyboard::Location::Standard,
+            modifiers: Modifiers::empty(),
+            text: None,
+            repeat,
+        })
+    }
+
+    #[test]
+    fn beginning_or_reopening_preview_reveals_properties_without_moving_the_molecule() {
+        for (open, tab) in [
+            (false, InspectorTab::Properties),
+            (true, InspectorTab::Assistant),
+            (true, InspectorTab::Templates),
+        ] {
+            let (mut app, a, _, original) = drawing();
+            app.inspector_open = open;
+            app.inspector_tab = tab;
+            app.tab.camera.zoom = 1.5;
+            app.viewport = iced::Size::new(1000. - app.inspector_width(), 600.);
+            let at = app.tab.doc.atom(a).unwrap().position;
+            let screen = app
+                .tab
+                .camera
+                .screen(at, iced::Rectangle::with_size(app.viewport));
+            let _ = app.optimization_action(Action::Begin);
+            assert!(app.inspector_open);
+            assert_eq!(app.inspector_tab, InspectorTab::Properties);
+            assert_eq!(
+                app.tab
+                    .camera
+                    .screen(at, iced::Rectangle::with_size(app.viewport)),
+                screen
+            );
+            assert_eq!(app.tab.doc, original);
+            let _ = app.update(Message::Inspector(InspectorTab::Templates));
+            assert_eq!(app.inspector_tab, InspectorTab::Templates);
+            let _ = app.update(Message::Inspector(InspectorTab::Properties));
+            assert_eq!(app.inspector_tab, InspectorTab::Properties);
+            assert!(app.tab.optimization.is_some());
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "Opt-in real renderer semantics and keyboard checks"]
+    async fn preview_controls_publish_native_actions_and_tab_enter_dispatches_the_same_actions() {
+        use iced::advanced::widget::{Operation, operation};
+        use iced::keyboard::key::Named;
+        use iced::{Rectangle, Size, mouse};
         use reshiki::accessibility::{
-            Activate, Collect, Role, focus_scope,
+            Activate, Role,
             tree::{NativeTree, Request},
         };
-
-        fn key(named: Named, repeat: bool) -> Event {
-            Event::Keyboard(keyboard::Event::KeyPressed {
-                key: Key::Named(named),
-                modified_key: Key::Named(named),
-                physical_key: Physical::Code(if named == Named::Tab {
-                    Code::Tab
-                } else {
-                    Code::Enter
-                }),
-                location: keyboard::Location::Standard,
-                modifiers: Modifiers::empty(),
-                text: None,
-                repeat,
-            })
-        }
-
-        let renderer = <iced::Renderer as Headless>::new(
-            iced::Font::with_name(reshiki::style::ui_font_family()),
-            iced::Pixels(16.),
-            None,
-        )
-        .await
-        .unwrap();
-        for width in [636., 884.] {
-            let (app, _, _, _) = prepared_preview();
-            let size = Size::new(width, 512.);
-            let viewport = Rectangle::with_size(size);
-            let mut bar = focus_scope(app.optimization_bar());
-            let mut tree = Tree::new(bar.as_widget());
-            let node = bar.as_widget_mut().layout(
-                &mut tree,
-                &renderer,
-                &layout::Limits::new(Size::ZERO, size),
-            );
-            let mut collect = Collect::new(viewport);
-            bar.as_widget_mut().operate(
-                &mut tree,
-                Layout::new(&node),
-                &renderer,
-                &mut operation::black_box(&mut collect),
-            );
-            let snapshot = collect.snapshot();
-            assert!(snapshot.duplicate_ids.is_empty());
-            assert_eq!(snapshot.nodes.len(), 17);
-            assert!(snapshot.nodes.iter().all(|node| {
-                node.enabled
-                    && node.visible_bounds.is_some_and(|visible| {
-                        (visible.width - node.bounds.width).abs() < 0.5
-                            && (visible.height - node.bounds.height).abs() < 0.5
-                    })
-            }));
+        for size in [Size::new(1040., 680.), Size::new(1280., 820.)] {
+            let (mut app, _, _, _) = prepared_preview();
+            let mut ui = PreviewUi::new(size).await;
+            ui.settle(&mut app);
+            let snapshot = ui.snapshot(&app);
+            let controls: Vec<_> = snapshot
+                .nodes
+                .iter()
+                .filter(|node| node.id.starts_with("optimization."))
+                .collect();
+            assert_eq!(controls.len(), 17);
             for (id, checked) in [
                 ("optimization.field.mmff94", false),
                 ("optimization.field.mmff94s", true),
@@ -1539,115 +2197,111 @@ mod tests {
                 ("optimization.show-original", false),
                 ("optimization.automatic-depth", true),
             ] {
-                let control = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
-                assert_eq!(control.role, Role::ToggleButton);
-                assert_eq!(control.checked, Some(checked));
+                let node = controls.iter().find(|node| node.id == id).unwrap();
+                assert_eq!(node.role, Role::ToggleButton);
+                assert_eq!(node.checked, Some(checked));
             }
             let mut native = NativeTree::default();
-            let native_tree = native.update(snapshot, "ReShiki", viewport, 2.).unwrap();
-            for (id, expected) in preview_controls(false) {
-                let native_id = native_tree
+            let tree = native
+                .update(&snapshot, "ReShiki", Rectangle::with_size(size), 2.)
+                .unwrap();
+            ui.focus(&app, "optimization.field.mmff94");
+            for (index, (id, expected)) in preview_controls(false).into_iter().enumerate() {
+                if index > 0 {
+                    let (status, messages) = ui.event(
+                        &app,
+                        preview_key(Named::Tab, false),
+                        mouse::Cursor::Unavailable,
+                    );
+                    assert_eq!(status, iced::event::Status::Captured);
+                    assert!(
+                        !messages
+                            .iter()
+                            .any(|message| matches!(message, Message::Optimization(_)))
+                    );
+                }
+                let current = ui.snapshot(&app);
+                let focused: Vec<_> = current.nodes.iter().filter(|node| node.focused).collect();
+                assert_eq!(focused.len(), 1);
+                assert_eq!(focused[0].id, id);
+                assert!(
+                    focused[0].visible_bounds.is_some(),
+                    "Tab reveals the scrolled control {id}"
+                );
+                let native_id = tree
                     .nodes
                     .iter()
                     .find(|(_, node)| node.author_id() == Some(id))
                     .unwrap()
                     .0;
-                let request = accesskit::ActionRequest {
-                    action: accesskit::Action::Click,
-                    target_tree: accesskit::TreeId::ROOT,
-                    target_node: native_id,
-                    data: None,
-                };
-                assert_eq!(native.resolve(&request), Some(Request::Activate(id.into())));
-                let mut activate = Activate::<Message>::new(id);
-                bar.as_widget_mut().operate(
-                    &mut tree,
-                    Layout::new(&node),
-                    &renderer,
-                    &mut operation::black_box(&mut activate),
+                assert_eq!(
+                    native.resolve(&accesskit::ActionRequest {
+                        action: accesskit::Action::Click,
+                        target_tree: accesskit::TreeId::ROOT,
+                        target_node: native_id,
+                        data: None,
+                    }),
+                    Some(Request::Activate(id.into()))
                 );
+                let mut activate = Activate::<Message>::new(id);
+                ui.operate(&app, &mut activate);
                 assert!(
                     matches!(activate.finish(), operation::Outcome::Some(Message::Optimization(actual)) if format!("{actual:?}") == format!("{expected:?}"))
                 );
-
-                let mut tab_messages = Vec::new();
-                let mut shell = Shell::new(&mut tab_messages);
-                bar.as_widget_mut().update(
-                    &mut tree,
-                    &key(Named::Tab, false),
-                    Layout::new(&node),
-                    mouse::Cursor::Unavailable,
-                    &renderer,
-                    &mut clipboard::Null,
-                    &mut shell,
-                    &viewport,
-                );
-                assert_eq!(shell.event_status(), iced::event::Status::Captured);
-                assert!(tab_messages.is_empty());
-                let mut focused = Collect::new(viewport);
-                bar.as_widget_mut().operate(
-                    &mut tree,
-                    Layout::new(&node),
-                    &renderer,
-                    &mut operation::black_box(&mut focused),
-                );
-                let focused: Vec<_> = focused
-                    .snapshot()
-                    .nodes
-                    .iter()
-                    .filter(|node| node.focused)
-                    .collect();
-                assert_eq!(focused.len(), 1);
-                assert_eq!(focused[0].id, id);
-
                 for repeat in [false, true] {
-                    let mut messages = Vec::new();
-                    let mut shell = Shell::new(&mut messages);
-                    bar.as_widget_mut().update(
-                        &mut tree,
-                        &key(Named::Enter, repeat),
-                        Layout::new(&node),
+                    let (status, messages) = ui.event(
+                        &app,
+                        preview_key(Named::Enter, repeat),
                         mouse::Cursor::Unavailable,
-                        &renderer,
-                        &mut clipboard::Null,
-                        &mut shell,
-                        &viewport,
                     );
-                    assert_eq!(shell.event_status(), iced::event::Status::Captured);
+                    assert_eq!(status, iced::event::Status::Captured);
+                    let actions: Vec<_> = messages
+                        .iter()
+                        .filter_map(|message| {
+                            if let Message::Optimization(action) = message {
+                                Some(format!("{action:?}"))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
                     if repeat {
-                        assert!(messages.is_empty(), "Held Enter must not repeat {id}");
+                        assert!(actions.is_empty());
                     } else {
-                        assert!(
-                            matches!(messages.as_slice(), [Message::Optimization(actual)] if format!("{actual:?}") == format!("{expected:?}")),
-                            "Keyboard and native activation differ for {id}"
-                        );
+                        assert_eq!(actions, vec![format!("{expected:?}")]);
                     }
                 }
             }
         }
-        let (mut app, _, _, _) = prepared_preview();
+        let (mut app, _, _, _) = drawing();
+        let _ = app.optimization_action(Action::Begin);
+        let mut ui = PreviewUi::new(Size::new(1040., 680.)).await;
+        ui.settle(&mut app);
+        let snapshot = ui.snapshot(&app);
+        for id in [
+            "optimization.run",
+            "optimization.apply",
+            "optimization.pin-selected",
+            "optimization.rotate-left",
+        ] {
+            assert!(
+                !snapshot
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == id)
+                    .unwrap()
+                    .enabled,
+                "Unavailable until generation finishes: {id}"
+            );
+        }
+        finish(&mut app);
         app.tab.optimization.as_mut().unwrap().phase = Phase::Applying;
-        let size = Size::new(636., 512.);
-        let mut bar = app.optimization_bar();
-        let mut tree = Tree::new(bar.as_widget());
-        let node = bar.as_widget_mut().layout(
-            &mut tree,
-            &renderer,
-            &layout::Limits::new(Size::ZERO, size),
-        );
-        let mut collect = Collect::new(Rectangle::with_size(size));
-        bar.as_widget_mut().operate(
-            &mut tree,
-            Layout::new(&node),
-            &renderer,
-            &mut operation::black_box(&mut collect),
-        );
+        let snapshot = ui.snapshot(&app);
         assert_eq!(
-            collect
-                .snapshot()
+            snapshot
                 .nodes
                 .iter()
-                .filter(|node| node.enabled)
+                .filter(|node| node.id.starts_with("optimization.") && node.enabled)
                 .map(|node| node.id.as_str())
                 .collect::<Vec<_>>(),
             vec!["optimization.cancel"]
@@ -1657,105 +2311,121 @@ mod tests {
                 continue;
             }
             let mut activate = Activate::<Message>::new(id);
-            bar.as_widget_mut().operate(
-                &mut tree,
-                Layout::new(&node),
-                &renderer,
-                &mut operation::black_box(&mut activate),
-            );
+            ui.operate(&app, &mut activate);
             assert!(matches!(activate.finish(), operation::Outcome::None));
         }
     }
 
     #[tokio::test]
-    #[ignore = "Opt-in renderer layout and pointer checks"]
-    async fn every_preview_control_fits_and_accepts_clicks_at_minimum_canvas_width() {
-        use iced::advanced::{
-            Layout, Shell, clipboard, layout, mouse, renderer::Headless, widget::Tree,
-        };
-        use iced::{Event, Rectangle, Size};
-        use std::collections::BTreeSet;
-
-        fn bounds(layout: Layout<'_>, rectangles: &mut Vec<Rectangle>) {
-            rectangles.push(layout.bounds());
-            for child in layout.children() {
-                bounds(child, rectangles);
+    #[ignore = "Opt-in renderer right-panel layout, scrolling and pointer checks"]
+    async fn properties_preview_controls_fit_scroll_and_keep_canvas_toolbar_height() {
+        use iced::{Event, Size, mouse};
+        for size in [
+            Size::new(1040., 480.),
+            Size::new(1040., 680.),
+            Size::new(1280., 820.),
+        ] {
+            let (mut app, _, _, original) = drawing();
+            app.inspector_open = true;
+            app.inspector_tab = InspectorTab::Properties;
+            let mut ui = PreviewUi::new(size).await;
+            ui.settle(&mut app);
+            let before = ui.canvas_bounds(&app);
+            let _ = app.optimization_action(Action::Begin);
+            finish(&mut app);
+            ui.settle(&mut app);
+            let after = ui.canvas_bounds(&app);
+            assert_eq!(
+                before, after,
+                "Preview keeps the ordinary 46 px canvas toolbar and viewport"
+            );
+            assert_eq!(app.inspector_width(), 300.);
+            let snapshot = ui.snapshot(&app);
+            let controls: Vec<_> = snapshot
+                .nodes
+                .iter()
+                .filter(|node| node.id.starts_with("optimization."))
+                .collect();
+            assert_eq!(controls.len(), 17);
+            for control in controls {
+                assert!(
+                    control.bounds.x >= size.width - 300. - 0.5
+                        && control.bounds.x + control.bounds.width <= size.width + 0.5,
+                    "{control:?} must fit the 300 px Properties panel"
+                );
             }
-        }
-
-        let renderer = <iced::Renderer as Headless>::new(
-            iced::Font::with_name(reshiki::style::ui_font_family()),
-            iced::Pixels(16.),
-            None,
-        )
-        .await
-        .unwrap();
-        // 636 px is the canvas in the minimum 1040 px window with its inspector.
-        for width in [636., 650., 884.] {
             for running in [false, true] {
-                let (mut app, _, _, _) = prepared_preview();
                 if running {
                     let _ = app.optimization_action(Action::Start);
                 }
-                let size = Size::new(width, 512.);
-                let viewport = Rectangle::with_size(size);
-                let mut bar = app.optimization_bar();
-                let mut tree = Tree::new(bar.as_widget());
-                let node = bar.as_widget_mut().layout(
-                    &mut tree,
-                    &renderer,
-                    &layout::Limits::new(Size::ZERO, size),
-                );
-                let mut rectangles = Vec::new();
-                bounds(Layout::new(&node), &mut rectangles);
-                for rectangle in &rectangles {
-                    assert!(
-                        rectangle.x >= -0.5
-                            && rectangle.x + rectangle.width <= width + 0.5
-                            && rectangle.y >= -0.5
-                            && rectangle.y + rectangle.height <= size.height + 0.5,
-                        "Control layout overflows the {width} px canvas: {rectangle:?}"
-                    );
-                }
-
-                // Discover click targets from the production widget's layout,
-                // then exercise the real widget input path without a copy of
-                // its row sizes, positions, or wrapping algorithm.
-                let mut clicked = BTreeSet::new();
-                for rectangle in rectangles {
-                    let mut bar = app.optimization_bar();
-                    let mut tree = Tree::new(bar.as_widget());
-                    let node = bar.as_widget_mut().layout(
-                        &mut tree,
-                        &renderer,
-                        &layout::Limits::new(Size::ZERO, size),
-                    );
-                    let mut messages = Vec::new();
-                    for event in [mouse::Event::ButtonPressed, mouse::Event::ButtonReleased] {
-                        bar.as_widget_mut().update(
-                            &mut tree,
-                            &Event::Mouse(event(mouse::Button::Left)),
-                            Layout::new(&node),
-                            mouse::Cursor::Available(rectangle.center()),
-                            &renderer,
-                            &mut clipboard::Null,
-                            &mut Shell::new(&mut messages),
-                            &viewport,
+                for (id, expected) in preview_controls(running) {
+                    ui.focus(&app, id);
+                    let snapshot = ui.snapshot(&app);
+                    for footer in ["optimization.cancel", "optimization.apply"] {
+                        let node = snapshot
+                            .nodes
+                            .iter()
+                            .find(|node| node.id == footer)
+                            .unwrap();
+                        let visible = node.visible_bounds.expect("fixed footer is always visible");
+                        assert!(
+                            (visible.height - node.bounds.height).abs() < 0.5
+                                && (visible.width - node.bounds.width).abs() < 0.5
                         );
                     }
-                    for message in messages {
-                        if let Message::Optimization(action) = message {
-                            clicked.insert(format!("{action:?}"));
-                        }
-                    }
-                }
-                for (_, action) in preview_controls(running) {
+                    let node = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
+                    let visible = node
+                        .visible_bounds
+                        .expect("focus reveals the control through the real inspector scroller");
                     assert!(
-                        clicked.contains(&format!("{action:?}")),
-                        "{action:?} is inaccessible at {width} px: {clicked:?}"
+                        (visible.height - node.bounds.height).abs() < 0.5
+                            && (visible.width - node.bounds.width).abs() < 0.5,
+                        "Fully reveal {id}: {node:?}"
+                    );
+                    let cursor = mouse::Cursor::Available(visible.center());
+                    let mut actions = Vec::new();
+                    for event in [mouse::Event::ButtonPressed, mouse::Event::ButtonReleased] {
+                        let (_, messages) =
+                            ui.event(&app, Event::Mouse(event(mouse::Button::Left)), cursor);
+                        actions.extend(messages.into_iter().filter_map(|message| {
+                            if let Message::Optimization(action) = message {
+                                Some(format!("{action:?}"))
+                            } else {
+                                None
+                            }
+                        }));
+                    }
+                    assert_eq!(
+                        actions,
+                        vec![format!("{expected:?}")],
+                        "Click the real right-panel control {id}"
                     );
                 }
             }
+            assert_eq!(app.tab.doc, original);
+            assert!(!app.tab.history.can_undo());
+            // The toolbar link restores the card after the inspector is hidden.
+            app.inspector_open = false;
+            ui.settle(&mut app);
+            let snapshot = ui.snapshot(&app);
+            let link = snapshot
+                .nodes
+                .iter()
+                .find(|node| node.id == "context-3d-properties")
+                .unwrap();
+            let cursor = mouse::Cursor::Available(link.visible_bounds.unwrap().center());
+            for event in [mouse::Event::ButtonPressed, mouse::Event::ButtonReleased] {
+                let (_, messages) =
+                    ui.event(&app, Event::Mouse(event(mouse::Button::Left)), cursor);
+                for message in messages {
+                    if matches!(message, Message::Inspector(InspectorTab::Properties)) {
+                        let _ = app.update(message);
+                    }
+                }
+            }
+            assert!(app.inspector_open);
+            assert_eq!(app.inspector_tab, InspectorTab::Properties);
+            assert!(app.tab.optimization.is_some());
         }
     }
 }

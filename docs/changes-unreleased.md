@@ -8,10 +8,11 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
 - **Under review — Interactive 3D geometry and keyboard drawing:** generate
-  conformers with RDKit MMFF94, MMFF94s, or UFF, relax around dragged or pinned
+  conformers with Rust MMFF94, MMFF94s, or UFF, relax around dragged or pinned
   atoms, and rotate an editable projection before Apply. Automatic rear fading
-  can be frozen or cleared independently of the geometry. F8 provides an
-  explicit drawing hotspot with arrow navigation and marked ring closure.
+  can be frozen or cleared independently of the geometry. Cmd/Ctrl+Shift+D
+  opens optimization. Select/Lasso enables a mouse/keyboard drawing hotspot
+  by default, with arrow navigation and marked ring closure; F8 turns it off.
   [Workflow and supported chemistry](3d-keyboard-drawing.md)
   · [Review evidence](changes/3d-keyboard-review-2026-10-05.md)
   · [PR #146](https://github.com/Ameyanagi/ReShiki/pull/146)
