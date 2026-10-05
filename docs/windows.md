@@ -35,6 +35,13 @@ transparency and resolution; the standard bitmap uses a white background.
 PNG file export also uses a white background.
 Imported external formats remain subject to the [clipboard limits](clipboard.md).
 
+To copy an embedded ChemDraw structure from PowerPoint, select the whole object
+on the slide and press **Ctrl+C**, then press **Ctrl+V** in ReShiki. Objects
+containing supported ChemDraw CDX import as editable atoms and bonds. A picture
+alone remains a picture; **Import → Paste picture** explicitly chooses the preview.
+See the [validation and review checklist](changes/windows-chemdraw-paste-2026-10-05.md)
+for this import path and its limits.
+
 ### Edit a drawing in Office
 
 1. Select objects in ReShiki and use **Ctrl+C**.

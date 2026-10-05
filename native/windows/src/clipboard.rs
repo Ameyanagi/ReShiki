@@ -15,6 +15,22 @@ const LIMIT: usize = 64 * 1024 * 1024;
 const UNICODE: u32 = 13;
 const DIB: u32 = 8;
 const DIB_V5: u32 = 17;
+const CHEMICAL_FORMATS: &[(&str, &str)] = &[
+    ("dev.reshiki.drawing", "dev.reshiki.drawing"),
+    ("dev.moruno.drawing", "dev.moruno.drawing"),
+    (
+        "ChemDraw Interchange Format",
+        "com.revvity.chemdraw.cdx-clipboard",
+    ),
+    ("ChemDraw XML", "public.cdxml"),
+    ("chemical/x-cdxml", "public.cdxml"),
+    ("MDLCT", "com.mdli.molfile"),
+    ("chemical/x-mdl-molfile", "com.mdli.molfile"),
+    ("SMILES", "org.opensmiles.smiles"),
+];
+
+#[cfg(test)]
+pub(super) static CLIPBOARD_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Deserialize, Serialize)]
 struct Representation {
@@ -42,6 +58,16 @@ pub(super) fn format(name: &str) -> Result<u32> {
     } else {
         Ok(id)
     }
+}
+pub(super) fn has_chemical_format() -> Result<bool> {
+    for &(name, _) in CHEMICAL_FORMATS {
+        let id = format(name)?;
+        // SAFETY: read-only availability queries do not require OpenClipboard.
+        if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 fn mapped(kind: &str) -> &str {
     match kind {
@@ -312,62 +338,47 @@ fn write(representations: Vec<Representation>, embedded: bool) -> Result<()> {
     Ok(())
 }
 fn read_packet(picture_only: bool) -> Result<Packet> {
-    if let Some(document) = super::ole::read_own(picture_only)? {
-        return Ok(Packet {
-            representations: vec![Representation {
-                kind: if picture_only {
-                    "public.png"
-                } else {
-                    "dev.reshiki.drawing"
-                }
-                .into(),
-                data: STANDARD.encode(document),
-            }],
-        });
-    }
-    let owner = Owner::new()?;
-    let _open = Open::new(owner.0)?;
-    let mut formats = Vec::new();
-    if !picture_only {
-        formats.extend([
-            ("dev.reshiki.drawing", "dev.reshiki.drawing"),
-            ("dev.moruno.drawing", "dev.moruno.drawing"),
-            (
-                "ChemDraw Interchange Format",
-                "com.revvity.chemdraw.cdx-clipboard",
-            ),
-            ("ChemDraw XML", "public.cdxml"),
-            ("chemical/x-cdxml", "public.cdxml"),
-            ("MDLCT", "com.mdli.molfile"),
-            ("chemical/x-mdl-molfile", "com.mdli.molfile"),
-            ("SMILES", "org.opensmiles.smiles"),
-        ]);
-    }
-    formats.extend([
-        ("PNG", "public.png"),
-        ("image/png", "public.png"),
-        ("JFIF", "public.jpeg"),
-        ("TIFF", "public.tiff"),
-        ("WebP", "org.webmproject.webp"),
-    ]);
     let packet = |kind: &str, bytes: Vec<u8>| Packet {
         representations: vec![Representation {
             kind: kind.into(),
             data: STANDARD.encode(bytes),
         }],
     };
-    for (name, kind) in formats {
+    if let Some(document) = super::ole::read_embedded(picture_only)? {
+        let (kind, bytes) = document.into_parts();
+        return Ok(packet(kind, bytes));
+    }
+    let owner = Owner::new()?;
+    let _open = Open::new(owner.0)?;
+    if !picture_only {
+        for &(name, kind) in CHEMICAL_FORMATS {
+            let id = format(name)?;
+            // SAFETY: read-only format query, while holding the clipboard.
+            if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
+                let mut bytes = read(id)?;
+                if kind.starts_with("dev.")
+                    || kind == "public.cdxml"
+                    || kind == "org.opensmiles.smiles"
+                {
+                    while bytes.last() == Some(&0) {
+                        bytes.pop();
+                    }
+                }
+                return Ok(packet(kind, bytes));
+            }
+        }
+    }
+    for (name, kind) in [
+        ("PNG", "public.png"),
+        ("image/png", "public.png"),
+        ("JFIF", "public.jpeg"),
+        ("TIFF", "public.tiff"),
+        ("WebP", "org.webmproject.webp"),
+    ] {
         let id = format(name)?;
         // SAFETY: read-only format query, while holding the clipboard.
         if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
-            let mut bytes = read(id)?;
-            if kind.starts_with("dev.") || kind == "public.cdxml" || kind == "org.opensmiles.smiles"
-            {
-                while bytes.last() == Some(&0) {
-                    bytes.pop();
-                }
-            }
-            return Ok(packet(kind, bytes));
+            return Ok(packet(kind, read(id)?));
         }
     }
     for id in [DIB_V5, DIB] {
@@ -488,6 +499,7 @@ mod tests {
     }
     #[test]
     fn real_clipboard_unicode_native_priority_and_invalid_write() {
+        let _clipboard = CLIPBOARD_TEST_LOCK.lock().unwrap();
         let rep = |kind: &str, bytes: &[u8]| Representation {
             kind: kind.into(),
             data: STANDARD.encode(bytes),

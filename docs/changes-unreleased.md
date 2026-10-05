@@ -7,7 +7,14 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
-- **Under review — Recover difficult 3D starting geometry:** generate usable
+- **Embedded ChemDraw paste on Windows:** normal Paste reads
+  supported chemical data from embedded Office objects instead of choosing
+  their presentation image. Paste picture retains its explicit image behavior.
+  [Validation and desktop review checklist](changes/windows-chemdraw-paste-2026-10-05.md)
+  · [PR #150](https://github.com/Ameyanagi/ReShiki/pull/150) · @Ameyanagi.
+  The user confirmed editable atom and bond paste from Office on Windows.
+
+- **Recover difficult 3D starting geometry:** generate usable
   previews for C60 and difficult imported structures, or continue from validated
   existing XYZ, with the selected Rust force field. Bounded retries can reduce
   timed-out sampling to one conformer; complex molecules may need further
