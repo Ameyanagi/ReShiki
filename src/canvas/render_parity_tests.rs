@@ -11,6 +11,7 @@ use reshiki::{
     document::{Annotation, Arrow},
     graphics::LinePattern,
     pictures::Picture,
+    templates::{Anchor, LIBRARY},
     typography::TextStyle,
 };
 
@@ -129,6 +130,49 @@ fn routing_document() -> Document {
         doc.graphics.push(g);
     }
     doc
+}
+
+/// A ring, an N–O bond, an arrow, a caption and a rectangle, spread over the
+/// 640x400 view. Returns the ring ids and `[n, o, arrow, rectangle]`.
+fn paper_document() -> (Document, Vec<u64>, [u64; 4]) {
+    let (mut doc, ring) = reshiki::editing::ring_placement(
+        &Document::default(),
+        World::new(200., 200.),
+        6,
+        false,
+        10.,
+        None,
+    )
+    .unwrap();
+    let n = doc.add_atom("N", World::new(380., 120.));
+    let o = doc.add_atom("O", World::new(422., 120.));
+    doc.add_bond(n, o, 1, "plain");
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow {
+        id: arrow,
+        start: World::new(260., 330.),
+        end: World::new(365., 330.),
+        kind: "forward".into(),
+        control: None,
+        style: None,
+    });
+    doc.annotations.push(Annotation {
+        id: doc.next_id(),
+        position: World::new(430., 250.),
+        text: "Caption".into(),
+        format: Default::default(),
+    });
+    let rectangle = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        rectangle,
+        GraphicKind::Rectangle,
+        World::new(470., 290.),
+        World::new(560., 360.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    ));
+    (doc, ring, [n, o, arrow, rectangle])
 }
 
 fn check_pixels(directory: &std::path::Path, name: &str, pixels: &[u8], capture: bool) {
@@ -514,6 +558,334 @@ async fn drawing_preview_matches_fresh_theme_and_size() {
                 &pixels,
                 &render(&PreviewState::default()),
             );
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "Paper layer baseline/candidate pixels; requires a headless renderer and artifact directory"]
+async fn paper_layers_match_captured_baseline() {
+    let directory = std::path::PathBuf::from(
+        std::env::var("RESHIKI_CANVAS_PIXELS")
+            .expect("Set RESHIKI_CANVAS_PIXELS to the baseline artifact directory"),
+    );
+    let capture = std::env::var("RESHIKI_CANVAS_CAPTURE_BASELINE").as_deref() == Ok("1");
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        backend.as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    let bounds = Rectangle::with_size(iced::Size::new(640., 400.));
+    let camera = Camera {
+        center: World::new(320., 200.),
+        zoom: 1.,
+    };
+    let (paper, ring, [n, o, arrow, rectangle]) = paper_document();
+    let metadata = serde_json::json!({
+        "renderer": renderer.name(), "width": 640, "height": 400,
+        "font": reshiki::style::ui_font_family(), "paper_document": paper,
+    });
+    let metadata_path = directory.join("paper_metadata.json");
+    if capture {
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            &metadata_path,
+            serde_json::to_vec_pretty(&metadata).unwrap(),
+        )
+        .unwrap();
+    } else {
+        let expected: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&metadata_path).unwrap()).unwrap();
+        assert_eq!(
+            metadata, expected,
+            "Use the same renderer, fonts and fixtures"
+        );
+    }
+    let all = paper.all_ids();
+    let arrow_only = [arrow];
+    let edit_points = [rectangle, arrow];
+    let ring_atom = *ring.iter().find(|id| paper.atom(**id).is_some()).unwrap();
+    let position = |id| paper.atom(id).unwrap().position;
+    let screen = |p| camera.screen(p, bounds);
+    let at = |x, y| screen(World::new(x, y));
+    let offset = |p, x, y| screen(p) + Vector::new(x, y);
+    // The ring is centered on (200, 200): a chain from its atom to the opposite
+    // vertex crosses the ring.
+    let across = World::new(400. - position(ring_atom).x, 400. - position(ring_atom).y);
+    let command = iced::keyboard::Modifiers::CTRL | iced::keyboard::Modifiers::LOGO;
+    let template = LIBRARY.iter().find(|t| t.name == "Cyclohexane").unwrap();
+    let chain = |start| Gesture::Chain {
+        start,
+        pressed: start,
+        source: None,
+        points: vec![start],
+        snaking: false,
+        dragged: true,
+    };
+    let transform = |handle| {
+        let selection = SelectionBox::new(&paper, &all, camera, bounds).unwrap();
+        Gesture::Transform(Box::new(TransformDrag::new(
+            selection,
+            handle,
+            World::new(300., 200.),
+            &all,
+        )))
+    };
+    let mut idle = None;
+    let mut line_short = None;
+    for mode in [
+        "idle",
+        "selected",
+        "hover",
+        "select_rect",
+        "lasso",
+        "move",
+        "copy_move",
+        "rotate",
+        "edge",
+        "tilt",
+        "chain",
+        "chain_overlap",
+        "ring_drag",
+        "ring_hover",
+        "ring_preset",
+        "ring_delocalized",
+        "template",
+        "bond",
+        "dotted",
+        "atom",
+        "arrow_draw",
+        "arrow_selected",
+        "arrow_handle",
+        "graphic",
+        "edit_points",
+        "erase",
+        "line_short",
+        "line_long",
+        "keyboard_target",
+        "pages_grid",
+        "dark_grid_move",
+    ] {
+        let mut doc = paper.clone();
+        match mode {
+            "pages_grid" => doc.page_layout = Some(Default::default()),
+            "dark_grid_move" => doc.canvas_theme = CanvasTheme::Dark,
+            _ => {}
+        }
+        let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        canvas.camera = camera;
+        let mut state = State::default();
+        state.cursor = match mode {
+            "idle" => None,
+            "selected" => {
+                canvas.selected = &all;
+                None
+            }
+            "hover" => Some(screen(position(ring_atom))),
+            "select_rect" => {
+                state.gesture = Some(Gesture::Select {
+                    start: World::new(150., 150.),
+                });
+                Some(at(260., 260.))
+            }
+            "lasso" => {
+                state.gesture = Some(Gesture::Lasso {
+                    points: vec![
+                        World::new(150., 150.),
+                        World::new(270., 150.),
+                        World::new(270., 270.),
+                    ],
+                });
+                Some(at(150., 270.))
+            }
+            "move" | "copy_move" | "dark_grid_move" => {
+                canvas.selected = &ring;
+                canvas.grid = mode == "dark_grid_move";
+                state.gesture = Some(Gesture::Move {
+                    start: position(ring_atom),
+                    ids: ring.clone(),
+                    clicked: vec![ring_atom],
+                });
+                if mode == "copy_move" {
+                    state.modifiers = command;
+                }
+                Some(offset(position(ring_atom), 30., 20.))
+            }
+            "rotate" | "edge" => {
+                canvas.selected = &all;
+                state.gesture = Some(transform(if mode == "rotate" {
+                    Handle::Rotate
+                } else {
+                    Handle::Edge(1)
+                }));
+                Some(at(325., 235.))
+            }
+            "tilt" => {
+                canvas.tool = Tool::Tilt;
+                canvas.selected = &ring;
+                let start = at(200., 200.);
+                state.gesture = Some(Gesture::Tilt(tilt::TiltDrag {
+                    ids: ring.clone(),
+                    start,
+                }));
+                Some(start + Vector::new(30., -20.))
+            }
+            "chain" => {
+                canvas.tool = Tool::Chain(ChainMode::Straight);
+                state.gesture = Some(chain(World::new(300., 380.)));
+                Some(at(400., 380.))
+            }
+            "chain_overlap" => {
+                canvas.tool = Tool::Chain(ChainMode::Straight);
+                state.gesture = Some(chain(position(ring_atom)));
+                Some(screen(across))
+            }
+            "ring_drag" => {
+                canvas.tool = Tool::Ring;
+                state.gesture = Some(Gesture::Ring {
+                    start: position(n),
+                    attached: true,
+                });
+                Some(offset(position(n), 0., -40.))
+            }
+            "ring_hover" => {
+                canvas.tool = Tool::Ring;
+                Some(screen(position(ring_atom)))
+            }
+            "ring_preset" | "ring_delocalized" => {
+                canvas.tool = Tool::RingPreset(reshiki::rings::Preset::Benzene);
+                if mode == "ring_delocalized" {
+                    state.modifiers = command;
+                }
+                Some(at(560., 120.))
+            }
+            "template" => {
+                canvas.tool = Tool::Template;
+                canvas.template = Some((template, Anchor::Auto));
+                Some(screen(position(o)))
+            }
+            "bond" => {
+                canvas.tool = Tool::Bond(1);
+                state.gesture = Some(Gesture::Draw {
+                    start: position(o),
+                    id: Some(o),
+                });
+                Some(offset(position(o), 40., -25.))
+            }
+            "dotted" => {
+                canvas.tool = Tool::StyledBond(reshiki::bonds::BondPreset::Dotted);
+                let start = World::new(560., 200.);
+                state.gesture = Some(Gesture::Draw { start, id: None });
+                Some(offset(start, 40., 0.))
+            }
+            "atom" => {
+                canvas.tool = Tool::Atom;
+                state.gesture = Some(Gesture::Draw {
+                    start: position(n),
+                    id: Some(n),
+                });
+                Some(offset(position(n), 0., 45.))
+            }
+            "arrow_draw" => {
+                canvas.tool = Tool::Arrow;
+                let start = World::new(300., 40.);
+                state.gesture = Some(Gesture::Draw { start, id: None });
+                Some(offset(start, 80., 10.))
+            }
+            "arrow_selected" => {
+                canvas.selected = &arrow_only;
+                None
+            }
+            "arrow_handle" => {
+                canvas.selected = &arrow_only;
+                state.gesture = Some(Gesture::ArrowHandle {
+                    id: arrow,
+                    index: 1,
+                });
+                Some(at(430., 320.))
+            }
+            "graphic" => {
+                canvas.tool = Tool::Graphic(GraphicKind::Ellipse);
+                state.gesture = Some(Gesture::Graphic {
+                    start: World::new(80., 320.),
+                });
+                Some(at(150., 380.))
+            }
+            "edit_points" => {
+                canvas.tool = Tool::EditPoints;
+                canvas.selected = &edit_points;
+                None
+            }
+            "erase" => {
+                canvas.tool = Tool::Erase;
+                Some(at(300., 200.))
+            }
+            // Tool::Select passes the gesture overlay guard, and the selection box
+            // drawn after its early return distinguishes a short drag from a long one.
+            "line_short" | "line_long" => {
+                canvas.selected = &all;
+                let start = World::new(560., 250.);
+                state.gesture = Some(Gesture::Draw { start, id: None });
+                Some(offset(
+                    start,
+                    if mode == "line_short" { 1. } else { 40. },
+                    0.,
+                ))
+            }
+            "keyboard_target" => {
+                canvas.keyboard_target = Some(World::new(300., 200.));
+                None
+            }
+            "pages_grid" => {
+                canvas.grid = true;
+                None
+            }
+            _ => unreachable!("unknown paper mode {mode}"),
+        };
+        let pointer = match state.cursor {
+            Some(point)
+                if matches!(
+                    mode,
+                    "hover"
+                        | "ring_hover"
+                        | "ring_preset"
+                        | "ring_delocalized"
+                        | "template"
+                        | "erase"
+                ) =>
+            {
+                mouse::Cursor::Available(point)
+            }
+            _ => mouse::Cursor::Unavailable,
+        };
+        let mut render = || {
+            renderer.reset(bounds);
+            for geometry in canvas.draw(&state, &renderer, &Theme::Light, bounds, pointer) {
+                renderer.draw_geometry(geometry);
+            }
+            Headless::screenshot(&mut renderer, iced::Size::new(640, 400), 1., Color::WHITE)
+        };
+        let pixels = render();
+        assert_same_pixels(&format!("{mode}: cold/warm paper"), &pixels, &render());
+        check_pixels(&directory, &format!("paper_{mode}"), &pixels, capture);
+        if let Some(idle) = &idle {
+            assert!(
+                pixels != *idle,
+                "mode {mode} does not reach its draw branch"
+            );
+        }
+        match mode {
+            "idle" => idle = Some(pixels),
+            "line_short" => line_short = Some(pixels),
+            "line_long" => assert!(
+                line_short.as_ref() != Some(&pixels),
+                "line_long does not draw past line_short's early return"
+            ),
+            _ => {}
         }
     }
 }
