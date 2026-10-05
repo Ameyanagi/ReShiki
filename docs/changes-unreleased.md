@@ -7,7 +7,7 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
-- **Under review — Interactive 3D geometry and keyboard drawing:** generate
+- **Interactive 3D geometry and keyboard drawing:** generate
   conformers with Rust MMFF94, MMFF94s, or UFF, relax around dragged or pinned
   atoms, and rotate an editable projection before Apply. Automatic rear fading
   can be frozen or cleared independently of the geometry. Cmd/Ctrl+Shift+D

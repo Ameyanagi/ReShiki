@@ -1,8 +1,8 @@
 # Interactive 3D and keyboard drawing review
 
-Status: draft, under review in [PR #146](https://github.com/Ameyanagi/ReShiki/pull/146).
-Author: @Ameyanagi. Targets [issue #48](https://github.com/Ameyanagi/ReShiki/issues/48).
-The PR remains a draft; automatic merge is disabled.
+Status: merged in [PR #146](https://github.com/Ameyanagi/ReShiki/pull/146).
+Author: @Ameyanagi. Resolves [issue #48](https://github.com/Ameyanagi/ReShiki/issues/48).
+This page preserves the validation evidence and reviewer workflow for the change.
 
 The geometry implementation is entirely Rust, using **COSMolKit 0.3.0**
 ETKDGv3 and its reviewed force-field API for **MMFF94, MMFF94s, and UFF**.
