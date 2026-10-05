@@ -6,7 +6,7 @@ use iced::{Point, Rectangle};
 use reshiki::chains;
 
 impl MoleculeCanvas<'_> {
-    pub(in crate::canvas) fn cursor_moved(
+    pub(super) fn cursor_moved(
         &self,
         state: &mut State,
         point: Option<Point>,

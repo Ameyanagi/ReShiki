@@ -9,7 +9,7 @@ use iced::{Point, Rectangle};
 use reshiki::{chains::ChainMode, graphics::GraphicKind};
 
 impl MoleculeCanvas<'_> {
-    pub(in crate::canvas) fn right_press(
+    pub(super) fn right_press(
         &self,
         state: &mut State,
         point: Option<Point>,
@@ -39,7 +39,7 @@ impl MoleculeCanvas<'_> {
         Some(Action::publish(Edit::ContextMenu { position, selected }).and_capture())
     }
 
-    pub(in crate::canvas) fn left_press(
+    pub(super) fn left_press(
         &self,
         state: &mut State,
         point: Option<Point>,
