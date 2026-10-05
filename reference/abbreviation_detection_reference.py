@@ -156,7 +156,10 @@ def reorder_bonds(mol, order):
 def main():
     RDLogger.DisableLog("rdApp.*")
     if "--write-presets" in sys.argv:
-        path = Path(__file__).resolve().parents[1] / "src/chemistry/abbreviations/presets.json"
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "crates/model/src/chemistry/abbreviations/presets.json"
+        )
         path.write_text(json.dumps(catalog(), indent=2) + "\n")
         return
     print(json.dumps(catalog()))

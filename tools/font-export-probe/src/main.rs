@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-#[path = "../../../src/style/font.rs"]
+#[path = "../../../crates/model/src/style/font.rs"]
 mod style_font;
 
 const VARIABLE: &[u8] =

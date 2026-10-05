@@ -168,7 +168,7 @@ def main():
         )
         path = (
             Path(__file__).resolve().parents[1]
-            / "src/chemistry/abbreviations"
+            / "crates/model/src/chemistry/abbreviations"
             / f"geometry-{system}-{arch}.json"
         )
         path.write_text(json.dumps(geometry(), indent=2) + "\n")

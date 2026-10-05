@@ -3649,6 +3649,7 @@ dependencies = [
  "reshiki-geometry",
  "reshiki-linux",
  "reshiki-macos",
+ "reshiki-model",
  "reshiki-process-heap",
  "reshiki-windows",
  "resvg 0.45.1",
@@ -3730,6 +3731,27 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "reshiki-model"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "iced_core",
+ "image",
+ "png 0.17.16",
+ "reshiki-chemistry",
+ "reshiki-process-heap",
+ "resvg 0.45.1",
+ "roxmltree 0.20.0",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tiff",
+ "ttf-parser",
 ]
 
 [[package]]

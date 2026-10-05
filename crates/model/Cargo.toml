@@ -1,0 +1,38 @@
+[package]
+name = "reshiki-model"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Documents, scenes, styles and editing for ReShiki"
+
+[features]
+default = []
+# Optional Python/RDKit development oracles, never part of release builds.
+rdkit-reference = ["reshiki-chemistry/rdkit-reference"]
+
+[dependencies]
+reshiki-chemistry = { path = "../chemistry" }
+iced_core = "0.14"
+base64 = "0.22"
+image = { version = "0.25", default-features = false, features = [
+  "png",
+  "jpeg",
+  "tiff",
+  "webp",
+  "gif",
+  "bmp",
+] }
+png = "0.17"
+resvg = "0.45"
+roxmltree = "0.20"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+tempfile = "3"
+thiserror = "2"
+tiff = "0.11.3"
+ttf-parser = "0.25"
+
+[dev-dependencies]
+anyhow = "1"
+reshiki-process-heap = { path = "../process-heap", features = ["allocation-metrics"] }

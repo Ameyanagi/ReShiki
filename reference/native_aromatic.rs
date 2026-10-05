@@ -346,10 +346,10 @@ fn serialize_aromatic_requests() -> anyhow::Result<()> {
         "reference/native_aromatic.rs",
         "src/engine.rs",
         "src/engine/reference.rs",
-        "src/document.rs",
-        "src/typography.rs",
-        "src/style.rs",
-        "src/atom_labels.rs",
+        "crates/model/src/document.rs",
+        "crates/model/src/typography.rs",
+        "crates/model/src/style.rs",
+        "crates/model/src/atom_labels.rs",
     ] {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join(name);
         hashes.insert(

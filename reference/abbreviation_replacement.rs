@@ -143,19 +143,21 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let data = match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => {
-            include_str!("../src/chemistry/abbreviations/geometry-macos-aarch64.json")
+            include_str!("../crates/model/src/chemistry/abbreviations/geometry-macos-aarch64.json")
         }
         ("linux", "x86_64") => {
-            include_str!("../src/chemistry/abbreviations/geometry-linux-x86_64.json")
+            include_str!("../crates/model/src/chemistry/abbreviations/geometry-linux-x86_64.json")
         }
         ("linux", "aarch64") => {
-            include_str!("../src/chemistry/abbreviations/geometry-linux-aarch64.json")
+            include_str!("../crates/model/src/chemistry/abbreviations/geometry-linux-aarch64.json")
         }
         ("windows", "x86_64") => {
-            include_str!("../src/chemistry/abbreviations/geometry-windows-x86_64.json")
+            include_str!("../crates/model/src/chemistry/abbreviations/geometry-windows-x86_64.json")
         }
         ("windows", "aarch64") => {
-            include_str!("../src/chemistry/abbreviations/geometry-windows-aarch64.json")
+            include_str!(
+                "../crates/model/src/chemistry/abbreviations/geometry-windows-aarch64.json"
+            )
         }
         target => anyhow::bail!("Unsupported reference ABI: {target:?}"),
     };

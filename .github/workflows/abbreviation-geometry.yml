@@ -5,7 +5,7 @@ on:
     paths:
       - .github/workflows/abbreviation-geometry.yml
       - reference/engine/abbreviations.py
-      - src/chemistry/abbreviations/presets.json
+      - crates/model/src/chemistry/abbreviations/presets.json
       - reference/abbreviation_replacement_reference.py
 permissions:
   contents: read
@@ -55,7 +55,7 @@ jobs:
         with:
           name: abbreviation-geometry-${{ matrix.system }}-${{ matrix.arch }}
           path: |
-            src/chemistry/abbreviations/geometry-${{ matrix.system }}-${{ matrix.arch }}.json
+            crates/model/src/chemistry/abbreviations/geometry-${{ matrix.system }}-${{ matrix.arch }}.json
             capture-provenance.json
           if-no-files-found: error
           retention-days: 30
