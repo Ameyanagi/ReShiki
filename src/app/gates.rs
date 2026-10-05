@@ -309,50 +309,20 @@ impl App {
             if matches!(message, Message::Tool(Tool::Select)) {
                 return Break(self.update(Message::CancelCleanup));
             }
-            if !matches!(
+            if !(matches!(
                 &message,
                 Message::ApplyCleanup
                     | Message::CancelCleanup
                     | Message::CleanupOriginal(_)
                     | Message::CleanupScope(_)
                     | Message::CleanupOrientation(_)
-                    | Message::Canvas(Edit::Pan(..) | Edit::Zoom(..) | Edit::Hover(_))
-                    | Message::InspectorScroll(_)
-                    | Message::Viewport(_)
-                    | Message::Fit
-                    | Message::Zoom(_)
-                    | Message::ToggleInspector
-                    | Message::Inspector(_)
-                    | Message::Appearance(_)
-                    | Message::ToggleView
-                    | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
-                    | Message::Grid
-                    | Message::SmartGuides(_)
-                    | Message::Rulers(_)
-                    | Message::Crosshair(_)
-                    | Message::RulerUnit(_)
-                    | Message::Tick
-                    | Message::EngineDone { .. }
-                    | Message::Close(_)
-                    | Message::Discard
-                    | Message::Cancel
-                    | Message::New
-                    | Message::Open
-                    | Message::Tabs(_)
-                    | Message::Saved(..)
-                    | Message::Exported(_)
-                    | Message::FigureExported(_)
                     | Message::Printing(
                         printing::Action::Prepared(..) | printing::Action::Finished(..)
                     )
                     | Message::Pictures(pictures::Action::Loaded(..))
                     | Message::Imports(import::Action::Loaded(..))
-                    | Message::Opened(_)
-                    | Message::ClipboardRead { .. }
-                    | Message::ClipboardWritten { .. }
-                    | Message::CopyAsPrepared(..)
-                    | Message::CopyAsWritten(..)
-            ) && !self.answers_save_dialog(&message)
+            ) || preview_passthrough(&message))
+                && !self.answers_save_dialog(&message)
             {
                 if !matches!(message, Message::Canvas(_)) {
                     self.status = "Apply or cancel the cleanup preview to continue editing".into();
@@ -382,4 +352,42 @@ impl App {
         }
         Continue(message)
     }
+}
+
+/// View, window, file and async-result messages that both modal previews (cleanup, 3D) let through.
+pub(super) fn preview_passthrough(message: &Message) -> bool {
+    matches!(
+        message,
+        Message::Canvas(Edit::Pan(..) | Edit::Zoom(..) | Edit::Hover(_))
+            | Message::InspectorScroll(_)
+            | Message::Viewport(_)
+            | Message::Fit
+            | Message::Zoom(_)
+            | Message::ToggleInspector
+            | Message::Inspector(_)
+            | Message::Appearance(_)
+            | Message::ToggleView
+            | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
+            | Message::Grid
+            | Message::SmartGuides(_)
+            | Message::Rulers(_)
+            | Message::Crosshair(_)
+            | Message::RulerUnit(_)
+            | Message::Tick
+            | Message::EngineDone { .. }
+            | Message::Close(_)
+            | Message::Discard
+            | Message::Cancel
+            | Message::New
+            | Message::Open
+            | Message::Tabs(_)
+            | Message::Saved(..)
+            | Message::Exported(_)
+            | Message::FigureExported(_)
+            | Message::Opened(_)
+            | Message::ClipboardRead { .. }
+            | Message::ClipboardWritten { .. }
+            | Message::CopyAsPrepared(..)
+            | Message::CopyAsWritten(..)
+    )
 }

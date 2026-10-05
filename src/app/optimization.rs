@@ -558,45 +558,13 @@ impl App {
                         | Edit::RelaxDragEnd { .. }
                         | Edit::RelaxDragCancel { .. }
                         | Edit::RelaxRotate { .. }
-                        | Edit::Pan(..)
-                        | Edit::Zoom(..)
-                        | Edit::Hover(_)
                 )
                 | Message::Tool(Tool::Select | Tool::Tilt)
-                | Message::InspectorScroll(_)
-                | Message::Viewport(_)
-                | Message::Fit
-                | Message::Zoom(_)
-                | Message::ToggleInspector
-                | Message::Inspector(_)
-                | Message::Appearance(_)
-                | Message::ToggleView
-                | Message::ObjectToolbar(super::object_toolbar::Action::Visible(_))
-                | Message::Grid
-                | Message::SmartGuides(_)
-                | Message::Rulers(_)
-                | Message::Crosshair(_)
-                | Message::RulerUnit(_)
-                | Message::Tick
-                | Message::EngineDone { .. }
-                | Message::Close(_)
-                | Message::Discard
-                | Message::Cancel
-                | Message::New
-                | Message::Open
-                | Message::Tabs(_)
-                | Message::Saved(..)
-                | Message::Exported(_)
-                | Message::FigureExported(_)
                 | Message::Autosaved(..)
                 | Message::FilePrepared(_)
-                | Message::Opened(_)
-                | Message::ClipboardRead { .. }
-                | Message::ClipboardWritten { .. }
-                | Message::CopyAsPrepared(..)
-                | Message::CopyAsWritten(..)
                 | Message::Updates(_)
-        ) || super::tabs::document_result(message)
+        ) || super::gates::preview_passthrough(message)
+            || super::tabs::document_result(message)
             || super::updates::background(message)
             || self.answers_save_dialog(message);
         if allowed {
