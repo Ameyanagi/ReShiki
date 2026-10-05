@@ -1,6 +1,7 @@
-//! Previews of drags that edit the draft document directly: tilts, pointer edits and transforms.
+//! Previews of drags that edit the draft document directly (tilts, pointer edits, transforms and moves) or select a region.
 
 use super::Draft;
+use crate::canvas::hit::region_selection;
 use crate::canvas::snapping::arrow_endpoint;
 use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, tilt};
 use iced::{Point, Rectangle};
@@ -159,6 +160,86 @@ impl MoleculeCanvas<'_> {
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
             drag.apply(preview.to_mut(), end, state.modifiers.shift());
             *ring_selection = Some(drag.ids.clone());
+        }
+    }
+
+    pub(in crate::canvas) fn preview_move(
+        &self,
+        draft: &mut Draft<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        let Draft {
+            preview,
+            ring_selection,
+            translation,
+            smart,
+            ..
+        } = draft;
+        if let (Some(Gesture::Move { start, ids, .. }), Some(p)) = (&state.gesture, state.cursor) {
+            let p = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let (delta, guides) =
+                self.move_delta(state, ids, World::new(p.x - start.x, p.y - start.y), bounds);
+            if start.distance(p) < 1.0 / self.camera.zoom {
+                *ring_selection = Some(ids.clone());
+            } else if self.copies(state.modifiers) {
+                let part = state.scene.borrow_mut().copy(self.doc, ids);
+                *ring_selection = Some(reshiki::editing::append(preview.to_mut(), &part, delta));
+                *smart = guides;
+            } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
+                // Moving every object cannot change their relative geometry,
+                // chemical labels, crossing gaps or ring attachment targets.
+                preview.to_mut().translate(ids, delta.x, delta.y);
+                *ring_selection = Some(ids.clone());
+                *translation = Some(delta);
+            } else if let Some(snapped) =
+                reshiki::editing::snap_ring(preview.to_mut(), ids, delta, 14.0 / self.camera.zoom)
+            {
+                // Fusing onto a ring wins over the guides, on release too.
+                *ring_selection = Some(snapped);
+            } else {
+                preview.to_mut().translate(ids, delta.x, delta.y);
+                *ring_selection = Some(ids.clone());
+                *smart = guides;
+            }
+        }
+    }
+
+    pub(in crate::canvas) fn preview_region(
+        &self,
+        draft: &mut Draft<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        let Draft { ring_selection, .. } = draft;
+        if let Some(p) = state.cursor {
+            let end = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let polygon = match &state.gesture {
+                Some(Gesture::Select { start }) => Some(vec![
+                    *start,
+                    World::new(end.x, start.y),
+                    end,
+                    World::new(start.x, end.y),
+                ]),
+                Some(Gesture::Lasso { points }) => {
+                    let mut p = points.clone();
+                    p.push(end);
+                    Some(p)
+                }
+                _ => None,
+            };
+            if let Some(polygon) = polygon {
+                *ring_selection = Some(region_selection(
+                    self.doc,
+                    self.selected,
+                    &polygon,
+                    state.modifiers,
+                ));
+            }
         }
     }
 }
