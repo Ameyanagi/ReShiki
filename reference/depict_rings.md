@@ -91,17 +91,17 @@ matching RDKit source headers and Boost headers:
 ```sh
 # macOS, with Apple clang:
 CC=/usr/bin/clang CXX=/usr/bin/clang++ .venv/bin/python \
-  tests/build_depict_geometry_oracle.py --component rings \
+  reference/build_depict_geometry_oracle.py --component rings \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185
 
 # Linux: replay identical input bits and pickles, preserving the original corpus.
-.venv/bin/python tests/build_depict_geometry_oracle.py --component rings \
+.venv/bin/python reference/build_depict_geometry_oracle.py --component rings \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185 --replay \
   --output tests/fixtures/depict-rings-linux-native.json.gz
 ```
 
 Windows x64 generation and fixture hashes are in the numeric audit. Use
-`tests/build_depict_windows_oracle.py --component rings`.
+`reference/build_depict_windows_oracle.py --component rings`.
 
 For live Rust-test replay, set `RESHIKI_DEPICT_RINGS_ORACLE` to the native helper,
 `RESHIKI_RDKIT_SOURCE` to its pinned source tree, and the wheel's native library

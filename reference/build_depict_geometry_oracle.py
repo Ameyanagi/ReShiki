@@ -1,8 +1,8 @@
 """Build the development-only native geometry oracle against the pinned wheel.
 
-macOS: .venv/bin/python tests/build_depict_geometry_oracle.py --rdkit-source /path/to/rdkit
+macOS: .venv/bin/python reference/build_depict_geometry_oracle.py --rdkit-source /path/to/rdkit
 Linux: use the pinned wheel's Python, add --boost-include /usr/include if needed.
-Windows: use tests/build_depict_windows_oracle.py from an x64 MSVC prompt.
+Windows: use reference/build_depict_windows_oracle.py from an x64 MSVC prompt.
 All platforms require Boost headers matching rdBase.boostVersion; the graph
 iterator ABI is not interchangeable with a newer Boost version.
 The checked-in fixture needs only standard-library Python on all three hosts.

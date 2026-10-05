@@ -65,10 +65,13 @@ Run the comparisons on a supported reference platform:
 ```sh
 cargo test --workspace --locked --features rdkit-reference --no-fail-fast
 uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+uv run --locked python -m unittest discover -s reference -p 'test_*.py'
 uv run --locked python scripts/check_reference_dependencies.py
 ```
 
 The `rdkit-reference` feature enables `PythonEngine` and independent differential tests. It is disabled in normal builds. Tests use the checkout's `.venv`; `RESHIKI_REFERENCE_PYTHON` selects another prepared interpreter. Windows ARM uses x64 reference tools under emulation while the app and Rust tests remain native ARM64.
+
+Everything that needs or captures from the pinned Python/RDKit reference lives in [`reference/`](../reference/README.md). `reference/engine/` is the Python worker. Each `reference/<name>.rs` is an `rdkit-reference` integration target, declared in `Cargo.toml` with an explicit `path`. The `*_reference.py`, `build_*_oracle.py` and `*.cpp` files are oracles and native observers, `reference/test_*.py` are the Python reference tests, and the Markdown notes record how fixtures were captured. Fixtures stay in `tests/fixtures/`, and `assets/drawing_style.json` holds the drawing style shared with the application.
 
 ## CI
 
@@ -93,12 +96,12 @@ Hooks check staged file types: Oxlint/Oxfmt for web and configuration files, Ruf
 ```sh
 bun run lint:js
 bun run format:check
-uv run --locked ruff check engine scripts tests
-uv run --locked ruff format --check engine scripts tests
+uv run --locked ruff check reference scripts tests
+uv run --locked ruff format --check reference scripts tests
 uv run --locked ty check
 ```
 
-To format, use `bun run format`, `uv run --locked ruff format engine scripts tests`, or `cargo fmt --all`.
+To format, use `bun run format`, `uv run --locked ruff format reference scripts tests`, or `cargo fmt --all`.
 
 ## Documentation
 

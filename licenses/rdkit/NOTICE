@@ -192,8 +192,9 @@ External/INCHI-API/inchi.cpp (molecular input and output for InChI, including cl
 Copyright (C) 2011-2025 Novartis Institutes for BioMedical Research Inc.
 and other RDKit contributors. The full source notice is in INCHI-ADAPTER.
 
-Adaptations are in src/chemistry/, engine/prepared.py, scripts/regenerate_atomic_data.py,
-scripts/regenerate_descriptor_data.py and the *_reference.py fixtures in tests/.
+Adaptations are in src/chemistry/, reference/engine/prepared.py,
+scripts/regenerate_atomic_data.py, scripts/regenerate_descriptor_data.py and the
+*_reference.py fixtures in reference/.
 These portions are distributed under the accompanying BSD-3-Clause LICENSE.
 
 The builtin ring-template catalog and matching/template-assisted construction

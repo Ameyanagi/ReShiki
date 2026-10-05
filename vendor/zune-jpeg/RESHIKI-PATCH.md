@@ -32,7 +32,7 @@ Changes from the registry source:
 
 No public API, feature defaults, dependency versions, allocation strategy,
 entropy decoding, metadata, orientation, or color conversion was changed.
-`tests/jpeg_sampling.rs` compares baseline and progressive JPEGs at 4:4:4,
+`reference/jpeg_sampling.rs` compares baseline and progressive JPEGs at 4:4:4,
 4:2:2 and 4:2:0, small/odd/MCU-boundary sizes, high-contrast/noise/gradient pixels,
 EXIF orientation, opacity, ordinary picture imports and scalar/SIMD decoding.
 The 2-level RGB allowance is unchanged; alpha and lossless formats remain exact.

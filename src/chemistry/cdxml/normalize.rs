@@ -1,4 +1,4 @@
-//! Chemistry-only copy from engine/bonds_exchange.py::chemistry_xml.
+//! Chemistry-only copy from reference/engine/bonds_exchange.py::chemistry_xml.
 use super::{Error, Result, tree::Tree};
 
 /// Prepare an XML copy for molecular parsing, preserving the drawing source.

@@ -1,6 +1,6 @@
 """Differential corpus for the Rust codec; Python stays an independent oracle.
 
-Invoked by tests/cdx_codec.rs. This script never regenerates expected results
+Invoked by reference/cdx_codec.rs. This script never regenerates expected results
 with Rust, so a migration cannot make both sides agree by accident. Explicit
 compatibility corrections below are independently grounded by GUI-captured
 ChemDraw binary/XML pairs in fixtures/chemdraw-captions and

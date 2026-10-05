@@ -109,15 +109,15 @@ New fixture SHA-256 values:
 Regenerate or verify the catalog from the pinned original checkout:
 
 ```sh
-.venv/bin/python tests/generate_depict_templates.py --rdkit-source /path/to/rdkit --check
+.venv/bin/python reference/generate_depict_templates.py --rdkit-source /path/to/rdkit --check
 ```
 
 Omit `--check` to regenerate and run `oxfmt` on the generated JSON afterward.
 Build and capture the independent native oracle on Linux or macOS:
 
 ```sh
-.venv/bin/python tests/build_depict_templates_oracle.py --rdkit-source /path/to/rdkit --boost-include /path/to/boost185
-.venv/bin/python tests/depict_templates_reference.py --rdkit-source /path/to/rdkit --oracle artifacts/depict-templates-oracle --replay --output /path/to/native-fixture.json.gz
+.venv/bin/python reference/build_depict_templates_oracle.py --rdkit-source /path/to/rdkit --boost-include /path/to/boost185
+.venv/bin/python reference/depict_templates_reference.py --rdkit-source /path/to/rdkit --oracle artifacts/depict-templates-oracle --replay --output /path/to/native-fixture.json.gz
 CARGO_BUILD_JOBS=4 cargo +1.95.0 test --locked --test depict_templates --test depict_rings --test depict_seeds --test depict_attachment -- --nocapture
 ```
 

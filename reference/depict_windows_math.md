@@ -166,7 +166,7 @@ requested setting, UCRT hash, original DLL/source hashes, compiler command and
 observer hash. The control affects only the C++ observer process.
 
 To exercise the disabled path on an FMA3-capable development host, compile
-`tests/depict_windows_fma3_disabled.cpp` with `/c /O2 /MD /EHsc` and link the
+`reference/depict_windows_fma3_disabled.cpp` with `/c /O2 /MD /EHsc` and link the
 resulting object directly into a stage test executable, for example:
 
 ```bat

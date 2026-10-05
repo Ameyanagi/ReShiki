@@ -45,6 +45,6 @@ The audit used RDKit `2026.03.6`, Boost `1_85`, and Python 3.12 on every host.
 Native source revision is `0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985`:
 `CXSmilesOps.cpp:431-466` converts coordinates through
 `boost::lexical_cast<double>`; `MolFileParser.cpp:2921-2980` applies or ignores
-the DAT SMARTSQ query. The original `engine/reactions.py` accepts only the exact
+the DAT SMARTSQ query. The original `reference/engine/reactions.py` accepts only the exact
 atomic-number query wrapper. No Cargo execution or production edit was needed
 for this audit.

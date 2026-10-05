@@ -1,4 +1,4 @@
-//! Logical groups from engine/groups_exchange.py::read_groups.
+//! Logical groups from reference/engine/groups_exchange.py::read_groups.
 use super::{Error, ObjectMapEntry, Result, association::invalid, tree::Tree};
 use crate::grouping::Group;
 use std::collections::HashMap;

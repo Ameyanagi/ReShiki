@@ -26,7 +26,7 @@ at commit `7eaa9f97f03ccf70a1bfb9874d4e9223b14075aa`.
 To regenerate on the matching Windows host:
 
 ```sh
-uv run --locked python tests/abbreviation_replacement_reference.py --write-geometry --target-arch aarch64
+uv run --locked python reference/abbreviation_replacement_reference.py --write-geometry --target-arch aarch64
 ```
 
 Use `x86_64` for a native Windows x64 host. On macOS and Linux, omit
@@ -60,7 +60,7 @@ original worker on the matching host.
 To regenerate the math corpus with x64 CPython on Windows:
 
 ```sh
-uv run --locked python tests/abbreviation_trigonometry_reference.py tests/fixtures/abbreviation-trigonometry-windows.bin
+uv run --locked python reference/abbreviation_trigonometry_reference.py tests/fixtures/abbreviation-trigonometry-windows.bin
 ```
 
 The capture temporarily disables FMA3 only inside that Python process and restores

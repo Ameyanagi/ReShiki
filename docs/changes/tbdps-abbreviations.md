@@ -91,7 +91,7 @@ of the complete aromatic-response fixtures. The
 retained every saved request and response byte-for-byte; only capture metadata
 and the abbreviation source hash changed. New preset geometry was independently
 captured on all five supported reference ABIs; see
-[geometry provenance](../../tests/abbreviation_geometry.md).
+[geometry provenance](../../reference/abbreviation_geometry.md).
 
 Release-note caption: **Enter TBDPS or OTBDPS as real protecting groups,
 preserving chemistry when expanding, saving, and exchanging drawings.**

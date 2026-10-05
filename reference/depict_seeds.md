@@ -131,17 +131,17 @@ Generate in an isolated checkout with the pinned native wheel and source headers
 
 ```sh
 CC=/usr/bin/clang CXX=/usr/bin/clang++ .venv/bin/python \
-  tests/build_depict_geometry_oracle.py --component seeds \
+  reference/build_depict_geometry_oracle.py --component seeds \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185
 
-.venv/bin/python tests/build_depict_geometry_oracle.py --component seeds \
+.venv/bin/python reference/build_depict_geometry_oracle.py --component seeds \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185 --replay \
   --output tests/fixtures/depict-seeds-linux-native.json.gz
 ```
 
 Windows x64 generation, its verbatim source adapter and fixture hashes are
 documented in the numeric audit. Use
-`tests/build_depict_windows_oracle.py --component seeds`. For optional direct
+`reference/build_depict_windows_oracle.py --component seeds`. For optional direct
 replay set `RESHIKI_DEPICT_SEEDS_ORACLE`, `RESHIKI_RDKIT_SOURCE` and the native
 library loader path. Replay always requires raw bit equality. Run
 `cargo +1.95.0 test --locked --test depict_seeds -- --nocapture`.

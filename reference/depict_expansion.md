@@ -109,9 +109,9 @@ They use the private arithmetic policy from `depict_numeric.md`; Linux remains
 unfused. No epsilon, alignment or zero cleanup is permitted.
 
 ```sh
-.venv/bin/python tests/build_depict_expansion_oracle.py \
+.venv/bin/python reference/build_depict_expansion_oracle.py \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185
-.venv/bin/python tests/depict_expansion_reference.py \
+.venv/bin/python reference/depict_expansion_reference.py \
   --oracle artifacts/depict-expansion-oracle --rdkit-source /path/to/pinned/rdkit \
   --replay --fixture tests/fixtures/depict-expansion-linux-native.json.gz \
   --output artifacts/depict-expansion-replayed.json.gz

@@ -1,4 +1,4 @@
-//! Native-precision arrows from engine/arrows_exchange.py::read_arrow.
+//! Native-precision arrows from reference/engine/arrows_exchange.py::read_arrow.
 use super::{
     Error as XmlError, ImportPoint,
     abbreviations::python_number,

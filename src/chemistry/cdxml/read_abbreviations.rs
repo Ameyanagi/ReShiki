@@ -1,4 +1,4 @@
-//! Stable drawing IDs from engine/abbreviations_exchange.py::read.
+//! Stable drawing IDs from reference/engine/abbreviations_exchange.py::read.
 use super::{
     Abbreviation, Error, Fragment, Result,
     abbreviations::{position, python_number},

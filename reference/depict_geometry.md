@@ -57,7 +57,7 @@ Apple clang and Boost headers:
 
 ```sh
 CC=/usr/bin/clang CXX=/usr/bin/clang++ .venv/bin/python \
-  tests/build_depict_geometry_oracle.py --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185
+  reference/build_depict_geometry_oracle.py --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185
 ```
 
 On Linux, use the pinned wheel's Python, a C++20 compiler and Boost headers. Replay
@@ -65,13 +65,13 @@ the existing input bits to keep cross-platform comparisons independent of the
 platform that generated initial molecular layouts:
 
 ```sh
-.venv/bin/python tests/build_depict_geometry_oracle.py \
+.venv/bin/python reference/build_depict_geometry_oracle.py \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185 --replay \
   --output tests/fixtures/depict-geometry-linux-native.json.gz
 ```
 
 Windows x64 generation and all fixture hashes are documented in the numeric
-audit. Use `tests/build_depict_windows_oracle.py --component geometry`.
+audit. Use `reference/build_depict_windows_oracle.py --component geometry`.
 
 For live replay during Rust tests, set `RESHIKI_DEPICT_ORACLE` to the executable
 and `RESHIKI_RDKIT_SOURCE` to the source tree. The replay checks the seven pinned

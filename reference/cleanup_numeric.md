@@ -20,7 +20,7 @@ The shared implementation in `src/chemistry/windows_trigonometry.rs` retains the
 Recreate the capture using the pinned Windows x64 Python environment:
 
 ```sh
-python tests/cleanup_windows_reference.py tests/fixtures/cleanup-windows-trigonometry.json
+python reference/cleanup_windows_reference.py tests/fixtures/cleanup-windows-trigonometry.json
 ```
 
 The capture requires a CPU that supports both CRT profiles. The portable fixture regression and original CPython numeric comparison run with `cargo test --features rdkit-reference --lib cleanup::numeric`; the unchanged native pair corpus runs with `cargo test --lib windows_trigonometry`. The full Windows ARM cleanup suite remains the hardware confirmation of the production target branch.

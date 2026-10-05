@@ -18,7 +18,7 @@ The numeric structure settings come from the [ACS graphics preparation guide](ht
 
 ## Implementation
 
-`engine/drawing_style.json` is the shared definition, embedded in the Rust application. A normal 42-unit bond in ReShiki represents 14.4 publication points. Existing document coordinates stay intact. SVG declares dimensions in points; PDF explicitly converts the SVG's 96 px/in coordinate system to 72 pt/in. PNG has matching physical dimensions and records its actual resolution, up to 1200 dpi. Large files use [automatic resolution](figure-export.md). Screen zoom never changes exported size.
+`assets/drawing_style.json` is the shared definition, embedded in the Rust application. A normal 42-unit bond in ReShiki represents 14.4 publication points. Existing document coordinates stay intact. SVG declares dimensions in points; PDF explicitly converts the SVG's 96 px/in coordinate system to 72 pt/in. PNG has matching physical dimensions and records its actual resolution, up to 1200 dpi. Large files use [automatic resolution](figure-export.md). Screen zoom never changes exported size.
 
 Atom labels use measured font advances and separate text runs for hydrogen subscripts, isotope masses and charges. Hydrogens choose a side based on neighboring bonds; ring double bonds use an inset second line. Annotation selection bounds and multiline spacing follow the larger default font. Arial must be available for exact font matching; fallback sans-serif metrics are used otherwise.
 

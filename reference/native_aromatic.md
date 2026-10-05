@@ -61,9 +61,9 @@ replay. Capturing worker responses does not use the Rust helper. For each source
 platform, run these three explicit steps from the repository root:
 
 ```sh
-uv run python tests/native_aromatic_reference.py --corpus --output artifacts/aromatic-raw.json.gz
-CARGO_BUILD_JOBS=4 uv run python tests/native_aromatic_reference.py --serialize artifacts/aromatic-raw.json.gz --output artifacts/aromatic-requests.json.gz
-uv run python tests/native_aromatic_reference.py --requests artifacts/aromatic-requests.json.gz --output tests/fixtures/native-aromatic-PLATFORM.json.gz
+uv run python reference/native_aromatic_reference.py --corpus --output artifacts/aromatic-raw.json.gz
+CARGO_BUILD_JOBS=4 uv run python reference/native_aromatic_reference.py --serialize artifacts/aromatic-raw.json.gz --output artifacts/aromatic-requests.json.gz
+uv run python reference/native_aromatic_reference.py --requests artifacts/aromatic-requests.json.gz --output tests/fixtures/native-aromatic-PLATFORM.json.gz
 ```
 
 The middle step calls only the ignored `serialize_aromatic_requests` test, using

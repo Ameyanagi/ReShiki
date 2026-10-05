@@ -1,5 +1,5 @@
 //! Explicit chemical abbreviation expansion, ported from
-//! engine/abbreviations_exchange.py::flatten. All edits are to a detached tree.
+//! reference/engine/abbreviations_exchange.py::flatten. All edits are to a detached tree.
 use super::{Error, Result, tree::Tree};
 use serde::Serialize;
 use std::{borrow::Cow, collections::HashMap};

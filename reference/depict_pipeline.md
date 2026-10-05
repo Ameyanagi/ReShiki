@@ -5,22 +5,22 @@ It never calls the application engine or the Rust solver. The checked fixture
 contains inputs only; expected output is produced live on the tested host.
 
 ```sh
-.venv/bin/python tests/depict_pipeline_reference.py --live \
+.venv/bin/python reference/depict_pipeline_reference.py --live \
   --output artifacts/depict-pipeline-native.json.gz
 # Diagnose a stable case family:
-.venv/bin/python tests/depict_pipeline_reference.py --live --filter fixed/5/
+.venv/bin/python reference/depict_pipeline_reference.py --live --filter fixed/5/
 # Deliberately observe native process-local seed caches:
-.venv/bin/python tests/depict_pipeline_reference.py --audit-seed-cache \
+.venv/bin/python reference/depict_pipeline_reference.py --audit-seed-cache \
   --output artifacts/depict-pipeline-seed-cache.json.gz
 # Read a saved capture with Python's standard library only:
-python3 tests/depict_pipeline_reference.py --fixture artifacts/depict-pipeline-native.json.gz
+python3 reference/depict_pipeline_reference.py --fixture artifacts/depict-pipeline-native.json.gz
 ```
 
 Inputs come from RDKit 2026.03.6, commit
 `0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985`. Generation requires that source tree:
 
 ```sh
-.venv/bin/python tests/depict_pipeline_reference.py --generate-inputs \
+.venv/bin/python reference/depict_pipeline_reference.py --generate-inputs \
   --rdkit-source /path/to/pinned/rdkit \
   --output tests/fixtures/depict-pipeline-inputs.json.gz
 ```

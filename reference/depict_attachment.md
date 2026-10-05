@@ -108,16 +108,16 @@ Generate in an isolated checkout using the pinned wheel, source and Boost header
 
 ```sh
 CC=/usr/bin/clang CXX=/usr/bin/clang++ .venv/bin/python \
-  tests/build_depict_geometry_oracle.py --component attachment \
+  reference/build_depict_geometry_oracle.py --component attachment \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185
 
-.venv/bin/python tests/build_depict_geometry_oracle.py --component attachment \
+.venv/bin/python reference/build_depict_geometry_oracle.py --component attachment \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185 --replay \
   --output tests/fixtures/depict-attachment-linux-native.json.gz
 ```
 
 Windows x64 generation and fixture hashes are in the numeric audit. Use
-`tests/build_depict_windows_oracle.py --component attachment`.
+`reference/build_depict_windows_oracle.py --component attachment`.
 
 For optional direct native replay, set `RESHIKI_DEPICT_ATTACHMENT_ORACLE` to the
 helper executable, `RESHIKI_RDKIT_SOURCE` to the pinned source tree and the wheel

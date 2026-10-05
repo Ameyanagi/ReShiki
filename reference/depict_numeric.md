@@ -90,7 +90,7 @@ Linux and Mac reproduced every existing capture exactly, excluding provenance.
 The official Boost 1.85.0 source archive SHA-256 is
 `7009fe1faa1697476bdc7027703a2badb84e849b7b0baad5086b087b971f8617`.
 
-Mac/Linux generation uses `tests/build_depict_geometry_oracle.py --component`
+Mac/Linux generation uses `reference/build_depict_geometry_oracle.py --component`
 with `--rdkit-source`, `--boost-include`, `--replay` and `--output`. The original
 C++ methods produce expected outputs. Python preserves input bits and serializes
 results; Rust does not participate. An isolated source/include tree is sufficient.

@@ -1,4 +1,4 @@
-//! Chemical prefix of engine/worker.py::import_cdxml, through legacy stereo.
+//! Chemical prefix of reference/engine/worker.py::import_cdxml, through legacy stereo.
 //! Fragment concatenation follows RDKit ChemTransforms.cpp and RWMol.cpp
 //! (2026.03.6), Copyright (C) 2006-2021 Greg Landrum (ChemTransforms), and
 //! Copyright (C) 2003-2024 Greg Landrum and other contributors (RWMol); BSD-3-Clause,

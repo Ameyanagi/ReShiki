@@ -1,4 +1,4 @@
-//! Detached label/indicator patches from engine/labels_exchange.py::read_labels.
+//! Detached label/indicator patches from reference/engine/labels_exchange.py::read_labels.
 use super::{
     Error,
     association::{self, ImportPoint, ObjectMapEntry, PreparedAtoms, invalid, numbers},

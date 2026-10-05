@@ -105,7 +105,7 @@ Mac uses Apple clang. The builder performs no Rust compilation or global changes
 For each target platform, replay the existing inputs:
 
 ```sh
-CXX=/usr/bin/clang++ .venv/bin/python tests/build_depict_finalize_oracle.py \
+CXX=/usr/bin/clang++ .venv/bin/python reference/build_depict_finalize_oracle.py \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185 \
   --fixture tests/fixtures/depict-finalize-linux-native.json.gz --replay \
   --output tests/fixtures/depict-finalize-macos-native.json.gz

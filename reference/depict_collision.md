@@ -44,9 +44,9 @@ scalar comparisons, 43,021 ordered collision pairs, 224 native exceptions and
 overflowing and over-budget inputs without mutating their source.
 
 ```sh
-.venv/bin/python tests/build_depict_collision_oracle.py \
+.venv/bin/python reference/build_depict_collision_oracle.py \
   --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185
-.venv/bin/python tests/depict_collision_reference.py \
+.venv/bin/python reference/depict_collision_reference.py \
   --oracle artifacts/depict-collision-oracle --rdkit-source /path/to/pinned/rdkit \
   --output tests/fixtures/depict-collision-linux-native.json.gz
 CARGO_BUILD_JOBS=4 cargo +1.95.0 test --locked --test depict_collision -- --nocapture
@@ -75,7 +75,7 @@ Source: `EmbeddedFrag.cpp:1436–1497,1699–2310`,
 `EmbeddedFrag.h:75–90`. Attribution is in `licenses/rdkit/NOTICE`.
 
 All application `Compute2DCoords` calls omit `nSamples` and `nFlipsPerSample`;
-the pinned defaults are zero. `engine/cleanup.py:122` additionally requests
+the pinned defaults are zero. `reference/engine/cleanup.py:122` additionally requests
 fixed coordinates, bond length, `canonOrient=false`, `forceRDKit=true` and ring
 templates. `RDDepictor.cpp:609–620` therefore selects deterministic repair.
 Random flip sampling is outside this supported workflow and is not implemented.
