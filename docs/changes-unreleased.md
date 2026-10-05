@@ -7,7 +7,7 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
-- **Under review — Signing and privacy policies:** document the current signing
+- **Signing and privacy policies:** document the current signing
   status, proposed SignPath process, local processing, and optional online data
   handling. Windows downloads remain unsigned while the application and signing
   setup are pending.
