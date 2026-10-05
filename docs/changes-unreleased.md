@@ -11,7 +11,8 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   supported chemical data from embedded Office objects instead of choosing
   their presentation image. Paste picture retains its explicit image behavior.
   [Validation and desktop review checklist](changes/windows-chemdraw-paste-2026-10-05.md)
-  · @Ameyanagi. Live PowerPoint acceptance remains to be checked on Windows.
+  · [PR #150](https://github.com/Ameyanagi/ReShiki/pull/150) · @Ameyanagi.
+  Live PowerPoint acceptance remains to be checked on Windows.
 
 - **Interactive 3D geometry and keyboard drawing:** generate
   conformers with Rust MMFF94, MMFF94s, or UFF, relax around dragged or pinned

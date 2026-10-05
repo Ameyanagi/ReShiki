@@ -1,6 +1,6 @@
 # Embedded ChemDraw paste from Windows Office
 
-Under review · @Ameyanagi.
+Under review · [PR #150](https://github.com/Ameyanagi/ReShiki/pull/150) · @Ameyanagi.
 
 Selecting a whole embedded ChemDraw object in PowerPoint and pressing Ctrl+C
 can offer its OLE storage alongside a presentation image, without a standalone

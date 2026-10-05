@@ -7,4 +7,7 @@ This list credits authors of merged pull requests to ReShiki.
 - @Ameyanagi — project creator and maintainer; added ordinary-Copy ChemDoodle Open/Load reaction handoff in [PR #144](https://github.com/Ameyanagi/ReShiki/pull/144), and Rust 3D optimization, depth appearance, and default keyboard drawing in [PR #146](https://github.com/Ameyanagi/ReShiki/pull/146).
 - @HiroYokoyama — proposed improved benzene fusion and Kekulé-pattern selection, with regression tests and follow-up review fixes, in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40), and added Ctrl/Cmd drag to copy and Shift drag to lock an axis in [PR #87](https://github.com/Ameyanagi/ReShiki/pull/87).
 
+Under review: @Ameyanagi's embedded ChemDraw paste fix for Windows Office in
+[PR #150](https://github.com/Ameyanagi/ReShiki/pull/150).
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.10.md) credit contributors alongside their changes.
