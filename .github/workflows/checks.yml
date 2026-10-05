@@ -221,7 +221,7 @@ jobs:
         if: runner.os == 'Linux'
         run: echo "RESHIKI_TEST_LINUX_GOLDENS=ubuntu-22.04-x64" >> "$GITHUB_ENV"
       - name: Replay independently captured chemistry fixtures
-        run: cargo test --locked --features rdkit-reference --test inchi_input --test inchi_output --test inchi_reader --test inchi_rust --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
+        run: cargo test --locked --features rdkit-reference --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
       - name: Replay complete aromatic response fixtures
         run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
   geometry:

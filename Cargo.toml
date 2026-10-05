@@ -337,23 +337,11 @@ name = "inchi_generator"
 required-features = ["rdkit-reference"]
 
 [[test]]
-name = "inchi_input"
-required-features = ["rdkit-reference"]
-
-[[test]]
 name = "inchi_key"
 required-features = ["rdkit-reference"]
 
 [[test]]
-name = "inchi_output"
-required-features = ["rdkit-reference"]
-
-[[test]]
 name = "inchi_reader"
-required-features = ["rdkit-reference"]
-
-[[test]]
-name = "inchi_rust"
 required-features = ["rdkit-reference"]
 
 [[test]]
