@@ -106,6 +106,11 @@ opt-level = 1
 [profile.test.package.reshiki-depict-math]
 opt-level = 1
 
+# Numerical geometry tests exercise the application's fixed embedding deadline.
+# Optimize the chemistry dependency while retaining test assertions and checks.
+[profile.test.package.cosmolkit-core]
+opt-level = 3
+
 [dev-dependencies]
 reshiki-process-heap = { path = "crates/process-heap", features = ["allocation-metrics"] }
 accesskit_consumer = "=0.38.0"

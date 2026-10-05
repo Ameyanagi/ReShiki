@@ -3678,6 +3678,7 @@ version = "0.1.0"
 dependencies = [
  "cosmolkit-core",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

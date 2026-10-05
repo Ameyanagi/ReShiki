@@ -65,6 +65,22 @@ and distribution details are in [Rust 3D geometry distribution](geometry-backend
 
 Generation uses a bounded, seeded conformer ensemble, minimizes the valid
 candidates with the chosen field, and selects their lowest energy result.
+When a drawing retains valid, genuinely three-dimensional coordinates, those
+coordinates are optimized first. Flat drawings, including tilted planes, and
+coordinates that conflict with the specified chemistry use conformer generation.
+Fullerene cages such as C₆₀ use a short initial trial and a distance-geometry
+fallback without flat-geometry assumptions when that trial fails. This changes
+the starting geometry; the chosen MMFF/UFF force field and stereo validation
+still apply to the resulting molecule. Closed carbon cages must also stay
+inside the supported near-convex geometry envelope; a folded or strongly
+nonconvex cage produces a diagnostic instead of being applied. C₆₀ has a full
+regression fixture; this does not establish support for every larger fullerene.
+An unsuccessful ensemble dominated by planarity rejections may use that
+alternate initialization for other strained structures too. If embedding times
+out, ReShiki may retry with a single conformer. This reduces sampling rather
+than changing the chosen force field. Retries remain bounded. The preview
+identifies existing 3D geometry, cage or alternate starting geometry, and
+single-conformer recovery.
 Subsequent dragging performs bounded local minimization. An unchanged set of
 targets and pins pauses after 50 batches or eight batches without meaningful
 energy improvement. The preview stays editable; moving a target or changing
