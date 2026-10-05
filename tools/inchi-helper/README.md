@@ -13,7 +13,7 @@ Python interpreter is required at runtime.
 
 Release packages contain only the application executable. The app relaunches `current_exe()` with `--inchi-worker` before initializing graphics or native UI. Its clipboard and printing modes on macOS use the same executable as well. Each operation still has its own process, pipes, deadline and heap budget.
 
-A development-only executable shares `src/chemistry/inchi/worker.rs` and the same allocator for independent transport tests:
+A development-only executable shares `crates/chemistry/src/inchi/worker.rs` and the same allocator for independent transport tests:
 
 ```sh
 python3 scripts/build_inchi_helper.py

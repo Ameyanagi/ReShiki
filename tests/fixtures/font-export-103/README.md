@@ -1,8 +1,8 @@
 # Variable-font export regression (#103)
 
 These development fixtures reproduce #103 and verify the compatible weight
-patch in `vendor/usvg`, `vendor/svg2pdf`, and `src/style/font.rs`. They are a
-**controlled backend test**, not a native Fedora editor reproduction.
+patch in `vendor/usvg`, `vendor/svg2pdf`, and `crates/model/src/style/font.rs`.
+They are a **controlled backend test**, not a native Fedora editor reproduction.
 
 The pinned Noto Sans JP font has a `wght` axis with range 100–900 and default
 100. With only this face in the font database, the unpatched

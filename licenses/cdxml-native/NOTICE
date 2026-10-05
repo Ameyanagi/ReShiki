@@ -1,4 +1,4 @@
-The molecular CDXML parser in src/chemistry/cdxml/ adapts:
+The molecular CDXML parser in crates/io/src/chemistry/cdxml/ adapts:
 
 RDKit 2026.03.6, commit 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
 External/ChemDraw/{chemdraw,node,bond,fragment,utils}.cpp

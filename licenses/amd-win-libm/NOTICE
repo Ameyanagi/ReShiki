@@ -1,5 +1,5 @@
 The bounded Windows non-FMA rotation implementation in
-src/chemistry/windows_trigonometry.rs is adapted from AMD's
+crates/chemistry/src/windows_trigonometry.rs is adapted from AMD's
 win-libm sin.asm, cos.asm, and Lsincos_array.asm (MIT license).
 
 Source: https://github.com/amd/win-libm

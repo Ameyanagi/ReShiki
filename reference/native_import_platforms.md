@@ -3,8 +3,8 @@
 The complete import tests compare the original worker on the same host. Their
 success totals differ because the pinned native CX coordinate reader accepts
 different hexadecimal numbers on each platform. These are existing policies in
-`src/chemistry/cx/number.rs`; no layout or import implementation was changed for
-this audit.
+`crates/chemistry/src/cx/number.rs`; no layout or import implementation was
+changed for this audit.
 
 | Corpus case                                        | Input detail                                               | macOS ARM64     | Linux x86_64    | Windows x64     |
 | -------------------------------------------------- | ---------------------------------------------------------- | --------------- | --------------- | --------------- |

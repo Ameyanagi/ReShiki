@@ -29,6 +29,17 @@ cargo test --workspace --locked
 cargo run --locked -- --engine-check
 ```
 
+To test one library layer, select its crate. Integration tests, binaries and examples belong to the root `reshiki` package, so qualify them with `-p reshiki`:
+
+```sh
+cargo test --locked -p reshiki-chemistry
+cargo test --locked -p reshiki-model
+cargo test --locked -p reshiki-io
+cargo test --locked -p reshiki --test theme_reference
+```
+
+A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
+
 The development-only helper and fault-injection stub let library tests exercise subprocess transport independently of the GUI entry point. Keep `RESHIKI_INCHI_HELPER` set while running those tests. In PowerShell, use `python`, set `$env:RESHIKI_INCHI_HELPER = (Resolve-Path artifacts/inchi-helper/reshiki-inchi-helper.exe).Path`, and set `$env:RESHIKI_REQUIRE_INCHI_HELPER = '1'`. Required mode fails if native test binaries are missing. Default tests do not require Python or RDKit. Windows clipboard tests replace the desktop clipboard with test data.
 
 Archive and installer checks run the installed app twice with Python, uv and the checkout unavailable. They reject separate worker executables, Python payloads and chemistry-environment creation. Release CI also runs the complete InChI framing and heap suite against the application’s `--inchi-worker` mode.

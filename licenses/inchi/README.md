@@ -13,7 +13,7 @@ collection includes both. No InChI C source is built or linked by the applicatio
 The remaining notes describe ReShiki's independently adapted InChIKey code and
 the older C implementation used only to capture development reference data.
 
-The Rust InChIKey implementation in `src/chemistry/inchi/key.rs` adapts the
+The Rust InChIKey implementation in `crates/chemistry/src/inchi/key.rs` adapts the
 key parsing, layer separation and base-26 encoding from the official IUPAC
 InChI reference implementation, version 1.07.3. These sources are MIT licensed,
 copyright 2024 IUPAC and InChI Trust. The project-level license additionally

@@ -48,7 +48,7 @@ Typed multi-center and variable attachment nodes preserve target IDs through nat
 | Floating/show-hide toolbars                 | Missing          | Inspector can hide; no independent Main/General/Style/Object palettes.                                                                                                                                     |
 | Native menus and accessible commands        | Missing          | ReShiki has an app menu; no native File/Edit/Object/Structure/Text menus or semantic canvas accessibility.                                                                                                 |
 
-Typography includes stored styles, selection-aware editing, text measurement and shared canvas/export layout. See the [desktop workflow, interchange checks and remaining limits](typography.md). Relevant files: `src/typography.rs`, `src/app/typography.rs`, `src/document.rs`, `src/style.rs`, `src/scene.rs`, `src/app/workspace.rs`, `src/chemistry/cdxml/presentation.rs`, `src/exchange/drawing.rs`.
+Typography includes stored styles, selection-aware editing, text measurement and shared canvas/export layout. See the [desktop workflow, interchange checks and remaining limits](typography.md). Relevant files: `crates/model/src/typography.rs`, `src/app/typography.rs`, `crates/model/src/document.rs`, `crates/model/src/style.rs`, `crates/model/src/scene.rs`, `src/app/workspace.rs`, `crates/io/src/chemistry/cdxml/presentation.rs`, `crates/io/src/exchange/drawing.rs`.
 
 ## Drawing tools and interaction
 

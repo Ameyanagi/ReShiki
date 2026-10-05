@@ -14,45 +14,59 @@ flowchart LR
     Rust <--> InChI[Same executable in isolated InChI worker mode]
 ```
 
+## Crates and layering
+
+The library is split into workspace crates. Each crate depends only on the crates before it:
+
+1. `reshiki-chemistry` (`crates/chemistry/`): the chemistry core, without GUI dependencies.
+2. `reshiki-model` (`crates/model/`): document, scene, styles, editing, pictures, storage and themes, plus the drawing-to-molecule and abbreviation adapters in `chemistry/`.
+3. `reshiki-io` (`crates/io/`): chemistry engine, drawing interchange, export, recovery, document styles and the template library, plus the CDXML, MOL, reaction and cleanup adapters in `chemistry/`.
+4. `reshiki` library (`src/lib.rs`): a facade that re-exports the moved modules at their existing `reshiki::<module>` paths, plus the assistant, clipboard, printing, updates, hotkeys, Office and accessibility services.
+5. `reshiki` executable (`src/main.rs`, `src/app/`, `src/canvas/`): the Iced application.
+
+`reshiki::chemistry` combines the core with both adapter layers, so existing imports keep working. Crate boundaries enforce the layering: a lower crate cannot import a higher one. The new crates are workspace default members, so `cargo test` and the pre-commit checks cover them. Release builds still produce exactly one executable with `cargo build --release --bin reshiki`; `build.rs` stays in the root package.
+
 ## Modules
 
-| File                                           | Responsibility                                                                 |
-| ---------------------------------------------- | ------------------------------------------------------------------------------ |
-| `src/document.rs`                              | Atoms, bonds, text, arrows, stable object IDs, validation, undo/redo snapshots |
-| `src/scene.rs`                                 | Toolkit-independent lines, polygons, labels and SVG serialization              |
-| `src/canvas.rs`                                | Canvas module root: canvas types, camera, event and draw dispatch              |
-| `src/canvas/hit.rs`                            | Hit testing for pointers and regions, and drawn-bond attachment targets        |
-| `src/canvas/snapping.rs`                       | Where gestures land: move deltas, smart guides, arrow ends, ring anchors       |
-| `src/canvas/input/`                            | Pointer and keyboard events: presses, motion and per-gesture releases          |
-| `src/canvas/paper/`                            | Paper drawing: background, active-gesture preview, document and overlays       |
-| `src/canvas/previews.rs`                       | Thumbnail, inspector, palette and proposal canvas programs                     |
-| `src/app.rs`                                   | App state, messages, lifecycle, update entry points and the root view          |
-| `src/app/gates.rs`                             | Ordered modal gates that run before message dispatch                           |
-| `src/app/dispatch.rs`                          | Message dispatch table: one handler per message variant                        |
-| `src/app/canvas_edit/`                         | Canvas gesture dispatch, direct manipulation, placement and clicks             |
-| `src/app/bond_edits.rs`                        | Bond drawing settings and edits to selected bonds                              |
-| `src/app/atom_edits.rs`                        | Element, charge, isotope, radical and mark edits to selected atoms             |
-| `src/app/ring_edits.rs`                        | Ring tool settings and the selected ring's aromaticity                         |
-| `src/app/selection_edits.rs`                   | Selection, grouping, framing and arrangement commands                          |
-| `src/app/history.rs`                           | Undo and redo of drawing history                                               |
-| `src/app/view_settings.rs`                     | Window, camera and view-aid preferences                                        |
-| `src/app/engine_jobs.rs`                       | Chemistry engine requests and the handling of their results                    |
-| `src/app/workspace.rs`                         | Command bar, context row, compact palette, inspector and status bar            |
-| `src/app/icons.rs`                             | Original vector tool and command icons                                         |
-| `src/engine.rs`                                | Chemistry interface, native routing and response validation                    |
-| `src/chemistry/`                               | Molecule preparation, bounded graph, properties and stereo calculations        |
-| `src/pictures/exchange/`                       | Bounded raster decoding, orientation, transparency and reflection              |
-| `src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
-| `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
-| `src/clipboard.rs`, `src/app/clipboard.rs`     | Native multi-format Copy/Paste, asynchronous completion guards and safe Cut    |
-| `native/macos/src/clipboard.rs`                | Bounded single-item AppKit pasteboard bridge                                   |
-| `native/windows/`                              | Windows clipboard, printing and editable Office objects through a safe API     |
-| `src/exchange/`                                | Editable drawing export, bounded CDX/CDXML codec and legacy text encodings     |
-| `reference/engine/cdx_exchange.py`             | Python reference codec retained for differential tests                         |
-| `src/export.rs`                                | Vector PDF and raster PNG from the shared SVG scene                            |
-| `src/storage.rs`                               | Write complete files beside the destination, then atomically replace           |
-| `src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
-| `reference/engine/worker.py`                   | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
+| File                                                        | Responsibility                                                                 |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `crates/model/src/document.rs`                              | Atoms, bonds, text, arrows, stable object IDs, validation, undo/redo snapshots |
+| `crates/model/src/scene.rs`                                 | Toolkit-independent lines, polygons, labels and SVG serialization              |
+| `src/canvas.rs`                                             | Canvas module root: canvas types, camera, event and draw dispatch              |
+| `src/canvas/hit.rs`                                         | Hit testing for pointers and regions, and drawn-bond attachment targets        |
+| `src/canvas/snapping.rs`                                    | Where gestures land: move deltas, smart guides, arrow ends, ring anchors       |
+| `src/canvas/input/`                                         | Pointer and keyboard events: presses, motion and per-gesture releases          |
+| `src/canvas/paper/`                                         | Paper drawing: background, active-gesture preview, document and overlays       |
+| `src/canvas/previews.rs`                                    | Thumbnail, inspector, palette and proposal canvas programs                     |
+| `src/app.rs`                                                | App state, messages, lifecycle, update entry points and the root view          |
+| `src/app/gates.rs`                                          | Ordered modal gates that run before message dispatch                           |
+| `src/app/dispatch.rs`                                       | Message dispatch table: one handler per message variant                        |
+| `src/app/canvas_edit/`                                      | Canvas gesture dispatch, direct manipulation, placement and clicks             |
+| `src/app/bond_edits.rs`                                     | Bond drawing settings and edits to selected bonds                              |
+| `src/app/atom_edits.rs`                                     | Element, charge, isotope, radical and mark edits to selected atoms             |
+| `src/app/ring_edits.rs`                                     | Ring tool settings and the selected ring's aromaticity                         |
+| `src/app/selection_edits.rs`                                | Selection, grouping, framing and arrangement commands                          |
+| `src/app/history.rs`                                        | Undo and redo of drawing history                                               |
+| `src/app/view_settings.rs`                                  | Window, camera and view-aid preferences                                        |
+| `src/app/engine_jobs.rs`                                    | Chemistry engine requests and the handling of their results                    |
+| `src/app/workspace.rs`                                      | Command bar, context row, compact palette, inspector and status bar            |
+| `src/app/icons.rs`                                          | Original vector tool and command icons                                         |
+| `crates/io/src/engine.rs`                                   | Chemistry interface, native routing and response validation                    |
+| `crates/chemistry/src/`                                     | Molecule preparation, bounded graph, properties and stereo calculations        |
+| `crates/model/src/chemistry/`                               | Drawing-to-molecule preparation and abbreviation detection and replacement     |
+| `crates/io/src/chemistry/`                                  | CDXML, MOL and reaction interchange, and selection cleanup                     |
+| `crates/model/src/pictures/exchange/`                       | Bounded raster decoding, orientation, transparency and reflection              |
+| `crates/model/src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
+| `crates/io/src/recovery.rs`                                 | Atomic session snapshots and recovery candidates                               |
+| `src/clipboard.rs`, `src/app/clipboard.rs`                  | Native multi-format Copy/Paste, asynchronous completion guards and safe Cut    |
+| `native/macos/src/clipboard.rs`                             | Bounded single-item AppKit pasteboard bridge                                   |
+| `native/windows/`                                           | Windows clipboard, printing and editable Office objects through a safe API     |
+| `crates/io/src/exchange/`                                   | Editable drawing export, bounded CDX/CDXML codec and legacy text encodings     |
+| `reference/engine/cdx_exchange.py`                          | Python reference codec retained for differential tests                         |
+| `crates/io/src/export.rs`                                   | Vector PDF and raster PNG from the shared SVG scene                            |
+| `crates/model/src/storage.rs`                               | Write complete files beside the destination, then atomically replace           |
+| `crates/model/src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
+| `reference/engine/worker.py`                                | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
 
 Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents are saved as JSON format version 17 and accept versions 1–17 when reading. Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
@@ -62,7 +76,7 @@ Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map nu
 
 `ChemistryEngine` accepts typed import, analysis, cleanup, abbreviation, aromatic-display and export requests. Native operations prepare immutable snapshots and return a complete response or an error. Parse, chemistry, layout and helper errors never start a Python fallback.
 
-The optional `rdkit-reference` feature exposes `engine::PythonEngine` from `src/engine/reference.rs`. Its original JSONL worker protocol remains available for differential tests: request IDs, `protocol: 1`, `ok` responses and stderr diagnostics. The reference process uses a prepared interpreter; it never installs packages. Custom backends remain available through `LocalEngine::with_backend`.
+The optional `rdkit-reference` feature exposes `engine::PythonEngine` from `crates/io/src/engine/reference.rs`. Its original JSONL worker protocol remains available for differential tests: request IDs, `protocol: 1`, `ok` responses and stderr diagnostics. The reference process uses a prepared interpreter; it never installs packages. Custom backends remain available through `LocalEngine::with_backend`.
 
 Iced tasks keep chemistry work off the UI thread. A document revision prevents late analysis/import/cleanup from replacing newer edits. Export uses the snapshot requested. Save records the exact snapshot written and a document epoch, so a late save cannot mark later edits as saved or redirect another document's path.
 
@@ -98,7 +112,7 @@ Kekulé assignment uses bounded, iterative backtracking and preserves bond direc
 
 Canonical ranking uses a separate record for atom maps and stereo metadata. `reference/ranking.rs` compares over 45,000 rank vectors against RDKit, including symmetry classes, different ring caches, tetrahedral and bond stereo, stereo groups, and atom permutations. It also checks over 10,000 bond assignments using Rust-generated ranks. Ranking reads existing stereo annotations; perception is a separate pass.
 
-`src/chemistry/smiles/write.rs` prepares components, ranks atoms, assigns Kekulé bonds when requested, adjusts stereo and assembles plain SMILES. Prepared molecular imports, analysis and SMILES exports use it asynchronously; transport tests forbid the native SMILES writer on these paths. Independent tests compare full strings and atom/bond order, including mixtures, maps, ring stereo, coordination winding and custom symbols. Malformed states, 20,000 disconnected atoms and combined text limits have separate checks.
+`crates/chemistry/src/smiles/write.rs` prepares components, ranks atoms, assigns Kekulé bonds when requested, adjusts stereo and assembles plain SMILES. Prepared molecular imports, analysis and SMILES exports use it asynchronously; transport tests forbid the native SMILES writer on these paths. Independent tests compare full strings and atom/bond order, including mixtures, maps, ring stereo, coordination winding and custom symbols. Malformed states, 20,000 disconnected atoms and combined text limits have separate checks.
 
 Small C++ reference fixtures verify the shared ring/traversal sorting and its heap fallback on each platform. Regenerate them with `reference/smiles_sort_reference.cpp` and the platform compiler; production uses only the checked Rust implementation. Adapted standard-library algorithms and their licenses are recorded in `licenses/stdlib/`, which release packages include.
 
@@ -124,7 +138,7 @@ Abbreviation detection and replacement run in Rust with the 31 existing presets.
 
 MOL export writes V2000/V3000 in Rust from the prepared molecule. Dative bonds, large graphs and large coordinates select V3000 automatically. `reference/molfile.rs` compares exact native output, including wedge endpoint reversals, unspecified double bonds, isotope/charge/radical records and format boundaries. Engine tests reimport exported structures and compare identities, atom maps, masses and stereo. They also preserve the existing rejection of generic R atoms as queries on MOL import.
 
-MOL import runs in Rust on a blocking task. The reader in `src/chemistry/molfile/read/` parses V2000/V3000, applies file-specific valence/hydrogen rules, then runs 2D/3D stereo and sanitization. Drawing reconstruction retains file coordinates, generated wedge directions and dummy labels. File annotations retain the conformer dimension and signed attachment values, including explicitly stored zero. `reference/molfile_import.rs` compares complete molecular states with direct RDKit imports, including legacy property records, enhanced stereo collections, substance groups, atom maps, continuation lines, templates and malformed files. The optional `RESHIKI_RDKIT_SOURCE` path adds the reference source's MOL and substance-group fixtures. Substance-group SMARTS uses Rust syntax validation, including CX extensions: valid queries exceed the editable contract, while invalid query text is ignored as in the native reader.
+MOL import runs in Rust on a blocking task. The reader in `crates/io/src/chemistry/molfile/read/` parses V2000/V3000, applies file-specific valence/hydrogen rules, then runs 2D/3D stereo and sanitization. Drawing reconstruction retains file coordinates, generated wedge directions and dummy labels. File annotations retain the conformer dimension and signed attachment values, including explicitly stored zero. `reference/molfile_import.rs` compares complete molecular states with direct RDKit imports, including legacy property records, enhanced stereo collections, substance groups, atom maps, continuation lines, templates and malformed files. The optional `RESHIKI_RDKIT_SOURCE` path adds the reference source's MOL and substance-group fixtures. Substance-group SMARTS uses Rust syntax validation, including CX extensions: valid queries exceed the editable contract, while invalid query text is ignored as in the native reader.
 
 `reference/molfile_drawing.rs` compares complete drawing states and editable output, including full CIP results. `reference/engine_migration.rs` compares complete import responses. Default MOL imports complete without Python. The retained bridge tests forbid native parsing, sanitization, stereo assignment, Kekulé/wedge generation and drawing conversion for prepared imports. Its signed ring-stereo transport uses a bounded, version-checked native binary property block because Python has no atomic integer-vector setter.
 
@@ -132,9 +146,9 @@ Substance-group parsing checks members, crossing bonds, attachments, defaults an
 
 `reference/smarts.rs` compares query acceptance and atom counts with direct RDKit parsing. Coverage includes recursive and Boolean queries, range expressions, isotope/H/charge syntax, chiral permutations, ring closures, names and UTF-8 boundaries. CX extensions validate coordinates, escaped labels, atom properties, bond references, stereo groups, link nodes, variable attachments and substance groups. Branches and negation chains are iterative; recursive queries, input size and atom counts have explicit limits. The same query corpus also runs through native MOL substance groups, without skipped parser cases. This validator does not replace query matching or the SMILES importer.
 
-SMILES import runs in Rust through `src/chemistry/smiles/`: names, CX annotations, hydrogen removal, sanitization and stereo perception. Shared CX parsing retains annotation order, coordinates, labels, radicals, bond changes, stereo groups and protected substance-group members. Independent tests compare prepared states and conformers; a separate suite checks coordinate values bit for bit, including each platform's hexadecimal and underflow rules. Optional numeric annotations fail only when an operation reads them, matching native import behavior.
+SMILES import runs in Rust through `crates/chemistry/src/smiles/`: names, CX annotations, hydrogen removal, sanitization and stereo perception. Shared CX parsing retains annotation order, coordinates, labels, radicals, bond changes, stereo groups and protected substance-group members. Independent tests compare prepared states and conformers; a separate suite checks coordinate values bit for bit, including each platform's hexadecimal and underflow rules. Optional numeric annotations fail only when an operation reads them, matching native import behavior.
 
-RXN and reaction SMILES export run in Rust through `src/chemistry/reaction.rs`. It preserves explicit participant roles, coefficients, maps, stereo and aromatic bond types without changing the drawing. Differential tests compare complete files and rejected inputs; a backend-free test verifies the runtime path. Reaction SMILES sorts participants within each role, groups disconnected components and expands coefficients. Backend-free tests cover both reaction export formats.
+RXN and reaction SMILES export run in Rust through `crates/io/src/chemistry/reaction.rs`. It preserves explicit participant roles, coefficients, maps, stereo and aromatic bond types without changing the drawing. Differential tests compare complete files and rejected inputs; a backend-free test verifies the runtime path. Reaction SMILES sorts participants within each role, groups disconnected components and expands coefficients. Backend-free tests cover both reaction export formats.
 
 RXN and reaction SMILES import use Rust readers and canvas assembly, preserving participant roles, stereo, label spacing, reagent rows and separators. Placement keeps full precision until the final canvas coordinates. Rust labels each participant, prepares the combined analysis graph after labeling and writes its SMILES. RXN and reaction SMILES use the native response path; the Rust solver supplies missing participant layouts. Complete-response and concurrent-import tests compare the original importer. Incomplete labels or invalid coordinates cannot publish a partial drawing.
 
@@ -148,13 +162,13 @@ Axial stereo detection runs before sanitization in the MOL reader. `reference/at
 
 `reference/spatial_stereo.rs` checks 3D atom perception against the native geometry API, including tetrahedral winding, all 53 coordination permutations, geometric tolerances, existing tags and annotation presence. The pass preserves connectivity and hydrogen counts, clears the stereo cache only for 3D conformers, and returns typed errors without editing inputs. The MOL reader uses it before sanitization; unsupported coordination classes retain the existing import rejection.
 
-Editable drawing export runs in `src/exchange/drawing/`, including rich text, labels, marks, arrows, graphics, pictures, bond crossings, nested groups and abbreviations. `reference/drawing_exchange.rs` compares XML object ownership, attributes and text against the original Python writer; PNG comparisons check decoded pixels. Engine tests also compare binary exports byte for byte and reimport chemical identities. The writer preserves unsupported-feature rejections and bounds XML size, object count, nesting and graph work.
+Editable drawing export runs in `crates/io/src/exchange/drawing/`, including rich text, labels, marks, arrows, graphics, pictures, bond crossings, nested groups and abbreviations. `reference/drawing_exchange.rs` compares XML object ownership, attributes and text against the original Python writer; PNG comparisons check decoded pixels. Engine tests also compare binary exports byte for byte and reimport chemical identities. The writer preserves unsupported-feature rejections and bounds XML size, object count, nesting and graph work.
 
 The Rust CDXML libraries expand abbreviations, normalize bond depictions and parse molecular fragments without inventing sanitization caches. Separate readers preserve drawing styles, rich text, bond appearance, marks, labels, arrows, graphics and groups. They retain native f64 values and source-object identities until checked document conversion. Chemical preparation combines fragments, preserves coordinate scales and runs sanitization and stereo perception in native stage order. Scene assembly preserves object ownership, aromatic circles and final appearance. Differential tests compare original scenes and the actual JSON-to-document transport. Default CDXML/CDX imports complete natively, generating molecular coordinates when absent.
 
-Rust computes symmetric SSSR rings with iterative, bounded searches. `reference/ring_perception.rs` compares ordered atoms and bonds against native RDKit, including NCI molecules, permutations, dense graphs and disconnected components. Greedy pruning uses the pinned platform's equal-key sorting policy from `src/chemistry/native_order/`, shared with SMILES traversal. Ring analysis and preparation no longer fall back to Python or accept transported ring overrides.
+Rust computes symmetric SSSR rings with iterative, bounded searches. `reference/ring_perception.rs` compares ordered atoms and bonds against native RDKit, including NCI molecules, permutations, dense graphs and disconnected components. Greedy pruning uses the pinned platform's equal-key sorting policy from `crates/chemistry/src/native_order/`, shared with SMILES traversal. Ring analysis and preparation no longer fall back to Python or accept transported ring overrides.
 
-Runtime analysis derives InChIKeys in `src/chemistry/inchi/key.rs` using safe Rust and software SHA-256. Rust derives the key from the generated InChI; export reuses that string. Empty or unsupported identifiers retain empty keys. Independent tests compare native keys and error codes, layers and platform integer behavior; an optional pinned 1,181-entry corpus adds chemical coverage. Malformed non-ASCII starts use deterministic ASCII validation; tests report native locale differences separately.
+Runtime analysis derives InChIKeys in `crates/chemistry/src/inchi/key.rs` using safe Rust and software SHA-256. Rust derives the key from the generated InChI; export reuses that string. Empty or unsupported identifiers retain empty keys. Independent tests compare native keys and error codes, layers and platform integer behavior; an optional pinned 1,181-entry corpus adds chemical coverage. Malformed non-ASCII starts use deterministic ASCII validation; tests report native locale differences separately.
 
 `chemistry::inchi::input` prepares owned atom, bond and stereo records for InChI 1.07.3 without FFI. Independent captures compare the exact arrays passed by the original adapter to its generator, including conformer absence, isotope/H handling and ordered bonds. Invalid indices and undefined native stereo inputs return typed errors without changing the source molecule.
 
@@ -192,7 +206,7 @@ Regenerate codec constants and codepage tables with `uv run --locked python scri
 
 Element, isotope, allowed-valence and outer-electron data come from RDKit `Release_2026_03_6`. Regenerate them with `uv run --locked python scripts/regenerate_atomic_data.py --rdkit-source ~/dev/rdkit`, then `cargo fmt --all`. The generator verifies the source checksum and compares every entry with installed RDKit. Its BSD license and attribution are in `licenses/rdkit/` and are included in release packages.
 
-Regenerate descriptor rules with `uv run --locked python scripts/regenerate_descriptor_data.py --rdkit-source ~/dev/rdkit`, then `bun run --bun oxfmt src/chemistry/descriptor_data.json`. The generator verifies source checksums and compiles the fixed queries into checked-in data. The application reads that data without invoking Python or parsing SMARTS.
+Regenerate descriptor rules with `uv run --locked python scripts/regenerate_descriptor_data.py --rdkit-source ~/dev/rdkit`, then `bun run --bun oxfmt crates/chemistry/src/descriptor_data.json`. The generator verifies source checksums and compiles the fixed queries into checked-in data. The application reads that data without invoking Python or parsing SMARTS.
 
 Packages contain no Python interpreter, worker project, uv environment or companion executables. Archive and installer checks exercise the relocated application with Python/uv unavailable and reject chemistry-cache creation. macOS bundles retain their icon, license notices and signing. Windows upgrades retire the app-owned old chemistry directory, InChI helper and expanded license trees, preserving user data and caches. The `Licenses` directory contains the four project license/notice files and `THIRD-PARTY-NOTICES.txt`; indexed SHA-256 references share only byte-identical texts, preserving every dependency declaration, nested notice and source attribution.
 

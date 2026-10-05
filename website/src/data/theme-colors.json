@@ -7,9 +7,9 @@
   "sources": [
     "https://jmol.sourceforge.net/jscolors/",
     "https://bottosson.github.io/posts/oklab/",
-    "https://github.com/Ameyanagi/ReShiki/blob/main/src/canvas_theme.rs",
-    "https://github.com/Ameyanagi/ReShiki/blob/main/src/palette.rs",
-    "https://github.com/Ameyanagi/ReShiki/blob/main/src/color_contrast.rs"
+    "https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/canvas_theme.rs",
+    "https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/palette.rs",
+    "https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/color_contrast.rs"
   ],
   "themes": [
     {
