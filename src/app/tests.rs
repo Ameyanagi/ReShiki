@@ -25,6 +25,7 @@ fn atom_drag_and_click_are_separate_undoable_actions() -> Result<(), String> {
 }
 
 use super::*;
+use reshiki::graphics::GraphicStyle;
 
 #[test]
 fn haworth_tools_and_edge_styles_are_undoable_without_erasing_sugar_stereo() -> anyhow::Result<()> {

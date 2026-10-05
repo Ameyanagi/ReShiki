@@ -1,4 +1,5 @@
 use super::*;
+use reshiki::graphics::GraphicStyle;
 use reshiki::pictures::Picture;
 use reshiki::scientific::{OrbitalKind, Phase, SymbolKind};
 

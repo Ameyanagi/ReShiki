@@ -4,7 +4,7 @@ use reshiki::{
     document::{Annotation, Arrow, Document, History, Point},
     editing::{self, Arrange, Transform},
     engine::{Analysis, ChemistryEngine, LocalEngine, Request, Response},
-    graphics::{BracketSides, Graphic, GraphicChange, GraphicStyle},
+    graphics::{BracketSides, Graphic, GraphicChange},
     recovery::{Candidate, Recovery},
 };
 use std::path::PathBuf;
@@ -35,6 +35,7 @@ mod macos_files;
 pub(crate) use macos_files::install_document_events;
 mod graphics;
 mod help;
+mod history;
 mod icons;
 mod import;
 mod inline_text;
@@ -57,6 +58,7 @@ mod reactions;
 mod ring_edits;
 #[cfg(test)]
 mod rotation_tests;
+mod selection_edits;
 mod shortcut_examples;
 #[cfg(test)]
 mod shortcut_focus_tests;
@@ -1223,83 +1225,11 @@ impl App {
             Message::BondPosition(position) => self.set_double_position(position),
             Message::BondColor(value) => self.tab.bond_color_input = value,
             Message::ApplyBondColor => self.apply_bond_color(),
-            Message::AddFrame(kind) => {
-                let mut ids = self.tab.doc.complete_selection(&self.tab.selected);
-                if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &ids) {
-                    let before = self.tab.doc.clone();
-                    let id = self.tab.doc.next_id();
-                    let padding = reshiki::style::DEFAULT.world(6.0);
-                    self.tab.doc.graphics.push(Graphic::dragged(
-                        id,
-                        kind,
-                        lo.offset(-padding, -padding),
-                        hi.offset(padding, padding),
-                        GraphicStyle {
-                            width_pt: self.tab.doc.drawing_style.line_width_pt,
-                            ..Default::default()
-                        },
-                        BracketSides::Both,
-                        false,
-                    ));
-                    ids.push(id);
-                    if let Ok(ids) = self.tab.doc.group_selection(&ids) {
-                        self.tab.selected = ids;
-                    }
-                    self.changed(before);
-                    self.tool = Tool::Select;
-                    self.status = "Frame added and grouped with the selection".into();
-                }
-            }
-            Message::Group => {
-                let before = self.tab.doc.clone();
-                match self.tab.doc.group_selection(&self.tab.selected) {
-                    Ok(ids) => {
-                        self.tab.selected = ids;
-                        self.changed(before);
-                        self.tool = Tool::Select;
-                        self.status = format!(
-                            "Grouped · {}-click selects a member · {} ungroups",
-                            shortcuts::keys(iced::keyboard::Modifiers::ALT, ""),
-                            shortcuts::label(&Message::Ungroup).unwrap_or_default()
-                        );
-                    }
-                    Err(e) => {
-                        self.status = e;
-                        self.error = true;
-                    }
-                }
-            }
-            Message::Ungroup => {
-                let before = self.tab.doc.clone();
-                if self.tab.doc.ungroup_selection(&self.tab.selected) {
-                    self.changed(before);
-                    self.status = "Ungrouped one level".into();
-                }
-            }
-            Message::IntegralGroup(integral) => {
-                let before = self.tab.doc.clone();
-                let ids = self.tab.doc.outer_selected_groups(&self.tab.selected);
-                for g in &mut self.tab.doc.groups {
-                    if ids.contains(&g.id) {
-                        g.integral = integral;
-                    }
-                }
-                self.changed(before);
-            }
-            Message::InvertSelection => {
-                let selected = self.tab.doc.expand_groups(&self.tab.selected);
-                self.tab.selected = self
-                    .tab
-                    .doc
-                    .all_ids()
-                    .into_iter()
-                    .filter(|id| !selected.contains(id))
-                    .collect();
-                self.tool = Tool::Select;
-                self.sync_typography();
-                self.sync_graphics();
-                self.sync_arrows();
-            }
+            Message::AddFrame(kind) => self.add_frame(kind),
+            Message::Group => self.group_selected(),
+            Message::Ungroup => self.ungroup_selected(),
+            Message::IntegralGroup(integral) => self.set_integral_groups(integral),
+            Message::InvertSelection => self.invert_selection(),
             Message::Arc(action) => self.update_arc(action),
             Message::GraphicStyle(change) => self.apply_graphic_style(change),
             Message::GraphicWidth(s) => self.tab.graphic_width_input = s,
@@ -1533,25 +1463,10 @@ impl App {
                 }
                 return iced::clipboard::read().map(Message::Pasted);
             }
-            Message::Duplicate => {
-                let part = editing::selection(&self.tab.doc, &self.tab.selected);
-                let before = self.tab.doc.clone();
-                self.tab.selected =
-                    editing::append(&mut self.tab.doc, &part, Point::new(28.0, 28.0));
-                self.changed(before);
-                self.tool = Tool::Select;
-            }
-            Message::Transform(transform) => {
-                let before = self.tab.doc.clone();
-                editing::transform(&mut self.tab.doc, &self.tab.selected, transform);
-                self.changed(before);
-            }
+            Message::Duplicate => self.duplicate_selection(),
+            Message::Transform(transform) => self.transform_selection(transform),
             Message::NumericTransform(action) => return self.numeric_transform_action(action),
-            Message::Arrange(arrange) => {
-                let before = self.tab.doc.clone();
-                editing::arrange(&mut self.tab.doc, &self.tab.selected, arrange);
-                self.changed(before);
-            }
+            Message::Arrange(arrange) => self.arrange_selection(arrange),
             Message::BondDepth(front) => self.layer_objects(front, false, true),
             Message::ReverseBonds => self.reverse_selected_bonds(),
             Message::InsertTemplate(index) => {
@@ -1719,91 +1634,10 @@ impl App {
                 }
             }
             Message::Clean => return self.begin_cleanup(None, None),
-            Message::Undo | Message::Redo => {
-                self.tab.erase_stroke = false;
-                self.tab.cleanup = None;
-                let before = self.tab.doc.clone();
-                let selected_group = !before.outer_selected_groups(&self.tab.selected).is_empty();
-                let changed = if matches!(message, Message::Undo) {
-                    self.tab.history.undo(&mut self.tab.doc)
-                } else {
-                    self.tab.history.redo(&mut self.tab.doc)
-                };
-                if changed {
-                    self.tab.keyboard_drawing.restore(
-                        matches!(message, Message::Redo),
-                        &self.tab.doc,
-                        self.tab.file_epoch,
-                    );
-                    self.tab
-                        .recent_molecules
-                        .restore(matches!(message, Message::Redo), self.tab.file_epoch);
-                    self.tab.revision = self.tab.revision.wrapping_add(1);
-                    if chemistry_changed(&before, &self.tab.doc) {
-                        self.tab.analysis = None;
-                        reshiki::atom_labels::clear_computed(&mut self.tab.doc);
-                        self.tab.labels_dirty = true;
-                    }
-                    let ids = self.tab.doc.all_ids();
-                    self.tab.selected.retain(|id| ids.contains(id));
-                    let previous_ids = before.all_ids();
-                    let restored_group = self.tab.doc.groups.iter().any(|group| {
-                        group
-                            .members
-                            .iter()
-                            .any(|id| self.tab.selected.contains(id))
-                            && group.members.iter().all(|id| {
-                                self.tab.selected.contains(id) || !previous_ids.contains(id)
-                            })
-                    });
-                    if selected_group || restored_group {
-                        self.tab.selected = self.tab.doc.expand_groups(&self.tab.selected);
-                    }
-                    if self.tab.selected.is_empty()
-                        && let Some(id) = self.tab.caption_target.filter(|id| ids.contains(id))
-                    {
-                        self.tab.selected.push(id);
-                    }
-                    self.sync_typography();
-                    self.sync_graphics();
-                    self.sync_arrows();
-                    self.sync_bonds();
-                    if before.drawing_style != self.tab.doc.drawing_style {
-                        self.sync_drawing_defaults();
-                        self.tab.styles.editor = None;
-                    }
-                    if before.page_layout != self.tab.doc.page_layout {
-                        self.tab.pages.editor = self
-                            .tab
-                            .pages
-                            .editor
-                            .as_ref()
-                            .map(|_| pages::Editor::new(&self.tab.doc, self.tab.file_epoch));
-                        if let Some(layout) = &self.tab.doc.page_layout {
-                            self.tab.pages.active =
-                                self.tab.pages.active.min(layout.count().saturating_sub(1));
-                            self.fit_pages(Some(self.tab.pages.active));
-                        } else {
-                            self.fit();
-                        }
-                    }
-                    self.status = "History restored".into();
-                    self.error = false;
-                }
-            }
-            Message::Delete => {
-                let before = self.tab.doc.clone();
-                self.tab.doc.delete(&self.tab.selected);
-                self.changed(before);
-            }
-            Message::SelectAll => {
-                self.tab.selected = self.tab.doc.all_ids();
-                self.tool = Tool::Select;
-                self.sync_typography();
-                self.sync_graphics();
-                self.sync_arrows();
-                self.sync_bonds();
-            }
+            Message::Undo => self.step_history(false),
+            Message::Redo => self.step_history(true),
+            Message::Delete => self.delete_selection(),
+            Message::SelectAll => self.select_all_objects(),
             Message::Charge(delta) => self.change_charge(delta),
             Message::ApplyIsotope => self.apply_isotope(),
             Message::CopySmiles => {
