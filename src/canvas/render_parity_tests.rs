@@ -752,9 +752,24 @@ async fn paper_layers_match_captured_baseline() {
                 });
                 Some(offset(position(n), 0., -40.))
             }
+            // O already has its bond to N, so a spiro ring there is rejected:
+            // the hover draws the rejection outline, atom marker and badge.
             "ring_hover" => {
                 canvas.tool = Tool::Ring;
-                Some(screen(position(ring_atom)))
+                let rejection = reshiki::editing::ring_placement(
+                    &doc,
+                    position(o),
+                    canvas.ring_size,
+                    canvas.aromatic_ring,
+                    10.,
+                    None,
+                )
+                .expect_err("ring_hover must hover a rejected ring attachment");
+                assert!(
+                    !rejection.outline.is_empty() && rejection.atom == Some(o),
+                    "ring_hover rejection must draw its outline and atom marker"
+                );
+                Some(screen(position(o)))
             }
             "ring_preset" | "ring_delocalized" => {
                 canvas.tool = Tool::RingPreset(reshiki::rings::Preset::Benzene);
