@@ -22,7 +22,7 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
-Version 0.10 adds document tabs, smart alignment guides, drag-to-copy, a compact interface, editable Strong/Tint palettes, and Rust InChI. Older drawings open normally; drawings saved in 0.10 use a new format that 0.9.1 and earlier cannot read. [Release notes](docs/changes-0.10.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
+Version 0.11 adds interactive Rust 3D optimization, mouse and keyboard drawing by default, persistent structure highlights, and editable embedded ChemDraw paste from Windows Office. Older drawings open normally; drawings saved in 0.11 use document version 19 and cannot be opened in 0.10.0 or earlier. Keep a separate copy before saving if you need an earlier release. [Release notes](docs/changes-0.11.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
 
 [Explore the color palettes](https://reshiki.com/guide/color-palettes/): each theme's Strong and Tint rows and every Presentation, Pastel and Jmol element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
 
@@ -81,4 +81,4 @@ ReShiki uses Rust and Iced, with chemistry, clipboard and printing in one applic
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 
-See the [latest release notes](docs/changes-0.10.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
+See the [latest release notes](docs/changes-0.11.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
