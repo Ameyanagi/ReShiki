@@ -311,15 +311,20 @@ class GeometryReferenceTests(unittest.TestCase):
 
     def test_native_import_embedding_regressions_match_official_force_fields(self):
         cases = (
-            ("taxol70-request.json", ("MMFF94s",), 70, 43, 8),
-            ("user-c36-request.json", FIELDS, 36, 24, 1),
+            ("taxol70-request.json", ("MMFF94s",), 70, 43, (None,)),
+            ("user-c36-request.json", FIELDS, 36, 24, (1, None)),
         )
-        for fixture, fields, original_count, added_h, conformers in cases:
-            for field in fields:
-                with self.subTest(fixture=fixture, field=field):
+        for fixture, fields, original_count, added_h, samples in cases:
+            for field, conformers in ((field, count) for field in fields for count in samples):
+                with self.subTest(
+                    fixture=fixture, field=field, conformers=conformers or "fixture default"
+                ):
                     molecule, request = native_fixture_request(fixture)
                     self.assertEqual(molecule.GetNumAtoms(), original_count)
-                    request.update(field=field, conformers=conformers)
+                    self.assertEqual(request["conformers"], 8)
+                    request.update(field=field)
+                    if conformers is not None:
+                        request["conformers"] = conformers
                     source = copy.deepcopy(request)
                     generated = self.solve(request)
                     self.assertEqual(len(generated["coordinates"]), original_count + added_h)

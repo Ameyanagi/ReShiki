@@ -175,10 +175,15 @@ fn app_taxol_graph_preserves_original_stereo_hydrogens_during_generation() {
 
 #[test]
 fn user_c36_graph_generates_with_each_field_without_fullerene_shortcut() {
-    for field in [ForceField::MMFF94, ForceField::MMFF94s, ForceField::UFF] {
+    let default_conformers = user_c36().conformers;
+    assert_eq!(default_conformers, 8);
+    for (field, conformers) in [ForceField::MMFF94, ForceField::MMFF94s, ForceField::UFF]
+        .into_iter()
+        .flat_map(|field| [1, default_conformers].map(|conformers| (field, conformers)))
+    {
         let mut request = user_c36();
         request.field = field;
-        request.conformers = 1;
+        request.conformers = conformers;
         request.validate().unwrap();
         assert_eq!(request.atoms.len(), 36);
         assert_eq!(request.bonds.len(), 42);
@@ -190,11 +195,12 @@ fn user_c36_graph_generates_with_each_field_without_fullerene_shortcut() {
         );
         assert!(request.bonds.iter().all(|bond| bond.stereo == 0));
         let source = serde_json::to_value(&request).unwrap();
-        let generated = solve(&request).unwrap_or_else(|error| panic!("{field:?}: {error}"));
+        let generated = solve(&request)
+            .unwrap_or_else(|error| panic!("{field:?}, conformers={conformers}: {error}"));
         assert_geometry_and_identity(&request, &generated, 24);
         assert!(
             generated.converged,
-            "{field:?}: {:?}",
+            "{field:?}, conformers={conformers}: {:?}",
             generated.diagnostics
         );
         assert!(

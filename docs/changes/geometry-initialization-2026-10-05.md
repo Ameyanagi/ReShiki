@@ -52,6 +52,11 @@ release build. The PR records its exact head commit. Different QA application
 identifiers isolate preferences and document associations; tab counts and the
 saved paclitaxel document name differ between captures.
 
+The release executable was built from implementation commit
+`a9c2685cb2eb8b9b18c1aef89695f8372f994d92`. Subsequent changes extend regression
+tests, adjust the test-only numerical optimization profile and keep the CI X11
+server ready between tests; the runtime sources and release profile are unchanged.
+
 The final unsigned application SHA-256 is
 `cf6918e86612f7e7dcc1831f547bb9e96015f40d3a7654cc4f0eea4ccce7ece8`.
 The screenshot bundle contains that release executable with an ad-hoc signature;
@@ -66,18 +71,26 @@ Appearance alone does not establish valid chemistry. The checks separately
 cover original atom ordering, original and temporary hydrogen mapping, requested
 stereo, covalent geometry, cage faces, energy and analytic gradients.
 
-| Check                          | Local result and scope                                                                                                                                                                                                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust geometry crate            | 22 tests pass: 17 unit tests, three complete C60 tests and two exact-input embedding tests; no ignored tests. C60 generation and XYZ reuse converge with all three force fields.                                                                                                      |
-| Drawing geometry adapter       | 14 tests pass, including physical XYZ units, source immutability and flat-seed exclusion.                                                                                                                                                                                             |
-| Editor optimization            | 24 tests pass; two existing opt-in renderer tests remain ignored. Covers Apply/Undo, cancellation, dragging, pins and initialization status.                                                                                                                                          |
-| Independent RDKit oracle       | Seven test methods and 68 same-coordinate energy/gradient comparisons pass without skips: 45 standard comparisons, C60 generation and XYZ reuse for all fields, paclitaxel original-H/stereo mapping, exact C36 comparisons for all fields, and invariance/pin/scale checks.          |
-| Actual executable distribution | 18 methods pass without skips, including isolated relocated MMFF94/UFF worker launches with empty search paths, no Python payload and native dependency inspection. Signed-bundle rejection cases use controlled fixtures; this is not a signed cross-platform release certification. |
-| Desktop interaction            | C60 generation, Apply, Undo, Redo, retained XYZ reuse and Cancel verified; exact C36 and paclitaxel preview recovery verified. Paclitaxel Apply/Undo also checked.                                                                                                                    |
+| Check                          | Local result and scope                                                                                                                                                                                                                                                                                                 |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust geometry crate            | 22 tests pass with strict operation contracts and no ignored tests: 17 unit tests, three complete C60 tests and two exact-input embedding tests. C60 generation/XYZ reuse and exact C36 generation with one and the default eight conformers cover all three force fields.                                             |
+| Drawing geometry adapter       | 14 tests pass, including physical XYZ units, source immutability and flat-seed exclusion.                                                                                                                                                                                                                              |
+| Editor optimization            | 24 tests pass; two existing opt-in renderer tests remain ignored. Covers Apply/Undo, cancellation, dragging, pins and initialization status.                                                                                                                                                                           |
+| Independent RDKit oracle       | Seven test methods and 71 same-coordinate energy/gradient comparisons pass without skips: 45 standard comparisons, C60 generation and XYZ reuse for all fields, paclitaxel original-H/stereo mapping, exact C36 comparisons for all fields with one and the default eight conformers, and invariance/pin/scale checks. |
+| Actual executable distribution | 18 methods pass without skips, including isolated relocated MMFF94/UFF worker launches with empty search paths, no Python payload and native dependency inspection. Signed-bundle rejection cases use controlled fixtures; this is not a signed cross-platform release certification.                                  |
+| Desktop interaction            | C60 generation, Apply, Undo, Redo, retained XYZ reuse and Cancel verified; exact C36 and paclitaxel preview recovery verified. Paclitaxel Apply/Undo also checked.                                                                                                                                                     |
 
 Strict all-target/all-feature Clippy, Rust formatting and the repository's
 pre-commit checks are required before submission. Runtime remains Rust in the
 single application executable; Python/RDKit comparisons are development tests.
+
+The fixed embedding deadline also applies in tests. An unoptimized chemistry
+dependency reproduced the paclitaxel CI timeout; its test profile now uses
+optimization level 3 while retaining debug assertions, overflow checks and
+strict operation contracts. This does not increase the application timeout.
+The X11 clipboard workflow also disables Xvfb's last-client reset: a separate
+CI failure occurred during connection setup between tests, consistent with that
+server reset race. Clipboard runtime behavior is unchanged.
 
 ## Limits
 
