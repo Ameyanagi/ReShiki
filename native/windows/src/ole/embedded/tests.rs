@@ -53,14 +53,19 @@ impl IEnumFORMATETC_Impl for Formats_Impl {
 
 #[implement(IDataObject)]
 struct ClipboardObject {
-    storage: IStorage,
-    embedded: u32,
+    storages: BTreeMap<u32, IStorage>,
     globals: BTreeMap<u32, Vec<u8>>,
+    retrievals: Rc<RefCell<BTreeMap<u32, usize>>>,
+    failed_retrieval: Option<u32>,
 }
 
 impl ClipboardObject {
     fn formats(&self) -> Vec<FORMATETC> {
-        let mut formats = vec![storage::format_etc(self.embedded, TYMED_ISTORAGE)];
+        let mut formats: Vec<_> = self
+            .storages
+            .keys()
+            .map(|&id| storage::format_etc(id, TYMED_ISTORAGE))
+            .collect();
         formats.extend(
             self.globals
                 .keys()
@@ -74,16 +79,21 @@ impl IDataObject_Impl for ClipboardObject_Impl {
     fn GetData(&self, format: *const FORMATETC) -> CResult<STGMEDIUM> {
         self.QueryGetData(format).ok()?;
         let format = unsafe { &*format };
-        if u32::from(format.cfFormat) == self.embedded {
+        let id = u32::from(format.cfFormat);
+        if let Some(storage) = self.storages.get(&id) {
+            *self.retrievals.borrow_mut().entry(id).or_default() += 1;
+            if self.failed_retrieval == Some(id) {
+                return Err(Error::new(E_FAIL, "Synthetic embedded retrieval failure"));
+            }
             Ok(STGMEDIUM {
                 tymed: TYMED_ISTORAGE.0 as u32,
                 u: STGMEDIUM_0 {
-                    pstg: ManuallyDrop::new(Some(self.storage.clone())),
+                    pstg: ManuallyDrop::new(Some(storage.clone())),
                 },
                 pUnkForRelease: ManuallyDrop::new(None),
             })
         } else {
-            storage::global(&self.globals[&u32::from(format.cfFormat)])
+            storage::global(&self.globals[&id])
         }
     }
     fn GetDataHere(&self, format: *const FORMATETC, medium: *mut STGMEDIUM) -> CResult<()> {
@@ -92,9 +102,10 @@ impl IDataObject_Impl for ClipboardObject_Impl {
             return Err(E_POINTER.into());
         }
         unsafe {
-            if u32::from((*format).cfFormat) != self.embedded
-                || (*medium).tymed != TYMED_ISTORAGE.0 as u32
-            {
+            let Some(storage) = self.storages.get(&u32::from((*format).cfFormat)) else {
+                return Err(DV_E_TYMED.into());
+            };
+            if (*medium).tymed != TYMED_ISTORAGE.0 as u32 {
                 return Err(DV_E_TYMED.into());
             }
             let destination = (*medium)
@@ -102,8 +113,8 @@ impl IDataObject_Impl for ClipboardObject_Impl {
                 .pstg
                 .as_ref()
                 .ok_or_else(|| Error::from(E_POINTER))?;
-            self.storage.CopyTo(None, None, destination)?;
-            WriteClassStg(destination, &ReadClassStg(&self.storage)?)
+            storage.CopyTo(None, None, destination)?;
+            WriteClassStg(destination, &ReadClassStg(storage)?)
         }
     }
     fn QueryGetData(&self, format: *const FORMATETC) -> HRESULT {
@@ -235,6 +246,187 @@ fn locked_contents_is_unrecognized_until_the_stream_can_be_opened() {
     .unwrap();
 }
 
+fn check_reader(
+    storages: BTreeMap<u32, IStorage>,
+    formats: [u32; 2],
+    picture_only: bool,
+    allow_foreign: bool,
+    failed_retrieval: Option<u32>,
+    expected: Option<(&str, &[u8])>,
+) -> Result<()> {
+    let expected_counts = storages
+        .keys()
+        .map(|&id| (id, 1_usize))
+        .collect::<BTreeMap<_, _>>();
+    let retrievals = Rc::new(RefCell::new(BTreeMap::new()));
+    let object: IDataObject = ClipboardObject {
+        storages,
+        globals: BTreeMap::new(),
+        retrievals: retrievals.clone(),
+        failed_retrieval,
+    }
+    .into();
+    let queried = Cell::new(false);
+    let result = super::super::read_data_object(&object, formats, picture_only, || {
+        queried.set(true);
+        Ok(allow_foreign)
+    })?;
+    assert_eq!(
+        result.map(EmbeddedData::into_parts),
+        expected.map(|(kind, bytes)| (kind, bytes.to_vec()))
+    );
+    assert_eq!(&*retrievals.borrow(), &expected_counts);
+    let own_result =
+        expected.is_some_and(|(kind, _)| kind == "dev.reshiki.drawing" || kind == "public.png");
+    assert_eq!(queried.get(), !picture_only && !own_result);
+    Ok(())
+}
+
+#[test]
+fn embedded_reader_retrieves_each_storage_once_and_checks_both_own_classes_first() {
+    // Exercise the actual production IDataObject reader directly on an STA;
+    // flushing a clipboard caches the media and hides source retrieval counts.
+    std::thread::spawn(|| -> Result<()> {
+        let _apartment = Apartment::new()?;
+        let source = clipboard::format("Embed Source")?;
+        let embedded = clipboard::format("Embedded Object")?;
+        let formats = [source, embedded];
+        check_reader(
+            BTreeMap::from([(source, foreign_storage("CONTENTS", CHEMDRAW, None, false)?)]),
+            formats,
+            false,
+            true,
+            None,
+            Some(("com.revvity.chemdraw.cdx-clipboard", CHEMDRAW)),
+        )?;
+        check_reader(
+            BTreeMap::from([(
+                source,
+                foreign_storage("CONTENTS", b"unrelated object", None, false)?,
+            )]),
+            formats,
+            false,
+            true,
+            None,
+            None,
+        )?;
+        for (picture_only, allow_foreign) in [(false, false), (true, true)] {
+            check_reader(
+                BTreeMap::from([(
+                    source,
+                    foreign_storage("CONTENTS", CDX_SIGNATURE, Some(CDX_LIMIT as u64 + 1), false)?,
+                )]),
+                formats,
+                picture_only,
+                allow_foreign,
+                None,
+                None,
+            )?;
+        }
+        let document = br#"{"version":15,"atoms":[],"bonds":[]}"#;
+        let preview = png();
+        for picture_only in [false, true] {
+            check_reader(
+                BTreeMap::from([
+                    (
+                        source,
+                        foreign_storage(
+                            "CONTENTS",
+                            CDX_SIGNATURE,
+                            Some(CDX_LIMIT as u64 + 1),
+                            false,
+                        )?,
+                    ),
+                    (
+                        embedded,
+                        Drawing::new(document.to_vec(), preview.clone(), None)?.storage()?,
+                    ),
+                ]),
+                formats,
+                picture_only,
+                true,
+                None,
+                Some(if picture_only {
+                    ("public.png", preview.as_slice())
+                } else {
+                    ("dev.reshiki.drawing", document.as_slice())
+                }),
+            )?;
+        }
+        Ok(())
+    })
+    .join()
+    .unwrap()
+    .unwrap();
+}
+
+#[test]
+fn unavailable_first_embedded_format_preserves_other_own_and_standalone_priority() {
+    std::thread::spawn(|| -> Result<()> {
+        let _apartment = Apartment::new()?;
+        let source = clipboard::format("Embed Source")?;
+        let embedded = clipboard::format("Embedded Object")?;
+        let formats = [source, embedded];
+        let document = br#"{"version":15,"atoms":[],"bonds":[]}"#;
+        check_reader(
+            BTreeMap::from([
+                (source, foreign_storage("CONTENTS", CHEMDRAW, None, false)?),
+                (
+                    embedded,
+                    Drawing::new(document.to_vec(), png(), None)?.storage()?,
+                ),
+            ]),
+            formats,
+            false,
+            true,
+            Some(source),
+            Some(("dev.reshiki.drawing", document)),
+        )?;
+        // Standalone chemistry can proceed when the first OLE acquisition fails.
+        check_reader(
+            BTreeMap::from([(source, foreign_storage("CONTENTS", CHEMDRAW, None, false)?)]),
+            formats,
+            false,
+            false,
+            Some(source),
+            None,
+        )?;
+        // A successfully acquired foreign CDX also wins over an earlier failure.
+        check_reader(
+            BTreeMap::from([
+                (source, foreign_storage("CONTENTS", CHEMDRAW, None, false)?),
+                (
+                    embedded,
+                    foreign_storage("CONTENTS", CHEMDRAW, None, false)?,
+                ),
+            ]),
+            formats,
+            false,
+            true,
+            Some(source),
+            Some(("com.revvity.chemdraw.cdx-clipboard", CHEMDRAW)),
+        )?;
+        // If no usable representation wins, retain the acquisition diagnostic.
+        let retrievals = Rc::new(RefCell::new(BTreeMap::new()));
+        let object: IDataObject = ClipboardObject {
+            storages: BTreeMap::from([(
+                source,
+                foreign_storage("CONTENTS", CHEMDRAW, None, false)?,
+            )]),
+            globals: BTreeMap::new(),
+            retrievals: retrievals.clone(),
+            failed_retrieval: Some(source),
+        }
+        .into();
+        assert!(super::super::read_data_object(&object, formats, false, || Ok(true)).is_err());
+        assert_eq!(&*retrievals.borrow(), &BTreeMap::from([(source, 1)]));
+        Ok(())
+    })
+    .join()
+    .unwrap()
+    .unwrap();
+}
+
 fn publish(
     embedded: &'static str,
     create: impl FnOnce() -> CResult<IStorage> + Send + 'static,
@@ -246,9 +438,10 @@ fn publish(
     std::thread::spawn(move || -> Result<()> {
         let _apartment = Apartment::new()?;
         let object: IDataObject = ClipboardObject {
-            storage: create()?,
-            embedded: clipboard::format(embedded)?,
+            storages: BTreeMap::from([(clipboard::format(embedded)?, create()?)]),
             globals: globals.into_iter().collect(),
+            retrievals: Rc::new(RefCell::new(BTreeMap::new())),
+            failed_retrieval: None,
         }
         .into();
         unsafe {

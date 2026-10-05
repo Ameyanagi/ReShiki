@@ -396,20 +396,7 @@ impl EmbeddedData {
     }
 }
 
-enum EmbeddedRead {
-    Own { picture_only: bool },
-    ChemDraw,
-}
-
-pub(super) fn read_own(picture_only: bool) -> Result<Option<EmbeddedData>> {
-    read_embedded(EmbeddedRead::Own { picture_only })
-}
-
-pub(super) fn read_chemdraw() -> Result<Option<EmbeddedData>> {
-    read_embedded(EmbeddedRead::ChemDraw)
-}
-
-fn read_embedded(read: EmbeddedRead) -> Result<Option<EmbeddedData>> {
+pub(super) fn read_embedded(picture_only: bool) -> Result<Option<EmbeddedData>> {
     let source = clipboard::format("Embed Source")?;
     let embedded = clipboard::format("Embedded Object")?;
     // SAFETY: these queries only inspect registered clipboard format IDs.
@@ -425,45 +412,86 @@ fn read_embedded(read: EmbeddedRead) -> Result<Option<EmbeddedData>> {
         let _apartment = Apartment::new()?;
         // SAFETY: OLE is initialized on this STA; data never leaves the thread.
         let data = unsafe { OleGetClipboard()? };
-        for id in [source, embedded] {
-            let format = storage::format_etc(id, TYMED_ISTORAGE);
-            // SAFETY: format is a live descriptor without a target-device pointer.
-            if unsafe { data.QueryGetData(&format) }.is_err() {
-                continue;
-            }
-            // SAFETY: the descriptor is valid; Medium releases the returned
-            // storage and any release owner through ReleaseStgMedium.
-            let medium = storage::Medium(unsafe { data.GetData(&format)? });
-            if medium.0.tymed != TYMED_ISTORAGE.0 as u32 {
-                continue;
-            }
-            // SAFETY: tymed selects this union field; its borrowed storage cannot
-            // outlive the owning medium, and all access stays on this STA.
-            let storage =
-                unsafe { medium.0.u.pstg.as_ref() }.context("Missing embedded storage")?;
-            match read {
-                EmbeddedRead::Own { picture_only } => {
-                    // SAFETY: storage is a live interface owned by medium on this STA.
-                    if unsafe { ReadClassStg(storage)? } == CLSID {
-                        let drawing = Drawing::load(storage)?;
-                        return Ok(Some(if picture_only {
-                            EmbeddedData::Picture(drawing.png)
-                        } else {
-                            EmbeddedData::Drawing(drawing.document)
-                        }));
-                    }
-                }
-                EmbeddedRead::ChemDraw => {
-                    if let Some(bytes) = embedded::read_contents(storage)? {
-                        return Ok(Some(EmbeddedData::ChemDraw(bytes)));
-                    }
-                }
-            }
-        }
-        Ok(None)
+        read_data_object(&data, [source, embedded], picture_only, || {
+            clipboard::has_chemical_format().map(|has| !has)
+        })
     })
     .join()
     .map_err(|_| anyhow::anyhow!("Office clipboard read thread failed"))?
+}
+
+fn read_data_object(
+    data: &IDataObject,
+    formats: [u32; 2],
+    picture_only: bool,
+    allow_foreign: impl FnOnce() -> Result<bool>,
+) -> Result<Option<EmbeddedData>> {
+    let mut foreign = Vec::with_capacity(2);
+    let mut acquisition_error: Option<anyhow::Error> = None;
+    for id in formats {
+        let format = storage::format_etc(id, TYMED_ISTORAGE);
+        // SAFETY: format is a live descriptor without a target-device pointer.
+        if unsafe { data.QueryGetData(&format) }.is_err() {
+            continue;
+        }
+        // SAFETY: the descriptor is valid; Medium releases the returned
+        // storage and any release owner through ReleaseStgMedium on this STA.
+        let medium = match unsafe { data.GetData(&format) } {
+            Ok(medium) => storage::Medium(medium),
+            Err(error) => {
+                acquisition_error.get_or_insert(error.into());
+                continue;
+            }
+        };
+        if medium.0.tymed != TYMED_ISTORAGE.0 as u32 {
+            continue;
+        }
+        // SAFETY: tymed selects this union field; the storage borrow cannot
+        // outlive its owning medium, and all access stays on this STA.
+        let Some(storage) = (unsafe { medium.0.u.pstg.as_ref() }) else {
+            acquisition_error.get_or_insert_with(|| anyhow::anyhow!("Missing embedded storage"));
+            continue;
+        };
+        // SAFETY: storage is a live interface owned by medium on this STA.
+        let class = match unsafe { ReadClassStg(storage) } {
+            Ok(class) => class,
+            Err(error) => {
+                acquisition_error.get_or_insert(error.into());
+                continue;
+            }
+        };
+        if class == CLSID {
+            let drawing = Drawing::load(storage)?;
+            return Ok(Some(if picture_only {
+                EmbeddedData::Picture(drawing.png)
+            } else {
+                EmbeddedData::Drawing(drawing.document)
+            }));
+        }
+        if !picture_only {
+            foreign.push(medium);
+        }
+    }
+    // Check both own classes before reading foreign payloads, retaining each
+    // medium so expensive IDataObject rendering is never requested a second time.
+    // Only then query standalone chemistry without a clipboard lock or data read.
+    if !picture_only && (!foreign.is_empty() || acquisition_error.is_some()) && !allow_foreign()? {
+        return Ok(None);
+    }
+    for medium in foreign {
+        // SAFETY: only checked TYMED_ISTORAGE media enter this list; the storage
+        // remains borrowed from its release owner on the same initialized STA.
+        let storage = unsafe { medium.0.u.pstg.as_ref() }.context("Missing embedded storage")?;
+        if let Some(bytes) = embedded::read_contents(storage)? {
+            return Ok(Some(EmbeddedData::ChemDraw(bytes)));
+        }
+    }
+    // Unclassified acquisition errors must not hide a usable later object or
+    // standalone chemistry, but retain their legacy diagnostic if nothing wins.
+    match acquisition_error {
+        Some(error) => Err(error),
+        None => Ok(None),
+    }
 }
 
 pub(super) fn run(render: Render) -> Result<()> {

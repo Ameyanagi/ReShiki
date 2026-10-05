@@ -15,6 +15,19 @@ const LIMIT: usize = 64 * 1024 * 1024;
 const UNICODE: u32 = 13;
 const DIB: u32 = 8;
 const DIB_V5: u32 = 17;
+const CHEMICAL_FORMATS: &[(&str, &str)] = &[
+    ("dev.reshiki.drawing", "dev.reshiki.drawing"),
+    ("dev.moruno.drawing", "dev.moruno.drawing"),
+    (
+        "ChemDraw Interchange Format",
+        "com.revvity.chemdraw.cdx-clipboard",
+    ),
+    ("ChemDraw XML", "public.cdxml"),
+    ("chemical/x-cdxml", "public.cdxml"),
+    ("MDLCT", "com.mdli.molfile"),
+    ("chemical/x-mdl-molfile", "com.mdli.molfile"),
+    ("SMILES", "org.opensmiles.smiles"),
+];
 
 #[cfg(test)]
 pub(super) static CLIPBOARD_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -45,6 +58,16 @@ pub(super) fn format(name: &str) -> Result<u32> {
     } else {
         Ok(id)
     }
+}
+pub(super) fn has_chemical_format() -> Result<bool> {
+    for &(name, _) in CHEMICAL_FORMATS {
+        let id = format(name)?;
+        // SAFETY: read-only availability queries do not require OpenClipboard.
+        if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 fn mapped(kind: &str) -> &str {
     match kind {
@@ -321,51 +344,30 @@ fn read_packet(picture_only: bool) -> Result<Packet> {
             data: STANDARD.encode(bytes),
         }],
     };
-    if let Some(document) = super::ole::read_own(picture_only)? {
+    if let Some(document) = super::ole::read_embedded(picture_only)? {
         let (kind, bytes) = document.into_parts();
         return Ok(packet(kind, bytes));
     }
     let owner = Owner::new()?;
+    let _open = Open::new(owner.0)?;
     if !picture_only {
-        // Standalone chemical formats take priority over a foreign OLE object.
-        // Release OpenClipboard before calling back through its IDataObject.
-        {
-            let _open = Open::new(owner.0)?;
-            for (name, kind) in [
-                ("dev.reshiki.drawing", "dev.reshiki.drawing"),
-                ("dev.moruno.drawing", "dev.moruno.drawing"),
-                (
-                    "ChemDraw Interchange Format",
-                    "com.revvity.chemdraw.cdx-clipboard",
-                ),
-                ("ChemDraw XML", "public.cdxml"),
-                ("chemical/x-cdxml", "public.cdxml"),
-                ("MDLCT", "com.mdli.molfile"),
-                ("chemical/x-mdl-molfile", "com.mdli.molfile"),
-                ("SMILES", "org.opensmiles.smiles"),
-            ] {
-                let id = format(name)?;
-                // SAFETY: read-only format query, while holding the clipboard.
-                if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
-                    let mut bytes = read(id)?;
-                    if kind.starts_with("dev.")
-                        || kind == "public.cdxml"
-                        || kind == "org.opensmiles.smiles"
-                    {
-                        while bytes.last() == Some(&0) {
-                            bytes.pop();
-                        }
+        for &(name, kind) in CHEMICAL_FORMATS {
+            let id = format(name)?;
+            // SAFETY: read-only format query, while holding the clipboard.
+            if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
+                let mut bytes = read(id)?;
+                if kind.starts_with("dev.")
+                    || kind == "public.cdxml"
+                    || kind == "org.opensmiles.smiles"
+                {
+                    while bytes.last() == Some(&0) {
+                        bytes.pop();
                     }
-                    return Ok(packet(kind, bytes));
                 }
+                return Ok(packet(kind, bytes));
             }
         }
-        if let Some(document) = super::ole::read_chemdraw()? {
-            let (kind, bytes) = document.into_parts();
-            return Ok(packet(kind, bytes));
-        }
     }
-    let _open = Open::new(owner.0)?;
     for (name, kind) in [
         ("PNG", "public.png"),
         ("image/png", "public.png"),

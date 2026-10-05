@@ -12,6 +12,9 @@ uses the existing chemical importer.
 ## Scope
 
 - Existing native ReShiki and explicit chemical formats retain priority.
+- Each offered OLE storage format is retrieved at most once per paste. Foreign
+  storage stays on the same COM apartment while priority is decided, avoiding
+  a second delayed-rendering request before chemical import or image fallback.
 - Both `Embed Source` and `Embedded Object` storage media are supported.
 - Only the exact root stream with the complete 12-byte CDX signature is read.
   Nested objects, unrelated streams and binary substrings are not searched.
@@ -49,6 +52,11 @@ chemical/native priority, explicit picture paste, PNG/DIB fallback, unrelated
 and nested streams, partial or misplaced signatures, and recognized oversize
 data. A separate storage test covers a root stream held open exclusively.
 Clipboard-mutating tests share a lock to avoid parallel-test interference.
+Counted COM data-object tests call the production reader and assert one
+retrieval per format, including a foreign first format followed by native
+ReShiki data. They also check that an unclassified acquisition failure does
+not hide valid later native, standalone or embedded chemical data. If no
+usable representation wins, the existing acquisition diagnostic is retained.
 
 These are synthetic Office storage tests, not a captured PowerPoint clipboard
 object. Local compilation checks target Windows x64 and ARM64; the existing
