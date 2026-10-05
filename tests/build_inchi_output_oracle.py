@@ -113,7 +113,7 @@ def main():
         "-I" + str(code),
         "-I" + str(inchi_include),
         "-I" + str(args.boost_include),
-        str(root / "tests/inchi_output_reference.cpp"),
+        str(root / "reference/inchi_output_reference.cpp"),
         *libraries,
         "-Wl,-rpath," + str(libs),
         "-o",
@@ -129,7 +129,7 @@ def main():
             for path in (
                 adapter_path,
                 inchi_include / "inchi_api.h",
-                root / "tests/inchi_output_reference.cpp",
+                root / "reference/inchi_output_reference.cpp",
                 include / "inchi_adapter_body.h",
             )
         },

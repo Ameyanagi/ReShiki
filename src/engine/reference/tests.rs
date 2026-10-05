@@ -5,7 +5,7 @@ use anyhow::Context;
 
 mod protocol;
 
-#[path = "../../../tests/support/reference_presentation.rs"]
+#[path = "../../../reference/support/reference_presentation.rs"]
 mod reference_presentation;
 
 async fn guarded(

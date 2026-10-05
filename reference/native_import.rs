@@ -317,12 +317,18 @@ async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result
     let reference = PythonEngine::default();
     for (name, xml) in [
         ("molecule", MOLECULE),
-        ("ethanol", include_str!("fixtures/ui-drawn-ethanol.cdxml")),
+        (
+            "ethanol",
+            include_str!("../tests/fixtures/ui-drawn-ethanol.cdxml"),
+        ),
         (
             "atom labels",
-            include_str!("fixtures/atom-labels-chemdraw.cdxml"),
+            include_str!("../tests/fixtures/atom-labels-chemdraw.cdxml"),
         ),
-        ("graphics", include_str!("fixtures/graphics-chemdraw.cdxml")),
+        (
+            "graphics",
+            include_str!("../tests/fixtures/graphics-chemdraw.cdxml"),
+        ),
     ] {
         let document = reference
             .execute(Request::import("cdxml", xml))

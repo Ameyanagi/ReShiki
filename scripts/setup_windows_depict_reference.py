@@ -144,7 +144,7 @@ def crt_evidence(directory, environment):
         env=environment,
         text=True,
     )
-    source = ROOT / "tests/depict_windows_crt_reference.cpp"
+    source = ROOT / "reference/depict_windows_crt_reference.cpp"
     binary = directory / "crt-reference.exe"
     command = [
         "cl",

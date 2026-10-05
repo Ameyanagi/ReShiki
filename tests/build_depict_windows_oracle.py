@@ -135,14 +135,14 @@ def main():
             cwd=directory,
         )
         links.append(str(link))
-    runtime = root / "tests/depict_windows_runtime.cpp"
+    runtime = root / "reference/depict_windows_runtime.cpp"
     additional = [str(runtime)]
     adapter = None
     if args.component == "seeds":
         path, adapter = seed_adapter(source, directory)
         additional.append(str(path))
     binary = directory / "oracle.exe"
-    reference = root / f"tests/depict_{args.component}_reference.cpp"
+    reference = root / f"reference/depict_{args.component}_reference.cpp"
     command = [
         "cl",
         "/nologo",

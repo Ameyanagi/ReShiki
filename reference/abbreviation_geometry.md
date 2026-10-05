@@ -9,7 +9,7 @@ TBDPS and OTBDPS were captured independently on all five native reference ABIs
 in [capture run 36483117507](https://github.com/Ameyanagi/ReShiki/actions/runs/36483117507).
 All 29 earlier templates remained unchanged on every host. The macOS CI capture
 also exactly matched the local Apple Silicon capture. See
-[capture provenance and SHA-256 hashes](fixtures/tbdps-geometry-provenance.json).
+[capture provenance and SHA-256 hashes](../tests/fixtures/tbdps-geometry-provenance.json).
 The Windows artifacts use CRLF; committed files normalize line endings to LF,
 so the provenance records both original capture and committed-file hashes.
 The narrowly triggered `Abbreviation geometry capture` workflow reproduces these

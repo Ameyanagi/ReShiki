@@ -622,7 +622,8 @@ async fn rust_prepared_drawings_preserve_full_analysis_and_molecular_exports() -
 #[tokio::test]
 async fn dense_ring_pruning_matches_complete_reference_responses() -> TestResult {
     use reshiki::{chemistry::graph::Graph, document::Document};
-    let graph: Graph = serde_json::from_str(include_str!("fixtures/ring-order-dependent.json"))?;
+    let graph: Graph =
+        serde_json::from_str(include_str!("../tests/fixtures/ring-order-dependent.json"))?;
     let mut document = Document::default();
     let ids = (0..graph.atoms.len())
         .map(|i| {
@@ -795,18 +796,18 @@ async fn native_drawings_match_the_original_python_importer() -> TestResult {
     let reference = PythonEngine::default();
     for (data, labels) in [
         (
-            include_bytes!("fixtures/native-ethyl-clipboard.cdx").as_slice(),
+            include_bytes!("../tests/fixtures/native-ethyl-clipboard.cdx").as_slice(),
             vec![],
         ),
         (
-            include_bytes!("fixtures/abbreviations-native.cdx").as_slice(),
+            include_bytes!("../tests/fixtures/abbreviations-native.cdx").as_slice(),
             vec![
                 ("Boc", LabelAlignment::Left),
                 ("OMe", LabelAlignment::Right),
             ],
         ),
         (
-            include_bytes!("fixtures/picture-group-native.cdx").as_slice(),
+            include_bytes!("../tests/fixtures/picture-group-native.cdx").as_slice(),
             vec![],
         ),
     ] {

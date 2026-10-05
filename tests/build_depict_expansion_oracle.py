@@ -53,7 +53,7 @@ def main():
     generated = root / "artifacts/depict-expansion-observation"
     (generated / "GraphMol/Depictor").mkdir(parents=True, exist_ok=True)
     helpers = (
-        (root / "tests/depict_attachment_reference.cpp").read_text().split("int main() {", 1)[0]
+        (root / "reference/depict_attachment_reference.cpp").read_text().split("int main() {", 1)[0]
     )
     (generated / "depict-native-fragment-observation.inc").write_text(helpers)
     header = (source / "GraphMol/Depictor/EmbeddedFrag.h").read_text()
@@ -119,7 +119,7 @@ def main():
             "-I" + str(source),
             "-I" + str(source / "GraphMol/Depictor"),
             "-I" + str(args.boost_include),
-            str(root / "tests/depict_expansion_reference.cpp"),
+            str(root / "reference/depict_expansion_reference.cpp"),
             *libraries,
             "-o",
             str(root / "artifacts/depict-expansion-oracle"),

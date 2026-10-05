@@ -22,7 +22,7 @@ use tokio::{
     task::JoinSet,
 };
 
-#[path = "common/fixture.rs"]
+#[path = "../tests/common/fixture.rs"]
 mod fixture;
 
 fn helper() -> anyhow::Result<Option<PathBuf>> {
@@ -343,7 +343,7 @@ fn serialize_aromatic_requests() -> anyhow::Result<()> {
         .to_owned();
     let mut hashes = BTreeMap::new();
     for name in [
-        "tests/native_aromatic.rs",
+        "reference/native_aromatic.rs",
         "src/engine.rs",
         "src/engine/reference.rs",
         "src/document.rs",

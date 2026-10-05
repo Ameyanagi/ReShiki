@@ -228,7 +228,8 @@ async fn dense_ring_reaction_export_never_calls_the_backend() -> anyhow::Result<
         engine::{ChemistryEngine, LocalEngine, PythonEngine, Request, Response},
         reactions::{Participant, Reaction},
     };
-    let graph: Graph = serde_json::from_str(include_str!("fixtures/ring-order-dependent.json"))?;
+    let graph: Graph =
+        serde_json::from_str(include_str!("../tests/fixtures/ring-order-dependent.json"))?;
     let mut doc = Document::default();
     let ids: Vec<_> = graph
         .atoms

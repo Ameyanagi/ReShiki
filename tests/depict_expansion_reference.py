@@ -248,7 +248,7 @@ def main():
                 (Path(RDConfig.RDDataDir) / "NCI/first_5K.smi").read_bytes()
             ).hexdigest(),
             observer_sha256=hashlib.sha256(
-                (ROOT / "tests/depict_expansion_reference.cpp").read_bytes()
+                (ROOT / "reference/depict_expansion_reference.cpp").read_bytes()
             ).hexdigest(),
             builder_sha256=hashlib.sha256(
                 (ROOT / "tests/build_depict_expansion_oracle.py").read_bytes()

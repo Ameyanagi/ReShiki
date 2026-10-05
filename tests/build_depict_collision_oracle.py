@@ -57,7 +57,7 @@ def main():
     generated = root / "artifacts/depict-collision-observation"
     (generated / "GraphMol/Depictor").mkdir(parents=True, exist_ok=True)
     helpers = (
-        (root / "tests/depict_attachment_reference.cpp").read_text().split("int main() {", 1)[0]
+        (root / "reference/depict_attachment_reference.cpp").read_text().split("int main() {", 1)[0]
     )
     (generated / "depict-native-fragment-observation.inc").write_text(helpers)
     header = (source / "GraphMol/Depictor/EmbeddedFrag.h").read_text()
@@ -122,8 +122,8 @@ def main():
             "/I" + str(source),
             "/I" + str(source / "GraphMol/Depictor"),
             "/I" + str(args.boost_include.resolve()),
-            str(root / "tests/depict_collision_reference.cpp"),
-            str(root / "tests/depict_windows_runtime.cpp"),
+            str(root / "reference/depict_collision_reference.cpp"),
+            str(root / "reference/depict_windows_runtime.cpp"),
             *links,
             "/Fe:" + str(root / "artifacts/depict-collision-oracle.exe"),
             "/Fo" + str(generated) + "\\",
@@ -137,7 +137,7 @@ def main():
                     compiler_command=command,
                     compiler_log_sha256=hashlib.sha256(result.stdout + result.stderr).hexdigest(),
                     runtime_initializer_sha256=hashlib.sha256(
-                        (root / "tests/depict_windows_runtime.cpp").read_bytes()
+                        (root / "reference/depict_windows_runtime.cpp").read_bytes()
                     ).hexdigest(),
                     boost_version=rdBase.boostVersion,
                     boost_header_sha256=hashlib.sha256(
@@ -170,7 +170,7 @@ def main():
             "-I" + str(source),
             "-I" + str(source / "GraphMol/Depictor"),
             "-I" + str(args.boost_include),
-            str(root / "tests/depict_collision_reference.cpp"),
+            str(root / "reference/depict_collision_reference.cpp"),
             *libraries,
             "-o",
             str(root / "artifacts/depict-collision-oracle"),

@@ -677,9 +677,10 @@ async fn picture_drawings_preserve_the_complete_document_and_exports() -> anyhow
     };
     let reference = PythonEngine::default();
     let config = Config::new(path);
-    let picture =
-        reshiki::pictures::Picture::import(include_bytes!("fixtures/jpeg-subsampled-3x2.jpg"))
-            .map_err(anyhow::Error::msg)?;
+    let picture = reshiki::pictures::Picture::import(include_bytes!(
+        "../tests/fixtures/jpeg-subsampled-3x2.jpg"
+    ))
+    .map_err(anyhow::Error::msg)?;
     let mut document = imported(&reference, "CO").await?;
     document
         .graphics

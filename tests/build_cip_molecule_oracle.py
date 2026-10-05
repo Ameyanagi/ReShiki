@@ -60,7 +60,7 @@ def main():
             "-I" + str(args.boost_include),
             str(
                 root
-                / f"tests/cip_{'rules' if args.component == 'pairing' else args.component}_reference.cpp"
+                / f"reference/cip_{'rules' if args.component == 'pairing' else args.component}_reference.cpp"
             ),
             *[str(libs / f"libRDKit{n}.1.dylib") for n in ("CIPLabeler", "GraphMol", "RDGeneral")],
             str(python),

@@ -16,7 +16,7 @@ The four new `windows-server2022` fixtures are unchanged files from that run.
 Attachment, collision, seeds, and finalization reuse existing fixtures: their
 independently captured data rows are byte-identical. The capture's DLL hashes,
 compiler provenance, and fixture hashes are retained in
-[`fixtures/depict-windows-server2022-profile.json`](fixtures/depict-windows-server2022-profile.json).
+[`fixtures/depict-windows-server2022-profile.json`](../tests/fixtures/depict-windows-server2022-profile.json).
 No observers are compiled or queried during saved replay. Python reads the
 fixtures and probes the original CRT; it does not generate expected structures.
 
@@ -140,7 +140,7 @@ initial ring before exercising attachment operations.
 
 Capture hashes, native compiler commands, runtime initializer hashes, and the
 invariant captures' provenance are recorded in
-[`fixtures/depict-windows-profile-audit.json`](fixtures/depict-windows-profile-audit.json).
+[`fixtures/depict-windows-profile-audit.json`](../tests/fixtures/depict-windows-profile-audit.json).
 The five changed companion fixtures retain their full native provenance.
 
 ## Capture and validation

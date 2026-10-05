@@ -40,7 +40,7 @@ fn native_import_assembly() -> anyhow::Result<()> {
         header["capture_sha256"],
         format!(
             "{:x}",
-            Sha256::digest(include_bytes!("inchi_output_reference.cpp"))
+            Sha256::digest(include_bytes!("../reference/inchi_output_reference.cpp"))
         )
     );
     let mut rules = BTreeSet::new();

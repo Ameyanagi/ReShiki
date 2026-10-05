@@ -32,7 +32,7 @@ def prepare_observation(root, source, generated):
     """Expose native private methods and record the unchanged matching trace."""
     (generated / "GraphMol/Depictor").mkdir(parents=True, exist_ok=True)
     helpers = (
-        (root / "tests/depict_attachment_reference.cpp").read_text().split("int main() {", 1)[0]
+        (root / "reference/depict_attachment_reference.cpp").read_text().split("int main() {", 1)[0]
     )
     (generated / "depict-native-fragment-observation.inc").write_text(helpers)
     header = (source / "GraphMol/Depictor/EmbeddedFrag.h").read_text()
@@ -140,7 +140,7 @@ def main():
         "-I" + str(source),
         "-I" + str(source / "GraphMol/Depictor"),
         "-I" + str(args.boost_include),
-        str(root / "tests/depict_templates_reference.cpp"),
+        str(root / "reference/depict_templates_reference.cpp"),
         *libraries,
         "-o",
         str(binary),
@@ -152,7 +152,7 @@ def main():
         "boost_version": rdBase.boostVersion,
         "boost_version_header_sha256": hashlib.sha256(boost_header.read_bytes()).hexdigest(),
         "reference_sha256": hashlib.sha256(
-            (root / "tests/depict_templates_reference.cpp").read_bytes()
+            (root / "reference/depict_templates_reference.cpp").read_bytes()
         ).hexdigest(),
         "generated_sha256": {
             p.relative_to(generated).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()

@@ -1,5 +1,5 @@
 //! Native import records captured independently from the original InchiToMol.
-#[path = "common/fixture.rs"]
+#[path = "../tests/common/fixture.rs"]
 mod fixture;
 
 use anyhow::Context;

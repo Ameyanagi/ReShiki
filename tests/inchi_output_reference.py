@@ -386,7 +386,7 @@ def generate(args):
             inchi_version="1.07.3",
             adapter_sha256="68c9b20d1d5920ed602ea931c1429395280c3d040971593073917618015183d1",
             capture_sha256=hashlib.sha256(
-                (ROOT / "tests/inchi_output_reference.cpp").read_bytes()
+                (ROOT / "reference/inchi_output_reference.cpp").read_bytes()
             ).hexdigest(),
         )
     ]

@@ -157,7 +157,7 @@ async fn isolated(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<(
     std::fs::create_dir_all(guard.join("engine"))?;
     std::fs::write(
         guard.join("engine/worker.py"),
-        include_str!("native_routing_guard.py"),
+        include_str!("../tests/native_routing_guard.py"),
     )?;
     let fixture = directory.path().join("cases.json");
     std::fs::write(&fixture, serde_json::to_vec(&serde_json::to_value(cases)?)?)?;

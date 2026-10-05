@@ -131,7 +131,9 @@ def main():
     # No private method is called by this observer; exposed fields do not alter
     # MSVC method access mangling. All fragment methods called are public exports.
     helpers = (
-        (root / "tests/depict_attachment_reference.cpp").read_bytes().split(b"int main() {", 1)[0]
+        (root / "reference/depict_attachment_reference.cpp")
+        .read_bytes()
+        .split(b"int main() {", 1)[0]
     )
     (generated / "depict-native-fragment-observation.inc").write_bytes(helpers)
     adapter = extract_adapter(source, generated / "depict-expansion-windows-source.inc")
@@ -188,7 +190,7 @@ def main():
         links.append(str(link))
         libraries[dll.name] = digest(dll)
         export_hashes[name] = digest(definition)
-    reference = root / "tests/depict_expansion_reference.cpp"
+    reference = root / "reference/depict_expansion_reference.cpp"
     binary = directory / "oracle.exe"
     command = [
         "cl",
@@ -207,7 +209,7 @@ def main():
         "/I" + str(source / "GraphMol/Depictor"),
         "/I" + str(args.boost_include.resolve()),
         str(reference),
-        str(root / "tests/depict_windows_runtime.cpp"),
+        str(root / "reference/depict_windows_runtime.cpp"),
         *links,
         "/Fe:" + str(binary),
         "/Fo" + str(directory) + "\\",
@@ -220,7 +222,7 @@ def main():
     (directory / "imports.txt").write_bytes(imports)
     native_build = dict(
         fma3=args.fma3,
-        runtime_initializer_sha256=digest(root / "tests/depict_windows_runtime.cpp"),
+        runtime_initializer_sha256=digest(root / "reference/depict_windows_runtime.cpp"),
         ucrt_sha256=digest(Path(os.environ["SYSTEMROOT"]) / "System32/ucrtbase.dll"),
         builder_sha256=digest(Path(__file__)),
         compiler_command=command,

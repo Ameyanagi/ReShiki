@@ -103,7 +103,7 @@ def main():
     links = []
     names = ("Depictor", "GraphMol", "RDGeometryLib", "RDGeneral")
     binary = directory / ("oracle.exe" if windows else "oracle")
-    cpp = root / "tests/depict_finalize_reference.cpp"
+    cpp = root / "reference/depict_finalize_reference.cpp"
     if windows:
         for name in names:
             files = list(libraries.glob(f"RDKit{name}-*.dll"))
@@ -138,7 +138,7 @@ def main():
             *("/I" + str(i) for i in includes),
             str(cpp),
             str(adapted),
-            str(root / "tests/depict_windows_runtime.cpp"),
+            str(root / "reference/depict_windows_runtime.cpp"),
             *links,
             "/Fe:" + str(binary),
             "/Fo" + str(directory) + "\\",
@@ -196,7 +196,7 @@ def main():
     if windows:
         provenance.update(
             fma3=args.fma3,
-            runtime_initializer_sha256=digest(root / "tests/depict_windows_runtime.cpp"),
+            runtime_initializer_sha256=digest(root / "reference/depict_windows_runtime.cpp"),
             ucrt_sha256=digest(Path(os.environ["SYSTEMROOT"]) / "System32/ucrtbase.dll"),
         )
     metadata = directory / "build.json"

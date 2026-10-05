@@ -232,10 +232,10 @@ def main():
             "platform": platform.platform(),
             "library_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
             "observer_source_sha256": hashlib.sha256(
-                (ROOT / "tests/depict_collision_reference.cpp").read_bytes()
+                (ROOT / "reference/depict_collision_reference.cpp").read_bytes()
             ).hexdigest(),
             "fragment_observer_sha256": hashlib.sha256(
-                (ROOT / "tests/depict_attachment_reference.cpp").read_bytes()
+                (ROOT / "reference/depict_attachment_reference.cpp").read_bytes()
             ).hexdigest(),
             "oracle_sha256": hashlib.sha256(args.oracle.read_bytes()).hexdigest(),
             "cases": len(inputs),

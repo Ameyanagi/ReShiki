@@ -99,7 +99,7 @@ debug = 1
 
 # RDKit's macOS ABI uses paired sincos. Compile only this non-inlined wrapper
 # with optimization so debug builds select the same libm call as release.
-# tests/depict_numeric.md records the native evidence and strict comparisons.
+# reference/depict_numeric.md records the native evidence and strict comparisons.
 [profile.dev.package.reshiki-depict-math]
 opt-level = 1
 
@@ -134,350 +134,436 @@ svg2pdf = { path = "vendor/svg2pdf" }
 # Share Iced's standard Wayland data device for bounded binary clipboard offers.
 smithay-clipboard = { path = "vendor/smithay-clipboard" }
 
-# Independent oracle suites explicitly require the development reference.
+# Independent oracle suites live in reference/ and require the development reference.
 
 [[test]]
 name = "abbreviation_detection"
+path = "reference/abbreviation_detection.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "abbreviation_engine"
+path = "reference/abbreviation_engine.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "abbreviation_replacement"
+path = "reference/abbreviation_replacement.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "aromatic_display"
+path = "reference/aromatic_display.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "aromaticity"
+path = "reference/aromaticity.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "atropisomer"
+path = "reference/atropisomer.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "bond_geometry"
+path = "reference/bond_geometry.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdx_codec"
+path = "reference/cdx_codec.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_abbreviation_ids"
+path = "reference/cdxml_abbreviation_ids.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_abbreviations"
+path = "reference/cdxml_abbreviations.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_arrows"
+path = "reference/cdxml_arrows.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_bonds"
+path = "reference/cdxml_bonds.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_graphics"
+path = "reference/cdxml_graphics.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_groups"
+path = "reference/cdxml_groups.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_labels"
+path = "reference/cdxml_labels.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_marks"
+path = "reference/cdxml_marks.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_molecular"
+path = "reference/cdxml_molecular.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_native_bonds"
+path = "reference/cdxml_native_bonds.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_normalization"
+path = "reference/cdxml_normalization.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_preparation"
+path = "reference/cdxml_preparation.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_presentation"
+path = "reference/cdxml_presentation.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cdxml_scene"
+path = "reference/cdxml_scene.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cleanup"
+path = "reference/cleanup.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cip_configuration"
+path = "reference/cip_configuration.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cip_digraph"
+path = "reference/cip_digraph.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cip_labeling"
+path = "reference/cip_labeling.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cip_molecule"
+path = "reference/cip_molecule.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cip_pairing"
+path = "reference/cip_pairing.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cip_ranking"
+path = "reference/cip_ranking.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cip_rules"
+path = "reference/cip_rules.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "cx_coordinate"
+path = "reference/cx_coordinate.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_attachment"
+path = "reference/depict_attachment.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_collision"
+path = "reference/depict_collision.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_expansion"
+path = "reference/depict_expansion.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_finalize"
+path = "reference/depict_finalize.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_geometry"
+path = "reference/depict_geometry.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_pipeline"
+path = "reference/depict_pipeline.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_rank_properties"
+path = "reference/depict_rank_properties.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_rings"
+path = "reference/depict_rings.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_seeds"
+path = "reference/depict_seeds.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "depict_templates"
+path = "reference/depict_templates.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "descriptors"
+path = "reference/descriptors.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "document_preparation"
+path = "reference/document_preparation.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "drawing_exchange"
+path = "reference/drawing_exchange.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "drawing_output"
+path = "reference/drawing_output.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "drawn_stereo"
+path = "reference/drawn_stereo.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "electronic"
+path = "reference/electronic.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "engine_migration"
+path = "reference/engine_migration.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "hydrogen_removal"
+path = "reference/hydrogen_removal.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "inchi_generator"
+path = "reference/inchi_generator.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "inchi_key"
+path = "reference/inchi_key.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "inchi_reader"
+path = "reference/inchi_reader.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "jpeg_sampling"
+path = "reference/jpeg_sampling.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "kekulize"
+path = "reference/kekulize.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "molfile"
+path = "reference/molfile.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "molfile_drawing"
+path = "reference/molfile_drawing.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "molfile_import"
+path = "reference/molfile_import.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "native_aromatic"
+path = "reference/native_aromatic.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "native_cleanup"
+path = "reference/native_cleanup.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "native_import"
+path = "reference/native_import.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "native_response"
+path = "reference/native_response.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "native_routing"
+path = "reference/native_routing.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "organometallic"
+path = "reference/organometallic.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "perception"
+path = "reference/perception.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "picture_migration"
+path = "reference/picture_migration.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "properties"
+path = "reference/properties.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "ranking"
+path = "reference/ranking.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "reaction_drawing"
+path = "reference/reaction_drawing.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "reaction_import"
+path = "reference/reaction_import.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "reaction_output"
+path = "reference/reaction_output.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "reaction_smiles"
+path = "reference/reaction_smiles.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "ring_perception"
+path = "reference/ring_perception.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "sanitization"
+path = "reference/sanitization.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "sanitize"
+path = "reference/sanitize.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "smarts"
+path = "reference/smarts.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "smiles_parse"
+path = "reference/smiles_parse.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "smiles_prepare"
+path = "reference/smiles_prepare.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "smiles_read"
+path = "reference/smiles_read.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "smiles_stereo"
+path = "reference/smiles_stereo.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "smiles_symbols"
+path = "reference/smiles_symbols.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "smiles_traversal"
+path = "reference/smiles_traversal.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "smiles_write"
+path = "reference/smiles_write.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "spatial_stereo"
+path = "reference/spatial_stereo.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "stereo"
+path = "reference/stereo.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "valence"
+path = "reference/valence.rs"
 required-features = ["rdkit-reference"]
 
 [[test]]
 name = "wedging"
+path = "reference/wedging.rs"
 required-features = ["rdkit-reference"]
 
 [[bin]]

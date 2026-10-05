@@ -29,7 +29,7 @@ def generate(args):
         check=True,
     )
     manifest = json.loads((ROOT / "artifacts/inchi-output-build.json").read_text())
-    original = ROOT / "tests/inchi_output_reference.cpp"
+    original = ROOT / "reference/inchi_output_reference.cpp"
     source = original.read_text()
     needle = "in.get();std::getline(in,text);"
     assert source.count(needle) == 1

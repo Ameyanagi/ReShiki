@@ -119,7 +119,7 @@ fn jpeg_chroma_edges_match_independent_libjpeg() -> anyhow::Result<()> {
 
 #[test]
 fn jpeg_resource_limits_and_truncations_remain_atomic() -> anyhow::Result<()> {
-    let bytes = include_bytes!("fixtures/jpeg-subsampled-3x2.jpg");
+    let bytes = include_bytes!("../tests/fixtures/jpeg-subsampled-3x2.jpg");
     for boundary in [0, 2, 7, 32, 128, bytes.len() / 2, bytes.len() - 10] {
         let source = bytes.get(..boundary).context("Truncated source")?;
         let mut budget = Budget::default();
