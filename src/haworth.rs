@@ -312,8 +312,6 @@ mod tests {
     fn sugar_labels_do_not_touch_unrelated_ring_edges() -> anyhow::Result<()> {
         for template in templates().map_err(anyhow::Error::msg)? {
             let doc = &template.document;
-            let overlaps = crate::assistant::review::internal_overlaps(doc);
-            assert!(overlaps.is_empty(), "{}: {overlaps:?}", template.name);
             let intersections = label_ring_intersections(doc)?;
             assert!(
                 intersections.is_empty(),

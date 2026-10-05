@@ -684,4 +684,13 @@ mod overlap_tests {
         crate::projection::add_centroid(&mut doc, &[n, cu]).unwrap();
         assert!(internal_overlaps(&doc).is_empty());
     }
+
+    #[test]
+    fn haworth_sugar_templates_have_no_internal_overlaps() -> anyhow::Result<()> {
+        for template in crate::haworth::templates().map_err(anyhow::Error::msg)? {
+            let overlaps = internal_overlaps(&template.document);
+            assert!(overlaps.is_empty(), "{}: {overlaps:?}", template.name);
+        }
+        Ok(())
+    }
 }

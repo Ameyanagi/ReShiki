@@ -222,3 +222,34 @@ fn optional_layout_scaling_is_explicit_and_atomic() {
     assert!(history.redo(&mut current));
     assert_eq!(current, scaled);
 }
+
+#[test]
+fn formatting_roundtrips_presets_boundaries_and_small_margins() {
+    use crate::style::units::{self, Dimension, Unit};
+    let mut values = vec![
+        f32::MIN_POSITIVE,
+        f32::from_bits(1),
+        1e-9,
+        0.,
+        14.4,
+        2.6015625,
+    ];
+    for dimension in Dimension::ALL {
+        let (min, max) = dimension.range();
+        values.extend([min, max]);
+        for preset in Preset::ALL {
+            values.push(dimension.get(&preset.style()));
+        }
+    }
+    for value in values {
+        for unit in Unit::ALL {
+            let text = units::format(value, unit);
+            assert_eq!(
+                units::parse(&text, unit).unwrap().points.to_bits(),
+                value.to_bits(),
+                "{value} pt -> {text} {unit}"
+            );
+        }
+    }
+    assert_eq!(units::format(14.4, Unit::Millimetres), "5.08");
+}

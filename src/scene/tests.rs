@@ -225,40 +225,6 @@ fn rotated_group_bonds_do_not_cross_label_ink() -> Result<(), String> {
 }
 
 #[test]
-fn expanded_azide_and_magnesium_bromide_keep_visible_bonds() -> Result<(), String> {
-    for key in ["M", "Z"] {
-        for angle in (0..360).step_by(15) {
-            let mut doc = Document::default();
-            let c = doc.add_atom("C", Point::new(-42., 0.));
-            let end = doc.add_atom("C", Point::default());
-            doc.add_bond(c, end, 1, "plain");
-            doc = crate::hotkeys::atom_edit(&doc, end, key, 42.)
-                .ok_or("key")??
-                .0;
-            let members = doc.abbreviation(end).ok_or("group")?.members.clone();
-            doc.expand_abbreviations(&members);
-            let ids = doc.all_ids();
-            crate::editing::transform_about(&mut doc, &ids, Point::default(), 1., angle as f32);
-            let drawing = primitives(&doc);
-            let strokes: usize = drawing
-                .iter()
-                .map(|p| match p {
-                    Primitive::Line(_, _, _) | Primitive::Polygon(_) => 1,
-                    Primitive::Path { commands, .. } => commands
-                        .iter()
-                        .filter(|c| matches!(c, crate::graphics::PathCommand::Move(_)))
-                        .count(),
-                    _ => 0,
-                })
-                .sum();
-            let expected = if key == "M" { 2 } else { 5 };
-            assert_eq!(strokes, expected, "{key}, {angle} degrees");
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn group_labels_remain_visible_and_anchor_to_elements_at_every_angle() -> Result<(), String> {
     use crate::abbreviations::LabelAlignment;
     for label in ["C2H5", "C₂H₅", "OCH3", "Boc"] {

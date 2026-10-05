@@ -307,36 +307,6 @@ mod tests {
     }
 
     #[test]
-    fn formatting_roundtrips_presets_boundaries_and_small_margins() {
-        let mut values = vec![
-            f32::MIN_POSITIVE,
-            f32::from_bits(1),
-            1e-9,
-            0.,
-            14.4,
-            2.6015625,
-        ];
-        for dimension in Dimension::ALL {
-            let (min, max) = dimension.range();
-            values.extend([min, max]);
-            for preset in crate::document_styles::Preset::ALL {
-                values.push(dimension.get(&preset.style()));
-            }
-        }
-        for value in values {
-            for unit in Unit::ALL {
-                let text = format(value, unit);
-                assert_eq!(
-                    parse(&text, unit).unwrap().points.to_bits(),
-                    value.to_bits(),
-                    "{value} pt -> {text} {unit}"
-                );
-            }
-        }
-        assert_eq!(format(14.4, Unit::Millimetres), "5.08");
-    }
-
-    #[test]
     fn physical_limits_are_checked_after_conversion() {
         for dimension in Dimension::ALL {
             let (min, max) = dimension.range();

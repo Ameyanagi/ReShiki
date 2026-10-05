@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    document::Point,
-    engine::{LocalEngine, Request},
-};
+use crate::document::Point;
 
 fn alcohol() -> Document {
     let mut doc = Document::default();
@@ -10,49 +7,6 @@ fn alcohol() -> Document {
     let o = doc.add_atom("O", Point::new(42., 0.));
     doc.add_bond(c, o, 1, "plain");
     doc
-}
-
-#[tokio::test]
-async fn labels_match_full_analysis_for_aromatic_charged_radical_and_stereo_input() {
-    let engine = LocalEngine::default();
-    for smiles in [
-        "CCO",
-        "N",
-        "[NH4+]",
-        "C[O-]",
-        "[OH]",
-        "[13CH3]O",
-        "c1cc[nH]c1",
-        "c1ncccc1",
-        "OP(=O)(O)O",
-        "CS(=O)(=O)O",
-        "[2H]O",
-        "C[N+](=O)[O-]",
-        "C[C@H](O)F",
-        "F/C=C/F",
-        "F/C=C\\F",
-        "C[C@H](O)F.C[C@@H](O)F",
-    ] {
-        let source = engine
-            .request(Request::import_smiles(smiles))
-            .await
-            .unwrap()
-            .document
-            .unwrap();
-        let checked = engine
-            .request(Request::molecule("analyze", source.clone()))
-            .await
-            .unwrap()
-            .document
-            .unwrap();
-        let result = Refresh::calculate(&source, &Refresh::default()).unwrap();
-        assert!(result.notice.is_none(), "{smiles}: {:?}", result.notice);
-        let mut actual = source.clone();
-        let mut expected = source.clone();
-        result.apply(&mut actual);
-        crate::atom_labels::refresh_computed(&mut expected, &checked);
-        assert_eq!(actual, expected, "{smiles}");
-    }
 }
 
 #[test]

@@ -162,3 +162,6 @@ pub fn image(document: &Document) -> Result<Vec<u8>, String> {
     );
     pixels.encode_png().map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests;
