@@ -13,6 +13,8 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   setup are pending.
   [Code signing policy](code-signing-policy.md) · [Privacy policy](privacy-policy.md)
   · [PR #151](https://github.com/Ameyanagi/ReShiki/pull/151) · @Ameyanagi.
+  Follow-up wording correction:
+  [PR #152](https://github.com/Ameyanagi/ReShiki/pull/152) · @Ameyanagi.
 
 - **Embedded ChemDraw paste on Windows:** normal Paste reads
   supported chemical data from embedded Office objects instead of choosing
