@@ -25,6 +25,7 @@ fn atom_drag_and_click_are_separate_undoable_actions() -> Result<(), String> {
 }
 
 use super::*;
+use reshiki::engine::ChemistryEngine;
 use reshiki::graphics::GraphicStyle;
 
 #[test]

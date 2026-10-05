@@ -3,7 +3,7 @@ use iced::{Color, Element, Subscription, Task, Theme};
 use reshiki::{
     document::{Annotation, Arrow, Document, History, Point},
     editing::{self, Arrange, Transform},
-    engine::{Analysis, ChemistryEngine, LocalEngine, Request, Response},
+    engine::{Analysis, LocalEngine, Request, Response},
     graphics::{BracketSides, Graphic, GraphicChange},
     recovery::{Candidate, Recovery},
 };
@@ -26,6 +26,7 @@ mod depth_appearance;
 mod document_styles;
 mod document_tab;
 use document_tab::DocumentTab;
+mod engine_jobs;
 mod figure_export;
 mod file_shortcuts;
 mod files;
@@ -542,31 +543,6 @@ impl App {
     }
     fn office_document(&self) -> bool {
         self.tab.path.is_some() && self.tab.path == self.office_path
-    }
-    fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
-        if self.tab.busy {
-            return Task::none();
-        }
-        self.tab.busy = true;
-        self.error = false;
-        self.status = "Working…".into();
-        let engine = self.engine.clone();
-        let revision = self.tab.revision;
-        let aromatic_selection = matches!(kind, Job::AromaticDisplay);
-        Task::perform(
-            async move {
-                if aromatic_selection {
-                    shortcuts::aromatic_selection(engine, request).await
-                } else {
-                    engine.execute(request).await
-                }
-            },
-            move |result| Message::EngineDone {
-                revision,
-                kind: kind.clone(),
-                result: Box::new(result),
-            },
-        )
     }
     fn changed(&mut self, before: Document) {
         if self.tab.doc != before {
@@ -1163,15 +1139,7 @@ impl App {
             Message::ContextKey(key) => return self.context_key(&key),
             Message::StyleMenu(action) => return self.style_menu_action(action),
             Message::Shortcut(action) => return self.shortcut_action(action),
-            Message::AromaticDisplay => {
-                if self.tab.selected.is_empty() {
-                    self.status = "Select an aromatic ring first".into();
-                    return Task::none();
-                }
-                let mut request = Request::molecule("aromatic", self.tab.doc.clone());
-                request.selected_ids = Some(self.tab.selected.clone());
-                return self.run(request, Job::AromaticDisplay);
-            }
+            Message::AromaticDisplay => return self.request_aromatic_display(),
             Message::Abbreviations(action) => return self.abbreviation_action(action),
             Message::Labels(action) => self.label_action(action),
             Message::LabelsReady(..) => {}
@@ -1216,9 +1184,7 @@ impl App {
                     return task;
                 }
             }
-            Message::InsertInput => {
-                return self.run(input_request(&self.imports.input.text()), Job::Insert);
-            }
+            Message::InsertInput => return self.insert_input(),
             Message::ToggleHelp => self.toggle_help(),
             Message::OpenShortcutExamples if self.pending.is_some() => {}
             Message::OpenShortcutExamples => return self.open_shortcut_examples(),
@@ -1290,51 +1256,14 @@ impl App {
             Message::RulerUnit(unit) => self.guides.unit = unit,
             Message::Fit => self.fit(),
             Message::Zoom(factor) => self.zoom_by(factor),
-            Message::Import => {
-                return self.run(input_request(&self.imports.input.text()), Job::Import);
-            }
-            Message::Example(smiles) => {
-                self.imports.set_text(smiles);
-                return self.run(Request::import_smiles(smiles), Job::Insert);
-            }
-            Message::Analyze => {
-                return self.run(
-                    Request::molecule("analyze", self.tab.doc.clone()),
-                    Job::Analyze,
-                );
-            }
+            Message::Import => return self.import_input(),
+            Message::Example(smiles) => return self.insert_example(smiles),
+            Message::Analyze => return self.analyze_drawing(),
             Message::CleanupScope(scope) => return self.begin_cleanup(Some(scope), None),
             Message::CleanupOrientation(on) => return self.begin_cleanup(None, Some(on)),
-            Message::CleanupOriginal(original) => {
-                if let Some(preview) = &mut self.tab.cleanup {
-                    preview.original = original;
-                }
-            }
-            Message::CancelCleanup => {
-                self.tab.cleanup_serial = self.tab.cleanup_serial.wrapping_add(1);
-                self.tab.cleanup = None;
-                self.status = "Cleanup cancelled · Drawing unchanged".into();
-                self.error = false;
-            }
-            Message::ApplyCleanup => {
-                if self.tab.busy {
-                    return Task::none();
-                }
-                if let Some(preview) = self.tab.cleanup.take() {
-                    if preview.revision != self.tab.revision || preview.epoch != self.tab.file_epoch
-                    {
-                        self.status = "Drawing changed · Run cleanup again".into();
-                        return Task::none();
-                    }
-                    let before = self.tab.doc.clone();
-                    self.tab.doc = preview.document;
-                    self.changed(before);
-                    if !self.error {
-                        self.tab.analysis = preview.analysis;
-                        self.status = "Cleanup applied · Undo restores the original layout".into();
-                    }
-                }
-            }
+            Message::CleanupOriginal(original) => self.set_cleanup_original(original),
+            Message::CancelCleanup => self.cancel_cleanup(),
+            Message::ApplyCleanup => self.apply_cleanup(),
             Message::Clean => return self.begin_cleanup(None, None),
             Message::Undo => self.step_history(false),
             Message::Redo => self.step_history(true),
@@ -1423,177 +1352,6 @@ impl App {
             } => return self.engine_done(revision, kind, *result),
             Message::Exported(result) => self.structure_exported(result),
             _ => {}
-        }
-        Task::none()
-    }
-    /// A chemistry job's result for its originating drawing.
-    fn engine_done(
-        &mut self,
-        revision: u64,
-        kind: Job,
-        result: Result<Response, String>,
-    ) -> Task<Message> {
-        self.tab.busy = false;
-        if matches!(&kind, Job::Clean(job) if job.serial != self.tab.cleanup_serial || job.epoch != self.tab.file_epoch)
-        {
-            return Task::none();
-        }
-        match result {
-            Err(e) => {
-                self.error = true;
-                self.status = e;
-            }
-            Ok(response) => {
-                if let Job::Export(format) = kind {
-                    return export_file(response.output.unwrap_or_default(), format);
-                }
-                if self.tab.revision != revision {
-                    self.status =
-                        "Operation finished; newer edits were preserved. Run it again to update."
-                            .into();
-                    return Task::none();
-                }
-                if let Job::Clean(job) = &kind {
-                    if let Some(document) = response.document {
-                        if let Err(error) = document.validate() {
-                            self.status = error;
-                            self.error = true;
-                        } else {
-                            self.tab.cleanup = Some(CleanupPreview {
-                                job: job.clone(),
-                                warnings: response.warnings,
-                                document,
-                                analysis: response.analysis,
-                                revision,
-                                epoch: self.tab.file_epoch,
-                                original: false,
-                            });
-                            self.status =
-                                "Cleanup preview · Compare with the original, then Apply or Cancel"
-                                    .into();
-                            self.error = false;
-                        }
-                    }
-                    return Task::none();
-                }
-                if matches!(kind, Job::Insert) {
-                    if let Some(document) = response.document {
-                        let before = self.tab.doc.clone();
-                        let center = editing::center(&document, &document.all_ids());
-                        let offset = if self.tab.doc.all_ids().is_empty() {
-                            Point::new(
-                                self.tab.camera.center.x - center.x,
-                                self.tab.camera.center.y - center.y,
-                            )
-                        } else {
-                            let (_, existing_max) = self.tab.doc.bounds();
-                            let (insert_min, _) = document.bounds();
-                            Point::new(
-                                existing_max.x + self.tab.doc.drawing_style.bond_length_world
-                                    - insert_min.x,
-                                self.tab.camera.center.y - center.y,
-                            )
-                        };
-                        self.tab.selected = editing::append(&mut self.tab.doc, &document, offset);
-                        self.changed(before);
-                        self.fit();
-                        self.tool = Tool::Select;
-                        self.status =
-                            "Inserted structure · Drag to position · Delete or Undo to remove"
-                                .into();
-                        if !response.warnings.is_empty() {
-                            self.status.push_str(" · ");
-                            self.status.push_str(&response.warnings.join(" · "));
-                        }
-                    }
-                    return Task::none();
-                }
-                if matches!(kind, Job::AromaticDisplay) {
-                    if let Some(document) = response.document {
-                        let before = self.tab.doc.clone();
-                        self.tab.doc = document.clone();
-                        self.changed(before);
-                        if self.error {
-                            return Task::none();
-                        }
-                        reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
-                        self.tab.labels_dirty = false;
-                        self.tab.analysis = response.analysis;
-                        self.tool = Tool::Select;
-                        self.status =
-                            "Aromatic display changed · Molecular identity retained".into();
-                    }
-                    return Task::none();
-                }
-                if matches!(kind, Job::Abbreviate) {
-                    if let Some(document) = response.document {
-                        let before = self.tab.doc.clone();
-                        let count = document.abbreviations.len();
-                        self.tab.doc = document;
-                        self.tab.selected = self
-                            .tab
-                            .doc
-                            .expand_abbreviation_selection(&self.tab.selected);
-                        self.changed(before);
-                        self.tab.analysis = response.analysis;
-                        self.tool = Tool::Select;
-                        self.status = if count == 0 {
-                            "No matching common groups in this selection".into()
-                        } else {
-                            format!(
-                                "{count} abbreviation{} · Full chemistry retained · Expand to edit internal atoms",
-                                if count == 1 { "" } else { "s" }
-                            )
-                        };
-                    }
-                    return Task::none();
-                }
-                if matches!(kind, Job::Analyze) {
-                    // Checking is a read-only chemistry operation. Refresh
-                    // computed H labels without rewriting the user's bond
-                    // orders/stereo or inserting a step into Undo/Redo.
-                    if let Some(document) = response.document {
-                        reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
-                    }
-                    self.tab.analysis = response.analysis;
-                    self.tab.chemistry_notice = None;
-                    if matches!(kind, Job::Analyze) {
-                        self.status = "No chemistry errors found".into();
-                        self.error = false;
-                    }
-                    return Task::none();
-                }
-                if let Some(document) = response.document {
-                    let before = self.tab.doc.clone();
-                    self.tab.doc = document.clone();
-                    self.changed(before);
-                    reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
-                    self.tab.labels_dirty = false;
-                    self.tab.chemistry_notice = None;
-                    self.tab.selected.clear();
-                    if matches!(kind, Job::Import | Job::ImportFile) {
-                        self.fit();
-                    }
-                    if matches!(kind, Job::ImportFile) {
-                        self.tab.path = None;
-                        self.tab.untitled_name = None;
-                        self.tab.saved = Document::default();
-                        self.tab.file_epoch = self.next_epoch();
-                    }
-                }
-                self.tab.analysis = response.analysis;
-                self.status = match kind {
-                    Job::Clean(_) => "Structure cleaned",
-                    Job::Analyze => "No chemistry errors found",
-                    _ => "Structure imported · Undo restores the previous drawing",
-                }
-                .into();
-                if !response.warnings.is_empty() {
-                    self.status.push_str(" · ");
-                    self.status.push_str(&response.warnings.join(" · "));
-                }
-                self.error = false;
-            }
         }
         Task::none()
     }

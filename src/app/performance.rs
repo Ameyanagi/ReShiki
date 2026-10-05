@@ -1,5 +1,6 @@
 //! Opt-in, release-mode timings of editing work on the event-loop thread.
 use super::*;
+use reshiki::engine::ChemistryEngine;
 use std::{hint::black_box, time::Instant};
 
 fn measure(name: &str, mut work: impl FnMut()) {

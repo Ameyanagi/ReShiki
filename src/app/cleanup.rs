@@ -60,4 +60,33 @@ impl App {
         request.cleanup = Some(job.options);
         self.run(request, Job::Clean(job))
     }
+    pub(super) fn set_cleanup_original(&mut self, original: bool) {
+        if let Some(preview) = &mut self.tab.cleanup {
+            preview.original = original;
+        }
+    }
+    pub(super) fn cancel_cleanup(&mut self) {
+        self.tab.cleanup_serial = self.tab.cleanup_serial.wrapping_add(1);
+        self.tab.cleanup = None;
+        self.status = "Cleanup cancelled · Drawing unchanged".into();
+        self.error = false;
+    }
+    pub(super) fn apply_cleanup(&mut self) {
+        if self.tab.busy {
+            return;
+        }
+        if let Some(preview) = self.tab.cleanup.take() {
+            if preview.revision != self.tab.revision || preview.epoch != self.tab.file_epoch {
+                self.status = "Drawing changed · Run cleanup again".into();
+                return;
+            }
+            let before = self.tab.doc.clone();
+            self.tab.doc = preview.document;
+            self.changed(before);
+            if !self.error {
+                self.tab.analysis = preview.analysis;
+                self.status = "Cleanup applied · Undo restores the original layout".into();
+            }
+        }
+    }
 }
