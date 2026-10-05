@@ -20,7 +20,12 @@ flowchart LR
 | ---------------------------------------------- | ------------------------------------------------------------------------------ |
 | `src/document.rs`                              | Atoms, bonds, text, arrows, stable object IDs, validation, undo/redo snapshots |
 | `src/scene.rs`                                 | Toolkit-independent lines, polygons, labels and SVG serialization              |
-| `src/canvas.rs`                                | Hit testing, pointer gestures, snapping, camera and previews                   |
+| `src/canvas.rs`                                | Canvas module root: canvas types, camera, event and draw dispatch              |
+| `src/canvas/hit.rs`                            | Hit testing for pointers and regions, and drawn-bond attachment targets        |
+| `src/canvas/snapping.rs`                       | Where gestures land: move deltas, smart guides, arrow ends, ring anchors       |
+| `src/canvas/input/`                            | Pointer and keyboard events: presses, motion and per-gesture releases          |
+| `src/canvas/paper/`                            | Paper drawing: background, active-gesture preview, document and overlays       |
+| `src/canvas/previews.rs`                       | Thumbnail, inspector, palette and proposal canvas programs                     |
 | `src/app.rs`                                   | App state, messages, lifecycle, update entry points and the root view          |
 | `src/app/gates.rs`                             | Ordered modal gates that run before message dispatch                           |
 | `src/app/dispatch.rs`                          | Message dispatch table: one handler per message variant                        |

@@ -1,152 +1,101 @@
-use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
-use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
-#[cfg(test)]
-use reshiki::chains;
-#[cfg(test)]
-use reshiki::graphics::{Graphic, PathCommand};
-use reshiki::{
-    chains::{BondDrawing, ChainDrawing, ChainMode},
-    document::{Document, Point as World},
-    graphics::{BracketSides, GraphicKind, GraphicStyle},
-};
+//! The molecule canvas: the iced program that draws the paper and turns pointer
+//! events into drawing edits. This root holds the shared canvas types and the
+//! `Program` entry points; the submodules do the work:
+//!
+//! - `cache`: document-derived scene, selection and guide data reused across frames.
+//! - `dashes`: dashed strokes that keep curves inside each dash.
+//! - `grid`: the paper's dot grid and its retained geometry.
+//! - `guides`: rulers, crosshair and measuring units.
+//! - `hit`: which objects a pointer or region selects, and where a drawn bond attaches.
+//! - `input`: pointer and keyboard events, split into presses, motion and releases.
+//! - `layered`: keeps geometry order across vector and raster layers.
+//! - `markers`: selection decorations retained with the current scene.
+//! - `movement`: the move constraint shared by the drag preview and the committed edit.
+//! - `optimization`: pointer interaction for a detached optimization preview.
+//! - `pages`: page sheets behind the drawing.
+//! - `paper`: draws the paper layer by layer, previewing the active gesture.
+//! - `previews`: thumbnail, inspector, palette and proposal canvas programs.
+//! - `render`: tessellates scene primitives into a layered frame.
+//! - `selection`: the selection box, its transform handles and drags.
+//! - `smart_guides`: snaps dragged edges, centers and gaps to other objects.
+//! - `snapping`: where a gesture lands, shared by event handling and the drag preview.
+//! - `text_cache`: bounded, position-independent text outlines.
+//! - `tilt`: screen-space tilt gestures.
+//! - `tool`: drawing tools and their status-bar hints.
+
 mod cache;
 mod dashes;
 mod grid;
 pub mod guides;
 mod hit;
 mod input;
-#[cfg(test)]
-pub(crate) mod label_click_tests;
 pub mod layered;
 mod markers;
 mod movement;
 pub(crate) mod optimization;
 mod pages;
 mod paper;
-#[cfg(test)]
-mod performance;
 mod previews;
 mod render;
+mod selection;
+mod smart_guides;
+mod snapping;
+mod text_cache;
+pub(crate) mod tilt;
+mod tool;
+
+#[cfg(test)]
+pub(crate) mod label_click_tests;
+#[cfg(test)]
+mod performance;
 #[cfg(test)]
 mod render_parity_tests;
 #[cfg(test)]
 pub(crate) mod rotation_gesture_tests;
-mod selection;
-mod smart_guides;
-mod snapping;
 #[cfg(test)]
 mod template_style_tests;
-mod text_cache;
-pub(crate) use text_cache::prepare_fonts;
-pub(crate) mod tilt;
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod transform_shortcut_tests;
+
 use grid::GridCache;
-#[cfg(test)]
-use grid::grid_dots;
-#[cfg(test)]
-use hit::{bond_target, bond_target_with, hit_selection, region_selection};
 pub use hit::{distance_to_segment, hit_object};
-#[cfg(test)]
-use previews::PreviewState;
+use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
+use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 pub use previews::{
     ArrowPreview, DrawingPreview, DrawingThumbnail, OwnedDrawingPreview, PalettePreview,
     ScientificPreview, TemplateAnchorPreview, TemplateThumbnail,
 };
+use reshiki::{
+    chains::{BondDrawing, ChainDrawing},
+    document::{Document, Point as World},
+    graphics::{BracketSides, GraphicStyle},
+};
+use selection::{Handle, SelectionBox, TransformDrag};
+pub(crate) use text_cache::prepare_fonts;
+pub use tool::Tool;
+
+// Names the use super::* test modules resolve through this root.
+#[cfg(test)]
+use grid::grid_dots;
+#[cfg(test)]
+use hit::{bond_target, bond_target_with, hit_selection, region_selection};
+#[cfg(test)]
+use previews::PreviewState;
 #[cfg(test)]
 use render::draw_primitives;
 #[cfg(test)]
+use reshiki::chains::{self, ChainMode};
+#[cfg(test)]
+use reshiki::graphics::{Graphic, GraphicKind, PathCommand};
+#[cfg(test)]
 use reshiki::scene::{Primitive, primitives};
-use selection::{Handle, SelectionBox, TransformDrag};
 #[cfg(test)]
 use smart_guides::{Axis, Guide};
 #[cfg(test)]
 use snapping::ring_gesture;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Tool {
-    Select,
-    Lasso,
-    Tilt,
-    Chain(ChainMode),
-    Bond(u8),
-    StyledBond(reshiki::bonds::BondPreset),
-    Wedge,
-    Hash,
-    Wavy,
-    Atom,
-    Ring,
-    RingPreset(reshiki::rings::Preset),
-    Template,
-    Arrow,
-    Text,
-    Erase,
-    Graphic(GraphicKind),
-    EditPoints,
-}
-impl Tool {
-    pub fn bond_preset(self) -> Option<reshiki::bonds::BondPreset> {
-        use reshiki::bonds::BondPreset as P;
-        Some(match self {
-            Self::Bond(1) => P::Single,
-            Self::Bond(2) => P::Double,
-            Self::Bond(3) => P::Triple,
-            Self::Wedge => P::Wedge,
-            Self::Hash => P::HashedWedge,
-            Self::Wavy => P::Wavy,
-            Self::StyledBond(p) => p,
-            _ => return None,
-        })
-    }
-    pub fn selects(self) -> bool {
-        matches!(self, Self::Select | Self::Lasso)
-    }
-    pub fn hint(self) -> &'static str {
-        match self {
-            Self::Select => {
-                "Bonded drags use Length/Angles · Option/Alt moves freely, without guides · Shift locks an axis · Ctrl/Cmd drag copies · Drag a ring edge to fuse"
-            }
-            Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag subtracts",
-            Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15° · Escape cancels",
-            Self::Chain(_) => {
-                "Drag a chain · Ctrl bends · Shift flips · Click places the chosen number of carbons"
-            }
-            Self::Bond(2) => {
-                "Click a bond to make it double · Click again to shift centered / left / right"
-            }
-            Self::Bond(_) => {
-                "Click an endpoint to grow · Drag to draw · Click a bond to cycle single → double → triple"
-            }
-            Self::Wedge | Self::Hash | Self::Wavy | Self::StyledBond(_) => {
-                "Click an endpoint to grow a chain · Drag to choose direction · Click a bond to change it"
-            }
-            Self::Atom => "Click to add an atom or replace an existing element",
-            Self::Ring | Self::RingPreset(_) => {
-                "Click or drag onto an atom or bond to attach · Drag from a bond to choose the side"
-            }
-            Self::Template => {
-                "Preview, then click an atom or bond to attach · Drag to choose the side · Escape cancels"
-            }
-            Self::Arrow => {
-                "Click to place or change an arrow · Click again to switch direction or half-head side · Drag the middle handle to bend"
-            }
-            Self::Text => "Click to type a label · Double-click a label to edit · Escape cancels",
-            Self::Erase => {
-                "Drag to erase atoms, bonds and objects along the stroke · Undo restores the whole stroke"
-            }
-            Self::Graphic(GraphicKind::Symbol(_)) => {
-                "Click an atom to attach · Drag from an atom to position · Click empty space for a free symbol"
-            }
-            Self::Graphic(GraphicKind::Orbital(_)) => {
-                "Click to place · Drag from the node for size/direction · Shift snaps to 15°"
-            }
-            Self::Graphic(_) => {
-                "Drag to draw · Shift constrains proportions or angle · Escape cancels"
-            }
-            Self::EditPoints => {
-                "Drag a curve handle or attachment point only · Escape returns to Select"
-            }
-        }
-    }
-}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransformField {
     Rotation,
@@ -154,9 +103,6 @@ pub enum TransformField {
     Width,
     Height,
 }
-
-#[cfg(test)]
-mod transform_shortcut_tests;
 
 #[derive(Debug, Clone)]
 pub enum Edit {
@@ -492,6 +438,3 @@ pub(crate) fn select_drag(
     canvas.selected = selected;
     tests::guided_drag(&canvas, from, to, modifiers).0
 }
-
-#[cfg(test)]
-mod tests;
