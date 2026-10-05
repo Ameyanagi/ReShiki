@@ -14,6 +14,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import run_reference_shard as runner
 
+# Batch tests count shard 0's commands; pin its workspace extras so they stay fixed.
+NATIVE_PRINT_ONLY = {("reshiki-macos", "native_print"): 0}
+
 
 def metadata(names):
     return {
@@ -123,6 +126,30 @@ class ReferenceShardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.integration_targets(data)
 
+    def test_geometry_tests_are_recognized_and_every_workspace_target_runs_once(self):
+        data = metadata(["one", "two", "three", "four"])
+        data["packages"][1].update(
+            name="reshiki-geometry",
+            targets=[
+                {"name": "reshiki_geometry", "kind": ["lib"]},
+                {"name": "c60", "kind": ["test"]},
+                {"name": "embedding", "kind": ["test"]},
+            ],
+        )
+        targets = runner.integration_targets(data)
+        for count in range(1, 5):
+            shards = runner.assign_targets(targets, count)
+            commands = [
+                command
+                for index, selected in enumerate(shards)
+                for command in runner.commands_for(selected, index)
+            ]
+            for package, target in runner.WORKSPACE_TARGET_SHARDS:
+                with self.subTest(count=count, package=package, target=target):
+                    expected = ["cargo", "test", "--locked", "--package", package, "--test", target]
+                    self.assertEqual(commands.count(expected), 1)
+
+    @patch.dict(runner.WORKSPACE_TARGET_SHARDS, NATIVE_PRINT_ONLY, clear=True)
     def test_batches_preserve_reference_flags_and_run_workspace_units_and_docs_once(self):
         shards = runner.assign_targets(["alpha", "beta", "gamma", "delta", "epsilon"], 4)
         all_commands = []
@@ -149,6 +176,7 @@ class ReferenceShardTests(unittest.TestCase):
         self.assertIn("--bins", workspace[0])
         self.assertIn("--doc", workspace[1])
 
+    @patch.dict(runner.WORKSPACE_TARGET_SHARDS, NATIVE_PRINT_ONLY, clear=True)
     def test_failed_batch_is_reported_and_later_batches_still_execute(self):
         for results, expected in [
             ([101, 0, 0, 0], 101),
@@ -200,6 +228,7 @@ class ReferenceShardTests(unittest.TestCase):
                 self.assertTrue(manifest["error"])
                 self.assertEqual(manifest["commands"], [])
 
+    @patch.dict(runner.WORKSPACE_TARGET_SHARDS, NATIVE_PRINT_ONLY, clear=True)
     def test_cargo_launch_error_still_runs_later_batches(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
