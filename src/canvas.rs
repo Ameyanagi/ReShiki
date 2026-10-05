@@ -1,9 +1,13 @@
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
+#[cfg(test)]
+use reshiki::chains;
+#[cfg(test)]
+use reshiki::graphics::Graphic;
 use reshiki::{
-    chains::{self, BondDrawing, ChainDrawing, ChainMode},
+    chains::{BondDrawing, ChainDrawing, ChainMode},
     document::{Document, Point as World},
-    graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand},
+    graphics::{BracketSides, GraphicKind, GraphicStyle, PathCommand},
 };
 mod cache;
 mod dashes;
@@ -18,6 +22,7 @@ mod markers;
 mod movement;
 pub(crate) mod optimization;
 mod pages;
+mod paper;
 #[cfg(test)]
 mod performance;
 mod previews;
@@ -53,7 +58,7 @@ use reshiki::scene::{Primitive, primitives};
 use selection::{Handle, SelectionBox, TransformDrag};
 #[cfg(test)]
 use smart_guides::{Axis, Guide};
-use snapping::{arrow_endpoint, ring_gesture};
+use snapping::ring_gesture;
 use std::borrow::Cow;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -501,195 +506,20 @@ impl MoleculeCanvas<'_> {
                 .filter(|p| bounds.contains(*p))
                 .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y)),
         );
-        let mut preview = Cow::Borrowed(self.joining.map(|(j, _)| &j.base).unwrap_or(self.doc));
-        let mut ring_selection = None;
-        let mut chain_badge = None;
-        let mut template_notice = None;
-        let mut rejection: Option<reshiki::editing::RingRejection> = None;
-        let mut translation = None;
-        let mut smart = Vec::new();
-        if let (Some(Gesture::Tilt(drag)), Some(p)) = (&state.gesture, state.cursor)
-            && self.tool == Tool::Tilt
-        {
-            let (x, y) = drag.angles(
-                Point::new(p.x - bounds.x, p.y - bounds.y),
-                state.modifiers.shift(),
-            );
-            tilt::apply(preview.to_mut(), &drag.ids, x, y);
-            ring_selection = Some(drag.ids.clone());
-            template_notice = Some((
-                format!("3D tilt · X {x:+.0}° · Y {y:+.0}° · Shift snaps · Escape cancels"),
-                true,
-            ));
-        }
-        if let (
-            Some(Gesture::Chain {
-                start,
-                pressed,
-                source,
-                points,
-                snaking,
-                dragged,
-            }),
-            Some(p),
-        ) = (&state.gesture, state.cursor)
-        {
-            let cursor = self
-                .camera
-                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            let (points, target) = self.chain_plan(
-                (*start, *pressed),
-                *source,
-                points,
-                (*snaking, *dragged),
-                cursor,
-                state.modifiers,
-            );
-            let endpoint = target
-                .and_then(|id| self.doc.atom(id).map(|a| a.position))
-                .or_else(|| points.last().copied())
-                .unwrap_or(*start);
-            let added = points
-                .len()
-                .saturating_sub(usize::from(source.is_some()))
-                .saturating_sub(usize::from(target.is_some() && points.len() > 1));
-            let cancelled = *dragged && points.len() < 2;
-            let placement = if cancelled {
-                Ok((self.doc.clone(), vec![]))
-            } else {
-                chains::place(self.doc, &points, *source, target, 10.0 / self.camera.zoom)
-            };
-            match placement {
-                Ok((doc, ids)) => {
-                    preview = Cow::Owned(doc);
-                    ring_selection = Some(ids);
-                    chain_badge = Some((
-                        endpoint,
-                        if cancelled {
-                            "Release to cancel".into()
-                        } else {
-                            format!("{added} new C · {} bonds", points.len().saturating_sub(1))
-                        },
-                        true,
-                    ));
-                }
-                Err(_) => {
-                    for pair in points.windows(2) {
-                        let [a, b] = pair else { continue };
-                        frame.stroke(
-                            &Path::line(
-                                self.camera.screen(*a, bounds),
-                                self.camera.screen(*b, bounds),
-                            ),
-                            Stroke::default()
-                                .with_width(1.5)
-                                .with_color(rgb([182, 66, 61])),
-                        );
-                    }
-                    chain_badge = Some((endpoint, "Overlap · change direction".into(), false));
-                }
-            }
-        }
-        if let Some(p) = state.cursor {
-            let end = self
-                .camera
-                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            if let (Some(Gesture::Graphic { start }), Tool::Graphic(kind)) =
-                (&state.gesture, self.tool)
-            {
-                if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
-                    let drawing = reshiki::scientific::Drawing {
-                        kind,
-                        style: self.graphic_style.clone(),
-                        phase: self.orbital_phase,
-                        flipped: self.phase_flipped,
-                        attach: self.attach_symbols,
-                    };
-                    if let Ok(id) = drawing.place(
-                        preview.to_mut(),
-                        *start,
-                        end,
-                        state.modifiers.shift(),
-                        10. / self.camera.zoom,
-                    ) {
-                        ring_selection = Some(vec![id]);
-                    }
-                } else {
-                    let id = preview.next_id();
-                    preview.to_mut().graphics.push(
-                        Graphic::dragged(
-                            id,
-                            kind,
-                            *start,
-                            end,
-                            self.graphic_style.clone(),
-                            self.bracket_sides,
-                            state.modifiers.shift() || self.graphic_constrain,
-                        )
-                        .with_arc(self.graphic_arc),
-                    );
-                    ring_selection = Some(vec![id]);
-                }
-            }
-            if let Some(Gesture::AtomMark { id, index }) = &state.gesture
-                && let Some(a) = preview.to_mut().atom_mut(*id)
-                && let Some(mark) = a.marks.get_mut(*index)
-            {
-                mark.offset = World::new(end.x - a.position.x, end.y - a.position.y);
-            }
-            if let Some(Gesture::ArrowHandle { id, index }) = &state.gesture
-                && let Some(arrow) = self.doc.arrows.iter().find(|a| a.id == *id)
-            {
-                let end = if *index < 2 {
-                    let (end, guides) = self.arrow_end(state, arrow, *index, end, bounds);
-                    smart = guides;
-                    end
-                } else {
-                    end
-                };
-                if let Some(a) = preview.to_mut().arrows.iter_mut().find(|a| a.id == *id) {
-                    a.edit_handle(*index, end);
-                }
-            }
-            if let Some(Gesture::Draw { start, .. }) = &state.gesture
-                && self.tool == Tool::Arrow
-                && start.distance(end) >= 3.0 / self.camera.zoom
-            {
-                let end = arrow_endpoint(
-                    *start,
-                    end,
-                    self.bond_drawing.fixed_angles && !state.modifiers.alt(),
-                );
-                let id = preview.next_id();
-                preview.to_mut().arrows.push(reshiki::document::Arrow::new(
-                    id,
-                    *start,
-                    end,
-                    self.arrow_preset,
-                    self.arrow_style.clone(),
-                ));
-            }
-            if let Some(Gesture::AtomIndicator { owner }) = &state.gesture
-                && let Some(anchor) = owner.anchor(&preview)
-            {
-                owner.set_offset(
-                    preview.to_mut(),
-                    Some(World::new(end.x - anchor.x, end.y - anchor.y)),
-                );
-            }
-            if let Some(Gesture::GraphicPoint { id, index }) = &state.gesture
-                && let Some(g) = preview.to_mut().graphics.iter_mut().find(|g| g.id == *id)
-            {
-                g.edit_point(*index, end);
-            }
-        }
-        if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor) {
-            let end = self
-                .camera
-                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            drag.apply(preview.to_mut(), end, state.modifiers.shift());
-            ring_selection = Some(drag.ids.clone());
-        }
+        let mut draft = paper::Draft::new(self.joining.map(|(j, _)| &j.base).unwrap_or(self.doc));
+        self.preview_tilt(&mut draft, state, bounds);
+        self.preview_chain(&mut draft, frame, state, bounds);
+        self.preview_pointer_edits(&mut draft, state, bounds);
+        self.preview_transform(&mut draft, state, bounds);
+        let paper::Draft {
+            mut preview,
+            mut ring_selection,
+            chain_badge,
+            mut template_notice,
+            mut rejection,
+            mut translation,
+            mut smart,
+        } = draft;
         if let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
             && self.tool == Tool::Ring
         {
