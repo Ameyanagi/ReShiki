@@ -2385,11 +2385,22 @@ fn dotted_click_reports_the_drag_hint_without_editing_or_dropping_redo() {
     use reshiki::bonds::BondPreset;
     let (mut app, _) = App::new();
     let _ = app.update(Message::New);
+    // A stale centroid makes a fall-through observable: changed() would re-sync
+    // it, edit the drawing, commit and drop redo.
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(100., 0.));
+    let centroid = reshiki::projection::add_centroid(&mut app.tab.doc, &[a, b]).unwrap();
+    app.tab.doc.atom_mut(centroid).unwrap().position = Point::new(0., 30.);
     app.tab.history = History::default();
     app.tool = Tool::Atom;
-    app.edit(Edit::Click(Point::default()));
+    app.edit(Edit::Click(Point::new(300., 0.)));
     let _ = app.update(Message::Undo);
     assert!(app.tab.history.can_redo());
+    assert_eq!(
+        app.tab.doc.atom(centroid).unwrap().position,
+        Point::new(0., 30.),
+        "undo restores the stale centroid"
+    );
     let before = app.tab.doc.clone();
     app.tool = Tool::StyledBond(BondPreset::Dotted);
     app.edit(Edit::Click(Point::new(42., 0.)));
