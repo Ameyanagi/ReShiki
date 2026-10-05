@@ -13,9 +13,11 @@ mod accessibility;
 mod arcs;
 mod arrows;
 mod assistant;
+mod atom_edits;
 mod atom_labels;
 mod atom_text;
 mod autosave;
+mod bond_edits;
 mod cleanup;
 mod clipboard;
 mod color_popover;
@@ -52,6 +54,7 @@ mod pictures;
 mod popover;
 mod printing;
 mod reactions;
+mod ring_edits;
 #[cfg(test)]
 mod rotation_tests;
 mod shortcut_examples;
@@ -1210,127 +1213,16 @@ impl App {
                 }
                 return self.template_action(action);
             }
-            Message::ResetBondDrawing => {
-                self.tab.bond_drawing = Default::default();
-                self.tab.bond_drawing.length = self.tab.doc.drawing_style.bond_length_world;
-                self.tab.drawing_length_input =
-                    self.tab.doc.drawing_style.bond_length_pt.to_string();
-                self.tab.chain_drawing.angle = 120.;
-                self.tab.chain_angle_input = "120".into();
-                self.status = format!(
-                    "{} bond defaults · {} pt length · 120° chain angle",
-                    self.tab.doc.drawing_style.name, self.tab.doc.drawing_style.bond_length_pt
-                );
-                self.error = false;
-            }
+            Message::ResetBondDrawing => self.reset_bond_drawing(),
             Message::FixedLength(on) => self.tab.bond_drawing.fixed_length = on,
             Message::FixedAngles(on) => self.tab.bond_drawing.fixed_angles = on,
-            Message::DrawingLength(value) => {
-                self.tab.drawing_length_input = value;
-                if let Ok(points) = self.tab.drawing_length_input.parse::<f32>()
-                    && points.is_finite()
-                    && (1.0..=300.0).contains(&points)
-                {
-                    self.tab.bond_drawing.length = reshiki::style::DEFAULT.world(points);
-                    self.error = false;
-                } else {
-                    self.status = "Bond length must be between 1 and 300 pt".into();
-                    self.error = true;
-                }
-            }
-            Message::ChainAtoms(value) => {
-                self.tab.chain_atoms_input = value;
-                if self.tab.chain_atoms_input.is_empty() {
-                    self.tab.chain_drawing.atoms = None;
-                    self.error = false;
-                } else if let Ok(count) = self.tab.chain_atoms_input.parse::<usize>()
-                    && (1..=reshiki::chains::MAX_ATOMS).contains(&count)
-                {
-                    self.tab.chain_drawing.atoms = Some(count);
-                    self.error = false;
-                } else {
-                    self.status =
-                        "Enter 1–512 chain atoms, or clear the field for automatic length".into();
-                    self.error = true;
-                }
-            }
-            Message::ChainAngle(value) => {
-                self.tab.chain_angle_input = value;
-                if let Ok(angle) = self.tab.chain_angle_input.parse::<f32>()
-                    && angle.is_finite()
-                    && (1.0..=179.0).contains(&angle)
-                {
-                    self.tab.chain_drawing.angle = angle;
-                    self.error = false;
-                } else {
-                    self.status = "Chain angle must be between 1° and 179°".into();
-                    self.error = true;
-                }
-            }
-            Message::ApplyBondPreset(preset) => {
-                if preset == reshiki::bonds::BondPreset::Dotted
-                    && self.tab.doc.bonds.iter().any(|b| {
-                        self.tab.selected.contains(&b.a)
-                            && self.tab.selected.contains(&b.b)
-                            && !reshiki::bonds::hydrogen_endpoints(&self.tab.doc, b.a, b.b)
-                    })
-                {
-                    self.status = "Hydrogen bonds need a bonded explicit H and an acceptor".into();
-                    self.error = true;
-                    return Task::none();
-                }
-                let before = self.tab.doc.clone();
-                let affected: Vec<_> = self
-                    .tab
-                    .doc
-                    .bonds
-                    .iter()
-                    .filter(|bond| {
-                        self.tab.selected.contains(&bond.a)
-                            && self.tab.selected.contains(&bond.b)
-                            && !preset.preserves_chemistry(bond)
-                    })
-                    .flat_map(|bond| [bond.a, bond.b])
-                    .collect();
-                self.tab.doc.invalidate_chemistry(&affected);
-                for bond in &mut self.tab.doc.bonds {
-                    if self.tab.selected.contains(&bond.a) && self.tab.selected.contains(&bond.b) {
-                        preset.apply(bond);
-                    }
-                }
-                self.changed(before);
-            }
-            Message::BondPosition(position) => {
-                let before = self.tab.doc.clone();
-                for bond in &mut self.tab.doc.bonds {
-                    if [2, 7].contains(&bond.order)
-                        && self.tab.selected.contains(&bond.a)
-                        && self.tab.selected.contains(&bond.b)
-                    {
-                        bond.double_position = position;
-                    }
-                }
-                self.changed(before);
-            }
+            Message::DrawingLength(value) => self.set_drawing_length(value),
+            Message::ChainAtoms(value) => self.set_chain_atoms(value),
+            Message::ChainAngle(value) => self.set_chain_angle(value),
+            Message::ApplyBondPreset(preset) => self.apply_bond_preset(preset),
+            Message::BondPosition(position) => self.set_double_position(position),
             Message::BondColor(value) => self.tab.bond_color_input = value,
-            Message::ApplyBondColor => {
-                if let Some(rgb) = graphics::parse_color(&self.tab.bond_color_input) {
-                    let color = reshiki::palette::Color::Custom(rgb);
-                    let before = self.tab.doc.clone();
-                    for bond in &mut self.tab.doc.bonds {
-                        if self.tab.selected.contains(&bond.a)
-                            && self.tab.selected.contains(&bond.b)
-                        {
-                            bond.color = color;
-                        }
-                    }
-                    self.remember_custom(Some(color), &before);
-                    self.changed(before);
-                } else {
-                    self.error = true;
-                    self.status = "Enter a six-digit bond color, such as #205091".into();
-                }
-            }
+            Message::ApplyBondColor => self.apply_bond_color(),
             Message::AddFrame(kind) => {
                 let mut ids = self.tab.doc.complete_selection(&self.tab.selected);
                 if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &ids) {
@@ -1420,51 +1312,9 @@ impl App {
             Message::OrbitalPhase(phase) => self.set_orbital_phase(phase),
             Message::FlipPhase(value) => self.set_phase_flipped(value),
             Message::AttachSymbols(value) => self.tab.attach_symbols = value,
-            Message::RotateMark(id, index) => {
-                let before = self.tab.doc.clone();
-                if let Some(a) = self.tab.doc.atom_mut(id)
-                    && let Some(m) = a.marks.get_mut(index)
-                {
-                    m.angle = (m.angle + 45.).rem_euclid(360.);
-                }
-                self.changed(before);
-            }
-            Message::RemoveMark(id, index) => {
-                let before = self.tab.doc.clone();
-                if let Some(a) = self.tab.doc.atom_mut(id)
-                    && index < a.marks.len()
-                {
-                    let mark = a.marks.remove(index);
-                    if mark.kind.charge() {
-                        a.charge = 0;
-                    }
-                    if mark.kind.radical() {
-                        a.radical_electrons = 0;
-                    }
-                    if mark.kind.charge() || mark.kind.radical() {
-                        a.explicit_h = 0;
-                        a.no_implicit = false;
-                        self.tab.doc.invalidate_chemistry(&[id]);
-                    }
-                }
-                self.changed(before);
-            }
-            Message::AtomRadical(value) => {
-                let before = self.tab.doc.clone();
-                self.tab.doc.invalidate_chemistry(&self.tab.selected);
-                for atom in self
-                    .tab
-                    .doc
-                    .atoms
-                    .iter_mut()
-                    .filter(|a| self.tab.selected.contains(&a.id))
-                {
-                    atom.radical_electrons = value;
-                    atom.explicit_h = 0;
-                    atom.no_implicit = false;
-                }
-                self.changed(before);
-            }
+            Message::RotateMark(id, index) => self.rotate_mark(id, index),
+            Message::RemoveMark(id, index) => self.remove_mark(id, index),
+            Message::AtomRadical(value) => self.set_radical(value),
             Message::GraphicSides(sides) => self.set_graphic_sides(sides),
             Message::ToggleInspector => {
                 self.inspector_open = !self.inspector_open;
@@ -1556,10 +1406,7 @@ impl App {
                     self.sync_graphics();
                 }
             }
-            Message::Element(e) => {
-                self.element = e;
-                self.tool = Tool::Atom;
-            }
+            Message::Element(e) => self.choose_element(e),
             Message::CaptionAction(action) => self.caption_action(action),
             Message::TextStyle(change) => self.apply_text_style(change),
             Message::FontSize(value) => self.tab.font_size_input = value,
@@ -1623,45 +1470,10 @@ impl App {
                 }
             }
             Message::Isotope(s) => self.tab.isotope = s,
-            Message::RingSize(n) => {
-                self.toolbar.ring = Tool::Ring;
-                self.ring_size = n;
-                self.tool = Tool::Ring;
-            }
-            Message::AromaticRing(value) => {
-                self.toolbar.ring = Tool::Ring;
-                self.aromatic_ring = value;
-                self.tool = Tool::Ring;
-            }
-            Message::ToggleAromaticRing => {
-                if self.tool.selects()
-                    && reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some()
-                {
-                    return self.update(Message::ToggleSelectedRing);
-                }
-                return self.update(Message::AromaticRing(!self.aromatic_ring));
-            }
-            Message::ToggleSelectedRing => {
-                let before = self.tab.doc.clone();
-                match reshiki::rings::toggle_selected_aromatic(
-                    &mut self.tab.doc,
-                    &self.tab.selected,
-                ) {
-                    Ok(aromatic) => {
-                        self.changed(before);
-                        self.status = if aromatic {
-                            "Selected ring set to aromatic"
-                        } else {
-                            "Selected ring set to saturated"
-                        }
-                        .into();
-                    }
-                    Err(error) => {
-                        self.error = true;
-                        self.status = error;
-                    }
-                }
-            }
+            Message::RingSize(n) => self.set_ring_size(n),
+            Message::AromaticRing(value) => self.set_aromatic_ring(value),
+            Message::ToggleAromaticRing => return self.toggle_aromatic_ring(),
+            Message::ToggleSelectedRing => self.toggle_selected_ring(),
             Message::ArrowStyle(style) => {
                 self.tab.arrow_style = style;
                 self.tab.arrows.style = reshiki::arrows::ArrowStyle::preset(style);
@@ -1682,18 +1494,7 @@ impl App {
             }
             Message::ArrowAction(action) => self.arrow_action(action),
             Message::CustomElement(s) => self.custom_element = s,
-            Message::ApplyElement => {
-                let symbol = self.custom_element.trim();
-                if editing::ELEMENTS.contains(&symbol) {
-                    self.element = symbol.into();
-                    self.tool = Tool::Atom;
-                    self.status = format!("Place {} atoms", self.element);
-                    self.error = false;
-                } else {
-                    self.status = "Enter an element symbol, for example Si, Fe, Na or H".into();
-                    self.error = true;
-                }
-            }
+            Message::ApplyElement => self.apply_custom_element(),
             Message::CopyImage => return self.copy_native(false, true),
             Message::CopyAs(format) => return self.copy_as(format),
             Message::Copy(cut) => {
@@ -1752,16 +1553,7 @@ impl App {
                 self.changed(before);
             }
             Message::BondDepth(front) => self.layer_objects(front, false, true),
-            Message::ReverseBonds => {
-                let before = self.tab.doc.clone();
-                self.tab.doc.invalidate_chemistry(&self.tab.selected);
-                for b in &mut self.tab.doc.bonds {
-                    if self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b) {
-                        b.reverse();
-                    }
-                }
-                self.changed(before);
-            }
+            Message::ReverseBonds => self.reverse_selected_bonds(),
             Message::InsertTemplate(index) => {
                 if self.templates.library.get(index).is_some()
                     && (!self.templates.active || self.template_index != index)
@@ -2012,33 +1804,8 @@ impl App {
                 self.sync_arrows();
                 self.sync_bonds();
             }
-            Message::Charge(delta) => {
-                let before = self.tab.doc.clone();
-                self.tab.doc.invalidate_chemistry(&self.tab.selected);
-                for id in &self.tab.selected {
-                    if let Some(a) = self.tab.doc.atom_mut(*id) {
-                        a.charge = a.charge.saturating_add(delta).clamp(-8, 8);
-                        a.explicit_h = 0;
-                        a.no_implicit = false;
-                    }
-                }
-                self.changed(before);
-            }
-            Message::ApplyIsotope => match self.tab.isotope.parse::<u32>() {
-                Ok(value) if value <= 300 => {
-                    let before = self.tab.doc.clone();
-                    for id in &self.tab.selected {
-                        if let Some(a) = self.tab.doc.atom_mut(*id) {
-                            a.isotope = value;
-                        }
-                    }
-                    self.changed(before);
-                }
-                _ => {
-                    self.status = "Enter an isotope mass number from 0 to 300 (0 clears it)".into();
-                    self.error = true;
-                }
-            },
+            Message::Charge(delta) => self.change_charge(delta),
+            Message::ApplyIsotope => self.apply_isotope(),
             Message::CopySmiles => {
                 if self.clipboard_working() {
                     self.status = "A clipboard operation is already in progress".into();
@@ -3073,43 +2840,6 @@ impl App {
             let revision = self.tab.revision;
             self.changed_continuing(before, self.tab.erase_committed);
             self.tab.erase_committed |= self.tab.revision != revision;
-        }
-    }
-    fn sync_bonds(&mut self) {
-        if let Some(b) = self
-            .tab
-            .doc
-            .bonds
-            .iter()
-            .find(|b| self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b))
-        {
-            self.tab.bond_color_input =
-                reshiki::palette::hex(reshiki::palette::Palette::of(&self.tab.doc).rgb(b.color));
-        }
-    }
-    fn apply_current_bond_preset(&mut self, a: u64, b: u64) {
-        if let Tool::StyledBond(preset) = self.tool
-            && let Some(bond) = self
-                .tab
-                .doc
-                .bonds
-                .iter_mut()
-                .find(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
-        {
-            preset.apply(bond);
-        }
-    }
-    fn bond_style(&self) -> (u8, &'static str) {
-        match self.tool {
-            Tool::Bond(n) => (n, "plain"),
-            Tool::StyledBond(preset) => {
-                let (n, s, _) = preset.parts();
-                (n, s)
-            }
-            Tool::Wedge => (1, "wedge"),
-            Tool::Hash => (1, "hash"),
-            Tool::Wavy => (1, "wavy"),
-            _ => (1, "plain"),
         }
     }
 
