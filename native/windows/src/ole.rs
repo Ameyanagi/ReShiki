@@ -2,6 +2,7 @@
 //! Office stores the complete drawing; an editor process works on a private
 //! temporary copy, and explicit saves update the container through SaveObject.
 
+mod embedded;
 mod object;
 mod storage;
 
@@ -379,9 +380,39 @@ pub(super) fn copy(mut formats: BTreeMap<u32, Vec<u8>>) -> Result<()> {
     .map_err(|_| anyhow::anyhow!("Office clipboard thread failed"))?
 }
 
-pub(super) fn read_own(picture_only: bool) -> Result<Option<Vec<u8>>> {
+pub(super) enum EmbeddedData {
+    Drawing(Vec<u8>),
+    Picture(Vec<u8>),
+    ChemDraw(Vec<u8>),
+}
+
+impl EmbeddedData {
+    pub(super) fn into_parts(self) -> (&'static str, Vec<u8>) {
+        match self {
+            Self::Drawing(bytes) => ("dev.reshiki.drawing", bytes),
+            Self::Picture(bytes) => ("public.png", bytes),
+            Self::ChemDraw(bytes) => ("com.revvity.chemdraw.cdx-clipboard", bytes),
+        }
+    }
+}
+
+enum EmbeddedRead {
+    Own { picture_only: bool },
+    ChemDraw,
+}
+
+pub(super) fn read_own(picture_only: bool) -> Result<Option<EmbeddedData>> {
+    read_embedded(EmbeddedRead::Own { picture_only })
+}
+
+pub(super) fn read_chemdraw() -> Result<Option<EmbeddedData>> {
+    read_embedded(EmbeddedRead::ChemDraw)
+}
+
+fn read_embedded(read: EmbeddedRead) -> Result<Option<EmbeddedData>> {
     let source = clipboard::format("Embed Source")?;
     let embedded = clipboard::format("Embedded Object")?;
+    // SAFETY: these queries only inspect registered clipboard format IDs.
     unsafe {
         use windows::Win32::System::DataExchange::IsClipboardFormatAvailable;
         if IsClipboardFormatAvailable(source).is_err()
@@ -390,27 +421,43 @@ pub(super) fn read_own(picture_only: bool) -> Result<Option<Vec<u8>>> {
             return Ok(None);
         }
     }
-    std::thread::spawn(move || -> Result<Option<Vec<u8>>> {
+    std::thread::spawn(move || -> Result<Option<EmbeddedData>> {
         let _apartment = Apartment::new()?;
+        // SAFETY: OLE is initialized on this STA; data never leaves the thread.
         let data = unsafe { OleGetClipboard()? };
         for id in [source, embedded] {
             let format = storage::format_etc(id, TYMED_ISTORAGE);
+            // SAFETY: format is a live descriptor without a target-device pointer.
             if unsafe { data.QueryGetData(&format) }.is_err() {
                 continue;
             }
+            // SAFETY: the descriptor is valid; Medium releases the returned
+            // storage and any release owner through ReleaseStgMedium.
             let medium = storage::Medium(unsafe { data.GetData(&format)? });
             if medium.0.tymed != TYMED_ISTORAGE.0 as u32 {
                 continue;
             }
+            // SAFETY: tymed selects this union field; its borrowed storage cannot
+            // outlive the owning medium, and all access stays on this STA.
             let storage =
                 unsafe { medium.0.u.pstg.as_ref() }.context("Missing embedded storage")?;
-            if unsafe { ReadClassStg(storage)? } == CLSID {
-                let drawing = Drawing::load(storage)?;
-                return Ok(Some(if picture_only {
-                    drawing.png
-                } else {
-                    drawing.document
-                }));
+            match read {
+                EmbeddedRead::Own { picture_only } => {
+                    // SAFETY: storage is a live interface owned by medium on this STA.
+                    if unsafe { ReadClassStg(storage)? } == CLSID {
+                        let drawing = Drawing::load(storage)?;
+                        return Ok(Some(if picture_only {
+                            EmbeddedData::Picture(drawing.png)
+                        } else {
+                            EmbeddedData::Drawing(drawing.document)
+                        }));
+                    }
+                }
+                EmbeddedRead::ChemDraw => {
+                    if let Some(bytes) = embedded::read_contents(storage)? {
+                        return Ok(Some(EmbeddedData::ChemDraw(bytes)));
+                    }
+                }
             }
         }
         Ok(None)

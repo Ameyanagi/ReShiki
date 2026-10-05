@@ -27,8 +27,10 @@ opens a private working document; Ctrl+S validates and renders it, updates the
 container, and acknowledges only the bytes accepted by Office. Saved OLE storage
 contains native JSON, a PNG fallback and vector preview, so Office can display it
 without launching ReShiki. Older PNG-only objects remain readable. Paste reads
-only this application's CLSID and bounded streams; foreign OLE objects are not
-activated or deserialized.
+this application's CLSID and bounded native streams, plus supported ChemDraw
+CDX from a foreign object's root `CONTENTS` stream through `TYMED_ISTORAGE`.
+The complete CDX signature is required and the payload is limited to 16 MB.
+Foreign objects are not activated; other embedded formats remain unsupported.
 
 Run `cargo test --workspace --locked` and
 `cargo clippy --workspace --all-targets --locked -- -D warnings` on Windows.

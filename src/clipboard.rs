@@ -734,6 +734,76 @@ async fn paste_packet_with_warnings(
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn embedded_chemdraw_payload_imports_editable_chemistry_and_rejects_corruption() {
+        let cdx = include_bytes!("../tests/fixtures/native-ethyl-clipboard.cdx");
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let preview = Representation::new("public.png", png.get_ref());
+        let picture = paste_packet(
+            LocalEngine::default(),
+            Packet {
+                representations: vec![preview.clone()],
+            },
+        )
+        .await
+        .unwrap();
+        assert!(picture.atoms.is_empty());
+        assert!(picture.bonds.is_empty());
+        assert_eq!(
+            picture
+                .graphics
+                .iter()
+                .filter(|graphic| graphic.picture.is_some())
+                .count(),
+            1
+        );
+        let packet = |data: &[u8]| Packet {
+            representations: vec![
+                Representation::new("com.revvity.chemdraw.cdx-clipboard", data),
+                preview.clone(),
+            ],
+        };
+        let drawing = paste_packet(LocalEngine::default(), packet(cdx))
+            .await
+            .unwrap();
+        assert_eq!(drawing.atoms.len(), 11);
+        assert_eq!(drawing.bonds.len(), 11);
+        assert_eq!(
+            drawing
+                .atoms
+                .iter()
+                .filter(|atom| atom.element == "C")
+                .count(),
+            9
+        );
+        assert_eq!(
+            drawing
+                .atoms
+                .iter()
+                .filter(|atom| atom.element == "O")
+                .count(),
+            2
+        );
+        assert!(
+            drawing
+                .graphics
+                .iter()
+                .all(|graphic| graphic.picture.is_none())
+        );
+        drawing.validate().unwrap();
+
+        // Recognized chemical data must report corruption rather than silently
+        // replacing an editable molecule with its otherwise valid image cache.
+        assert!(
+            paste_packet(LocalEngine::default(), packet(&cdx[..32]))
+                .await
+                .is_err()
+        );
+    }
+
     #[derive(Serialize, Deserialize)]
     struct LegacyRepresentation {
         #[serde(rename = "type")]
