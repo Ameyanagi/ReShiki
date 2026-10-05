@@ -52,6 +52,8 @@ enum Terminal {
 struct Context {
     document: (super::document_tab::TabId, u64, u64),
     selected: Vec<u64>,
+    keyboard_target: Option<String>,
+    optimization: Option<super::optimization::AccessibilityContext>,
     inline_session: Option<iced::widget::Id>,
     surface: (
         super::InspectorTab,
@@ -200,10 +202,24 @@ impl App {
             self.imports.menu || self.imports.examples_menu,
             self.style_menu.is_some() || self.tab.inspector_ui.menu_open(),
         );
+        let keyboard_target = self.keyboard_drawing_active().then(|| {
+            format!(
+                "{} · {:?}",
+                self.tab.keyboard_drawing.active_label(&self.tab.doc),
+                self.tab.keyboard_drawing.marked()
+            )
+        });
+        let optimization = self
+            .tab
+            .optimization
+            .as_ref()
+            .map(super::optimization::Session::accessibility_context);
         let state = &mut self.accessibility;
         let identity_changed = state.context.as_ref().is_none_or(|context| {
             (context.document.0, context.document.1) != (document.0, document.1)
                 || context.selected != self.tab.selected
+                || context.keyboard_target != keyboard_target
+                || context.optimization != optimization
                 || context.inline_session != inline_session
                 || context.surface != surface
         });
@@ -211,6 +227,8 @@ impl App {
             state.context = Some(Context {
                 document,
                 selected: self.tab.selected.clone(),
+                keyboard_target,
+                optimization,
                 inline_session,
                 surface,
             });

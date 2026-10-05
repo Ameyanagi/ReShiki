@@ -21,8 +21,8 @@ pub use drawing::{
     detect_bond_stereo, double_bond_directions, from_3d, from_directions,
 };
 pub(crate) use drawing::{
-    CoordinateBounds, detect_atropisomers_with_bounds, double_bond_directions_with_bounds,
-    from_3d_with_bounds, from_directions_with_bounds,
+    CoordinateBounds, detect_atropisomers_with_bounds, detect_bond_stereo_preserving,
+    double_bond_directions_with_bounds, from_3d_with_bounds, from_directions_with_bounds,
 };
 pub use priority::atom_priorities;
 use std::collections::{HashMap, HashSet};

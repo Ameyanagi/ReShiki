@@ -223,6 +223,50 @@ jobs:
         run: cargo test --locked --features rdkit-reference --test inchi_input --test inchi_output --test inchi_reader --test inchi_rust --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
       - name: Replay complete aromatic response fixtures
         run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
+  geometry:
+    name: Rust geometry (${{ matrix.target }})
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            msvc_arch: x64
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            msvc_arch: arm64
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+      # Keep the packaged Windows executable independent of redistributable CRT DLLs.
+      RUSTFLAGS: ${{ endsWith(matrix.target, '-pc-windows-msvc') && '-C target-feature=+crt-static' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select the matching native Rust host
+        run: rustup set default-host ${{ matrix.target }}
+      - run: rustup toolchain install 1.99.0 --profile minimal --target ${{ matrix.target }}
+      - run: rustup default 1.99.0
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        with:
+          shared-key: geometry-${{ matrix.target }}
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.msvc_arch }}
+      - name: Test the Rust geometry crate with the locked COSMolKit source
+        run: cargo test --locked -p reshiki-geometry --features cosmolkit-core/op-contracts-strict --target ${{ matrix.target }}
   reference:
     needs: scope
     if: needs.scope.outputs.live == 'true'

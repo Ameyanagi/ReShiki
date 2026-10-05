@@ -224,6 +224,7 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
+        self.pause_optimization();
         if self.style_menu.is_some() {
             self.close_style_menu();
         }
@@ -657,6 +658,7 @@ pub(super) fn document_result(message: &Message) -> bool {
     matches!(
         message,
         Message::EngineDone { .. }
+            | Message::Optimization(super::optimization::Action::WorkerDone(..))
             | Message::Exported(_)
             | Message::FigureExported(_)
             | Message::Printing(printing::Action::Prepared(..) | printing::Action::Finished(..))
@@ -958,6 +960,108 @@ pub(super) mod tests {
         assert_eq!(app.tab.id, first);
         let _ = app.update(Message::Tabs(Action::Number(5)));
         assert_eq!(app.tab.id, first, "No fifth tab");
+    }
+
+    async fn keyboard_labels_fixture() -> (App, u64, u64, Message) {
+        use iced::futures::StreamExt;
+        use reshiki::keyboard_drawing::Target;
+
+        let mut app = ready();
+        let before = app.tab.doc.clone();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.changed(before);
+        app.tab.selected = vec![b];
+        app.sync_keyboard_drawing();
+        app.tab
+            .keyboard_drawing
+            .set_target(Target::Atom(b), &app.tab.doc);
+        app.tab.keyboard_drawing.mark(a);
+        let mut labels = iced_runtime::task::into_stream(app.start_label_refresh())
+            .expect("A real label calculation starts");
+        let Some(iced_runtime::Action::Output(message)) = labels.next().await else {
+            panic!("The label task must return its tagged completion");
+        };
+        assert!(matches!(&message, Message::LabelsReady(_, Ok(_))));
+        (app, a, b, message)
+    }
+
+    #[tokio::test]
+    async fn background_labels_preserve_keyboard_target_and_mark_while_front_tool_is_text() {
+        use crate::canvas::Tool;
+        use reshiki::keyboard_drawing::Target;
+
+        let (mut app, a, b, labels) = keyboard_labels_fixture().await;
+        let first = app.tab.id;
+        let drawing = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let _ = app.update(Message::New);
+        let second = app.tab.id;
+        let _ = app.update(Message::Tool(Tool::Text));
+        let _ = app.update(Message::Tab(first, Box::new(labels)));
+        assert_eq!(app.tab.id, second);
+        assert_eq!(app.tool, Tool::Text);
+        let background = &app.tabs.background[0];
+        assert_eq!(background.keyboard_drawing.target(), Target::Atom(b));
+        assert_eq!(background.keyboard_drawing.marked(), Some(a));
+        assert!(background.keyboard_drawing.enabled());
+        assert_eq!(background.revision, revision);
+        assert!(super::super::same_drawing(&background.doc, &drawing));
+        assert_eq!(background.doc.atom(b).unwrap().label_h, 3);
+
+        let _ = app.update(Message::Tool(Tool::Select));
+        select(&mut app, first);
+        assert!(app.keyboard_drawing_active());
+        assert_eq!(app.tab.keyboard_drawing.target(), Target::Atom(b));
+        assert_eq!(app.tab.keyboard_drawing.marked(), Some(a));
+    }
+
+    #[tokio::test]
+    async fn background_labels_reconcile_deleted_targets_and_new_document_epochs() {
+        use crate::canvas::Tool;
+        use reshiki::keyboard_drawing::Target;
+
+        for new_epoch in [false, true] {
+            let (mut app, a, b, labels) = keyboard_labels_fixture().await;
+            let first = app.tab.id;
+            app.tab
+                .keyboard_drawing
+                .set_target(Target::Atom(a), &app.tab.doc);
+            if new_epoch {
+                app.tab.keyboard_drawing.leave();
+            }
+            let _ = app.update(Message::New);
+            let _ = app.update(Message::Tool(Tool::Text));
+            if new_epoch {
+                let epoch = app.next_epoch();
+                let _ = app.in_tab(first, |app| {
+                    let mut replacement = Document::default();
+                    let reused = replacement.add_atom("N", Point::new(200., 100.));
+                    assert_eq!(reused, a);
+                    app.tab.doc = replacement;
+                    app.tab.file_epoch = epoch;
+                    app.tab.selected = vec![reused];
+                });
+            } else {
+                let _ = app.in_tab(first, |app| app.tab.doc.delete(&[a]));
+            }
+            let _ = app.update(Message::Tab(first, Box::new(labels)));
+            assert_eq!(app.tool, Tool::Text);
+            let background = &app.tabs.background[0];
+            assert_eq!(
+                background.keyboard_drawing.target(),
+                Target::Blank(Point::default())
+            );
+            assert_eq!(background.keyboard_drawing.marked(), None);
+            assert_eq!(background.keyboard_drawing.enabled(), !new_epoch);
+            if !new_epoch {
+                assert!(
+                    background.doc.atom(b).is_some(),
+                    "A remaining hotspot is not selected"
+                );
+            }
+        }
     }
 
     #[test]

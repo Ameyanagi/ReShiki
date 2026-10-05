@@ -172,7 +172,11 @@ fn prepare_output(
 /// Export an RXN file with explicit participant roles and coefficients.
 pub fn write_rxn(doc: &Document, selected: Option<&[u64]>) -> Result<String, Error> {
     let rows = prepare_output(doc, selected, |molecule| {
-        Ok(molfile::reaction_ctab(molecule)?)
+        Ok(if molfile::has_projected_coordinates(doc) {
+            molfile::reaction_ctab_projected(molecule)?
+        } else {
+            molfile::reaction_ctab(molecule)?
+        })
     })?;
     let mut output = String::from("$RXN V3000\n\n      RDKit\n\nM  V30 COUNTS");
     for row in &rows {

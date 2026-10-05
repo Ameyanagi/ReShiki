@@ -17,13 +17,13 @@ mod spatial;
 pub(crate) use spatial::from_3d_with_bounds;
 pub use spatial::{SpatialAnnotations, SpatialError, SpatialOptions, SpatialStereo, from_3d};
 pub mod wedging;
-pub(crate) use bonds::double_bond_directions_with_bounds;
 pub use bonds::{BondGeometry, detect_bond_stereo, double_bond_directions};
+pub(crate) use bonds::{detect_bond_stereo_preserving, double_bond_directions_with_bounds};
 
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Point3 {
     pub x: f64,

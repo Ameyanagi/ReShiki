@@ -334,8 +334,12 @@ async fn prepare_copy_with_reaction(
         ));
         // External editors receive explicit visible ink colors, without the
         // source page background. Native data above retains the original theme.
-        let exchange_doc =
-            crate::canvas_theme::for_paste(doc.clone(), crate::canvas_theme::CanvasTheme::Light);
+        // Resolve depth paint against the source paper before changing the
+        // external snapshot's canvas; a dark drawing fades toward black.
+        let exchange_doc = crate::canvas_theme::for_paste(
+            crate::depth_appearance::materialize(&doc).into_owned(),
+            crate::canvas_theme::CanvasTheme::Light,
+        );
         let mut request = Request::molecule("export", exchange_doc.clone());
         request.format = Some("cdx".into());
         let direct = engine.request(request).await.and_then(|response| {
@@ -1396,6 +1400,92 @@ mod tests {
             .await
             .map_err(anyhow::Error::msg)?;
             assert_eq!(pasted.document.bonds[bond].color, Color::Custom(color));
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dark_depth_copy_materializes_external_paint_before_switching_paper()
+    -> anyhow::Result<()> {
+        use crate::{canvas_theme::CanvasTheme, document::Point, palette::Color};
+        use anyhow::{Context, ensure};
+        for frozen in [false, true] {
+            let mut source = Document {
+                canvas_theme: CanvasTheme::Dark,
+                ..Document::default()
+            };
+            for (i, element) in ["O", "C", "O"].into_iter().enumerate() {
+                let id = source.add_atom(element, Point::new(i as f32 * 42., 0.));
+                source.atom_mut(id).context("atom")?.depth = i as f32 * 20. - 20.;
+                if i > 0 {
+                    source.add_bond(id - 1, id, 1, "plain");
+                }
+            }
+            let ids = source.all_ids();
+            crate::depth_appearance::enable(&mut source, &ids, 0.6).map_err(anyhow::Error::msg)?;
+            if frozen {
+                crate::depth_appearance::freeze(&mut source, &ids);
+            }
+            let before = source.clone();
+            let (outcome, representations) =
+                prepare_copy(Default::default(), source.clone(), false)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+            ensure!(outcome.external_editable);
+            let native_representation = representations
+                .iter()
+                .find(|r| r.kind == NATIVE)
+                .context("native drawing")?;
+            let native =
+                Document::from_json(&native_representation.bytes().map_err(anyhow::Error::msg)?)
+                    .map_err(anyhow::Error::msg)?;
+            assert_eq!(native.depth_appearance, source.depth_appearance);
+            assert_eq!(native.canvas_theme, CanvasTheme::Dark);
+            assert_eq!(
+                native.bonds[0].color,
+                Color::Ink,
+                "native retains the editable base color"
+            );
+            let pasted = paste_packet_with_warnings(
+                Default::default(),
+                Packet {
+                    representations: vec![native_representation.clone()],
+                },
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            ensure!(pasted.native);
+            assert_eq!(pasted.document.depth_appearance, source.depth_appearance);
+
+            let cdx = representations
+                .iter()
+                .find(|r| r.kind == CDX_TYPES[0])
+                .context("external CDX")?
+                .bytes()
+                .map_err(anyhow::Error::msg)?;
+            let xml = crate::exchange::from_cdx(&cdx).map_err(anyhow::Error::msg)?;
+            let external = crate::chemistry::cdxml::import_cdxml(&xml)?.document;
+            let rear = external
+                .atoms
+                .iter()
+                .min_by(|a, b| a.position.x.total_cmp(&b.position.x))
+                .context("rear label")?;
+            assert_eq!(
+                rear.text_style.as_ref().context("rear ink")?.color.rgb(),
+                [102; 3],
+                "{frozen}"
+            );
+            let rear_bond = external
+                .bonds
+                .iter()
+                .find(|b| b.a == rear.id || b.b == rear.id)
+                .context("rear bond")?;
+            assert_eq!(rear_bond.color.rgb(), [140; 3], "{frozen}");
+            assert!(external.depth_appearance.is_empty());
+            assert_eq!(
+                source, before,
+                "copy keeps the source projection and scopes"
+            );
         }
         Ok(())
     }

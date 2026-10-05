@@ -20,6 +20,7 @@ mod cleanup;
 mod clipboard;
 mod color_popover;
 mod context_menu;
+mod depth_appearance;
 mod document_styles;
 mod document_tab;
 use document_tab::DocumentTab;
@@ -37,10 +38,12 @@ mod import;
 mod inline_text;
 mod inspector;
 mod joining;
+mod keyboard_drawing;
 mod label_refresh;
 mod molecule_shortcuts;
 mod numeric_transforms;
 mod object_toolbar;
+mod optimization;
 mod pages;
 mod palettes;
 #[cfg(test)]
@@ -103,9 +106,12 @@ pub enum Message {
     Updates(updates::Action),
     Reaction(reactions::Action),
     DrawingStyle(document_styles::Action),
+    DepthAppearance(depth_appearance::Action),
     InlineText(inline_text::Action),
     AtomText(atom_text::Action),
     Join(joining::Action),
+    KeyboardDrawing(keyboard_drawing::Action),
+    Optimization(optimization::Action),
     Pages(pages::Action),
     Printing(printing::Action),
     Pictures(pictures::Action),
@@ -433,6 +439,7 @@ impl App {
         };
         let task = app.open_startup(startup);
         let update_check = app.update_action(updates::Action::Check(false));
+        app.sync_keyboard_drawing();
         (app, Task::batch([task, update_check]))
     }
     pub fn title(&self) -> String {
@@ -505,12 +512,19 @@ impl App {
                     key,
                     modified_key,
                     modifiers,
+                    repeat,
                     ..
                 }) = event
                 else {
                     return None;
                 };
                 if status == iced::event::Status::Captured {
+                    return None;
+                }
+                if repeat
+                    && modifiers.is_empty()
+                    && key == iced::keyboard::Key::Named(iced::keyboard::key::Named::F8)
+                {
                     return None;
                 }
                 shortcuts::key_message(&key, &modified_key, modifiers)
@@ -557,6 +571,7 @@ impl App {
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
         reshiki::projection::sync_centroids(&mut self.tab.doc);
         reshiki::ring_fills::prune(&mut self.tab.doc);
+        reshiki::depth_appearance::prune(&mut self.tab.doc);
         self.tab.cleanup = None;
         self.tab.doc.reconcile_abbreviations(&before);
         if let Err(error) = reshiki::reactions::reconcile(&mut self.tab.doc) {
@@ -577,6 +592,9 @@ impl App {
         let drawing_style_changed = before.drawing_style != self.tab.doc.drawing_style;
         self.tab
             .recent_molecules
+            .record(&before, &self.tab.doc, self.tab.file_epoch, continuing);
+        self.tab
+            .keyboard_drawing
             .record(&before, &self.tab.doc, self.tab.file_epoch, continuing);
         let chemistry_changed = chemistry_changed(&before, &self.tab.doc);
         if chemistry_changed {
@@ -705,6 +723,13 @@ impl App {
         self.recover_candidate(candidate.path);
     }
     fn display_document(&self) -> &Document {
+        if let Some(session) =
+            self.tab.optimization.as_ref().filter(|session| {
+                session.current(self.tab.id, self.tab.file_epoch, self.tab.revision)
+            })
+        {
+            return session.preview_document();
+        }
         self.tab
             .cleanup
             .as_ref()
@@ -718,9 +743,24 @@ impl App {
         if let Message::Accessibility(action) = message {
             return self.accessibility_action(action);
         }
-        let controls_unchanged = matches!(&message, Message::Canvas(Edit::Hover(_)));
+        let keyboard_before = (
+            self.tab.keyboard_drawing.target(),
+            self.tab.keyboard_drawing.marked(),
+        );
+        let controls_unchanged = matches!(
+            &message,
+            Message::Canvas(
+                Edit::Hover(_) | Edit::RelaxDragTarget { .. } | Edit::RelaxRotate { .. }
+            )
+        );
         let task = self.update_routed(message);
-        if controls_unchanged {
+        if controls_unchanged
+            && keyboard_before
+                == (
+                    self.tab.keyboard_drawing.target(),
+                    self.tab.keyboard_drawing.marked(),
+                )
+        {
             task
         } else {
             Task::batch([task, self.accessibility_refresh()])
@@ -774,6 +814,20 @@ impl App {
             return self.mac_file_action(action);
         }
         let previous = self.inspector_tab;
+        let pointer_selection = match &message {
+            Message::Canvas(Edit::Select(_)) => Some(
+                self.tab
+                    .hover
+                    .filter(|(_, epoch)| *epoch == self.tab.file_epoch)
+                    .map(|(point, _)| point),
+            ),
+            Message::Canvas(Edit::Click(point) | Edit::SelectAt(_, point)) => Some(Some(*point)),
+            _ => None,
+        };
+        let message = match message {
+            Message::Canvas(Edit::SelectAt(ids, _)) => Message::Canvas(Edit::Select(ids)),
+            message => message,
+        };
         let opening_transform = matches!(&message, Message::Canvas(Edit::BeginTransform(_)));
         let refresh_dimensions = matches!(
             &message,
@@ -784,6 +838,18 @@ impl App {
         } else {
             self.update_inner(message)
         };
+        if background {
+            // A background result belongs to this document, but the selected
+            // tool belongs to the front tab. Only discard stale targets here.
+            self.tab
+                .keyboard_drawing
+                .reconcile(&self.tab.doc, self.tab.file_epoch);
+        } else {
+            self.sync_keyboard_drawing();
+        }
+        if let Some(point) = pointer_selection {
+            self.keyboard_pointer_selection(point);
+        }
         let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
         self.sync_numeric_transforms();
         if refresh_dimensions {
@@ -841,6 +907,9 @@ impl App {
         if let Message::LabelsReady(key, result) = message {
             self.labels_ready(key, result);
             return Task::none();
+        }
+        if let Some(task) = self.optimization_gate(&message) {
+            return task;
         }
         if let Message::FilePrepared(opened) = message {
             return self.file_prepared(opened);
@@ -967,6 +1036,8 @@ impl App {
         if matches!(message, Message::Escape) {
             return if self.tab.inline_text.is_some() {
                 self.inline_action(inline_text::Action::Finish(false))
+            } else if self.tab.optimization.is_some() {
+                self.optimization_action(optimization::Action::Cancel)
             } else {
                 self.update(Message::Tool(Tool::Select))
             };
@@ -1088,6 +1159,9 @@ impl App {
             && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id) || self.tab.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
             Message::Accessibility(_) => return Task::none(),
+            Message::KeyboardDrawing(action) => return self.keyboard_drawing_action(action),
+            Message::Optimization(action) => return self.optimization_action(action),
+            Message::DepthAppearance(action) => return self.depth_appearance_action(action),
             Message::DrawingStyle(action) => return self.drawing_style_action(action),
             Message::Imports(action) => return self.import_action(action),
             Message::Pages(action) => return self.page_action(action),
@@ -1740,7 +1814,12 @@ impl App {
             Message::Canvas(Edit::BeginTransform(field)) => {
                 return self.begin_numeric_transform(field);
             }
-            Message::Canvas(edit) => self.edit(edit),
+            Message::Canvas(edit) => {
+                if let Some(task) = self.optimization_edit(edit.clone()) {
+                    return task;
+                }
+                self.edit(edit);
+            }
             Message::Appearance(mode) => {
                 self.appearance.mode = mode;
                 if let Err(error) = self.appearance.save() {
@@ -1859,6 +1938,11 @@ impl App {
                     self.tab.history.redo(&mut self.tab.doc)
                 };
                 if changed {
+                    self.tab.keyboard_drawing.restore(
+                        matches!(message, Message::Redo),
+                        &self.tab.doc,
+                        self.tab.file_epoch,
+                    );
                     self.tab
                         .recent_molecules
                         .restore(matches!(message, Message::Redo), self.tab.file_epoch);
@@ -2101,6 +2185,7 @@ impl App {
     /// Background delivery calls these handlers without front-tab input or focus handling.
     fn update_document_result(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Optimization(action) => return self.optimization_action(action),
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
             Message::FigureExported(result) => self.figure_exported(result),
             Message::Printing(action) => return self.print_action(action),
@@ -2388,6 +2473,7 @@ impl App {
         }
         if let Edit::Hover(point) = edit {
             self.tab.hover = point.map(|p| (p, self.tab.file_epoch));
+            self.keyboard_pointer_hover(point);
             return;
         }
         if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
@@ -2415,6 +2501,11 @@ impl App {
         match edit {
             Edit::ContextMenu { .. } => return,
             Edit::Hover(_)
+            | Edit::RelaxDragStart { .. }
+            | Edit::RelaxDragTarget { .. }
+            | Edit::RelaxDragEnd { .. }
+            | Edit::RelaxDragCancel { .. }
+            | Edit::RelaxRotate { .. }
             | Edit::BeginText(_)
             | Edit::BeginTransform(_)
             | Edit::EraseStart(_)
@@ -2634,7 +2725,7 @@ impl App {
                     }
                 }
             }
-            Edit::Select(ids) => {
+            Edit::Select(ids) | Edit::SelectAt(ids, _) => {
                 let inspector_width = self.inspector_width();
                 self.tab.selected = ids;
                 self.sync_typography();
@@ -3063,6 +3154,8 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.groups == b.groups
         && a.reactions == b.reactions
         && a.abbreviations == b.abbreviations
+        && a.ring_fills == b.ring_fills
+        && a.depth_appearance == b.depth_appearance
         && a.atoms.len() == b.atoms.len()
         && a.atoms.iter().zip(&b.atoms).all(|(a, b)| {
             let mut a = a.clone();
@@ -3677,6 +3770,47 @@ mod tests {
     }
 
     #[test]
+    fn ring_fill_edits_mark_saved_drawings_dirty_and_restore_through_undo_redo() {
+        let (mut app, _) = App::new();
+        app.tab.selected = editing::ring(&mut app.tab.doc, Point::default(), 6, true, 0.);
+        app.tab.saved = app.tab.doc.clone();
+        app.tab.history = History::default();
+        let unfilled = app.tab.saved.clone();
+        assert!(!app.dirty());
+        let _ = app.update(Message::ColorScope(typography::ColorScope::Rings));
+        let tint = reshiki::palette::Color::Palette(
+            reshiki::palette::Hue::Blue,
+            reshiki::palette::Row::Tint,
+        );
+        let _ = app.update(Message::TextStyle(reshiki::typography::StyleChange::Color(
+            tint,
+        )));
+        let filled = app.tab.doc.clone();
+        assert_eq!(filled.ring_fills.len(), 1);
+        assert_eq!(filled.atoms, unfilled.atoms);
+        assert_eq!(filled.bonds, unfilled.bonds);
+        assert!(app.dirty());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, unfilled);
+        assert!(!app.dirty());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, filled);
+        assert!(app.dirty());
+
+        app.tab.saved = filled.clone();
+        assert!(!app.dirty());
+        let _ = app.update(Message::ClearRingFill);
+        assert_eq!(app.tab.doc, unfilled);
+        assert!(app.dirty());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, filled);
+        assert!(!app.dirty());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, unfilled);
+        assert!(app.dirty());
+    }
+
+    #[test]
     fn custom_ring_hex_is_exact_in_dark_mode_and_undoable() {
         let (mut app, _) = App::new();
         app.tab.selected = editing::ring(&mut app.tab.doc, Point::default(), 6, false, 0.);
@@ -3691,6 +3825,78 @@ mod tests {
         assert_eq!(app.tab.text_color_input, "#C9E0F8");
         let _ = app.update(Message::Undo);
         assert_eq!(app.tab.doc, original);
+    }
+
+    #[test]
+    fn depth_appearance_edits_mark_saved_projections_dirty_and_restore_through_undo_redo()
+    -> Result<(), String> {
+        use depth_appearance::Action;
+        for (initial, action) in [
+            (0, Action::Enhance(true)),
+            (1, Action::Enhance(false)),
+            (2, Action::Clear),
+        ] {
+            let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+            let (mut app, _) = App::new();
+            app.tab.recovery = Some(Recovery::in_directory(directory.path())?);
+            app.tab.doc = Document::default();
+            let a = app.tab.doc.add_atom("C", Point::default());
+            let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+            app.tab.doc.add_bond(a, b, 1, "plain");
+            app.tab.doc.atom_mut(a).unwrap().depth = -21.;
+            app.tab.doc.atom_mut(b).unwrap().depth = 21.;
+            if initial > 0 {
+                reshiki::depth_appearance::enable(
+                    &mut app.tab.doc,
+                    &[a, b],
+                    reshiki::depth_appearance::DEFAULT_STRENGTH,
+                )?;
+            }
+            if initial == 2 {
+                reshiki::depth_appearance::freeze(&mut app.tab.doc, &[a, b]);
+            }
+            let saved = Document::from_json(&app.tab.doc.file_json()?)?;
+            app.tab.doc = saved.clone();
+            app.tab.saved = saved.clone();
+            app.tab.history = History::default();
+            app.tab.labels_dirty = false;
+            app.tab.selected = vec![a];
+            let revision = app.tab.revision;
+            assert!(!app.dirty());
+            assert!(!app.needs_draft(&app.tab));
+
+            let _ = app.update(Message::DepthAppearance(action));
+            assert!(!app.error, "{}", app.status);
+            let edited = app.tab.doc.clone();
+            assert_ne!(edited.depth_appearance, saved.depth_appearance);
+            assert_eq!(edited.atoms, saved.atoms);
+            assert_eq!(edited.bonds, saved.bonds);
+            assert!(!chemistry_changed(&saved, &edited));
+            assert!(app.dirty());
+            assert!(app.needs_draft(&app.tab));
+            assert_eq!(app.tab.revision, revision + 1);
+            assert_eq!(Document::from_json(&edited.file_json()?)?, edited);
+
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, saved);
+            assert!(!app.dirty());
+            assert!(!app.needs_draft(&app.tab));
+            assert!(!app.tab.history.can_undo());
+            assert_eq!(app.tab.revision, revision + 2);
+
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, edited);
+            assert!(app.dirty());
+            assert!(app.needs_draft(&app.tab));
+            assert!(!app.tab.history.can_redo());
+            assert_eq!(app.tab.revision, revision + 3);
+            let _ = app.update(Message::Close(iced::window::Id::unique()));
+            assert!(matches!(
+                app.pending,
+                Some(Pending::CloseWindow(_, id, _)) if id == app.tab.id
+            ));
+        }
+        Ok(())
     }
 
     #[test]

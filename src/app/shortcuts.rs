@@ -117,7 +117,7 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
         Message::Copy(cut) => (command, if *cut { "X" } else { "C" }),
         Message::Paste => (command, "V"),
         Message::CopyImage => (shift, "C"),
-        Message::Duplicate => (shift, "D"),
+        Message::Optimization(super::optimization::Action::Begin) => (shift, "D"),
         Message::SelectAll => (command, "A"),
         Message::InvertSelection => (shift, "A"),
         Message::Group => (command, "G"),
@@ -140,6 +140,9 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
             },
         ),
         Message::Delete => (Modifiers::empty(), "Delete"),
+        Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle) => {
+            (Modifiers::empty(), "F8")
+        }
         Message::Shortcut(Action::SelectRing(size)) => (
             Modifiers::SHIFT,
             match size {
@@ -165,6 +168,11 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
 pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<Message> {
     if super::help::is_shortcut(key, mods) {
         return Some(Message::ToggleHelp);
+    }
+    if mods.is_empty() && matches!(key, Key::Named(Named::F8)) {
+        return Some(Message::KeyboardDrawing(
+            super::keyboard_drawing::Action::Toggle,
+        ));
     }
     if mods.command() {
         if mods.shift() && !mods.alt() && matches!(key, Key::Named(Named::ArrowRight)) {
@@ -207,7 +215,7 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
                 "k" => Message::Clean,
                 "h" => Message::Transform(Transform::FlipVertical),
                 "v" => Message::Transform(Transform::FlipHorizontal),
-                "d" => Message::Duplicate,
+                "d" => Message::Optimization(super::optimization::Action::Begin),
                 "e" => Message::Inspector(InspectorTab::Export),
                 "c" => Message::CopyImage,
                 _ => return None,
@@ -294,6 +302,18 @@ impl App {
             Action::Rulers => return self.update(Message::Rulers(!self.guides.rulers)),
             Action::Crosshair => return self.update(Message::Crosshair(!self.guides.crosshair)),
             Action::Nudge(x, y) => {
+                self.sync_keyboard_drawing();
+                if self.tool.selects()
+                    && self.tab.keyboard_drawing.active()
+                    && let Some(direction) = reshiki::keyboard_drawing::Direction::from_delta(x, y)
+                {
+                    return self.keyboard_drawing_action(
+                        super::keyboard_drawing::Action::Navigate(
+                            direction,
+                            x.abs().max(y.abs()) > 1.,
+                        ),
+                    );
+                }
                 let before = self.tab.doc.clone();
                 let ids = if self.tool == Tool::EditPoints {
                     self.tab.selected.clone()
@@ -380,25 +400,39 @@ impl App {
         )
     }
 
-    fn commit_hotkey(&mut self, result: Result<(Document, Vec<u64>), String>, status: &str) {
+    pub(super) fn commit_hotkey(
+        &mut self,
+        result: Result<(Document, Vec<u64>), String>,
+        status: &str,
+    ) -> bool {
         match result {
             Ok((doc, selected)) => {
                 let before = std::mem::replace(&mut self.tab.doc, doc);
-                self.tab.selected = selected;
-                self.changed(before);
-                self.status = status.into();
+                let previous_selection = std::mem::replace(&mut self.tab.selected, selected);
                 self.error = false;
+                self.changed(before);
+                if self.error {
+                    self.tab.selected = previous_selection;
+                    return false;
+                }
+                self.status = status.into();
                 self.sync_typography();
                 self.sync_bonds();
+                true
             }
             Err(error) => {
                 self.status = error;
                 self.error = true;
+                false
             }
         }
     }
 
     pub(super) fn context_key(&mut self, key: &str) -> Task<Message> {
+        self.sync_keyboard_drawing();
+        if self.tool.selects() && self.tab.keyboard_drawing.active() {
+            return self.keyboard_context_key(key);
+        }
         let point = self
             .tab
             .hover
@@ -449,18 +483,41 @@ impl App {
                 None
             }
         });
+        self.context_key_resolved(
+            key,
+            atom,
+            bond,
+            false,
+            hovered_atom.is_some() || hovered_bond.is_some(),
+        )
+    }
+
+    /// The keyboard mode supplies its hotspot directly, without synthesizing
+    /// hover events or relying on the selection created by the previous edit.
+    pub(super) fn context_key_at(
+        &mut self,
+        key: &str,
+        target: reshiki::keyboard_drawing::Target,
+    ) -> Task<Message> {
+        let (atom, bond) = match target {
+            reshiki::keyboard_drawing::Target::Atom(id) => (Some(id), None),
+            reshiki::keyboard_drawing::Target::Bond(a, b) => (None, Some((a, b))),
+            reshiki::keyboard_drawing::Target::Blank(_) => (None, None),
+        };
+        self.context_key_resolved(key, atom, bond, true, false)
+    }
+
+    fn context_key_resolved(
+        &mut self,
+        key: &str,
+        atom: Option<u64>,
+        bond: Option<(u64, u64)>,
+        explicit: bool,
+        pointed: bool,
+    ) -> Task<Message> {
         // Hover attachment wins even when placement automatically selected the
         // previous ring. Only an unpointed selection gives `a` a display action.
-        if key == "a"
-            && hovered_atom.is_none()
-            && hovered_bond.is_none()
-            && reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some()
-            && self.tab.doc.bonds.iter().any(|b| {
-                self.tab.selected.contains(&b.a)
-                    && self.tab.selected.contains(&b.b)
-                    && matches!(b.order, 2 | 4)
-            })
-        {
+        if key == "a" && !explicit && !pointed && self.aromatic_display_selection() {
             return self.update(Message::AromaticDisplay);
         }
         if key == "g" {
@@ -473,6 +530,7 @@ impl App {
         }
         if ["/", "?", "=", "Enter"].contains(&key) {
             if key == "Enter"
+                && !explicit
                 && self
                     .tab
                     .selected
@@ -548,17 +606,26 @@ impl App {
             && let Some(result) =
                 hotkeys::atom_edit(&self.tab.doc, id, key, self.tab.bond_drawing.length)
         {
+            let focus = result.as_ref().ok().map(|(_, focus)| *focus);
             let result = result.map(|(doc, focus)| (doc, vec![focus]));
-            self.commit_hotkey(result, "Atom shortcut applied");
-            if !self.error {
+            if self.commit_hotkey(result, "Atom shortcut applied") {
                 self.tab.labels_dirty = true;
-                // Continue growth at its new endpoint until the pointer moves again.
-                self.tab.hover = self
-                    .tab
-                    .selected
-                    .first()
-                    .and_then(|id| self.tab.doc.atom(*id))
-                    .map(|a| (a.position, self.tab.file_epoch));
+                if explicit {
+                    if let Some(focus) = focus {
+                        self.tab.keyboard_drawing.set_target(
+                            reshiki::keyboard_drawing::Target::Atom(focus),
+                            &self.tab.doc,
+                        );
+                    }
+                } else {
+                    // Continue ordinary hover growth until the pointer moves again.
+                    self.tab.hover = self
+                        .tab
+                        .selected
+                        .first()
+                        .and_then(|id| self.tab.doc.atom(*id))
+                        .map(|a| (a.position, self.tab.file_epoch));
+                }
             }
             return Task::none();
         }
@@ -568,6 +635,15 @@ impl App {
         {
             self.commit_hotkey(result, "Ring attached");
             return Task::none();
+        }
+        self.empty_context_key(key)
+    }
+
+    /// Keys without a contextual chemistry action keep their ordinary drawing
+    /// tool behavior, including Text, chain and graphic shortcuts.
+    pub(super) fn empty_context_key(&mut self, key: &str) -> Task<Message> {
+        if ["/", "?", "=", "Enter"].contains(&key) {
+            return self.update(Message::Inspector(InspectorTab::Properties));
         }
         // No contextual action: select a drawing tool. Preserve useful nonconflicting aliases.
         let tool = match key {
@@ -604,6 +680,15 @@ impl App {
             return self.update(Message::Element(label.into()));
         }
         Task::none()
+    }
+
+    pub(super) fn aromatic_display_selection(&self) -> bool {
+        reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some()
+            && self.tab.doc.bonds.iter().any(|bond| {
+                self.tab.selected.contains(&bond.a)
+                    && self.tab.selected.contains(&bond.b)
+                    && matches!(bond.order, 2 | 4)
+            })
     }
 }
 
@@ -874,6 +959,12 @@ mod tests {
     #[test]
     fn stale_hover_and_empty_cleanup_do_not_modify_the_drawing() {
         let (mut app, _) = App::new();
+        // Verify the classic hover epoch guard. Hybrid mode intentionally
+        // initializes a fresh visible hotspot when the file epoch changes.
+        let _ = app.update(Message::KeyboardDrawing(
+            super::super::keyboard_drawing::Action::Leave,
+        ));
+        assert!(!app.tab.keyboard_drawing.enabled());
         app.tab.busy = false;
         app.tab.doc = Document::default();
         app.tab.doc.add_atom("C", Point::default());
@@ -952,6 +1043,43 @@ mod compatibility_tests {
     }
 
     #[test]
+    fn primary_shift_d_starts_a_detached_3d_preview_instead_of_duplicating() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = Document::from_json(include_bytes!(
+            "../../tests/fixtures/geometry/adamantane.rsk"
+        ))
+        .unwrap();
+        app.tab.selected = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+        let original = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let modifiers = primary() | Modifiers::SHIFT;
+        let message = key_message(&key("d"), &key("D"), modifiers).unwrap();
+        assert!(matches!(
+            message,
+            Message::Optimization(super::super::optimization::Action::Begin)
+        ));
+        let _ = app.update(message.clone());
+        assert!(app.tab.optimization.is_some());
+        assert_eq!(app.tab.doc, original);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.tab.history.can_undo());
+        let serial = app.tab.optimization_serial;
+        let _ = app.update(message);
+        assert_eq!(app.tab.optimization_serial, serial);
+        assert_eq!(app.tab.doc, original);
+        let _ = app.update(Message::Optimization(
+            super::super::optimization::Action::Cancel,
+        ));
+        assert!(app.tab.optimization.is_none());
+        assert_eq!(app.tab.doc, original);
+        assert!(matches!(
+            key_message(&key("d"), &key("d"), primary()),
+            Some(Message::Shortcut(Action::CopyText("cdxml")))
+        ));
+    }
+
+    #[test]
     fn displayed_shortcuts_are_the_keys_that_run_their_commands() {
         let mut messages = vec![
             Message::Undo,
@@ -960,7 +1088,7 @@ mod compatibility_tests {
             Message::Copy(true),
             Message::Paste,
             Message::CopyImage,
-            Message::Duplicate,
+            Message::Optimization(super::super::optimization::Action::Begin),
             Message::SelectAll,
             Message::InvertSelection,
             Message::Group,
@@ -1014,6 +1142,7 @@ mod compatibility_tests {
             assert_eq!(format!("{actual:?}"), format!("{:?}", Some(message)));
         }
         assert_eq!(label(&Message::Transform(Transform::Rotate(180.))), None);
+        assert_eq!(label(&Message::Duplicate), None);
         let label = |message| label(&message).unwrap_or_default();
         let edit_label = || Message::AtomText(crate::app::atom_text::Action::Begin(None));
         let (command, alt) = (Modifiers::COMMAND, Modifiers::ALT);
@@ -1119,6 +1248,12 @@ mod compatibility_tests {
     #[test]
     fn numeric_hotkeys_distinguish_hovered_bond_atom_and_blank_canvas() -> Result<(), String> {
         let (mut app, _) = App::new();
+        // This compatibility contract uses classic hover/selection routing:
+        // Hover(None) leaves no target, unlike the independent hybrid hotspot.
+        let _ = app.update(Message::KeyboardDrawing(
+            super::super::keyboard_drawing::Action::Leave,
+        ));
+        assert!(!app.tab.keyboard_drawing.enabled());
         app.tab.doc = Document::default();
         let a = app.tab.doc.add_atom("C", Point::default());
         let b = app.tab.doc.add_atom("C", Point::new(42., 0.));

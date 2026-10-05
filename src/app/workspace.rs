@@ -19,6 +19,18 @@ mod layout_snapshots;
 mod selection_canvas_qa;
 
 impl App {
+    fn keyboard_context_summary(&self) -> String {
+        use reshiki::keyboard_drawing::Target;
+        match self.tab.keyboard_drawing.target() {
+            Target::Blank(_) => "Empty position".into(),
+            Target::Atom(id) => self.tab.doc.atom(id).map_or_else(
+                || "Empty position".into(),
+                |atom| format!("{} #{id}", atom.element),
+            ),
+            Target::Bond(a, b) => format!("Bond {a}–{b}"),
+        }
+    }
+
     pub(super) fn selection_summary(&self) -> String {
         let selected: std::collections::HashSet<_> = self.tab.selected.iter().copied().collect();
         let groups = self.tab.doc.outer_selected_groups(&self.tab.selected);
@@ -220,6 +232,14 @@ impl App {
         };
         let mut content = column![background(self.command_bar()), background(self.style_bar())];
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
+            optimizer: self.optimization_canvas(),
+            keyboard_target: if self.keyboard_drawing_active() {
+                self.tab
+                    .keyboard_drawing
+                    .marker_point(self.display_document())
+            } else {
+                None
+            },
             element: &self.element,
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
             hidden_annotation: self.inline_label_id(),
@@ -492,9 +512,24 @@ impl App {
         };
         let symbols = graphic_hint(self.toolbar.symbol, "Chemical symbols");
         let orbitals = graphic_hint(self.toolbar.orbital, "Orbitals");
+        let keyboard = self.keyboard_drawing_active();
         let tools = [
-            (Tool::Select, "Select / move · v"),
-            (Tool::Lasso, "Lasso select · l"),
+            (
+                Tool::Select,
+                if keyboard {
+                    "Select / move · Escape or toolbar"
+                } else {
+                    "Select / move · v"
+                },
+            ),
+            (
+                Tool::Lasso,
+                if keyboard {
+                    "Lasso select · Toolbar"
+                } else {
+                    "Lasso select · l"
+                },
+            ),
             (Tool::Tilt, "3D tilt"),
             (Tool::Erase, "Eraser"),
             (Tool::Atom, atom.as_str()),
@@ -726,6 +761,51 @@ impl App {
 
     /// Context row commands in fold order: the first ones fold into ⋯ first.
     pub(super) fn context_commands(&self) -> Vec<RowCommand> {
+        let mut commands = self.standard_context_commands();
+        if self.keyboard_drawing_active() {
+            use super::keyboard_drawing::Action;
+            use reshiki::keyboard_drawing::Target;
+            let atom = match self.tab.keyboard_drawing.target() {
+                Target::Atom(id) => Some(id),
+                _ => None,
+            };
+            let marked = self.tab.keyboard_drawing.marked();
+            commands.retain(|command| {
+                !matches!(command.message, Message::KeyboardDrawing(Action::Toggle))
+            });
+            commands.extend([
+                RowCommand {
+                    label: "Mark [",
+                    menu: "Mark atom [",
+                    hint: if atom.is_some() {
+                        "Mark the active atom for a connection · ["
+                    } else {
+                        "Choose an atom with arrows or the mouse before marking · ["
+                    },
+                    message: Message::KeyboardDrawing(Action::Mark),
+                    enabled: atom.is_some(),
+                },
+                RowCommand {
+                    label: "Connect ]",
+                    menu: "Connect to marked atom ]",
+                    hint: if marked.is_none() {
+                        "Mark an atom with [ before connecting · ]"
+                    } else if atom.is_none() {
+                        "Choose an atom with arrows or the mouse to connect · ]"
+                    } else if atom == marked {
+                        "Choose a different atom to connect to the marked atom · ]"
+                    } else {
+                        "Connect the active atom to the marked atom · ]"
+                    },
+                    message: Message::KeyboardDrawing(Action::Connect),
+                    enabled: atom.zip(marked).is_some_and(|(a, b)| a != b),
+                },
+            ]);
+        }
+        commands
+    }
+
+    fn standard_context_commands(&self) -> Vec<RowCommand> {
         let mut commands = Vec::new();
         let constraints = self.tool.bond_preset().is_some()
             || matches!(self.tool, Tool::Chain(_))
@@ -738,6 +818,59 @@ impl App {
                 message: Message::ResetBondDrawing,
                 enabled: true,
             });
+        }
+        if matches!(self.tool, Tool::Select | Tool::Lasso) {
+            commands.extend([
+                RowCommand {
+                    label: "3D optimize…",
+                    menu: "3D optimize…",
+                    hint: "Generate an optimized conformer using MMFF or UFF; preview before applying",
+                    message: Message::Optimization(super::optimization::Action::Begin),
+                    enabled: !self.tab.doc.atoms.is_empty() && !self.tab.busy,
+                },
+                RowCommand {
+                    label: "Keyboard drawing",
+                    menu: "Keyboard drawing (F8)",
+                    hint: "Draw with digits and letters; navigate atoms and bonds with arrows (F8)",
+                    message: Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle),
+                    enabled: !self.tab.busy,
+                },
+            ]);
+            let ids = self.depth_ids();
+            if ids
+                .iter()
+                .any(|id| self.tab.doc.atom(*id).is_some_and(|a| a.depth != 0.))
+                || reshiki::depth_appearance::has(&self.tab.doc, &ids)
+            {
+                let automatic = reshiki::depth_appearance::is_automatic_for(&self.tab.doc, &ids);
+                commands.push(RowCommand {
+                    label: if automatic { "Freeze depth" } else { "Enhance depth" },
+                    menu: if automatic { "Freeze depth appearance" } else { "Enhance depth appearance" },
+                    hint: "Rear ink fades with depth; freezing keeps positions and editable appearance",
+                    message: Message::DepthAppearance(super::depth_appearance::Action::Enhance(!automatic)),
+                    enabled: true,
+                });
+                if reshiki::depth_appearance::has(&self.tab.doc, &ids) {
+                    commands.push(RowCommand {
+                        label: "Clear depth",
+                        menu: "Clear depth appearance",
+                        hint: "Restore base colors while keeping the current 3D projection",
+                        message: Message::DepthAppearance(super::depth_appearance::Action::Clear),
+                        enabled: true,
+                    });
+                    if !self.tab.selected.is_empty() {
+                        commands.push(RowCommand {
+                            label: "Original ink",
+                            menu: "Use original ink for selection",
+                            hint: "Keep selected atoms and bonds in their editable base colors",
+                            message: Message::DepthAppearance(
+                                super::depth_appearance::Action::OriginalInk,
+                            ),
+                            enabled: true,
+                        });
+                    }
+                }
+            }
         }
         if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.tab.selected.is_empty() {
             return commands;
@@ -780,6 +913,41 @@ impl App {
     }
 
     pub(super) fn context_bar(&self) -> Element<'_, Message> {
+        if self.tab.optimization.is_some() {
+            return container(
+                row![
+                    text(tool_name(self.tool).0).size(12),
+                    text(if self.tool == Tool::Tilt {
+                        "Drag to rotate the preview"
+                    } else {
+                        "Drag unpinned atoms · Shift-click selects"
+                    })
+                    .size(11)
+                    .style(muted_text),
+                    Space::new().width(Length::Fill),
+                    hover_hint(
+                        reshiki::accessibility::button(
+                            "context-3d-properties",
+                            "Open 3D preview controls in Properties",
+                            text("3D preview →").size(12),
+                        )
+                        .on_press(Message::Inspector(InspectorTab::Properties))
+                        .padding([7, 9])
+                        .style(control(false)),
+                        "Open the 3D preview controls in the right Properties panel",
+                        tooltip::Position::Bottom,
+                    ),
+                ]
+                .spacing(CONTEXT_GAP)
+                .align_y(Alignment::Center),
+            )
+            .height(46)
+            .padding([5., CONTEXT_PADDING])
+            .center_y(46)
+            .clip(true)
+            .style(panel)
+            .into();
+        }
         if self.tab.joining.is_some() {
             return self.join_bar();
         }
@@ -795,7 +963,12 @@ impl App {
     /// Tool name, options and commands, plus the arrange group for selection
     /// tools. A short row folds commands into ⋯ instead of scrolling.
     fn context_row(&self, width: f32) -> Element<'_, Message> {
-        let (name, short) = tool_name(self.tool);
+        let keyboard = self.keyboard_drawing_active();
+        let (name, short) = if keyboard {
+            ("Keyboard", "Keys")
+        } else {
+            tool_name(self.tool)
+        };
         let commands = self.context_commands();
         let widths: Vec<f32> = commands
             .iter()
@@ -806,12 +979,19 @@ impl App {
             super::object_toolbar::GROUP_WIDTH,
             super::object_toolbar::COMPACT_WIDTH,
         ));
-        let summary = (select && !self.tab.selected.is_empty()).then(|| self.selection_summary());
+        let summary = if keyboard {
+            Some(self.keyboard_context_summary())
+        } else {
+            (select && !self.tab.selected.is_empty()).then(|| self.selection_summary())
+        };
         let options = self.options_width();
         let fit = fit(
             width,
             &Fold {
-                name: (text_width(name, 12.), text_width(short, 12.)),
+                name: (
+                    text_width(name, 12.) + if keyboard { 18. } else { 0. },
+                    text_width(short, 12.) + if keyboard { 18. } else { 0. },
+                ),
                 options,
                 summary: summary
                     .as_ref()
@@ -830,15 +1010,45 @@ impl App {
             about.push(summary);
         }
         about.push(hint.into_owned());
-        let mut row = row![hover_hint(
-            text(if fit.short { short } else { name })
-                .size(12)
-                .style(crate::appearance::text_color(ink())),
-            about.join(" · "),
-            tooltip::Position::Bottom,
-        )]
-        .spacing(CONTEXT_GAP)
-        .align_y(Alignment::Center);
+        let name: Element<'_, Message> = if keyboard {
+            let active = self.tab.keyboard_drawing.active_label(&self.tab.doc);
+            let marked = self
+                .tab
+                .keyboard_drawing
+                .marked()
+                .map(|id| format!(" · Marked atom {id}"))
+                .unwrap_or_default();
+            hover_hint(
+                reshiki::accessibility::button(
+                    "keyboard-done",
+                    format!("Leave keyboard drawing · F8 · Active {active}{marked}"),
+                    text(if fit.short { short } else { name }).size(12),
+                )
+                .checked(true)
+                .value(active.clone())
+                .padding([7, 9])
+                .style(control(true))
+                .on_press(Message::KeyboardDrawing(
+                    super::keyboard_drawing::Action::Leave,
+                )),
+                format!(
+                    "Keyboard drawing · {active}{marked}\n{}\nClick to turn off · F8",
+                    reshiki::keyboard_drawing::State::hint()
+                ),
+                tooltip::Position::Bottom,
+            )
+            .into()
+        } else {
+            hover_hint(
+                text(if fit.short { short } else { name })
+                    .size(12)
+                    .style(crate::appearance::text_color(ink())),
+                about.join(" · "),
+                tooltip::Position::Bottom,
+            )
+            .into()
+        };
+        let mut row = row![name].spacing(CONTEXT_GAP).align_y(Alignment::Center);
         if !options_list.is_empty() {
             row = row.push(divider());
         }
@@ -850,7 +1060,8 @@ impl App {
         for (index, (c, w)) in commands.iter().zip(&widths).enumerate().skip(folded) {
             row = row.push(hover_keys(
                 reshiki::accessibility::button(
-                    format!("context-command-{index}"),
+                    keyboard_control_id(&c.message)
+                        .map_or_else(|| format!("context-command-{index}"), str::to_owned),
                     c.hint,
                     text(c.label).size(12),
                 )
@@ -1167,7 +1378,18 @@ impl App {
             }
             Tool::Select | Tool::Lasso => {
                 let mut options = Vec::new();
-                if summary && !self.tab.selected.is_empty() {
+                if summary && self.keyboard_drawing_active() {
+                    options.push(
+                        hover_hint(
+                            text(self.keyboard_context_summary())
+                                .size(11)
+                                .style(muted_text),
+                            self.tab.keyboard_drawing.active_label(&self.tab.doc),
+                            tooltip::Position::Bottom,
+                        )
+                        .into(),
+                    );
+                } else if summary && !self.tab.selected.is_empty() {
                     options.push(
                         hover_hint(
                             text(self.selection_summary()).size(11).style(muted_text),
@@ -1280,20 +1502,22 @@ impl App {
             InspectorTab::Import => self.import_panel(),
             InspectorTab::Export => self.export_panel(),
         };
-        container(
-            column![
-                container(tabs).padding([8, 8]),
-                scrollable(container(body).padding([8, 16]))
-                    .id("inspector-content")
-                    .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))
-                    .height(Length::Fill)
-            ]
-            .spacing(4),
-        )
-        .width(self.inspector_width())
-        .height(Length::Fill)
-        .style(panel)
-        .into()
+        let mut content = column![
+            container(tabs).padding([8, 8]),
+            scrollable(container(body).padding([8, 16]))
+                .id("inspector-content")
+                .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))
+                .height(Length::Fill)
+        ]
+        .spacing(4);
+        if self.inspector_tab == InspectorTab::Properties && self.tab.optimization.is_some() {
+            content = content.push(container(self.optimization_footer()).padding([10, 16]));
+        }
+        container(content)
+            .width(self.inspector_width())
+            .height(Length::Fill)
+            .style(panel)
+            .into()
     }
 
     fn templates_panel(&self) -> Element<'_, Message> {
@@ -2096,6 +2320,17 @@ pub(super) struct RowCommand {
     pub enabled: bool,
 }
 
+/// Shared by the inline context row and its foreground overflow menu.
+pub(super) fn keyboard_control_id(message: &Message) -> Option<&'static str> {
+    use super::keyboard_drawing::Action;
+    match message {
+        Message::KeyboardDrawing(Action::Mark) => Some("keyboard-mark"),
+        Message::KeyboardDrawing(Action::Connect) => Some("keyboard-connect"),
+        Message::KeyboardDrawing(Action::Leave) => Some("keyboard-done"),
+        _ => None,
+    }
+}
+
 /// Measured widths of a context row's parts.
 struct Fold<'a> {
     /// The tool name and its short form.
@@ -2664,14 +2899,42 @@ mod selection_tests {
     fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
         let (mut app, _) = App::new();
         app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
-        assert!(app.context_commands().is_empty());
+        let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
+        assert_eq!(labels, ["3D optimize…", "Mark [", "Connect ]"]);
+        assert!(app.context_commands().iter().all(|command| !matches!(
+            command.message,
+            Message::Copy(_) | Message::CopyImage | Message::CopyAs(_) | Message::Paste
+        )));
+        let _ = app.update(Message::KeyboardDrawing(
+            super::super::keyboard_drawing::Action::Leave,
+        ));
+        assert!(!app.keyboard_drawing_active());
+        let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
+        assert_eq!(labels, ["3D optimize…", "Keyboard drawing"]);
         app.tab.selected = app.tab.doc.all_ids();
         let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-        assert_eq!(labels, ["Move & attach…", "Group"]);
+        assert_eq!(
+            labels,
+            [
+                "3D optimize…",
+                "Keyboard drawing",
+                "Move & attach…",
+                "Group"
+            ]
+        );
         let _ = app.update(Message::Group);
         let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-        assert_eq!(labels, ["Move & attach…", "Group", "Ungroup"]);
-        assert!(!app.context_commands()[1].enabled);
+        assert_eq!(
+            labels,
+            [
+                "3D optimize…",
+                "Keyboard drawing",
+                "Move & attach…",
+                "Group",
+                "Ungroup"
+            ]
+        );
+        assert!(!app.context_commands()[3].enabled);
     }
 
     #[test]

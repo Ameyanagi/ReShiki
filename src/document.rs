@@ -80,6 +80,10 @@ pub struct Bond {
     /// Bond appearance describes projection depth, not tetrahedral stereochemistry.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub projection: bool,
+    /// Captured chemical stereo is independent of this bond's projected XY.
+    /// An authoritative `None` keeps unspecified double-bond stereo unspecified.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stereo_authoritative: bool,
     #[serde(default)]
     pub z_order: i16,
     #[serde(
@@ -144,7 +148,7 @@ fn forward() -> String {
 }
 
 /// The newest document format this build reads. Saved files are marked with it.
-pub const VERSION: u32 = 18;
+pub const VERSION: u32 = 19;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -179,6 +183,10 @@ pub struct Document {
     pub atom_labels: crate::atom_labels::Settings,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ring_fills: Vec<crate::ring_fills::RingFill>,
+    /// Editable projection paint; ordinary foreground and fill colors remain
+    /// the base colors restored by clearing the depth appearance.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub depth_appearance: Vec<crate::depth_appearance::Scope>,
     pub version: u32,
     pub atoms: Vec<Atom>,
     pub bonds: Vec<Bond>,
@@ -200,6 +208,7 @@ impl Default for Document {
     fn default() -> Self {
         Self {
             ring_fills: vec![],
+            depth_appearance: vec![],
             version: 15,
             drawing_style: Default::default(),
             canvas_theme: Default::default(),
@@ -333,6 +342,7 @@ impl Document {
             highlight: retained.and_then(|bond| bond.highlight),
             ring_arc: false,
             projection: false,
+            stereo_authoritative: false,
             z_order: retained.map_or(0, |bond| bond.z_order),
             indicator: retained.map_or_else(Default::default, |bond| bond.indicator.clone()),
             cip_label: None,
@@ -357,6 +367,21 @@ impl Document {
             return;
         }
         crate::atom_labels::clear_computed(self);
+        // Even an unspecified captured alkene can become a new chemical case
+        // when a substituent is edited. Coordinate-only edits do not enter here.
+        let neighbors: HashSet<_> = self
+            .bonds
+            .iter()
+            .filter_map(|bond| {
+                if affected.contains(&bond.a) {
+                    Some(bond.b)
+                } else if affected.contains(&bond.b) {
+                    Some(bond.a)
+                } else {
+                    None
+                }
+            })
+            .collect();
         for atom in &mut self.atoms {
             atom.label_h = 0;
             if affected.contains(&atom.id)
@@ -372,9 +397,12 @@ impl Document {
             if affected.contains(&bond.a)
                 || affected.contains(&bond.b)
                 || bond.stereo_atoms.iter().any(|a| affected.contains(a))
+                || bond.stereo_authoritative
+                    && (neighbors.contains(&bond.a) || neighbors.contains(&bond.b))
             {
                 bond.stereo = None;
                 bond.stereo_atoms.clear();
+                bond.stereo_authoritative = false;
             }
         }
     }
@@ -391,6 +419,7 @@ impl Document {
         self.graphics.retain(|a| !ids.contains(&a.id));
         crate::projection::prune_centroids(self);
         crate::ring_fills::prune(self);
+        crate::depth_appearance::prune(self);
         self.prune_groups();
         crate::reactions::prune(self);
     }
@@ -432,6 +461,7 @@ impl Document {
     }
     pub fn validate(&self) -> Result<(), String> {
         crate::projection::validate(self)?;
+        crate::depth_appearance::validate(self)?;
         crate::ring_fills::validate(self)?;
         crate::attachments::validate(self)?;
         self.drawing_style.validate()?;
@@ -535,8 +565,12 @@ impl Document {
                 return Err("Duplicate bond".into());
             }
             b.validate_appearance()?;
+            if b.stereo_authoritative && b.order != 2 {
+                return Err("Captured double-bond stereo requires a double bond".into());
+            }
             if b.stereo.is_some()
-                && (b.stereo_atoms.len() != 2
+                && ((b.stereo_atoms.len() != 2
+                    && !(b.stereo.as_deref() == Some("any") && b.stereo_atoms.is_empty()))
                     || b.stereo_atoms.iter().any(|id| !atom_ids.contains(id)))
             {
                 return Err("Invalid bond stereo references".into());
@@ -848,6 +882,7 @@ mod tests {
             highlight: None,
             ring_arc: false,
             projection: false,
+            stereo_authoritative: false,
             z_order: 0,
             indicator: Default::default(),
             cip_label: None,

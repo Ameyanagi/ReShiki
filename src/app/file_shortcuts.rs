@@ -357,8 +357,8 @@ struct Fields {
 }
 
 impl Fields {
-    /// Enter that a field applied leaves it. Unhandled Undo, Redo and arrow
-    /// keys stay in a focused field instead of changing the drawing.
+    /// Enter that a field applied leaves it. Unhandled Undo, Redo, arrow and
+    /// optimization keys stay in a focused field instead of changing the drawing.
     fn after(event: &Event, captured: bool) -> Option<Self> {
         let Event::Keyboard(keyboard::Event::KeyPressed {
             key,
@@ -382,10 +382,15 @@ impl Fields {
                         | keyboard::key::Named::ArrowDown
                         | keyboard::key::Named::ArrowLeft
                         | keyboard::key::Named::ArrowRight
+                        | keyboard::key::Named::F8
                 )
             ) || matches!(
                 super::shortcuts::key_message(key, modified_key, *modifiers),
-                Some(Message::Undo | Message::Redo)
+                Some(
+                    Message::Undo
+                        | Message::Redo
+                        | Message::Optimization(super::optimization::Action::Begin)
+                )
             ))
             .then(Self::default)
         }
@@ -467,6 +472,53 @@ fn activation_event(event: &Event) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unhandled_optimization_chord_is_swallowed_only_by_a_focused_field() {
+        use keyboard::{
+            Key, Modifiers,
+            key::{Code, Physical},
+        };
+        let command = if cfg!(target_os = "macos") {
+            Modifiers::LOGO
+        } else {
+            Modifiers::CTRL
+        };
+        let event = Event::Keyboard(keyboard::Event::KeyPressed {
+            key: Key::Character("d".into()),
+            modified_key: Key::Character("D".into()),
+            physical_key: Physical::Code(Code::KeyD),
+            location: keyboard::Location::Standard,
+            modifiers: command | Modifiers::SHIFT,
+            text: None,
+            repeat: false,
+        });
+        assert!(matches!(
+            super::super::shortcuts::key_message(
+                &Key::Character("d".into()),
+                &Key::Character("D".into()),
+                command | Modifiers::SHIFT
+            ),
+            Some(Message::Optimization(
+                super::super::optimization::Action::Begin
+            ))
+        ));
+        let mut fields = Fields::after(&event, false)
+            .expect("Check focus after an unhandled optimization chord");
+        let mut messages = Vec::new();
+        let mut shell = Shell::new(&mut messages);
+        fields.finish(&mut shell);
+        assert_eq!(shell.event_status(), iced::event::Status::Ignored);
+        fields.focused = true;
+        fields.finish(&mut shell);
+        assert_eq!(shell.event_status(), iced::event::Status::Captured);
+        assert!(!fields.leave, "Keep the field focused");
+        assert!(Fields::after(&event, true).is_none());
+        assert!(
+            messages.is_empty(),
+            "Focused optimization chords publish no drawing action"
+        );
+    }
 
     #[test]
     fn modal_activation_rejects_control_alt_and_logo_on_every_platform() {

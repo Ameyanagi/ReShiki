@@ -86,6 +86,7 @@ impl NativeBond {
         Ok(Bond {
             ring_arc: false,
             projection: false,
+            stereo_authoritative: false,
             a: self.a,
             b: self.b,
             order: self.order,

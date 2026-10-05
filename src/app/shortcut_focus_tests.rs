@@ -108,6 +108,23 @@ impl Ui {
         find.1.expect("input in the real app view")
     }
 
+    fn input_value(&mut self, app: &App, target: &'static str) -> String {
+        struct Find(Id, Option<String>);
+        impl Operation for Find {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+                operate(self);
+            }
+            fn text_input(&mut self, id: Option<&Id>, _: Rectangle, state: &mut dyn TextInput) {
+                if id == Some(&self.0) {
+                    self.1 = Some(state.text().into());
+                }
+            }
+        }
+        let mut find = Find(Id::new(target), None);
+        self.inspect(app, &mut find);
+        find.1.expect("input value in the real app view")
+    }
+
     fn semantics(&mut self, app: &App) -> reshiki::accessibility::Snapshot {
         let mut collect = reshiki::accessibility::Collect::new(self.viewport);
         self.inspect(
@@ -1084,4 +1101,332 @@ async fn focused_numeric_field_keeps_arrow_keys_out_of_drawing_transforms() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, drawing);
     assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn keyboard_drawing_mode_keeps_real_fields_in_charge_of_typing_arrows_and_f8() {
+    use super::keyboard_drawing::Action as Drawing;
+    use reshiki::{document::Point, keyboard_drawing::Target};
+
+    for panel in ["numeric", "sidebar labels", "assistant", "atom label"] {
+        let mut ui = Ui::new().await;
+        ui.viewport = Rectangle::with_size(Size::new(1280., 1800.));
+        let (mut app, _) = App::new();
+        let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.selected = vec![a];
+        app.tab.saved = app.tab.doc.clone();
+        app.tab.history = super::History::default();
+        app.tab.busy = false;
+        if !app.tab.keyboard_drawing.enabled() {
+            let _ = app.update(Message::KeyboardDrawing(Drawing::Toggle));
+        }
+        app.sync_keyboard_drawing();
+        assert!(app.tab.keyboard_drawing.enabled());
+        assert_eq!(app.tab.keyboard_drawing.target(), Target::Atom(a));
+        app.inspector_open = true;
+        let field = match panel {
+            "numeric" => {
+                app.tab.selected = vec![a, b];
+                app.inspector_tab = InspectorTab::Properties;
+                let _ = app.update(Message::Canvas(crate::canvas::Edit::BeginTransform(
+                    crate::canvas::TransformField::Rotation,
+                )));
+                ui.input(&app, "transform-rotation").0
+            }
+            "sidebar labels" => {
+                app.inspector_tab = InspectorTab::Labels;
+                app.tab.labels.seed = "keyboard-focus-seed".into();
+                ui.input_text(&app, "keyboard-focus-seed").0
+            }
+            "assistant" => {
+                app.inspector_tab = InspectorTab::Assistant;
+                ui.input(&app, "assistant-input").0
+            }
+            _ => {
+                let _ = app.update(Message::AtomText(super::atom_text::Action::Begin(Some(a))));
+                ui.input(&app, "atom-text").0
+            }
+        };
+        assert!(ui.viewport.contains(field.center()), "{panel}: {field:?}");
+        ui.click(&mut app, field.center());
+        let drawing = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let selection = app.tab.selected.clone();
+        let target = app.tab.keyboard_drawing.target();
+
+        for (text, code, modifiers) in [
+            ("3", Code::Digit3, Modifiers::empty()),
+            ("n", Code::KeyN, Modifiers::empty()),
+            ("N", Code::KeyN, Modifiers::SHIFT),
+            ("[", Code::BracketLeft, Modifiers::empty()),
+            ("]", Code::BracketRight, Modifiers::empty()),
+        ] {
+            let (status, messages) = ui.event(
+                &app,
+                press(Key::Character(text.into()), code, modifiers, Some(text)),
+                mouse::Cursor::Unavailable,
+            );
+            assert_eq!(
+                status,
+                iced::event::Status::Captured,
+                "{panel}: {text}: {messages:?}"
+            );
+            assert!(
+                !messages.iter().any(|message| matches!(
+                    message,
+                    Message::ContextKey(_) | Message::KeyboardDrawing(_) | Message::Shortcut(_)
+                )),
+                "{panel}: {messages:?}"
+            );
+            apply(&mut app, messages);
+        }
+
+        for modifiers in [
+            Modifiers::empty(),
+            Modifiers::SHIFT,
+            Modifiers::ALT,
+            Modifiers::ALT | Modifiers::SHIFT,
+        ] {
+            for (named, code) in [
+                (Named::ArrowLeft, Code::ArrowLeft),
+                (Named::ArrowRight, Code::ArrowRight),
+                (Named::ArrowUp, Code::ArrowUp),
+                (Named::ArrowDown, Code::ArrowDown),
+            ] {
+                let (status, messages) = ui.event(
+                    &app,
+                    press(Key::Named(named), code, modifiers, None),
+                    mouse::Cursor::Unavailable,
+                );
+                assert_eq!(
+                    status,
+                    iced::event::Status::Captured,
+                    "{panel}: {named:?}: {messages:?}"
+                );
+                assert!(
+                    !messages.iter().any(|message| matches!(
+                        message,
+                        Message::Shortcut(_) | Message::Transform(_) | Message::KeyboardDrawing(_)
+                    )),
+                    "{panel}: {messages:?}"
+                );
+                apply(&mut app, messages);
+            }
+        }
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Named(Named::F8), Code::F8, Modifiers::empty(), None),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(
+            status,
+            iced::event::Status::Captured,
+            "{panel}: F8: {messages:?}"
+        );
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::KeyboardDrawing(_))),
+            "{panel}: {messages:?}"
+        );
+        apply(&mut app, messages);
+        assert!(
+            app.tab.keyboard_drawing.enabled(),
+            "{panel}: F8 must stay in the field"
+        );
+        assert_eq!(app.tab.keyboard_drawing.target(), target, "{panel}");
+        assert_eq!(
+            app.tab.keyboard_drawing.marked(),
+            None,
+            "{panel}: typed brackets are field content"
+        );
+        assert_eq!(app.tab.doc, drawing, "{panel}");
+        assert_eq!(app.tab.saved, drawing, "{panel}");
+        assert_eq!(app.tab.revision, revision, "{panel}");
+        assert_eq!(app.tab.selected, selection, "{panel}");
+        assert!(!app.tab.history.can_undo(), "{panel}");
+        assert!(!app.tab.history.can_redo(), "{panel}");
+
+        let focused = match panel {
+            "numeric" => ui.input(&app, "transform-rotation").1,
+            "sidebar labels" => ui.input_text(&app, &app.tab.labels.seed).1,
+            "assistant" => ui.input(&app, "assistant-input").1,
+            _ => ui.input(&app, "atom-text").1,
+        };
+        assert!(focused, "{panel}: F8 must preserve actual field focus");
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn optimization_chord_stays_in_real_focused_fields_and_routes_after_blur() {
+    use super::optimization::Action as Optimize;
+    use reshiki::document::Point;
+    let command = if cfg!(target_os = "macos") {
+        Modifiers::LOGO
+    } else {
+        Modifiers::CTRL
+    };
+
+    for panel in ["numeric", "sidebar labels"] {
+        let mut ui = Ui::new().await;
+        ui.viewport = Rectangle::with_size(Size::new(1280., 1800.));
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.selected = vec![a, b];
+        app.tab.saved = app.tab.doc.clone();
+        app.tab.history = super::History::default();
+        app.sync_keyboard_drawing();
+        app.inspector_open = true;
+        let field = if panel == "numeric" {
+            app.inspector_tab = InspectorTab::Properties;
+            let _ = app.update(Message::Canvas(crate::canvas::Edit::BeginTransform(
+                crate::canvas::TransformField::Rotation,
+            )));
+            ui.input(&app, "transform-rotation").0
+        } else {
+            app.inspector_tab = InspectorTab::Labels;
+            app.tab.labels.seed = "optimization-focus-seed".into();
+            ui.input_text(&app, "optimization-focus-seed").0
+        };
+        ui.click(&mut app, field.center());
+        let drawing = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let target = app.tab.keyboard_drawing.target();
+        let draft = if panel == "numeric" {
+            ui.input_value(&app, "transform-rotation")
+        } else {
+            app.tab.labels.seed.clone()
+        };
+        let (status, messages) = ui.event(
+            &app,
+            press(
+                Key::Character("D".into()),
+                Code::KeyD,
+                command | Modifiers::SHIFT,
+                Some("D"),
+            ),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(
+            status,
+            iced::event::Status::Captured,
+            "{panel}: {messages:?}"
+        );
+        assert!(
+            messages.is_empty(),
+            "{panel}: Command+Shift+D must not publish or type: {messages:?}"
+        );
+        apply(&mut app, messages);
+        let after_command = if panel == "numeric" {
+            assert!(ui.input(&app, "transform-rotation").1);
+            ui.input_value(&app, "transform-rotation")
+        } else {
+            assert!(ui.input_text(&app, &app.tab.labels.seed).1);
+            app.tab.labels.seed.clone()
+        };
+        assert_eq!(
+            after_command, draft,
+            "{panel}: command text must not be inserted"
+        );
+        assert!(
+            app.tab.optimization.is_none(),
+            "{panel}: no preview while typing"
+        );
+        assert_eq!(app.tab.doc, drawing, "{panel}");
+        assert_eq!(app.tab.keyboard_drawing.target(), target, "{panel}");
+
+        let (status, messages) = ui.event(
+            &app,
+            press(
+                Key::Character("D".into()),
+                Code::KeyD,
+                Modifiers::SHIFT,
+                Some("D"),
+            ),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(
+            status,
+            iced::event::Status::Captured,
+            "{panel}: {messages:?}"
+        );
+        assert!(
+            !messages.iter().any(|message| matches!(
+                message,
+                Message::Optimization(_) | Message::ContextKey(_) | Message::Shortcut(_)
+            )),
+            "{panel}: {messages:?}"
+        );
+        apply(&mut app, messages);
+        let typed = if panel == "numeric" {
+            ui.input_value(&app, "transform-rotation")
+        } else {
+            app.tab.labels.seed.clone()
+        };
+        assert_ne!(typed, draft, "{panel}: Shift+D remains text input");
+        assert!(typed.contains('D'), "{panel}: {typed}");
+        assert!(app.tab.optimization.is_none());
+        assert_eq!(
+            app.tab.doc, drawing,
+            "{panel}: typing must not seed, duplicate or modify the drawing"
+        );
+        assert_eq!(app.tab.saved, drawing, "{panel}");
+        assert_eq!(app.tab.revision, revision, "{panel}");
+        assert_eq!(app.tab.selected, vec![a, b], "{panel}");
+        assert!(
+            !app.tab.history.can_undo() && !app.tab.history.can_redo(),
+            "{panel}"
+        );
+
+        let (_, messages) = ui.event(
+            &app,
+            press(
+                Key::Named(Named::Escape),
+                Code::Escape,
+                Modifiers::empty(),
+                None,
+            ),
+            mouse::Cursor::Unavailable,
+        );
+        apply(&mut app, messages);
+        let focused = if panel == "numeric" {
+            ui.input(&app, "transform-rotation").1
+        } else {
+            ui.input_text(&app, &app.tab.labels.seed).1
+        };
+        assert!(!focused, "{panel}: Escape releases field focus");
+        let (status, messages) = ui.event(
+            &app,
+            press(
+                Key::Character("D".into()),
+                Code::KeyD,
+                command | Modifiers::SHIFT,
+                Some("D"),
+            ),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(
+            status,
+            iced::event::Status::Ignored,
+            "{panel}: {messages:?}"
+        );
+        assert!(matches!(
+            messages.as_slice(),
+            [Message::Optimization(Optimize::Begin)]
+        ));
+        apply(&mut app, messages);
+        assert!(
+            app.tab.optimization.is_some(),
+            "{panel}: blurred shortcut opens the preview"
+        );
+        assert_eq!(app.tab.doc, drawing);
+        assert!(!app.tab.history.can_undo() && !app.tab.history.can_redo());
+    }
 }

@@ -38,6 +38,7 @@ pub(super) struct DocumentTab {
     // Selection and view.
     pub(super) selected: Vec<u64>,
     pub(super) hover: Option<(Point, u64)>,
+    pub(super) keyboard_drawing: reshiki::keyboard_drawing::State,
     pub(super) camera: Camera,
     pub(super) fit_to_view: bool,
     pub(super) pages: pages::State,
@@ -49,6 +50,8 @@ pub(super) struct DocumentTab {
     pub(super) erase_committed: bool,
     pub(super) cleanup: Option<CleanupPreview>,
     pub(super) cleanup_serial: u64,
+    pub(super) optimization: Option<super::optimization::Session>,
+    pub(super) optimization_serial: u64,
     // Derived chemistry and in-flight work.
     pub(super) analysis: Option<Analysis>,
     pub(super) busy: bool,
@@ -113,6 +116,7 @@ impl DocumentTab {
             untitled_name: None,
             selected: vec![],
             hover: None,
+            keyboard_drawing: Default::default(),
             camera: Camera::default(),
             fit_to_view: false,
             pages: pages::State::default(),
@@ -123,6 +127,8 @@ impl DocumentTab {
             erase_committed: false,
             cleanup: None,
             cleanup_serial: 0,
+            optimization: None,
+            optimization_serial: 0,
             analysis: None,
             busy: false,
             clipboard_busy: false,
@@ -193,6 +199,7 @@ impl DocumentTab {
             && !self.busy
             && !self.clipboard_busy
             && self.cleanup.is_none()
+            && self.optimization.is_none()
             && self.inline_text.is_none()
             && self.atom_text.is_none()
             && self.joining.is_none()

@@ -219,9 +219,15 @@ class ReleaseTests(unittest.TestCase):
     def test_release_includes_adapted_source_licenses(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "Licenses"
-            with patch("build_release.run") as run:
+            with (
+                patch("build_release.run") as run,
+                patch("geometry_source.verify") as geometry,
+            ):
                 run.return_value = subprocess.CompletedProcess([], 0, stdout='{"packages": []}')
                 notices(destination)
+            geometry.assert_called_once_with(
+                Path(__file__).resolve().parents[1], cargo_metadata={"packages": []}
+            )
             self.assertIn(
                 "BSD 3-Clause License",
                 (destination / "THIRD-PARTY-NOTICES.txt").read_text(),
@@ -262,6 +268,16 @@ class ReleaseTests(unittest.TestCase):
                     "build_inchi_helper.dependency",
                     return_value={"name": "cosmolkit-inchi", "version": "0.3.0"},
                 ),
+                patch(
+                    "geometry_source.verify",
+                    return_value={
+                        "version": "2026.03.6",
+                        "implementation": "Rust",
+                        "runtime": "self-process-rust-core",
+                        "runtime_python": False,
+                        "backend": {"name": "cosmolkit-core", "version": "0.3.0"},
+                    },
+                ),
                 patch("build_release.verify_archive"),
                 patch("build_release.run") as run,
                 patch("sys.argv", ["build_release.py", "--target", target]),
@@ -291,6 +307,11 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(metadata["inchi"]["version"], "1.07.5")
                 self.assertEqual(metadata["inchi"]["runtime"], "self-process")
                 self.assertEqual(metadata["inchi"]["dependency"]["name"], "cosmolkit-inchi")
+                self.assertEqual(metadata["geometry"]["backend"]["name"], "cosmolkit-core")
+                self.assertEqual(metadata["geometry"]["implementation"], "Rust")
+                self.assertEqual(metadata["geometry"]["runtime"], "self-process-rust-core")
+                self.assertEqual(metadata["geometry"]["linkage"], "static")
+                self.assertFalse(metadata["geometry"]["runtime_python"])
                 self.assertEqual(
                     [name for name in stream.namelist() if name.endswith(".exe")],
                     ["reshiki-1.2.3-windows-arm64/reshiki.exe"],

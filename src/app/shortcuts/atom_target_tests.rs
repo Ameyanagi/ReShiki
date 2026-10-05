@@ -1288,6 +1288,12 @@ fn empty_canvas_tool_aliases_do_not_relabel_or_change_drawing_history() {
         ),
     ] {
         let (mut app, _, _) = fixture("N");
+        // Off preserves classic empty-canvas aliases. Hybrid mode uses these
+        // contextual atom/ring keys to seed at its blank hotspot.
+        let _ = app.update(Message::KeyboardDrawing(
+            crate::app::keyboard_drawing::Action::Leave,
+        ));
+        assert!(!app.tab.keyboard_drawing.enabled());
         app.tab.selected.clear();
         hover(&mut app, Point::new(-400., -400.));
         let before = app.tab.doc.clone();
@@ -1313,6 +1319,12 @@ fn empty_canvas_tool_aliases_do_not_relabel_or_change_drawing_history() {
         ("B", "B"),
     ] {
         let (mut app, _, _) = fixture("N");
+        // Classic empty-canvas element aliases choose a pointer drawing tool;
+        // default hybrid mode intentionally places an atom at its hotspot.
+        let _ = app.update(Message::KeyboardDrawing(
+            crate::app::keyboard_drawing::Action::Leave,
+        ));
+        assert!(!app.tab.keyboard_drawing.enabled());
         app.tab.selected.clear();
         hover(&mut app, Point::new(-400., -400.));
         let before = app.tab.doc.clone();

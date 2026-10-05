@@ -17,6 +17,9 @@ use crate::{
 use base64::{Engine, engine::general_purpose::STANDARD};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub helper: PathBuf,
@@ -125,7 +128,7 @@ pub async fn analyze_prepared(
     let source = Arc::clone(&molecule);
     let (smiles, input) = tokio::task::spawn_blocking(move || {
         molecular::validate_molecule(&source)?;
-        prepare_identifiers(&source)
+        prepare_identifiers(&source, false)
     })
     .await??;
     let inchi = generate_inchi(input.as_ref(), config).await?;
@@ -185,7 +188,11 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
             }
             Err(error) => return Err(error.into()),
         };
-        let drawing = molecular::for_drawing(&molecule, document)?;
+        let drawing = if preserves_projection(&source) {
+            molecule.projected_drawing(document)?
+        } else {
+            molecular::for_drawing(&molecule, document)?
+        };
         Ok(Some(Arc::new(Prepared { molecule, drawing })))
     })
     .await??;
@@ -292,11 +299,21 @@ fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error>
     }
     // The original to_document pass precedes Analyze. Full CIP operates on
     // the detached drawing, never on the molecule used for identifiers.
-    let document = prepared
-        .drawing
-        .clone()
-        .finish(prepared.drawing.labels()?)?;
-    let (smiles, inchi) = prepare_identifiers(&prepared.molecule)?;
+    let labels = prepared.drawing.labels()?;
+    let document = if preserves_projection(request) {
+        prepared
+            .drawing
+            .clone()
+            .finish_preserving(labels, document)?
+    } else {
+        prepared.drawing.clone().finish(labels)?
+    };
+    let (smiles, inchi) = prepare_identifiers(
+        &prepared.molecule,
+        molfile::has_projected_coordinates(
+            request.document.as_ref().ok_or(Error::MissingDocument)?,
+        ),
+    )?;
     Ok(Draft {
         document,
         smiles,
@@ -305,8 +322,17 @@ fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error>
     })
 }
 
+fn preserves_projection(request: &Request) -> bool {
+    matches!(request.operation.as_str(), "analyze" | "export")
+        && request
+            .document
+            .as_ref()
+            .is_some_and(molfile::has_projected_coordinates)
+}
+
 fn prepare_identifiers(
     molecule: &molecular::Molecule,
+    projected: bool,
 ) -> Result<(String, Option<kernel::Molecule>), Error> {
     let bonds = &molecule.state.graph.bonds;
     let identifiers = !bonds.iter().any(|b| matches!(b.order, 0 | 7));
@@ -316,7 +342,10 @@ fn prepare_identifiers(
         String::new()
     };
     let inchi = if identifiers && !bonds.iter().any(|b| matches!(b.order, 5 | 6)) {
-        match kernel::Molecule::prepare(&molecule.state, Some(&molecule.positions)) {
+        // A flattened view must not invent stereochemistry from its XY. The
+        // prepared state already owns the tetrahedral and double-bond tags.
+        let positions = (!projected).then_some(molecule.positions.as_slice());
+        match kernel::Molecule::prepare(&molecule.state, positions) {
             Ok(input) => Some(input),
             // The pinned adapter returns an empty identifier before calling the
             // kernel when its one-sided adjacency exceeds native storage.
@@ -411,10 +440,16 @@ fn finish(
                 .ok_or(Error::Empty)?
                 .inchi
                 .clone(),
-            Some("mol") => molfile::write_absolute(
-                &prepared.ok_or(Error::MissingPrepared)?.molecule,
-                Default::default(),
-            )?,
+            Some("mol") => {
+                let molecule = &prepared.ok_or(Error::MissingPrepared)?.molecule;
+                if molfile::has_projected_coordinates(
+                    request.document.as_ref().ok_or(Error::MissingDocument)?,
+                ) {
+                    molfile::write_projected_absolute(molecule, Default::default())?
+                } else {
+                    molfile::write_absolute(molecule, Default::default())?
+                }
+            }
             Some("cdxml" | "cdx") => {
                 let xml = exchange::drawing::write(document, request.into())?;
                 if format == Some("cdx") {

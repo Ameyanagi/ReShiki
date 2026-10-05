@@ -302,6 +302,7 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
         .zip(&drawn.graph.bonds)
     {
         let code = match item.stereo.as_deref() {
+            Some("any") => Some(1),
             Some("z") => Some(2),
             Some("e") => Some(3),
             Some("cis") => Some(4),
@@ -314,6 +315,12 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
                 .iter()
                 .map(|&id| index(&input.indices, id))
                 .collect::<Result<Vec<_>, _>>()?;
+            if code == 1 && controls.is_empty() {
+                meta.stereo = 1;
+                meta.stereo_atoms.clear();
+                meta.unknown_stereo = true;
+                continue;
+            }
             if controls.len() != 2
                 || !edges.contains(&(bond.a, *at(&controls, 0)?))
                 || !edges.contains(&(bond.b, *at(&controls, 1)?))
@@ -324,39 +331,66 @@ fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
             }
             meta.stereo_atoms = controls;
             meta.stereo = code;
-        } else if item.order == 2 && item.display == "wavy" {
+            meta.unknown_stereo = code == 1;
+        } else if item.order == 2 && item.display == "wavy" && !item.stereo_authoritative {
             meta.stereo = 1;
         }
     }
-    let geometry = stereo::detect_bond_stereo(
-        &drawn.graph,
-        &drawn.metadata,
-        &sanitized.directions,
-        Some(&input.positions),
-        &sanitized.rings,
-    )
+    let authoritative: Option<Vec<_>> =
+        document
+            .bonds
+            .iter()
+            .any(|b| b.stereo_authoritative)
+            .then(|| {
+                document
+                    .bonds
+                    .iter()
+                    .map(|b| b.stereo_authoritative)
+                    .collect()
+            });
+    let geometry = if let Some(mask) = authoritative.as_deref() {
+        stereo::detect_bond_stereo_preserving(
+            &drawn.graph,
+            &drawn.metadata,
+            &sanitized.directions,
+            Some(&input.positions),
+            &sanitized.rings,
+            mask,
+        )
+    } else {
+        stereo::detect_bond_stereo(
+            &drawn.graph,
+            &drawn.metadata,
+            &sanitized.directions,
+            Some(&input.positions),
+            &sanitized.rings,
+        )
+    }
     .map_err(Error::Stereo)?;
     let properties = perception::Properties::unspecified(&drawn.graph);
-    let state = perception::perceive(
-        &perception::State {
-            graph: drawn.graph,
-            metadata: geometry.metadata,
-            directions: geometry.directions,
-            valences: drawn.valences,
-            conjugated: sanitized.conjugated,
-            hybridizations: sanitized.hybridizations,
-            rings: perception::RingCache {
-                kind: perception::RingKind::Symmetric,
-                atoms: sanitized.rings,
-            },
-            properties,
+    let state = perception::State {
+        graph: drawn.graph,
+        metadata: geometry.metadata,
+        directions: geometry.directions,
+        valences: drawn.valences,
+        conjugated: sanitized.conjugated,
+        hybridizations: sanitized.hybridizations,
+        rings: perception::RingCache {
+            kind: perception::RingKind::Symmetric,
+            atoms: sanitized.rings,
         },
-        perception::Options {
-            clean: false,
-            force: true,
-            flag_possible: false,
-        },
-    )
+        properties,
+    };
+    let options = perception::Options {
+        clean: false,
+        force: true,
+        flag_possible: false,
+    };
+    let state = if let Some(mask) = authoritative.as_deref() {
+        perception::perceive_preserving_bonds(&state, options, mask)
+    } else {
+        perception::perceive(&state, options)
+    }
     .map_err(Error::Stereo)?;
     if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
         || state.metadata.atoms.iter().any(|a| a.chiral_tag > 2)

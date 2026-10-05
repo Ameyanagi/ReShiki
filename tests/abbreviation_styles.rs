@@ -1,5 +1,5 @@
 use reshiki::{
-    document::{Document, Point},
+    document::{Document, Point, VERSION},
     palette::{self, Color, Hue, Row},
     typography::TextStyle,
 };
@@ -33,7 +33,7 @@ fn independent_label_style_survives_native_save_and_expansion_keeps_internal_typ
     group.label_color_override = true;
     let bytes = doc.file_json().unwrap();
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(json["version"], 18);
+    assert_eq!(json["version"], VERSION);
     assert!(
         json["abbreviations"][0]["label_color_override"]
             .as_bool()

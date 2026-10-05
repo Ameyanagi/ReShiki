@@ -1,0 +1,46 @@
+Rust geometry backend and parameter data
+=======================================
+
+ReShiki's geometry worker uses cosmolkit-core 0.3.0 from the COSMolKit Rust
+implementation, https://github.com/Ameyanagi/COSMolKit.git. The complete Git
+revision is pinned in native/geometry/Cargo.toml and Cargo.lock and recorded
+in each release's build.json. COSMolKit retains its MIT license and the
+copyright of the COSMolKit Contributors; its complete terms are included
+by the Rust dependency notice supplements and consolidated distribution.
+The geometry adapter and worker integration are original ReShiki code.
+
+COSMolKit implements distance-geometry embedding, MMFF94, MMFF94s, UFF,
+atom typing, energy/gradient evaluation, and optimization in Rust. Its Rust
+build script reads embedded RDKit parameter/torsion/atomic data to generate
+Rust constants. Files named Params.cpp and atomic_data.cpp are data sources
+for that generator; no C++ solver or Boost headers are compiled or linked.
+Python is used only by separate developer/reference tests. The application
+runs from its own executable without a Python or RDKit runtime or downloads.
+
+COSMolKit identifies the parameter/reference origin as RDKit 2026.03.1,
+revision 351f8f378f8ad6bbd517980c38896e66bf907af8. The independent ReShiki
+comparison reference is RDKit 2026.03.6, revision
+0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985, https://github.com/rdkit/rdkit.
+This reference version is retained in the worker protocol's version field;
+it does not identify the Rust backend or original parameter-source revision.
+Exact SHA-256 values for
+COSMolKit's embedded data are audited by scripts/geometry_source.py and
+recorded in release build.json. UFF, atomic data, ETKDGv2, small-ring and
+macrocycle torsion files match that RDKit reference. The MMFF source adds
+an Id header, and the legacy torsion-v1 file repeats its first pattern.
+
+Original RDKit source/data notices remain applicable under BSD-3-Clause; see
+RDKIT-LICENSE. The embedded source files preserve:
+Copyright (C) 2013 Paolo Tosco
+Copyright (C) 2004-2006 Rational Discovery LLC
+Copyright (C) 2004-2021 Greg Landrum and other RDKit contributors
+Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors
+All Rights Reserved
+
+The MMFF parameter data additionally preserve:
+Copyright (c) Merck and Co., Inc., 1994, 1995, 1996
+All Rights Reserved
+and, for MMFF94s-specific tables:
+Copyright (c) Merck and Co., Inc., 1994,1995,1996,1997,1998,1999
+All Rights Reserved
+This notice does not replace, modify, or relicense those original notices.

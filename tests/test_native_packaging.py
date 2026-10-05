@@ -135,6 +135,7 @@ class NativeRuntimeTests(unittest.TestCase):
                 "platform": "windows",
                 "architecture": "arm64",
                 "inchi": {"version": "1.07.5"},
+                "geometry": {"version": "2026.03.6"},
             }
             with zipfile.ZipFile(archive, "w") as stream:
                 stream.writestr("package/build.json", json.dumps(metadata))
@@ -144,11 +145,13 @@ class NativeRuntimeTests(unittest.TestCase):
                 patch("build_release.verify_binary"),
                 patch("build_release.verify_inchi_worker") as helper,
                 patch("build_release.verify_runtime") as check,
+                patch("build_release.verify_geometry_worker") as geometry,
             ):
                 build_release.verify_archive(archive)
             self.assertEqual(helper.call_args.args[0].name, "reshiki.exe")
             self.assertEqual(check.call_args.args[0].parent, check.call_args.args[1])
             self.assertEqual(check.call_count, 1)
+            geometry.assert_called_once_with(check.call_args.args[0], "2026.03.6")
 
     def test_windows_upgrade_cleanup_is_scoped_to_the_app(self):
         script = (build_release.ROOT / "packaging/windows/reshiki.iss").read_text()

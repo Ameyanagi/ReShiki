@@ -205,7 +205,15 @@ mod tests {
         assert!(run_item(&mut app, Page::Arrange, "Align needs 2 objects").is_err());
         assert_eq!(
             labels(&app, Page::More(2)),
-            ["Move & attach…", "Group"],
+            ["3D optimize…", "Move & attach…"],
+            "Default keyboard drawing folds the selection commands first"
+        );
+        let _ = app.update(Message::KeyboardDrawing(
+            super::super::keyboard_drawing::Action::Leave,
+        ));
+        assert_eq!(
+            labels(&app, Page::More(2)),
+            ["3D optimize…", "Keyboard drawing (F8)"],
             "⋯ lists the folded commands in row order"
         );
         let _ = app.update(Message::ContextMenu(Action::Open(Page::Arrange, 300.)));
@@ -1182,6 +1190,11 @@ impl App {
     fn context_panel(&self, menu: &State, page: Page, level: usize) -> cascade::Panel<'_> {
         let mut entries = column![].spacing(1);
         let mut items = Vec::new();
+        let keyboard_commands = if matches!(page, Page::More(_)) {
+            self.context_commands()
+        } else {
+            Vec::new()
+        };
         if matches!(page, Page::Main) && !self.tab.selected.is_empty() {
             entries = entries.push(
                 container(
@@ -1200,7 +1213,18 @@ impl App {
                     enabled,
                 } => {
                     let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
-                    let accessible_name = label;
+                    let keyboard_hint = match &action {
+                        Action::Run(message) => super::workspace::keyboard_control_id(message)
+                            .and_then(|id| {
+                                keyboard_commands.iter().find(|command| {
+                                    super::workspace::keyboard_control_id(&command.message)
+                                        == Some(id)
+                                })
+                            })
+                            .map(|command| command.hint),
+                        _ => None,
+                    };
+                    let accessible_name = keyboard_hint.unwrap_or(label);
                     let label = text(label).size(12).width(Length::Fill);
                     let label = if destructive {
                         label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
@@ -1225,30 +1249,43 @@ impl App {
                                 .children
                                 .get(level)
                                 .is_some_and(|child| child.anchor == index));
-                    let item = reshiki::accessibility::button(
-                        format!("menu-{page:?}-{index}"),
-                        accessible_name,
-                        content,
-                    )
-                    .padding([6, 10])
-                    .width(Length::Fill)
-                    .style(move |theme: &iced::Theme, status| {
-                        let mut style = button::text(theme, status);
-                        if active {
-                            style.background = Some(
-                                Color {
-                                    a: 0.12,
-                                    ..theme.palette().primary
-                                }
-                                .into(),
-                            );
+                    let id = match &action {
+                        Action::Run(message) => {
+                            super::workspace::keyboard_control_id(message).map(str::to_owned)
                         }
-                        style
-                    })
-                    .on_press_maybe(
-                        enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
-                    );
+                        _ => None,
+                    }
+                    .unwrap_or_else(|| format!("menu-{page:?}-{index}"));
+                    let item = reshiki::accessibility::button(id, accessible_name, content)
+                        .padding([6, 10])
+                        .width(Length::Fill)
+                        .style(move |theme: &iced::Theme, status| {
+                            let mut style = button::text(theme, status);
+                            if active {
+                                style.background = Some(
+                                    Color {
+                                        a: 0.12,
+                                        ..theme.palette().primary
+                                    }
+                                    .into(),
+                                );
+                            }
+                            style
+                        })
+                        .on_press_maybe(
+                            enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
+                        );
                     items.push(index);
+                    let item: Element<'_, Message> = if let Some(hint) = keyboard_hint {
+                        super::workspace::hover_hint(
+                            item,
+                            hint.to_owned(),
+                            iced::widget::tooltip::Position::Right,
+                        )
+                        .into()
+                    } else {
+                        item.into()
+                    };
                     entries.push(container(item).id(cascade::row_id(level, index)))
                 }
                 Entry::Separator => entries.push(horizontal_line()),

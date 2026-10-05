@@ -51,6 +51,18 @@ impl App {
                 ),
                 ("F1".into(), "Keyboard shortcuts"),
                 (
+                    "F8".into(),
+                    "Keyboard drawing on/off; orange hotspot shows the active atom or bond",
+                ),
+                (
+                    "Arrows / Shift-arrows in keyboard drawing".into(),
+                    "Navigate atom–bond–atom / skip to the same target kind",
+                ),
+                (
+                    "[ / ] in keyboard drawing".into(),
+                    "Mark an atom / connect the active atom to the marked atom",
+                ),
+                (
                     format!("{} drag", keys(alt, "")),
                     "Draw or move freely, without bond constraints or smart guides",
                 ),
@@ -85,7 +97,6 @@ impl App {
                 (label(Message::Group), "Group"),
                 (label(Message::Ungroup), "Ungroup"),
                 (label(Message::InvertSelection), "Invert selection"),
-                (label(Message::Duplicate), "Duplicate"),
                 (
                     "Drag an object".into(),
                     "Snap to other objects' edges, centers and equal gaps (smart guides)",
@@ -126,7 +137,7 @@ impl App {
             ],
         );
         let context = column![
-            text("Under the pointer (case-sensitive)").size(14),
+            text("Under the pointer or keyboard hotspot (case-sensitive)").size(14),
             shortcut("1 / 2 / 3", "Bond: single / double / triple"),
             shortcut("b / w / h / y", "Bond: bold / wedge / hashed wedge / wavy"),
             shortcut("d / D / B / H", "Bond: dashed / partial double / bold double / hashed"),
@@ -195,6 +206,10 @@ impl App {
                 (keys(command, "P"), "Print"),
                 (keys(command, "J"), "Join selected atoms / bonds"),
                 (keys(command | shift, "K"), "Clean up"),
+                (
+                    label(Message::Optimization(super::optimization::Action::Begin)),
+                    "Generate an optimized 3D conformer",
+                ),
                 (
                     format!("{} / {}", keys(command, "L"), keys(command, "E")),
                     "Fixed bond length / angles",
