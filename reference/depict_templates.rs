@@ -195,7 +195,7 @@ fn builtin_templates_match_direct_native_order_and_construction() -> anyhow::Res
         "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
     );
     let catalog: Value = serde_json::from_str(include_str!(
-        "../src/chemistry/depict/templates/builtin.json"
+        "../crates/chemistry/src/depict/templates/builtin.json"
     ))?;
     let queries = catalog["templates"].as_array().context("catalog")?;
     assert_eq!(queries.len(), 578);
@@ -393,7 +393,7 @@ fn template_bounds_and_outside_degree_predicates_are_atomic() -> anyhow::Result<
         stereo::perception::{RingCache, RingKind},
     };
     let catalog: Value = serde_json::from_str(include_str!(
-        "../src/chemistry/depict/templates/builtin.json"
+        "../crates/chemistry/src/depict/templates/builtin.json"
     ))?;
     let query = catalog["templates"]
         .as_array()

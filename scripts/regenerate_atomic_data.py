@@ -81,7 +81,7 @@ def main():
         "use super::Element;",
         f'pub const RDKIT_VERSION: &str = "{VERSION}";',
         "pub(super) const ELECTRON_MASS: f64 = 0.00054857991;",
-        "pub(super) const ELEMENTS: &[Element] = &[",
+        "pub const ELEMENTS: &[Element] = &[",
     ]
     for symbol, average, exact, common, outer, valences in elements.values():
         lines.append(
@@ -91,12 +91,12 @@ def main():
     lines.extend(
         [
             "];",
-            "pub(super) const ISOTOPES: &[(u8, u16, f64)] = &[",
+            "pub const ISOTOPES: &[(u8, u16, f64)] = &[",
             *(f"    ({n}, {i}, {m!r})," for (n, i), m in sorted(isotopes.items())),
             "];",
         ]
     )
-    (ROOT / "src/chemistry/atomic_data.rs").write_text("\n".join(lines) + "\n")
+    (ROOT / "crates/chemistry/src/atomic_data.rs").write_text("\n".join(lines) + "\n")
     print(f"Generated {len(elements)} elements and {len(isotopes)} isotopes for RDKit {VERSION}")
 
 

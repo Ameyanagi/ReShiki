@@ -66,7 +66,9 @@ def main():
     )
     args = parser.parse_args()
     result = catalog(args.rdkit_source)
-    path = Path(__file__).resolve().parents[1] / "src/chemistry/depict/templates/builtin.json"
+    path = (
+        Path(__file__).resolve().parents[1] / "crates/chemistry/src/depict/templates/builtin.json"
+    )
     if args.check:
         actual = json.loads(path.read_text())
         assert (

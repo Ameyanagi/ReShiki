@@ -254,7 +254,7 @@ class RustBuildTests(unittest.TestCase):
                 self.assertEqual(metadata["target"], target)
                 self.assertEqual(metadata["dependency"]["name"], "cosmolkit-inchi")
                 self.assertEqual(metadata["dependency"]["version"], "0.3.0")
-                self.assertIn("src/chemistry/inchi/kernel.rs", metadata["source_hashes"])
+                self.assertIn("crates/chemistry/src/inchi/kernel.rs", metadata["source_hashes"])
                 self.assertFalse(
                     any(str(arg).endswith((".c", ".cpp")) for cmd in commands for arg in cmd)
                 )

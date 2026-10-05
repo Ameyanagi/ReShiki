@@ -89,7 +89,7 @@ def main():
     source = args.rdkit_source.resolve() / "Code"
     for relative, digest in SOURCE_SHA256.items():
         assert hashlib.sha256((args.rdkit_source / relative).read_bytes()).hexdigest() == digest
-    catalog = json.loads((root / "src/chemistry/depict/templates/builtin.json").read_text())
+    catalog = json.loads((root / "crates/chemistry/src/depict/templates/builtin.json").read_text())
     assert catalog["source_commit"] == PIN
     assert (
         hashlib.sha256((source / "GraphMol/Depictor/TemplateSmarts.h").read_bytes()).hexdigest()

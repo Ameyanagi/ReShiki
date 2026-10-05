@@ -1,0 +1,36 @@
+[package]
+name = "reshiki-chemistry"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Molecular preparation, depiction, identifiers and properties for ReShiki"
+
+[features]
+default = []
+# Optional Python/RDKit development oracles, never part of release builds.
+rdkit-reference = []
+
+[dependencies]
+# Keep identical to the root declaration; scripts/build_inchi_helper.py validates that one.
+cosmolkit-inchi = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "252a1f3d6480fc4a0abcd51d76707f51f69b4406" }
+reshiki-depict-math = { path = "../depict-math" }
+reshiki-process-heap = { path = "../process-heap" }
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"] }
+thiserror = "2"
+tokio = { version = "1", features = [
+  "process",
+  "fs",
+  "io-util",
+  "sync",
+  "time",
+  "rt-multi-thread",
+  "macros",
+] }
+
+[dev-dependencies]
+anyhow = "1"
+reshiki-process-heap = { path = "../process-heap", features = ["allocation-metrics"] }
+tempfile = "3"

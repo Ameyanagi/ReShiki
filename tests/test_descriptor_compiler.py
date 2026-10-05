@@ -15,7 +15,7 @@ from regenerate_descriptor_data import VERSION, Compiler
 
 class DescriptorCompilerTests(unittest.TestCase):
     def test_committed_crippen_rules_replay_recursive_pattern_order_exactly(self):
-        expected = json.loads((ROOT / "src/chemistry/descriptor_data.json").read_text())
+        expected = json.loads((ROOT / "crates/chemistry/src/descriptor_data.json").read_text())
         compiler = Compiler()
         with rdBase.BlockLogs():
             for rule in expected["crippen"]:

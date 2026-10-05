@@ -3644,6 +3644,7 @@ dependencies = [
  "pdf-writer",
  "png 0.17.16",
  "reqwest",
+ "reshiki-chemistry",
  "reshiki-depict-math",
  "reshiki-geometry",
  "reshiki-linux",
@@ -3666,6 +3667,22 @@ dependencies = [
  "ttf-parser",
  "zune-core 0.5.3",
  "zune-jpeg 0.5.15",
+]
+
+[[package]]
+name = "reshiki-chemistry"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cosmolkit-inchi",
+ "reshiki-depict-math",
+ "reshiki-process-heap",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]

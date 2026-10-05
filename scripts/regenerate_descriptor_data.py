@@ -132,7 +132,7 @@ def main():
         donors=counters["NumHBD"],
         acceptors=counters["NumHBA"],
     )
-    (ROOT / "src/chemistry/descriptor_data.json").write_text(
+    (ROOT / "crates/chemistry/src/descriptor_data.json").write_text(
         json.dumps(output, separators=(",", ":")) + "\n"
     )
     print(
