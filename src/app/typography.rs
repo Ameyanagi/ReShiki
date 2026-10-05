@@ -870,6 +870,59 @@ impl App {
         self.changed(before);
         self.sync_style_inputs();
     }
+    pub(super) fn apply_font_size_input(&mut self) {
+        match self.tab.font_size_input.parse::<f32>() {
+            Ok(size) if size.is_finite() && (4.0..=144.0).contains(&size) => {
+                self.apply_text_style(reshiki::typography::StyleChange::Size(size))
+            }
+            _ => {
+                self.error = true;
+                self.status = "Enter a font size from 4 to 144 pt".into();
+            }
+        }
+    }
+    pub(super) fn set_color_scope(&mut self, scope: ColorScope) {
+        self.tab.color_scope = scope;
+        self.sync_color_input();
+        if scope == typography::ColorScope::Rings {
+            self.status = "Ring interiors · Select a ring, then choose a Tint color".into();
+        } else if scope == typography::ColorScope::Highlights {
+            self.status = "Highlights · Select atoms or bonds, then choose a Tint color".into();
+        }
+    }
+    pub(super) fn set_text_color_input(&mut self, value: String) {
+        self.tab.text_color_input = value;
+        self.flag_color_input(false);
+    }
+    pub(super) fn apply_text_color_input(&mut self) {
+        if let Some(rgb) = reshiki::palette::parse_color(&self.tab.text_color_input) {
+            // Typed colors are exact on both canvases.
+            let color = reshiki::palette::Color::Custom(rgb);
+            if self.tab.color_scope == typography::ColorScope::Rings {
+                self.apply_ring_color(Some(color));
+            } else {
+                self.apply_text_style(reshiki::typography::StyleChange::Color(color));
+            }
+        } else {
+            self.error = true;
+            self.status = super::color_popover::HINT.into();
+            self.flag_color_input(true);
+        }
+    }
+    pub(super) fn apply_text_width_input(&mut self) {
+        let width = self.tab.text_width_input.trim();
+        if width.is_empty() {
+            self.apply_paragraph(None, None, Some(None));
+        } else if let Ok(width) = width.parse::<f32>()
+            && width.is_finite()
+            && (10.0..=2000.0).contains(&width)
+        {
+            self.apply_paragraph(None, None, Some(Some(width)));
+        } else {
+            self.error = true;
+            self.status = "Text width must be 10–2000 pt, or blank for automatic width".into();
+        }
+    }
 }
 
 #[cfg(test)]

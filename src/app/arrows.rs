@@ -383,4 +383,22 @@ impl App {
         panel.push(self.inspector_section(super::inspector::Section::ArrowGeometry, "Arrowhead & markers", "", false, geometry))
             .push(text("Drag endpoints to resize; drag the square handle to bend. Return applies numeric and color fields.").size(11).style(muted_text)).into()
     }
+    pub(super) fn set_arrow_style(&mut self, style: Preset) {
+        self.tab.arrow_style = style;
+        self.tab.arrows.style = reshiki::arrows::ArrowStyle::preset(style);
+        self.tab.arrows.style.width_pt = self.tab.doc.drawing_style.line_width_pt;
+        self.tool = Tool::Arrow;
+        self.inspector_open = true;
+        self.inspector_tab = InspectorTab::Properties;
+        let before = self.tab.doc.clone();
+        for a in &mut self.tab.doc.arrows {
+            if self.tab.selected.contains(&a.id) {
+                a.kind = style.kind().into();
+                a.control = None;
+                a.style = Some(self.tab.arrows.style.clone());
+            }
+        }
+        self.changed(before);
+        self.sync_arrows();
+    }
 }

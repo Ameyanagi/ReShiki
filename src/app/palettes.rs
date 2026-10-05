@@ -1,5 +1,5 @@
 //! Compact visual flyouts for toolbar families.
-use super::{App, Message};
+use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use crate::canvas::{PalettePreview, Tool};
 use iced::widget::{
@@ -715,6 +715,31 @@ impl App {
             })
         ]
         .into()
+    }
+    pub(super) fn select_tool(&mut self, tool: Tool) {
+        self.tab.erase_stroke = false;
+        self.palette = None;
+        self.toolbar.remember(tool);
+        if let Some(option) = self.toolbar.graphic(tool) {
+            self.tab.graphic_style = option.style.clone();
+            self.tab.bracket_sides = option.sides;
+            self.tab.graphic_width_input = self.tab.graphic_style.width_pt.to_string();
+        }
+        self.tool = tool;
+        self.error = false;
+        if matches!(tool, Tool::Graphic(_) | Tool::RingPreset(_)) {
+            self.tab.selected.clear();
+        }
+        if matches!(
+            tool,
+            Tool::Arrow | Tool::Graphic(_) | Tool::EditPoints | Tool::RingPreset(_)
+        ) {
+            self.inspector_open = true;
+            self.inspector_tab = InspectorTab::Properties;
+        }
+        if matches!(tool, Tool::Graphic(_)) {
+            self.sync_graphics();
+        }
     }
 }
 

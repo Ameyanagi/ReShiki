@@ -348,6 +348,12 @@ impl App {
         ]
         .into()
     }
+    pub(super) fn toggle_help(&mut self) {
+        self.help_open = !self.help_open;
+        if self.help_open {
+            self.palette = None;
+        }
+    }
 }
 
 fn shortcut(keys: &str, label: &'static str) -> Element<'static, Message> {

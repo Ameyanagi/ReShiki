@@ -73,6 +73,7 @@ mod theme_generator;
 mod tool_button;
 mod typography;
 mod updates;
+mod view_settings;
 #[cfg(all(target_os = "linux", feature = "wayland-qa"))]
 mod wayland_qa;
 #[cfg(windows)]
@@ -1194,27 +1195,10 @@ impl App {
             Message::Abbreviations(action) => return self.abbreviation_action(action),
             Message::Labels(action) => self.label_action(action),
             Message::LabelsReady(..) => {}
-            Message::InspectorScroll(y) => {
-                if self.inspector_tab == InspectorTab::Templates && y.is_finite() {
-                    self.templates.scroll = y.max(0.);
-                }
-            }
-            Message::TemplateNavigate(forward) => {
-                if self.inspector_open && self.inspector_tab == InspectorTab::Templates {
-                    return self.template_action(if forward {
-                        template_library::Action::Forward
-                    } else {
-                        template_library::Action::Browse
-                    });
-                }
-            }
+            Message::InspectorScroll(y) => self.scroll_templates(y),
+            Message::TemplateNavigate(forward) => return self.navigate_templates(forward),
             Message::Reaction(action) => return self.reaction_action(action),
-            Message::Templates(action) => {
-                if let Some(task) = self.template_async(&action) {
-                    return task;
-                }
-                return self.template_action(action);
-            }
+            Message::Templates(action) => return self.template_message(action),
             Message::ResetBondDrawing => self.reset_bond_drawing(),
             Message::FixedLength(on) => self.tab.bond_drawing.fixed_length = on,
             Message::FixedAngles(on) => self.tab.bond_drawing.fixed_angles = on,
@@ -1246,182 +1230,42 @@ impl App {
             Message::RemoveMark(id, index) => self.remove_mark(id, index),
             Message::AtomRadical(value) => self.set_radical(value),
             Message::GraphicSides(sides) => self.set_graphic_sides(sides),
-            Message::ToggleInspector => {
-                self.inspector_open = !self.inspector_open;
-                if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
-                    return self.assistant_action(assistant::Action::Open);
-                }
-            }
+            Message::ToggleInspector => return self.toggle_inspector(),
             Message::Inspector(tab) => {
-                if tab != InspectorTab::ThemeGenerator {
-                    self.theme_library.editor = None;
-                }
-                if tab != InspectorTab::DrawingStyle {
-                    self.tab.styles.editor = None;
-                }
-                if tab == InspectorTab::Labels {
-                    let atoms: Vec<_> = self
-                        .tab
-                        .doc
-                        .atoms
-                        .iter()
-                        .filter(|a| self.tab.selected.contains(&a.id))
-                        .collect();
-                    self.tab.labels.scope = if atoms.is_empty() {
-                        atom_labels::Scope::Drawing
-                    } else {
-                        atom_labels::Scope::Selection
-                    };
-                    self.tab.labels.number = if let [atom] = atoms.as_slice() {
-                        atom.display
-                            .number
-                            .as_ref()
-                            .map(|n| n.text.clone())
-                            .unwrap_or_default()
-                    } else {
-                        String::new()
-                    };
-                }
-                self.inspector_tab = tab;
-                self.inspector_open = true;
-                if tab == InspectorTab::Import {
-                    self.help_open = false;
-                    return iced::widget::operation::focus(import::INPUT);
+                if let Some(task) = self.show_inspector_tab(tab) {
+                    return task;
                 }
             }
             Message::InsertInput => {
                 return self.run(input_request(&self.imports.input.text()), Job::Insert);
             }
-            Message::ToggleHelp => {
-                self.help_open = !self.help_open;
-                if self.help_open {
-                    self.palette = None;
-                }
-            }
+            Message::ToggleHelp => self.toggle_help(),
             Message::OpenShortcutExamples if self.pending.is_some() => {}
             Message::OpenShortcutExamples => return self.open_shortcut_examples(),
-            Message::Viewport(size) => {
-                if self.viewport != size {
-                    self.viewport = size;
-                    if let Some(index) = self.tab.pages.fit {
-                        self.fit_pages(index);
-                    } else if self.tab.fit_to_view {
-                        self.fit();
-                    }
-                }
-            }
+            Message::Viewport(size) => self.set_viewport(size),
             Message::InspectorAction(_) | Message::ContextMenu(_) => {}
-            Message::Tool(tool) => {
-                self.tab.erase_stroke = false;
-                self.palette = None;
-                self.toolbar.remember(tool);
-                if let Some(option) = self.toolbar.graphic(tool) {
-                    self.tab.graphic_style = option.style.clone();
-                    self.tab.bracket_sides = option.sides;
-                    self.tab.graphic_width_input = self.tab.graphic_style.width_pt.to_string();
-                }
-                self.tool = tool;
-                self.error = false;
-                if matches!(tool, Tool::Graphic(_) | Tool::RingPreset(_)) {
-                    self.tab.selected.clear();
-                }
-                if matches!(
-                    tool,
-                    Tool::Arrow | Tool::Graphic(_) | Tool::EditPoints | Tool::RingPreset(_)
-                ) {
-                    self.inspector_open = true;
-                    self.inspector_tab = InspectorTab::Properties;
-                }
-                if matches!(tool, Tool::Graphic(_)) {
-                    self.sync_graphics();
-                }
-            }
+            Message::Tool(tool) => self.select_tool(tool),
             Message::Element(e) => self.choose_element(e),
             Message::CaptionAction(action) => self.caption_action(action),
             Message::TextStyle(change) => self.apply_text_style(change),
             Message::FontSize(value) => self.tab.font_size_input = value,
-            Message::ApplyFontSize => match self.tab.font_size_input.parse::<f32>() {
-                Ok(size) if size.is_finite() && (4.0..=144.0).contains(&size) => {
-                    self.apply_text_style(reshiki::typography::StyleChange::Size(size))
-                }
-                _ => {
-                    self.error = true;
-                    self.status = "Enter a font size from 4 to 144 pt".into();
-                }
-            },
+            Message::ApplyFontSize => self.apply_font_size_input(),
             Message::ClearRingFill => self.apply_ring_color(None),
             Message::ClearHighlights => self.apply_highlight_color(None),
-            Message::ColorScope(scope) => {
-                self.tab.color_scope = scope;
-                self.sync_color_input();
-                if scope == typography::ColorScope::Rings {
-                    self.status = "Ring interiors · Select a ring, then choose a Tint color".into();
-                } else if scope == typography::ColorScope::Highlights {
-                    self.status =
-                        "Highlights · Select atoms or bonds, then choose a Tint color".into();
-                }
-            }
-            Message::TextColor(value) => {
-                self.tab.text_color_input = value;
-                self.flag_color_input(false);
-            }
-            Message::ApplyTextColor => {
-                if let Some(rgb) = reshiki::palette::parse_color(&self.tab.text_color_input) {
-                    // Typed colors are exact on both canvases.
-                    let color = reshiki::palette::Color::Custom(rgb);
-                    if self.tab.color_scope == typography::ColorScope::Rings {
-                        self.apply_ring_color(Some(color));
-                    } else {
-                        self.apply_text_style(reshiki::typography::StyleChange::Color(color));
-                    }
-                } else {
-                    self.error = true;
-                    self.status = color_popover::HINT.into();
-                    self.flag_color_input(true);
-                }
-            }
+            Message::ColorScope(scope) => self.set_color_scope(scope),
+            Message::TextColor(value) => self.set_text_color_input(value),
+            Message::ApplyTextColor => self.apply_text_color_input(),
             Message::TextAlign(alignment) => self.apply_paragraph(Some(alignment), None, None),
             Message::GroupLabelAlign(alignment) => self.apply_group_alignment(alignment),
             Message::TextSpacing(spacing) => self.apply_paragraph(None, Some(spacing), None),
             Message::TextWidth(value) => self.tab.text_width_input = value,
-            Message::ApplyTextWidth => {
-                let width = self.tab.text_width_input.trim();
-                if width.is_empty() {
-                    self.apply_paragraph(None, None, Some(None));
-                } else if let Ok(width) = width.parse::<f32>()
-                    && width.is_finite()
-                    && (10.0..=2000.0).contains(&width)
-                {
-                    self.apply_paragraph(None, None, Some(Some(width)));
-                } else {
-                    self.error = true;
-                    self.status =
-                        "Text width must be 10–2000 pt, or blank for automatic width".into();
-                }
-            }
+            Message::ApplyTextWidth => self.apply_text_width_input(),
             Message::Isotope(s) => self.tab.isotope = s,
             Message::RingSize(n) => self.set_ring_size(n),
             Message::AromaticRing(value) => self.set_aromatic_ring(value),
             Message::ToggleAromaticRing => return self.toggle_aromatic_ring(),
             Message::ToggleSelectedRing => self.toggle_selected_ring(),
-            Message::ArrowStyle(style) => {
-                self.tab.arrow_style = style;
-                self.tab.arrows.style = reshiki::arrows::ArrowStyle::preset(style);
-                self.tab.arrows.style.width_pt = self.tab.doc.drawing_style.line_width_pt;
-                self.tool = Tool::Arrow;
-                self.inspector_open = true;
-                self.inspector_tab = InspectorTab::Properties;
-                let before = self.tab.doc.clone();
-                for a in &mut self.tab.doc.arrows {
-                    if self.tab.selected.contains(&a.id) {
-                        a.kind = style.kind().into();
-                        a.control = None;
-                        a.style = Some(self.tab.arrows.style.clone());
-                    }
-                }
-                self.changed(before);
-                self.sync_arrows();
-            }
+            Message::ArrowStyle(style) => self.set_arrow_style(style),
             Message::ArrowAction(action) => self.arrow_action(action),
             Message::CustomElement(s) => self.custom_element = s,
             Message::ApplyElement => self.apply_custom_element(),
@@ -1469,33 +1313,7 @@ impl App {
             Message::Arrange(arrange) => self.arrange_selection(arrange),
             Message::BondDepth(front) => self.layer_objects(front, false, true),
             Message::ReverseBonds => self.reverse_selected_bonds(),
-            Message::InsertTemplate(index) => {
-                if self.templates.library.get(index).is_some()
-                    && (!self.templates.active || self.template_index != index)
-                {
-                    self.templates.remember(self.template_index);
-                }
-                if let Some(template) = self.templates.library.get(index) {
-                    if !self.templates.active || self.template_index != index {
-                        self.templates.anchor = template.anchor;
-                        if matches!(template.anchor, reshiki::templates::Anchor::Bond(..)) {
-                            self.templates.connection = reshiki::templates::Connection::FuseBond;
-                        } else if matches!(template.anchor, reshiki::templates::Anchor::Atom(_))
-                            && self.templates.connection == reshiki::templates::Connection::FuseBond
-                        {
-                            self.templates.connection = reshiki::templates::Connection::Connect;
-                        }
-                    }
-                    self.template_index = index;
-                    self.templates.active = true;
-                    self.tool = Tool::Template;
-                    self.error = false;
-                    self.status = format!(
-                        "{} · {} · Escape cancels",
-                        template.name, self.templates.connection
-                    );
-                }
-            }
+            Message::InsertTemplate(index) => self.insert_template(index),
             Message::Tick => self.request_drafts(),
             Message::Autosaved(..) => {} // Handled before editor/modal guards.
             Message::Restore if self.pending.is_some() => {}
@@ -1527,67 +1345,21 @@ impl App {
                 }
                 self.edit(edit);
             }
-            Message::Appearance(mode) => {
-                self.appearance.mode = mode;
-                if let Err(error) = self.appearance.save() {
-                    self.status =
-                        format!("Appearance changed, but could not save preference: {error}");
-                    self.error = true;
-                }
-            }
-            Message::ColorTheme(theme) => {
-                if !self.finish_inline(true) {
-                    return Task::none();
-                }
-                let before = self.tab.doc.clone();
-                theme.apply(&mut self.tab.doc);
-                self.changed(before);
-                self.sync_color_input();
-                self.status = format!(
-                    "{theme} colors · Journal dimensions unchanged · Undo restores previous colors"
-                );
-            }
-            Message::CanvasTheme(theme) => {
-                if !self.finish_inline(true) {
-                    return Task::none();
-                }
-                if self.tab.doc.canvas_theme != theme {
-                    let before = self.tab.doc.clone();
-                    self.tab.doc.canvas_theme = theme;
-                    self.changed(before);
-                    self.sync_color_input();
-                    self.status = format!(
-                        "{theme} canvas · Copies retain ink colors on a transparent background"
-                    );
-                }
-            }
+            Message::Appearance(mode) => self.set_appearance(mode),
+            Message::ColorTheme(theme) => self.apply_color_theme(theme),
+            Message::CanvasTheme(theme) => self.set_canvas_theme(theme),
             Message::ThemeFile(action) => return self.theme_file_action(action),
             Message::ThemeGenerator(action) => return self.theme_generator_action(action),
             Message::QuickDrawingStyle(choice) => return self.quick_drawing_style(choice),
             Message::Grid => self.grid = !self.grid,
-            Message::SmartGuides(enabled) => {
-                self.appearance.smart_guides = enabled;
-                if let Err(error) = self.appearance.save() {
-                    self.status = format!("Could not save smart guides preference: {error}");
-                    self.error = true;
-                }
-            }
+            Message::SmartGuides(enabled) => self.set_smart_guides(enabled),
             Message::ToggleView => self.view_open = !self.view_open,
             Message::ObjectToolbar(action) => self.object_toolbar_action(action),
-            Message::Rulers(enabled) => {
-                self.guides.rulers = enabled;
-                if self.tab.fit_to_view {
-                    self.fit();
-                }
-            }
+            Message::Rulers(enabled) => self.set_rulers(enabled),
             Message::Crosshair(enabled) => self.guides.crosshair = enabled,
             Message::RulerUnit(unit) => self.guides.unit = unit,
             Message::Fit => self.fit(),
-            Message::Zoom(f) => {
-                self.tab.pages.fit = None;
-                self.tab.fit_to_view = false;
-                self.tab.camera.zoom = (self.tab.camera.zoom * f).clamp(0.005, 5.0);
-            }
+            Message::Zoom(factor) => self.zoom_by(factor),
             Message::Import => {
                 return self.run(input_request(&self.imports.input.text()), Job::Import);
             }

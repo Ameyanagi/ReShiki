@@ -2,7 +2,7 @@
 use super::{App, Message};
 use iced::Task;
 use reshiki::{
-    canvas_theme::ColorTheme,
+    canvas_theme::{CanvasTheme, ColorTheme},
     theme_files::{self, ThemeFile},
 };
 use std::path::PathBuf;
@@ -258,6 +258,31 @@ impl App {
                 self.error = true;
                 false
             }
+        }
+    }
+    pub(super) fn apply_color_theme(&mut self, theme: ColorTheme) {
+        if !self.finish_inline(true) {
+            return;
+        }
+        let before = self.tab.doc.clone();
+        theme.apply(&mut self.tab.doc);
+        self.changed(before);
+        self.sync_color_input();
+        self.status = format!(
+            "{theme} colors · Journal dimensions unchanged · Undo restores previous colors"
+        );
+    }
+    pub(super) fn set_canvas_theme(&mut self, theme: CanvasTheme) {
+        if !self.finish_inline(true) {
+            return;
+        }
+        if self.tab.doc.canvas_theme != theme {
+            let before = self.tab.doc.clone();
+            self.tab.doc.canvas_theme = theme;
+            self.changed(before);
+            self.sync_color_input();
+            self.status =
+                format!("{theme} canvas · Copies retain ink colors on a transparent background");
         }
     }
 }

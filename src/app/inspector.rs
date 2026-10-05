@@ -1462,6 +1462,53 @@ impl App {
         ))
         .into()
     }
+    pub(super) fn toggle_inspector(&mut self) -> Task<Message> {
+        self.inspector_open = !self.inspector_open;
+        if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
+            return self.assistant_action(super::assistant::Action::Open);
+        }
+        Task::none()
+    }
+    /// Returns the Import tab's focus task. `None` lets update_inner's
+    /// inspector reveal apply.
+    pub(super) fn show_inspector_tab(&mut self, tab: InspectorTab) -> Option<Task<Message>> {
+        if tab != InspectorTab::ThemeGenerator {
+            self.theme_library.editor = None;
+        }
+        if tab != InspectorTab::DrawingStyle {
+            self.tab.styles.editor = None;
+        }
+        if tab == InspectorTab::Labels {
+            let atoms: Vec<_> = self
+                .tab
+                .doc
+                .atoms
+                .iter()
+                .filter(|a| self.tab.selected.contains(&a.id))
+                .collect();
+            self.tab.labels.scope = if atoms.is_empty() {
+                super::atom_labels::Scope::Drawing
+            } else {
+                super::atom_labels::Scope::Selection
+            };
+            self.tab.labels.number = if let [atom] = atoms.as_slice() {
+                atom.display
+                    .number
+                    .as_ref()
+                    .map(|n| n.text.clone())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+        }
+        self.inspector_tab = tab;
+        self.inspector_open = true;
+        if tab == InspectorTab::Import {
+            self.help_open = false;
+            return Some(iced::widget::operation::focus(super::import::INPUT));
+        }
+        None
+    }
 }
 
 #[cfg(test)]

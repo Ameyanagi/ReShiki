@@ -914,6 +914,54 @@ impl App {
         }
         Ok(())
     }
+    pub(super) fn scroll_templates(&mut self, y: f32) {
+        if self.inspector_tab == InspectorTab::Templates && y.is_finite() {
+            self.templates.scroll = y.max(0.);
+        }
+    }
+    pub(super) fn navigate_templates(&mut self, forward: bool) -> Task<Message> {
+        if self.inspector_open && self.inspector_tab == InspectorTab::Templates {
+            return self.template_action(if forward {
+                Action::Forward
+            } else {
+                Action::Browse
+            });
+        }
+        Task::none()
+    }
+    pub(super) fn template_message(&mut self, action: Action) -> Task<Message> {
+        if let Some(task) = self.template_async(&action) {
+            return task;
+        }
+        self.template_action(action)
+    }
+    pub(super) fn insert_template(&mut self, index: usize) {
+        if self.templates.library.get(index).is_some()
+            && (!self.templates.active || self.template_index != index)
+        {
+            self.templates.remember(self.template_index);
+        }
+        if let Some(template) = self.templates.library.get(index) {
+            if !self.templates.active || self.template_index != index {
+                self.templates.anchor = template.anchor;
+                if matches!(template.anchor, reshiki::templates::Anchor::Bond(..)) {
+                    self.templates.connection = reshiki::templates::Connection::FuseBond;
+                } else if matches!(template.anchor, reshiki::templates::Anchor::Atom(_))
+                    && self.templates.connection == reshiki::templates::Connection::FuseBond
+                {
+                    self.templates.connection = reshiki::templates::Connection::Connect;
+                }
+            }
+            self.template_index = index;
+            self.templates.active = true;
+            self.tool = Tool::Template;
+            self.error = false;
+            self.status = format!(
+                "{} · {} · Escape cancels",
+                template.name, self.templates.connection
+            );
+        }
+    }
 }
 
 /// The inspector notice would disappear on close; retain the successful save
