@@ -7,12 +7,20 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
-- **Under review — Embedded ChemDraw paste on Windows:** normal Paste reads
+- **Embedded ChemDraw paste on Windows:** normal Paste reads
   supported chemical data from embedded Office objects instead of choosing
   their presentation image. Paste picture retains its explicit image behavior.
   [Validation and desktop review checklist](changes/windows-chemdraw-paste-2026-10-05.md)
   · [PR #150](https://github.com/Ameyanagi/ReShiki/pull/150) · @Ameyanagi.
-  Live PowerPoint acceptance remains to be checked on Windows.
+  The user confirmed editable atom and bond paste from Office on Windows.
+
+- **Recover difficult 3D starting geometry:** generate usable
+  previews for C60 and difficult imported structures, or continue from validated
+  existing XYZ, with the selected Rust force field. Bounded retries can reduce
+  timed-out sampling to one conformer; complex molecules may need further
+  relaxation. C60 is verified within a conservative cage envelope.
+  [Before/after and review checks](changes/geometry-initialization-2026-10-05.md)
+  · [PR #149](https://github.com/Ameyanagi/ReShiki/pull/149) · @Ameyanagi.
 
 - **Interactive 3D geometry and keyboard drawing:** generate
   conformers with Rust MMFF94, MMFF94s, or UFF, relax around dragged or pinned

@@ -229,6 +229,7 @@ pub(super) struct Session {
     energy: Option<f64>,
     iterations: u64,
     converged: bool,
+    initialization: Option<&'static str>,
     relaxation: Relaxation,
     notice: Option<String>,
     depth_enhancement: bool,
@@ -665,6 +666,7 @@ impl App {
                 energy: None,
                 iterations: 0,
                 converged: false,
+                initialization: None,
                 relaxation: Relaxation::default(),
                 notice: None,
                 depth_enhancement: true,
@@ -757,8 +759,22 @@ impl App {
                 .iterations
                 .saturating_add(u64::from(result.iterations));
             session.converged = result.converged;
-            // Worker diagnostics describe generation internals. Successful
-            // previews use the phase and energy display; notices are errors.
+            if flight.work == Work::Generate {
+                session.initialization = result.diagnostics.iter().rev().find_map(|diagnostic| {
+                    if diagnostic.starts_with("initialization=existing-3d") {
+                        Some("Existing 3D geometry")
+                    } else if diagnostic.starts_with("initialization=cage-ETDG") {
+                        Some("Cage starting geometry")
+                    } else if diagnostic.starts_with("initialization=ETDG-fallback") {
+                        Some("Alternative starting geometry")
+                    } else if diagnostic.starts_with("initialization=single-conformer") {
+                        Some("Single conformer")
+                    } else {
+                        None
+                    }
+                });
+            }
+            // Successful initialization is context, not an error notice.
             session.notice = None;
             if let Some(drag) = session.drag
                 && drag.released
@@ -1052,6 +1068,10 @@ impl App {
                 }
                 .into()
             });
+        let phase = session.initialization.map_or_else(
+            || phase.to_owned(),
+            |initialization| format!("{phase} · {initialization}"),
+        );
         let field = |id, name, label, field| {
             preview_control(
                 id,
@@ -1227,6 +1247,45 @@ mod tests {
         let _ = app.optimization_action(Action::Begin);
         finish(&mut app);
         (app, a, b, original)
+    }
+
+    #[test]
+    fn initialization_context_survives_relaxation_without_an_error_or_source_edit() {
+        for (diagnostic, label) in [
+            ("initialization=existing-3d", "Existing 3D geometry"),
+            ("initialization=cage-ETDG", "Cage starting geometry"),
+            (
+                "initialization=ETDG-fallback",
+                "Alternative starting geometry",
+            ),
+            ("initialization=single-conformer", "Single conformer"),
+        ] {
+            let (mut app, _, _, original) = drawing();
+            let _ = app.optimization_action(Action::Begin);
+            let session = app.tab.optimization.as_ref().unwrap();
+            let key = session.flight.as_ref().unwrap().key;
+            let mut computed = result(session);
+            // Only the final initialization is shown after a recovered retry.
+            computed.diagnostics = vec![
+                "initialization=single-conformer; earlier retry".into(),
+                diagnostic.into(),
+            ];
+            let _ = app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(computed))));
+            let session = app.tab.optimization.as_ref().unwrap();
+            assert_eq!(session.initialization, Some(label));
+            assert!(session.notice.is_none());
+            assert!(!app.error);
+            assert_eq!(app.tab.doc, original);
+
+            let _ = app.optimization_action(Action::Start);
+            finish(&mut app);
+            assert_eq!(
+                app.tab.optimization.as_ref().unwrap().initialization,
+                Some(label)
+            );
+            let _ = app.optimization_action(Action::Cancel);
+            assert_eq!(app.tab.doc, original);
+        }
     }
 
     fn complete_live(app: &mut App, energy: f64, converged: bool) -> Task<Message> {

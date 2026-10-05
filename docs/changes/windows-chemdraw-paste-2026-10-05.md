@@ -1,6 +1,6 @@
 # Embedded ChemDraw paste from Windows Office
 
-Under review · [PR #150](https://github.com/Ameyanagi/ReShiki/pull/150) · @Ameyanagi.
+[PR #150](https://github.com/Ameyanagi/ReShiki/pull/150) · @Ameyanagi.
 
 Selecting a whole embedded ChemDraw object in PowerPoint and pressing Ctrl+C
 can offer its OLE storage alongside a presentation image, without a standalone
@@ -67,7 +67,7 @@ which an identical-looking image would not demonstrate.
 
 ## Desktop review checklist
 
-Use a Windows build of this branch and a real embedded ChemDraw object:
+Use a Windows build containing PR #150 and a real embedded ChemDraw object:
 
 1. Select the whole object on the PowerPoint slide and press Ctrl+C.
 2. Focus ReShiki and press Ctrl+V. Select an atom or bond and confirm it can be
@@ -79,9 +79,11 @@ Use a Windows build of this branch and a real embedded ChemDraw object:
 5. Copy an ordinary slide image and an embedded ReShiki object separately.
    Confirm that each retains its existing picture/native behavior.
 
-Live Office acceptance remains to be checked on Windows. An object containing
-only a rendered picture, an unsupported storage layout, or unsupported CDX
-features remains outside the tested editable import path.
+On 2026-10-05, the user reported successful Office copy/paste on Windows and
+confirmed that individual atoms and bonds are editable after paste. Save/reopen,
+Undo/Redo and explicit picture paste remain separate checklist items. An object
+containing only a rendered picture, an unsupported storage layout, or unsupported
+CDX features remains outside the tested editable import path.
 
 Release caption: **Copy a supported embedded ChemDraw object from PowerPoint
 into ReShiki as editable atoms and bonds on Windows.**

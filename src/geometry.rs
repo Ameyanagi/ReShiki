@@ -342,6 +342,20 @@ impl Prepared {
         let mut coordinates = if let Some(c) = conformer {
             c.validate(self.ids.len())?;
             c.positions.iter().map(|p| [p.x, p.y, p.z]).collect()
+        } else if operation == reshiki_geometry::Operation::Generate
+            && self.drawing_positions.first().is_some_and(|first| {
+                self.drawing_positions
+                    .iter()
+                    .any(|p| (p.z - first.z).abs() > 1e-4)
+            })
+        {
+            // Retained XYZ is only a candidate: the worker checks intrinsic
+            // dimensionality, physical geometry and stereo before adding H.
+            // In particular, a tilted planar drawing is not a valid 3D seed.
+            self.drawing_positions
+                .iter()
+                .map(|p| [p.x, p.y, p.z])
+                .collect()
         } else {
             Vec::new()
         };

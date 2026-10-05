@@ -136,7 +136,8 @@ jobs:
           shared-key: linux-x11
       - name: Run native clipboard regressions serially on a private display
         run: |
-          xvfb-run -a -s '-screen 0 1024x768x24 -nolisten tcp' cargo test -p reshiki-linux --lib --locked --no-default-features x11::tests:: -- --ignored --test-threads=1
+          # Tests briefly release their last connection; keep the X server ready.
+          xvfb-run -a -s '-screen 0 1024x768x24 -nolisten tcp -noreset' cargo test -p reshiki-linux --lib --locked --no-default-features x11::tests:: -- --ignored --test-threads=1
   rust:
     needs: scope
     if: needs.scope.outputs.native == 'true'
