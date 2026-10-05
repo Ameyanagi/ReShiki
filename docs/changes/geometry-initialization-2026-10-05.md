@@ -1,6 +1,6 @@
 # Recovering 3D starting geometry
 
-Under review · @Ameyanagi.
+Under review · [PR #149](https://github.com/Ameyanagi/ReShiki/pull/149) · @Ameyanagi.
 
 C60, the reported C36H24 structure, and the native paclitaxel import could fail
 with `embedding lost a conformer` before a usable 3D preview appeared. Generation

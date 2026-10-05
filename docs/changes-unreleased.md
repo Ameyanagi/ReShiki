@@ -13,7 +13,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   timed-out sampling to one conformer; complex molecules may need further
   relaxation. C60 is verified within a conservative cage envelope.
   [Before/after and review checks](changes/geometry-initialization-2026-10-05.md)
-  · @Ameyanagi.
+  · [PR #149](https://github.com/Ameyanagi/ReShiki/pull/149) · @Ameyanagi.
 
 - **Interactive 3D geometry and keyboard drawing:** generate
   conformers with Rust MMFF94, MMFF94s, or UFF, relax around dragged or pinned
