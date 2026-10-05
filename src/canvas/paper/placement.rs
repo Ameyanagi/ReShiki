@@ -10,7 +10,7 @@ use reshiki::chains;
 use std::borrow::Cow;
 
 impl MoleculeCanvas<'_> {
-    pub(in crate::canvas) fn preview_chain(
+    pub(super) fn preview_chain(
         &self,
         draft: &mut Draft<'_>,
         frame: &mut layered::Frame<'_>,
@@ -93,12 +93,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_ring(
-        &self,
-        draft: &mut Draft<'_>,
-        state: &State,
-        bounds: Rectangle,
-    ) {
+    pub(super) fn preview_ring(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft {
             preview,
             ring_selection,
@@ -146,7 +141,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_ring_preset(
+    pub(super) fn preview_ring_preset(
         &self,
         draft: &mut Draft<'_>,
         state: &State,
@@ -210,7 +205,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_template(
+    pub(super) fn preview_template(
         &self,
         draft: &mut Draft<'_>,
         frame: &mut layered::Frame<'_>,
@@ -339,7 +334,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_delocalized_ring(
+    pub(super) fn preview_delocalized_ring(
         &self,
         draft: &mut Draft<'_>,
         state: &State,
@@ -380,7 +375,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_bonded_atom(
+    pub(super) fn preview_bonded_atom(
         &self,
         draft: &mut Draft<'_>,
         state: &State,
@@ -449,7 +444,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_bond(
+    pub(super) fn preview_bond(
         &self,
         draft: &mut Draft<'_>,
         frame: &mut layered::Frame<'_>,

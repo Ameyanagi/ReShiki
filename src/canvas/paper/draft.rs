@@ -8,12 +8,7 @@ use iced::{Point, Rectangle};
 use reshiki::graphics::{Graphic, GraphicKind};
 
 impl MoleculeCanvas<'_> {
-    pub(in crate::canvas) fn preview_tilt(
-        &self,
-        draft: &mut Draft<'_>,
-        state: &State,
-        bounds: Rectangle,
-    ) {
+    pub(super) fn preview_tilt(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft {
             preview,
             ring_selection,
@@ -36,7 +31,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_pointer_edits(
+    pub(super) fn preview_pointer_edits(
         &self,
         draft: &mut Draft<'_>,
         state: &State,
@@ -143,7 +138,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_transform(
+    pub(super) fn preview_transform(
         &self,
         draft: &mut Draft<'_>,
         state: &State,
@@ -163,12 +158,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_move(
-        &self,
-        draft: &mut Draft<'_>,
-        state: &State,
-        bounds: Rectangle,
-    ) {
+    pub(super) fn preview_move(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft {
             preview,
             ring_selection,
@@ -207,12 +197,7 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    pub(in crate::canvas) fn preview_region(
-        &self,
-        draft: &mut Draft<'_>,
-        state: &State,
-        bounds: Rectangle,
-    ) {
+    pub(super) fn preview_region(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft { ring_selection, .. } = draft;
         if let Some(p) = state.cursor {
             let end = self
