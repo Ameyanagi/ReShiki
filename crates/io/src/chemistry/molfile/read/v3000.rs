@@ -1,6 +1,8 @@
 use super::*;
 use crate::chemistry::ranking::StereoGroup;
 use std::collections::{HashMap, HashSet};
+#[cfg(test)]
+mod tests;
 
 // Native V3000 bookmark fields use unsigned from_chars without checking its
 // status. Preserve zero on invalid/overflowing input and signed map storage.
