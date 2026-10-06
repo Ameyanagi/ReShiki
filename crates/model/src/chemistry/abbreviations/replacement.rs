@@ -320,6 +320,39 @@ pub fn replace_with_policy(
     if !scale.is_finite() || scale < 0.1 {
         return Err(Error::Geometry);
     }
+    let (ids, positions) =
+        place_replacement_atoms(document, geometry, target, root, &origin, scale, (c, s))?;
+    let part = build_replacement_part(preset, ids, positions, target, anchor)?;
+    let (mut result, members) = splice_replacement(document, part, &remove, target);
+    result.abbreviations.push(Abbreviation {
+        label_style: old.and_then(|g| g.label_style.clone()),
+        label_color_override: old.is_some_and(|g| g.label_color_override),
+        highlight,
+        alignment: Default::default(),
+        label: label.into(),
+        reverse_label: preset.reverse_label.clone(),
+        anchor: target,
+        members,
+    });
+    if let Some(color) = highlight {
+        crate::highlights::apply(&mut result, &[target], Some(color));
+    }
+    result.version = result.version.max(15);
+    crate::ring_fills::prune(&mut result);
+    validate_with_policy(&result, policy)?;
+    Ok(result)
+}
+
+fn place_replacement_atoms(
+    document: &Document,
+    geometry: &Geometry,
+    target: u64,
+    root: &Point3,
+    origin: &Point3,
+    scale: f64,
+    rotation: (f64, f64),
+) -> Result<(Vec<u64>, Vec<Point3>)> {
+    let (c, s) = rotation;
     // The reference includes group IDs but excludes reaction references.
     let maximum = document
         .atoms
@@ -354,6 +387,16 @@ pub fn replace_with_policy(
             z: 0.0,
         });
     }
+    Ok((ids, positions))
+}
+
+fn build_replacement_part(
+    preset: &Preset,
+    ids: Vec<u64>,
+    positions: Vec<Point3>,
+    target: u64,
+    anchor: &crate::document::Atom,
+) -> Result<Document> {
     let molecule = Molecule {
         rdkit_version: RDKIT_VERSION,
         ids,
@@ -396,6 +439,15 @@ pub fn replace_with_policy(
             atom.display.highlight = anchor.display.highlight;
         }
     }
+    Ok(part)
+}
+
+fn splice_replacement(
+    document: &Document,
+    part: Document,
+    remove: &HashSet<u64>,
+    target: u64,
+) -> (Document, Vec<u64>) {
     let members = part.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
     let mut result = document.clone();
     result.atoms.retain(|a| !remove.contains(&a.id));
@@ -427,23 +479,7 @@ pub fn replace_with_policy(
             }
         }
     }
-    result.abbreviations.push(Abbreviation {
-        label_style: old.and_then(|g| g.label_style.clone()),
-        label_color_override: old.is_some_and(|g| g.label_color_override),
-        highlight,
-        alignment: Default::default(),
-        label: label.into(),
-        reverse_label: preset.reverse_label.clone(),
-        anchor: target,
-        members,
-    });
-    if let Some(color) = highlight {
-        crate::highlights::apply(&mut result, &[target], Some(color));
-    }
-    result.version = result.version.max(15);
-    crate::ring_fills::prune(&mut result);
-    validate_with_policy(&result, policy)?;
-    Ok(result)
+    (result, members)
 }
 
 #[cfg(test)]
