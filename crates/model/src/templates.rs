@@ -148,17 +148,7 @@ fn place_with_mode_scaled(
     mode: Connection,
 ) -> Result<(Document, Vec<u64>), &'static str> {
     let (part, free_scale) = source;
-    if doc.validate().is_err()
-        || part.validate().is_err()
-        || !point.x.is_finite()
-        || !point.y.is_finite()
-        || !radius.is_finite()
-        || radius <= 0.
-        || direction.is_some_and(|p| !p.x.is_finite() || !p.y.is_finite())
-        || !anchor.valid(part)
-    {
-        return Err("Invalid template or attachment geometry.");
-    }
+    check_connect_inputs(doc, part, point, direction, radius, anchor)?;
     let target = doc.nearest(point, radius);
     let bond = target.is_none() && editing::nearest_bond(doc, point, radius).is_some();
     if mode == Connection::Auto || (target.is_none() && !bond) {
@@ -179,12 +169,47 @@ fn place_with_mode_scaled(
     }
     let id = target.ok_or("Choose a drawing atom to connect.")?;
     let target = doc.atom(id).ok_or("The drawing atom is unavailable.")?;
-    let eligible = |d: &Document, a: &Atom| blocked(d, a).is_none();
     if !eligible(doc, target) {
         return Err(
             "This atom has no available valence, or needs its abbreviation/stereochemistry expanded first.",
         );
     }
+    // `_lengths` lives to the end of the placement, as it did inline, so
+    // peak heap use is unchanged.
+    let (_lengths, length) = connection_length(doc, part, id, target);
+    let (angle, dest) = connection_destination(doc, target, id, direction, radius, length);
+    let best = best_connection(doc, part, anchor, id, length, angle, dest);
+    best.map(|(_, doc, ids)| (doc, ids))
+        .ok_or("The chosen template atom has no available valence for a new bond.")
+}
+
+fn check_connect_inputs(
+    doc: &Document,
+    part: &Document,
+    point: Point,
+    direction: Option<Point>,
+    radius: f32,
+    anchor: Anchor,
+) -> Result<(), &'static str> {
+    if doc.validate().is_err()
+        || part.validate().is_err()
+        || !point.x.is_finite()
+        || !point.y.is_finite()
+        || !radius.is_finite()
+        || radius <= 0.
+        || direction.is_some_and(|p| !p.x.is_finite() || !p.y.is_finite())
+        || !anchor.valid(part)
+    {
+        return Err("Invalid template or attachment geometry.");
+    }
+    Ok(())
+}
+
+fn eligible(d: &Document, a: &Atom) -> bool {
+    blocked(d, a).is_none()
+}
+
+fn connection_length(doc: &Document, part: &Document, id: u64, target: &Atom) -> (Vec<f32>, f32) {
     let lengths: Vec<_> = doc
         .bonds
         .iter()
@@ -211,6 +236,17 @@ fn place_with_mode_scaled(
     } else {
         lengths.iter().sum::<f32>() / lengths.len() as f32
     };
+    (lengths, length)
+}
+
+fn connection_destination(
+    doc: &Document,
+    target: &Atom,
+    id: u64,
+    direction: Option<Point>,
+    radius: f32,
+    length: f32,
+) -> (f32, Point) {
     let end = direction
         .filter(|p| p.distance(target.position) > radius)
         .unwrap_or_else(|| editing::bond_extension(doc, target.position, Some(id), 1));
@@ -218,6 +254,18 @@ fn place_with_mode_scaled(
     let dest = target
         .position
         .offset(length * angle.cos(), length * angle.sin());
+    (angle, dest)
+}
+
+fn best_connection(
+    doc: &Document,
+    part: &Document,
+    anchor: Anchor,
+    id: u64,
+    length: f32,
+    angle: f32,
+    dest: Point,
+) -> Option<(f32, Document, Vec<u64>)> {
     let mut best: Option<(f32, Document, Vec<u64>)> = None;
     for source in &part.atoms {
         if matches!(anchor, Anchor::Atom(chosen) if chosen != source.id) || !eligible(part, source)
@@ -246,14 +294,7 @@ fn place_with_mode_scaled(
                 rotation,
             );
             positioned.translate(&all, dest.x - source.position.x, dest.y - source.position.y);
-            let mut score = 0.;
-            for a in &positioned.atoms {
-                for b in &doc.atoms {
-                    let distance = a.position.distance(b.position) / length;
-                    score +=
-                        (0.85 - distance).max(0.).powi(2) * 1000. + 0.05 / (distance + 0.1).powi(2);
-                }
-            }
+            let score = connection_score(doc, &positioned, length);
             if best.as_ref().is_some_and(|(old, _, _)| score >= *old) {
                 continue;
             }
@@ -276,8 +317,18 @@ fn place_with_mode_scaled(
             }
         }
     }
-    best.map(|(_, doc, ids)| (doc, ids))
-        .ok_or("The chosen template atom has no available valence for a new bond.")
+    best
+}
+
+fn connection_score(doc: &Document, positioned: &Document, length: f32) -> f32 {
+    let mut score = 0.;
+    for a in &positioned.atoms {
+        for b in &doc.atoms {
+            let distance = a.position.distance(b.position) / length;
+            score += (0.85 - distance).max(0.).powi(2) * 1000. + 0.05 / (distance + 0.1).powi(2);
+        }
+    }
+    score
 }
 
 fn bond_directions(doc: &Document, source: &Atom) -> Vec<(f32, u8)> {
