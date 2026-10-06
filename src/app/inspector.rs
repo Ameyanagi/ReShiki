@@ -974,81 +974,7 @@ impl App {
             );
         }
         if let Some(first) = bonds.first() {
-            let preset = BondPreset::of(first)
-                .filter(|p| bonds.iter().all(|b| BondPreset::of(b) == Some(*p)));
-            let mut controls = column![
-                text("Style").size(11).style(muted_text),
-                crate::appearance::pick_list(BondPreset::ALL, preset, Message::ApplyBondPreset)
-                    .placeholder("Mixed bond styles")
-                    .text_size(12)
-                    .padding(7)
-                    .width(Length::Fill),
-            ]
-            .spacing(7);
-            if bonds.iter().any(|b| [2, 7].contains(&b.order)) {
-                let position = bonds
-                    .iter()
-                    .find(|b| [2, 7].contains(&b.order))
-                    .map(|b| b.double_position)
-                    .filter(|p| {
-                        bonds
-                            .iter()
-                            .filter(|b| [2, 7].contains(&b.order))
-                            .all(|b| b.double_position == *p)
-                    });
-                controls = controls
-                    .push(text("Second line placement").size(11).style(muted_text))
-                    .push(
-                        crate::appearance::pick_list(
-                            DoublePosition::ALL,
-                            position,
-                            Message::BondPosition,
-                        )
-                        .placeholder("Mixed positions")
-                        .text_size(12)
-                        .padding(7)
-                        .width(Length::Fill),
-                    );
-            }
-            controls = controls
-                .push(text("Color").size(11).style(muted_text))
-                .push(
-                    row![
-                        crate::appearance::text_input("#000000", &self.tab.bond_color_input)
-                            .on_input(Message::BondColor)
-                            .on_submit(Message::ApplyBondColor)
-                            .size(12)
-                            .padding(7),
-                        command("Apply", Message::ApplyBondColor),
-                    ]
-                    .spacing(6),
-                );
-            if atoms.len() >= 3 {
-                controls = controls.push(
-                    row![
-                        hover_hint(
-                            command("Aromatic circle", Message::AromaticDisplay)
-                                .on_press_maybe((!self.tab.busy).then_some(Message::AromaticDisplay))
-                                .width(Length::Fill),
-                            "Toggle the aromatic circle",
-                            tooltip::Position::Top,
-                        ),
-                        hover_hint(
-                            command("Inner ring curve", Message::InspectorAction(Action::RingArc))
-                                .width(Length::Fill),
-                            "Toggle the inner ring curve · Select consecutive ring atoms for a partial curve, or the whole ring for a circle. Bond orders stay unchanged.",
-                            tooltip::Position::Top,
-                        ),
-                    ]
-                    .spacing(6),
-                );
-            }
-            if self.has_selected_ring() {
-                controls = controls.push(
-                    keyed_command("Saturated ↔ Aromatic", Message::ToggleSelectedRing)
-                        .width(Length::Fill),
-                );
-            }
+            let controls = self.bond_appearance_controls(first, &atoms, &bonds);
             body = body.push(self.inspector_section(
                 Section::Bonds,
                 "Bond appearance",
@@ -1075,74 +1001,7 @@ impl App {
             );
         }
         if let Some(first) = atoms.first() {
-            let count = first.radical_electrons;
-            let count = atoms
-                .iter()
-                .all(|a| a.radical_electrons == count)
-                .then_some(count);
-            let mut controls = column![
-                row![
-                    text("Charge").size(12).width(Length::Fill),
-                    command("−", Message::Charge(-1)),
-                    command("+", Message::Charge(1))
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-                row![
-                    crate::appearance::text_input("Isotope mass", &self.tab.isotope)
-                        .on_input(Message::Isotope)
-                        .on_submit(Message::ApplyIsotope)
-                        .size(12)
-                        .padding(7),
-                    command("Set", Message::ApplyIsotope)
-                ]
-                .spacing(6),
-                row![
-                    text("Unpaired electrons").size(11).width(Length::Fill),
-                    crate::appearance::pick_list([0u8, 1, 2], count, Message::AtomRadical)
-                        .placeholder("Mixed")
-                        .text_size(12)
-                        .padding(6)
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-            ]
-            .spacing(8);
-            for a in atoms.iter().filter(|a| !a.marks.is_empty()) {
-                controls =
-                    controls.push(text(format!("{} · positioned marks", a.element)).size(12));
-                for (index, mark) in a.marks.iter().enumerate() {
-                    controls = controls.push(
-                        row![
-                            text(match mark.kind {
-                                reshiki::scientific::MarkKind::Charge => "Charge",
-                                reshiki::scientific::MarkKind::CircledCharge => "Circled charge",
-                                reshiki::scientific::MarkKind::Radical => "Radical",
-                                reshiki::scientific::MarkKind::RadicalIon => "Radical ion",
-                                reshiki::scientific::MarkKind::LonePair => "Lone pair",
-                                reshiki::scientific::MarkKind::LonePairBar => "Lone pair bar",
-                            })
-                            .size(11)
-                            .width(Length::Fill),
-                            command("Rotate", Message::RotateMark(a.id, index)),
-                            command("Remove", Message::RemoveMark(a.id, index))
-                        ]
-                        .spacing(4),
-                    );
-                }
-                controls = controls.push(command(
-                    if self.tool == Tool::EditPoints {
-                        "Finish positioning marks"
-                    } else {
-                        "Position atom marks"
-                    },
-                    Message::Tool(if self.tool == Tool::EditPoints {
-                        Tool::Select
-                    } else {
-                        Tool::EditPoints
-                    }),
-                ));
-            }
+            let controls = self.atom_detail_controls(first, &atoms);
             body = body.push(self.inspector_section(
                 Section::Atoms,
                 "Atom details",
@@ -1157,56 +1016,7 @@ impl App {
             "Grouping & frames",
             "",
             false,
-            || {
-                let groups = self.tab.doc.outer_selected_groups(&self.tab.selected);
-                let mut grouping = column![
-                    row![
-                        command("Group", Message::Group)
-                            .on_press_maybe(self.can_group().then_some(Message::Group))
-                            .width(Length::Fill),
-                        command("Ungroup", Message::Ungroup)
-                            .on_press_maybe((!groups.is_empty()).then_some(Message::Ungroup))
-                            .width(Length::Fill)
-                    ]
-                    .spacing(6),
-                    command("Invert selection", Message::InvertSelection),
-                    crate::appearance::pick_list(
-                        [
-                            reshiki::graphics::GraphicKind::Brackets,
-                            reshiki::graphics::GraphicKind::Parentheses,
-                            reshiki::graphics::GraphicKind::Braces,
-                            reshiki::graphics::GraphicKind::Rectangle,
-                            reshiki::graphics::GraphicKind::RoundedRectangle
-                        ],
-                        None::<reshiki::graphics::GraphicKind>,
-                        Message::AddFrame
-                    )
-                    .placeholder("Add frame…")
-                    .text_size(12)
-                    .padding(7)
-                    .width(Length::Fill),
-                ]
-                .spacing(6);
-                if !groups.is_empty() {
-                    let integral = self
-                        .tab
-                        .doc
-                        .groups
-                        .iter()
-                        .filter(|g| groups.contains(&g.id))
-                        .all(|g| g.integral);
-                    grouping = grouping.push(hover_hint(
-                        checkbox(integral)
-                            .label("Integral group")
-                            .size(14)
-                            .text_size(12)
-                            .on_toggle(Message::IntegralGroup),
-                        "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
-                        tooltip::Position::Top,
-                    ));
-                }
-                grouping
-            },
+            || self.grouping_controls(),
         ));
         body.push(
             button(
@@ -1219,6 +1029,216 @@ impl App {
             .on_press(Message::Delete),
         )
         .into()
+    }
+
+    fn bond_appearance_controls(
+        &self,
+        first: &reshiki::document::Bond,
+        atoms: &[&reshiki::document::Atom],
+        bonds: &[&reshiki::document::Bond],
+    ) -> iced::widget::Column<'_, Message> {
+        let preset =
+            BondPreset::of(first).filter(|p| bonds.iter().all(|b| BondPreset::of(b) == Some(*p)));
+        let mut controls = column![
+            text("Style").size(11).style(muted_text),
+            crate::appearance::pick_list(BondPreset::ALL, preset, Message::ApplyBondPreset)
+                .placeholder("Mixed bond styles")
+                .text_size(12)
+                .padding(7)
+                .width(Length::Fill),
+        ]
+        .spacing(7);
+        if bonds.iter().any(|b| [2, 7].contains(&b.order)) {
+            let position = bonds
+                .iter()
+                .find(|b| [2, 7].contains(&b.order))
+                .map(|b| b.double_position)
+                .filter(|p| {
+                    bonds
+                        .iter()
+                        .filter(|b| [2, 7].contains(&b.order))
+                        .all(|b| b.double_position == *p)
+                });
+            controls = controls
+                .push(text("Second line placement").size(11).style(muted_text))
+                .push(
+                    crate::appearance::pick_list(
+                        DoublePosition::ALL,
+                        position,
+                        Message::BondPosition,
+                    )
+                    .placeholder("Mixed positions")
+                    .text_size(12)
+                    .padding(7)
+                    .width(Length::Fill),
+                );
+        }
+        controls = controls
+            .push(text("Color").size(11).style(muted_text))
+            .push(
+                row![
+                    crate::appearance::text_input("#000000", &self.tab.bond_color_input)
+                        .on_input(Message::BondColor)
+                        .on_submit(Message::ApplyBondColor)
+                        .size(12)
+                        .padding(7),
+                    command("Apply", Message::ApplyBondColor),
+                ]
+                .spacing(6),
+            );
+        if atoms.len() >= 3 {
+            controls = controls.push(
+                row![
+                    hover_hint(
+                        command("Aromatic circle", Message::AromaticDisplay)
+                            .on_press_maybe((!self.tab.busy).then_some(Message::AromaticDisplay))
+                            .width(Length::Fill),
+                        "Toggle the aromatic circle",
+                        tooltip::Position::Top,
+                    ),
+                    hover_hint(
+                        command("Inner ring curve", Message::InspectorAction(Action::RingArc))
+                            .width(Length::Fill),
+                        "Toggle the inner ring curve · Select consecutive ring atoms for a partial curve, or the whole ring for a circle. Bond orders stay unchanged.",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(6),
+            );
+        }
+        if self.has_selected_ring() {
+            controls = controls.push(
+                keyed_command("Saturated ↔ Aromatic", Message::ToggleSelectedRing)
+                    .width(Length::Fill),
+            );
+        }
+        controls
+    }
+
+    fn atom_detail_controls(
+        &self,
+        first: &reshiki::document::Atom,
+        atoms: &[&reshiki::document::Atom],
+    ) -> iced::widget::Column<'_, Message> {
+        let count = first.radical_electrons;
+        let count = atoms
+            .iter()
+            .all(|a| a.radical_electrons == count)
+            .then_some(count);
+        let mut controls = column![
+            row![
+                text("Charge").size(12).width(Length::Fill),
+                command("−", Message::Charge(-1)),
+                command("+", Message::Charge(1))
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+            row![
+                crate::appearance::text_input("Isotope mass", &self.tab.isotope)
+                    .on_input(Message::Isotope)
+                    .on_submit(Message::ApplyIsotope)
+                    .size(12)
+                    .padding(7),
+                command("Set", Message::ApplyIsotope)
+            ]
+            .spacing(6),
+            row![
+                text("Unpaired electrons").size(11).width(Length::Fill),
+                crate::appearance::pick_list([0u8, 1, 2], count, Message::AtomRadical)
+                    .placeholder("Mixed")
+                    .text_size(12)
+                    .padding(6)
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        ]
+        .spacing(8);
+        for a in atoms.iter().filter(|a| !a.marks.is_empty()) {
+            controls = controls.push(text(format!("{} · positioned marks", a.element)).size(12));
+            for (index, mark) in a.marks.iter().enumerate() {
+                controls = controls.push(
+                    row![
+                        text(match mark.kind {
+                            reshiki::scientific::MarkKind::Charge => "Charge",
+                            reshiki::scientific::MarkKind::CircledCharge => "Circled charge",
+                            reshiki::scientific::MarkKind::Radical => "Radical",
+                            reshiki::scientific::MarkKind::RadicalIon => "Radical ion",
+                            reshiki::scientific::MarkKind::LonePair => "Lone pair",
+                            reshiki::scientific::MarkKind::LonePairBar => "Lone pair bar",
+                        })
+                        .size(11)
+                        .width(Length::Fill),
+                        command("Rotate", Message::RotateMark(a.id, index)),
+                        command("Remove", Message::RemoveMark(a.id, index))
+                    ]
+                    .spacing(4),
+                );
+            }
+            controls = controls.push(command(
+                if self.tool == Tool::EditPoints {
+                    "Finish positioning marks"
+                } else {
+                    "Position atom marks"
+                },
+                Message::Tool(if self.tool == Tool::EditPoints {
+                    Tool::Select
+                } else {
+                    Tool::EditPoints
+                }),
+            ));
+        }
+        controls
+    }
+
+    fn grouping_controls(&self) -> iced::widget::Column<'_, Message> {
+        let groups = self.tab.doc.outer_selected_groups(&self.tab.selected);
+        let mut grouping = column![
+            row![
+                command("Group", Message::Group)
+                    .on_press_maybe(self.can_group().then_some(Message::Group))
+                    .width(Length::Fill),
+                command("Ungroup", Message::Ungroup)
+                    .on_press_maybe((!groups.is_empty()).then_some(Message::Ungroup))
+                    .width(Length::Fill)
+            ]
+            .spacing(6),
+            command("Invert selection", Message::InvertSelection),
+            crate::appearance::pick_list(
+                [
+                    reshiki::graphics::GraphicKind::Brackets,
+                    reshiki::graphics::GraphicKind::Parentheses,
+                    reshiki::graphics::GraphicKind::Braces,
+                    reshiki::graphics::GraphicKind::Rectangle,
+                    reshiki::graphics::GraphicKind::RoundedRectangle
+                ],
+                None::<reshiki::graphics::GraphicKind>,
+                Message::AddFrame
+            )
+            .placeholder("Add frame…")
+            .text_size(12)
+            .padding(7)
+            .width(Length::Fill),
+        ]
+        .spacing(6);
+        if !groups.is_empty() {
+            let integral = self
+                .tab
+                .doc
+                .groups
+                .iter()
+                .filter(|g| groups.contains(&g.id))
+                .all(|g| g.integral);
+            grouping = grouping.push(hover_hint(
+                checkbox(integral)
+                    .label("Integral group")
+                    .size(14)
+                    .text_size(12)
+                    .on_toggle(Message::IntegralGroup),
+                "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
+                tooltip::Position::Top,
+            ));
+        }
+        grouping
     }
 
     /// The figure format, chosen from a menu grouped into vector and raster.
