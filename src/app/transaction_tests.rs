@@ -680,13 +680,20 @@ fn observer_history_alignment_survives_cip_only_frames() {
     app.tab.doc.atom_mut(b1).unwrap().position.y += 10.;
     app.changed(before);
 
+    // Clear the selection before each probe: an empty recent context leaves it
+    // untouched, so a stale [a1, a2] would otherwise hide a misaligned frame.
+    const SELECTED: &str = "Selected the most recently edited molecule(s)";
     app.step_history(false);
     assert_eq!(app.tab.keyboard_drawing.target(), Target::Atom(a1));
+    app.tab.selected.clear();
     app.select_recent_shortcut();
+    assert_eq!(app.status, SELECTED);
     assert_eq!(app.tab.selected, [a1, a2]);
 
     app.step_history(false);
     assert_eq!(app.tab.keyboard_drawing.target(), Target::Atom(b1));
+    app.tab.selected.clear();
     app.select_recent_shortcut();
+    assert_eq!(app.status, SELECTED);
     assert_eq!(app.tab.selected, [a1, a2]);
 }
