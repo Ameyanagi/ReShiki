@@ -233,7 +233,42 @@ impl App {
             }
         };
         let mut content = column![background(self.command_bar()), background(self.style_bar())];
-        let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
+        let drawing: Element<'_, Edit> = self.drawing_canvas();
+        // Keyed by tab, so that switching tabs ends a drag or other gesture.
+        let drawing: Element<'_, Edit> = iced::widget::keyed_column([(self.tab.id, drawing)])
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
+        let paper = self.with_drop_overlay(
+            sensor(self.with_context_menu(self.with_inline_text(drawing.map(Message::Canvas))))
+                .on_show(Message::Viewport)
+                .on_resize(Message::Viewport)
+                .into(),
+        );
+        let context: Element<'_, Message> = if let Some(preview) = &self.tab.cleanup {
+            self.cleanup_bar(preview)
+        } else {
+            self.context_bar()
+        };
+        let workspace = column![background(context), paper]
+            .height(Length::Fill)
+            .width(Length::Fill);
+        let mut body = row![background(self.tool_palette()), workspace].height(Length::Fill);
+        if self.inspector_open {
+            body = body.push(background(self.inspector()));
+        }
+        content = content.push(body);
+        if self.view_open {
+            content = content.push(background(self.view_options()));
+        }
+        content
+            .push(background(self.status_bar()))
+            .height(Length::Fill)
+            .into()
+    }
+
+    fn drawing_canvas(&self) -> Element<'_, Edit> {
+        canvas(MoleculeCanvas {
             optimizer: self.optimization_canvas(),
             keyboard_target: if self.keyboard_drawing_active() {
                 self.tab
@@ -288,87 +323,55 @@ impl App {
         })
         .width(Length::Fill)
         .height(Length::Fill)
-        .into();
-        // Keyed by tab, so that switching tabs ends a drag or other gesture.
-        let drawing: Element<'_, Edit> = iced::widget::keyed_column([(self.tab.id, drawing)])
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into();
-        let paper = self.with_drop_overlay(
-            sensor(self.with_context_menu(self.with_inline_text(drawing.map(Message::Canvas))))
-                .on_show(Message::Viewport)
-                .on_resize(Message::Viewport)
-                .into(),
-        );
-        let context: Element<'_, Message> = if let Some(preview) = &self.tab.cleanup {
-            use reshiki::cleanup::Scope;
-            let scopes = vec![Scope::SelectedAtoms, Scope::SelectedMolecules];
-            let mut bar = column![
-                row![
-                    text("Cleanup preview").size(13),
-                    crate::appearance::pick_list(
-                        scopes,
-                        Some(preview.job.options.scope),
-                        |scope| Message::Cleanup(super::cleanup::Action::Scope(scope))
-                    )
+        .into()
+    }
+
+    fn cleanup_bar<'a>(&'a self, preview: &'a super::CleanupPreview) -> Element<'a, Message> {
+        use reshiki::cleanup::Scope;
+        let scopes = vec![Scope::SelectedAtoms, Scope::SelectedMolecules];
+        let mut bar = column![
+            row![
+                text("Cleanup preview").size(13),
+                crate::appearance::pick_list(scopes, Some(preview.job.options.scope), |scope| {
+                    Message::Cleanup(super::cleanup::Action::Scope(scope))
+                })
+                .text_size(12)
+                .width(160),
+                checkbox(preview.original)
+                    .label("Show original")
                     .text_size(12)
-                    .width(160),
-                    checkbox(preview.original)
-                        .label("Show original")
-                        .text_size(12)
-                        .size(14)
-                        .on_toggle(
-                            |original| Message::Cleanup(super::cleanup::Action::Original(original))
-                        ),
-                    Space::new().width(Length::Fill),
-                    command("Cancel", Message::Cleanup(super::cleanup::Action::Cancel)),
-                    button(text("Apply").size(12))
-                        .on_press_maybe(
-                            (!self.tab.busy)
-                                .then_some(Message::Cleanup(super::cleanup::Action::Apply))
-                        )
-                        .style(crate::appearance::primary),
-                ]
-                .spacing(10)
-                .align_y(Alignment::Center),
-                row![
-                    checkbox(preview.job.options.keep_orientation)
-                        .label("Keep orientation")
-                        .text_size(11)
-                        .size(13)
-                        .on_toggle(|keep| Message::Cleanup(super::cleanup::Action::Orientation(
-                            keep
-                        ))),
-                    text(preview.job.options.scope.hint())
-                        .size(11)
-                        .style(muted_text),
-                ]
-                .spacing(16)
-                .align_y(Alignment::Center),
+                    .size(14)
+                    .on_toggle(
+                        |original| Message::Cleanup(super::cleanup::Action::Original(original))
+                    ),
+                Space::new().width(Length::Fill),
+                command("Cancel", Message::Cleanup(super::cleanup::Action::Cancel)),
+                button(text("Apply").size(12))
+                    .on_press_maybe(
+                        (!self.tab.busy).then_some(Message::Cleanup(super::cleanup::Action::Apply))
+                    )
+                    .style(crate::appearance::primary),
             ]
-            .spacing(6);
-            for warning in &preview.warnings {
-                bar = bar.push(text(warning).size(11).style(muted_text));
-            }
-            container(bar).padding([8, 12]).style(panel).into()
-        } else {
-            self.context_bar()
-        };
-        let workspace = column![background(context), paper]
-            .height(Length::Fill)
-            .width(Length::Fill);
-        let mut body = row![background(self.tool_palette()), workspace].height(Length::Fill);
-        if self.inspector_open {
-            body = body.push(background(self.inspector()));
+            .spacing(10)
+            .align_y(Alignment::Center),
+            row![
+                checkbox(preview.job.options.keep_orientation)
+                    .label("Keep orientation")
+                    .text_size(11)
+                    .size(13)
+                    .on_toggle(|keep| Message::Cleanup(super::cleanup::Action::Orientation(keep))),
+                text(preview.job.options.scope.hint())
+                    .size(11)
+                    .style(muted_text),
+            ]
+            .spacing(16)
+            .align_y(Alignment::Center),
+        ]
+        .spacing(6);
+        for warning in &preview.warnings {
+            bar = bar.push(text(warning).size(11).style(muted_text));
         }
-        content = content.push(body);
-        if self.view_open {
-            content = content.push(background(self.view_options()));
-        }
-        content
-            .push(background(self.status_bar()))
-            .height(Length::Fill)
-            .into()
+        container(bar).padding([8, 12]).style(panel).into()
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
@@ -575,45 +578,7 @@ impl App {
         for pair in tools.chunks(2) {
             let mut line = row![].spacing(4);
             for (tool, hint) in pair {
-                let family = super::palettes::family(*tool);
-                let icon = if *tool == Tool::Ring {
-                    Icon::Ring(self.ring_size, self.aromatic_ring)
-                } else if *tool == Tool::Arrow {
-                    Icon::Arrow(self.tab.arrow_style)
-                } else {
-                    Icon::Tool(*tool)
-                };
-                // Vector tools can share a renderer layer. A separate clipped
-                // layer per icon adds GPU passes to every canvas redraw.
-                let item = iced::widget::canvas(super::tool_button::ToolButton {
-                    tool: *tool,
-                    icon,
-                    active: self.tool == *tool,
-                    opens_on_click: family == Some(super::palettes::Family::Bonds),
-                })
-                .width(36)
-                .height(36);
-                let item = reshiki::accessibility::button(
-                    format!("tool-{tool:?}"),
-                    (*hint).to_owned(),
-                    item,
-                )
-                .padding(0)
-                .width(36)
-                .height(36)
-                .checked(self.tool == *tool)
-                .style(|_, _| iced::widget::button::Style::default())
-                .on_press(if family == Some(super::palettes::Family::Bonds) {
-                    Message::Palette(super::palettes::Action::Open(*tool))
-                } else {
-                    Message::Tool(*tool)
-                });
-                let item: Element<'_, Message> = if self.palette.is_some() {
-                    item.into()
-                } else {
-                    hover_hint(item, (*hint).to_owned(), tooltip::Position::Right).into()
-                };
-                line = line.push(item);
+                line = line.push(self.tool_palette_button(*tool, hint));
             }
             palette = palette.push(line);
         }
@@ -627,24 +592,7 @@ impl App {
         ] {
             let mut line = row![].spacing(4);
             for symbol in pair {
-                line = line.push(hover_hint(
-                    reshiki::accessibility::button(
-                        format!("element-{symbol}"),
-                        super::palettes::element_hint(symbol),
-                        text(symbol).size(13).center(),
-                    )
-                    .checked(self.tool == Tool::Atom && self.element == symbol)
-                    .width(36)
-                    .height(30)
-                    .on_press(Message::Element(symbol.into()))
-                    .style(element_control(
-                        self.tool == Tool::Atom && self.element == symbol,
-                        &self.tab.doc,
-                        symbol,
-                    )),
-                    super::palettes::element_hint(symbol),
-                    tooltip::Position::Right,
-                ));
+                line = line.push(self.element_palette_button(symbol));
             }
             palette = palette.push(line);
         }
@@ -657,25 +605,7 @@ impl App {
                         .scroller_width(3)
                         .spacing(3)
                 )),
-            hover_hint(
-                reshiki::accessibility::button(
-                    "help-open",
-                    "Help and keyboard shortcuts",
-                    column![
-                        iced::widget::canvas(Glyph(Icon::Keyboard, true))
-                            .width(24)
-                            .height(24),
-                        text("Help").size(10),
-                    ]
-                    .spacing(3)
-                    .align_x(Alignment::Center)
-                )
-                .padding([5, 10])
-                .on_press(Message::ToggleHelp)
-                .style(control(self.help_open)),
-                "Help · F1",
-                tooltip::Position::Right,
-            )
+            self.help_palette_button()
         ]
         .spacing(8)
         .align_x(Alignment::Center);
@@ -685,6 +615,86 @@ impl App {
             .padding([14, 8])
             .style(panel)
             .into()
+    }
+
+    fn tool_palette_button(&self, tool: Tool, hint: &str) -> Element<'_, Message> {
+        let family = super::palettes::family(tool);
+        let icon = if tool == Tool::Ring {
+            Icon::Ring(self.ring_size, self.aromatic_ring)
+        } else if tool == Tool::Arrow {
+            Icon::Arrow(self.tab.arrow_style)
+        } else {
+            Icon::Tool(tool)
+        };
+        // Vector tools can share a renderer layer. A separate clipped
+        // layer per icon adds GPU passes to every canvas redraw.
+        let item = iced::widget::canvas(super::tool_button::ToolButton {
+            tool,
+            icon,
+            active: self.tool == tool,
+            opens_on_click: family == Some(super::palettes::Family::Bonds),
+        })
+        .width(36)
+        .height(36);
+        let item = reshiki::accessibility::button(format!("tool-{tool:?}"), hint.to_owned(), item)
+            .padding(0)
+            .width(36)
+            .height(36)
+            .checked(self.tool == tool)
+            .style(|_, _| iced::widget::button::Style::default())
+            .on_press(if family == Some(super::palettes::Family::Bonds) {
+                Message::Palette(super::palettes::Action::Open(tool))
+            } else {
+                Message::Tool(tool)
+            });
+        if self.palette.is_some() {
+            item.into()
+        } else {
+            hover_hint(item, hint.to_owned(), tooltip::Position::Right).into()
+        }
+    }
+
+    fn element_palette_button(&self, symbol: &'static str) -> tooltip::Tooltip<'_, Message> {
+        hover_hint(
+            reshiki::accessibility::button(
+                format!("element-{symbol}"),
+                super::palettes::element_hint(symbol),
+                text(symbol).size(13).center(),
+            )
+            .checked(self.tool == Tool::Atom && self.element == symbol)
+            .width(36)
+            .height(30)
+            .on_press(Message::Element(symbol.into()))
+            .style(element_control(
+                self.tool == Tool::Atom && self.element == symbol,
+                &self.tab.doc,
+                symbol,
+            )),
+            super::palettes::element_hint(symbol),
+            tooltip::Position::Right,
+        )
+    }
+
+    fn help_palette_button(&self) -> tooltip::Tooltip<'_, Message> {
+        hover_hint(
+            reshiki::accessibility::button(
+                "help-open",
+                "Help and keyboard shortcuts",
+                column![
+                    iced::widget::canvas(Glyph(Icon::Keyboard, true))
+                        .width(24)
+                        .height(24),
+                    text("Help").size(10),
+                ]
+                .spacing(3)
+                .align_x(Alignment::Center),
+            )
+            .padding([5, 10])
+            .on_press(Message::ToggleHelp)
+            .style(control(self.help_open)),
+            "Help · F1",
+            tooltip::Position::Right,
+        )
     }
 
     /// Bond length and angle constraints differ from the document's.
@@ -2053,6 +2063,16 @@ impl App {
                 .spacing(5),
             );
         }
+        body = self.atom_label_stereo_section(body, stereo);
+        self.atom_label_indicator_section(body)
+    }
+
+    fn atom_label_stereo_section<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+        stereo: bool,
+    ) -> iced::widget::Column<'a, Message> {
+        use super::atom_labels::Action as A;
         body = body
             .push(horizontal_line())
             .push(section("STEREOCHEMISTRY"))
@@ -2074,6 +2094,14 @@ impl App {
                     .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
             );
         }
+        body
+    }
+
+    fn atom_label_indicator_section<'a>(
+        &'a self,
+        body: iced::widget::Column<'a, Message>,
+    ) -> Element<'a, Message> {
+        use super::atom_labels::Action as A;
         body.push(horizontal_line())
             .push(section("INDICATOR APPEARANCE"))
             .push(
