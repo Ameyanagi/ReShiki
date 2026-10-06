@@ -232,7 +232,7 @@ fn stale_hover_and_empty_cleanup_do_not_modify_the_drawing() {
     let _ = app.context_key("o");
     assert_eq!(app.tab.doc, before);
     assert_eq!(app.tool, Tool::Atom);
-    let _ = app.update(Message::Clean);
+    let _ = app.update(Message::Cleanup(crate::app::cleanup::Action::Begin));
     assert!(!app.tab.busy);
     assert!(app.tab.cleanup.is_none());
     assert!(app.status.contains("Select"));

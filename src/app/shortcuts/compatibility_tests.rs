@@ -198,7 +198,7 @@ fn dispatcher_preserves_shift_and_does_not_fall_through_modifier_chords() {
     ));
     assert!(matches!(
         key_message(&key("k"), &key("K"), primary() | Modifiers::SHIFT),
-        Some(Message::Clean)
+        Some(Message::Cleanup(crate::app::cleanup::Action::Begin))
     ));
     assert!(matches!(
         key_message(&key("j"), &key("j"), primary()),

@@ -381,7 +381,7 @@ fn background_checks_and_cleanup_previews_stay_with_their_drawing() {
             assert_eq!(tab.doc, before);
             assert_eq!(tab.cleanup.as_ref().unwrap().document, computed);
             select(&mut app, id);
-            let _ = app.update(Message::ApplyCleanup);
+            let _ = app.update(Message::Cleanup(crate::app::cleanup::Action::Apply));
             assert_eq!(app.tab.doc, computed);
             let _ = app.update(Message::Undo);
             assert_eq!(app.tab.doc, before);

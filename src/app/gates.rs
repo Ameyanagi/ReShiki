@@ -1,7 +1,7 @@
 //! Modal gates that run before message dispatch. Their order decides which modal surface wins.
 use super::{
-    App, InspectorTab, Message, atom_text, color_popover, document_styles, import, inline_text,
-    joining, object_toolbar, optimization, pictures, printing, tabs, template_library,
+    App, InspectorTab, Message, atom_text, cleanup, color_popover, document_styles, import,
+    inline_text, joining, object_toolbar, optimization, pictures, printing, tabs, template_library,
     theme_generator, updates,
 };
 use crate::canvas::{self, Edit, Tool};
@@ -307,19 +307,20 @@ impl App {
     fn cleanup_preview_gate(&mut self, message: Message) -> Gate {
         if self.tab.cleanup.is_some() {
             if matches!(message, Message::Tool(Tool::Select)) {
-                return Break(self.update(Message::CancelCleanup));
+                return Break(self.update(Message::Cleanup(cleanup::Action::Cancel)));
             }
             if !(matches!(
                 &message,
-                Message::ApplyCleanup
-                    | Message::CancelCleanup
-                    | Message::CleanupOriginal(_)
-                    | Message::CleanupScope(_)
-                    | Message::CleanupOrientation(_)
-                    | Message::Printing(
-                        printing::Action::Prepared(..) | printing::Action::Finished(..)
-                    )
-                    | Message::Pictures(pictures::Action::Loaded(..))
+                // Begin stays blocked: it would restart cleanup under the preview.
+                Message::Cleanup(
+                    cleanup::Action::Apply
+                        | cleanup::Action::Cancel
+                        | cleanup::Action::Original(_)
+                        | cleanup::Action::Scope(_)
+                        | cleanup::Action::Orientation(_),
+                ) | Message::Printing(
+                    printing::Action::Prepared(..) | printing::Action::Finished(..)
+                ) | Message::Pictures(pictures::Action::Loaded(..))
                     | Message::Imports(import::Action::Loaded(..))
             ) || preview_passthrough(&message))
                 && !self.answers_save_dialog(&message)

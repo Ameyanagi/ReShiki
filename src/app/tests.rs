@@ -250,7 +250,7 @@ fn cancelling_a_running_cleanup_refresh_prevents_late_preview_or_apply() {
     app.tab.doc.add_bond(a, b, 1, "plain");
     app.tab.selected = vec![b];
     let original = app.tab.doc.clone();
-    let _ = app.update(Message::Clean);
+    let _ = app.update(Message::Cleanup(cleanup::Action::Begin));
     let job = cleanup::CleanupJob {
         options: reshiki::cleanup::Options {
             scope: reshiki::cleanup::Scope::SelectedAtoms,
@@ -278,16 +278,16 @@ fn cancelling_a_running_cleanup_refresh_prevents_late_preview_or_apply() {
         app.tab.cleanup.as_ref().unwrap().job.options.scope,
         reshiki::cleanup::Scope::SelectedAtoms
     );
-    let _ = app.update(Message::CleanupScope(
+    let _ = app.update(Message::Cleanup(cleanup::Action::Scope(
         reshiki::cleanup::Scope::SelectedMolecules,
-    ));
+    )));
     assert!(app.tab.busy);
     let mut pending = job;
     pending.serial = app.tab.cleanup_serial;
-    let _ = app.update(Message::ApplyCleanup);
+    let _ = app.update(Message::Cleanup(cleanup::Action::Apply));
     assert_eq!(app.tab.doc, original);
     assert!(app.tab.cleanup.is_some());
-    let _ = app.update(Message::CancelCleanup);
+    let _ = app.update(Message::Cleanup(cleanup::Action::Cancel));
     let _ = app.update(Message::EngineDone {
         revision: app.tab.revision,
         kind: Job::Clean(pending),
@@ -358,9 +358,9 @@ fn cleanup_requires_apply_can_cancel_and_rejects_stale_results() {
     assert!(!app.dirty());
     let _ = app.update(Message::Delete);
     assert_eq!(app.tab.doc, original);
-    let _ = app.update(Message::CleanupOriginal(true));
+    let _ = app.update(Message::Cleanup(cleanup::Action::Original(true)));
     assert_eq!(app.display_document(), &original);
-    let _ = app.update(Message::CancelCleanup);
+    let _ = app.update(Message::Cleanup(cleanup::Action::Cancel));
     assert_eq!(app.tab.doc, original);
     assert!(!app.tab.history.can_undo());
     let _ = app.update(Message::EngineDone {
@@ -373,7 +373,7 @@ fn cleanup_requires_apply_can_cancel_and_rejects_stale_results() {
         }),
         result: response(),
     });
-    let _ = app.update(Message::ApplyCleanup);
+    let _ = app.update(Message::Cleanup(cleanup::Action::Apply));
     assert_eq!(app.tab.doc, cleaned);
     assert_eq!(app.tab.selected, vec![a, b]);
     let _ = app.update(Message::Undo);
@@ -2212,7 +2212,7 @@ fn cleanup_orientation_restarts_the_previewed_job() {
         original: false,
     });
     let serial = app.tab.cleanup_serial;
-    let _ = app.update(Message::CleanupOrientation(true));
+    let _ = app.update(Message::Cleanup(cleanup::Action::Orientation(true)));
     assert!(app.tab.busy);
     assert_eq!(app.tab.cleanup_serial, serial.wrapping_add(1));
     assert!(app.tab.cleanup.as_ref().is_some_and(|p| !p.original));

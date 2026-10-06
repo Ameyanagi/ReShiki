@@ -307,7 +307,7 @@ impl App {
                     crate::appearance::pick_list(
                         scopes,
                         Some(preview.job.options.scope),
-                        Message::CleanupScope
+                        |scope| Message::Cleanup(super::cleanup::Action::Scope(scope))
                     )
                     .text_size(12)
                     .width(160),
@@ -315,11 +315,16 @@ impl App {
                         .label("Show original")
                         .text_size(12)
                         .size(14)
-                        .on_toggle(Message::CleanupOriginal),
+                        .on_toggle(
+                            |original| Message::Cleanup(super::cleanup::Action::Original(original))
+                        ),
                     Space::new().width(Length::Fill),
-                    command("Cancel", Message::CancelCleanup),
+                    command("Cancel", Message::Cleanup(super::cleanup::Action::Cancel)),
                     button(text("Apply").size(12))
-                        .on_press_maybe((!self.tab.busy).then_some(Message::ApplyCleanup))
+                        .on_press_maybe(
+                            (!self.tab.busy)
+                                .then_some(Message::Cleanup(super::cleanup::Action::Apply))
+                        )
                         .style(crate::appearance::primary),
                 ]
                 .spacing(10)
@@ -329,7 +334,9 @@ impl App {
                         .label("Keep orientation")
                         .text_size(11)
                         .size(13)
-                        .on_toggle(Message::CleanupOrientation),
+                        .on_toggle(|keep| Message::Cleanup(super::cleanup::Action::Orientation(
+                            keep
+                        ))),
                     text(preview.job.options.scope.hint())
                         .size(11)
                         .style(muted_text),
@@ -450,8 +457,11 @@ impl App {
             ),
             icon_button(
                 Icon::Cleanup,
-                keyed("Clean up…", &Message::Clean),
-                (!self.tab.busy).then_some(Message::Clean),
+                keyed(
+                    "Clean up…",
+                    &Message::Cleanup(super::cleanup::Action::Begin)
+                ),
+                (!self.tab.busy).then_some(Message::Cleanup(super::cleanup::Action::Begin)),
                 false
             ),
             icon_button(

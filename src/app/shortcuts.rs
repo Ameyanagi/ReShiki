@@ -212,7 +212,7 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
                 "z" => Message::Redo,
                 "a" => Message::InvertSelection,
                 "g" => Message::Ungroup,
-                "k" => Message::Clean,
+                "k" => Message::Cleanup(super::cleanup::Action::Begin),
                 "h" => Message::Transform(Transform::FlipVertical),
                 "v" => Message::Transform(Transform::FlipHorizontal),
                 "d" => Message::Optimization(super::optimization::Action::Begin),

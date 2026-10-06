@@ -12,17 +12,32 @@ use reshiki::scientific::{Phase, SymbolKind};
 /// Columns: (message, passes the cleanup-preview gate, preview_passthrough, commits_draft).
 fn cases() -> Vec<(Message, bool, bool, bool)> {
     vec![
-        (Message::Clean, false, false, true),
-        (Message::ApplyCleanup, true, false, false),
-        (Message::CancelCleanup, true, false, false),
-        (Message::CleanupOriginal(true), true, false, false),
+        (Message::Cleanup(cleanup::Action::Begin), false, false, true),
+        (Message::Cleanup(cleanup::Action::Apply), true, false, false),
         (
-            Message::CleanupScope(Scope::SelectedMolecules),
+            Message::Cleanup(cleanup::Action::Cancel),
             true,
             false,
             false,
         ),
-        (Message::CleanupOrientation(true), true, false, false),
+        (
+            Message::Cleanup(cleanup::Action::Original(true)),
+            true,
+            false,
+            false,
+        ),
+        (
+            Message::Cleanup(cleanup::Action::Scope(Scope::SelectedMolecules)),
+            true,
+            false,
+            false,
+        ),
+        (
+            Message::Cleanup(cleanup::Action::Orientation(true)),
+            true,
+            false,
+            false,
+        ),
         (Message::Grid, true, true, false),
         (Message::SmartGuides(false), true, true, false),
         (Message::Rulers(true), true, true, false),

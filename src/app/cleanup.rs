@@ -9,7 +9,45 @@ pub struct CleanupJob {
     pub serial: u64,
     pub epoch: u64,
 }
+
+/// Cleanup commands, nested under `Message::Cleanup`.
+/// `Begin` is the only one the cleanup preview blocks and the only one that commits drafts.
+#[derive(Debug, Clone)]
+pub enum Action {
+    /// Starts a cleanup preview (was `Clean`: toolbar "Clean up…", Shift+Cmd/Ctrl+K).
+    Begin,
+    /// Applies the previewed cleanup (was `ApplyCleanup`).
+    Apply,
+    /// Discards the preview (was `CancelCleanup`).
+    Cancel,
+    /// Shows the original drawing under the preview (was `CleanupOriginal`, "Show original").
+    Original(bool),
+    /// Reruns the preview with another scope (was `CleanupScope`).
+    Scope(Scope),
+    /// Reruns the preview keeping or freeing the orientation (was `CleanupOrientation`, "Keep orientation").
+    Orientation(bool),
+}
+
 impl App {
+    pub(super) fn cleanup_action(&mut self, action: Action) -> Task<Message> {
+        match action {
+            Action::Begin => self.begin_cleanup(None, None),
+            Action::Scope(scope) => self.begin_cleanup(Some(scope), None),
+            Action::Orientation(on) => self.begin_cleanup(None, Some(on)),
+            Action::Original(original) => {
+                self.set_cleanup_original(original);
+                Task::none()
+            }
+            Action::Cancel => {
+                self.cancel_cleanup();
+                Task::none()
+            }
+            Action::Apply => {
+                self.apply_cleanup();
+                Task::none()
+            }
+        }
+    }
     pub(super) fn begin_cleanup(
         &mut self,
         scope: Option<Scope>,
