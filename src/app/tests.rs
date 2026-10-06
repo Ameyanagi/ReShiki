@@ -2147,12 +2147,14 @@ fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
     let history = app.tab.history.can_undo();
     let export = reshiki::export::drawing(&app.tab.doc, "svg").expect("SVG before view change");
     for message in [
-        Message::ToggleView,
-        Message::Rulers(true),
-        Message::Crosshair(true),
-        Message::RulerUnit(canvas::guides::Unit::Inches),
-        Message::Grid,
-        Message::SmartGuides(false),
+        Message::View(view_settings::Action::Toggle),
+        Message::View(view_settings::Action::Rulers(true)),
+        Message::View(view_settings::Action::Crosshair(true)),
+        Message::View(view_settings::Action::RulerUnit(
+            canvas::guides::Unit::Inches,
+        )),
+        Message::View(view_settings::Action::Grid),
+        Message::View(view_settings::Action::SmartGuides(false)),
     ] {
         let _ = app.update(message);
     }
@@ -2177,15 +2179,17 @@ fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
 fn view_messages_and_shortcuts_set_their_view_aids() {
     let (mut app, _) = App::new();
     let (grid, view_open) = (app.grid, app.view_open);
-    let _ = app.update(Message::Grid);
+    let _ = app.update(Message::View(view_settings::Action::Grid));
     assert_eq!(app.grid, !grid);
-    let _ = app.update(Message::ToggleView);
+    let _ = app.update(Message::View(view_settings::Action::Toggle));
     assert_eq!(app.view_open, !view_open);
-    let _ = app.update(Message::Rulers(true));
+    let _ = app.update(Message::View(view_settings::Action::Rulers(true)));
     assert!(app.guides.rulers);
-    let _ = app.update(Message::Crosshair(true));
+    let _ = app.update(Message::View(view_settings::Action::Crosshair(true)));
     assert!(app.guides.crosshair);
-    let _ = app.update(Message::RulerUnit(canvas::guides::Unit::Inches));
+    let _ = app.update(Message::View(view_settings::Action::RulerUnit(
+        canvas::guides::Unit::Inches,
+    )));
     assert_eq!(app.guides.unit, canvas::guides::Unit::Inches);
     let _ = app.update(Message::Shortcut(shortcuts::Action::Rulers));
     assert!(!app.guides.rulers);

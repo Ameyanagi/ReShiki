@@ -299,8 +299,16 @@ impl App {
             Action::FixedAngles => {
                 return self.update(Message::FixedAngles(!self.tab.bond_drawing.fixed_angles));
             }
-            Action::Rulers => return self.update(Message::Rulers(!self.guides.rulers)),
-            Action::Crosshair => return self.update(Message::Crosshair(!self.guides.crosshair)),
+            Action::Rulers => {
+                return self.update(Message::View(super::view_settings::Action::Rulers(
+                    !self.guides.rulers,
+                )));
+            }
+            Action::Crosshair => {
+                return self.update(Message::View(super::view_settings::Action::Crosshair(
+                    !self.guides.crosshair,
+                )));
+            }
             Action::Nudge(x, y) => {
                 self.sync_keyboard_drawing();
                 if self.tool.selects()

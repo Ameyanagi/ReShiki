@@ -2087,13 +2087,13 @@ impl App {
                 ),
                 checkbox(self.grid)
                     .label("Grid")
-                    .on_toggle(|_| Message::Grid)
+                    .on_toggle(|_| Message::View(super::view_settings::Action::Grid))
                     .size(14)
                     .text_size(12),
                 hover_hint(
                     checkbox(self.appearance.smart_guides)
                         .label("Smart guides")
-                        .on_toggle(Message::SmartGuides)
+                        .on_toggle(|on| Message::View(super::view_settings::Action::SmartGuides(on)))
                         .size(14)
                         .text_size(12),
                     "Snap dragged objects to other objects' edges, centers and equal gaps · Hold Option/Alt to move freely",
@@ -2101,12 +2101,12 @@ impl App {
                 ),
                 checkbox(self.guides.rulers)
                     .label("Rulers")
-                    .on_toggle(Message::Rulers)
+                    .on_toggle(|on| Message::View(super::view_settings::Action::Rulers(on)))
                     .size(14)
                     .text_size(12),
                 checkbox(self.guides.crosshair)
                     .label("Crosshair")
-                    .on_toggle(Message::Crosshair)
+                    .on_toggle(|on| Message::View(super::view_settings::Action::Crosshair(on)))
                     .size(14)
                     .text_size(12),
                 divider(),
@@ -2114,14 +2114,14 @@ impl App {
                 crate::appearance::pick_list(
                     crate::canvas::guides::Unit::ALL,
                     Some(self.guides.unit),
-                    Message::RulerUnit
+                    |unit| Message::View(super::view_settings::Action::RulerUnit(unit))
                 )
                 .text_size(12)
                 .padding(5)
                 .width(68),
                 command("Page setup…", Message::Pages(super::pages::Action::Show)),
                 Space::new().width(Length::Fill),
-                command("Done", Message::ToggleView),
+                command("Done", Message::View(super::view_settings::Action::Toggle)),
             ]
             .spacing(10)
             .align_y(Alignment::Center),
@@ -2236,7 +2236,10 @@ impl App {
         let status = status
             .extend(self.document_settings())
             .push(divider())
-            .push(command("View", Message::ToggleView).style(control(self.view_open)))
+            .push(
+                command("View", Message::View(super::view_settings::Action::Toggle))
+                    .style(control(self.view_open)),
+            )
             .push(command("−", Message::Zoom(0.8)))
             .push(
                 text(format!("{:.0}%", self.tab.camera.zoom * 100.0))

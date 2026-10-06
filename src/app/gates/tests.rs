@@ -2,7 +2,7 @@
 use super::preview_passthrough;
 use crate::app::{
     App, CleanupPreview, Message, atom_text, cleanup, color_popover, inline_text, joining, tabs,
-    updates,
+    updates, view_settings,
 };
 use crate::canvas::{Tool, guides::Unit};
 use reshiki::cleanup::Scope;
@@ -38,12 +38,42 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             false,
             false,
         ),
-        (Message::Grid, true, true, false),
-        (Message::SmartGuides(false), true, true, false),
-        (Message::Rulers(true), true, true, false),
-        (Message::Crosshair(true), true, true, false),
-        (Message::RulerUnit(Unit::Inches), true, true, false),
-        (Message::ToggleView, true, true, false),
+        (
+            Message::View(view_settings::Action::Grid),
+            true,
+            true,
+            false,
+        ),
+        (
+            Message::View(view_settings::Action::SmartGuides(false)),
+            true,
+            true,
+            false,
+        ),
+        (
+            Message::View(view_settings::Action::Rulers(true)),
+            true,
+            true,
+            false,
+        ),
+        (
+            Message::View(view_settings::Action::Crosshair(true)),
+            true,
+            true,
+            false,
+        ),
+        (
+            Message::View(view_settings::Action::RulerUnit(Unit::Inches)),
+            true,
+            true,
+            false,
+        ),
+        (
+            Message::View(view_settings::Action::Toggle),
+            true,
+            true,
+            false,
+        ),
         (
             Message::GraphicStyle(GraphicChange::Pattern(LinePattern::Dashed)),
             false,

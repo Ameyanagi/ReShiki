@@ -2,7 +2,7 @@
 use super::{
     App, InspectorTab, Message, atom_text, cleanup, color_popover, document_styles, import,
     inline_text, joining, object_toolbar, optimization, pictures, printing, tabs, template_library,
-    theme_generator, updates,
+    theme_generator, updates, view_settings,
 };
 use crate::canvas::{self, Edit, Tool};
 use iced::Task;
@@ -367,13 +367,15 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
             | Message::ToggleInspector
             | Message::Inspector(_)
             | Message::Appearance(_)
-            | Message::ToggleView
+            | Message::View(
+                view_settings::Action::Grid
+                    | view_settings::Action::SmartGuides(_)
+                    | view_settings::Action::Rulers(_)
+                    | view_settings::Action::Crosshair(_)
+                    | view_settings::Action::RulerUnit(_)
+                    | view_settings::Action::Toggle
+            )
             | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
-            | Message::Grid
-            | Message::SmartGuides(_)
-            | Message::Rulers(_)
-            | Message::Crosshair(_)
-            | Message::RulerUnit(_)
             | Message::Tick
             | Message::EngineDone { .. }
             | Message::Close(_)
