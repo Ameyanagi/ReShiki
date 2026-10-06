@@ -328,7 +328,6 @@ impl Arrow {
         self.appearance().validate()
     }
     pub fn paths(&self) -> Vec<ArrowPath> {
-        use PathCommand::{Close, Cubic, Line, Move};
         let s = self.appearance();
         let mut result = Vec::new();
         let u = unit(self.start, self.end);
@@ -355,209 +354,242 @@ impl Arrow {
                 filled,
             });
         };
-        let head = |tip: Point,
-                    direction: Point,
-                    kind: Head,
-                    path: &mut dyn FnMut(Vec<PathCommand>, bool, bool)| {
-            if kind == Head::None {
-                return;
+        self.shafts(&s, n, gap, &mut path);
+        if s.dipole {
+            self.dipole_mark(&s, &mut path);
+        }
+        if s.no_go != NoGo::None {
+            self.no_go_mark(&s, &mut path);
+        }
+        result
+    }
+    fn head_path(
+        &self,
+        s: &ArrowStyle,
+        tip: Point,
+        direction: Point,
+        kind: Head,
+        path: &mut dyn FnMut(Vec<PathCommand>, bool, bool),
+    ) {
+        use PathCommand::{Close, Line, Move};
+        if kind == Head::None {
+            return;
+        }
+        let length = DEFAULT
+            .world(s.head_length_pt)
+            .min(self.start.distance(self.end) * 0.4);
+        let width = DEFAULT.world(s.head_width_pt);
+        let base = tip.offset(-direction.x * length, -direction.y * length);
+        let left = base.offset(direction.y * width, -direction.x * width);
+        let right = base.offset(-direction.y * width, direction.x * width);
+        let center = tip.offset(
+            -direction.x * length * (1. - s.head_notch),
+            -direction.y * length * (1. - s.head_notch),
+        );
+        let mut pts = vec![Move(tip)];
+        match kind {
+            Head::Full => {
+                pts.extend([Line(left), Line(center), Line(right)]);
             }
-            let length = DEFAULT
-                .world(s.head_length_pt)
-                .min(self.start.distance(self.end) * 0.4);
-            let width = DEFAULT.world(s.head_width_pt);
-            let base = tip.offset(-direction.x * length, -direction.y * length);
-            let left = base.offset(direction.y * width, -direction.x * width);
-            let right = base.offset(-direction.y * width, direction.x * width);
-            let center = tip.offset(
-                -direction.x * length * (1. - s.head_notch),
-                -direction.y * length * (1. - s.head_notch),
-            );
-            let mut pts = vec![Move(tip)];
-            match kind {
-                Head::Full => {
-                    pts.extend([Line(left), Line(center), Line(right)]);
-                }
-                Head::Left => {
-                    pts.extend([Line(left), Line(center)]);
-                }
-                Head::Right => {
-                    pts.extend([Line(right), Line(center)]);
-                }
-                Head::None => {}
+            Head::Left => {
+                pts.extend([Line(left), Line(center)]);
             }
-            if s.shape == HeadShape::Open {
-                pts = match kind {
-                    Head::Full => vec![Move(left), Line(tip), Line(right)],
-                    Head::Left => vec![Move(left), Line(tip)],
-                    _ => vec![Move(right), Line(tip)],
-                };
-            } else {
-                pts.push(Close);
+            Head::Right => {
+                pts.extend([Line(right), Line(center)]);
             }
-            path(pts, s.shape == HeadShape::Solid, true);
-        };
-        // Cubic representation exactly reproduces the editable quadratic curve.
-        let body = |from: f32, to: f32, offset: f32| {
-            let shift = |p: Point| p.offset(n.x * offset, n.y * offset);
-            let start = self.point(from);
-            let end = self.point(to);
-            if let Some(c) = self.control_point() {
-                if self.kind == "bent" {
-                    let mut commands = vec![Move(shift(start))];
-                    if from.min(to) < 0.5 && from.max(to) > 0.5 {
-                        commands.push(Line(shift(c)));
-                    }
-                    commands.push(Line(shift(end)));
-                    return commands;
-                }
-                if offset != 0. {
-                    // A curve's parallel follows its local normal. Hermite cubic
-                    // segments retain smooth tangents and a constant shaft gap.
-                    let steps = 16;
-                    let dt = (to - from) / steps as f32;
-                    let mut commands = vec![Move(self.offset_point(from, offset))];
-                    for i in 0..steps {
-                        let t0 = from + i as f32 * dt;
-                        let t1 = from + (i + 1) as f32 * dt;
-                        let p0 = self.offset_point(t0, offset);
-                        let p1 = self.offset_point(t1, offset);
-                        let v0 = self.offset_velocity(t0, offset);
-                        let v1 = self.offset_velocity(t1, offset);
-                        commands.push(Cubic(
-                            p0.offset(v0.x * dt / 3., v0.y * dt / 3.),
-                            p1.offset(-v1.x * dt / 3., -v1.y * dt / 3.),
-                            p1,
-                        ));
-                    }
-                    return commands;
-                }
-                let tangent = |t: f32| {
-                    Point::new(
-                        2. * ((1. - t) * (c.x - self.start.x) + t * (self.end.x - c.x)),
-                        2. * ((1. - t) * (c.y - self.start.y) + t * (self.end.y - c.y)),
-                    )
-                };
-                let a = tangent(from);
-                let b = tangent(to);
-                let dt = (to - from) / 3.;
-                vec![
-                    Move(shift(start)),
-                    Cubic(
-                        shift(start.offset(a.x * dt, a.y * dt)),
-                        shift(end.offset(-b.x * dt, -b.y * dt)),
-                        shift(end),
-                    ),
-                ]
-            } else {
-                vec![Move(shift(start)), Line(shift(end))]
-            }
-        };
-        let tangent = |t: f32, reverse: bool| {
-            let c = self
-                .control_point()
-                .unwrap_or_else(|| lerp(self.start, self.end, 0.5));
-            let d = if self.kind == "bent" {
-                if t < 0.5 {
-                    unit(self.start, c)
-                } else {
-                    unit(c, self.end)
-                }
-            } else {
-                unit(lerp(self.start, c, t), lerp(c, self.end, t))
+            Head::None => {}
+        }
+        if s.shape == HeadShape::Open {
+            pts = match kind {
+                Head::Full => vec![Move(left), Line(tip), Line(right)],
+                Head::Left => vec![Move(left), Line(tip)],
+                _ => vec![Move(right), Line(tip)],
             };
-            if reverse { Point::new(-d.x, -d.y) } else { d }
-        };
-        let half_head = |from: f32, to: f32, offset: f32, kind: Head| {
-            if s.shape != HeadShape::Solid || !matches!(kind, Head::Left | Head::Right) {
-                return None;
+        } else {
+            pts.push(Close);
+        }
+        path(pts, s.shape == HeadShape::Solid, true);
+    }
+    // Cubic representation exactly reproduces the editable quadratic curve.
+    fn shaft_body(&self, n: Point, from: f32, to: f32, offset: f32) -> Vec<PathCommand> {
+        use PathCommand::{Cubic, Line, Move};
+        let shift = |p: Point| p.offset(n.x * offset, n.y * offset);
+        let start = self.point(from);
+        let end = self.point(to);
+        if let Some(c) = self.control_point() {
+            if self.kind == "bent" {
+                let mut commands = vec![Move(shift(start))];
+                if from.min(to) < 0.5 && from.max(to) > 0.5 {
+                    commands.push(Line(shift(c)));
+                }
+                commands.push(Line(shift(end)));
+                return commands;
             }
-            let sign = (to - from).signum();
-            let span = (to - from).abs();
-            let direction = tangent(to, sign < 0.);
-            let radius = DEFAULT.world(s.width_pt) * 0.5;
-            let length = DEFAULT
-                .world(s.head_length_pt)
-                .min(self.point(from).distance(self.point(to)) * 0.4);
-            let width = DEFAULT.world(s.head_width_pt).max(radius * 1.5);
-            let speed = self
-                .offset_velocity(to, offset)
-                .distance(Point::default())
-                .max(0.0001);
-            let neck = to - sign * (length * (1. - s.head_notch) / speed).min(span * 0.4);
-            let side = if kind == Head::Left { 1. } else { -1. };
-            let inner = offset + side * sign * radius;
-            let outer = offset - side * sign * radius;
-            // Continue the shaft's unbarbed edge all the way to the tip. Closing
-            // a triangle on the shaft centerline leaves its round cap exposed.
-            let tip = self.offset_point(to, inner);
-            let wing = tip.offset(
-                -direction.x * length + direction.y * side * (width + radius),
-                -direction.y * length - direction.x * side * (width + radius),
-            );
-            let mut commands = vec![
-                Move(tip),
-                Line(wing),
-                Line(self.offset_point(neck, outer)),
-                Line(self.offset_point(neck, inner)),
-            ];
-            if self.kind == "bent" || self.control_point().is_none() {
-                commands.push(Line(tip));
-            } else {
-                commands.extend(body(neck, to, inner).into_iter().skip(1));
+            if offset != 0. {
+                // A curve's parallel follows its local normal. Hermite cubic
+                // segments retain smooth tangents and a constant shaft gap.
+                let steps = 16;
+                let dt = (to - from) / steps as f32;
+                let mut commands = vec![Move(self.offset_point(from, offset))];
+                for i in 0..steps {
+                    let t0 = from + i as f32 * dt;
+                    let t1 = from + (i + 1) as f32 * dt;
+                    let p0 = self.offset_point(t0, offset);
+                    let p1 = self.offset_point(t1, offset);
+                    let v0 = self.offset_velocity(t0, offset);
+                    let v1 = self.offset_velocity(t1, offset);
+                    commands.push(Cubic(
+                        p0.offset(v0.x * dt / 3., v0.y * dt / 3.),
+                        p1.offset(-v1.x * dt / 3., -v1.y * dt / 3.),
+                        p1,
+                    ));
+                }
+                return commands;
             }
-            commands.push(Close);
-            // Overlap the shortened shaft's cap inside the filled neck.
-            let overlap = (radius * 1.25 / speed).min((to - neck).abs() * 0.25);
-            Some((commands, neck + sign * overlap))
-        };
-        let trim = |kind: Head, at: f32, span: f32| {
-            if kind == Head::None || s.shape == HeadShape::Open {
-                return 0.;
-            }
-            let length = DEFAULT
-                .world(s.head_length_pt)
-                .min(self.start.distance(self.end) * 0.4);
-            let inset = if s.shape == HeadShape::Hollow && kind == Head::Full {
-                length * (1. - s.head_notch)
-            } else {
-                (DEFAULT.world(s.width_pt) * 0.5 * (s.head_length_pt / s.head_width_pt + 1.))
-                    .min(length * 0.7)
+            let tangent = |t: f32| {
+                Point::new(
+                    2. * ((1. - t) * (c.x - self.start.x) + t * (self.end.x - c.x)),
+                    2. * ((1. - t) * (c.y - self.start.y) + t * (self.end.y - c.y)),
+                )
             };
-            (inset / self.velocity(at).distance(Point::default()).max(0.0001)).min(span * 0.35)
+            let a = tangent(from);
+            let b = tangent(to);
+            let dt = (to - from) / 3.;
+            vec![
+                Move(shift(start)),
+                Cubic(
+                    shift(start.offset(a.x * dt, a.y * dt)),
+                    shift(end.offset(-b.x * dt, -b.y * dt)),
+                    shift(end),
+                ),
+            ]
+        } else {
+            vec![Move(shift(start)), Line(shift(end))]
+        }
+    }
+    fn shaft_tangent(&self, t: f32, reverse: bool) -> Point {
+        let c = self
+            .control_point()
+            .unwrap_or_else(|| lerp(self.start, self.end, 0.5));
+        let d = if self.kind == "bent" {
+            if t < 0.5 {
+                unit(self.start, c)
+            } else {
+                unit(c, self.end)
+            }
+        } else {
+            unit(lerp(self.start, c, t), lerp(c, self.end, t))
         };
+        if reverse { Point::new(-d.x, -d.y) } else { d }
+    }
+    fn half_head(
+        &self,
+        s: &ArrowStyle,
+        n: Point,
+        from: f32,
+        to: f32,
+        offset: f32,
+        kind: Head,
+    ) -> Option<(Vec<PathCommand>, f32)> {
+        use PathCommand::{Close, Line, Move};
+        if s.shape != HeadShape::Solid || !matches!(kind, Head::Left | Head::Right) {
+            return None;
+        }
+        let sign = (to - from).signum();
+        let span = (to - from).abs();
+        let direction = self.shaft_tangent(to, sign < 0.);
+        let radius = DEFAULT.world(s.width_pt) * 0.5;
+        let length = DEFAULT
+            .world(s.head_length_pt)
+            .min(self.point(from).distance(self.point(to)) * 0.4);
+        let width = DEFAULT.world(s.head_width_pt).max(radius * 1.5);
+        let speed = self
+            .offset_velocity(to, offset)
+            .distance(Point::default())
+            .max(0.0001);
+        let neck = to - sign * (length * (1. - s.head_notch) / speed).min(span * 0.4);
+        let side = if kind == Head::Left { 1. } else { -1. };
+        let inner = offset + side * sign * radius;
+        let outer = offset - side * sign * radius;
+        // Continue the shaft's unbarbed edge all the way to the tip. Closing
+        // a triangle on the shaft centerline leaves its round cap exposed.
+        let tip = self.offset_point(to, inner);
+        let wing = tip.offset(
+            -direction.x * length + direction.y * side * (width + radius),
+            -direction.y * length - direction.x * side * (width + radius),
+        );
+        let mut commands = vec![
+            Move(tip),
+            Line(wing),
+            Line(self.offset_point(neck, outer)),
+            Line(self.offset_point(neck, inner)),
+        ];
+        if self.kind == "bent" || self.control_point().is_none() {
+            commands.push(Line(tip));
+        } else {
+            commands.extend(self.shaft_body(n, neck, to, inner).into_iter().skip(1));
+        }
+        commands.push(Close);
+        // Overlap the shortened shaft's cap inside the filled neck.
+        let overlap = (radius * 1.25 / speed).min((to - neck).abs() * 0.25);
+        Some((commands, neck + sign * overlap))
+    }
+    fn head_trim(&self, s: &ArrowStyle, kind: Head, at: f32, span: f32) -> f32 {
+        if kind == Head::None || s.shape == HeadShape::Open {
+            return 0.;
+        }
+        let length = DEFAULT
+            .world(s.head_length_pt)
+            .min(self.start.distance(self.end) * 0.4);
+        let inset = if s.shape == HeadShape::Hollow && kind == Head::Full {
+            length * (1. - s.head_notch)
+        } else {
+            (DEFAULT.world(s.width_pt) * 0.5 * (s.head_length_pt / s.head_width_pt + 1.))
+                .min(length * 0.7)
+        };
+        (inset / self.velocity(at).distance(Point::default()).max(0.0001)).min(span * 0.35)
+    }
+    fn shafts(
+        &self,
+        s: &ArrowStyle,
+        n: Point,
+        gap: f32,
+        path: &mut impl FnMut(Vec<PathCommand>, bool, bool),
+    ) {
         let mut shaft = |from: f32, to: f32, offset: f32, head_kind: Head, tail_kind: Head| {
             let sign = (to - from).signum();
             let span = (to - from).abs();
-            let end_head = half_head(from, to, offset, head_kind);
-            let start_head = half_head(to, from, offset, tail_kind);
+            let end_head = self.half_head(s, n, from, to, offset, head_kind);
+            let start_head = self.half_head(s, n, to, from, offset, tail_kind);
             let start = start_head
                 .as_ref()
                 .map(|(_, at)| *at)
-                .unwrap_or_else(|| from + sign * trim(tail_kind, from, span));
+                .unwrap_or_else(|| from + sign * self.head_trim(s, tail_kind, from, span));
             let end = end_head
                 .as_ref()
                 .map(|(_, at)| *at)
-                .unwrap_or_else(|| to - sign * trim(head_kind, to, span));
-            path(body(start, end, offset), false, false);
+                .unwrap_or_else(|| to - sign * self.head_trim(s, head_kind, to, span));
+            path(self.shaft_body(n, start, end, offset), false, false);
             if let Some((commands, _)) = end_head {
                 path(commands, true, true);
             } else {
-                head(
+                self.head_path(
+                    s,
                     self.offset_point(to, offset),
-                    tangent(to, sign < 0.),
+                    self.shaft_tangent(to, sign < 0.),
                     head_kind,
-                    &mut path,
+                    &mut *path,
                 );
             }
             if let Some((commands, _)) = start_head {
                 path(commands, true, true);
             } else {
-                head(
+                self.head_path(
+                    s,
                     self.offset_point(from, offset),
-                    tangent(from, sign > 0.),
+                    self.shaft_tangent(from, sign > 0.),
                     tail_kind,
-                    &mut path,
+                    &mut *path,
                 );
             }
         };
@@ -571,50 +603,63 @@ impl Arrow {
             let head_length = DEFAULT.world(s.head_length_pt).min(length * 0.4);
             let head_width = DEFAULT.world(s.head_width_pt).max(0.001);
             let inset = (head_length * gap / head_width / length).min(0.4);
-            path(body(0., 1. - inset, -gap), false, false);
-            path(body(0., 1. - inset, gap), false, false);
-            head(self.end, tangent(1., false), s.head, &mut path);
-            head(self.start, tangent(0., true), s.tail, &mut path);
+            path(self.shaft_body(n, 0., 1. - inset, -gap), false, false);
+            path(self.shaft_body(n, 0., 1. - inset, gap), false, false);
+            self.head_path(
+                s,
+                self.end,
+                self.shaft_tangent(1., false),
+                s.head,
+                &mut *path,
+            );
+            self.head_path(
+                s,
+                self.start,
+                self.shaft_tangent(0., true),
+                s.tail,
+                &mut *path,
+            );
         } else {
             shaft(0., 1., 0., s.head, s.tail);
         }
-        if s.dipole {
-            let p = self.point(0.);
-            let d = tangent(0., false);
-            let w = DEFAULT.world(s.head_width_pt);
+    }
+    fn dipole_mark(&self, s: &ArrowStyle, path: &mut impl FnMut(Vec<PathCommand>, bool, bool)) {
+        use PathCommand::{Line, Move};
+        let p = self.point(0.);
+        let d = self.shaft_tangent(0., false);
+        let w = DEFAULT.world(s.head_width_pt);
+        path(
+            vec![
+                Move(p.offset(-d.y * w, d.x * w)),
+                Line(p.offset(d.y * w, -d.x * w)),
+            ],
+            false,
+            true,
+        );
+    }
+    fn no_go_mark(&self, s: &ArrowStyle, path: &mut impl FnMut(Vec<PathCommand>, bool, bool)) {
+        use PathCommand::{Line, Move};
+        let p = self.point(0.5);
+        let d = self.shaft_tangent(0.5, false);
+        let w = DEFAULT.world(2.);
+        let q = |x: f32, y: f32| p.offset((d.x * x - d.y * y) * w, (d.y * x + d.x * y) * w);
+        if s.no_go == NoGo::Hash {
             path(
                 vec![
-                    Move(p.offset(-d.y * w, d.x * w)),
-                    Line(p.offset(d.y * w, -d.x * w)),
+                    Move(q(-1.5, 1.)),
+                    Line(q(0.5, -1.)),
+                    Move(q(-0.5, 1.)),
+                    Line(q(1.5, -1.)),
                 ],
                 false,
                 true,
             );
+        } else {
+            path(vec![Move(q(-1., 1.)), Line(q(1., -1.))], false, true);
         }
-        if s.no_go != NoGo::None {
-            let p = self.point(0.5);
-            let d = tangent(0.5, false);
-            let w = DEFAULT.world(2.);
-            let q = |x: f32, y: f32| p.offset((d.x * x - d.y * y) * w, (d.y * x + d.x * y) * w);
-            if s.no_go == NoGo::Hash {
-                path(
-                    vec![
-                        Move(q(-1.5, 1.)),
-                        Line(q(0.5, -1.)),
-                        Move(q(-0.5, 1.)),
-                        Line(q(1.5, -1.)),
-                    ],
-                    false,
-                    true,
-                );
-            } else {
-                path(vec![Move(q(-1., 1.)), Line(q(1., -1.))], false, true);
-            }
-            if s.no_go == NoGo::Cross {
-                path(vec![Move(q(-1., -1.)), Line(q(1., 1.))], false, true);
-            }
+        if s.no_go == NoGo::Cross {
+            path(vec![Move(q(-1., -1.)), Line(q(1., 1.))], false, true);
         }
-        result
     }
     pub fn hit(&self, point: Point, radius: f32) -> bool {
         self.paths().iter().any(|p| {
