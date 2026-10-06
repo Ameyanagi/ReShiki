@@ -522,6 +522,68 @@ fn place_anchored_scaled(
     anchor: Anchor,
     free_scale: f32,
 ) -> Result<(Document, Vec<u64>), &'static str> {
+    check_attachment(doc, part, point, direction, radius, anchor)?;
+    let (atom, bond) = attachment_target(doc, part, point, radius);
+    if atom.is_none() && bond.is_none() {
+        return place_free(doc, part, point, direction, radius, anchor, free_scale);
+    }
+    if (atom.is_some() && matches!(anchor, Anchor::Bond(..)))
+        || (bond.is_some() && matches!(anchor, Anchor::Atom(..)))
+    {
+        return Err("Match the chosen source atom to an atom, or source bond to a bond.");
+    }
+
+    // Aromatic placement uses the same geometry and atom mapping as every other
+    // template. Only eligible source edges opt into final-graph reassignment.
+    let aromatic = aromatic::Fusion::new(doc, part);
+    let ctx = Attachment {
+        doc,
+        part,
+        aromatic: &aromatic,
+        direction,
+        radius,
+    };
+    let mut best: Option<(f32, Document, Vec<u64>)> = None;
+    let mut consider =
+        |source: &[u64], target: &[u64], origin: Point, dest: Point, scale: f32, angle: f32| {
+            // `_all` lives to the end of the candidate, as it did inline, so
+            // peak heap use is unchanged.
+            let Some((positioned, _all, shared, fuse)) =
+                ctx.pose(source, target, origin, dest, scale, angle)
+            else {
+                return;
+            };
+            let score = ctx.score(&positioned, &shared, dest, scale);
+            if best
+                .as_ref()
+                .is_some_and(|(previous, _, _)| score >= *previous)
+            {
+                return;
+            }
+            let Some((result, ids)) = ctx.merge(&positioned, &shared, fuse, source) else {
+                return;
+            };
+            best = Some((score, result, ids));
+        };
+
+    if let Some(index) = bond {
+        ctx.bond_candidates(anchor, index, &mut consider)?;
+    } else if let Some(id) = atom {
+        ctx.atom_candidates(anchor, id, point, &mut consider)?;
+    }
+    best.map(|(_, doc, ids)| (doc, ids)).ok_or(
+        "No compatible attachment: match elements and an eligible bond, with room for the new bonds.",
+    )
+}
+
+fn check_attachment(
+    doc: &Document,
+    part: &Document,
+    point: Point,
+    direction: Option<Point>,
+    radius: f32,
+    anchor: Anchor,
+) -> Result<(), &'static str> {
     if doc.validate().is_err() || part.validate().is_err() {
         return Err("The drawing or template is invalid.");
     }
@@ -536,6 +598,15 @@ fn place_anchored_scaled(
     if !anchor.valid(part) || part.all_ids().is_empty() {
         return Err("Choose an attachment point in a nonempty template.");
     }
+    Ok(())
+}
+
+fn attachment_target(
+    doc: &Document,
+    part: &Document,
+    point: Point,
+    radius: f32,
+) -> (Option<u64>, Option<usize>) {
     let atom = (!part.atoms.is_empty())
         .then(|| doc.nearest(point, radius))
         .flatten();
@@ -547,195 +618,257 @@ fn place_anchored_scaled(
                 .flatten()
         })
         .flatten();
-    if atom.is_none() && bond.is_none() {
-        let mut result = doc.clone();
-        let center = anchor
-            .point(part)
-            .ok_or("The source attachment point is unavailable")?;
+    (atom, bond)
+}
+
+fn place_free(
+    doc: &Document,
+    part: &Document,
+    point: Point,
+    direction: Option<Point>,
+    radius: f32,
+    anchor: Anchor,
+    free_scale: f32,
+) -> Result<(Document, Vec<u64>), &'static str> {
+    let mut result = doc.clone();
+    let center = anchor
+        .point(part)
+        .ok_or("The source attachment point is unavailable")?;
+    let mut positioned = part.clone();
+    let direction = direction.filter(|p| p.distance(point) > radius);
+    if free_scale != 1. || direction.is_some() {
+        let angle = direction
+            .map(|direction| {
+                (direction.y - point.y)
+                    .atan2(direction.x - point.x)
+                    .to_degrees()
+            })
+            .unwrap_or(0.);
+        let ids = positioned.all_ids();
+        editing::transform_about(&mut positioned, &ids, center, free_scale, angle);
+    }
+    let ids = editing::append(
+        &mut result,
+        &positioned,
+        Point::new(point.x - center.x, point.y - center.y),
+    );
+    if ids.len() != part.all_ids().len() {
+        return Err("The template could not be inserted.");
+    }
+    Ok((result, ids))
+}
+
+/// A posed copy of the template, its IDs, the shared-atom map and whether the
+/// candidate fuses an aromatic edge.
+type Pose = (Document, Vec<u64>, HashMap<u64, u64>, bool);
+
+/// Read-only inputs shared by every candidate of one attachment.
+#[derive(Clone, Copy)]
+struct Attachment<'a> {
+    doc: &'a Document,
+    part: &'a Document,
+    aromatic: &'a aromatic::Fusion,
+    direction: Option<Point>,
+    radius: f32,
+}
+impl Attachment<'_> {
+    fn pose(
+        &self,
+        source: &[u64],
+        target: &[u64],
+        origin: Point,
+        dest: Point,
+        scale: f32,
+        angle: f32,
+    ) -> Option<Pose> {
+        let Attachment {
+            doc,
+            part,
+            aromatic,
+            direction,
+            radius,
+        } = *self;
         let mut positioned = part.clone();
-        let direction = direction.filter(|p| p.distance(point) > radius);
-        if free_scale != 1. || direction.is_some() {
-            let angle = direction
-                .map(|direction| {
-                    (direction.y - point.y)
-                        .atan2(direction.x - point.x)
-                        .to_degrees()
-                })
-                .unwrap_or(0.);
-            let ids = positioned.all_ids();
-            editing::transform_about(&mut positioned, &ids, center, free_scale, angle);
-        }
-        let ids = editing::append(
-            &mut result,
-            &positioned,
-            Point::new(point.x - center.x, point.y - center.y),
-        );
-        if ids.len() != part.all_ids().len() {
-            return Err("The template could not be inserted.");
-        }
-        return Ok((result, ids));
-    }
-    if (atom.is_some() && matches!(anchor, Anchor::Bond(..)))
-        || (bond.is_some() && matches!(anchor, Anchor::Atom(..)))
-    {
-        return Err("Match the chosen source atom to an atom, or source bond to a bond.");
-    }
-
-    // Aromatic placement uses the same geometry and atom mapping as every other
-    // template. Only eligible source edges opt into final-graph reassignment.
-    let aromatic = aromatic::Fusion::new(doc, part);
-    let mut best: Option<(f32, Document, Vec<u64>)> = None;
-    let mut consider =
-        |source: &[u64], target: &[u64], origin: Point, dest: Point, scale: f32, angle: f32| {
-            let mut positioned = part.clone();
-            let all = positioned.all_ids();
-            editing::transform_about(&mut positioned, &all, origin, scale, angle.to_degrees());
-            positioned.translate(&all, dest.x - origin.x, dest.y - origin.y);
-            let fuse = matches!(source, [a,b] if aromatic.source_edge(*a,*b));
-            if fuse && let Some(aim) = direction.filter(|p| p.distance(dest) > radius) {
-                let ([seed, _], [ta, tb]) = (source, target) else {
-                    return;
-                };
-                let Some(a) = doc.atom(*ta) else {
-                    return;
-                };
-                let Some(b) = doc.atom(*tb) else {
-                    return;
-                };
-                let center = aromatic.center(&positioned, *seed);
-                let cross = |p: Point| {
-                    (b.position.x - a.position.x) * (p.y - dest.y)
-                        - (b.position.y - a.position.y) * (p.x - dest.x)
-                };
-                if cross(aim).abs() > radius * a.position.distance(b.position)
-                    && cross(aim) * cross(center) < 0.
-                {
-                    return;
-                }
-            }
-            let mut shared: HashMap<_, _> =
-                source.iter().copied().zip(target.iter().copied()).collect();
-            if fuse && !aromatic.map_vertices(doc, &positioned, source, target, &mut shared) {
-                return;
-            }
-            let length = crate::style::DEFAULT.bond_length_world * scale;
-            let mut score = 0.0;
-            let mut center = Point::default();
-            let mut count = 0;
-            for a in &positioned.atoms {
-                if shared.contains_key(&a.id) {
-                    continue;
-                }
-                center = center.offset(a.position.x, a.position.y);
-                count += 1;
-                for other in &doc.atoms {
-                    let distance = a.position.distance(other.position) / length;
-                    score += (0.75 - distance).max(0.0).powi(2) * 1000.0;
-                    score += 0.05 / (distance + 0.1).powi(2);
-                }
-            }
-            // A single atom or edge can be shared too. Existing-fragment joining
-            // then removes the duplicate while retaining its captions and groups.
-            if count == 0 {
-                center = dest;
-            } else {
-                center.x /= count as f32;
-                center.y /= count as f32;
-            }
-            if let Some(direction) = direction.filter(|p| p.distance(dest) > radius) {
-                let aim = (direction.y - dest.y).atan2(direction.x - dest.x);
-                let actual = (center.y - dest.y).atan2(center.x - dest.x);
-                score += (1.0 - (aim - actual).cos()) * 10000.0;
-            }
-            if best
-                .as_ref()
-                .is_some_and(|(previous, _, _)| score >= *previous)
+        let all = positioned.all_ids();
+        editing::transform_about(&mut positioned, &all, origin, scale, angle.to_degrees());
+        positioned.translate(&all, dest.x - origin.x, dest.y - origin.y);
+        let fuse = matches!(source, [a,b] if aromatic.source_edge(*a,*b));
+        if fuse && let Some(aim) = direction.filter(|p| p.distance(dest) > radius) {
+            let ([seed, _], [ta, tb]) = (source, target) else {
+                return None;
+            };
+            let a = doc.atom(*ta)?;
+            let b = doc.atom(*tb)?;
+            let center = aromatic.center(&positioned, *seed);
+            let cross = |p: Point| {
+                (b.position.x - a.position.x) * (p.y - dest.y)
+                    - (b.position.y - a.position.y) * (p.x - dest.x)
+            };
+            if cross(aim).abs() > radius * a.position.distance(b.position)
+                && cross(aim) * cross(center) < 0.
             {
-                return;
+                return None;
             }
-            let mut result = doc.clone();
-            let ids = editing::append(&mut result, &positioned, Point::default());
-            if ids.len() != part.all_ids().len() {
-                return;
-            }
-            let added: HashMap<_, _> = part
-                .all_ids()
-                .into_iter()
-                .zip(ids.iter().copied())
-                .collect();
-            let mapping: HashMap<_, _> = shared
-                .iter()
-                .filter_map(|(a, b)| added.get(a).map(|id| (*id, *b)))
-                .collect();
-            let mapped = |id: u64| mapping.get(&id).copied().unwrap_or(id);
-            for fill in &mut result.ring_fills {
-                for id in &mut fill.atoms {
-                    *id = mapped(*id);
-                }
-            }
-            let mut affected: Vec<_> = shared.values().copied().collect();
-            affected.extend(mapping.keys());
-            crate::highlights::inherit_merged(&mut result, &mapping);
-            result.invalidate_chemistry(&affected);
-            result.atoms.retain(|a| !mapping.contains_key(&a.id));
-            // A multi-edge fusion may map both endpoints of a genuinely new
-            // edge. Remove only duplicate edges, not every mapped-to-mapped edge.
-            result.bonds.retain(|b| {
-                !(mapping.contains_key(&b.a)
-                    && mapping.contains_key(&b.b)
-                    && doc.bonds.iter().any(|old| {
-                        (old.a == mapped(b.a) && old.b == mapped(b.b))
-                            || (old.b == mapped(b.a) && old.a == mapped(b.b))
-                    }))
-            });
-            for b in &mut result.bonds {
-                b.a = mapped(b.a);
-                b.b = mapped(b.b);
-                for id in &mut b.stereo_atoms {
-                    *id = mapped(*id);
-                }
-            }
-            // The templates contain no stereo at attachment sites. Retain remote stereo.
-            for a in &mut result.atoms {
-                for member in &mut a.centroid {
-                    *member = mapped(*member);
-                }
-                if let Some(stereo) = &mut a.stereo {
-                    for id in &mut stereo.neighbors {
-                        *id = mapped(*id);
-                    }
-                }
-            }
-            for group in &mut result.groups {
-                for id in &mut group.members {
-                    *id = mapped(*id);
-                }
-                group.members.sort_unstable();
-                group.members.dedup();
-            }
-            for group in &mut result.abbreviations {
-                group.anchor = mapped(group.anchor);
-                for id in &mut group.members {
-                    *id = mapped(*id);
-                }
-                group.members.sort_unstable();
-                group.members.dedup();
-            }
-            if fuse {
-                let source_ids: HashMap<_, _> =
-                    added.iter().map(|(a, b)| (*a, mapped(*b))).collect();
-                if !aromatic.assign(doc, part, &mut result, &source_ids, source) {
-                    return;
-                }
-            }
-            result.reconcile_molecule_groups();
-            if crate::reactions::reconcile(&mut result).is_err() || result.validate().is_err() {
-                return;
-            }
-            best = Some((score, result, ids.into_iter().map(mapped).collect()));
-        };
+        }
+        let mut shared: HashMap<_, _> =
+            source.iter().copied().zip(target.iter().copied()).collect();
+        if fuse && !aromatic.map_vertices(doc, &positioned, source, target, &mut shared) {
+            return None;
+        }
+        Some((positioned, all, shared, fuse))
+    }
 
-    if let Some(index) = bond {
+    fn score(
+        &self,
+        positioned: &Document,
+        shared: &HashMap<u64, u64>,
+        dest: Point,
+        scale: f32,
+    ) -> f32 {
+        let Attachment {
+            doc,
+            direction,
+            radius,
+            ..
+        } = *self;
+        let length = crate::style::DEFAULT.bond_length_world * scale;
+        let mut score = 0.0;
+        let mut center = Point::default();
+        let mut count = 0;
+        for a in &positioned.atoms {
+            if shared.contains_key(&a.id) {
+                continue;
+            }
+            center = center.offset(a.position.x, a.position.y);
+            count += 1;
+            for other in &doc.atoms {
+                let distance = a.position.distance(other.position) / length;
+                score += (0.75 - distance).max(0.0).powi(2) * 1000.0;
+                score += 0.05 / (distance + 0.1).powi(2);
+            }
+        }
+        // A single atom or edge can be shared too. Existing-fragment joining
+        // then removes the duplicate while retaining its captions and groups.
+        if count == 0 {
+            center = dest;
+        } else {
+            center.x /= count as f32;
+            center.y /= count as f32;
+        }
+        if let Some(direction) = direction.filter(|p| p.distance(dest) > radius) {
+            let aim = (direction.y - dest.y).atan2(direction.x - dest.x);
+            let actual = (center.y - dest.y).atan2(center.x - dest.x);
+            score += (1.0 - (aim - actual).cos()) * 10000.0;
+        }
+        score
+    }
+
+    fn merge(
+        &self,
+        positioned: &Document,
+        shared: &HashMap<u64, u64>,
+        fuse: bool,
+        source: &[u64],
+    ) -> Option<(Document, Vec<u64>)> {
+        let Attachment {
+            doc,
+            part,
+            aromatic,
+            ..
+        } = *self;
+        let mut result = doc.clone();
+        let ids = editing::append(&mut result, positioned, Point::default());
+        if ids.len() != part.all_ids().len() {
+            return None;
+        }
+        let added: HashMap<_, _> = part
+            .all_ids()
+            .into_iter()
+            .zip(ids.iter().copied())
+            .collect();
+        let mapping: HashMap<_, _> = shared
+            .iter()
+            .filter_map(|(a, b)| added.get(a).map(|id| (*id, *b)))
+            .collect();
+        let mapped = |id: u64| mapping.get(&id).copied().unwrap_or(id);
+        for fill in &mut result.ring_fills {
+            for id in &mut fill.atoms {
+                *id = mapped(*id);
+            }
+        }
+        let mut affected: Vec<_> = shared.values().copied().collect();
+        affected.extend(mapping.keys());
+        crate::highlights::inherit_merged(&mut result, &mapping);
+        result.invalidate_chemistry(&affected);
+        result.atoms.retain(|a| !mapping.contains_key(&a.id));
+        // A multi-edge fusion may map both endpoints of a genuinely new
+        // edge. Remove only duplicate edges, not every mapped-to-mapped edge.
+        result.bonds.retain(|b| {
+            !(mapping.contains_key(&b.a)
+                && mapping.contains_key(&b.b)
+                && doc.bonds.iter().any(|old| {
+                    (old.a == mapped(b.a) && old.b == mapped(b.b))
+                        || (old.b == mapped(b.a) && old.a == mapped(b.b))
+                }))
+        });
+        for b in &mut result.bonds {
+            b.a = mapped(b.a);
+            b.b = mapped(b.b);
+            for id in &mut b.stereo_atoms {
+                *id = mapped(*id);
+            }
+        }
+        // The templates contain no stereo at attachment sites. Retain remote stereo.
+        for a in &mut result.atoms {
+            for member in &mut a.centroid {
+                *member = mapped(*member);
+            }
+            if let Some(stereo) = &mut a.stereo {
+                for id in &mut stereo.neighbors {
+                    *id = mapped(*id);
+                }
+            }
+        }
+        for group in &mut result.groups {
+            for id in &mut group.members {
+                *id = mapped(*id);
+            }
+            group.members.sort_unstable();
+            group.members.dedup();
+        }
+        for group in &mut result.abbreviations {
+            group.anchor = mapped(group.anchor);
+            for id in &mut group.members {
+                *id = mapped(*id);
+            }
+            group.members.sort_unstable();
+            group.members.dedup();
+        }
+        if fuse {
+            let source_ids: HashMap<_, _> = added.iter().map(|(a, b)| (*a, mapped(*b))).collect();
+            if !aromatic.assign(doc, part, &mut result, &source_ids, source) {
+                return None;
+            }
+        }
+        result.reconcile_molecule_groups();
+        if crate::reactions::reconcile(&mut result).is_err() || result.validate().is_err() {
+            return None;
+        }
+        Some((result, ids.into_iter().map(mapped).collect()))
+    }
+
+    fn bond_candidates(
+        &self,
+        anchor: Anchor,
+        index: usize,
+        consider: &mut impl FnMut(&[u64], &[u64], Point, Point, f32, f32),
+    ) -> Result<(), &'static str> {
+        let Attachment {
+            doc,
+            part,
+            aromatic,
+            ..
+        } = *self;
         let target = doc
             .bonds
             .get(index)
@@ -802,7 +935,23 @@ fn place_anchored_scaled(
                 );
             }
         }
-    } else if let Some(id) = atom {
+        Ok(())
+    }
+
+    fn atom_candidates(
+        &self,
+        anchor: Anchor,
+        id: u64,
+        point: Point,
+        consider: &mut impl FnMut(&[u64], &[u64], Point, Point, f32, f32),
+    ) -> Result<(), &'static str> {
+        let Attachment {
+            doc,
+            part,
+            direction,
+            radius,
+            ..
+        } = *self;
         let target = doc.atom(id).ok_or("The attachment atom is unavailable")?;
         let neighbors: Vec<_> = doc
             .bonds
@@ -883,8 +1032,6 @@ fn place_anchored_scaled(
                 );
             }
         }
+        Ok(())
     }
-    best.map(|(_, doc, ids)| (doc, ids)).ok_or(
-        "No compatible attachment: match elements and an eligible bond, with room for the new bonds.",
-    )
 }
