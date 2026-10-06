@@ -34,6 +34,8 @@ pub enum Page {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod view_parity_tests;
 const SHORTCUT_GAP: f32 = 12.;
 const SCROLLBAR_WIDTH: f32 = 10.;
 const SCROLLBAR_GAP: f32 = 4.;

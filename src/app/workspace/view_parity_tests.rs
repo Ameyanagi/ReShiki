@@ -39,7 +39,7 @@
 //! On macOS the only headless renderer is wgpu/Metal; TinySkia is enabled
 //! only on Windows.
 use super::layout_snapshots::{
-    STATES, atom, benzene, canvas_bounds, molecule, open, pass, select_all,
+    STATES, atom, benzene, canvas_bounds, mixed, molecule, open, pass, select_all,
 };
 use super::{App, InspectorTab, Message, PALETTE_WIDTH};
 use crate::canvas::{Edit, Tool};
@@ -57,7 +57,7 @@ use iced::keyboard::{
 use iced::{Element, Event, Length, Point, Rectangle, Size, Theme, Vector};
 use iced_runtime::{UserInterface, user_interface::Cache};
 use reshiki::accessibility::{Activate, Collect};
-use reshiki::document::{Document, Point as World};
+use reshiki::document::{Arrow, Document, Point as World};
 use std::{any::Any, cell::RefCell, fmt::Write as _, path::Path, rc::Rc};
 
 type Renderer = iced::Renderer;
@@ -98,6 +98,19 @@ const PALETTE_SCROLL: &[Script] = &[Script::Wheel {
     lines: -10.,
 }];
 const INSPECTOR: &str = "inspector-content";
+/// Wheel scripts at the centre of the minimum window, over the help body.
+const HELP_MID: &[Script] = &[Script::Wheel {
+    x: 520.,
+    y: 340.,
+    lines: -15.,
+}];
+const HELP_END: &[Script] = &[Script::Wheel {
+    x: 520.,
+    y: 340.,
+    lines: -200.,
+}];
+/// Where the right-click menu cases open, as in the `copy-as` state.
+const MENU_AT: Point = Point::new(36., 24.);
 
 fn case(
     name: impl Into<String>,
@@ -465,7 +478,278 @@ fn cases() -> Vec<Case> {
             Probe::None,
         ),
     ]);
+    cases.extend(palette_cases());
+    cases.extend(help_cases());
+    cases.extend(menu_cases());
+    cases.extend(selection_cases());
     cases
+}
+
+/// Every toolbar flyout, and flyouts with a variant active.
+fn palette_cases() -> Vec<Case> {
+    use crate::app::palettes::{Action, Family, GraphicOption};
+    use reshiki::arrows::{ArrowStyle, Preset as ArrowPreset};
+    use reshiki::graphics::{BracketSides, GraphicKind, LinePattern};
+    use reshiki::{rings::Preset, scientific::SymbolKind};
+    let palette = |name: &str, family: Family, setup: fn(&mut App)| {
+        case(
+            format!("palette-{name}"),
+            move |app: &mut App| {
+                setup(app);
+                app.palette = Some(family);
+            },
+            MINIMUM,
+            Probe::Window,
+        )
+    };
+    let mut cases: Vec<Case> = [
+        Family::Atoms,
+        Family::Bonds,
+        Family::Rings,
+        Family::Arrows,
+        Family::Rectangles,
+        Family::Ellipses,
+        Family::Brackets,
+        Family::Symbols,
+        Family::Orbitals,
+    ]
+    .into_iter()
+    .map(|family| palette(&format!("{family:?}"), family, |_| {}))
+    .collect();
+    // Choosing an option closes the flyout, so each variant reopens it.
+    cases.extend([
+        palette("Bonds-Wedge", Family::Bonds, |app| app.tool = Tool::Wedge),
+        palette("Rings-Benzene", Family::Rings, |app| {
+            app.tool = Tool::RingPreset(Preset::Benzene);
+        }),
+        palette("Rings-aromatic", Family::Rings, |app| {
+            app.tool = Tool::Ring;
+            app.ring_size = 6;
+            app.aromatic_ring = true;
+        }),
+        palette("Arrows-Dashed", Family::Arrows, |app| {
+            let dashed = ArrowStyle {
+                pattern: LinePattern::Dashed,
+                ..ArrowStyle::default()
+            };
+            let _ = app.update(Message::Palette(Action::ArrowVariant(
+                ArrowPreset::Forward,
+                dashed,
+            )));
+        }),
+        palette("Brackets-Left", Family::Brackets, |app| {
+            // The second option of the private `graphic_options(Family::Brackets)`.
+            let option = GraphicOption {
+                kind: GraphicKind::Brackets,
+                style: Default::default(),
+                sides: BracketSides::Left,
+                constrain: false,
+            };
+            let _ = app.update(Message::Palette(Action::Graphic(option)));
+        }),
+        palette("Symbols-second", Family::Symbols, |app| {
+            app.tool = Tool::Graphic(GraphicKind::Symbol(SymbolKind::ALL[1]));
+        }),
+    ]);
+    cases
+}
+
+/// Help, at the top, scrolled part way and scrolled to the end. The STATES
+/// case `help` already covers both sizes without probes.
+fn help_cases() -> Vec<Case> {
+    let help = |name: &str, script: &'static [Script]| Case {
+        script,
+        ..case(
+            format!("help-{name}"),
+            |app: &mut App| app.help_open = true,
+            MINIMUM,
+            Probe::Window,
+        )
+    };
+    vec![
+        help("window", &[]),
+        help("scrolled-mid", HELP_MID),
+        help("scrolled-end", HELP_END),
+    ]
+}
+
+/// Benzene with a filled ring, all selected.
+fn ring_fill(app: &mut App) {
+    use reshiki::palette::{Color, Hue, Row};
+    let mut doc = benzene();
+    let ids = doc.all_ids();
+    let fill = Some(Color::Palette(Hue::Blue, Row::Strong));
+    assert_eq!(reshiki::ring_fills::apply(&mut doc, &ids, fill), 1);
+    open(app, doc);
+    select_all(app);
+}
+
+/// Right-click menus and context row menus; the cascade tests own their input.
+fn menu_cases() -> Vec<Case> {
+    use crate::app::context_menu::{Action, Page, State};
+    let menu =
+        |name: &str, setup: fn(&mut App)| case(format!("menu-{name}"), setup, BOTH, Probe::None);
+    // The right-click menu with one submenu open, as its row opens it.
+    fn submenu(app: &mut App, page: Page) {
+        app.context_menu = Some(State::new(MENU_AT, Page::Main));
+        let _ = app.context_action(Action::Page(page));
+    }
+    fn row(app: &mut App, page: Page) {
+        mixed(app);
+        let _ = app.context_action(Action::Open(page, 200.));
+        assert!(app.context_menu.is_some());
+    }
+    vec![
+        menu("main-empty", |app| {
+            open(app, benzene());
+            app.context_menu = Some(State::new(MENU_AT, Page::Main));
+        }),
+        menu("main-selected", |app| {
+            molecule(app);
+            app.context_menu = Some(State::new(MENU_AT, Page::Main));
+        }),
+        menu("align", |app| {
+            mixed(app);
+            assert!(app.alignment_count() >= 2);
+            submenu(app, Page::Align);
+        }),
+        menu("bonds-ring-fill", |app| {
+            ring_fill(app);
+            submenu(app, Page::Bonds);
+        }),
+        menu("tilt", |app| {
+            molecule(app);
+            submenu(app, Page::Tilt);
+        }),
+        menu("attachments", |app| {
+            molecule(app);
+            submenu(app, Page::Attachments);
+        }),
+        menu("row-AlignObjects", |app| row(app, Page::AlignObjects)),
+        menu("row-Distribute", |app| row(app, Page::Distribute)),
+        menu("row-Order", |app| row(app, Page::Order)),
+        menu("row-Arrange", |app| row(app, Page::Arrange)),
+        menu("row-More", |app| {
+            mixed(app);
+            let folded = app.context_commands().len();
+            row(app, Page::More(folded));
+        }),
+    ]
+}
+
+/// Unbonded atoms carrying every kind of positioned mark, all selected.
+fn marks(app: &mut App) {
+    use reshiki::scientific::{SymbolKind as S, attach};
+    let mut doc = Document::default();
+    for (element, x, kinds) in [
+        ("C", 0., &[S::Radical, S::LonePair, S::LonePairBar][..]),
+        ("O", 60., &[S::CirclePlus]),
+        ("N", 120., &[S::RadicalAnion]),
+        ("S", 180., &[S::Minus]),
+    ] {
+        let id = doc.add_atom(element, World::new(x, 0.));
+        for (i, &kind) in kinds.iter().enumerate() {
+            let atom = doc.atom_mut(id).unwrap();
+            attach(atom, kind, World::new(10., -10. + 8. * i as f32)).unwrap();
+        }
+    }
+    open(app, doc);
+    select_all(app);
+}
+
+/// The Properties panel for each kind of selection.
+fn selection_cases() -> Vec<Case> {
+    use crate::app::inspector::{Action, Section};
+    let selection = |name: &str, setup: fn(&mut App)| {
+        case(
+            format!("selection-{name}"),
+            move |app: &mut App| {
+                setup(app);
+                app.inspector_open = true;
+                app.inspector_tab = InspectorTab::Properties;
+            },
+            BOTH,
+            Probe::Inspector,
+        )
+    };
+    fn section(app: &mut App, section: Section) {
+        let _ = app.update(Message::InspectorAction(Action::Section(section, true)));
+    }
+    vec![
+        selection("double-bond", |app| {
+            let mut doc = Document::default();
+            let a = doc.add_atom("C", World::default());
+            let b = doc.add_atom("C", World::new(42., 0.));
+            doc.add_bond(a, b, 2, "plain");
+            open(app, doc);
+            select_all(app);
+        }),
+        selection("chain", |app| {
+            let mut doc = Document::default();
+            let a = doc.add_atom("C", World::default());
+            let b = doc.add_atom("C", World::new(36., 21.));
+            let c = doc.add_atom("C", World::new(72., 0.));
+            doc.add_bond(a, b, 1, "plain");
+            doc.add_bond(b, c, 1, "plain");
+            open(app, doc);
+            select_all(app);
+        }),
+        selection("ring", molecule),
+        selection("marks-select", |app| {
+            marks(app);
+            app.tool = Tool::Select;
+        }),
+        selection("marks-edit-points", |app| {
+            marks(app);
+            app.tool = Tool::EditPoints;
+        }),
+        selection("radicals-mixed", |app| {
+            let mut doc = Document::default();
+            let a = doc.add_atom("C", World::default());
+            doc.add_atom("C", World::new(60., 0.));
+            doc.atom_mut(a).unwrap().radical_electrons = 1;
+            open(app, doc);
+            select_all(app);
+        }),
+        selection("atom-text", |app| {
+            open(app, benzene());
+            let id = app.tab.doc.atoms[0].id;
+            let _ = app.update(Message::Canvas(Edit::Select(vec![id])));
+            assert!(app.atom_text_target().is_some());
+        }),
+        selection("group-integral", |app| {
+            molecule(app);
+            let _ = app.update(Message::Group);
+            let _ = app.update(Message::IntegralGroup(true));
+            section(app, Section::Groups);
+            assert!(app.tab.doc.groups.iter().any(|group| group.integral));
+        }),
+        selection("arrow", |app| {
+            let mut doc = Document::default();
+            doc.arrows.push(Arrow::new(
+                doc.next_id(),
+                World::default(),
+                World::new(90., 0.),
+                Default::default(),
+                Default::default(),
+            ));
+            open(app, doc);
+            select_all(app);
+        }),
+        selection("bonds-atoms", |app| {
+            molecule(app);
+            section(app, Section::Bonds);
+            section(app, Section::Atoms);
+        }),
+        // Crossings & direction is collapsed by default.
+        selection("crossings", |app| {
+            open(app, benzene());
+            let bond = &app.tab.doc.bonds[0];
+            let ids = vec![bond.a, bond.b];
+            let _ = app.update(Message::Canvas(Edit::Select(ids)));
+            section(app, Section::BondDirection);
+        }),
+    ]
 }
 
 fn rect(bounds: Rectangle) -> String {
@@ -1523,6 +1807,19 @@ fn run(case: &Case, size: Size, renderer: &mut Renderer) -> Run {
         }
     }
     out.push_str(&frame.record.lines);
+    // Self-check of the help scroll scripts, not part of the baseline: the
+    // only scrollable that Help leaves operable is its body.
+    if let Some(position) = case.name.strip_prefix("help-scrolled-") {
+        let [help] = frame.record.scrolls.as_slice() else {
+            panic!("{}: one help scrollable expected", case.name);
+        };
+        let y = help.translation.y;
+        let end = (help.content.height - help.bounds.height).max(0.).round();
+        assert!(y > 0., "{}: translation {y}", case.name);
+        if position == "end" {
+            assert_eq!(y, end, "{}: translation", case.name);
+        }
+    }
 
     // (c) A11Y and (d) ACT, through the runtime.
     let (cache, messages) = driver.replay_cache(renderer, case.script);
