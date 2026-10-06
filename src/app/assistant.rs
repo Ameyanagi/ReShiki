@@ -12,6 +12,10 @@ use reshiki::{
 };
 use serde_json::json;
 
+mod attachments;
+mod drafts;
+mod preferences;
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Open,
@@ -290,224 +294,40 @@ impl App {
         );
         match action {
             Action::ViewImage(image) => self.assistant.viewed_image = image,
-            Action::Open => {
-                self.inspector_open = true;
-                self.inspector_tab = InspectorTab::Assistant;
-                self.palette = None;
-                if self.assistant.account.is_none() && !self.assistant.busy {
-                    return self.assistant_action(Action::Connect);
-                }
-                return if self.assistant.follow_chat {
-                    iced::widget::operation::snap_to_end("assistant-chat")
-                } else {
-                    iced::widget::operation::scroll_to(
-                        "assistant-chat",
-                        iced::widget::operation::AbsoluteOffset {
-                            x: Some(0.),
-                            y: Some(self.assistant.chat_offset),
-                        },
-                    )
-                };
-            }
+            Action::Open => return self.assistant_open(),
             Action::Input(action) => {
                 self.assistant.input.perform(action);
             }
-            Action::Paste { image_only } => {
-                self.assistant.menu = None;
-                if self.assistant.reading_image || (image_only && self.assistant.busy) {
-                    return Task::none();
-                }
-                self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
-                let serial = self.assistant.image_serial;
-                let epoch = self.tab.file_epoch;
-                self.assistant.reading_image = true;
-                if !reshiki::clipboard::available() {
-                    return iced::clipboard::read().map(move |text| {
-                        Message::Assistant(Action::TextPasted {
-                            serial,
-                            epoch,
-                            text,
-                        })
-                    });
-                }
-                return Task::perform(reshiki::clipboard::picture(), move |result| {
-                    Message::Assistant(Action::ImageRead {
-                        serial,
-                        epoch,
-                        image_only,
-                        result,
-                    })
-                });
-            }
-            Action::OpenImage => {
-                self.assistant.menu = None;
-                if self.assistant.busy || self.assistant.reading_image {
-                    return Task::none();
-                }
-                self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
-                let serial = self.assistant.image_serial;
-                let epoch = self.tab.file_epoch;
-                self.assistant.reading_image = true;
-                return Task::perform(
-                    async {
-                        let Some(file) = rfd::AsyncFileDialog::new()
-                            .set_title("Attach a chemical drawing")
-                            .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "webp"])
-                            .pick_file()
-                            .await
-                        else {
-                            return Ok(None);
-                        };
-                        let path = file.path().to_owned();
-                        tokio::task::spawn_blocking(move || {
-                            reshiki::pictures::Picture::open(&path).map(Some)
-                        })
-                        .await
-                        .map_err(|e| e.to_string())?
-                    },
-                    move |result| {
-                        Message::Assistant(Action::ImageRead {
-                            serial,
-                            epoch,
-                            image_only: true,
-                            result,
-                        })
-                    },
-                );
-            }
+            Action::Paste { image_only } => return self.assistant_paste(image_only),
+            Action::OpenImage => return self.assistant_open_image(),
             Action::ImageRead {
                 serial,
                 epoch,
                 image_only,
                 result,
-            } => {
-                if serial != self.assistant.image_serial {
-                    return Task::none();
-                }
-                self.assistant.reading_image = false;
-                if epoch != self.tab.file_epoch {
-                    return Task::none();
-                }
-                match result {
-                    Ok(Some(_)) if self.assistant.busy => {
-                        self.assistant.status =
-                            "Finish or stop the current request, then paste the image again."
-                                .into();
-                    }
-                    Ok(Some(image)) => {
-                        // Keep the exact source for follow-up requests and show it in the composer.
-                        self.assistant.source_image = Some(image);
-                        self.assistant.error = false;
-                        self.assistant.status =
-                            "Image attached · Add instructions or Send to draw its structure."
-                                .into();
-                    }
-                    Ok(None) if !image_only => {
-                        self.assistant.reading_image = true;
-                        return iced::clipboard::read().map(move |text| {
-                            Message::Assistant(Action::TextPasted {
-                                serial,
-                                epoch,
-                                text,
-                            })
-                        });
-                    }
-                    Ok(None) => {
-                        self.assistant.status =
-                            "Copy an image, then choose Paste image, or open an image file.".into();
-                    }
-                    Err(error) => {
-                        self.assistant.error = true;
-                        self.assistant.status = format!("Could not read image: {error}");
-                    }
-                }
-            }
+            } => return self.assistant_image_read(serial, epoch, image_only, result),
             Action::TextPasted {
                 serial,
                 epoch,
                 text,
-            } => {
-                if serial != self.assistant.image_serial {
-                    return Task::none();
-                }
-                self.assistant.reading_image = false;
-                if epoch == self.tab.file_epoch
-                    && let Some(text) = text
-                {
-                    self.assistant.input.perform(text_editor::Action::Edit(
-                        text_editor::Edit::Paste(std::sync::Arc::new(text)),
-                    ));
-                }
-            }
-            Action::ClearImage => {
-                self.assistant.menu = None;
-                self.assistant.source_image = None;
-                self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
-                self.assistant.reading_image = false;
-            }
+            } => return self.assistant_text_pasted(serial, epoch, text),
+            Action::ClearImage => self.assistant_clear_image(),
             Action::Example(value) => {
                 self.assistant.input = text_editor::Content::with_text(value);
             }
             Action::Replace(value) => self.assistant.replace = value,
-            Action::AutoApply(value) => {
-                if !value {
-                    self.assistant.waiting_for_canvas_edit = false;
-                }
-                self.assistant.preferences.auto_apply = value;
-                self.assistant.preferences_dirty = true;
-                self.assistant.menu = None;
-                if value
-                    && self
-                        .assistant
-                        .draft
-                        .as_ref()
-                        .is_some_and(|d| d.review.can_auto_apply())
-                    && !self.assistant.busy
-                {
-                    return self.assistant_action(Action::Apply);
-                }
-            }
-            Action::Model(value) => {
-                self.assistant.preferences.model = value;
-                self.assistant.preferences_dirty = true;
-                self.assistant.menu = None;
-            }
-            Action::Menu(value) => {
-                self.assistant.menu = if self.assistant.menu == value {
-                    None
-                } else {
-                    value
-                };
-                self.assistant.search.clear();
-            }
+            Action::AutoApply(value) => return self.assistant_auto_apply(value),
+            Action::Model(value) => self.assistant_set_model(value),
+            Action::Menu(value) => self.assistant_toggle_menu(value),
             Action::Search(value) => self.assistant.search = value,
             Action::ChatScrolled { follow, offset } => {
                 self.assistant.follow_chat = follow;
                 self.assistant.chat_offset = offset;
             }
             Action::JumpToResult => self.assistant.follow_chat = true,
-            Action::Effort(value) => {
-                if let Some(id) = self.assistant.model().map(|m| m.id.clone()) {
-                    self.assistant.preferences.efforts.insert(id, value);
-                    self.assistant.preferences_dirty = true;
-                }
-                self.assistant.menu = None;
-            }
-            Action::Tier(value) => {
-                if let Some(id) = self.assistant.model().map(|m| m.id.clone()) {
-                    self.assistant.preferences.tiers.insert(id, value);
-                    self.assistant.preferences_dirty = true;
-                }
-                self.assistant.menu = None;
-            }
-            Action::PreferencesSaved(result) => {
-                self.assistant.preferences_saving = false;
-                if let Err(error) = result {
-                    self.assistant.status =
-                        format!("Could not save assistant preferences: {error}");
-                    self.assistant.error = true;
-                }
-            }
+            Action::Effort(value) => self.assistant_set_effort(value),
+            Action::Tier(value) => self.assistant_set_tier(value),
+            Action::PreferencesSaved(result) => self.assistant_preferences_saved(result),
             Action::Reset => {
                 self.assistant.tab = None;
                 self.assistant.canvas = None;
@@ -688,109 +508,12 @@ impl App {
                     );
                 }
             }
-            Action::Reject => {
-                self.assistant.waiting_for_canvas_edit = false;
-                self.assistant.draft = None;
-                self.assistant.preview = None;
-                self.assistant.record(
-                    "ReShiki",
-                    "Proposal rejected. The drawing was not changed.".into(),
-                );
-                self.assistant.status = "Rejected · Your drawing is unchanged".into();
-            }
-            Action::Apply => {
-                scroll = self.assistant.follow_chat;
-                if self.assistant.busy || self.tab.cleanup.is_some() {
-                    return Task::none();
-                }
-                if self.tab.inline_text.is_some() || self.tab.joining.is_some() {
-                    self.assistant.waiting_for_canvas_edit = true;
-                    self.assistant.status =
-                        "Ready · Finish or cancel the current canvas edit to apply".into();
-                    return Task::none();
-                }
-                let Some(draft) = &self.assistant.draft else {
-                    return Task::none();
-                };
-                if draft.epoch != self.tab.file_epoch
-                    || (!draft.replace.is_empty() && draft.revision != self.tab.revision)
-                {
-                    self.assistant.status = "This proposal targets a drawing or selection that changed. Send a follow-up to refresh it.".into();
-                    self.assistant.error = true;
-                    return Task::none();
-                }
-                match assistant::candidate(&self.tab.doc, &draft.fragment, &draft.replace) {
-                    Ok((document, ids)) => {
-                        let before = self.tab.doc.clone();
-                        self.tab.doc = document;
-                        self.tab.selected = ids;
-                        self.changed(before);
-                        self.assistant.completed = self
-                            .assistant
-                            .draft
-                            .as_ref()
-                            .map(|d| (d.fragment.clone(), d.review.clone()));
-                        self.assistant.draft = None;
-                        self.tool = crate::canvas::Tool::Select;
-                        if let Some((lo, hi)) =
-                            reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
-                        {
-                            self.tab.camera.center = reshiki::document::Point::new(
-                                (lo.x + hi.x) / 2.,
-                                (lo.y + hi.y) / 2.,
-                            );
-                            let paper =
-                                self.guides.paper(iced::Rectangle::with_size(self.viewport));
-                            self.tab.camera.zoom = ((paper.width - 70.).max(100.)
-                                / (hi.x - lo.x).max(240.))
-                            .min((paper.height - 70.).max(100.) / (hi.y - lo.y).max(180.))
-                            .clamp(0.05, 2.5);
-                            self.tab.fit_to_view = false;
-                        }
-                        self.assistant.record(
-                            "ReShiki",
-                            "Applied to the drawing. Undo restores the previous drawing.".into(),
-                        );
-                        self.assistant.status = "Applied · Undo is available".into();
-                        self.status =
-                            "Assistant drawing applied · Undo restores the previous drawing".into();
-                    }
-                    Err(error) => {
-                        self.assistant.error = true;
-                        self.assistant.status = error;
-                    }
-                }
-            }
+            Action::Reject => self.assistant_reject(),
+            Action::Apply => return self.assistant_apply(),
             Action::PreviewTarget(target) => {
                 self.assistant.preview_target = (target != "Overview").then_some(target);
             }
-            Action::PreviewEdit(edit) => {
-                self.assistant.waiting_for_canvas_edit = false;
-                if self.assistant.busy {
-                    let _ = self.assistant_action(Action::Stop);
-                }
-                if let Some(draft) = &mut self.assistant.draft {
-                    match assistant::review::apply(
-                        &draft.fragment,
-                        &[edit],
-                        !draft.proposal.composition.preserve_details,
-                    ) {
-                        Ok(doc) => {
-                            draft.fragment = doc.clone();
-                            draft.review.verified = false;
-                            draft.review.summary =
-                                "Draft edited. Run Improve layout to check this version.".into();
-                            draft.review.issues =
-                                vec!["This edited version has not been visually checked.".into()];
-                            self.assistant.preview = Some(doc);
-                        }
-                        Err(error) => {
-                            self.assistant.status = error;
-                            self.assistant.error = true;
-                        }
-                    }
-                }
-            }
+            Action::PreviewEdit(edit) => self.assistant_preview_edit(edit),
             action @ (Action::Send | Action::Improve) => {
                 let improving = matches!(action, Action::Improve);
 
@@ -1058,10 +781,25 @@ impl App {
                 }
             }
         }
-        if scroll {
+        chat_scroll(scroll)
+    }
+    fn assistant_open(&mut self) -> Task<Message> {
+        self.inspector_open = true;
+        self.inspector_tab = InspectorTab::Assistant;
+        self.palette = None;
+        if self.assistant.account.is_none() && !self.assistant.busy {
+            return self.assistant_action(Action::Connect);
+        }
+        if self.assistant.follow_chat {
             iced::widget::operation::snap_to_end("assistant-chat")
         } else {
-            Task::none()
+            iced::widget::operation::scroll_to(
+                "assistant-chat",
+                iced::widget::operation::AbsoluteOffset {
+                    x: Some(0.),
+                    y: Some(self.assistant.chat_offset),
+                },
+            )
         }
     }
     fn assistant_preview_controls<'a>(&'a self, doc: &'a Document) -> Element<'a, Message> {
@@ -1893,6 +1631,14 @@ fn action<'a>(
         .padding([7, 10])
         .on_press(Message::Assistant(value))
         .style(super::workspace::control(false))
+}
+/// The tail of assistant_action: follow the chat to its end when `scroll` is set.
+fn chat_scroll(scroll: bool) -> Task<Message> {
+    if scroll {
+        iced::widget::operation::snap_to_end("assistant-chat")
+    } else {
+        Task::none()
+    }
 }
 fn surface(background: Color, radius: f32) -> container::Style {
     container::Style {
