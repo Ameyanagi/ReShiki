@@ -1912,4 +1912,6 @@ fn card() -> container::Style {
 }
 
 #[cfg(test)]
+mod dispatch_tests;
+#[cfg(test)]
 mod tests;
