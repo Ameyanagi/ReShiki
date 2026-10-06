@@ -109,16 +109,7 @@ impl App {
             chat = chat.push(chat_message(message));
         }
         if !state.reply.is_empty() && state.busy {
-            chat =
-                chat.push(
-                    column![
-                        text("Codex").size(11).style(crate::appearance::text_color(
-                            Color::from_rgb8(17, 126, 108)
-                        )),
-                        text(&state.reply).size(13).width(Length::Fill)
-                    ]
-                    .spacing(6),
-                );
+            chat = chat.push(codex_reply(&state.reply));
         }
         if state.busy {
             chat = chat.push(self.assistant_activity_card());
@@ -538,17 +529,21 @@ fn chat_message(message: &ChatMessage) -> Element<'_, Message> {
             .style(super::super::workspace::muted_text)
             .into()
     } else {
-        column![
-            text("Codex")
-                .size(11)
-                .style(crate::appearance::text_color(Color::from_rgb8(
-                    17, 126, 108
-                ))),
-            text(&message.text).size(13).width(Length::Fill)
-        ]
-        .spacing(6)
-        .into()
+        codex_reply(&message.text)
     }
+}
+// The "Codex" reply column shared by finished replies and the reply streaming in.
+fn codex_reply(reply: &str) -> Element<'_, Message> {
+    column![
+        text("Codex")
+            .size(11)
+            .style(crate::appearance::text_color(Color::from_rgb8(
+                17, 126, 108
+            ))),
+        text(reply).size(13).width(Length::Fill)
+    ]
+    .spacing(6)
+    .into()
 }
 fn panel_header<'a>() -> Element<'a, Message> {
     row![
