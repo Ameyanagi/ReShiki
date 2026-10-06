@@ -81,6 +81,7 @@ async fn typed_attachment_proposals_preview_without_applying_and_retain_exchange
         let preview = tools
             .call("canvas_preview", serde_json::to_value(&proposal)?, &engine)
             .await
+            .map(assistant::codex::tool_response)
             .map_err(anyhow::Error::msg)?;
         assert_eq!(preview["success"], true);
         let description: Value = serde_json::from_str(

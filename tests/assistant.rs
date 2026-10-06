@@ -315,6 +315,7 @@ async fn canvas_tools_return_live_data_and_images_without_mutating_the_document(
     let inspect = tools
         .call("canvas_inspect", serde_json::json!({}), &engine)
         .await
+        .map(assistant::codex::tool_response)
         .unwrap();
     let text: serde_json::Value =
         serde_json::from_str(inspect["contentItems"][0]["text"].as_str().unwrap()).unwrap();
@@ -343,6 +344,7 @@ async fn canvas_tools_return_live_data_and_images_without_mutating_the_document(
             &engine,
         )
         .await
+        .map(assistant::codex::tool_response)
         .unwrap();
     assert_eq!(preview["success"], true);
     assert_eq!(canvas.read().unwrap().document, document);
@@ -357,6 +359,7 @@ async fn canvas_tools_return_live_data_and_images_without_mutating_the_document(
     let inspect = tools
         .call("canvas_inspect", serde_json::json!({}), &engine)
         .await
+        .map(assistant::codex::tool_response)
         .unwrap();
     assert!(
         inspect["contentItems"][0]["text"]
@@ -1064,6 +1067,7 @@ async fn canvas_tool_results_keep_the_codex_envelope() {
     let inspect = tools
         .call("canvas_inspect", serde_json::json!({}), &engine)
         .await
+        .map(assistant::codex::tool_response)
         .unwrap();
     assert_codex_envelope(&inspect);
     let preview = tools
@@ -1073,6 +1077,7 @@ async fn canvas_tool_results_keep_the_codex_envelope() {
             &engine,
         )
         .await
+        .map(assistant::codex::tool_response)
         .unwrap();
     assert_codex_envelope(&preview);
 }

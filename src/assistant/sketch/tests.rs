@@ -147,7 +147,7 @@ fn native_ring_centroids_and_tilts_render_valid_contacts() -> Result<(), String>
             assert_eq!(contact.order, order);
             assert!(contact.a == 1 || contact.b == 1);
         }
-        assert!(crate::assistant::canvas_tools::image(&doc).is_ok());
+        assert!(super::super::canvas_tools::image(&doc).is_ok());
         assert!(
             crate::chemistry::document::prepare(&doc).is_err(),
             "No fabricated haptic molecular data"

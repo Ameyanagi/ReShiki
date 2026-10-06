@@ -1,9 +1,9 @@
 //! Bounded canvas tools. Images are rendered from drawing data, never the desktop.
-use super::{DrawingSettings, Proposal};
+use super::{DrawingSettings, Proposal, progress::Event};
 use crate::document::Document;
-use base64::Engine;
 use serde_json::{Value, json};
 use std::sync::{Arc, RwLock};
+use tokio::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Default)]
 pub struct Snapshot {
@@ -20,6 +20,13 @@ pub struct CanvasTools {
     pub replace: Vec<u64>,
     pub epoch: u64,
     pub revision: u64,
+}
+/// A canvas tool's description text and rendered PNG, independent of the agent protocol.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct ToolOutput {
+    pub text: String,
+    pub png: Vec<u8>,
 }
 impl CanvasTools {
     fn snapshot(&self) -> Result<Snapshot, String> {
@@ -67,16 +74,17 @@ impl CanvasTools {
         name: &str,
         arguments: Value,
         engine: &crate::engine::LocalEngine,
-    ) -> Result<Value, String> {
-        self.call_progress(name, arguments, engine, None).await
+    ) -> Result<ToolOutput, String> {
+        self.call_progress(name, arguments, engine, None::<&Sender<Event>>)
+            .await
     }
-    pub async fn call_progress(
+    pub async fn call_progress<P: From<Event>>(
         &self,
         name: &str,
         arguments: Value,
         engine: &crate::engine::LocalEngine,
-        progress: Option<&tokio::sync::mpsc::Sender<super::codex::Progress>>,
-    ) -> Result<Value, String> {
+        progress: Option<&Sender<P>>,
+    ) -> Result<ToolOutput, String> {
         let snapshot = self.snapshot()?;
         let (document, text) = match name {
             "canvas_inspect" => {
@@ -96,7 +104,7 @@ impl CanvasTools {
                 self.replacement(&proposal)?;
                 if let Some(progress) = progress {
                     let _ = progress
-                        .send(super::codex::Progress::Proposal(Box::new(proposal.clone())))
+                        .send(Event::Proposal(Box::new(proposal.clone())).into())
                         .await;
                 }
                 let fragment =
@@ -116,13 +124,11 @@ impl CanvasTools {
         let png = tokio::task::spawn_blocking(move || image(&document))
             .await
             .map_err(|e| e.to_string())??;
-        let encoded = base64::engine::general_purpose::STANDARD.encode(png);
-        Ok(
-            json!({"success":true,"contentItems":[{"type":"inputText","text":text},{"type":"inputImage","imageUrl":format!("data:image/png;base64,{encoded}")}]}),
-        )
+        Ok(ToolOutput { text, png })
     }
 }
-pub(crate) fn inspection_document(document: &Document) -> Result<Value, String> {
+#[doc(hidden)]
+pub fn inspection_document(document: &Document) -> Result<Value, String> {
     let mut description = document.clone();
     for graphic in &mut description.graphics {
         graphic.picture = None;

@@ -227,3 +227,41 @@ async fn corrections_are_rerendered_and_exact_final_images_are_required() -> any
     }
     Ok(())
 }
+
+#[test]
+fn tool_response_keeps_codex_content_bytes() {
+    assert_eq!(
+        tool_response(ToolOutput {
+            text: "{\"a\":1} H₂O".into(),
+            png: vec![0x89, b'P', b'N', b'G'],
+        })
+        .to_string(),
+        r#"{"contentItems":[{"text":"{\"a\":1} H₂O","type":"inputText"},{"imageUrl":"data:image/png;base64,iVBORw==","type":"inputImage"}],"success":true}"#
+    );
+}
+
+#[test]
+fn progress_events_map_to_codex_variants_without_reallocation() {
+    let document = Box::new(crate::document::Document::default());
+    let document_ptr = &*document as *const _;
+    let proposal = Box::new(super::super::Proposal::default());
+    let proposal_ptr = &*proposal as *const _;
+    assert!(matches!(
+        Progress::from(Event::Preview(document)),
+        Progress::Preview(converted) if std::ptr::eq(&*converted, document_ptr)
+    ));
+    assert!(matches!(
+        Progress::from(Event::Proposal(proposal)),
+        Progress::Proposal(converted) if std::ptr::eq(&*converted, proposal_ptr)
+    ));
+    assert!(matches!(
+        Progress::from(Event::Structures {
+            completed: 2,
+            total: 5
+        }),
+        Progress::Structures {
+            completed: 2,
+            total: 5
+        }
+    ));
+}

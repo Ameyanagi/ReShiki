@@ -1,11 +1,12 @@
 //! Scheme layout measures rendered labels, coefficients and disconnected fragments.
-use super::{DrawingSettings, Molecule, Proposal};
+use super::{DrawingSettings, Molecule, Proposal, progress::Event};
 use crate::{
     document::{Annotation, Arrow, Document, Point},
     engine::{ChemistryEngine, LocalEngine, Request},
     typography::{TextAlign, TextFormat},
 };
 use std::collections::HashSet;
+use tokio::sync::mpsc::Sender;
 
 struct Participant {
     doc: Document,
@@ -182,11 +183,11 @@ async fn prepare(
         label_format,
     })
 }
-async fn prepare_all(
+async fn prepare_all<P: From<Event>>(
     engine: &LocalEngine,
     molecules: &[Molecule],
     settings: &DrawingSettings,
-    progress: Option<&tokio::sync::mpsc::Sender<super::codex::Progress>>,
+    progress: Option<&Sender<P>>,
     prepared: &mut usize,
     total: usize,
 ) -> Result<Vec<Participant>, String> {
@@ -195,10 +196,13 @@ async fn prepare_all(
         result.push(prepare(engine, molecule, settings).await?);
         *prepared += 1;
         if let Some(progress) = progress {
-            let _ = progress.try_send(super::codex::Progress::Structures {
-                completed: *prepared,
-                total,
-            });
+            let _ = progress.try_send(
+                Event::Structures {
+                    completed: *prepared,
+                    total,
+                }
+                .into(),
+            );
         }
     }
     Ok(result)
@@ -285,14 +289,14 @@ pub async fn render(
     proposal: &Proposal,
     settings: &DrawingSettings,
 ) -> Result<Document, String> {
-    render_progress(engine, proposal, settings, None).await
+    render_progress(engine, proposal, settings, None::<&Sender<Event>>).await
 }
 
-pub async fn render_progress(
+pub async fn render_progress<P: From<Event>>(
     engine: &LocalEngine,
     proposal: &Proposal,
     settings: &DrawingSettings,
-    progress: Option<&tokio::sync::mpsc::Sender<super::codex::Progress>>,
+    progress: Option<&Sender<P>>,
 ) -> Result<Document, String> {
     proposal.validate()?;
     let mut settings = settings.clone();
@@ -305,7 +309,7 @@ pub async fn render_progress(
     if let Some(sketch) = &proposal.sketch {
         let doc = sketch.render(&settings)?;
         if let Some(progress) = progress {
-            let _ = progress.try_send(super::codex::Progress::Preview(Box::new(doc.clone())));
+            let _ = progress.try_send(Event::Preview(Box::new(doc.clone())).into());
         }
         return Ok(doc);
     }
@@ -339,7 +343,7 @@ pub async fn render_progress(
         if let Some(progress) = progress {
             let mut preview = doc.clone();
             compose(&mut preview, &panels, proposal)?;
-            let _ = progress.try_send(super::codex::Progress::Preview(Box::new(preview)));
+            let _ = progress.try_send(Event::Preview(Box::new(preview)).into());
         }
     }
     for (index, reaction) in proposal.reactions.iter().enumerate() {
@@ -451,7 +455,7 @@ pub async fn render_progress(
         if let Some(progress) = progress {
             let mut preview = doc.clone();
             compose(&mut preview, &panels, proposal)?;
-            let _ = progress.try_send(super::codex::Progress::Preview(Box::new(preview)));
+            let _ = progress.try_send(Event::Preview(Box::new(preview)).into());
         }
     }
     compose(&mut doc, &panels, proposal)?;

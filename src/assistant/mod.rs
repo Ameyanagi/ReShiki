@@ -4,6 +4,7 @@ pub mod canvas_tools;
 pub mod codex;
 pub mod composition;
 mod layout;
+pub mod progress;
 pub mod review;
 pub mod settings;
 pub mod sketch;
@@ -12,6 +13,8 @@ use crate::{
     engine::LocalEngine,
     typography::TextFormat,
 };
+#[doc(hidden)]
+pub use layout::render_progress;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
