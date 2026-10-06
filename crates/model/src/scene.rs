@@ -124,61 +124,7 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
                 > 1
     });
     if let Some(group) = doc.abbreviation(a.id).filter(|_| internal_group.is_none()) {
-        let style = crate::typography::TextStyle {
-            formula: true,
-            ..group.text_style(doc)
-        };
-        let content = group.text(doc);
-        let size = STYLE.world(style.size_pt);
-        let layout = crate::typography::layout(
-            content,
-            &crate::typography::TextFormat {
-                style: style.clone(),
-                ..Default::default()
-            },
-        );
-        let range = crate::abbreviations::anchor_range(content, group.faces_left(doc));
-        let format = crate::typography::TextFormat {
-            style: style.clone(),
-            ..Default::default()
-        };
-        let before =
-            crate::typography::layout(content.get(..range.start).unwrap_or_default(), &format)
-                .width;
-        let through =
-            crate::typography::layout(content.get(..range.end).unwrap_or_default(), &format).width;
-        let anchor_x = (before + through) / 2.;
-        let origin = a.position.offset(
-            if matches!(
-                group.alignment,
-                crate::abbreviations::LabelAlignment::Center
-                    | crate::abbreviations::LabelAlignment::Above
-            ) {
-                -layout.width / 2.
-            } else {
-                -anchor_x
-            },
-            if group.alignment == crate::abbreviations::LabelAlignment::Above {
-                -layout.height - size * 0.35
-            } else {
-                -crate::style::label_vertical_center(
-                    content.get(range.clone()).unwrap_or(content),
-                    size,
-                    &style,
-                )
-            },
-        );
-        return layout
-            .fragments
-            .into_iter()
-            .map(|run| Primitive::Text {
-                position: origin.offset(run.position.x, run.position.y),
-                text: run.text,
-                size: run.style.size(),
-                color: run.style.color.rgb(),
-                style: run.style,
-            })
-            .collect();
+        return abbreviation_label_runs(a, doc, group);
     }
     let show_element = internal_group.is_some() || visible(a, doc);
     if !show_element && a.charge == 0 {
@@ -215,57 +161,208 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
         -element_width / 2.0,
         -crate::style::label_vertical_center(label, size, &style),
     );
-    let mut runs = if show_element {
+    let runs = if show_element {
         vec![text(origin, label.to_string(), size)]
     } else {
         vec![]
     };
-    let mut right = origin.x + element_width;
-    let mut mark_y = origin.y;
+    let right = origin.x + element_width;
+    let mark_y = origin.y;
     let isotope_width = if a.isotope > 0 {
         text_width(&a.isotope.to_string(), small)
     } else {
         0.0
     };
+    let frame = LabelFrame {
+        style: &style,
+        origin,
+        element_width,
+        isotope_width,
+        size,
+        small,
+    };
+    let mut cursor = LabelCursor {
+        runs,
+        right,
+        mark_y,
+    };
     if let Some((_, suffix)) = condensed {
-        let layout = crate::typography::layout(
-            suffix,
-            &crate::typography::TextFormat {
-                style: crate::typography::TextStyle {
-                    formula: true,
-                    ..style.clone()
-                },
-                ..Default::default()
-            },
-        );
-        let mut parts: Vec<_> = layout
-            .fragments
-            .into_iter()
-            .map(|run| Primitive::Text {
-                position: run.position,
-                text: run.text,
-                size: run.style.size(),
-                color: run.style.color.rgb(),
-                style: run.style,
-            })
-            .collect();
-        let side = crate::atom_labels::appendage_position(a, doc);
-        place_appendage(
-            &runs,
-            &mut parts,
-            (origin, element_width),
-            (layout.width, isotope_width),
-            size,
-            side,
-        );
-        runs.extend(parts);
-        if side == crate::atom_labels::HydrogenPosition::Right {
-            right += layout.width;
-        }
+        push_condensed_suffix(a, doc, frame, &mut cursor, suffix);
     }
     if internal_group.is_some() {
-        return runs;
+        return cursor.runs;
     }
+    push_hydrogens(a, doc, frame, &mut cursor, show_element);
+    push_isotope(a, frame, &mut cursor);
+    push_charge(a, frame, &mut cursor);
+    push_radicals(a, frame, &mut cursor);
+    cursor.runs
+}
+
+/// A contracted abbreviation: the whole label is laid out as formula text
+/// and anchored on its attachment glyph for the group's alignment.
+fn abbreviation_label_runs(
+    a: &Atom,
+    doc: &Document,
+    group: &crate::abbreviations::Abbreviation,
+) -> Vec<Primitive> {
+    let style = crate::typography::TextStyle {
+        formula: true,
+        ..group.text_style(doc)
+    };
+    let content = group.text(doc);
+    let size = STYLE.world(style.size_pt);
+    let layout = crate::typography::layout(
+        content,
+        &crate::typography::TextFormat {
+            style: style.clone(),
+            ..Default::default()
+        },
+    );
+    let range = crate::abbreviations::anchor_range(content, group.faces_left(doc));
+    let format = crate::typography::TextFormat {
+        style: style.clone(),
+        ..Default::default()
+    };
+    let before =
+        crate::typography::layout(content.get(..range.start).unwrap_or_default(), &format).width;
+    let through =
+        crate::typography::layout(content.get(..range.end).unwrap_or_default(), &format).width;
+    let anchor_x = (before + through) / 2.;
+    let origin = a.position.offset(
+        if matches!(
+            group.alignment,
+            crate::abbreviations::LabelAlignment::Center
+                | crate::abbreviations::LabelAlignment::Above
+        ) {
+            -layout.width / 2.
+        } else {
+            -anchor_x
+        },
+        if group.alignment == crate::abbreviations::LabelAlignment::Above {
+            -layout.height - size * 0.35
+        } else {
+            -crate::style::label_vertical_center(
+                content.get(range.clone()).unwrap_or(content),
+                size,
+                &style,
+            )
+        },
+    );
+    layout
+        .fragments
+        .into_iter()
+        .map(|run| Primitive::Text {
+            position: origin.offset(run.position.x, run.position.y),
+            text: run.text,
+            size: run.style.size(),
+            color: run.style.color.rgb(),
+            style: run.style,
+        })
+        .collect()
+}
+
+/// Read-only placement of an element label, shared by its appendage
+/// stages. It borrows the label style, so building it clones nothing.
+#[derive(Clone, Copy)]
+struct LabelFrame<'s> {
+    style: &'s crate::typography::TextStyle,
+    origin: Point,
+    element_width: f32,
+    isotope_width: f32,
+    size: f32,
+    small: f32,
+}
+impl LabelFrame<'_> {
+    fn text_width(&self, text: &str, size: f32) -> f32 {
+        crate::style::styled_text_width(text, size, self.style)
+    }
+    fn text(&self, position: Point, content: String, size: f32) -> Primitive {
+        Primitive::Text {
+            position,
+            text: content,
+            size,
+            color: self.style.color.rgb(),
+            style: self.style.clone(),
+        }
+    }
+}
+
+/// The runs placed so far, and where the next charge or radical goes.
+struct LabelCursor {
+    runs: Vec<Primitive>,
+    right: f32,
+    mark_y: f32,
+}
+
+/// The suffix of a condensed label (Me in NMe), inline or stacked.
+fn push_condensed_suffix(
+    a: &Atom,
+    doc: &Document,
+    frame: LabelFrame<'_>,
+    cursor: &mut LabelCursor,
+    suffix: &str,
+) {
+    let LabelFrame {
+        style,
+        origin,
+        element_width,
+        isotope_width,
+        size,
+        ..
+    } = frame;
+    let layout = crate::typography::layout(
+        suffix,
+        &crate::typography::TextFormat {
+            style: crate::typography::TextStyle {
+                formula: true,
+                ..style.clone()
+            },
+            ..Default::default()
+        },
+    );
+    let mut parts: Vec<_> = layout
+        .fragments
+        .into_iter()
+        .map(|run| Primitive::Text {
+            position: run.position,
+            text: run.text,
+            size: run.style.size(),
+            color: run.style.color.rgb(),
+            style: run.style,
+        })
+        .collect();
+    let side = crate::atom_labels::appendage_position(a, doc);
+    place_appendage(
+        &cursor.runs,
+        &mut parts,
+        (origin, element_width),
+        (layout.width, isotope_width),
+        size,
+        side,
+    );
+    cursor.runs.extend(parts);
+    if side == crate::atom_labels::HydrogenPosition::Right {
+        cursor.right += layout.width;
+    }
+}
+
+/// Attached hydrogens with their count, inline or stacked, in their own ink.
+fn push_hydrogens(
+    a: &Atom,
+    doc: &Document,
+    frame: LabelFrame<'_>,
+    cursor: &mut LabelCursor,
+    show_element: bool,
+) {
+    let LabelFrame {
+        origin,
+        element_width,
+        isotope_width,
+        size,
+        small,
+        ..
+    } = frame;
     let label_h = if a.no_implicit {
         a.explicit_h
     } else {
@@ -277,13 +374,13 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
         } else {
             String::new()
         };
-        let h_width = text_width("H", size);
-        let width = h_width + text_width(&count, small);
+        let h_width = frame.text_width("H", size);
+        let width = h_width + frame.text_width(&count, small);
         use crate::atom_labels::HydrogenPosition as H;
         let position = crate::atom_labels::appendage_position(a, doc);
-        let mut parts = vec![text(Point::default(), "H".into(), size)];
+        let mut parts = vec![frame.text(Point::default(), "H".into(), size)];
         if !count.is_empty() {
-            parts.push(text(Point::new(h_width, size * 0.40), count, small));
+            parts.push(frame.text(Point::new(h_width, size * 0.40), count, small));
         }
         if let Some(hydrogen_color) = a.display.hydrogen_color {
             for part in &mut parts {
@@ -294,7 +391,7 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
             }
         }
         place_appendage(
-            &runs,
+            &cursor.runs,
             &mut parts,
             (origin, element_width),
             (width, isotope_width),
@@ -303,23 +400,38 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
         );
         if matches!(position, H::Above | H::Below) {
             if let Some(Primitive::Text { position, .. }) = parts.first() {
-                mark_y = position.y;
+                cursor.mark_y = position.y;
             }
-            right = origin.x + width;
+            cursor.right = origin.x + width;
         }
-        runs.extend(parts);
+        cursor.runs.extend(parts);
         if position == H::Right {
-            right += width;
+            cursor.right += width;
         }
     }
+}
+
+/// The mass number, raised before the element symbol.
+fn push_isotope(a: &Atom, frame: LabelFrame<'_>, cursor: &mut LabelCursor) {
+    let LabelFrame {
+        origin,
+        size,
+        small,
+        ..
+    } = frame;
     if a.isotope > 0 {
         let isotope = a.isotope.to_string();
-        runs.push(text(
-            origin.offset(-text_width(&isotope, small), -size * 0.25),
+        cursor.runs.push(frame.text(
+            origin.offset(-frame.text_width(&isotope, small), -size * 0.25),
             isotope,
             small,
         ));
     }
+}
+
+/// The printed charge, unless hidden or drawn by an attached charge mark.
+fn push_charge(a: &Atom, frame: LabelFrame<'_>, cursor: &mut LabelCursor) {
+    let LabelFrame { size, small, .. } = frame;
     if a.charge != 0
         && !a.display.hide_charge
         && !a.marks.iter().any(|m| {
@@ -333,22 +445,30 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
             String::new()
         };
         let label = format!("{amount}{}", if a.charge > 0 { "+" } else { "−" });
-        let width = text_width(&label, small);
-        runs.push(text(Point::new(right, mark_y - size * 0.25), label, small));
-        right += width;
+        let width = frame.text_width(&label, small);
+        cursor.runs.push(frame.text(
+            Point::new(cursor.right, cursor.mark_y - size * 0.25),
+            label,
+            small,
+        ));
+        cursor.right += width;
     }
+}
+
+/// Radical dots, unless drawn by an attached radical mark.
+fn push_radicals(a: &Atom, frame: LabelFrame<'_>, cursor: &mut LabelCursor) {
+    let LabelFrame { size, small, .. } = frame;
     if a.radical_electrons > 0
         && !a.marks.iter().any(|m| {
             m.kind.radical() && (m.kind != crate::scientific::MarkKind::RadicalIon || a.charge != 0)
         })
     {
-        runs.push(text(
-            Point::new(right, mark_y - size * 0.25),
+        cursor.runs.push(frame.text(
+            Point::new(cursor.right, cursor.mark_y - size * 0.25),
             "•".repeat(a.radical_electrons as usize),
             small,
         ));
     }
-    runs
 }
 
 /// Stack using actual glyph ink, including subscripts, so H₂/Cl₂ clear the core.
