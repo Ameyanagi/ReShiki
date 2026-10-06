@@ -76,6 +76,8 @@ mod template_style_evidence;
 mod theme_files;
 mod theme_generator;
 mod tool_button;
+#[cfg(test)]
+mod transaction_tests;
 mod typography;
 mod updates;
 mod view_settings;
