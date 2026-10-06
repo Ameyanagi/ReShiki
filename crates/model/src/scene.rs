@@ -1535,6 +1535,8 @@ fn render_svg(doc: &Document, background: bool) -> String {
 }
 
 #[cfg(test)]
+mod label_parity_tests;
+#[cfg(test)]
 mod primitives_parity_tests;
 #[cfg(test)]
 mod tests;
