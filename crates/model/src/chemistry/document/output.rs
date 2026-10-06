@@ -412,6 +412,46 @@ fn reconstruct(
         properties.cip_code = None;
     }
     work.state.properties.bond_codes.fill(None);
+    let WorkGraph {
+        adjacent,
+        bonds_by_pair,
+    } = work_graph(&work, n)?;
+    let circular: HashSet<_> = base
+        .into_iter()
+        .flat_map(|d| &d.bonds)
+        .filter(|b| b.order == 4)
+        .flat_map(|b| [b.a, b.b])
+        .collect();
+    let atoms = reconstruct_atoms(
+        &work,
+        molecule,
+        previous,
+        dummy_labels,
+        &circular,
+        &adjacent,
+    )?;
+    let ordered = ordered_bonds(base, &bonds_by_pair, e)?;
+    let (bonds, bond_indices) = reconstruct_bonds(&work, molecule, ordered, e)?;
+    let document = Document {
+        version: 15,
+        atoms,
+        bonds,
+        ..base.cloned().unwrap_or_default()
+    };
+    Ok(Drawing {
+        molecule: work,
+        document,
+        bond_indices,
+    })
+}
+
+/// Neighbor IDs per atom and the bond index of each unordered ID pair.
+struct WorkGraph {
+    adjacent: Vec<Vec<u64>>,
+    bonds_by_pair: HashMap<(u64, u64), usize>,
+}
+
+fn work_graph(work: &Molecule, n: usize) -> Result<WorkGraph, Error> {
     let mut adjacent = vec![Vec::new(); n];
     let mut bonds_by_pair = HashMap::new();
     for (i, bond) in work.state.graph.bonds.iter().enumerate() {
@@ -425,14 +465,24 @@ fn reconstruct(
                 .push(neighbor);
         }
     }
-    let circular: HashSet<_> = base
-        .into_iter()
-        .flat_map(|d| &d.bonds)
-        .filter(|b| b.order == 4)
-        .flat_map(|b| [b.a, b.b])
-        .collect();
-    let atoms = work
-        .state
+    Ok(WorkGraph {
+        adjacent,
+        bonds_by_pair,
+    })
+}
+
+/// Rebuild each drawing atom from the wedged work state, keeping the previous
+/// drawing's display, marks and text style.
+fn reconstruct_atoms(
+    work: &Molecule,
+    molecule: &Molecule,
+    previous: &HashMap<u64, &Atom>,
+    dummy_labels: Option<&[Option<String>]>,
+    circular: &HashSet<u64>,
+    adjacent: &[Vec<u64>],
+) -> Result<Vec<Atom>, Error> {
+    let state = &molecule.state;
+    work.state
         .graph
         .atoms
         .iter()
@@ -484,7 +534,7 @@ fn reconstruct(
                 0 => None,
                 tag => Some(AtomStereo {
                     winding: if tag == 1 { "cw" } else { "ccw" }.into(),
-                    neighbors: at(&adjacent, i)?.clone(),
+                    neighbors: at(adjacent, i)?.clone(),
                 }),
             };
             atom.label_h = u32::from(a.explicit_hydrogens)
@@ -493,7 +543,15 @@ fn reconstruct(
             atom.cip_label = None;
             Ok(atom)
         })
-        .collect::<Result<Vec<_>, Error>>()?;
+        .collect::<Result<Vec<_>, Error>>()
+}
+
+/// Bond indices in the base drawing's order, or in graph order on import.
+fn ordered_bonds<'b>(
+    base: Option<&'b Document>,
+    bonds_by_pair: &HashMap<(u64, u64), usize>,
+    e: usize,
+) -> Result<Vec<(usize, Option<&'b Bond>)>, Error> {
     let ordered = if let Some(base) = base {
         base.bonds
             .iter()
@@ -507,6 +565,17 @@ fn reconstruct(
     } else {
         (0..e).map(|i| (i, None)).collect()
     };
+    Ok(ordered)
+}
+
+/// Rebuild each drawing bond in `ordered`, recording its graph index.
+fn reconstruct_bonds(
+    work: &Molecule,
+    molecule: &Molecule,
+    ordered: Vec<(usize, Option<&Bond>)>,
+    e: usize,
+) -> Result<(Vec<Bond>, Vec<usize>), Error> {
+    let state = &molecule.state;
     let mut bond_indices = Vec::with_capacity(e);
     let bonds = ordered
         .into_iter()
@@ -578,15 +647,5 @@ fn reconstruct(
             Ok(bond)
         })
         .collect::<Result<Vec<_>, Error>>()?;
-    let document = Document {
-        version: 15,
-        atoms,
-        bonds,
-        ..base.cloned().unwrap_or_default()
-    };
-    Ok(Drawing {
-        molecule: work,
-        document,
-        bond_indices,
-    })
+    Ok((bonds, bond_indices))
 }
