@@ -88,6 +88,25 @@ impl Reader<'_> {
 }
 
 pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, expect_end: bool) -> Result<()> {
+    let Counts {
+        atoms: n,
+        bonds: e,
+        groups,
+        objects,
+    } = ctab_counts(r)?;
+    let indices = atom_block(r, p, n)?;
+    let bond_ids = bond_block(r, p, e, &indices)?;
+    trailing_blocks(r, p, groups, objects, &indices, &bond_ids, expect_end)
+}
+
+struct Counts {
+    atoms: usize,
+    bonds: usize,
+    groups: usize,
+    objects: usize,
+}
+
+fn ctab_counts(r: &mut Reader<'_>) -> Result<Counts> {
     r.expect("BEGIN CTAB")?;
     let line = r.v3()?;
     let tokens = r.tokens(&line)?;
@@ -108,229 +127,307 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, expect_end: bool) -> Resu
         .unwrap_or(0);
     let groups = r.count(groups, 100_000)?;
     let objects = r.count(objects, 100_000)?;
+    Ok(Counts {
+        atoms: n,
+        bonds: e,
+        groups,
+        objects,
+    })
+}
+
+fn atom_block(r: &mut Reader<'_>, p: &mut Parsed, n: usize) -> Result<HashMap<i32, usize>> {
     let mut indices = HashMap::new();
     if n != 0 {
         r.expect("BEGIN ATOM")?;
         for _ in 0..n {
-            let line = r.v3()?;
-            let tokens = r.tokens(&line)?;
-            let id = bookmark(r.token(&tokens, 0)?);
-            if indices.insert(id, p.graph.atoms.len()).is_some() {
-                return Err(r.invalid("Duplicate atom ID"));
-            }
-            let mut atom = r.symbol(r.token(&tokens, 1)?, true)?;
-            let position = Point3 {
-                x: r.coordinate(r.token(&tokens, 2)?, false)?,
-                y: r.coordinate(r.token(&tokens, 3)?, false)?,
-                z: r.coordinate(r.token(&tokens, 4)?, false)?,
-            };
-            let map = r.integer(r.token(&tokens, 5)?)?.max(0);
-            let mut props = FileAtom {
-                dummy_label: dummy_label(r.token(&tokens, 1)?),
-                ..FileAtom::default()
-            };
-            for &token in tokens.iter().skip(6) {
-                let (key, value) = r.assignment(token)?;
-                match key.as_str() {
-                    "CHG" => {
-                        atom.charge = i8::try_from(r.integer(value)?)
-                            .map_err(|_| r.invalid("Excessive charge"))?
-                    }
-                    "RAD" => {
-                        let code = r.integer(value)?;
-                        if code != 0 {
-                            atom.radical_electrons = radical(code)?;
-                        }
-                    }
-                    "MASS" => {
-                        let mass = r
-                            .integer(value)
-                            .or_else(|_| r.coordinate(value, true).map(|v| v.floor() as i32))?;
-                        atom.isotope =
-                            u16::try_from(mass).map_err(|_| r.invalid("Invalid isotope"))?;
-                    }
-                    "VAL" if value != "0" => props.valence = r.integer(value)?,
-                    "CFG" if !(0..=3).contains(&r.integer(value)?) => {
-                        return Err(r.invalid("Invalid atom CFG"));
-                    }
-                    "HCOUNT" | "RBCNT" | "SUBST" if value != "0" => {
-                        return Err(ReadError::Unsupported("atom query"));
-                    }
-                    "UNSAT" if value == "1" => {
-                        return Err(ReadError::Unsupported("unsaturation query"));
-                    }
-                    "RGROUPS" => {
-                        let content = value
-                            .strip_prefix('(')
-                            .and_then(|s| s.strip_suffix(')'))
-                            .ok_or_else(|| r.invalid("Invalid RGROUPS list"))?;
-                        let entries = content.split_whitespace().collect::<Vec<_>>();
-                        let count = r.count(r.integer(r.token(&entries, 0)?)?, 100_000)?;
-                        if entries.len() < count + 1 {
-                            return Err(r.invalid("Missing RGROUPS entries"));
-                        }
-                        if count > 0 {
-                            return Err(ReadError::Unsupported("R-group query"));
-                        }
-                    }
-                    "ATTCHPT" if value != "0" => {
-                        let attachment = r.integer(value)?;
-                        if props.attachment.is_some() {
-                            return Err(r.invalid("Duplicate attachment point"));
-                        }
-                        props.attachment = Some(attachment);
-                    }
-                    "ATTCHORD" if value.starts_with('(') => {
-                        template_order(r, value)?;
-                    }
-                    "ATTCHORD" => {
-                        r.integer(value)?;
-                    }
-                    "STBOX" | "EXACHG" | "INVRET" | "SEQID" => {
-                        r.integer(value)?;
-                    }
-                    _ => (),
-                }
-            }
-            p.atom(
-                atom,
-                position,
-                AtomMetadata {
-                    map_number: map,
-                    map_present: map > 0,
-                    ..AtomMetadata::default()
-                },
-                props,
-            );
+            atom_record(r, p, &mut indices)?;
         }
         r.expect("END ATOM")?;
     }
+    Ok(indices)
+}
+
+fn atom_record(
+    r: &mut Reader<'_>,
+    p: &mut Parsed,
+    indices: &mut HashMap<i32, usize>,
+) -> Result<()> {
+    let line = r.v3()?;
+    let tokens = r.tokens(&line)?;
+    let id = bookmark(r.token(&tokens, 0)?);
+    if indices.insert(id, p.graph.atoms.len()).is_some() {
+        return Err(r.invalid("Duplicate atom ID"));
+    }
+    let mut atom = r.symbol(r.token(&tokens, 1)?, true)?;
+    let position = Point3 {
+        x: r.coordinate(r.token(&tokens, 2)?, false)?,
+        y: r.coordinate(r.token(&tokens, 3)?, false)?,
+        z: r.coordinate(r.token(&tokens, 4)?, false)?,
+    };
+    let map = r.integer(r.token(&tokens, 5)?)?.max(0);
+    let mut props = FileAtom {
+        dummy_label: dummy_label(r.token(&tokens, 1)?),
+        ..FileAtom::default()
+    };
+    atom_properties(r, &tokens, &mut atom, &mut props)?;
+    p.atom(
+        atom,
+        position,
+        AtomMetadata {
+            map_number: map,
+            map_present: map > 0,
+            ..AtomMetadata::default()
+        },
+        props,
+    );
+    Ok(())
+}
+
+fn atom_properties(
+    r: &Reader<'_>,
+    tokens: &[&str],
+    atom: &mut Atom,
+    props: &mut FileAtom,
+) -> Result<()> {
+    for &token in tokens.iter().skip(6) {
+        let (key, value) = r.assignment(token)?;
+        match key.as_str() {
+            "CHG" => {
+                atom.charge =
+                    i8::try_from(r.integer(value)?).map_err(|_| r.invalid("Excessive charge"))?
+            }
+            "RAD" => {
+                let code = r.integer(value)?;
+                if code != 0 {
+                    atom.radical_electrons = radical(code)?;
+                }
+            }
+            "MASS" => {
+                let mass = r
+                    .integer(value)
+                    .or_else(|_| r.coordinate(value, true).map(|v| v.floor() as i32))?;
+                atom.isotope = u16::try_from(mass).map_err(|_| r.invalid("Invalid isotope"))?;
+            }
+            "VAL" if value != "0" => props.valence = r.integer(value)?,
+            "CFG" if !(0..=3).contains(&r.integer(value)?) => {
+                return Err(r.invalid("Invalid atom CFG"));
+            }
+            "HCOUNT" | "RBCNT" | "SUBST" if value != "0" => {
+                return Err(ReadError::Unsupported("atom query"));
+            }
+            "UNSAT" if value == "1" => {
+                return Err(ReadError::Unsupported("unsaturation query"));
+            }
+            "RGROUPS" => {
+                let content = value
+                    .strip_prefix('(')
+                    .and_then(|s| s.strip_suffix(')'))
+                    .ok_or_else(|| r.invalid("Invalid RGROUPS list"))?;
+                let entries = content.split_whitespace().collect::<Vec<_>>();
+                let count = r.count(r.integer(r.token(&entries, 0)?)?, 100_000)?;
+                if entries.len() < count + 1 {
+                    return Err(r.invalid("Missing RGROUPS entries"));
+                }
+                if count > 0 {
+                    return Err(ReadError::Unsupported("R-group query"));
+                }
+            }
+            "ATTCHPT" if value != "0" => {
+                let attachment = r.integer(value)?;
+                if props.attachment.is_some() {
+                    return Err(r.invalid("Duplicate attachment point"));
+                }
+                props.attachment = Some(attachment);
+            }
+            "ATTCHORD" if value.starts_with('(') => {
+                template_order(r, value)?;
+            }
+            "ATTCHORD" => {
+                r.integer(value)?;
+            }
+            "STBOX" | "EXACHG" | "INVRET" | "SEQID" => {
+                r.integer(value)?;
+            }
+            _ => (),
+        }
+    }
+    Ok(())
+}
+
+fn bond_block(
+    r: &mut Reader<'_>,
+    p: &mut Parsed,
+    e: usize,
+    indices: &HashMap<i32, usize>,
+) -> Result<HashMap<i32, usize>> {
     let mut bond_ids = HashMap::new();
     if e != 0 {
         r.expect("BEGIN BOND")?;
         for _ in 0..e {
-            let line = r.v3()?;
-            let tokens = r.tokens(&line)?;
-            if bond_ids
-                .insert(bookmark(r.token(&tokens, 0)?), p.graph.bonds.len())
-                .is_some()
-            {
-                return Err(r.invalid("Duplicate bond ID"));
-            }
-            let (kind, mut props) = order(bookmark(r.token(&tokens, 1)?), true);
-            let endpoint = |i| -> Result<usize> {
-                indices
-                    .get(&bookmark(r.token(&tokens, i)?))
-                    .copied()
-                    .ok_or_else(|| r.invalid("Missing bond atom"))
-            };
-            let (a, b) = (endpoint(2)?, endpoint(3)?);
-            let mut dir = Direction::None;
-            let mut endpts = None;
-            let mut attach = None;
-            for &token in tokens.iter().skip(4) {
-                let (key, value) = r.assignment(token)?;
-                match key.as_str() {
-                    "CFG" => match r.integer(value)? {
-                        0 => (),
-                        1 => {
-                            dir = Direction::Wedge;
-                            p.chirality = true;
-                        }
-                        3 => {
-                            dir = Direction::Hash;
-                            p.chirality = true;
-                        }
-                        2 => {
-                            if kind == 1 {
-                                dir = Direction::Unknown;
-                            } else if kind == 2 {
-                                dir = Direction::EitherDouble;
-                            }
-                        }
-                        _ => return Err(r.invalid("Invalid bond CFG")),
-                    },
-                    "TOPO" if value != "0" => {
-                        return Err(ReadError::Unsupported("bond topology query"));
-                    }
-                    "RXCTR" => {
-                        r.integer(value)?;
-                    }
-                    "ENDPTS" => {
-                        if endpts.is_some() {
-                            return Err(r.invalid("Duplicate ENDPTS"));
-                        }
-                        let text = value
-                            .strip_prefix('(')
-                            .and_then(|v| v.strip_suffix(')'))
-                            .ok_or_else(|| r.invalid("Invalid ENDPTS list"))?;
-                        let mut values = text.split_whitespace();
-                        let count = values
-                            .next()
-                            .and_then(|v| v.parse::<usize>().ok())
-                            .filter(|n| (2..=300).contains(n))
-                            .ok_or_else(|| r.invalid("Invalid ENDPTS count"))?;
-                        let mut members = Vec::new();
-                        let mut unique = HashSet::new();
-                        for value in values {
-                            if members.len() >= count {
-                                return Err(r.invalid("ENDPTS count mismatch"));
-                            }
-                            let id = value
-                                .parse::<i32>()
-                                .map_err(|_| r.invalid("Invalid ENDPTS atom ID"))?;
-                            let index = *indices
-                                .get(&id)
-                                .ok_or_else(|| r.invalid("Missing ENDPTS atom"))?;
-                            if index == a || index == b || !unique.insert(index) {
-                                return Err(r.invalid("Invalid or duplicate ENDPTS atom"));
-                            }
-                            members.push(index as u64 + 1);
-                        }
-                        if members.len() != count {
-                            return Err(r.invalid("ENDPTS count mismatch"));
-                        }
-                        endpts = Some(members);
-                    }
-                    "ATTACH" => {
-                        if attach.is_some() {
-                            return Err(r.invalid("Duplicate ATTACH"));
-                        }
-                        attach = Some(match value {
-                            "ALL" => crate::attachments::Kind::MultiCenter,
-                            "ANY" => crate::attachments::Kind::Variable,
-                            _ => return Err(r.invalid("Unknown ATTACH mode")),
-                        });
-                    }
-                    _ => (),
-                }
-            }
-            match (attach, endpts) {
-                (Some(attachment_kind), Some(members)) => {
-                    let dummy =
-                        |i: usize| p.graph.atoms.get(i).is_some_and(|a| a.atomic_number == 0);
-                    let id = match (dummy(a), dummy(b)) {
-                        (true, false) => a,
-                        (false, true) => b,
-                        _ => {
-                            return Err(
-                                r.invalid("Attachment bond needs exactly one dummy endpoint")
-                            );
-                        }
-                    };
-                    props.attachment = Some(crate::attachments::Attachment {
-                        id: id as u64 + 1,
-                        kind: attachment_kind,
-                        members,
-                    });
-                }
-                (None, None) => (),
-                _ => return Err(r.invalid("ENDPTS and ATTACH must occur together")),
-            }
-            p.bond(a, b, kind, dir, props);
+            bond_record(r, p, indices, &mut bond_ids)?;
         }
         r.expect("END BOND")?;
     }
+    Ok(bond_ids)
+}
+
+fn bond_record(
+    r: &mut Reader<'_>,
+    p: &mut Parsed,
+    indices: &HashMap<i32, usize>,
+    bond_ids: &mut HashMap<i32, usize>,
+) -> Result<()> {
+    let line = r.v3()?;
+    let tokens = r.tokens(&line)?;
+    if bond_ids
+        .insert(bookmark(r.token(&tokens, 0)?), p.graph.bonds.len())
+        .is_some()
+    {
+        return Err(r.invalid("Duplicate bond ID"));
+    }
+    let (kind, mut props) = order(bookmark(r.token(&tokens, 1)?), true);
+    let endpoint = |i| -> Result<usize> {
+        indices
+            .get(&bookmark(r.token(&tokens, i)?))
+            .copied()
+            .ok_or_else(|| r.invalid("Missing bond atom"))
+    };
+    let (a, b) = (endpoint(2)?, endpoint(3)?);
+    let mut dir = Direction::None;
+    let mut endpts = None;
+    let mut attach = None;
+    for &token in tokens.iter().skip(4) {
+        let (key, value) = r.assignment(token)?;
+        match key.as_str() {
+            "CFG" => match r.integer(value)? {
+                0 => (),
+                1 => {
+                    dir = Direction::Wedge;
+                    p.chirality = true;
+                }
+                3 => {
+                    dir = Direction::Hash;
+                    p.chirality = true;
+                }
+                2 => {
+                    if kind == 1 {
+                        dir = Direction::Unknown;
+                    } else if kind == 2 {
+                        dir = Direction::EitherDouble;
+                    }
+                }
+                _ => return Err(r.invalid("Invalid bond CFG")),
+            },
+            "TOPO" if value != "0" => {
+                return Err(ReadError::Unsupported("bond topology query"));
+            }
+            "RXCTR" => {
+                r.integer(value)?;
+            }
+            "ENDPTS" => {
+                if endpts.is_some() {
+                    return Err(r.invalid("Duplicate ENDPTS"));
+                }
+                endpts = Some(endpoint_members(r, value, indices, a, b)?);
+            }
+            "ATTACH" => {
+                if attach.is_some() {
+                    return Err(r.invalid("Duplicate ATTACH"));
+                }
+                attach = Some(match value {
+                    "ALL" => crate::attachments::Kind::MultiCenter,
+                    "ANY" => crate::attachments::Kind::Variable,
+                    _ => return Err(r.invalid("Unknown ATTACH mode")),
+                });
+            }
+            _ => (),
+        }
+    }
+    bond_attachment(r, p, a, b, attach, endpts, &mut props)?;
+    p.bond(a, b, kind, dir, props);
+    Ok(())
+}
+
+fn endpoint_members(
+    r: &Reader<'_>,
+    value: &str,
+    indices: &HashMap<i32, usize>,
+    a: usize,
+    b: usize,
+) -> Result<Vec<u64>> {
+    let text = value
+        .strip_prefix('(')
+        .and_then(|v| v.strip_suffix(')'))
+        .ok_or_else(|| r.invalid("Invalid ENDPTS list"))?;
+    let mut values = text.split_whitespace();
+    let count = values
+        .next()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|n| (2..=300).contains(n))
+        .ok_or_else(|| r.invalid("Invalid ENDPTS count"))?;
+    let mut members = Vec::new();
+    let mut unique = HashSet::new();
+    for value in values {
+        if members.len() >= count {
+            return Err(r.invalid("ENDPTS count mismatch"));
+        }
+        let id = value
+            .parse::<i32>()
+            .map_err(|_| r.invalid("Invalid ENDPTS atom ID"))?;
+        let index = *indices
+            .get(&id)
+            .ok_or_else(|| r.invalid("Missing ENDPTS atom"))?;
+        if index == a || index == b || !unique.insert(index) {
+            return Err(r.invalid("Invalid or duplicate ENDPTS atom"));
+        }
+        members.push(index as u64 + 1);
+    }
+    if members.len() != count {
+        return Err(r.invalid("ENDPTS count mismatch"));
+    }
+    Ok(members)
+}
+
+fn bond_attachment(
+    r: &Reader<'_>,
+    p: &Parsed,
+    a: usize,
+    b: usize,
+    attach: Option<crate::attachments::Kind>,
+    endpts: Option<Vec<u64>>,
+    props: &mut FileBond,
+) -> Result<()> {
+    match (attach, endpts) {
+        (Some(attachment_kind), Some(members)) => {
+            let dummy = |i: usize| p.graph.atoms.get(i).is_some_and(|a| a.atomic_number == 0);
+            let id = match (dummy(a), dummy(b)) {
+                (true, false) => a,
+                (false, true) => b,
+                _ => {
+                    return Err(r.invalid("Attachment bond needs exactly one dummy endpoint"));
+                }
+            };
+            props.attachment = Some(crate::attachments::Attachment {
+                id: id as u64 + 1,
+                kind: attachment_kind,
+                members,
+            });
+        }
+        (None, None) => (),
+        _ => return Err(r.invalid("ENDPTS and ATTACH must occur together")),
+    }
+    Ok(())
+}
+
+fn trailing_blocks(
+    r: &mut Reader<'_>,
+    p: &mut Parsed,
+    groups: usize,
+    objects: usize,
+    indices: &HashMap<i32, usize>,
+    bond_ids: &HashMap<i32, usize>,
+    expect_end: bool,
+) -> Result<()> {
     let mut line = r.v3()?.to_ascii_uppercase();
     let mut objects_found = false;
     let mut groups_found = false;
@@ -347,7 +444,7 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, expect_end: bool) -> Resu
             if groups == 0 || groups_found {
                 return Err(r.invalid("Unexpected or repeated substance group block"));
             }
-            groups::read_v3000(r, p, groups, &indices, &bond_ids)?;
+            groups::read_v3000(r, p, groups, indices, bond_ids)?;
             groups_found = true;
             line = r.v3()?.to_ascii_uppercase();
             continue;
