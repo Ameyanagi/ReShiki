@@ -662,72 +662,16 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let mut out = vec![];
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
-    let graphic_primitive = |g: &&crate::graphics::Graphic| {
-        if g.kind == crate::graphics::GraphicKind::Picture {
-            vec![Primitive::Picture((*g).clone())]
-        } else {
-            g.parts()
-                .into_iter()
-                .map(|p| Primitive::Path {
-                    commands: p.commands,
-                    style: p.style,
-                    filled: p.filled,
-                })
-                .collect()
-        }
-    };
-    out.extend(
-        graphics
-            .iter()
-            .filter(|g| g.layer < 0)
-            .flat_map(graphic_primitive),
-    );
-    out.extend(doc.ring_fills.iter().filter_map(|fill| fill.primitive(doc)));
-    out.extend(crate::highlights::primitives(doc));
-    let arcs = crate::ring_arcs::render(doc);
-    // A partial curve replaces the ring's circle, not its aromatic membership.
-    // Retain every ring here so its other edges do not gain fallback dashes.
-    let circles = crate::aromatic::circles(doc);
-    let mut crossing_gaps = crate::crossings::gaps(doc);
-    for circle in circles.iter().filter(|c| !arcs.intersects(c)) {
-        for part in circle.graphic().parts() {
-            let stroke = Primitive::Path {
-                commands: part.commands,
-                style: part.style,
-                filled: part.filled,
-            };
-            let (stroke, gaps) = crate::crossings::ring_stroke(doc, circle, stroke);
-            out.push(stroke);
-            for (index, gap) in gaps {
-                if let Some(gaps) = crossing_gaps.get_mut(index) {
-                    gaps.push(gap);
-                }
-            }
-        }
-    }
-    out.extend(arcs.primitives.iter().cloned());
-    for (index, gap) in &arcs.crossings {
-        if let Some(gaps) = crossing_gaps.get_mut(*index) {
-            gaps.push(*gap);
-        }
-    }
-    let labels: std::collections::HashMap<_, _> = doc
-        .atoms
-        .iter()
-        .map(|a| (a.id, atom_label(a, doc)))
-        .collect();
-    let label_bounds: std::collections::HashMap<_, _> = labels
-        .iter()
-        .map(|(id, runs)| {
-            // A charge beside an implicit carbon must not shorten its bonds.
-            let bounds = doc
-                .atom(*id)
-                .filter(|a| visible(a, doc) || doc.abbreviation(*id).is_some())
-                .map(|_| label_ink_boxes(runs))
-                .unwrap_or_default();
-            (*id, bounds)
-        })
-        .collect();
+    push_underlays(&mut out, doc, &graphics);
+    let RingStrokes {
+        arcs,
+        circles,
+        crossing_gaps,
+    } = push_ring_strokes(&mut out, doc);
+    let AtomLabels {
+        runs: labels,
+        bounds: label_bounds,
+    } = collect_atom_labels(doc);
     // Fill joined bond outlines together. Separate antialiased polygons leave
     // translucent seams even when their mathematical corners agree exactly.
     let joins = crate::bond_joins::Joins::new(doc);
@@ -1054,6 +998,123 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             }
         }
     }
+    push_junctions(&mut out, &mut joined, &joins, &crossing_gaps);
+    push_joined_outlines(&mut out, joined);
+    push_atom_labels(&mut out, doc, &labels);
+    push_arrows_and_annotations(&mut out, doc);
+    out.extend(
+        graphics
+            .iter()
+            .filter(|g| g.layer >= 0)
+            .flat_map(graphic_primitive),
+    );
+    out
+}
+fn graphic_primitive(g: &&crate::graphics::Graphic) -> Vec<Primitive> {
+    if g.kind == crate::graphics::GraphicKind::Picture {
+        vec![Primitive::Picture((*g).clone())]
+    } else {
+        g.parts()
+            .into_iter()
+            .map(|p| Primitive::Path {
+                commands: p.commands,
+                style: p.style,
+                filled: p.filled,
+            })
+            .collect()
+    }
+}
+fn push_underlays(
+    out: &mut Vec<Primitive>,
+    doc: &Document,
+    graphics: &[&crate::graphics::Graphic],
+) {
+    out.extend(
+        graphics
+            .iter()
+            .filter(|g| g.layer < 0)
+            .flat_map(graphic_primitive),
+    );
+    out.extend(doc.ring_fills.iter().filter_map(|fill| fill.primitive(doc)));
+    out.extend(crate::highlights::primitives(doc));
+}
+/// Aromatic circles and ring arcs, with the crossing gaps they add.
+struct RingStrokes {
+    arcs: crate::ring_arcs::Arcs,
+    circles: Vec<crate::aromatic::Circle>,
+    crossing_gaps: Vec<Vec<crate::crossings::Gap>>,
+}
+fn push_ring_strokes(out: &mut Vec<Primitive>, doc: &Document) -> RingStrokes {
+    let arcs = crate::ring_arcs::render(doc);
+    // A partial curve replaces the ring's circle, not its aromatic membership.
+    // Retain every ring here so its other edges do not gain fallback dashes.
+    let circles = crate::aromatic::circles(doc);
+    let mut crossing_gaps = crate::crossings::gaps(doc);
+    for circle in circles.iter().filter(|c| !arcs.intersects(c)) {
+        for part in circle.graphic().parts() {
+            let stroke = Primitive::Path {
+                commands: part.commands,
+                style: part.style,
+                filled: part.filled,
+            };
+            let (stroke, gaps) = crate::crossings::ring_stroke(doc, circle, stroke);
+            out.push(stroke);
+            for (index, gap) in gaps {
+                if let Some(gaps) = crossing_gaps.get_mut(index) {
+                    gaps.push(gap);
+                }
+            }
+        }
+    }
+    out.extend(arcs.primitives.iter().cloned());
+    for (index, gap) in &arcs.crossings {
+        if let Some(gaps) = crossing_gaps.get_mut(*index) {
+            gaps.push(*gap);
+        }
+    }
+    RingStrokes {
+        arcs,
+        circles,
+        crossing_gaps,
+    }
+}
+/// Label runs per atom and the ink boxes that trim its bonds.
+struct AtomLabels {
+    runs: std::collections::HashMap<u64, Vec<Primitive>>,
+    bounds: std::collections::HashMap<u64, Vec<(Point, Point)>>,
+}
+fn collect_atom_labels(doc: &Document) -> AtomLabels {
+    let labels: std::collections::HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .map(|a| (a.id, atom_label(a, doc)))
+        .collect();
+    let label_bounds: std::collections::HashMap<_, _> = labels
+        .iter()
+        .map(|(id, runs)| {
+            // A charge beside an implicit carbon must not shorten its bonds.
+            let bounds = doc
+                .atom(*id)
+                .filter(|a| visible(a, doc) || doc.abbreviation(*id).is_some())
+                .map(|_| label_ink_boxes(runs))
+                .unwrap_or_default();
+            (*id, bounds)
+        })
+        .collect();
+    AtomLabels {
+        runs: labels,
+        bounds: label_bounds,
+    }
+}
+fn push_junctions(
+    out: &mut Vec<Primitive>,
+    joined: &mut std::collections::BTreeMap<
+        crate::palette::Color,
+        Vec<crate::graphics::PathCommand>,
+    >,
+    joins: &crate::bond_joins::Joins<'_>,
+    crossing_gaps: &[Vec<crate::crossings::Gap>],
+) {
     for junction in joins.junctions() {
         use crate::graphics::PathCommand;
         let mut commands = Vec::new();
@@ -1090,6 +1151,11 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             joined.entry(junction.color).or_default().extend(commands);
         }
     }
+}
+fn push_joined_outlines(
+    out: &mut Vec<Primitive>,
+    joined: std::collections::BTreeMap<crate::palette::Color, Vec<crate::graphics::PathCommand>>,
+) {
     out.extend(joined.into_iter().map(|(color, commands)| Primitive::Path {
         commands,
         style: crate::graphics::GraphicStyle {
@@ -1100,6 +1166,12 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         },
         filled: true,
     }));
+}
+fn push_atom_labels(
+    out: &mut Vec<Primitive>,
+    doc: &Document,
+    labels: &std::collections::HashMap<u64, Vec<Primitive>>,
+) {
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
         out.extend(labels.get(&a.id).into_iter().flatten().cloned());
         out.extend(
@@ -1117,6 +1189,8 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             .iter()
             .map(|l| l.primitive()),
     );
+}
+fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
     for a in &doc.arrows {
         out.extend(a.paths().into_iter().map(|p| Primitive::Path {
             commands: p.commands,
@@ -1135,13 +1209,6 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             });
         }
     }
-    out.extend(
-        graphics
-            .iter()
-            .filter(|g| g.layer >= 0)
-            .flat_map(graphic_primitive),
-    );
-    out
 }
 fn head(out: &mut Vec<Primitive>, end: Point, angle: f32, half: bool, width: f32) {
     let a = end.offset(
