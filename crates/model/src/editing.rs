@@ -1470,4 +1470,7 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
 mod core_tests;
 
 #[cfg(test)]
+mod ring_placement_parity_tests;
+
+#[cfg(test)]
 mod tests;
