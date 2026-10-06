@@ -42,6 +42,7 @@ The library is split into workspace crates. Each crate depends only on the crate
 | `src/app/gates.rs`                                          | Ordered modal gates that run before message dispatch                           |
 | `src/app/dispatch.rs`                                       | Message dispatch table: one handler per message variant                        |
 | `src/app/canvas_edit/`                                      | Canvas gesture dispatch, direct manipulation, placement and clicks             |
+| `src/app/assistant.rs`, `src/app/assistant/`                | Assistant actions, request lifecycle, attachments, drafts and panel view       |
 | `src/app/bond_edits.rs`                                     | Bond drawing settings and edits to selected bonds                              |
 | `src/app/atom_edits.rs`                                     | Element, charge, isotope, radical and mark edits to selected atoms             |
 | `src/app/ring_edits.rs`                                     | Ring tool settings and the selected ring's aromaticity                         |
