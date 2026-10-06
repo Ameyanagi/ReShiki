@@ -9,7 +9,7 @@ use reshiki::graphics::{Graphic, GraphicKind};
 use std::path::Path;
 
 /// Lays out and updates the view once, optionally saving a screenshot; returns published messages.
-fn pass(
+pub(super) fn pass(
     app: &App,
     renderer: &mut iced::Renderer,
     tree: &mut Tree,
@@ -109,25 +109,25 @@ fn snapshot(app: &mut App, renderer: &mut iced::Renderer, size: Size, output: &P
     pass(app, renderer, &mut tree, size, Some(output));
 }
 
-fn benzene() -> Document {
+pub(super) fn benzene() -> Document {
     reshiki::rings::Preset::Benzene.document(42., false)
 }
 
-fn open(app: &mut App, doc: Document) {
+pub(super) fn open(app: &mut App, doc: Document) {
     app.tab.doc = doc;
     app.tab.saved = app.tab.doc.clone();
 }
 
-fn select_all(app: &mut App) {
+pub(super) fn select_all(app: &mut App) {
     let _ = app.update(Message::Canvas(Edit::Select(app.tab.doc.all_ids())));
 }
 
-fn molecule(app: &mut App) {
+pub(super) fn molecule(app: &mut App) {
     open(app, benzene());
     select_all(app);
 }
 
-fn mixed(app: &mut App) {
+pub(super) fn mixed(app: &mut App) {
     let mut doc = benzene();
     doc.arrows.push(Arrow::new(
         doc.next_id(),
@@ -150,11 +150,11 @@ fn mixed(app: &mut App) {
     select_all(app);
 }
 
-fn ring_tool(app: &mut App) {
+pub(super) fn ring_tool(app: &mut App) {
     let _ = app.update(Message::Tool(Tool::Ring));
 }
 
-fn arc(app: &mut App) {
+pub(super) fn arc(app: &mut App) {
     let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Arc)));
     let _ = app.update(Message::Canvas(Edit::Graphic(
         World::new(-80., -50.),
@@ -163,12 +163,12 @@ fn arc(app: &mut App) {
     )));
 }
 
-fn import(app: &mut App) {
+pub(super) fn import(app: &mut App) {
     let _ = app.update(Message::Inspector(InspectorTab::Import));
 }
 
 /// The Insert ▾ menu open over typed SMILES.
-fn import_menu(app: &mut App) {
+pub(super) fn import_menu(app: &mut App) {
     use crate::app::import::Action;
     import(app);
     let paste = text_editor::Edit::Paste(std::sync::Arc::new("CCO".into()));
@@ -179,7 +179,7 @@ fn import_menu(app: &mut App) {
 }
 
 /// The Transform section with tilt shown under More.
-fn transform(app: &mut App) {
+pub(super) fn transform(app: &mut App) {
     use crate::app::inspector::{Action, Section};
     molecule(app);
     for (section, expanded) in [(Section::Bonds, false), (Section::Transform, true)] {
@@ -192,14 +192,14 @@ fn transform(app: &mut App) {
 
 /// Closing an edited tab waits for the native save dialog, which the
 /// headless renderer cannot show; nothing may appear above the canvas.
-fn unsaved(app: &mut App) {
+pub(super) fn unsaved(app: &mut App) {
     app.tab.doc = benzene();
     let _ = app.update(Message::Tabs(crate::app::tabs::Action::Close(None)));
     assert!(app.pending.is_some());
 }
 
 /// Three drawings; the one in front has unsaved changes.
-fn tabs(app: &mut App) {
+pub(super) fn tabs(app: &mut App) {
     open(app, benzene());
     app.tab.path = Some("aspirin.rsk".into());
     app.add_tab();
@@ -212,7 +212,7 @@ fn tabs(app: &mut App) {
 }
 
 /// More tabs than fit, with the ▾ list of the others open.
-fn many_tabs(app: &mut App) {
+pub(super) fn many_tabs(app: &mut App) {
     tabs(app);
     for name in [
         "oxidation",
@@ -229,7 +229,7 @@ fn many_tabs(app: &mut App) {
 }
 
 /// A launch that found drafts from a session that closed unexpectedly.
-fn recovery(app: &mut App) {
+pub(super) fn recovery(app: &mut App) {
     use reshiki::recovery::{Candidate, Snapshot};
     let snapshot = Snapshot {
         document: benzene(),
@@ -244,7 +244,7 @@ fn recovery(app: &mut App) {
 
 /// The color popover for a selection in a custom color that is faint on the
 /// light canvas, with two recent custom colors.
-fn color_popover(app: &mut App) {
+pub(super) fn color_popover(app: &mut App) {
     use reshiki::palette::Color as Paint;
     mixed(app);
     app.tab.doc.remember_color([31, 78, 121]);
@@ -257,7 +257,7 @@ fn color_popover(app: &mut App) {
 }
 
 /// Edit hues with Blue moved from 255° to 225°, recoloring the drawing.
-fn edit_hues(app: &mut App) {
+pub(super) fn edit_hues(app: &mut App) {
     use super::super::color_popover::Action;
     use reshiki::palette::{Color as Paint, Hue, Row};
     mixed(app);
@@ -271,13 +271,13 @@ fn edit_hues(app: &mut App) {
 }
 
 /// The widest inspector tab.
-fn assistant(app: &mut App) {
+pub(super) fn assistant(app: &mut App) {
     app.inspector_open = true;
     app.inspector_tab = InspectorTab::Assistant;
 }
 
 /// A snaking chain with changed constraints, so that Reset shows.
-fn chain(app: &mut App) {
+pub(super) fn chain(app: &mut App) {
     let _ = app.update(Message::Tool(Tool::Chain(
         reshiki::chains::ChainMode::Snaking,
     )));
@@ -285,7 +285,7 @@ fn chain(app: &mut App) {
 }
 
 /// One selected atom moves its bonded neighbors: constraints and Reset show.
-fn atom(app: &mut App) {
+pub(super) fn atom(app: &mut App) {
     open(app, benzene());
     let id = app.tab.doc.atoms[0].id;
     let _ = app.update(Message::Canvas(Edit::Select(vec![id])));
@@ -330,7 +330,7 @@ fn smart_guides_scheme(app: &mut App) -> (World, World) {
 }
 
 /// The canvas widget: the leaf the size of the drawing viewport.
-fn canvas_bounds(layout: Layout<'_>, size: Size) -> Option<Rectangle> {
+pub(super) fn canvas_bounds(layout: Layout<'_>, size: Size) -> Option<Rectangle> {
     if layout.bounds().size() == size && layout.children().next().is_none() {
         return Some(layout.bounds());
     }
@@ -406,9 +406,9 @@ fn smart_guides(renderer: &mut iced::Renderer, size: Size, output: &Path) {
     pass(&app, renderer, &mut tree, size, Some(output));
 }
 
-type Setup = fn(&mut App);
+pub(super) type Setup = fn(&mut App);
 
-const STATES: [(&str, Setup); 20] = [
+pub(super) const STATES: [(&str, Setup); 20] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("copy-as", |app| {

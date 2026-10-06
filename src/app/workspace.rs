@@ -17,6 +17,8 @@ use reshiki::typography::{Script, StyleChange};
 mod layout_snapshots;
 #[cfg(test)]
 mod selection_canvas_qa;
+#[cfg(test)]
+mod view_parity_tests;
 
 impl App {
     fn keyboard_context_summary(&self) -> String {
