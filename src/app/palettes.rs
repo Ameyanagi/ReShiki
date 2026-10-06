@@ -354,329 +354,16 @@ impl App {
             .align_y(Alignment::Center)
         ]
         .spacing(8);
-        match family {
-            Family::Atoms => {
-                // Positions follow the 18 periodic-table groups. f-blocks are separate.
-                let rows = [
-                    "H . . . . . . . . . . . . . . . . He",
-                    "Li Be . . . . . . . . . . B C N O F Ne",
-                    "Na Mg . . . . . . . . . . Al Si P S Cl Ar",
-                    "K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr",
-                    "Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe",
-                    "Cs Ba La Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn",
-                    "Fr Ra Ac Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og",
-                    ". . Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu . .",
-                    ". . Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr . .",
-                ];
-                for symbols in rows {
-                    let mut line = row![].spacing(2);
-                    for symbol in symbols.split_whitespace() {
-                        if symbol == "." {
-                            line = line.push(Space::new().width(29).height(29));
-                        } else {
-                            line = line.push(super::workspace::hover_hint(
-                                button(text(symbol).size(12).center())
-                                    .width(29)
-                                    .height(29)
-                                    .padding(1)
-                                    .style(super::workspace::element_control(
-                                        self.element == symbol,
-                                        &self.tab.doc,
-                                        symbol,
-                                    ))
-                                    .on_press(Message::Palette(Action::Atom(symbol.into()))),
-                                element_hint(symbol),
-                                tooltip::Position::Bottom,
-                            ));
-                        }
-                    }
-                    body = body.push(line);
-                }
-                body = body.push(text("Choose an element, then click an atom to replace it or empty space to add it.").size(11));
-            }
-            Family::Bonds => {
-                let presets: Vec<_> = BondPreset::ALL
-                    .iter()
-                    .copied()
-                    .filter(|p| {
-                        !matches!(
-                            p,
-                            BondPreset::Single | BondPreset::Double | BondPreset::Triple
-                        )
-                    })
-                    .collect();
-                for presets in presets.chunks(4) {
-                    let mut line = row![].spacing(8);
-                    for preset in presets {
-                        let mut doc = Document::default();
-                        let a = doc.add_atom("C", Point::new(0., 16.));
-                        let b = doc.add_atom("C", Point::new(60., -16.));
-                        let (order, display, _) = preset.parts();
-                        doc.add_bond(a, b, order, display);
-                        if let Some(bond) = doc.bonds.first_mut() {
-                            preset.apply(bond);
-                        }
-                        line = line.push(super::workspace::hover_hint(
-                            button(
-                                column![
-                                    canvas(PalettePreview(doc)).width(68).height(42),
-                                    text(preset.name()).size(10).center().width(68)
-                                ]
-                                .align_x(Alignment::Center),
-                            )
-                            .padding(4)
-                            .style(super::workspace::control(
-                                self.tool.bond_preset() == Some(*preset),
-                            ))
-                            .on_press(Message::Palette(Action::Bond(*preset))),
-                            bond_hint(*preset, preset.name()),
-                            tooltip::Position::Bottom,
-                        ));
-                    }
-                    body = body.push(line);
-                }
-                body = body.push(text("Choose a style, then draw or click an existing bond. Single, double and triple bonds also have direct toolbar buttons.").size(11));
-            }
-            Family::Rings => {
-                let mut options = Vec::new();
-                for size in 3..=8 {
-                    let mut doc = Document::default();
-                    reshiki::editing::ring(&mut doc, Point::default(), size, false, 42.);
-                    options.push((doc, format!("{size}-membered"), Action::Ring(size, false)));
-                }
-                let mut aromatic = Document::default();
-                reshiki::editing::ring(&mut aromatic, Point::default(), 6, true, 42.);
-                options.push((
-                    RingPreset::Benzene.document(42., false),
-                    "Benzene".into(),
-                    Action::RingPreset(RingPreset::Benzene),
-                ));
-                options.push((aromatic, "Aromatic circle".into(), Action::Ring(6, true)));
-                for p in [
-                    RingPreset::ChairUp,
-                    RingPreset::ChairDown,
-                    RingPreset::Cyclopentadiene,
-                    RingPreset::HaworthFive,
-                    RingPreset::HaworthSix,
-                ] {
-                    options.push((p.document(42., false), p.to_string(), Action::RingPreset(p)));
-                }
-                for group in options.chunks(4) {
-                    let mut line = row![].spacing(8);
-                    for (doc, label, action) in group {
-                        line = line.push(super::workspace::hover_hint(
-                            button(
-                                column![
-                                    canvas(PalettePreview(doc.clone())).width(68).height(48),
-                                    text(label.clone()).size(10).center().width(68)
-                                ]
-                                .align_x(Alignment::Center),
-                            )
-                            .padding(4)
-                            .style(super::workspace::control(match action {
-                                Action::Ring(size, aromatic) => {
-                                    self.tool == Tool::Ring
-                                        && self.ring_size == *size
-                                        && self.aromatic_ring == *aromatic
-                                }
-                                Action::RingPreset(preset) => {
-                                    self.tool == Tool::RingPreset(*preset)
-                                }
-                                _ => false,
-                            }))
-                            .on_press(Message::Palette(action.clone())),
-                            ring_hint(label, action),
-                            tooltip::Position::Bottom,
-                        ));
-                    }
-                    body = body.push(line);
-                }
-                body = body.push(text("Choose a ring, then click an atom or bond to attach. Templates offer more structures.").size(11));
-            }
-            Family::Arrows => {
-                let mut options: Vec<_> = ArrowPreset::ALL
-                    .iter()
-                    .map(|&preset| (preset.to_string(), preset, ArrowStyle::preset(preset)))
-                    .collect();
-                for (label, preset, style) in [
-                    (
-                        "Bold",
-                        ArrowPreset::Forward,
-                        ArrowStyle {
-                            width_pt: 1.4,
-                            head_length_pt: 7.,
-                            head_width_pt: 2.4,
-                            ..ArrowStyle::default()
-                        },
-                    ),
-                    (
-                        "Dashed",
-                        ArrowPreset::Forward,
-                        ArrowStyle {
-                            pattern: LinePattern::Dashed,
-                            ..ArrowStyle::default()
-                        },
-                    ),
-                    (
-                        "Hollow",
-                        ArrowPreset::Forward,
-                        ArrowStyle {
-                            shape: reshiki::arrows::HeadShape::Hollow,
-                            head_length_pt: 6.,
-                            head_width_pt: 2.,
-                            ..ArrowStyle::default()
-                        },
-                    ),
-                    (
-                        "Unequal equilibrium",
-                        ArrowPreset::Equilibrium,
-                        ArrowStyle {
-                            equilibrium_ratio: 0.6,
-                            ..ArrowStyle::preset(ArrowPreset::Equilibrium)
-                        },
-                    ),
-                    (
-                        "Angled",
-                        ArrowPreset::Forward,
-                        ArrowStyle {
-                            shape: reshiki::arrows::HeadShape::Open,
-                            ..ArrowStyle::default()
-                        },
-                    ),
-                    (
-                        "Half arrow",
-                        ArrowPreset::Forward,
-                        ArrowStyle {
-                            head: reshiki::arrows::Head::Left,
-                            ..ArrowStyle::default()
-                        },
-                    ),
-                ] {
-                    options.push((label.into(), preset, style));
-                }
-                for presets in options.chunks(3) {
-                    let mut line = row![].spacing(8);
-                    for (label, preset, style) in presets {
-                        let arrow = Arrow::new(
-                            1,
-                            Point::new(0., 0.),
-                            Point::new(80., 0.),
-                            *preset,
-                            style.clone(),
-                        );
-                        line = line.push(super::workspace::hover_hint(
-                            button(
-                                column![
-                                    canvas(PalettePreview(Document {
-                                        arrows: vec![arrow],
-                                        ..Document::default()
-                                    }))
-                                    .width(94)
-                                    .height(50),
-                                    text(label.clone()).size(10).center().width(94)
-                                ]
-                                .align_x(Alignment::Center),
-                            )
-                            .padding(6)
-                            .style(super::workspace::control(
-                                self.tab.arrow_style == *preset && self.tab.arrows.style == *style,
-                            ))
-                            .on_press(Message::Palette(
-                                if style == &ArrowStyle::preset(*preset) {
-                                    Action::Arrow(*preset)
-                                } else {
-                                    Action::ArrowVariant(*preset, style.clone())
-                                },
-                            )),
-                            label.clone(),
-                            tooltip::Position::Bottom,
-                        ));
-                    }
-                    body = body.push(line);
-                }
-                body = body.push(text("Click to place or change an arrow. Click the same type again to switch direction or half-head side. Drag to draw; drag the middle handle to bend.").size(11));
-            }
+        body = match family {
+            Family::Atoms => self.atom_palette(body),
+            Family::Bonds => self.bond_palette(body),
+            Family::Rings => self.ring_palette(body),
+            Family::Arrows => self.arrow_palette(body),
             Family::Rectangles | Family::Ellipses | Family::Brackets => {
-                for options in graphic_options(family).chunks(3) {
-                    let mut line = row![].spacing(8);
-                    for (label, option) in options {
-                        line = line.push(super::workspace::hover_hint(
-                            button(
-                                column![
-                                    canvas(PalettePreview(option.document()))
-                                        .width(94)
-                                        .height(50),
-                                    text(label.clone()).size(10).width(94).center(),
-                                ]
-                                .align_x(Alignment::Center),
-                            )
-                            .padding(6)
-                            .style(super::workspace::control(
-                                self.tool == Tool::Graphic(option.kind)
-                                    && self.toolbar.graphic(self.tool) == Some(option),
-                            ))
-                            .on_press(Message::Palette(Action::Graphic(option.clone()))),
-                            // T keeps the remembered bracket style and sides;
-                            // it cannot choose this specific palette variant.
-                            label.clone(),
-                            tooltip::Position::Bottom,
-                        ));
-                    }
-                    body = body.push(line);
-                }
-                body = body.push(
-                    text(
-                        "Choose a style, then drag to draw. Hold the toolbar button to change it.",
-                    )
-                    .size(11),
-                );
+                self.graphic_palette(body, family)
             }
-            Family::Symbols | Family::Orbitals => {
-                let tools: Vec<Tool> = match family {
-                    Family::Symbols => reshiki::scientific::SymbolKind::ALL
-                        .iter()
-                        .map(|k| Tool::Graphic(GraphicKind::Symbol(*k)))
-                        .collect(),
-                    _ => reshiki::scientific::OrbitalKind::ALL
-                        .iter()
-                        .map(|k| Tool::Graphic(GraphicKind::Orbital(*k)))
-                        .collect(),
-                };
-                for choices in tools.chunks(3) {
-                    let mut line = row![].spacing(8);
-                    for &tool in choices {
-                        let label = match tool {
-                            Tool::Graphic(kind) => kind.to_string(),
-                            _ => String::new(),
-                        };
-                        line = line.push(super::workspace::hover_hint(
-                            button(
-                                column![
-                                    canvas(super::icons::Glyph(
-                                        super::icons::Icon::Tool(tool),
-                                        true
-                                    ))
-                                    .width(24)
-                                    .height(24),
-                                    text(label.clone()).size(10).width(94).center(),
-                                ]
-                                .align_x(Alignment::Center),
-                            )
-                            .padding(6)
-                            .style(super::workspace::control(self.tool == tool))
-                            .on_press(Message::Palette(Action::Tool(tool))),
-                            if let Tool::Graphic(kind) = tool {
-                                graphic_hint(kind, &label)
-                            } else {
-                                label
-                            },
-                            tooltip::Position::Bottom,
-                        ));
-                    }
-                    body = body.push(line);
-                }
-            }
-        }
+            Family::Symbols | Family::Orbitals => self.scientific_palette(body, family),
+        };
         let popup = container(body)
             .width(if family == Family::Atoms { 590 } else { 360 })
             .padding(14)
@@ -715,6 +402,349 @@ impl App {
             })
         ]
         .into()
+    }
+    fn atom_palette<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+    ) -> iced::widget::Column<'a, Message> {
+        // Positions follow the 18 periodic-table groups. f-blocks are separate.
+        let rows = [
+            "H . . . . . . . . . . . . . . . . He",
+            "Li Be . . . . . . . . . . B C N O F Ne",
+            "Na Mg . . . . . . . . . . Al Si P S Cl Ar",
+            "K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr",
+            "Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe",
+            "Cs Ba La Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn",
+            "Fr Ra Ac Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og",
+            ". . Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu . .",
+            ". . Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr . .",
+        ];
+        for symbols in rows {
+            let mut line = row![].spacing(2);
+            for symbol in symbols.split_whitespace() {
+                if symbol == "." {
+                    line = line.push(Space::new().width(29).height(29));
+                } else {
+                    line = line.push(super::workspace::hover_hint(
+                        button(text(symbol).size(12).center())
+                            .width(29)
+                            .height(29)
+                            .padding(1)
+                            .style(super::workspace::element_control(
+                                self.element == symbol,
+                                &self.tab.doc,
+                                symbol,
+                            ))
+                            .on_press(Message::Palette(Action::Atom(symbol.into()))),
+                        element_hint(symbol),
+                        tooltip::Position::Bottom,
+                    ));
+                }
+            }
+            body = body.push(line);
+        }
+        body = body.push(
+            text("Choose an element, then click an atom to replace it or empty space to add it.")
+                .size(11),
+        );
+        body
+    }
+    fn bond_palette<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+    ) -> iced::widget::Column<'a, Message> {
+        let presets: Vec<_> = BondPreset::ALL
+            .iter()
+            .copied()
+            .filter(|p| {
+                !matches!(
+                    p,
+                    BondPreset::Single | BondPreset::Double | BondPreset::Triple
+                )
+            })
+            .collect();
+        for presets in presets.chunks(4) {
+            let mut line = row![].spacing(8);
+            for preset in presets {
+                let mut doc = Document::default();
+                let a = doc.add_atom("C", Point::new(0., 16.));
+                let b = doc.add_atom("C", Point::new(60., -16.));
+                let (order, display, _) = preset.parts();
+                doc.add_bond(a, b, order, display);
+                if let Some(bond) = doc.bonds.first_mut() {
+                    preset.apply(bond);
+                }
+                line = line.push(super::workspace::hover_hint(
+                    button(
+                        column![
+                            canvas(PalettePreview(doc)).width(68).height(42),
+                            text(preset.name()).size(10).center().width(68)
+                        ]
+                        .align_x(Alignment::Center),
+                    )
+                    .padding(4)
+                    .style(super::workspace::control(
+                        self.tool.bond_preset() == Some(*preset),
+                    ))
+                    .on_press(Message::Palette(Action::Bond(*preset))),
+                    bond_hint(*preset, preset.name()),
+                    tooltip::Position::Bottom,
+                ));
+            }
+            body = body.push(line);
+        }
+        body = body.push(text("Choose a style, then draw or click an existing bond. Single, double and triple bonds also have direct toolbar buttons.").size(11));
+        body
+    }
+    fn ring_palette<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+    ) -> iced::widget::Column<'a, Message> {
+        let mut options = Vec::new();
+        for size in 3..=8 {
+            let mut doc = Document::default();
+            reshiki::editing::ring(&mut doc, Point::default(), size, false, 42.);
+            options.push((doc, format!("{size}-membered"), Action::Ring(size, false)));
+        }
+        let mut aromatic = Document::default();
+        reshiki::editing::ring(&mut aromatic, Point::default(), 6, true, 42.);
+        options.push((
+            RingPreset::Benzene.document(42., false),
+            "Benzene".into(),
+            Action::RingPreset(RingPreset::Benzene),
+        ));
+        options.push((aromatic, "Aromatic circle".into(), Action::Ring(6, true)));
+        for p in [
+            RingPreset::ChairUp,
+            RingPreset::ChairDown,
+            RingPreset::Cyclopentadiene,
+            RingPreset::HaworthFive,
+            RingPreset::HaworthSix,
+        ] {
+            options.push((p.document(42., false), p.to_string(), Action::RingPreset(p)));
+        }
+        for group in options.chunks(4) {
+            let mut line = row![].spacing(8);
+            for (doc, label, action) in group {
+                line = line.push(super::workspace::hover_hint(
+                    button(
+                        column![
+                            canvas(PalettePreview(doc.clone())).width(68).height(48),
+                            text(label.clone()).size(10).center().width(68)
+                        ]
+                        .align_x(Alignment::Center),
+                    )
+                    .padding(4)
+                    .style(super::workspace::control(match action {
+                        Action::Ring(size, aromatic) => {
+                            self.tool == Tool::Ring
+                                && self.ring_size == *size
+                                && self.aromatic_ring == *aromatic
+                        }
+                        Action::RingPreset(preset) => self.tool == Tool::RingPreset(*preset),
+                        _ => false,
+                    }))
+                    .on_press(Message::Palette(action.clone())),
+                    ring_hint(label, action),
+                    tooltip::Position::Bottom,
+                ));
+            }
+            body = body.push(line);
+        }
+        body = body.push(text("Choose a ring, then click an atom or bond to attach. Templates offer more structures.").size(11));
+        body
+    }
+    fn arrow_palette<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+    ) -> iced::widget::Column<'a, Message> {
+        let mut options: Vec<_> = ArrowPreset::ALL
+            .iter()
+            .map(|&preset| (preset.to_string(), preset, ArrowStyle::preset(preset)))
+            .collect();
+        for (label, preset, style) in [
+            (
+                "Bold",
+                ArrowPreset::Forward,
+                ArrowStyle {
+                    width_pt: 1.4,
+                    head_length_pt: 7.,
+                    head_width_pt: 2.4,
+                    ..ArrowStyle::default()
+                },
+            ),
+            (
+                "Dashed",
+                ArrowPreset::Forward,
+                ArrowStyle {
+                    pattern: LinePattern::Dashed,
+                    ..ArrowStyle::default()
+                },
+            ),
+            (
+                "Hollow",
+                ArrowPreset::Forward,
+                ArrowStyle {
+                    shape: reshiki::arrows::HeadShape::Hollow,
+                    head_length_pt: 6.,
+                    head_width_pt: 2.,
+                    ..ArrowStyle::default()
+                },
+            ),
+            (
+                "Unequal equilibrium",
+                ArrowPreset::Equilibrium,
+                ArrowStyle {
+                    equilibrium_ratio: 0.6,
+                    ..ArrowStyle::preset(ArrowPreset::Equilibrium)
+                },
+            ),
+            (
+                "Angled",
+                ArrowPreset::Forward,
+                ArrowStyle {
+                    shape: reshiki::arrows::HeadShape::Open,
+                    ..ArrowStyle::default()
+                },
+            ),
+            (
+                "Half arrow",
+                ArrowPreset::Forward,
+                ArrowStyle {
+                    head: reshiki::arrows::Head::Left,
+                    ..ArrowStyle::default()
+                },
+            ),
+        ] {
+            options.push((label.into(), preset, style));
+        }
+        for presets in options.chunks(3) {
+            let mut line = row![].spacing(8);
+            for (label, preset, style) in presets {
+                let arrow = Arrow::new(
+                    1,
+                    Point::new(0., 0.),
+                    Point::new(80., 0.),
+                    *preset,
+                    style.clone(),
+                );
+                line = line.push(super::workspace::hover_hint(
+                    button(
+                        column![
+                            canvas(PalettePreview(Document {
+                                arrows: vec![arrow],
+                                ..Document::default()
+                            }))
+                            .width(94)
+                            .height(50),
+                            text(label.clone()).size(10).center().width(94)
+                        ]
+                        .align_x(Alignment::Center),
+                    )
+                    .padding(6)
+                    .style(super::workspace::control(
+                        self.tab.arrow_style == *preset && self.tab.arrows.style == *style,
+                    ))
+                    .on_press(Message::Palette(
+                        if style == &ArrowStyle::preset(*preset) {
+                            Action::Arrow(*preset)
+                        } else {
+                            Action::ArrowVariant(*preset, style.clone())
+                        },
+                    )),
+                    label.clone(),
+                    tooltip::Position::Bottom,
+                ));
+            }
+            body = body.push(line);
+        }
+        body = body.push(text("Click to place or change an arrow. Click the same type again to switch direction or half-head side. Drag to draw; drag the middle handle to bend.").size(11));
+        body
+    }
+    fn graphic_palette<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+        family: Family,
+    ) -> iced::widget::Column<'a, Message> {
+        for options in graphic_options(family).chunks(3) {
+            let mut line = row![].spacing(8);
+            for (label, option) in options {
+                line = line.push(super::workspace::hover_hint(
+                    button(
+                        column![
+                            canvas(PalettePreview(option.document()))
+                                .width(94)
+                                .height(50),
+                            text(label.clone()).size(10).width(94).center(),
+                        ]
+                        .align_x(Alignment::Center),
+                    )
+                    .padding(6)
+                    .style(super::workspace::control(
+                        self.tool == Tool::Graphic(option.kind)
+                            && self.toolbar.graphic(self.tool) == Some(option),
+                    ))
+                    .on_press(Message::Palette(Action::Graphic(option.clone()))),
+                    // T keeps the remembered bracket style and sides;
+                    // it cannot choose this specific palette variant.
+                    label.clone(),
+                    tooltip::Position::Bottom,
+                ));
+            }
+            body = body.push(line);
+        }
+        body = body.push(
+            text("Choose a style, then drag to draw. Hold the toolbar button to change it.")
+                .size(11),
+        );
+        body
+    }
+    fn scientific_palette<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+        family: Family,
+    ) -> iced::widget::Column<'a, Message> {
+        let tools: Vec<Tool> = match family {
+            Family::Symbols => reshiki::scientific::SymbolKind::ALL
+                .iter()
+                .map(|k| Tool::Graphic(GraphicKind::Symbol(*k)))
+                .collect(),
+            _ => reshiki::scientific::OrbitalKind::ALL
+                .iter()
+                .map(|k| Tool::Graphic(GraphicKind::Orbital(*k)))
+                .collect(),
+        };
+        for choices in tools.chunks(3) {
+            let mut line = row![].spacing(8);
+            for &tool in choices {
+                let label = match tool {
+                    Tool::Graphic(kind) => kind.to_string(),
+                    _ => String::new(),
+                };
+                line = line.push(super::workspace::hover_hint(
+                    button(
+                        column![
+                            canvas(super::icons::Glyph(super::icons::Icon::Tool(tool), true))
+                                .width(24)
+                                .height(24),
+                            text(label.clone()).size(10).width(94).center(),
+                        ]
+                        .align_x(Alignment::Center),
+                    )
+                    .padding(6)
+                    .style(super::workspace::control(self.tool == tool))
+                    .on_press(Message::Palette(Action::Tool(tool))),
+                    if let Tool::Graphic(kind) = tool {
+                        graphic_hint(kind, &label)
+                    } else {
+                        label
+                    },
+                    tooltip::Position::Bottom,
+                ));
+            }
+            body = body.push(line);
+        }
+        body
     }
     pub(super) fn select_tool(&mut self, tool: Tool) {
         self.tab.erase_stroke = false;
