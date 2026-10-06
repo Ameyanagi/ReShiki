@@ -926,6 +926,18 @@ pub fn ring_oriented(
     Ok(ids)
 }
 
+const INVALID_RING_GEOMETRY: &str = "Invalid ring attachment geometry.";
+
+/// The clicked point, clamped ring size, hit radius and optional drag that
+/// every ring_placement stage reads.
+#[derive(Clone, Copy)]
+struct RingRequest {
+    p: Point,
+    n: usize,
+    radius: f32,
+    direction: Option<Point>,
+}
+
 /// The drawing `ring_oriented` would produce. The live preview and commit
 /// both build it, so a rejected preview matches the rejected click.
 pub fn ring_placement(
@@ -936,48 +948,16 @@ pub fn ring_placement(
     radius: f32,
     direction: Option<Point>,
 ) -> Result<(Document, Vec<u64>), RingRejection> {
-    const INVALID: &str = "Invalid ring attachment geometry.";
-    if !p.x.is_finite()
-        || !p.y.is_finite()
-        || !radius.is_finite()
-        || radius < 0.
-        || direction.is_some_and(|p| !p.x.is_finite() || !p.y.is_finite())
-    {
-        return Err(RingRejection::new(INVALID, "Invalid ring geometry"));
-    }
+    check_ring_request(p, radius, direction)?;
     let n = size.clamp(3, 8) as usize;
+    let request = RingRequest {
+        p,
+        n,
+        radius,
+        direction,
+    };
     if aromatic && n == 6 {
-        let drawing = crate::rings::Drawing {
-            preset: crate::rings::Preset::Benzene,
-            length: crate::style::DEFAULT.bond_length_world,
-            alternate: false,
-            connect: false,
-        };
-        // Ring construction historically accepts zero to disable snapping.
-        // Keep that convention here without relaxing the template API's
-        // positive-radius contract or accidentally hitting an existing label.
-        let empty = Document::default();
-        let base = if radius == 0. { &empty } else { doc };
-        let (mut result, ids) = drawing
-            .place(base, p, direction, if radius == 0. { 1. } else { radius })
-            .map_err(|message| {
-                let mut rejection = RingRejection::new(message, attachment_label(doc, p, radius));
-                rejection.atom = doc.nearest(p, radius).filter(|_| radius > 0.);
-                rejection
-            })?;
-        let mut circles: Vec<_> = crate::aromatic::circles(base)
-            .into_iter()
-            .map(|c| c.atoms)
-            .collect();
-        circles.push(ids.clone());
-        crate::templates::show_circles(&mut result, &circles);
-        return Ok(if radius == 0. {
-            let mut doc = doc.clone();
-            let ids = append(&mut doc, &result, Point::default());
-            (doc, ids)
-        } else {
-            (result, ids)
-        });
+        return aromatic_hexagon(doc, p, radius, direction);
     }
     let atom = doc.nearest(p, radius);
     let bond = if atom.is_none() {
@@ -990,118 +970,9 @@ pub fn ring_placement(
     let mut result = doc.clone();
     let mut ids = vec![];
     if let Some(index) = bond {
-        let Some(b) = doc.bonds.get(index).cloned() else {
-            return Err(RingRejection::new(
-                "The attachment bond is no longer available.",
-                "The bond is unavailable",
-            ));
-        };
-        let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
-            return Err(RingRejection::new(
-                "The attachment bond has missing atoms.",
-                "The bond is unavailable",
-            ));
-        };
-        let (a, z) = (a.position, z.position);
-        let positions = |sign: f32| {
-            let mut points = vec![a, z];
-            let mut vector = Point::new(z.x - a.x, z.y - a.y);
-            let (s, c) = (sign * std::f32::consts::TAU / n as f32).sin_cos();
-            for _ in 2..n {
-                vector = Point::new(vector.x * c - vector.y * s, vector.x * s + vector.y * c);
-                if let Some(last) = points.last().copied() {
-                    points.push(last.offset(vector.x, vector.y));
-                }
-            }
-            points
-        };
-        let score = |points: &[Point]| {
-            points
-                .iter()
-                .skip(2)
-                .map(|p| {
-                    doc.atoms
-                        .iter()
-                        .map(|a| 1.0 / (p.distance(a.position) + 1.0).powi(2))
-                        .sum::<f32>()
-                })
-                .sum::<f32>()
-        };
-        let first = positions(1.0);
-        let second = positions(-1.0);
-        let side = direction.map(|p| (z.x - a.x) * (p.y - a.y) - (z.y - a.y) * (p.x - a.x));
-        let first_side = side
-            .filter(|side| side.abs() > radius * a.distance(z))
-            .map(|side| side > 0.0)
-            .unwrap_or_else(|| score(&first) <= score(&second));
-        let points = if first_side { first } else { second };
-        let appearance = b.validate_appearance().is_ok();
-        if !appearance || b.stereo.is_some() || !b.stereo_atoms.is_empty() {
-            return Err(RingRejection {
-                outline: points,
-                ..RingRejection::new(
-                    "Choose a supported bond appearance without assigned stereochemistry.",
-                    if appearance {
-                        "The bond has stereochemistry"
-                    } else {
-                        "Unsupported bond style"
-                    },
-                )
-            });
-        }
-        ids.extend([b.a, b.b]);
-        for p in points.iter().skip(2) {
-            ids.push(result.add_atom("C", *p));
-        }
+        fused_ring_vertices(doc, request, index, &mut result, &mut ids)?;
     } else {
-        let neighbors: Vec<_> = doc
-            .bonds
-            .iter()
-            .filter_map(|b| {
-                let other = if Some(b.a) == atom {
-                    b.b
-                } else if Some(b.b) == atom {
-                    b.a
-                } else {
-                    return None;
-                };
-                doc.atom(other).map(|a| a.position)
-            })
-            .collect();
-        let anchor = atom
-            .and_then(|id| doc.atom(id))
-            .map(|a| a.position)
-            .unwrap_or(p);
-        let length = if neighbors.is_empty() {
-            crate::style::DEFAULT.bond_length_world
-        } else {
-            neighbors.iter().map(|p| p.distance(anchor)).sum::<f32>() / neighbors.len() as f32
-        };
-        let r = length / (2.0 * (std::f32::consts::PI / n as f32).sin());
-        // The center belongs in the open angular gap, opposite the substituent
-        // at a terminal atom. Never assume that the ring lies to its left.
-        let angle = direction
-            .filter(|p| p.distance(anchor) > radius)
-            .map(|p| (p.y - anchor.y).atan2(p.x - anchor.x))
-            .unwrap_or_else(|| open_angle(anchor, &neighbors));
-        let center = if atom.is_some() {
-            anchor.offset(r * angle.cos(), r * angle.sin())
-        } else {
-            p
-        };
-        let phase = if atom.is_some() {
-            angle + std::f32::consts::PI
-        } else {
-            0.0
-        };
-        for i in 0..n {
-            let angle = phase + i as f32 * std::f32::consts::TAU / n as f32;
-            ids.push(if let Some(id) = atom.filter(|_| i == 0) {
-                id
-            } else {
-                result.add_atom("C", center.offset(angle.cos() * r, angle.sin() * r))
-            });
-        }
+        attached_ring_vertices(doc, request, atom, &mut result, &mut ids);
     }
     for (i, (&a, &b)) in ids
         .iter()
@@ -1121,6 +992,221 @@ pub fn ring_placement(
             }
         }
     }
+    check_ring_candidate(doc, result, ids)
+}
+
+/// Reject non-finite or negative input before any geometry is built.
+fn check_ring_request(
+    p: Point,
+    radius: f32,
+    direction: Option<Point>,
+) -> Result<(), RingRejection> {
+    if !p.x.is_finite()
+        || !p.y.is_finite()
+        || !radius.is_finite()
+        || radius < 0.
+        || direction.is_some_and(|p| !p.x.is_finite() || !p.y.is_finite())
+    {
+        return Err(RingRejection::new(
+            INVALID_RING_GEOMETRY,
+            "Invalid ring geometry",
+        ));
+    }
+    Ok(())
+}
+
+/// The aromatic six-ring, built as a benzene template with its circle.
+fn aromatic_hexagon(
+    doc: &Document,
+    p: Point,
+    radius: f32,
+    direction: Option<Point>,
+) -> Result<(Document, Vec<u64>), RingRejection> {
+    let drawing = crate::rings::Drawing {
+        preset: crate::rings::Preset::Benzene,
+        length: crate::style::DEFAULT.bond_length_world,
+        alternate: false,
+        connect: false,
+    };
+    // Ring construction historically accepts zero to disable snapping.
+    // Keep that convention here without relaxing the template API's
+    // positive-radius contract or accidentally hitting an existing label.
+    let empty = Document::default();
+    let base = if radius == 0. { &empty } else { doc };
+    let (mut result, ids) = drawing
+        .place(base, p, direction, if radius == 0. { 1. } else { radius })
+        .map_err(|message| {
+            let mut rejection = RingRejection::new(message, attachment_label(doc, p, radius));
+            rejection.atom = doc.nearest(p, radius).filter(|_| radius > 0.);
+            rejection
+        })?;
+    let mut circles: Vec<_> = crate::aromatic::circles(base)
+        .into_iter()
+        .map(|c| c.atoms)
+        .collect();
+    circles.push(ids.clone());
+    crate::templates::show_circles(&mut result, &circles);
+    Ok(if radius == 0. {
+        let mut doc = doc.clone();
+        let ids = append(&mut doc, &result, Point::default());
+        (doc, ids)
+    } else {
+        (result, ids)
+    })
+}
+
+/// Add the new vertices of a ring fused to the bond at `index`, on the
+/// dragged side or the less crowded one.
+fn fused_ring_vertices(
+    doc: &Document,
+    request: RingRequest,
+    index: usize,
+    result: &mut Document,
+    ids: &mut Vec<u64>,
+) -> Result<(), RingRejection> {
+    let RingRequest {
+        n,
+        radius,
+        direction,
+        ..
+    } = request;
+    let Some(b) = doc.bonds.get(index).cloned() else {
+        return Err(RingRejection::new(
+            "The attachment bond is no longer available.",
+            "The bond is unavailable",
+        ));
+    };
+    let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
+        return Err(RingRejection::new(
+            "The attachment bond has missing atoms.",
+            "The bond is unavailable",
+        ));
+    };
+    let (a, z) = (a.position, z.position);
+    let positions = |sign: f32| {
+        let mut points = vec![a, z];
+        let mut vector = Point::new(z.x - a.x, z.y - a.y);
+        let (s, c) = (sign * std::f32::consts::TAU / n as f32).sin_cos();
+        for _ in 2..n {
+            vector = Point::new(vector.x * c - vector.y * s, vector.x * s + vector.y * c);
+            if let Some(last) = points.last().copied() {
+                points.push(last.offset(vector.x, vector.y));
+            }
+        }
+        points
+    };
+    let score = |points: &[Point]| {
+        points
+            .iter()
+            .skip(2)
+            .map(|p| {
+                doc.atoms
+                    .iter()
+                    .map(|a| 1.0 / (p.distance(a.position) + 1.0).powi(2))
+                    .sum::<f32>()
+            })
+            .sum::<f32>()
+    };
+    let first = positions(1.0);
+    let second = positions(-1.0);
+    let side = direction.map(|p| (z.x - a.x) * (p.y - a.y) - (z.y - a.y) * (p.x - a.x));
+    let first_side = side
+        .filter(|side| side.abs() > radius * a.distance(z))
+        .map(|side| side > 0.0)
+        .unwrap_or_else(|| score(&first) <= score(&second));
+    let points = if first_side { first } else { second };
+    let appearance = b.validate_appearance().is_ok();
+    if !appearance || b.stereo.is_some() || !b.stereo_atoms.is_empty() {
+        return Err(RingRejection {
+            outline: points,
+            ..RingRejection::new(
+                "Choose a supported bond appearance without assigned stereochemistry.",
+                if appearance {
+                    "The bond has stereochemistry"
+                } else {
+                    "Unsupported bond style"
+                },
+            )
+        });
+    }
+    ids.extend([b.a, b.b]);
+    for p in points.iter().skip(2) {
+        ids.push(result.add_atom("C", *p));
+    }
+    Ok(())
+}
+
+/// Add the vertices of a ring attached at `atom`, or free-standing at `p`.
+fn attached_ring_vertices(
+    doc: &Document,
+    request: RingRequest,
+    atom: Option<u64>,
+    result: &mut Document,
+    ids: &mut Vec<u64>,
+) {
+    let RingRequest {
+        p,
+        n,
+        radius,
+        direction,
+    } = request;
+    let neighbors: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter_map(|b| {
+            let other = if Some(b.a) == atom {
+                b.b
+            } else if Some(b.b) == atom {
+                b.a
+            } else {
+                return None;
+            };
+            doc.atom(other).map(|a| a.position)
+        })
+        .collect();
+    let anchor = atom
+        .and_then(|id| doc.atom(id))
+        .map(|a| a.position)
+        .unwrap_or(p);
+    let length = if neighbors.is_empty() {
+        crate::style::DEFAULT.bond_length_world
+    } else {
+        neighbors.iter().map(|p| p.distance(anchor)).sum::<f32>() / neighbors.len() as f32
+    };
+    let r = length / (2.0 * (std::f32::consts::PI / n as f32).sin());
+    // The center belongs in the open angular gap, opposite the substituent
+    // at a terminal atom. Never assume that the ring lies to its left.
+    let angle = direction
+        .filter(|p| p.distance(anchor) > radius)
+        .map(|p| (p.y - anchor.y).atan2(p.x - anchor.x))
+        .unwrap_or_else(|| open_angle(anchor, &neighbors));
+    let center = if atom.is_some() {
+        anchor.offset(r * angle.cos(), r * angle.sin())
+    } else {
+        p
+    };
+    let phase = if atom.is_some() {
+        angle + std::f32::consts::PI
+    } else {
+        0.0
+    };
+    for i in 0..n {
+        let angle = phase + i as f32 * std::f32::consts::TAU / n as f32;
+        ids.push(if let Some(id) = atom.filter(|_| i == 0) {
+            id
+        } else {
+            result.add_atom("C", center.offset(angle.cos() * r, angle.sin() * r))
+        });
+    }
+}
+
+/// Check the candidate's shared atoms, edge length, overlaps, reactions
+/// and validity, rejecting with the ring's outline.
+fn check_ring_candidate(
+    doc: &Document,
+    mut result: Document,
+    ids: Vec<u64>,
+) -> Result<(Document, Vec<u64>), RingRejection> {
     let outline: Vec<_> = ids
         .iter()
         .filter_map(|id| result.atom(*id).map(|a| a.position))
@@ -1193,7 +1279,7 @@ pub fn ring_placement(
     })?;
     result
         .validate()
-        .map_err(|_| reject(INVALID, "Invalid ring geometry", None))?;
+        .map_err(|_| reject(INVALID_RING_GEOMETRY, "Invalid ring geometry", None))?;
     Ok((result, ids))
 }
 
