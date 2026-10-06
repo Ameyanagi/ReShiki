@@ -1546,10 +1546,66 @@ impl App {
     }
 
     fn templates_panel(&self) -> Element<'_, Message> {
-        use super::template_library::{Action as A, Filter};
+        use super::template_library::Action as A;
         let action = Message::Templates;
         let state = &self.templates;
         let mut body = column![section("TEMPLATE LIBRARY")].spacing(8);
+        body = self.template_browse_controls(body);
+        if let Some(error) = &state.notice {
+            body = body.push(
+                text(error)
+                    .size(11)
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
+            );
+        }
+        if state.editing {
+            body = body
+                .push(section(if state.draft.is_some() {
+                    "NEW TEMPLATE"
+                } else {
+                    "EDIT TEMPLATE"
+                }))
+                .push(
+                    crate::appearance::text_input("Template name", &state.name)
+                        .on_input(|s| Message::Templates(A::Name(s)))
+                        .size(12)
+                        .padding(7),
+                )
+                .push(
+                    crate::appearance::text_input("Collection", &state.category)
+                        .on_input(|s| Message::Templates(A::Category(s)))
+                        .size(12)
+                        .padding(7),
+                )
+                .push(
+                    row![
+                        command("Save", action(A::SaveDetails)).style(crate::appearance::primary),
+                        command("Cancel", action(A::CancelDetails))
+                    ]
+                    .spacing(6),
+                );
+        }
+        if state.active
+            && let Some(t) = state.library.get(self.template_index)
+        {
+            body = self.active_template_details(body, t);
+        }
+        if state.undo.is_some() {
+            body = body.push(command("Undo library change", action(A::Restore)));
+        }
+        if !state.active && !state.editing {
+            body = self.template_library_browser(body);
+        }
+        body.into()
+    }
+
+    fn template_browse_controls<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+    ) -> iced::widget::Column<'a, Message> {
+        use super::template_library::{Action as A, Filter};
+        let action = Message::Templates;
+        let state = &self.templates;
         if !state.active {
             body = body.push(
                 column![
@@ -1594,224 +1650,200 @@ impl App {
         } else {
             body = body.push(command("← Browse templates", action(A::Browse)));
         }
-        if let Some(error) = &state.notice {
-            body = body.push(
-                text(error)
-                    .size(11)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
-            );
-        }
-        if state.editing {
-            body = body
-                .push(section(if state.draft.is_some() {
-                    "NEW TEMPLATE"
-                } else {
-                    "EDIT TEMPLATE"
-                }))
-                .push(
-                    crate::appearance::text_input("Template name", &state.name)
-                        .on_input(|s| Message::Templates(A::Name(s)))
-                        .size(12)
-                        .padding(7),
+        body
+    }
+
+    fn active_template_details<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+        t: &'a reshiki::templates::Template,
+    ) -> iced::widget::Column<'a, Message> {
+        use super::template_library::Action as A;
+        let action = Message::Templates;
+        let state = &self.templates;
+        let preview: Element<'_, reshiki::templates::Anchor> =
+            canvas(crate::canvas::TemplateAnchorPreview {
+                document: &t.document,
+                anchor: state.anchor,
+            })
+            .width(Length::Fill)
+            .height(145)
+            .into();
+        body = body
+            .push(horizontal_line())
+            .push(text(&t.name).size(14))
+            .push(
+                crate::appearance::pick_list(
+                    [
+                        reshiki::templates::Connection::Connect,
+                        reshiki::templates::Connection::ShareAtom,
+                        reshiki::templates::Connection::FuseBond,
+                    ],
+                    Some(state.connection),
+                    |mode| Message::Templates(A::Connection(mode)),
                 )
-                .push(
-                    crate::appearance::text_input("Collection", &state.category)
-                        .on_input(|s| Message::Templates(A::Category(s)))
-                        .size(12)
-                        .padding(7),
-                )
-                .push(
-                    row![
-                        command("Save", action(A::SaveDetails)).style(crate::appearance::primary),
-                        command("Cancel", action(A::CancelDetails))
-                    ]
-                    .spacing(6),
-                );
-        }
-        if state.active
-            && let Some(t) = state.library.get(self.template_index)
-        {
-            let preview: Element<'_, reshiki::templates::Anchor> =
-                canvas(crate::canvas::TemplateAnchorPreview {
-                    document: &t.document,
-                    anchor: state.anchor,
-                })
-                .width(Length::Fill)
-                .height(145)
-                .into();
-            body = body
-                .push(horizontal_line())
-                .push(text(&t.name).size(14))
-                .push(
-                    crate::appearance::pick_list(
-                        [
-                            reshiki::templates::Connection::Connect,
-                            reshiki::templates::Connection::ShareAtom,
-                            reshiki::templates::Connection::FuseBond,
-                        ],
-                        Some(state.connection),
-                        |mode| Message::Templates(A::Connection(mode)),
+                .text_size(12)
+                .width(Length::Fill),
+            )
+            .push(preview.map(|a| Message::Templates(A::Anchor(a))))
+            .push(text(state.connection.hint()).size(11).style(muted_text))
+            .push(
+                row![
+                    text(state.anchor.to_string()).size(11).width(Length::Fill),
+                    command("Auto", action(A::Anchor(reshiki::templates::Anchor::Auto)))
+                ]
+                .align_y(Alignment::Center),
+            )
+            .push(
+                row![
+                    command("Place", Message::InsertTemplate(self.template_index)),
+                    command(
+                        if state.library.favorite(&t.id) {
+                            "★ Saved"
+                        } else {
+                            "☆ Favorite"
+                        },
+                        action(A::Favorite(self.template_index))
                     )
+                ]
+                .spacing(6),
+            )
+            .push(
+                checkbox(state.repeat)
+                    .label("Keep placing")
                     .text_size(12)
-                    .width(Length::Fill),
-                )
-                .push(preview.map(|a| Message::Templates(A::Anchor(a))))
-                .push(text(state.connection.hint()).size(11).style(muted_text))
-                .push(
-                    row![
-                        text(state.anchor.to_string()).size(11).width(Length::Fill),
-                        command("Auto", action(A::Anchor(reshiki::templates::Anchor::Auto)))
-                    ]
-                    .align_y(Alignment::Center),
-                )
-                .push(
-                    row![
-                        command("Place", Message::InsertTemplate(self.template_index)),
-                        command(
-                            if state.library.favorite(&t.id) {
-                                "★ Saved"
-                            } else {
-                                "☆ Favorite"
-                            },
-                            action(A::Favorite(self.template_index))
-                        )
-                    ]
-                    .spacing(6),
-                )
-                .push(
-                    checkbox(state.repeat)
-                        .label("Keep placing")
-                        .text_size(12)
-                        .size(14)
-                        .on_toggle(|v| Message::Templates(A::Repeat(v))),
-                )
-                .push(
-                    text(if state.repeat {
-                        "Click again to add another copy. Escape finishes placement."
-                    } else {
-                        "Returns to Select after one placement."
-                    })
-                    .size(11)
-                    .style(muted_text),
-                );
-            if !t.note.is_empty() {
-                body = body.push(text(&t.note).size(11).style(muted_text));
-            }
-            if self.template_index >= reshiki::templates::LIBRARY.len() {
-                body = body
-                    .push(
-                        row![
-                            command("Edit", action(A::EditDetails)),
-                            command("Remember anchor", action(A::RememberAnchor))
-                        ]
-                        .spacing(5),
-                    )
-                    .push(
-                        button(text("Replace from selection").size(11))
-                            .padding(6)
-                            .on_press_maybe(
-                                (!self.tab.selected.is_empty()).then(|| action(A::Replace)),
-                            ),
-                    )
-                    .push(command("Remove template", action(A::Remove)));
-            }
-        }
-        if state.undo.is_some() {
-            body = body.push(command("Undo library change", action(A::Restore)));
-        }
-        if !state.active && !state.editing {
-            if state.collection == "All collections"
-                && state.query.trim().is_empty()
-                && state.filter == Filter::All
-            {
-                let mut categories = std::collections::BTreeMap::<
-                    &str,
-                    (usize, &reshiki::templates::Template),
-                >::new();
-                for template in state.library.iter() {
-                    let name = super::template_library::category(template);
-                    let entry = categories.entry(name).or_insert((0, template));
-                    entry.0 += 1;
-                }
-                body = body
-                    .push(horizontal_line())
-                    .push(text("CATEGORIES").size(10).style(muted_text));
-                for (name, (count, sample)) in categories {
-                    let preview: Element<'_, Message> =
-                        canvas(crate::canvas::TemplateThumbnail(&sample.document))
-                            .width(26)
-                            .height(26)
-                            .into();
-                    body = body.push(
-                        button(
-                            row![
-                                preview,
-                                text(name).size(12).width(Length::Fill),
-                                text(count.to_string()).size(11).style(muted_text),
-                                text("›").size(15)
-                            ]
-                            .spacing(7)
-                            .align_y(Alignment::Center),
-                        )
-                        .padding([3, 6])
-                        .width(Length::Fill)
-                        .style(button::text)
-                        .on_press(action(A::Collection(name.into()))),
-                    );
-                }
-                return body.into();
-            }
-            let mut matches: Vec<_> = state
-                .library
-                .iter()
-                .enumerate()
-                .filter(|(i, t)| state.matches(*i, t))
-                .collect();
-            matches.sort_by_key(|(_, t)| state.search_rank(t));
-            let empty = matches.is_empty();
-            body = body.push(horizontal_line()).push(
-                text(format!(
-                    "{} · {} templates",
-                    if state.collection == "All collections" {
-                        "Results"
-                    } else {
-                        &state.collection
-                    },
-                    matches.len()
-                ))
+                    .size(14)
+                    .on_toggle(|v| Message::Templates(A::Repeat(v))),
+            )
+            .push(
+                text(if state.repeat {
+                    "Click again to add another copy. Escape finishes placement."
+                } else {
+                    "Returns to Select after one placement."
+                })
                 .size(11)
                 .style(muted_text),
             );
-            for tiles in matches.chunks(4) {
-                let mut line = row![].spacing(4);
-                for (index, template) in tiles {
-                    let preview: Element<'_, Message> =
-                        canvas(crate::canvas::TemplateThumbnail(&template.document))
-                            .width(44)
-                            .height(44)
-                            .into();
-                    line = line.push(hover_hint(
-                        button(preview)
-                            .padding(4)
-                            .width(52)
-                            .height(52)
-                            .style(control(state.active && self.template_index == *index))
-                            .on_press(Message::InsertTemplate(*index)),
-                        template.name.as_str(),
-                        tooltip::Position::Left,
-                    ));
-                }
-                body = body.push(line);
+        if !t.note.is_empty() {
+            body = body.push(text(&t.note).size(11).style(muted_text));
+        }
+        if self.template_index >= reshiki::templates::LIBRARY.len() {
+            body = body
+                .push(
+                    row![
+                        command("Edit", action(A::EditDetails)),
+                        command("Remember anchor", action(A::RememberAnchor))
+                    ]
+                    .spacing(5),
+                )
+                .push(
+                    button(text("Replace from selection").size(11))
+                        .padding(6)
+                        .on_press_maybe(
+                            (!self.tab.selected.is_empty()).then(|| action(A::Replace)),
+                        ),
+                )
+                .push(command("Remove template", action(A::Remove)));
+        }
+        body
+    }
+
+    fn template_library_browser<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+    ) -> iced::widget::Column<'a, Message> {
+        use super::template_library::{Action as A, Filter};
+        let action = Message::Templates;
+        let state = &self.templates;
+        if state.collection == "All collections"
+            && state.query.trim().is_empty()
+            && state.filter == Filter::All
+        {
+            let mut categories =
+                std::collections::BTreeMap::<&str, (usize, &reshiki::templates::Template)>::new();
+            for template in state.library.iter() {
+                let name = super::template_library::category(template);
+                let entry = categories.entry(name).or_insert((0, template));
+                entry.0 += 1;
             }
-            if empty {
+            body = body
+                .push(horizontal_line())
+                .push(text("CATEGORIES").size(10).style(muted_text));
+            for (name, (count, sample)) in categories {
+                let preview: Element<'_, Message> =
+                    canvas(crate::canvas::TemplateThumbnail(&sample.document))
+                        .width(26)
+                        .height(26)
+                        .into();
                 body = body.push(
-                    text("No matching templates. Try another search or save a selection.")
-                        .size(12)
-                        .style(muted_text),
+                    button(
+                        row![
+                            preview,
+                            text(name).size(12).width(Length::Fill),
+                            text(count.to_string()).size(11).style(muted_text),
+                            text("›").size(15)
+                        ]
+                        .spacing(7)
+                        .align_y(Alignment::Center),
+                    )
+                    .padding([3, 6])
+                    .width(Length::Fill)
+                    .style(button::text)
+                    .on_press(action(A::Collection(name.into()))),
                 );
             }
+            return body;
         }
-        body.into()
+        let mut matches: Vec<_> = state
+            .library
+            .iter()
+            .enumerate()
+            .filter(|(i, t)| state.matches(*i, t))
+            .collect();
+        matches.sort_by_key(|(_, t)| state.search_rank(t));
+        let empty = matches.is_empty();
+        body = body.push(horizontal_line()).push(
+            text(format!(
+                "{} · {} templates",
+                if state.collection == "All collections" {
+                    "Results"
+                } else {
+                    &state.collection
+                },
+                matches.len()
+            ))
+            .size(11)
+            .style(muted_text),
+        );
+        for tiles in matches.chunks(4) {
+            let mut line = row![].spacing(4);
+            for (index, template) in tiles {
+                let preview: Element<'_, Message> =
+                    canvas(crate::canvas::TemplateThumbnail(&template.document))
+                        .width(44)
+                        .height(44)
+                        .into();
+                line = line.push(hover_hint(
+                    button(preview)
+                        .padding(4)
+                        .width(52)
+                        .height(52)
+                        .style(control(state.active && self.template_index == *index))
+                        .on_press(Message::InsertTemplate(*index)),
+                    template.name.as_str(),
+                    tooltip::Position::Left,
+                ));
+            }
+            body = body.push(line);
+        }
+        if empty {
+            body = body.push(
+                text("No matching templates. Try another search or save a selection.")
+                    .size(12)
+                    .style(muted_text),
+            );
+        }
+        body
     }
 
     fn abbreviations_panel(&self) -> Element<'_, Message> {
