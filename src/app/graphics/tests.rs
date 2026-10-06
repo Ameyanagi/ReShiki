@@ -265,3 +265,13 @@ fn no_selection_changes_drawing_defaults_without_document_history() {
     assert!(!app.tab.history.can_undo());
     assert!(!app.tab.history.can_redo());
 }
+
+#[test]
+fn style_message_restyles_selected_graphics_and_defaults() {
+    let mut app = ready(vec![shape(1, GraphicKind::Rectangle)], vec![1]);
+    let dashed = reshiki::graphics::LinePattern::Dashed;
+    let _ = app.update(Message::GraphicStyle(GraphicChange::Pattern(dashed)));
+    assert_eq!(app.tab.graphic_style.pattern, dashed);
+    assert_eq!(app.tab.doc.graphics[0].style.pattern, dashed);
+    assert!(!app.error, "{}", app.status);
+}

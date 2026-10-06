@@ -391,3 +391,6 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
             | Message::CopyAsWritten(..)
     )
 }
+
+#[cfg(test)]
+mod tests;

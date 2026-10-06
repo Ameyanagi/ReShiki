@@ -2174,6 +2174,51 @@ fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
 }
 
 #[test]
+fn view_messages_and_shortcuts_set_their_view_aids() {
+    let (mut app, _) = App::new();
+    let (grid, view_open) = (app.grid, app.view_open);
+    let _ = app.update(Message::Grid);
+    assert_eq!(app.grid, !grid);
+    let _ = app.update(Message::ToggleView);
+    assert_eq!(app.view_open, !view_open);
+    let _ = app.update(Message::Rulers(true));
+    assert!(app.guides.rulers);
+    let _ = app.update(Message::Crosshair(true));
+    assert!(app.guides.crosshair);
+    let _ = app.update(Message::RulerUnit(canvas::guides::Unit::Inches));
+    assert_eq!(app.guides.unit, canvas::guides::Unit::Inches);
+    let _ = app.update(Message::Shortcut(shortcuts::Action::Rulers));
+    assert!(!app.guides.rulers);
+    let _ = app.update(Message::Shortcut(shortcuts::Action::Crosshair));
+    assert!(!app.guides.crosshair);
+}
+
+#[test]
+fn cleanup_orientation_restarts_the_previewed_job() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.cleanup = Some(CleanupPreview {
+        job: cleanup::CleanupJob {
+            options: Default::default(),
+            selection: vec![],
+            serial: app.tab.cleanup_serial,
+            epoch: app.tab.file_epoch,
+        },
+        warnings: vec![],
+        document: app.tab.doc.clone(),
+        analysis: None,
+        revision: app.tab.revision,
+        epoch: app.tab.file_epoch,
+        original: false,
+    });
+    let serial = app.tab.cleanup_serial;
+    let _ = app.update(Message::CleanupOrientation(true));
+    assert!(app.tab.busy);
+    assert_eq!(app.tab.cleanup_serial, serial.wrapping_add(1));
+    assert!(app.tab.cleanup.as_ref().is_some_and(|p| !p.original));
+}
+
+#[test]
 fn native_extensions_open_the_same_editable_document_and_keep_the_path() {
     let mut document: Document = serde_json::from_str(include_str!(
         "../../tests/fixtures/ui-drawn-ethanol.reshiki"
