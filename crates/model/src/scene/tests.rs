@@ -32,6 +32,31 @@ fn highlighted_selection_bounds_build_join_geometry_once_at_any_selection_size()
     }
 }
 
+#[test]
+fn primitives_build_join_geometry_once_plus_once_for_highlights() {
+    use crate::{
+        document::{Document, Point},
+        palette::Color,
+    };
+    let mut doc = Document::default();
+    let ids: Vec<_> = (0..8)
+        .map(|i| doc.add_atom("C", Point::new(i as f32 * 36., (i % 2) as f32 * 21.)))
+        .collect();
+    for pair in ids.windows(2) {
+        let [a, b] = pair else { continue };
+        doc.add_bond(*a, *b, 1, "bold");
+    }
+    let before = crate::bond_joins::construction_count();
+    assert!(!super::primitives(&doc).is_empty());
+    assert_eq!(crate::bond_joins::construction_count() - before, 1);
+    for bond in &mut doc.bonds {
+        bond.highlight = Some(Color::Custom([190, 230, 240]));
+    }
+    let before = crate::bond_joins::construction_count();
+    assert!(!super::primitives(&doc).is_empty());
+    assert_eq!(crate::bond_joins::construction_count() - before, 2);
+}
+
 use super::*;
 
 #[test]
