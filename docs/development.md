@@ -35,6 +35,7 @@ To test one library layer, select its crate. Integration tests, binaries and exa
 cargo test --locked -p reshiki-chemistry
 cargo test --locked -p reshiki-model
 cargo test --locked -p reshiki-io
+cargo test --locked -p reshiki-agent
 cargo test --locked -p reshiki --test theme_reference
 ```
 

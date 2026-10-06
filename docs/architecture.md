@@ -21,8 +21,9 @@ The library is split into workspace crates. Each crate depends only on the crate
 1. `reshiki-chemistry` (`crates/chemistry/`): the chemistry core, without GUI dependencies.
 2. `reshiki-model` (`crates/model/`): document, scene, styles, editing, pictures, storage and themes, plus the drawing-to-molecule and abbreviation adapters in `chemistry/`.
 3. `reshiki-io` (`crates/io/`): chemistry engine, drawing interchange, export, recovery, document styles and the template library, plus the CDXML, MOL, reaction and cleanup adapters in `chemistry/`.
-4. `reshiki` library (`src/lib.rs`): a facade that re-exports the moved modules at their existing `reshiki::<module>` paths, plus the assistant, clipboard, printing, updates, hotkeys, Office and accessibility services.
-5. `reshiki` executable (`src/main.rs`, `src/app/`, `src/canvas/`): the Iced application.
+4. `reshiki-agent` (`crates/agent/`): the assistant's GUI-free proposal schema, layout, composition, sketch diagrams, review and canvas inspection and rendering.
+5. `reshiki` library (`src/lib.rs`): a facade that re-exports the moved modules at their existing `reshiki::<module>` paths, plus the Codex assistant client and its preferences, clipboard, printing, updates, hotkeys, Office and accessibility services.
+6. `reshiki` executable (`src/main.rs`, `src/app/`, `src/canvas/`): the Iced application.
 
 `reshiki::chemistry` combines the core with both adapter layers, so existing imports keep working. Crate boundaries enforce the layering: a lower crate cannot import a higher one. The new crates are workspace default members, so `cargo test` and the pre-commit checks cover them. Release builds still produce exactly one executable with `cargo build --release --bin reshiki`; `build.rs` stays in the root package.
 
@@ -43,6 +44,7 @@ The library is split into workspace crates. Each crate depends only on the crate
 | `src/app/dispatch.rs`                                       | Message dispatch table: one handler per message variant                        |
 | `src/app/canvas_edit/`                                      | Canvas gesture dispatch, direct manipulation, placement and clicks             |
 | `src/app/assistant.rs`, `src/app/assistant/`                | Assistant actions, request lifecycle, attachments, drafts and panel view       |
+| `crates/agent/src/`                                         | Assistant proposals: schema, layout, sketch, review and canvas tools           |
 | `src/app/bond_edits.rs`                                     | Bond drawing settings and edits to selected bonds                              |
 | `src/app/atom_edits.rs`                                     | Element, charge, isotope, radical and mark edits to selected atoms             |
 | `src/app/ring_edits.rs`                                     | Ring tool settings and the selected ring's aromaticity                         |

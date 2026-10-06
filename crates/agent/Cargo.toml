@@ -1,0 +1,24 @@
+[package]
+name = "reshiki-agent"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "GUI-free drawing proposals, composition and canvas inspection for ReShiki"
+
+[features]
+default = []
+# Optional Python/RDKit development oracles, never part of release builds.
+rdkit-reference = ["reshiki-io/rdkit-reference"]
+
+[dependencies]
+reshiki-model = { path = "../model" }
+reshiki-io = { path = "../io" }
+resvg = "0.45"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+tokio = { version = "1", features = ["sync", "rt"] }
+
+[dev-dependencies]
+anyhow = "1"
+reshiki-process-heap = { path = "../process-heap", features = ["allocation-metrics"] }

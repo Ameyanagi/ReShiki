@@ -3,7 +3,7 @@ use crate::document::Document;
 #[test]
 fn reported_wedge_junctions_have_shared_atoms_and_complete_outlines() {
     let doc: Document = serde_json::from_str(include_str!(
-        "../../../tests/fixtures/bond-join-regression.rsk"
+        "../../../../tests/fixtures/bond-join-regression.rsk"
     ))
     .unwrap();
     doc.validate().unwrap();

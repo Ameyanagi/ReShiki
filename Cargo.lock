@@ -3644,6 +3644,7 @@ dependencies = [
  "pdf-writer",
  "png 0.17.16",
  "reqwest",
+ "reshiki-agent",
  "reshiki-chemistry",
  "reshiki-depict-math",
  "reshiki-geometry",
@@ -3669,6 +3670,20 @@ dependencies = [
  "ttf-parser",
  "zune-core 0.5.3",
  "zune-jpeg 0.5.15",
+]
+
+[[package]]
+name = "reshiki-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reshiki-io",
+ "reshiki-model",
+ "reshiki-process-heap",
+ "resvg 0.45.1",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

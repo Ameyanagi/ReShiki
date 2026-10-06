@@ -14,6 +14,7 @@ rdkit-reference = [
   "reshiki-chemistry/rdkit-reference",
   "reshiki-model/rdkit-reference",
   "reshiki-io/rdkit-reference",
+  "reshiki-agent/rdkit-reference",
 ]
 # Opt-in state observation for disposable compositor integration tests.
 wayland-qa = ["reshiki-linux/wayland-qa"]
@@ -24,13 +25,14 @@ members = [
   "native/windows",
   "native/linux",
   "native/geometry",
+  "crates/agent",
   "crates/chemistry",
   "crates/depict-math",
   "crates/io",
   "crates/model",
   "crates/process-heap",
 ]
-default-members = [".", "crates/chemistry", "crates/io", "crates/model"]
+default-members = [".", "crates/agent", "crates/chemistry", "crates/io", "crates/model"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 reshiki-macos = { path = "native/macos" }
@@ -58,6 +60,7 @@ reshiki-depict-math = { path = "crates/depict-math" }
 reshiki-chemistry = { path = "crates/chemistry" }
 reshiki-model = { path = "crates/model" }
 reshiki-io = { path = "crates/io" }
+reshiki-agent = { path = "crates/agent" }
 iced = { version = "0.14", default-features = false, features = [
   "canvas",
   "tokio",

@@ -643,9 +643,10 @@ mod overlap_tests {
     #[test]
     fn planar_coordination_scheme_is_readable_and_ownership_is_not_an_overlap() {
         // A visual regression fixture, not a validated chemical assignment.
-        let doc: Document =
-            serde_json::from_str(include_str!("../../tests/fixtures/coordination-layout.rsk"))
-                .unwrap();
+        let doc: Document = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/coordination-layout.rsk"
+        ))
+        .unwrap();
         assert!(doc.atoms.iter().all(|a| a.depth == 0.));
         assert!(internal_overlaps(&doc).is_empty());
         let issues = quality(&doc, &Composition::default());
