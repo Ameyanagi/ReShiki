@@ -139,7 +139,7 @@ pub async fn analyze_prepared(
 /// non-abbreviation requests omit preparation. Discovery remains lazy so a
 /// figure, exotic bond analysis or native early-empty result needs no helper.
 pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
-    if request.protocol == 1
+    if request.protocol == crate::engine::PROTOCOL
         && request.operation == "export"
         && matches!(request.format.as_deref(), Some("cdxml" | "cdx" | "mol"))
         && request
@@ -180,7 +180,7 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
         let molecule = match molecular::prepare(document) {
             Ok(molecule) => molecule,
             Err(molecular::Error::Sanitization(_))
-                if source.protocol == 1
+                if source.protocol == crate::engine::PROTOCOL
                     && source.operation == "export"
                     && matches!(source.format.as_deref(), Some("cdxml" | "cdx")) =>
             {
@@ -260,7 +260,7 @@ async fn generate_inchi(
 }
 
 fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error> {
-    if request.protocol != 1 {
+    if request.protocol != crate::engine::PROTOCOL {
         return Err(Error::Protocol);
     }
     if !matches!(

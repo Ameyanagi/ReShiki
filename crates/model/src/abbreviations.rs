@@ -273,6 +273,8 @@ impl Document {
                 .iter()
                 .any(|g| g.members.contains(&a) && g.members.contains(&b))
     }
+    /// Any selected member pulls in the whole abbreviation. The result is in
+    /// [`Document::all_ids`] order.
     pub fn expand_abbreviation_selection(&self, ids: &[u64]) -> Vec<u64> {
         let mut selected: HashSet<_> = ids.iter().copied().collect();
         for group in &self.abbreviations {

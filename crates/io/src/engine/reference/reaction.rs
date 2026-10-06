@@ -34,7 +34,7 @@ impl PythonEngine {
         let (doc, molecule, smiles) = drawing;
         let mut result = self
             .exchange(serde_json::json!({
-                "protocol": 1,
+                "protocol": crate::engine::PROTOCOL,
                 "operation": "import",
                 "format": format,
                 "prepared_reaction": true,
@@ -87,7 +87,7 @@ impl PythonEngine {
             }
             let reply: Positions = serde_json::from_value(
                 self.exchange(serde_json::json!({
-                    "protocol": 1,
+                    "protocol": crate::engine::PROTOCOL,
                     "operation": "layout_reaction",
                     "format": "rsmi",
                     "prepared_parts": parts,

@@ -121,7 +121,7 @@ impl PythonEngine {
         })
     }
     pub async fn request(&self, request: Request) -> Result<Response, String> {
-        if request.protocol != 1 {
+        if request.protocol != crate::engine::PROTOCOL {
             return Err("Unsupported protocol version".into());
         }
         if let Some(doc) = &request.document {
@@ -441,7 +441,7 @@ impl PythonEngine {
         }
         let layout: Layout = serde_json::from_value(
             self.exchange(serde_json::json!({
-                "protocol": 1,
+                "protocol": crate::engine::PROTOCOL,
                 "operation": "layout_import",
                 "format": "smiles",
                 "prepared_molecule": molecule,

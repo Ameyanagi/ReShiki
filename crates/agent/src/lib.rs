@@ -29,6 +29,7 @@ use reshiki_model::*;
 mod branching;
 pub mod canvas_tools;
 pub mod composition;
+pub mod envelope;
 mod layout;
 pub mod progress;
 pub mod review;

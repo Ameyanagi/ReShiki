@@ -79,7 +79,7 @@ pub async fn execute(
 }
 
 fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
-    if request.protocol != 1 {
+    if request.protocol != crate::engine::PROTOCOL {
         return Err(Error::Protocol);
     }
     if request.operation != "clean" {

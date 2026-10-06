@@ -155,7 +155,7 @@ pub async fn execute(
 }
 
 fn prepare(request: Request) -> Result<Preparation, Error> {
-    if request.protocol != 1 {
+    if request.protocol != crate::engine::PROTOCOL {
         return Err(Error::Protocol);
     }
     if let Some(document) = &request.document {

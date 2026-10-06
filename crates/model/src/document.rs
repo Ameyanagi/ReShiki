@@ -278,6 +278,8 @@ impl Document {
             ..self.clone()
         }
     }
+    /// The next free ID: the largest object or group ID plus one, saturating.
+    /// Objects and groups share this counter, and a deleted maximum is reused.
     pub fn next_id(&self) -> u64 {
         self.object_ids()
             .chain(self.groups.iter().map(|a| a.id))
@@ -448,9 +450,13 @@ impl Document {
         }
         crate::projection::sync_centroids(self);
     }
+    /// Every object ID, in [`Document::object_ids`] order.
     pub fn all_ids(&self) -> Vec<u64> {
         self.object_ids().collect()
     }
+    /// Atom, annotation, arrow and graphic IDs, in that order. They share one ID
+    /// space; groups use the same counter but are not objects, and bonds have
+    /// no ID.
     pub fn object_ids(&self) -> impl Iterator<Item = u64> + '_ {
         self.atoms
             .iter()

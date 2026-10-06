@@ -39,7 +39,7 @@ pub async fn execute(
 ) -> Result<Response, Error> {
     let request = request.into();
     let edit = tokio::task::spawn_blocking(move || {
-        if request.protocol != 1 {
+        if request.protocol != crate::engine::PROTOCOL {
             return Err(Error::Protocol);
         }
         if request.operation != "aromatic" {

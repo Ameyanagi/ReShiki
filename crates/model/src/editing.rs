@@ -80,6 +80,8 @@ pub enum Arrange {
     DistributeVertical,
 }
 
+/// The selected part as its own document: [`crate::attachments::selection`],
+/// then [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     let ids = crate::attachments::selection(doc, ids);
     let ids: HashSet<_> = doc
@@ -100,6 +102,13 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     part
 }
 
+/// Insert `source` at `offset` under new IDs and return the inserted IDs.
+///
+/// IDs are assigned sequentially from `doc.next_id()`: first to
+/// `source.all_ids()`, then to the source group IDs. The returned IDs are the
+/// inserted part's [`Document::all_ids`], the source `all_ids()` order
+/// remapped, so the remap is `zip(source.all_ids(), returned)`. On failure
+/// nothing is inserted and the result is empty.
 pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> {
     if doc.validate().is_err()
         || source.validate().is_err()

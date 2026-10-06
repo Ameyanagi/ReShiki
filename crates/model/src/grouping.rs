@@ -64,6 +64,8 @@ impl Document {
         self.prune_groups();
     }
 
+    /// Expand abbreviations, then every group with a selected member until
+    /// nothing changes. The result is in [`Document::all_ids`] order.
     pub fn expand_groups(&self, ids: &[u64]) -> Vec<u64> {
         let mut selected: HashSet<_> = self
             .expand_abbreviation_selection(ids)
@@ -86,6 +88,8 @@ impl Document {
             .collect()
     }
 
+    /// Expand abbreviations, then each integral group with a selected member.
+    /// The result is in [`Document::all_ids`] order.
     pub fn expand_integral_groups(&self, ids: &[u64]) -> Vec<u64> {
         let mut selected: HashSet<_> = self
             .expand_abbreviation_selection(ids)

@@ -122,6 +122,8 @@ pub fn editor_markers(doc: &Document) -> impl Iterator<Item = &Atom> {
 
 /// Include a selected point's target atoms; complete target selections also
 /// carry their attachment points. No chemical bonds are synthesized here.
+/// The result is sorted by ID. [`crate::editing::selection`] composes this
+/// with [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Vec<u64> {
     let mut selected: std::collections::HashSet<_> = ids.iter().copied().collect();
     for a in doc.atoms.iter().filter(|a| a.attachment.is_some()) {

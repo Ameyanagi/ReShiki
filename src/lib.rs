@@ -27,6 +27,7 @@ pub use reshiki_model::{
     storage, style, templates, theme_files, theme_generator, transaction, typography,
 };
 
+pub use reshiki_agent::envelope;
 #[cfg(windows)]
 use reshiki_io::native_windows;
 pub use reshiki_io::{

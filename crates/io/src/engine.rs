@@ -9,6 +9,9 @@ mod reference;
 #[cfg(feature = "rdkit-reference")]
 pub use reference::PythonEngine;
 
+/// Internal engine request protocol (Request.protocol and reference-worker payloads); distinct from the operation API and document versions.
+pub const PROTOCOL: u32 = 1;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -47,7 +50,7 @@ impl Request {
             cleanup: None,
             selected_ids: None,
             atom_indicators: None,
-            protocol: 1,
+            protocol: PROTOCOL,
             operation: "import".into(),
             document: None,
             text: Some(text.into()),
@@ -125,7 +128,7 @@ impl Request {
             selected_ids: None,
             atom_indicators: (operation == "export")
                 .then(|| crate::atom_labels::indicators(&document)),
-            protocol: 1,
+            protocol: PROTOCOL,
             operation: operation.into(),
             document: Some(document),
             text: None,
@@ -215,7 +218,7 @@ impl<B: ChemistryEngine> LocalEngine<B> {
 impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
     async fn execute(&self, mut request: Request) -> Result<Response, String> {
         use base64::{Engine, engine::general_purpose::STANDARD};
-        if request.protocol != 1 {
+        if request.protocol != PROTOCOL {
             return Err("Unsupported protocol version".into());
         }
         if self.native_responses && request.operation == "clean" {
