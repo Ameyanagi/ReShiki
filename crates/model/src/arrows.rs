@@ -640,3 +640,6 @@ impl Arrow {
         (lo, hi)
     }
 }
+
+#[cfg(test)]
+mod paths_parity_tests;

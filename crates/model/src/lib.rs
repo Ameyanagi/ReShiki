@@ -59,3 +59,6 @@ pub mod theme_files;
 pub mod theme_generator;
 pub mod transaction;
 pub mod typography;
+
+#[cfg(test)]
+mod parity_tests;
