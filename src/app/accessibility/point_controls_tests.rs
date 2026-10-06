@@ -225,7 +225,7 @@ impl Ui {
                 Message::ArrowAction(crate::app::arrows::Action::Number(
                     crate::app::arrows::Field::Line,
                     _
-                )) | Message::GraphicWidth(_)
+                )) | Message::Graphics(crate::app::graphics::Action::Width(_))
             ));
             for message in messages {
                 let _ = app.update(message);
@@ -528,7 +528,10 @@ async fn selected_width_fields_publish_units_and_apply_one_undo_step() {
         let (status, messages) = ui.event(&app, key(Named::Enter, Modifiers::empty(), false));
         assert_eq!(status, iced::event::Status::Captured);
         assert_eq!(messages.len(), 1);
-        assert!(matches!(messages[0], Message::ApplyGraphicWidth));
+        assert!(matches!(
+            messages[0],
+            Message::Graphics(crate::app::graphics::Action::ApplyWidth)
+        ));
         for message in messages {
             let _ = app.update(message);
         }
@@ -642,7 +645,9 @@ async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selectio
         assert_eq!(status, iced::event::Status::Captured);
         assert_eq!(messages.len(), 1);
         let message = messages.remove(0);
-        assert!(matches!(&message, Message::GraphicWidth(value) if value == "2"));
+        assert!(
+            matches!(&message, Message::Graphics(crate::app::graphics::Action::Width(value)) if value == "2")
+        );
         let _ = app.update(message);
         assert_eq!(app.tab.graphic_width_input, "2");
         assert_eq!(app.tab.doc, drawing);

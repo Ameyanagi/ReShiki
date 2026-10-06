@@ -15,6 +15,24 @@ pub(super) enum ColorField {
     Fill,
 }
 
+/// Graphic style and scientific-symbol inputs, nested under `Message::Graphics`.
+/// Only `Style` commits inline and join drafts.
+#[derive(Debug, Clone)]
+pub enum Action {
+    Style(GraphicChange),
+    Width(String),
+    ApplyWidth,
+    Stroke(String),
+    ApplyStroke,
+    Fill(String),
+    ApplyFill,
+    Sides(BracketSides),
+    ScientificKind(GraphicKind),
+    OrbitalPhase(reshiki::scientific::Phase),
+    FlipPhase(bool),
+    AttachSymbols(bool),
+}
+
 pub(super) fn parse_color(s: &str) -> Option<[u8; 3]> {
     let s = s.trim().trim_start_matches('#');
     if s.len() != 6 || !s.is_ascii() {
@@ -27,6 +45,22 @@ pub(super) fn parse_color(s: &str) -> Option<[u8; 3]> {
     ])
 }
 impl App {
+    pub(super) fn graphic_action(&mut self, action: Action) {
+        match action {
+            Action::Style(change) => self.apply_graphic_style(change),
+            Action::Width(s) => self.tab.graphic_width_input = s,
+            Action::ApplyWidth => self.apply_graphic_width(),
+            Action::Stroke(s) => self.tab.graphic_stroke_input = s,
+            Action::ApplyStroke => self.apply_graphic_color(ColorField::Stroke),
+            Action::Fill(s) => self.tab.graphic_fill_input = s,
+            Action::ApplyFill => self.apply_graphic_color(ColorField::Fill),
+            Action::ScientificKind(kind) => self.set_scientific_kind(kind),
+            Action::OrbitalPhase(phase) => self.set_orbital_phase(phase),
+            Action::FlipPhase(value) => self.set_phase_flipped(value),
+            Action::AttachSymbols(value) => self.tab.attach_symbols = value,
+            Action::Sides(sides) => self.set_graphic_sides(sides),
+        }
+    }
     pub(super) fn graphic_panel(&self) -> Element<'_, Message> {
         use reshiki::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};
         let selected: Vec<_> = self
@@ -57,7 +91,10 @@ impl App {
                         } else {
                             style.fill == Some(color)
                         };
-                        (current, Some(Message::GraphicStyle(change(color))))
+                        (
+                            current,
+                            Some(Message::Graphics(Action::Style(change(color)))),
+                        )
                     }),
                     self.tab.doc.canvas_theme,
                 )
@@ -79,15 +116,15 @@ impl App {
                     &self.tab.graphic_width_input,
                 )
                 .style(crate::appearance::input_style)
-                .on_input(Message::GraphicWidth)
-                .on_submit(Message::ApplyGraphicWidth)
+                .on_input(|width| Message::Graphics(Action::Width(width)))
+                .on_submit(Message::Graphics(Action::ApplyWidth))
                 .size(12)
                 .padding(5)
                 .width(48),
                 crate::appearance::pick_list(
                     [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
                     Some(self.tab.graphic_style.pattern),
-                    |p| Message::GraphicStyle(GraphicChange::Pattern(p))
+                    |p| Message::Graphics(Action::Style(GraphicChange::Pattern(p)))
                 )
                 .text_size(12)
                 .padding(5)
@@ -99,13 +136,15 @@ impl App {
                 Row::Strong,
                 (
                     style.stroke == Paint::Ink,
-                    Some(Message::GraphicStyle(GraphicChange::Stroke(Paint::Ink)))
+                    Some(Message::Graphics(Action::Style(GraphicChange::Stroke(
+                        Paint::Ink
+                    ))))
                 ),
                 GraphicChange::Stroke
             ),
             crate::appearance::text_input("#RRGGBB", &self.tab.graphic_stroke_input)
-                .on_input(Message::GraphicStroke)
-                .on_submit(Message::ApplyGraphicStroke)
+                .on_input(|stroke| Message::Graphics(Action::Stroke(stroke)))
+                .on_submit(Message::Graphics(Action::ApplyStroke))
                 .size(12)
                 .padding(6),
         ]
@@ -132,13 +171,13 @@ impl App {
         }
         match kind {
             GraphicKind::Symbol(kind) => {
-                panel=panel.push(crate::appearance::pick_list(reshiki::scientific::SymbolKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Symbol(k))).text_size(12).padding(6).width(Length::Fill))
-                    .push(hover_hint(checkbox(self.tab.attach_symbols).label("Attach to atoms").on_toggle(Message::AttachSymbols).size(14).text_size(12), "Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.", tooltip::Position::Top));
+                panel=panel.push(crate::appearance::pick_list(reshiki::scientific::SymbolKind::ALL,Some(kind),|k| Message::Graphics(Action::ScientificKind(GraphicKind::Symbol(k)))).text_size(12).padding(6).width(Length::Fill))
+                    .push(hover_hint(checkbox(self.tab.attach_symbols).label("Attach to atoms").on_toggle(|attach| Message::Graphics(Action::AttachSymbols(attach))).size(14).text_size(12), "Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.", tooltip::Position::Top));
             }
             GraphicKind::Orbital(kind) => {
-                panel=panel.push(hover_hint(crate::appearance::pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Orbital(k))).text_size(12).padding(6).width(Length::Fill), "Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Group with a molecule to move them together.", tooltip::Position::Top))
-                    .push(crate::appearance::pick_list(reshiki::scientific::Phase::ALL,Some(self.tab.orbital_phase),Message::OrbitalPhase).text_size(12).padding(6).width(Length::Fill))
-                    .push(checkbox(self.tab.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, reshiki::scientific::OrbitalKind::S | reshiki::scientific::OrbitalKind::Sigma | reshiki::scientific::OrbitalKind::Lobe)).then_some(Message::FlipPhase)).size(14).text_size(12));
+                panel=panel.push(hover_hint(crate::appearance::pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k| Message::Graphics(Action::ScientificKind(GraphicKind::Orbital(k)))).text_size(12).padding(6).width(Length::Fill), "Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Group with a molecule to move them together.", tooltip::Position::Top))
+                    .push(crate::appearance::pick_list(reshiki::scientific::Phase::ALL,Some(self.tab.orbital_phase),|phase| Message::Graphics(Action::OrbitalPhase(phase))).text_size(12).padding(6).width(Length::Fill))
+                    .push(checkbox(self.tab.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, reshiki::scientific::OrbitalKind::S | reshiki::scientific::OrbitalKind::Sigma | reshiki::scientific::OrbitalKind::Lobe)).then_some(|flipped: bool| Message::Graphics(Action::FlipPhase(flipped)))).size(14).text_size(12));
             }
             _ => {}
         }
@@ -156,14 +195,14 @@ impl App {
                     Row::Tint,
                     (
                         style.fill.is_none(),
-                        Some(Message::GraphicStyle(GraphicChange::Fill(None))),
+                        Some(Message::Graphics(Action::Style(GraphicChange::Fill(None)))),
                     ),
                     |color| GraphicChange::Fill(Some(color)),
                 ))
                 .push(
                     crate::appearance::text_input("#RRGGBB", &self.tab.graphic_fill_input)
-                        .on_input(Message::GraphicFill)
-                        .on_submit(Message::ApplyGraphicFill)
+                        .on_input(|fill| Message::Graphics(Action::Fill(fill)))
+                        .on_submit(Message::Graphics(Action::ApplyFill))
                         .size(12)
                         .padding(6),
                 );
@@ -176,7 +215,7 @@ impl App {
                 crate::appearance::pick_list(
                     [BracketSides::Both, BracketSides::Left, BracketSides::Right],
                     Some(self.tab.bracket_sides),
-                    Message::GraphicSides,
+                    |sides| Message::Graphics(Action::Sides(sides)),
                 )
                 .text_size(12)
                 .padding(6),

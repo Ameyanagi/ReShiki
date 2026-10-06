@@ -1,8 +1,8 @@
 //! Pins how the modal gates and draft predicates treat the cleanup, view-aid and graphic-input messages.
 use super::preview_passthrough;
 use crate::app::{
-    App, CleanupPreview, Message, atom_text, cleanup, color_popover, inline_text, joining, tabs,
-    updates, view_settings,
+    App, CleanupPreview, Message, atom_text, cleanup, color_popover, graphics, inline_text,
+    joining, tabs, updates, view_settings,
 };
 use crate::canvas::{Tool, guides::Unit};
 use reshiki::cleanup::Scope;
@@ -75,37 +75,81 @@ fn cases() -> Vec<(Message, bool, bool, bool)> {
             false,
         ),
         (
-            Message::GraphicStyle(GraphicChange::Pattern(LinePattern::Dashed)),
+            Message::Graphics(graphics::Action::Style(GraphicChange::Pattern(
+                LinePattern::Dashed,
+            ))),
             false,
             false,
             true,
         ),
-        (Message::GraphicWidth("2".into()), false, false, false),
-        (Message::ApplyGraphicWidth, false, false, false),
         (
-            Message::GraphicStroke("#117E6C".into()),
-            false,
-            false,
-            false,
-        ),
-        (Message::ApplyGraphicStroke, false, false, false),
-        (Message::GraphicFill("#DCEFE9".into()), false, false, false),
-        (Message::ApplyGraphicFill, false, false, false),
-        (
-            Message::GraphicSides(BracketSides::Left),
+            Message::Graphics(graphics::Action::Width("2".into())),
             false,
             false,
             false,
         ),
         (
-            Message::ScientificKind(GraphicKind::Symbol(SymbolKind::CircleMinus)),
+            Message::Graphics(graphics::Action::ApplyWidth),
             false,
             false,
             false,
         ),
-        (Message::OrbitalPhase(Phase::Shaded), false, false, false),
-        (Message::FlipPhase(true), false, false, false),
-        (Message::AttachSymbols(false), false, false, false),
+        (
+            Message::Graphics(graphics::Action::Stroke("#117E6C".into())),
+            false,
+            false,
+            false,
+        ),
+        (
+            Message::Graphics(graphics::Action::ApplyStroke),
+            false,
+            false,
+            false,
+        ),
+        (
+            Message::Graphics(graphics::Action::Fill("#DCEFE9".into())),
+            false,
+            false,
+            false,
+        ),
+        (
+            Message::Graphics(graphics::Action::ApplyFill),
+            false,
+            false,
+            false,
+        ),
+        (
+            Message::Graphics(graphics::Action::Sides(BracketSides::Left)),
+            false,
+            false,
+            false,
+        ),
+        (
+            Message::Graphics(graphics::Action::ScientificKind(GraphicKind::Symbol(
+                SymbolKind::CircleMinus,
+            ))),
+            false,
+            false,
+            false,
+        ),
+        (
+            Message::Graphics(graphics::Action::OrbitalPhase(Phase::Shaded)),
+            false,
+            false,
+            false,
+        ),
+        (
+            Message::Graphics(graphics::Action::FlipPhase(true)),
+            false,
+            false,
+            false,
+        ),
+        (
+            Message::Graphics(graphics::Action::AttachSymbols(false)),
+            false,
+            false,
+            false,
+        ),
     ]
 }
 

@@ -1,5 +1,5 @@
 //! The message dispatch table: one handler per Message variant after the modal gates.
-use super::{App, InspectorTab, Message, files, graphics};
+use super::{App, InspectorTab, Message, files};
 use crate::canvas::{Edit, Tool};
 use iced::Task;
 
@@ -69,21 +69,10 @@ impl App {
             Message::IntegralGroup(integral) => self.set_integral_groups(integral),
             Message::InvertSelection => self.invert_selection(),
             Message::Arc(action) => self.update_arc(action),
-            Message::GraphicStyle(change) => self.apply_graphic_style(change),
-            Message::GraphicWidth(s) => self.tab.graphic_width_input = s,
-            Message::ApplyGraphicWidth => self.apply_graphic_width(),
-            Message::GraphicStroke(s) => self.tab.graphic_stroke_input = s,
-            Message::ApplyGraphicStroke => self.apply_graphic_color(graphics::ColorField::Stroke),
-            Message::GraphicFill(s) => self.tab.graphic_fill_input = s,
-            Message::ApplyGraphicFill => self.apply_graphic_color(graphics::ColorField::Fill),
-            Message::ScientificKind(kind) => self.set_scientific_kind(kind),
-            Message::OrbitalPhase(phase) => self.set_orbital_phase(phase),
-            Message::FlipPhase(value) => self.set_phase_flipped(value),
-            Message::AttachSymbols(value) => self.tab.attach_symbols = value,
+            Message::Graphics(action) => self.graphic_action(action),
             Message::RotateMark(id, index) => self.rotate_mark(id, index),
             Message::RemoveMark(id, index) => self.remove_mark(id, index),
             Message::AtomRadical(value) => self.set_radical(value),
-            Message::GraphicSides(sides) => self.set_graphic_sides(sides),
             Message::ToggleInspector => return Some(self.toggle_inspector()),
             Message::Inspector(tab) => {
                 if let Some(task) = self.show_inspector_tab(tab) {

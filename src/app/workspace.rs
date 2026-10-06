@@ -1194,7 +1194,9 @@ impl App {
                     G::Symbol(k) => crate::appearance::pick_list(
                         reshiki::scientific::SymbolKind::ALL,
                         Some(k),
-                        |k| Message::ScientificKind(G::Symbol(k)),
+                        |k| {
+                            Message::Graphics(super::graphics::Action::ScientificKind(G::Symbol(k)))
+                        },
                     )
                     .text_size(12)
                     .padding(5)
@@ -1202,7 +1204,11 @@ impl App {
                     G::Orbital(k) => crate::appearance::pick_list(
                         reshiki::scientific::OrbitalKind::ALL,
                         Some(k),
-                        |k| Message::ScientificKind(G::Orbital(k)),
+                        |k| {
+                            Message::Graphics(super::graphics::Action::ScientificKind(G::Orbital(
+                                k,
+                            )))
+                        },
                     )
                     .text_size(12)
                     .padding(5)

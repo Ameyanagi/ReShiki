@@ -52,10 +52,10 @@ fn assert_undo_redo(app: &mut App, before: &Document) {
 #[test]
 fn invalid_graphic_inputs_preserve_drafts_document_and_redo() {
     let mut app = ready(vec![shape(1, GraphicKind::Rectangle)], vec![1]);
-    let _ = app.update(Message::GraphicWidth("2".into()));
-    let _ = app.update(Message::ApplyGraphicWidth);
-    let _ = app.update(Message::GraphicStroke("#117E6C".into()));
-    let _ = app.update(Message::ApplyGraphicStroke);
+    let _ = app.update(Message::Graphics(Action::Width("2".into())));
+    let _ = app.update(Message::Graphics(Action::ApplyWidth));
+    let _ = app.update(Message::Graphics(Action::Stroke("#117E6C".into())));
+    let _ = app.update(Message::Graphics(Action::ApplyStroke));
     let redo = app.tab.doc.clone();
     let _ = app.update(Message::Undo);
     let before = app.tab.doc.clone();
@@ -65,8 +65,8 @@ fn invalid_graphic_inputs_preserve_drafts_document_and_redo() {
     assert!(app.tab.history.can_redo());
 
     for draft in ["NaN", "inf", "0", "12.1", " 2"] {
-        let _ = app.update(Message::GraphicWidth(draft.into()));
-        let _ = app.update(Message::ApplyGraphicWidth);
+        let _ = app.update(Message::Graphics(Action::Width(draft.into())));
+        let _ = app.update(Message::Graphics(Action::ApplyWidth));
         assert!(app.error);
         assert_eq!(app.status, "Line width must be 0.1–12 pt");
         assert_eq!(app.tab.graphic_width_input, draft);
@@ -78,8 +78,8 @@ fn invalid_graphic_inputs_preserve_drafts_document_and_redo() {
         assert!(app.tab.history.can_redo());
     }
     for draft in ["#abcd", "ZZZZZZ", "日本語"] {
-        let _ = app.update(Message::GraphicStroke(draft.into()));
-        let _ = app.update(Message::ApplyGraphicStroke);
+        let _ = app.update(Message::Graphics(Action::Stroke(draft.into())));
+        let _ = app.update(Message::Graphics(Action::ApplyStroke));
         assert!(app.error);
         assert_eq!(app.status, "Enter a six-digit hex color, such as #117E6C");
         assert_eq!(app.tab.graphic_stroke_input, draft);
@@ -90,8 +90,8 @@ fn invalid_graphic_inputs_preserve_drafts_document_and_redo() {
         assert!(app.tab.history.can_undo());
         assert!(app.tab.history.can_redo());
 
-        let _ = app.update(Message::GraphicFill(draft.into()));
-        let _ = app.update(Message::ApplyGraphicFill);
+        let _ = app.update(Message::Graphics(Action::Fill(draft.into())));
+        let _ = app.update(Message::Graphics(Action::ApplyFill));
         assert!(app.error);
         assert_eq!(app.status, "Enter a six-digit hex color, such as #DCEFE9");
         assert_eq!(app.tab.graphic_fill_input, draft);
@@ -124,16 +124,16 @@ fn mixed_selection_styles_skip_pictures_and_apply_one_undo_step() {
     let unselected = app.tab.doc.graphics[2].clone();
     for (draft, apply) in [
         (
-            Message::GraphicWidth("2.5".into()),
-            Message::ApplyGraphicWidth,
+            Message::Graphics(Action::Width("2.5".into())),
+            Message::Graphics(Action::ApplyWidth),
         ),
         (
-            Message::GraphicStroke("#117E6C".into()),
-            Message::ApplyGraphicStroke,
+            Message::Graphics(Action::Stroke("#117E6C".into())),
+            Message::Graphics(Action::ApplyStroke),
         ),
         (
-            Message::GraphicFill("#DCEFE9".into()),
-            Message::ApplyGraphicFill,
+            Message::Graphics(Action::Fill("#DCEFE9".into())),
+            Message::Graphics(Action::ApplyFill),
         ),
     ] {
         let before = app.tab.doc.clone();
@@ -170,7 +170,7 @@ fn scientific_kind_keeps_families_while_phase_and_sides_include_pictures() {
     let unselected = app.tab.doc.graphics[4].clone();
     let symbol = GraphicKind::Symbol(SymbolKind::CircleMinus);
     let before = app.tab.doc.clone();
-    let _ = app.update(Message::ScientificKind(symbol));
+    let _ = app.update(Message::Graphics(Action::ScientificKind(symbol)));
     assert_eq!(app.tool, Tool::Graphic(symbol));
     assert_eq!(app.toolbar.symbol, Tool::Graphic(symbol));
     assert_eq!(app.tab.doc.graphics[0].kind, symbol);
@@ -179,7 +179,7 @@ fn scientific_kind_keeps_families_while_phase_and_sides_include_pictures() {
 
     let orbital = GraphicKind::Orbital(OrbitalKind::Hybrid);
     let before = app.tab.doc.clone();
-    let _ = app.update(Message::ScientificKind(orbital));
+    let _ = app.update(Message::Graphics(Action::ScientificKind(orbital)));
     assert_eq!(app.tool, Tool::Graphic(orbital));
     assert_eq!(app.toolbar.orbital, Tool::Graphic(orbital));
     assert_eq!(app.toolbar.symbol, Tool::Graphic(symbol));
@@ -189,7 +189,7 @@ fn scientific_kind_keeps_families_while_phase_and_sides_include_pictures() {
     assert_undo_redo(&mut app, &before);
 
     let before = app.tab.doc.clone();
-    let _ = app.update(Message::OrbitalPhase(Phase::Shaded));
+    let _ = app.update(Message::Graphics(Action::OrbitalPhase(Phase::Shaded)));
     assert_eq!(app.tab.orbital_phase, Phase::Shaded);
     assert!(
         app.tab.doc.graphics[..4]
@@ -200,14 +200,14 @@ fn scientific_kind_keeps_families_while_phase_and_sides_include_pictures() {
     assert_undo_redo(&mut app, &before);
 
     let before = app.tab.doc.clone();
-    let _ = app.update(Message::FlipPhase(true));
+    let _ = app.update(Message::Graphics(Action::FlipPhase(true)));
     assert!(app.tab.phase_flipped);
     assert!(app.tab.doc.graphics[..4].iter().all(|g| g.phase_flipped));
     assert_eq!(app.tab.doc.graphics[4], unselected);
     assert_undo_redo(&mut app, &before);
 
     let before = app.tab.doc.clone();
-    let _ = app.update(Message::GraphicSides(BracketSides::Right));
+    let _ = app.update(Message::Graphics(Action::Sides(BracketSides::Right)));
     assert_eq!(app.tab.bracket_sides, BracketSides::Right);
     assert!(
         app.tab.doc.graphics[..4]
@@ -224,34 +224,34 @@ fn no_selection_changes_drawing_defaults_without_document_history() {
     let before = app.tab.doc.clone();
     let revision = app.tab.revision;
     for width in ["0.1", "12"] {
-        let _ = app.update(Message::GraphicWidth(width.into()));
-        let _ = app.update(Message::ApplyGraphicWidth);
+        let _ = app.update(Message::Graphics(Action::Width(width.into())));
+        let _ = app.update(Message::Graphics(Action::ApplyWidth));
         assert_eq!(
             app.tab.graphic_style.width_pt,
             width.parse::<f32>().unwrap()
         );
         assert_eq!(app.tab.graphic_width_input, width);
     }
-    let _ = app.update(Message::GraphicStroke(" ##a1B2c3 ".into()));
-    let _ = app.update(Message::ApplyGraphicStroke);
+    let _ = app.update(Message::Graphics(Action::Stroke(" ##a1B2c3 ".into())));
+    let _ = app.update(Message::Graphics(Action::ApplyStroke));
     assert_eq!(
         app.tab.graphic_style.stroke,
         Paint::Custom([0xa1, 0xb2, 0xc3])
     );
     assert_eq!(app.tab.graphic_stroke_input, "#A1B2C3");
-    let _ = app.update(Message::GraphicFill("#DCEFE9".into()));
-    let _ = app.update(Message::ApplyGraphicFill);
+    let _ = app.update(Message::Graphics(Action::Fill("#DCEFE9".into())));
+    let _ = app.update(Message::Graphics(Action::ApplyFill));
     assert_eq!(
         app.tab.graphic_style.fill,
         Some(Paint::Custom([0xdc, 0xef, 0xe9]))
     );
     assert_eq!(app.tab.graphic_fill_input, "#DCEFE9");
-    let _ = app.update(Message::OrbitalPhase(Phase::Open));
-    let _ = app.update(Message::FlipPhase(true));
-    let _ = app.update(Message::GraphicSides(BracketSides::Left));
-    let _ = app.update(Message::AttachSymbols(false));
+    let _ = app.update(Message::Graphics(Action::OrbitalPhase(Phase::Open)));
+    let _ = app.update(Message::Graphics(Action::FlipPhase(true)));
+    let _ = app.update(Message::Graphics(Action::Sides(BracketSides::Left)));
+    let _ = app.update(Message::Graphics(Action::AttachSymbols(false)));
     let kind = GraphicKind::Orbital(OrbitalKind::Dxy);
-    let _ = app.update(Message::ScientificKind(kind));
+    let _ = app.update(Message::Graphics(Action::ScientificKind(kind)));
     assert_eq!(app.tool, Tool::Graphic(kind));
     assert_eq!(app.toolbar.orbital, Tool::Graphic(kind));
     assert_eq!(app.tab.orbital_phase, Phase::Open);
@@ -270,7 +270,9 @@ fn no_selection_changes_drawing_defaults_without_document_history() {
 fn style_message_restyles_selected_graphics_and_defaults() {
     let mut app = ready(vec![shape(1, GraphicKind::Rectangle)], vec![1]);
     let dashed = reshiki::graphics::LinePattern::Dashed;
-    let _ = app.update(Message::GraphicStyle(GraphicChange::Pattern(dashed)));
+    let _ = app.update(Message::Graphics(Action::Style(GraphicChange::Pattern(
+        dashed,
+    ))));
     assert_eq!(app.tab.graphic_style.pattern, dashed);
     assert_eq!(app.tab.doc.graphics[0].style.pattern, dashed);
     assert!(!app.error, "{}", app.status);
