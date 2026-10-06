@@ -81,7 +81,7 @@ Extracted macOS archives and installed disk-image copies also run the actual app
 
 Before the native-runtime cutover, the [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
-The [0.10.0 validation record](release-0.10.0-validation.md) records the completed source review, package checks and public-download verification for the single-executable release. The [0.9.0 record](release-0.9.0-validation.md) and [0.8.0 record](release-0.8.0-validation.md) retain earlier evidence.
+The [0.11.0 validation record](release-0.11.0-validation.md) records the completed source review, stable workflow and public-download verification. The [0.10.0 record](release-0.10.0-validation.md) retains the single-executable release evidence, and the [0.9.0 record](release-0.9.0-validation.md) and [0.8.0 record](release-0.8.0-validation.md) retain earlier checks.
 
 ## Publish a version
 
