@@ -24,7 +24,7 @@ pub use reshiki_model::{
     chains, color_contrast, common_groups, crossings, depth_appearance, document, editing, erasing,
     graphics, grouping, haworth, highlights, joining, ligands, pages, palette, pictures,
     projection, reactions, ring_arcs, ring_fills, rings, scene, scientific, selection_region,
-    storage, style, templates, theme_files, theme_generator, typography,
+    storage, style, templates, theme_files, theme_generator, transaction, typography,
 };
 
 #[cfg(windows)]

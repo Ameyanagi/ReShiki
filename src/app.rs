@@ -6,6 +6,7 @@ use reshiki::{
     engine::{Analysis, LocalEngine, Request, Response},
     graphics::{BracketSides, Graphic, GraphicChange},
     recovery::{Candidate, Recovery},
+    transaction::chemistry_changed,
 };
 use std::ops::ControlFlow;
 use std::path::PathBuf;
@@ -536,50 +537,44 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
-        reshiki::projection::sync_centroids(&mut self.tab.doc);
-        reshiki::ring_fills::prune(&mut self.tab.doc);
-        reshiki::depth_appearance::prune(&mut self.tab.doc);
         self.tab.cleanup = None;
-        self.tab.doc.reconcile_abbreviations(&before);
-        if let Err(error) = reshiki::reactions::reconcile(&mut self.tab.doc) {
-            self.tab.doc = before;
-            self.error = true;
-            self.status = error;
-            return;
-        }
-        if self.tab.doc != before {
-            if let Err(error) = self.tab.doc.validate() {
-                self.tab.doc = before;
+        let reconciled = match reshiki::transaction::reconcile(&mut self.tab.doc, before) {
+            Ok(reconciled) => reconciled,
+            Err(rejection) => {
                 self.error = true;
-                self.status = format!("Edit cancelled: {error}");
+                self.status = match rejection {
+                    reshiki::transaction::Rejection::Reactions(error) => error,
+                    reshiki::transaction::Rejection::Invalid(error) => {
+                        format!("Edit cancelled: {error}")
+                    }
+                };
                 return;
             }
-            self.tab.doc.reconcile_molecule_groups();
-        }
-        let drawing_style_changed = before.drawing_style != self.tab.doc.drawing_style;
-        self.tab
-            .recent_molecules
-            .record(&before, &self.tab.doc, self.tab.file_epoch, continuing);
-        self.tab
-            .keyboard_drawing
-            .record(&before, &self.tab.doc, self.tab.file_epoch, continuing);
-        let chemistry_changed = chemistry_changed(&before, &self.tab.doc);
-        if chemistry_changed {
-            reshiki::atom_labels::clear_computed(&mut self.tab.doc);
+        };
+        self.tab.recent_molecules.record(
+            reconciled.before(),
+            &self.tab.doc,
+            self.tab.file_epoch,
+            continuing,
+        );
+        self.tab.keyboard_drawing.record(
+            reconciled.before(),
+            &self.tab.doc,
+            self.tab.file_epoch,
+            continuing,
+        );
+        let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
+        if committed.chemistry_changed {
             self.tab.labels_dirty = true;
             self.tab.chemistry_notice = None;
         }
-        if self
-            .tab
-            .history
-            .commit_continuing(before, &self.tab.doc, continuing)
-        {
+        if committed.recorded {
             self.tab.revision = self.tab.revision.wrapping_add(1);
-            if chemistry_changed {
+            if committed.chemistry_changed {
                 self.tab.analysis = None;
             }
             self.error = false;
-            self.status = if chemistry_changed {
+            self.status = if committed.chemistry_changed {
                 "Drawing changed · Check structure to refresh properties"
             } else {
                 "Drawing updated"
@@ -587,7 +582,7 @@ impl App {
             .into();
             self.sync_pictures();
         }
-        if drawing_style_changed {
+        if committed.drawing_style_changed {
             self.sync_drawing_defaults();
         }
         let existing: std::collections::HashSet<_> = self.tab.doc.all_ids().into_iter().collect();
@@ -890,57 +885,6 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
             a.cip_label = None;
             b.cip_label = None;
             a == b
-        })
-}
-
-fn chemistry_changed(before: &Document, after: &Document) -> bool {
-    before.bonds.len() != after.bonds.len()
-        || before.bonds.iter().zip(&after.bonds).any(|(a, b)| {
-            let mut a = a.clone();
-            let mut b = b.clone();
-            a.z_order = 0;
-            b.z_order = 0;
-            a.color = Default::default();
-            b.color = Default::default();
-            a.highlight = None;
-            b.highlight = None;
-            a.double_position = Default::default();
-            b.double_position = Default::default();
-            a.secondary_display = None;
-            b.secondary_display = None;
-            a.indicator = Default::default();
-            b.indicator = Default::default();
-            a.cip_label = None;
-            b.cip_label = None;
-            if a.order == 4 && b.order == 4 || a.order == b.order && a.projection && b.projection {
-                a.display = "plain".into();
-                b.display = "plain".into();
-                a.projection = false;
-                b.projection = false;
-                if a.a > a.b {
-                    a.reverse();
-                }
-                if b.a > b.b {
-                    b.reverse();
-                }
-            }
-            a != b
-        })
-        || before.atoms.len() != after.atoms.len()
-        || before.atoms.iter().zip(&after.atoms).any(|(a, b)| {
-            let mut a = a.clone();
-            let mut b = b.clone();
-            a.text_style = None;
-            b.text_style = None;
-            a.marks.clear();
-            b.marks.clear();
-            a.display = Default::default();
-            b.display = Default::default();
-            a.cip_label = None;
-            b.cip_label = None;
-            a.label_h = 0;
-            b.label_h = 0;
-            a != b
         })
 }
 
