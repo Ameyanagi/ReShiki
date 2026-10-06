@@ -389,6 +389,31 @@ fn bond_attachment_endpoints() {
             Some((1, Kind::MultiCenter, vec![4, 3])),
         ]
     );
+    // With nonsequential atom IDs the IDs and members are converted, not the
+    // raw bookmarks 10, 20 and 30.
+    let p = ctab(
+        &[
+            "COUNTS 4 1",
+            "BEGIN ATOM",
+            "40 C 0 0 0 0",
+            "10 R 1 0 0 0",
+            "30 C 2 0 0 0",
+            "20 C 3 0 0 0",
+            "END ATOM",
+            "BEGIN BOND",
+            "7 1 40 10 ENDPTS=(2 20 30) ATTACH=ANY",
+            "END BOND",
+            "END CTAB",
+        ],
+        false,
+    )
+    .unwrap();
+    let attachment = p.bonds[0].attachment.as_ref().unwrap();
+    assert_eq!((p.graph.bonds[0].a, p.graph.bonds[0].b), (0, 1));
+    assert_eq!(
+        (attachment.id, attachment.kind, attachment.members.clone()),
+        (2, Kind::Variable, vec![4, 3])
+    );
 }
 
 #[test]
@@ -521,10 +546,11 @@ fn accepted_ctab_fills_the_raw_parse() {
         &[
             "COUNTS 6 8 0 0 0",
             "BEGIN ATOM",
-            "1 C 0 0 0 3 CHG=-1 MASS=13 VAL=4",
+            // A zero VAL or ATTCHPT is ignored and keeps the earlier value.
+            "1 C 0 0 0 3 CHG=-1 MASS=13 VAL=4 VAL=0",
             "2 N 1.5 -0.25 0 0 RAD=2 chg=1",
             "3 O -1 1 0.5 -2 MASS=12.7 CFG=2 ATTCHPT=-1",
-            "4 R 2 2 0 0 ATTCHPT=2 ATTCHORD=(2 1 Al)",
+            "4 R 2 2 0 0 ATTCHPT=2 ATTCHPT=0 ATTCHORD=(2 1 Al)",
             "5 D 0 -1 0 7 RAD=1 VAL=0",
             "6 Pol 3 0 0 0 UNSAT=2 ATTCHPT=0",
             "END ATOM",
