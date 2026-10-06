@@ -844,3 +844,320 @@ async fn upright_carbonyls_keep_orthogonal_branch_arrows_and_independent_caption
             .all(|issue| !issue.contains("overlap"))
     );
 }
+
+fn canvas_with_oxygen() -> assistant::canvas_tools::CanvasTools {
+    let mut document = Document::default();
+    document.add_atom("O", Point::default());
+    assistant::canvas_tools::CanvasTools {
+        canvas: std::sync::Arc::new(std::sync::RwLock::new(assistant::canvas_tools::Snapshot {
+            document,
+            ..Default::default()
+        })),
+        settings: Default::default(),
+        replace: vec![],
+        revision: 0,
+        epoch: 0,
+    }
+}
+
+fn progress_trace(rx: &mut tokio::sync::mpsc::Receiver<assistant::codex::Progress>) -> Vec<String> {
+    let mut trace = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        trace.push(match event {
+            assistant::codex::Progress::Proposal(_) => "proposal".to_owned(),
+            assistant::codex::Progress::Structures { completed, total } => {
+                format!("structures {completed}/{total}")
+            }
+            assistant::codex::Progress::Preview(doc) => format!("preview {}", doc.atoms.len()),
+            other => format!("{other:?}"),
+        });
+    }
+    trace
+}
+
+fn four_molecules() -> Proposal {
+    Proposal {
+        explanation: "Row".into(),
+        molecules: vec![
+            molecule("CCO", "Ethanol"),
+            molecule("CC(=O)O", "Acetic acid"),
+            molecule("O", "Water"),
+            molecule("CCN", "Ethylamine"),
+        ],
+        ..Default::default()
+    }
+}
+
+fn sketch_proposal() -> Proposal {
+    Proposal {
+        explanation: "Sketch".into(),
+        sketch: Some(
+            serde_json::from_str(include_str!("fixtures/assistant-cp-star-dimer.json")).unwrap(),
+        ),
+        ..Default::default()
+    }
+}
+
+fn assert_codex_envelope(response: &serde_json::Value) {
+    let text = response["contentItems"][0]["text"].as_str().unwrap();
+    let url = response["contentItems"][1]["imageUrl"].as_str().unwrap();
+    assert!(url.starts_with("data:image/png;base64,"));
+    assert_eq!(
+        response.to_string(),
+        format!(
+            r#"{{"contentItems":[{{"text":{},"type":"inputText"}},{{"imageUrl":{},"type":"inputImage"}}],"success":true}}"#,
+            serde_json::Value::from(text),
+            serde_json::Value::from(url)
+        )
+    );
+}
+
+#[tokio::test]
+async fn canvas_preview_progress_events_keep_their_order() {
+    let engine = LocalEngine::default();
+    let tools = canvas_with_oxygen();
+    let cases: [(Proposal, &[&str]); 3] = [
+        (
+            reaction(),
+            &[
+                "proposal",
+                "structures 1/4",
+                "structures 2/4",
+                "structures 3/4",
+                "structures 4/4",
+                "preview 14",
+            ],
+        ),
+        (
+            four_molecules(),
+            &[
+                "proposal",
+                "structures 1/4",
+                "structures 2/4",
+                "structures 3/4",
+                "preview 8",
+                "structures 4/4",
+                "preview 11",
+            ],
+        ),
+        (sketch_proposal(), &["proposal", "preview 28"]),
+    ];
+    for (proposal, expected) in cases {
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<assistant::codex::Progress>(64);
+        tools
+            .call_progress(
+                "canvas_preview",
+                serde_json::to_value(&proposal).unwrap(),
+                &engine,
+                Some(&tx),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            progress_trace(&mut rx),
+            expected,
+            "{}",
+            proposal.explanation
+        );
+    }
+}
+
+#[tokio::test]
+async fn canvas_preview_waits_for_proposal_capacity_and_drops_partial_progress() {
+    let engine = LocalEngine::default();
+    let tools = canvas_with_oxygen();
+    let limit = std::time::Duration::from_secs(120);
+    // Structure and preview progress are lossy: an undrained slot must not block them.
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<assistant::codex::Progress>(1);
+    tokio::time::timeout(
+        limit,
+        tools.call_progress(
+            "canvas_preview",
+            serde_json::to_value(reaction()).unwrap(),
+            &engine,
+            Some(&tx),
+        ),
+    )
+    .await
+    .expect("structure and preview progress must not wait")
+    .unwrap();
+    assert_eq!(progress_trace(&mut rx), ["proposal"]);
+    // The proposal itself waits for capacity; the preview sent after it is dropped.
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<assistant::codex::Progress>(1);
+    tx.try_send(assistant::codex::Progress::Status("held".into()))
+        .unwrap();
+    let call = tools.call_progress(
+        "canvas_preview",
+        serde_json::to_value(sketch_proposal()).unwrap(),
+        &engine,
+        Some(&tx),
+    );
+    let mut call = std::pin::pin!(call);
+    assert!(
+        call.as_mut()
+            .poll(&mut std::task::Context::from_waker(std::task::Waker::noop()))
+            .is_pending()
+    );
+    assert_eq!(progress_trace(&mut rx), [r#"Status("held")"#]);
+    tokio::time::timeout(limit, call)
+        .await
+        .expect("proposal send must resume")
+        .unwrap();
+    assert_eq!(progress_trace(&mut rx), ["proposal"]);
+}
+
+#[tokio::test]
+async fn canvas_tool_errors_keep_their_text_precedence_and_progress() {
+    let engine = LocalEngine::default();
+    let mut stale = canvas_with_oxygen();
+    stale.epoch = 1;
+    assert_eq!(
+        stale
+            .call(
+                "canvas_inspect",
+                serde_json::json!({"unexpected": true}),
+                &engine
+            )
+            .await
+            .unwrap_err(),
+        "The user switched drawings. Stop and ask for a new request in the current drawing."
+    );
+    let mut replacing = canvas_with_oxygen();
+    replacing.replace = vec![1];
+    replacing.revision = 1;
+    assert_eq!(
+        replacing
+            .call(
+                "canvas_preview",
+                serde_json::json!("not a proposal"),
+                &engine
+            )
+            .await
+            .unwrap_err(),
+        "The replacement target changed while you were working. Do not overwrite it; ask for a new request."
+    );
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<assistant::codex::Progress>(64);
+    let error = canvas_with_oxygen()
+        .call_progress(
+            "canvas_preview",
+            serde_json::to_value(Proposal {
+                explanation: "Which ester?".into(),
+                ..Default::default()
+            })
+            .unwrap(),
+            &engine,
+            Some(&tx),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error,
+        "A visual preview needs at least one molecule or reaction"
+    );
+    assert_eq!(progress_trace(&mut rx), ["proposal"]);
+}
+
+#[tokio::test]
+async fn canvas_tool_results_keep_the_codex_envelope() {
+    let engine = LocalEngine::default();
+    let tools = canvas_with_oxygen();
+    let inspect = tools
+        .call("canvas_inspect", serde_json::json!({}), &engine)
+        .await
+        .unwrap();
+    assert_codex_envelope(&inspect);
+    let preview = tools
+        .call(
+            "canvas_preview",
+            serde_json::to_value(reaction()).unwrap(),
+            &engine,
+        )
+        .await
+        .unwrap();
+    assert_codex_envelope(&preview);
+}
+
+#[tokio::test]
+#[ignore = "before/after parity dump for refactors; run with --ignored --nocapture and diff the ASSISTANT_PARITY lines"]
+async fn assistant_parity_dump() {
+    let engine = LocalEngine::default();
+    let tools = canvas_with_oxygen();
+    let mut rotated = four_molecules();
+    for (molecule, rotation) in rotated.molecules.iter_mut().zip([30., 90., -60., 180.]) {
+        molecule.rotation = rotation;
+    }
+    let mut branching = Proposal::default();
+    branching.composition.arrangement = assistant::composition::Arrangement::Branching;
+    for (direction, product) in [(0., "CC=O"), (-90., "C=C"), (180., "CCOC(C)=O")] {
+        branching.reactions.push(Step {
+            reactants: vec![molecule("CCO", "Ethanol")],
+            products: vec![molecule(product, "Product")],
+            arrow: "forward".into(),
+            conditions: "Reagents".into(),
+            direction: Some(direction),
+            ..Default::default()
+        });
+    }
+    let cases = [
+        ("reaction", reaction()),
+        ("rotated", rotated),
+        ("branching", branching),
+        ("sketch", sketch_proposal()),
+    ];
+    for (name, proposal) in cases {
+        let doc = assistant::render(&engine, &proposal, &Default::default())
+            .await
+            .unwrap();
+        println!(
+            "ASSISTANT_PARITY,{name},render,{}",
+            serde_json::to_string(&doc).unwrap()
+        );
+        println!(
+            "ASSISTANT_PARITY,{name},quality,{:?}",
+            assistant::review::quality(&doc, &proposal.composition)
+        );
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<assistant::codex::Progress>(64);
+        tools
+            .call_progress(
+                "canvas_preview",
+                serde_json::to_value(&proposal).unwrap(),
+                &engine,
+                Some(&tx),
+            )
+            .await
+            .unwrap();
+        let mut index = 0;
+        while let Ok(event) = rx.try_recv() {
+            if let assistant::codex::Progress::Preview(preview) = event {
+                println!(
+                    "ASSISTANT_PARITY,{name},preview{index},{}",
+                    serde_json::to_string(&preview).unwrap()
+                );
+                index += 1;
+            }
+        }
+        if name == "sketch" {
+            let target = assistant::review::targets(&doc)
+                .into_iter()
+                .find(|t| t.kind == "ligand")
+                .unwrap();
+            let tilted = assistant::review::apply(
+                &doc,
+                &[assistant::review::Edit::TiltLigand {
+                    target: target.name,
+                    x_degrees: 17.,
+                    y_degrees: -8.,
+                    rotation_degrees: 12.,
+                    depth_bonds: true,
+                    show_charge: false,
+                }],
+                true,
+            )
+            .unwrap();
+            println!(
+                "ASSISTANT_PARITY,sketch,tilt,{}",
+                serde_json::to_string(&tilted).unwrap()
+            );
+        }
+    }
+}
