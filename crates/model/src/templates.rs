@@ -1,5 +1,7 @@
 //! Built-in molecules and attachment geometry, shared by preview and placement.
 mod aromatic;
+#[cfg(test)]
+mod placement_parity_tests;
 use crate::document::{Atom, Document, Point};
 use crate::editing;
 pub(crate) use aromatic::show_circles;
