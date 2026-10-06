@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]
+mod reconstruct_parity_tests;
+#[cfg(test)]
 mod tests;
 
 #[derive(Debug, Deserialize, Serialize)]
