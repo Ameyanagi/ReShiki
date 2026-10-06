@@ -9,4 +9,6 @@ This list credits authors of contributions to ReShiki.
 
 Release preparation and documentation for 0.11.0: @Ameyanagi in [PR #185](https://github.com/Ameyanagi/ReShiki/pull/185).
 
+Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.com/Ameyanagi/ReShiki/pull/187) (under review).
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

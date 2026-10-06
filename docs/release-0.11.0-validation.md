@@ -38,6 +38,6 @@ Windows portable/setup checks and Linux portable-runtime checks passed in the fi
 
 ## Documentation validation
 
-Local `bun run docs:check` passed with zero errors, warnings or hints. With this validation record included, `bun run docs:build` produced 91 pages and verified 7,815 local documentation links and assets plus 1,088 colors. The [main documentation workflow](https://github.com/Ameyanagi/ReShiki/actions/runs/37385685879) built and deployed the release preparation documentation. This record follows the same documentation review and deployment path. Direct public documentation probes were blocked by Cloudflare error 1010; public visual acceptance was not performed.
+Local `bun run docs:check` passed with zero errors, warnings or hints. With this validation record included, `bun run docs:build` produced 91 pages and verified 7,816 local documentation links and assets plus 1,088 colors. The [main documentation workflow](https://github.com/Ameyanagi/ReShiki/actions/runs/37385685879) built and deployed the release preparation documentation. This record follows the same documentation review and deployment path. Direct public documentation probes were blocked by Cloudflare error 1010; public visual acceptance was not performed.
 
 Publication and package checks do not close the documented C60 display issue or the remaining desktop, accessibility, performance, Office/LibreOffice and antivirus acceptance work. Those limits remain in the release notes.
