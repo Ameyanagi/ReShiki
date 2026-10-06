@@ -679,324 +679,22 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         crate::palette::Color,
         Vec<crate::graphics::PathCommand>,
     > = Default::default();
+    let scene = BondScene {
+        doc,
+        style,
+        arcs: &arcs,
+        circles: &circles,
+        label_bounds: &label_bounds,
+        joins: &joins,
+        crossing_gaps: &crossing_gaps,
+    };
     for (bond_index, b) in doc
         .bonds
         .iter()
         .enumerate()
         .filter(|(_, b)| doc.bond_visible(b.a, b.b))
     {
-        let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
-            continue;
-        };
-        let length = a.position.distance(z.position);
-        if length < 0.1 {
-            continue;
-        }
-        let ux = (z.position.x - a.position.x) / length;
-        let uy = (z.position.y - a.position.y) / length;
-        let start = label_end(
-            a.position,
-            ux,
-            uy,
-            label_bounds
-                .get(&a.id)
-                .map(Vec::as_slice)
-                .unwrap_or_default(),
-            length,
-            style.world(style.margin_width_pt),
-        );
-        let end = label_end(
-            z.position,
-            -ux,
-            -uy,
-            label_bounds
-                .get(&z.id)
-                .map(Vec::as_slice)
-                .unwrap_or_default(),
-            length,
-            style.world(style.margin_width_pt),
-        );
-        if (end.x - start.x) * ux + (end.y - start.y) * uy <= 0.1 {
-            continue;
-        }
-        let nx = -uy;
-        let ny = ux;
-        let bond_start = out.len();
-        match b.display.as_str() {
-            "plain" | "bold" | "wedge" if !matches!(b.order, 2 | 7) && joins.needed(b) => {
-                out.push(Primitive::Polygon(joins.polygon(b, start, end)));
-            }
-            "hollow_wedge" => {
-                use crate::graphics::PathCommand;
-                let points = joins.polygon(b, start, end);
-                if let Some(first) = points.first() {
-                    let mut commands = vec![PathCommand::Move(*first)];
-                    commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
-                    commands.push(PathCommand::Close);
-                    out.push(Primitive::Path {
-                        commands,
-                        style: crate::graphics::GraphicStyle {
-                            width_pt: style.line_width_pt,
-                            ..Default::default()
-                        },
-                        filled: false,
-                    });
-                }
-            }
-            "hash" | "hashed" => {
-                let spacing = style.world(style.hash_spacing_pt);
-                let count = (start.distance(end) / spacing).floor().max(1.0) as u32;
-                for i in 1..=count {
-                    let t = (i as f32 * spacing / start.distance(end)).min(1.0);
-                    let p = Point::new(
-                        start.x + (end.x - start.x) * t,
-                        start.y + (end.y - start.y) * t,
-                    );
-                    let t = if b.display == "hashed" { 1.0 } else { t };
-                    out.push(Primitive::Line(
-                        p.offset(
-                            nx * (style.line_width()
-                                + t * (style.world(style.bold_width_pt) - style.line_width()))
-                                / 2.0,
-                            ny * (style.line_width()
-                                + t * (style.world(style.bold_width_pt) - style.line_width()))
-                                / 2.0,
-                        ),
-                        p.offset(
-                            -nx * (style.line_width()
-                                + t * (style.world(style.bold_width_pt) - style.line_width()))
-                                / 2.0,
-                            -ny * (style.line_width()
-                                + t * (style.world(style.bold_width_pt) - style.line_width()))
-                                / 2.0,
-                        ),
-                        style.line_width(),
-                    ));
-                }
-            }
-            "wavy" if b.order == 2 => {
-                let half = style.bond_length_world * style.bond_spacing_ratio / 2.0;
-                for sign in [-1.0, 1.0] {
-                    out.push(Primitive::Line(
-                        start.offset(nx * half * sign, ny * half * sign),
-                        end.offset(-nx * half * sign, -ny * half * sign),
-                        style.line_width(),
-                    ));
-                }
-            }
-            "wavy" => {
-                out.push(Primitive::Path {
-                    commands: crate::bonds::wavy_path(
-                        start,
-                        end,
-                        style.bond_length_world / 4.,
-                        style.line_width() * 1.25,
-                    ),
-                    style: crate::graphics::GraphicStyle {
-                        width_pt: style.line_width_pt,
-                        ..Default::default()
-                    },
-                    filled: false,
-                });
-            }
-            _ => {
-                let spacing = style.bond_length_world * style.bond_spacing_ratio;
-                let inward = if b.order == 4 {
-                    automatic_double_side(doc, b).unwrap_or(1.)
-                } else {
-                    1.
-                };
-                use crate::bonds::DoublePosition;
-                let position = if matches!(b.order, 2 | 7) {
-                    effective_double_position(doc, b)
-                } else {
-                    DoublePosition::Center
-                };
-                let side = match position {
-                    DoublePosition::Left => Some(-1.),
-                    DoublePosition::Right => Some(1.),
-                    DoublePosition::Auto | DoublePosition::Center => None,
-                };
-                let order = if arcs.contains(b.a, b.b) { 1 } else { b.order };
-                let offsets: &[f32] = match (order, side) {
-                    (2 | 7, Some(side)) => &[0.0, spacing * side],
-                    (2 | 7, None) => &[-spacing / 2.0, spacing / 2.0],
-                    (6, _) => &[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
-                    (3, _) => &[-spacing, 0.0, spacing],
-                    _ => &[0.0],
-                };
-                for (index, offset) in offsets.iter().enumerate() {
-                    let trim = if side.is_some() && [2, 7].contains(&b.order) && *offset != 0.0 {
-                        spacing * 0.75
-                    } else {
-                        0.0
-                    };
-                    let display = if index == 1 {
-                        b.secondary_display.as_deref().unwrap_or(&b.display)
-                    } else {
-                        &b.display
-                    };
-                    let first = start.offset(nx * offset + ux * trim, ny * offset + uy * trim);
-                    let last = end.offset(nx * offset - ux * trim, ny * offset - uy * trim);
-                    let available = (last.x - first.x) * ux + (last.y - first.y) * uy;
-                    if available <= 0.1 {
-                        continue;
-                    }
-                    let first = label_end(
-                        first,
-                        ux,
-                        uy,
-                        label_bounds
-                            .get(&a.id)
-                            .map(Vec::as_slice)
-                            .unwrap_or_default(),
-                        available,
-                        style.world(style.margin_width_pt),
-                    );
-                    let last = label_end(
-                        last,
-                        -ux,
-                        -uy,
-                        label_bounds
-                            .get(&z.id)
-                            .map(Vec::as_slice)
-                            .unwrap_or_default(),
-                        available,
-                        style.world(style.margin_width_pt),
-                    );
-                    if (last.x - first.x) * ux + (last.y - first.y) * uy <= 0.1 {
-                        continue;
-                    }
-                    if index == 0 && *offset == 0. && joins.needed(b) {
-                        out.push(Primitive::Polygon(joins.polygon(b, first, last)));
-                    } else if display == "bold" {
-                        // An explicitly centered bold rail still needs flat
-                        // ends; round caps protrude beyond the junction.
-                        let half = style.world(style.bold_width_pt) / 2.;
-                        out.push(Primitive::Polygon(vec![
-                            first.offset(nx * half, ny * half),
-                            last.offset(nx * half, ny * half),
-                            last.offset(-nx * half, -ny * half),
-                            first.offset(-nx * half, -ny * half),
-                        ]));
-                    } else if matches!(display, "dashed" | "dotted") {
-                        out.push(Primitive::Path {
-                            commands: vec![
-                                crate::graphics::PathCommand::Move(first),
-                                crate::graphics::PathCommand::Line(last),
-                            ],
-                            style: crate::graphics::GraphicStyle {
-                                width_pt: style.line_width_pt,
-                                pattern: if display == "dotted" {
-                                    crate::graphics::LinePattern::Dotted
-                                } else {
-                                    crate::graphics::LinePattern::Dashed
-                                },
-                                ..Default::default()
-                            },
-                            filled: false,
-                        });
-                    } else {
-                        out.push(Primitive::Line(
-                            first,
-                            last,
-                            if display == "bold" {
-                                style.world(style.bold_width_pt)
-                            } else {
-                                style.line_width()
-                            },
-                        ));
-                    }
-                }
-                if b.order == 4
-                    && !arcs.contains(b.a, b.b)
-                    && !circles.iter().any(|c| c.contains_bond(b.a, b.b))
-                {
-                    for i in 0..5 {
-                        let t = i as f32 / 5.0;
-                        let v = (i as f32 + 0.5) / 5.0;
-                        out.push(Primitive::Line(
-                            Point::new(
-                                start.x + (end.x - start.x) * t + nx * spacing * inward,
-                                start.y + (end.y - start.y) * t + ny * spacing * inward,
-                            ),
-                            Point::new(
-                                start.x + (end.x - start.x) * v + nx * spacing * inward,
-                                start.y + (end.y - start.y) * v + ny * spacing * inward,
-                            ),
-                            style.line_width(),
-                        ));
-                    }
-                }
-            }
-        }
-        if b.order == 5 && b.display == "plain" {
-            head(&mut out, end, uy.atan2(ux), false, style.line_width());
-        }
-        if let Some(gaps) = crossing_gaps.get(bond_index).filter(|g| !g.is_empty()) {
-            let bond_primitives = out.drain(bond_start..).collect();
-            out.extend(crate::crossings::cut(bond_primitives, gaps));
-        }
-        if joins.needed(b) && b.display != "hollow_wedge" {
-            use crate::graphics::PathCommand;
-            let commands = joined.entry(b.color).or_default();
-            let mut secondary = Vec::new();
-            for primitive in out.drain(bond_start..) {
-                if let Primitive::Polygon(points) = primitive {
-                    if let Some(first) = points.first() {
-                        commands.push(PathCommand::Move(*first));
-                        commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
-                        commands.push(PathCommand::Close);
-                    }
-                } else {
-                    secondary.push(primitive);
-                }
-            }
-            out.extend(secondary);
-        }
-        if b.color.rgb() != [0, 0, 0] {
-            for primitive in out.iter_mut().skip(bond_start) {
-                use crate::graphics::{GraphicStyle, PathCommand};
-                match primitive {
-                    Primitive::Path { style, .. } => {
-                        style.stroke = b.color;
-                        if style.fill.is_some() {
-                            style.fill = Some(b.color);
-                        }
-                    }
-                    Primitive::Line(a, z, width) => {
-                        *primitive = Primitive::Path {
-                            commands: vec![PathCommand::Move(*a), PathCommand::Line(*z)],
-                            style: GraphicStyle {
-                                stroke: b.color,
-                                width_pt: *width * STYLE.points_per_world(),
-                                ..Default::default()
-                            },
-                            filled: false,
-                        };
-                    }
-                    Primitive::Polygon(points) => {
-                        let Some(first) = points.first() else {
-                            continue;
-                        };
-                        let mut commands = vec![PathCommand::Move(*first)];
-                        commands.extend(points.iter().skip(1).map(|p| PathCommand::Line(*p)));
-                        commands.push(PathCommand::Close);
-                        *primitive = Primitive::Path {
-                            commands,
-                            style: GraphicStyle {
-                                stroke: b.color,
-                                fill: Some(b.color),
-                                width_pt: 0.0,
-                                ..Default::default()
-                            },
-                            filled: true,
-                        };
-                    }
-                    _ => {}
-                }
-            }
-        }
+        push_bond(scene, &mut out, &mut joined, bond_index, b);
     }
     push_junctions(&mut out, &mut joined, &joins, &crossing_gaps);
     push_joined_outlines(&mut out, joined);
@@ -1207,6 +905,451 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
                 color: fragment.style.color.rgb(),
                 style: fragment.style,
             });
+        }
+    }
+}
+/// Read-only state shared by every bond of the bond pass.
+#[derive(Clone, Copy)]
+struct BondScene<'a, 'd> {
+    doc: &'a Document,
+    style: &'a crate::style::DrawingStyle,
+    arcs: &'a crate::ring_arcs::Arcs,
+    circles: &'a [crate::aromatic::Circle],
+    label_bounds: &'a std::collections::HashMap<u64, Vec<(Point, Point)>>,
+    joins: &'a crate::bond_joins::Joins<'d>,
+    crossing_gaps: &'a [Vec<crate::crossings::Gap>],
+}
+/// A drawable bond's end atoms, label-trimmed ends, direction and normal.
+#[derive(Clone, Copy)]
+struct BondFrame<'a> {
+    a: &'a Atom,
+    z: &'a Atom,
+    start: Point,
+    end: Point,
+    ux: f32,
+    uy: f32,
+    nx: f32,
+    ny: f32,
+}
+fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
+    let BondScene {
+        doc,
+        style,
+        label_bounds,
+        ..
+    } = scene;
+    let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
+        return None;
+    };
+    let length = a.position.distance(z.position);
+    if length < 0.1 {
+        return None;
+    }
+    let ux = (z.position.x - a.position.x) / length;
+    let uy = (z.position.y - a.position.y) / length;
+    let start = label_end(
+        a.position,
+        ux,
+        uy,
+        label_bounds
+            .get(&a.id)
+            .map(Vec::as_slice)
+            .unwrap_or_default(),
+        length,
+        style.world(style.margin_width_pt),
+    );
+    let end = label_end(
+        z.position,
+        -ux,
+        -uy,
+        label_bounds
+            .get(&z.id)
+            .map(Vec::as_slice)
+            .unwrap_or_default(),
+        length,
+        style.world(style.margin_width_pt),
+    );
+    if (end.x - start.x) * ux + (end.y - start.y) * uy <= 0.1 {
+        return None;
+    }
+    let nx = -uy;
+    let ny = ux;
+    Some(BondFrame {
+        a,
+        z,
+        start,
+        end,
+        ux,
+        uy,
+        nx,
+        ny,
+    })
+}
+fn push_bond(
+    scene: BondScene<'_, '_>,
+    out: &mut Vec<Primitive>,
+    joined: &mut std::collections::BTreeMap<
+        crate::palette::Color,
+        Vec<crate::graphics::PathCommand>,
+    >,
+    bond_index: usize,
+    b: &Bond,
+) {
+    let BondScene { style, joins, .. } = scene;
+    let Some(frame) = bond_frame(scene, b) else {
+        return;
+    };
+    let BondFrame {
+        start,
+        end,
+        ux,
+        uy,
+        nx,
+        ny,
+        ..
+    } = frame;
+    let bond_start = out.len();
+    match b.display.as_str() {
+        "plain" | "bold" | "wedge" if !matches!(b.order, 2 | 7) && joins.needed(b) => {
+            out.push(Primitive::Polygon(joins.polygon(b, start, end)));
+        }
+        "hollow_wedge" => push_hollow_wedge(scene, out, b, start, end),
+        "hash" | "hashed" => push_hashed_wedge(scene, out, b, frame),
+        "wavy" if b.order == 2 => {
+            let half = style.bond_length_world * style.bond_spacing_ratio / 2.0;
+            for sign in [-1.0, 1.0] {
+                out.push(Primitive::Line(
+                    start.offset(nx * half * sign, ny * half * sign),
+                    end.offset(-nx * half * sign, -ny * half * sign),
+                    style.line_width(),
+                ));
+            }
+        }
+        "wavy" => {
+            out.push(Primitive::Path {
+                commands: crate::bonds::wavy_path(
+                    start,
+                    end,
+                    style.bond_length_world / 4.,
+                    style.line_width() * 1.25,
+                ),
+                style: crate::graphics::GraphicStyle {
+                    width_pt: style.line_width_pt,
+                    ..Default::default()
+                },
+                filled: false,
+            });
+        }
+        _ => push_bond_rails(scene, out, b, frame),
+    }
+    if b.order == 5 && b.display == "plain" {
+        head(out, end, uy.atan2(ux), false, style.line_width());
+    }
+    cut_bond_crossings(scene, out, bond_index, bond_start);
+    collect_joined_outlines(scene, out, joined, bond_start, b);
+    recolor_bond(out, bond_start, b);
+}
+fn push_hollow_wedge(
+    scene: BondScene<'_, '_>,
+    out: &mut Vec<Primitive>,
+    b: &Bond,
+    start: Point,
+    end: Point,
+) {
+    let BondScene { style, joins, .. } = scene;
+    use crate::graphics::PathCommand;
+    let points = joins.polygon(b, start, end);
+    if let Some(first) = points.first() {
+        let mut commands = vec![PathCommand::Move(*first)];
+        commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+        commands.push(PathCommand::Close);
+        out.push(Primitive::Path {
+            commands,
+            style: crate::graphics::GraphicStyle {
+                width_pt: style.line_width_pt,
+                ..Default::default()
+            },
+            filled: false,
+        });
+    }
+}
+fn push_hashed_wedge(
+    scene: BondScene<'_, '_>,
+    out: &mut Vec<Primitive>,
+    b: &Bond,
+    frame: BondFrame<'_>,
+) {
+    let BondScene { style, .. } = scene;
+    let BondFrame {
+        start, end, nx, ny, ..
+    } = frame;
+    let spacing = style.world(style.hash_spacing_pt);
+    let count = (start.distance(end) / spacing).floor().max(1.0) as u32;
+    for i in 1..=count {
+        let t = (i as f32 * spacing / start.distance(end)).min(1.0);
+        let p = Point::new(
+            start.x + (end.x - start.x) * t,
+            start.y + (end.y - start.y) * t,
+        );
+        let t = if b.display == "hashed" { 1.0 } else { t };
+        out.push(Primitive::Line(
+            p.offset(
+                nx * (style.line_width()
+                    + t * (style.world(style.bold_width_pt) - style.line_width()))
+                    / 2.0,
+                ny * (style.line_width()
+                    + t * (style.world(style.bold_width_pt) - style.line_width()))
+                    / 2.0,
+            ),
+            p.offset(
+                -nx * (style.line_width()
+                    + t * (style.world(style.bold_width_pt) - style.line_width()))
+                    / 2.0,
+                -ny * (style.line_width()
+                    + t * (style.world(style.bold_width_pt) - style.line_width()))
+                    / 2.0,
+            ),
+            style.line_width(),
+        ));
+    }
+}
+fn push_bond_rails(
+    scene: BondScene<'_, '_>,
+    out: &mut Vec<Primitive>,
+    b: &Bond,
+    frame: BondFrame<'_>,
+) {
+    let BondScene {
+        doc,
+        style,
+        arcs,
+        circles,
+        label_bounds,
+        joins,
+        ..
+    } = scene;
+    let BondFrame {
+        a,
+        z,
+        start,
+        end,
+        ux,
+        uy,
+        nx,
+        ny,
+    } = frame;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    let inward = if b.order == 4 {
+        automatic_double_side(doc, b).unwrap_or(1.)
+    } else {
+        1.
+    };
+    use crate::bonds::DoublePosition;
+    let position = if matches!(b.order, 2 | 7) {
+        effective_double_position(doc, b)
+    } else {
+        DoublePosition::Center
+    };
+    let side = match position {
+        DoublePosition::Left => Some(-1.),
+        DoublePosition::Right => Some(1.),
+        DoublePosition::Auto | DoublePosition::Center => None,
+    };
+    let order = if arcs.contains(b.a, b.b) { 1 } else { b.order };
+    let offsets: &[f32] = match (order, side) {
+        (2 | 7, Some(side)) => &[0.0, spacing * side],
+        (2 | 7, None) => &[-spacing / 2.0, spacing / 2.0],
+        (6, _) => &[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
+        (3, _) => &[-spacing, 0.0, spacing],
+        _ => &[0.0],
+    };
+    for (index, offset) in offsets.iter().enumerate() {
+        let trim = if side.is_some() && [2, 7].contains(&b.order) && *offset != 0.0 {
+            spacing * 0.75
+        } else {
+            0.0
+        };
+        let display = if index == 1 {
+            b.secondary_display.as_deref().unwrap_or(&b.display)
+        } else {
+            &b.display
+        };
+        let first = start.offset(nx * offset + ux * trim, ny * offset + uy * trim);
+        let last = end.offset(nx * offset - ux * trim, ny * offset - uy * trim);
+        let available = (last.x - first.x) * ux + (last.y - first.y) * uy;
+        if available <= 0.1 {
+            continue;
+        }
+        let first = label_end(
+            first,
+            ux,
+            uy,
+            label_bounds
+                .get(&a.id)
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
+            available,
+            style.world(style.margin_width_pt),
+        );
+        let last = label_end(
+            last,
+            -ux,
+            -uy,
+            label_bounds
+                .get(&z.id)
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
+            available,
+            style.world(style.margin_width_pt),
+        );
+        if (last.x - first.x) * ux + (last.y - first.y) * uy <= 0.1 {
+            continue;
+        }
+        if index == 0 && *offset == 0. && joins.needed(b) {
+            out.push(Primitive::Polygon(joins.polygon(b, first, last)));
+        } else if display == "bold" {
+            // An explicitly centered bold rail still needs flat
+            // ends; round caps protrude beyond the junction.
+            let half = style.world(style.bold_width_pt) / 2.;
+            out.push(Primitive::Polygon(vec![
+                first.offset(nx * half, ny * half),
+                last.offset(nx * half, ny * half),
+                last.offset(-nx * half, -ny * half),
+                first.offset(-nx * half, -ny * half),
+            ]));
+        } else if matches!(display, "dashed" | "dotted") {
+            out.push(Primitive::Path {
+                commands: vec![
+                    crate::graphics::PathCommand::Move(first),
+                    crate::graphics::PathCommand::Line(last),
+                ],
+                style: crate::graphics::GraphicStyle {
+                    width_pt: style.line_width_pt,
+                    pattern: if display == "dotted" {
+                        crate::graphics::LinePattern::Dotted
+                    } else {
+                        crate::graphics::LinePattern::Dashed
+                    },
+                    ..Default::default()
+                },
+                filled: false,
+            });
+        } else {
+            out.push(Primitive::Line(
+                first,
+                last,
+                if display == "bold" {
+                    style.world(style.bold_width_pt)
+                } else {
+                    style.line_width()
+                },
+            ));
+        }
+    }
+    if b.order == 4
+        && !arcs.contains(b.a, b.b)
+        && !circles.iter().any(|c| c.contains_bond(b.a, b.b))
+    {
+        for i in 0..5 {
+            let t = i as f32 / 5.0;
+            let v = (i as f32 + 0.5) / 5.0;
+            out.push(Primitive::Line(
+                Point::new(
+                    start.x + (end.x - start.x) * t + nx * spacing * inward,
+                    start.y + (end.y - start.y) * t + ny * spacing * inward,
+                ),
+                Point::new(
+                    start.x + (end.x - start.x) * v + nx * spacing * inward,
+                    start.y + (end.y - start.y) * v + ny * spacing * inward,
+                ),
+                style.line_width(),
+            ));
+        }
+    }
+}
+fn cut_bond_crossings(
+    scene: BondScene<'_, '_>,
+    out: &mut Vec<Primitive>,
+    bond_index: usize,
+    bond_start: usize,
+) {
+    let BondScene { crossing_gaps, .. } = scene;
+    if let Some(gaps) = crossing_gaps.get(bond_index).filter(|g| !g.is_empty()) {
+        let bond_primitives = out.drain(bond_start..).collect();
+        out.extend(crate::crossings::cut(bond_primitives, gaps));
+    }
+}
+fn collect_joined_outlines(
+    scene: BondScene<'_, '_>,
+    out: &mut Vec<Primitive>,
+    joined: &mut std::collections::BTreeMap<
+        crate::palette::Color,
+        Vec<crate::graphics::PathCommand>,
+    >,
+    bond_start: usize,
+    b: &Bond,
+) {
+    let BondScene { joins, .. } = scene;
+    if joins.needed(b) && b.display != "hollow_wedge" {
+        use crate::graphics::PathCommand;
+        let commands = joined.entry(b.color).or_default();
+        let mut secondary = Vec::new();
+        for primitive in out.drain(bond_start..) {
+            if let Primitive::Polygon(points) = primitive {
+                if let Some(first) = points.first() {
+                    commands.push(PathCommand::Move(*first));
+                    commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+                    commands.push(PathCommand::Close);
+                }
+            } else {
+                secondary.push(primitive);
+            }
+        }
+        out.extend(secondary);
+    }
+}
+fn recolor_bond(out: &mut [Primitive], bond_start: usize, b: &Bond) {
+    if b.color.rgb() != [0, 0, 0] {
+        for primitive in out.iter_mut().skip(bond_start) {
+            use crate::graphics::{GraphicStyle, PathCommand};
+            match primitive {
+                Primitive::Path { style, .. } => {
+                    style.stroke = b.color;
+                    if style.fill.is_some() {
+                        style.fill = Some(b.color);
+                    }
+                }
+                Primitive::Line(a, z, width) => {
+                    *primitive = Primitive::Path {
+                        commands: vec![PathCommand::Move(*a), PathCommand::Line(*z)],
+                        style: GraphicStyle {
+                            stroke: b.color,
+                            width_pt: *width * STYLE.points_per_world(),
+                            ..Default::default()
+                        },
+                        filled: false,
+                    };
+                }
+                Primitive::Polygon(points) => {
+                    let Some(first) = points.first() else {
+                        continue;
+                    };
+                    let mut commands = vec![PathCommand::Move(*first)];
+                    commands.extend(points.iter().skip(1).map(|p| PathCommand::Line(*p)));
+                    commands.push(PathCommand::Close);
+                    *primitive = Primitive::Path {
+                        commands,
+                        style: GraphicStyle {
+                            stroke: b.color,
+                            fill: Some(b.color),
+                            width_pt: 0.0,
+                            ..Default::default()
+                        },
+                        filled: true,
+                    };
+                }
+                _ => {}
+            }
         }
     }
 }
