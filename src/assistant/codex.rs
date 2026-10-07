@@ -498,8 +498,7 @@ async fn generate(
             };
             super::review::Outcome { proposal, document, review: Default::default() }
         };
-        let straightened = if outcome.proposal.sketch.is_some() { 0 } else { super::composition::straighten_all(&mut outcome.document) };
-        if straightened > 0 { outcome.review.changes.push(format!("Aligned {straightened} molecular structures to clean drawing axes.")); }
+        if let Some(change) = super::composition::finish_layout(&outcome.proposal, &mut outcome.document) { outcome.review.changes.push(change); }
         let _ = progress.send(Progress::Preview(Box::new(outcome.document.clone()))).await;
         let checked = review_draft(&mut server, &turn, &prompt, &mut outcome).await;
         if server.cancel.stopped() { return Err("Stopped".into()); }

@@ -134,6 +134,54 @@ fn capped_history_keeps_chronology_noops_and_continuous_gestures() {
     assert_eq!(doc, before);
 }
 #[test]
+fn history_limits_and_exposes_frames_oldest_first() {
+    assert_eq!(History::default().limit(), 100);
+    assert_eq!(History::with_limit(0).limit(), 1);
+    let x = |doc: &Document| doc.atoms[0].position.x;
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::default());
+    let mut history = History::with_limit(3);
+    assert_eq!(history.limit(), 3);
+    assert!(history.peek(false).is_none() && history.peek(true).is_none());
+    for value in 1..=5 {
+        let before = doc.clone();
+        doc.atoms[0].position.x = value as f32;
+        assert!(history.commit(before, &doc));
+    }
+    assert_eq!(history.frames(), 3);
+    assert_eq!(
+        history.undo_frames().map(x).collect::<Vec<_>>(),
+        [2., 3., 4.]
+    );
+    assert_eq!(history.peek(false).map(x), Some(4.));
+    assert!(history.undo(&mut doc));
+    assert!(history.undo(&mut doc));
+    assert_eq!(x(&doc), 3.);
+    assert_eq!(history.undo_frames().map(x).collect::<Vec<_>>(), [2.]);
+    assert_eq!(history.redo_frames().map(x).collect::<Vec<_>>(), [5., 4.]);
+    assert_eq!(history.peek(true).map(x), Some(4.));
+    assert_eq!(history.peek(false).map(x), Some(2.));
+    assert_eq!(history.frames(), 3);
+    assert!(history.redo(&mut doc));
+    assert_eq!(x(&doc), 4.);
+}
+#[test]
+fn native_files_open_at_version_15_or_later_without_computed_labels() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("O", Point::new(42., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.atoms[0].cip_label = Some("R".into());
+    doc.bonds[0].cip_label = Some("E".into());
+    for version in [14, 15, VERSION] {
+        doc.version = version;
+        let opened = Document::from_native_file(&serde_json::to_vec(&doc).unwrap()).unwrap();
+        assert_eq!(opened.version, version.max(15));
+        assert!(opened.atoms[0].cip_label.is_none() && opened.bonds[0].cip_label.is_none());
+    }
+    assert!(Document::from_native_file(b"not JSON").is_err());
+}
+#[test]
 fn newer_drawings_are_reported_before_parsing_and_saves_use_the_current_version() {
     let mut doc = Document::default();
     let a = doc.add_atom("C", Point::default());

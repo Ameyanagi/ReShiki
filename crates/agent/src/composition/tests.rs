@@ -23,3 +23,27 @@ fn straighten_all_realigns_rotated_structures_once() {
     assert_ne!(doc, before);
     assert_eq!(straighten_all(&mut doc), 0);
 }
+
+#[test]
+fn finish_layout_straightens_generated_structures_but_not_sketches() {
+    let mut expected = rotated();
+    let straightened = straighten_all(&mut expected);
+    let mut doc = rotated();
+    assert_eq!(
+        finish_layout(&crate::Proposal::default(), &mut doc),
+        Some(format!(
+            "Aligned {straightened} molecular structures to clean drawing axes."
+        ))
+    );
+    assert_eq!(doc, expected);
+    assert_eq!(finish_layout(&crate::Proposal::default(), &mut doc), None);
+    let sketched = crate::Proposal {
+        sketch: Some(
+            serde_json::from_value(serde_json::json!({"atoms":[],"bonds":[],"shapes":[]})).unwrap(),
+        ),
+        ..Default::default()
+    };
+    let mut doc = rotated();
+    assert_eq!(finish_layout(&sketched, &mut doc), None);
+    assert_eq!(doc, rotated());
+}

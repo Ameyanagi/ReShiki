@@ -88,6 +88,20 @@ async fn publication_sequence_characterization() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn publication_matches_sequence() -> anyhow::Result<()> {
+    let engine = LocalEngine::default();
+    for (case, doc, format, pages) in publication_cases()? {
+        let expected = sequence(&engine, doc.clone(), format, pages).await;
+        let actual = export::publication(&engine, doc, format, pages, export::FILE_PIXELS)
+            .await
+            .map(|publication| (publication.bytes, publication.details));
+        // Compare without printing raster bytes on a mismatch.
+        assert!(actual == expected, "{case}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn unresolved_aromatic_drawing_exports_without_assigning_chemistry() -> anyhow::Result<()> {
     let mut doc = Document::default();
     reshiki::editing::ring(&mut doc, Point::default(), 5, true, 42.);

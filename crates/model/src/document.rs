@@ -266,6 +266,14 @@ impl Document {
         });
         self.version = EXACT_COLORS;
     }
+    /// Open a native drawing file as the editor does: [`Self::from_json`],
+    /// the version raised to at least 15, and computed labels cleared.
+    pub fn from_native_file(bytes: &[u8]) -> Result<Self, String> {
+        let mut doc = Self::from_json(bytes)?;
+        doc.version = doc.version.max(15);
+        crate::atom_labels::clear_computed(&mut doc);
+        Ok(doc)
+    }
     /// Native file contents, marked with this build's document version.
     pub fn file_json(&self) -> Result<Vec<u8>, String> {
         serde_json::to_vec_pretty(&self.current()).map_err(|e| e.to_string())
@@ -611,12 +619,49 @@ impl Document {
     }
 }
 
-#[derive(Default)]
 pub struct History {
     undo: VecDeque<Document>,
     redo: VecDeque<Document>,
+    limit: usize,
+}
+/// The editor keeps 100 undo frames.
+impl Default for History {
+    fn default() -> Self {
+        Self::with_limit(100)
+    }
 }
 impl History {
+    /// An empty history that keeps at most `limit` undo frames (at least one).
+    pub fn with_limit(limit: usize) -> Self {
+        Self {
+            undo: VecDeque::new(),
+            redo: VecDeque::new(),
+            limit: limit.max(1),
+        }
+    }
+    pub fn limit(&self) -> usize {
+        self.limit
+    }
+    /// Undo plus redo frames.
+    pub fn frames(&self) -> usize {
+        self.undo.len() + self.redo.len()
+    }
+    /// The drawing the next undo (or, with `redo`, the next redo) restores.
+    pub fn peek(&self, redo: bool) -> Option<&Document> {
+        if redo {
+            self.redo.back()
+        } else {
+            self.undo.back()
+        }
+    }
+    /// Undo frames, oldest first; the last is the next undo.
+    pub fn undo_frames(&self) -> std::collections::vec_deque::Iter<'_, Document> {
+        self.undo.iter()
+    }
+    /// Redo frames, oldest first; the last is the next redo.
+    pub fn redo_frames(&self) -> std::collections::vec_deque::Iter<'_, Document> {
+        self.redo.iter()
+    }
     pub fn commit(&mut self, before: Document, after: &Document) -> bool {
         self.commit_continuing(before, after, false)
     }
@@ -634,7 +679,7 @@ impl History {
             self.undo.push_back(before);
         }
         self.redo.clear();
-        if self.undo.len() > 100 {
+        if self.undo.len() > self.limit {
             let _ = self.undo.pop_front();
         }
         true

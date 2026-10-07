@@ -252,3 +252,25 @@ fn clipboard_png_keeps_the_fixed_preferred_resolution() {
         "{detail}"
     );
 }
+
+#[test]
+fn figure_budgets_step_down_the_resolution_ladder_to_72_dpi() {
+    let [(_, doc), _] = parity_fixtures();
+    let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();
+    // png_dimensions scales CSS pixels by dpi / 96.
+    let side = |length: f32| u64::from((length * 0.75).ceil() as u32);
+    let at_72 = side(tree.size().width()) * side(tree.size().height());
+    let file = figure(&doc, "png").unwrap();
+    let full = figure_with_budget(&doc, "png", FILE_PIXELS).unwrap();
+    assert_eq!((full.bytes, full.detail), (file.bytes, file.detail));
+    let reduced = figure_with_budget(&doc, "png", at_72).unwrap();
+    let detail = reduced.detail.unwrap();
+    assert!(detail.ends_with("at 72 dpi"), "{detail}");
+    assert!(!detail.ends_with(&format!("at {} dpi", crate::style::DEFAULT.png_dpi)));
+    assert_eq!(
+        figure_with_budget(&doc, "png", at_72 - 1).err().as_deref(),
+        Some("Drawing is too large for a PNG even at 72 dpi; use SVG or PDF.")
+    );
+    // Vector formats have no pixel budget.
+    assert!(figure_with_budget(&doc, "svg", 1).is_ok());
+}

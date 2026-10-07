@@ -284,3 +284,38 @@ fn alignment_does_not_collapse_bonded_atoms() {
     );
     assert_eq!(groups(&d, &ids).len(), 2);
 }
+
+#[test]
+fn analysis_covers_whole_abbreviations_in_document_order_without_labels() {
+    let mut doc = Document::default();
+    let member = doc.add_atom("C", Point::default());
+    let anchor = doc.add_atom("O", Point::new(42., 0.));
+    let outside = doc.add_atom("C", Point::new(84., 0.));
+    doc.add_bond(member, anchor, 1, "plain");
+    doc.add_bond(anchor, outside, 1, "plain");
+    doc.contract(&[anchor, member], "OMe", "MeO").unwrap();
+    for atom in &mut doc.atoms {
+        atom.cip_label = Some("R".into());
+    }
+    for bond in &mut doc.bonds {
+        bond.cip_label = Some("E".into());
+    }
+    let before = doc.clone();
+    assert_eq!(analysis_atoms(&doc, &[member]), [member, anchor]);
+    assert_eq!(
+        analysis_atoms(&doc, &[outside, anchor]),
+        [member, anchor, outside]
+    );
+    assert!(analysis_atoms(&doc, &[u64::MAX]).is_empty());
+    let part = analysis_document(&doc, &[member, anchor]);
+    let mut expected = selection(&doc, &[member, anchor]);
+    crate::atom_labels::clear_computed(&mut expected);
+    assert_eq!(part, expected);
+    assert_eq!(
+        part.atoms.iter().map(|a| a.id).collect::<Vec<_>>(),
+        [member, anchor]
+    );
+    assert!(part.atoms.iter().all(|a| a.cip_label.is_none()));
+    assert!(part.bonds.iter().all(|b| b.cip_label.is_none()));
+    assert_eq!(doc, before);
+}

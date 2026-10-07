@@ -621,24 +621,7 @@ pub fn text_request(text: &str) -> Request {
     Request::import(text_format(text), text)
 }
 
-/// Import format of typed or pasted structure text, recognized by cheap markers.
-pub fn text_format(text: &str) -> &'static str {
-    if text.trim_start().starts_with("InChI=") {
-        "inchi"
-    } else if text.trim_start().starts_with("$RXN") {
-        "rxn"
-    } else if text.contains("M  END") {
-        "mol"
-    } else if text.contains("<CDXML") {
-        "cdxml"
-    } else if text.contains("V2000") || text.contains("V3000") {
-        "mol"
-    } else if text.replace("->", "").matches('>').count() == 2 {
-        "rsmi"
-    } else {
-        "smiles"
-    }
-}
+pub use crate::engine::text_format;
 
 pub async fn paste(engine: LocalEngine, image_only: bool) -> Result<Document, String> {
     Ok(paste_with_warnings(engine, image_only).await?.document)

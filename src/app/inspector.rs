@@ -220,30 +220,15 @@ impl App {
         if self.tab.selected.is_empty() {
             return None;
         }
-        let ids: HashSet<_> = self
-            .tab
-            .doc
-            .expand_abbreviation_selection(&self.tab.selected)
-            .into_iter()
-            .collect();
         Some(PropertyKey {
             revision: self.tab.revision,
             epoch: self.tab.file_epoch,
-            atoms: self
-                .tab
-                .doc
-                .atoms
-                .iter()
-                .filter(|a| ids.contains(&a.id))
-                .map(|a| a.id)
-                .collect(),
+            atoms: reshiki::editing::analysis_atoms(&self.tab.doc, &self.tab.selected),
         })
     }
 
     fn property_document(&self, key: &PropertyKey) -> Document {
-        let mut part = reshiki::editing::selection(&self.tab.doc, &key.atoms);
-        reshiki::atom_labels::clear_computed(&mut part);
-        part
+        reshiki::editing::analysis_document(&self.tab.doc, &key.atoms)
     }
 
     fn property_request_key(&self) -> PropertyKey {
