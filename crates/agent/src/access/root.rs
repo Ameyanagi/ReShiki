@@ -31,6 +31,9 @@ impl Root {
         Self::open_inner(path, hook)
     }
 
+    // Opening a root is the access module's one ambient directory open: it
+    // canonicalizes the folder and needs cap-std's ambient authority.
+    #[allow(clippy::disallowed_methods, clippy::disallowed_types)]
     fn open_inner(path: &Path, hook: &dyn Fn()) -> Result<Self, GrantError> {
         if !path.is_absolute() {
             return Err(GrantError::Config(format!(
@@ -72,7 +75,9 @@ fn open_error(path: &Path, error: io::Error) -> GrantError {
 }
 
 /// The opened handle must still be the directory at the canonical path.
+// Part of opening a root: the canonical path is compared with the handle.
 #[cfg(unix)]
+#[allow(clippy::disallowed_methods)]
 fn same_directory(dir: &Dir, canonical: &Path) -> bool {
     use cap_std::fs::MetadataExt as _;
     use std::os::unix::fs::MetadataExt as _;
@@ -197,7 +202,7 @@ impl Grants {
 
 /// The number of `root` components and the remainder, if `root` is a proper
 /// whole-component prefix of `path`.
-fn strip(root: &Path, path: &Path) -> Option<(usize, PathBuf)> {
+pub(super) fn strip(root: &Path, path: &Path) -> Option<(usize, PathBuf)> {
     let mut rest = path.components();
     let mut depth = 0;
     for part in root.components() {
@@ -208,6 +213,14 @@ fn strip(root: &Path, path: &Path) -> Option<(usize, PathBuf)> {
     }
     let rest: PathBuf = rest.collect();
     (!rest.as_os_str().is_empty()).then_some((depth, rest))
+}
+
+/// Whether `path` is `ancestor` or lies inside it, by whole components.
+pub(super) fn within(path: &Path, ancestor: &Path) -> bool {
+    let mut parts = path.components();
+    ancestor
+        .components()
+        .all(|part| parts.next().is_some_and(|next| same_component(part, next)))
 }
 
 /// Unix compares exactly; a case or Unicode-normalization variant fails closed.

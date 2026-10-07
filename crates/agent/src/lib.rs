@@ -9,7 +9,11 @@
         clippy::unreachable,
         clippy::todo,
         clippy::unimplemented,
-        clippy::indexing_slicing
+        clippy::indexing_slicing,
+        // Stdout belongs to the MCP protocol.
+        clippy::print_stdout,
+        clippy::print_stderr,
+        clippy::dbg_macro
     )
 )]
 

@@ -1,5 +1,9 @@
+// Tests build their layouts with std::fs and tempfile, outside every grant.
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
 use super::{
+    config::FILE_NAME,
     path::parse,
+    protected::{app_bundle, project},
     root::{Kind, Root, normalize},
     write::Hooks,
     *,
@@ -748,4 +752,479 @@ fn clones_share_handles() {
     let copy = grants.clone();
     assert!(Arc::ptr_eq(&grants.read[0].dir, &copy.read[0].dir));
     assert!(Arc::ptr_eq(&grants.write[0].dir, &copy.write[0].dir));
+}
+
+fn write_config(dir: &Path, json: &str) -> PathBuf {
+    let file = dir.join(FILE_NAME);
+    fs::write(&file, json).unwrap();
+    file
+}
+
+/// The configuration error, which must name the file.
+fn config_error(dir: &Path) -> String {
+    let file = text(&dir.join(FILE_NAME));
+    match AccessConfig::load_from(dir) {
+        Err(GrantError::Config(message)) => {
+            assert!(message.contains(&file), "{message} does not name {file}");
+            message
+        }
+        other => panic!("expected a configuration error, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_valid_configuration_loads() {
+    let (_dir, base) = sandbox();
+    let read = folder(&base, "read");
+    let write = folder(&base, "write");
+    let json = serde_json::json!({ "version": 1, "read": [text(&read)], "write": [text(&write)] });
+    write_config(&base, &json.to_string());
+    let config = AccessConfig::load_from(&base).unwrap();
+    assert_eq!(config.read, [read]);
+    assert_eq!(config.write, [write]);
+    // Either list may be left out.
+    write_config(&base, r#"{ "version": 1 }"#);
+    assert_eq!(
+        AccessConfig::load_from(&base).unwrap(),
+        AccessConfig::empty()
+    );
+}
+
+#[test]
+fn a_missing_configuration_grants_nothing() {
+    let (_dir, base) = sandbox();
+    assert_eq!(
+        AccessConfig::load_from(&base).unwrap(),
+        AccessConfig::empty()
+    );
+    let absent = base.join("absent");
+    assert_eq!(
+        AccessConfig::load_from(&absent).unwrap(),
+        AccessConfig::empty()
+    );
+}
+
+#[test]
+fn invalid_configurations_are_errors_naming_the_file() {
+    let (_dir, base) = sandbox();
+    let cases = [
+        ("malformed", "{ \"version\": 1,".to_owned(), "EOF"),
+        (
+            "unknown field",
+            r#"{ "version": 1, "roots": [] }"#.to_owned(),
+            "unknown field",
+        ),
+        (
+            "missing version",
+            r#"{ "read": [] }"#.to_owned(),
+            "missing field",
+        ),
+        (
+            "version 2",
+            r#"{ "version": 2 }"#.to_owned(),
+            "unsupported version 2",
+        ),
+        (
+            "relative path",
+            r#"{ "version": 1, "write": ["relative/folder"] }"#.to_owned(),
+            "must be absolute",
+        ),
+        (
+            "over 64 KiB",
+            format!("{{ \"version\": 1 }}{}", " ".repeat(64 * 1024)),
+            "larger than 65536 bytes",
+        ),
+    ];
+    for (case, json, reason) in cases {
+        write_config(&base, &json);
+        let message = config_error(&base);
+        assert!(message.contains(reason), "{case}: {message}");
+    }
+    // Exactly 64 KiB still loads.
+    let json = r#"{ "version": 1 }"#;
+    write_config(
+        &base,
+        &format!("{json}{}", " ".repeat(64 * 1024 - json.len())),
+    );
+    assert_eq!(
+        AccessConfig::load_from(&base).unwrap(),
+        AccessConfig::empty()
+    );
+}
+
+#[test]
+fn a_configuration_that_is_a_folder_is_an_error() {
+    let (_dir, base) = sandbox();
+    folder(&base, FILE_NAME);
+    config_error(&base);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_configuration_fifo_is_refused_without_blocking() {
+    let (_dir, base) = sandbox();
+    let status = std::process::Command::new("mkfifo")
+        .arg(base.join(FILE_NAME))
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let dir = base.clone();
+    std::thread::spawn(move || {
+        let _ = sender.send(AccessConfig::load_from(&dir));
+    });
+    // Without O_NONBLOCK the open would wait for a writer forever.
+    let result = receiver
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .unwrap();
+    assert!(matches!(result, Err(GrantError::Config(_))), "{result:?}");
+    assert!(config_error(&base).contains("not a regular file"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_configuration_loads() {
+    let (_dir, base) = sandbox();
+    let read = folder(&base, "read");
+    let elsewhere = folder(&base, "elsewhere");
+    let target = write_config(
+        &elsewhere,
+        &serde_json::json!({ "version": 1, "read": [text(&read)] }).to_string(),
+    );
+    std::os::unix::fs::symlink(target, base.join(FILE_NAME)).unwrap();
+    assert_eq!(AccessConfig::load_from(&base).unwrap().read, [read]);
+}
+
+fn unprotected() -> Protected {
+    Protected::new(Vec::new(), None, None)
+}
+
+fn sources(config: AccessConfig, read: &[PathBuf], write: &[PathBuf], cwd: &Path) -> GrantSources {
+    GrantSources {
+        config,
+        cli_read: read.to_vec(),
+        cli_write: write.to_vec(),
+        cwd: cwd.to_path_buf(),
+    }
+}
+
+/// Grant `path` for reading and, separately, for writing under `protected`.
+fn refusals(protected: &Protected, path: &Path) -> [Option<GrantError>; 2] {
+    let grant = |read: &[PathBuf], write: &[PathBuf]| {
+        Grants::from_sources(
+            &sources(AccessConfig::empty(), read, write, Path::new("")),
+            protected,
+        )
+        .err()
+    };
+    let path = [path.to_path_buf()];
+    [grant(&path, &[]), grant(&[], &path)]
+}
+
+fn assert_refused(protected: &Protected, path: &Path, expected: GrantError) {
+    assert_eq!(
+        refusals(protected, path),
+        [Some(expected.clone()), Some(expected)],
+        "{}",
+        path.display()
+    );
+}
+
+fn assert_allowed(protected: &Protected, path: &Path) {
+    assert_eq!(
+        refusals(protected, path),
+        [None, None],
+        "{}",
+        path.display()
+    );
+}
+
+#[test]
+fn configuration_and_command_line_folders_are_united_once_per_folder() {
+    let (_dir, base) = sandbox();
+    let a = folder(&base, "a");
+    let b = folder(&base, "b");
+    let c = folder(&base, "c");
+    let config = AccessConfig {
+        version: 1,
+        read: vec![a.clone(), b.clone()],
+        write: vec![b.clone()],
+    };
+    // Relative command-line folders resolve against cwd; duplicates of a
+    // canonical folder keep the first spelling.
+    let read = [PathBuf::from("a"), c.clone(), base.join("c").join(".")];
+    let write = [PathBuf::from("b"), PathBuf::from("c")];
+    let grants =
+        Grants::from_sources(&sources(config, &read, &write, &base), &unprotected()).unwrap();
+    assert_eq!(
+        grants.summary(),
+        GrantSummary {
+            read: vec![text(&a), text(&b), text(&c)],
+            write: vec![text(&b), text(&base.join("c"))],
+        }
+    );
+    // Write roots still never imply read.
+    let cli_only = Grants::from_sources(
+        &sources(AccessConfig::empty(), &[], slice::from_ref(&c), &base),
+        &unprotected(),
+    )
+    .unwrap();
+    assert!(cli_only.read.is_empty());
+    assert_eq!(cli_only.write.len(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_and_its_target_are_one_folder() {
+    let (_dir, base) = sandbox();
+    let real = folder(&base, "real");
+    let alias = base.join("alias");
+    std::os::unix::fs::symlink(&real, &alias).unwrap();
+    let grants = Grants::from_sources(
+        &sources(AccessConfig::empty(), &[alias.clone(), real], &[], &base),
+        &unprotected(),
+    )
+    .unwrap();
+    assert_eq!(grants.summary().read, [text(&alias)]);
+}
+
+#[test]
+fn a_missing_command_line_folder_is_an_error() {
+    let (_dir, base) = sandbox();
+    let result = Grants::from_sources(
+        &sources(
+            AccessConfig::empty(),
+            &[PathBuf::from("absent")],
+            &[],
+            &base,
+        ),
+        &unprotected(),
+    );
+    assert_eq!(
+        result.unwrap_err(),
+        GrantError::NotFound(base.join("absent"))
+    );
+}
+
+#[test]
+fn file_system_roots_are_too_broad() {
+    let root = PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" });
+    assert_refused(&unprotected(), &root, GrantError::TooBroad(root.clone()));
+}
+
+#[test]
+fn home_and_its_ancestors_are_too_broad() {
+    let (_dir, base) = sandbox();
+    let users = folder(&base, "users");
+    let home = folder(&users, "me");
+    let documents = folder(&home, "documents");
+    let protected = Protected::new(Vec::new(), Some(home.clone()), None);
+    for refused in [&home, &users, &base] {
+        assert_refused(&protected, refused, GrantError::TooBroad(refused.clone()));
+    }
+    assert_allowed(&protected, &documents);
+    assert_allowed(&protected, &folder(&users, "someone"));
+}
+
+#[test]
+fn protected_folders_cannot_be_granted_inside_or_around() {
+    let (_dir, base) = sandbox();
+    let parent = folder(&base, "parent");
+    let data = folder(&parent, "data");
+    let inside = folder(&data, "inside");
+    let sibling = folder(&parent, "sibling");
+    let protected = Protected::new(vec![data.clone()], None, None);
+    for refused in [&data, &inside, &parent, &base] {
+        assert_refused(&protected, refused, GrantError::Protected(refused.clone()));
+    }
+    assert_allowed(&protected, &sibling);
+}
+
+#[test]
+fn an_absent_data_folder_stays_protected() {
+    let (_dir, base) = sandbox();
+    let parent = folder(&base, "parent");
+    let data = parent.join("data");
+    let protected = Protected::new(vec![data.clone()], None, None);
+    assert_eq!(protected.paths, slice::from_ref(&data));
+    assert_refused(&protected, &parent, GrantError::Protected(parent.clone()));
+    // Once the app creates it, it is protected itself.
+    fs::create_dir(&data).unwrap();
+    assert_refused(&protected, &data, GrantError::Protected(data.clone()));
+}
+
+#[test]
+fn projection_canonicalizes_the_existing_part_and_appends_the_rest() {
+    let (_dir, base) = sandbox();
+    let real = folder(&base, "real");
+    assert_eq!(project(&real), real);
+    assert_eq!(project(&real.join("a").join("b")), real.join("a").join("b"));
+    assert_eq!(
+        project(&real.join("a").join("..").join("b")),
+        real.join("b")
+    );
+    #[cfg(unix)]
+    {
+        let alias = base.join("alias");
+        std::os::unix::fs::symlink(&real, &alias).unwrap();
+        assert_eq!(project(&alias.join("absent")), real.join("absent"));
+        // A data folder reached through a symlink protects the real folder.
+        let protected = Protected::new(vec![alias.join("absent")], None, None);
+        assert_refused(&protected, &real, GrantError::Protected(real.clone()));
+    }
+}
+
+#[test]
+fn the_system_root_and_everything_inside_it_are_protected() {
+    let (_dir, base) = sandbox();
+    let windows = folder(&base, "Windows");
+    let system32 = folder(&windows, "System32");
+    let protected = Protected::new(Vec::new(), None, Some(windows.clone()));
+    for refused in [&windows, &system32] {
+        assert_refused(&protected, refused, GrantError::Protected(refused.clone()));
+    }
+    assert_allowed(&protected, &folder(&base, "Users"));
+}
+
+#[cfg(unix)]
+#[test]
+fn unix_system_trees_are_protected() {
+    let dev = PathBuf::from("/dev");
+    assert_refused(&unprotected(), &dev, GrantError::Protected(dev.clone()));
+}
+
+#[test]
+fn the_macos_app_bundle_encloses_its_executable_folder() {
+    let applications = PathBuf::from(absolute("Applications"));
+    let bundle = applications.join("ReShiki.app");
+    let executables = bundle.join("Contents").join("MacOS");
+    assert_eq!(app_bundle(&executables), Some(bundle));
+    assert_eq!(app_bundle(&applications), None);
+    assert_eq!(app_bundle(&applications.join("MacOS")), None);
+}
+
+#[test]
+fn this_process_protects_its_executable_folder_and_home() {
+    let protected = Protected::current().unwrap();
+    let executable = std::env::current_exe().unwrap();
+    let folder = executable.parent().unwrap().to_path_buf();
+    assert_refused(&protected, &folder, GrantError::Protected(folder.clone()));
+    if let Some(home) = reshiki_io::compatibility::home_directory().filter(|home| home.is_dir()) {
+        assert_refused(&protected, &home, GrantError::TooBroad(home.clone()));
+    }
+}
+
+fn subset(choices: &[PathBuf], mask: u32) -> Vec<PathBuf> {
+    choices
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| mask >> index & 1 == 1)
+        .map(|(_, path)| path.clone())
+        .collect()
+}
+
+fn inside_any(path: &Path, folders: &[PathBuf]) -> bool {
+    folders.iter().any(|folder| path.starts_with(folder))
+}
+
+#[test]
+fn narrowing_only_ever_shrinks_a_grant_set() {
+    let (_dir, base) = sandbox();
+    let a = folder(&base, "a");
+    let b = folder(&a, "b");
+    let c = folder(&b, "c");
+    let d = folder(&base, "d");
+    let files: Vec<PathBuf> = [&base, &a, &b, &c, &d]
+        .into_iter()
+        .map(|dir| {
+            let file = dir.join("f.mol");
+            fs::write(&file, b"mol").unwrap();
+            file
+        })
+        .collect();
+    let root_choices = [base.clone(), a.clone(), b.clone(), d.clone()];
+    // Nested, overlapping, missing and not-a-folder limits.
+    let limit_choices = [
+        base.clone(),
+        a.clone(),
+        b.clone(),
+        c.clone(),
+        d.clone(),
+        a.join("missing"),
+        b.join("f.mol"),
+    ];
+    for root_mask in 0..1u32 << root_choices.len() {
+        let roots = subset(&root_choices, root_mask);
+        let grants = Grants::open(&roots, &roots).unwrap();
+        for limit_mask in 0..1u32 << limit_choices.len() {
+            let limits = subset(&limit_choices, limit_mask);
+            let folders: Vec<PathBuf> = limits.iter().filter(|l| l.is_dir()).cloned().collect();
+            let narrowed = grants.narrowed(&limits);
+            let label = format!("roots {roots:?}, limits {limits:?}");
+            for root in narrowed.read.iter().chain(&narrowed.write) {
+                assert!(inside_any(&root.canonical, &roots), "{label}");
+                assert!(inside_any(&root.canonical, &folders), "{label}");
+            }
+            for file in &files {
+                let expected = inside_any(file, &roots) && inside_any(file, &folders);
+                let request = text(file);
+                assert_eq!(
+                    narrowed.read(&request, 64, FORMATS).is_ok(),
+                    expected,
+                    "{label}: read {request}"
+                );
+                let located = narrowed.locate(Kind::Write, &parse(&request).unwrap());
+                assert_eq!(located.is_ok(), expected, "{label}: write {request}");
+            }
+        }
+    }
+}
+
+#[test]
+fn narrowing_keeps_read_and_write_separate() {
+    let (_dir, base) = sandbox();
+    let a = folder(&base, "a");
+    let inner = folder(&a, "inner");
+    let d = folder(&base, "d");
+    let grants = Grants::open(slice::from_ref(&a), slice::from_ref(&d)).unwrap();
+    let narrowed = grants.narrowed(&[inner.clone(), d.clone()]);
+    assert_eq!(
+        narrowed.summary(),
+        GrantSummary {
+            read: vec![text(&inner)],
+            write: vec![text(&d)],
+        }
+    );
+    // A root kept whole shares the original handle.
+    assert!(Arc::ptr_eq(&grants.write[0].dir, &narrowed.write[0].dir));
+    assert!(grants.narrowed(&[]).summary().read.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn narrowing_opens_sub_roots_through_the_root_handle() {
+    let (_dir, base) = sandbox();
+    let root = folder(&base, "root");
+    let outside = folder(&base, "outside");
+    fs::write(outside.join("secret.mol"), b"secret").unwrap();
+    let real = folder(&root, "real");
+    fs::write(real.join("f.mol"), b"inside").unwrap();
+    std::os::unix::fs::symlink(&outside, root.join("escape")).unwrap();
+    std::os::unix::fs::symlink("real", root.join("alias")).unwrap();
+    let grants = both(&root);
+    // A symlink leaving the root cannot become a sub-root.
+    let escaped = grants.narrowed(&[root.join("escape")]);
+    assert!(escaped.read.is_empty() && escaped.write.is_empty());
+    // One that stays inside resolves through the handle.
+    let alias = grants.narrowed(&[root.join("alias")]);
+    let request = text(&root.join("alias").join("f.mol"));
+    assert_eq!(alias.read(&request, 64, FORMATS).unwrap(), b"inside");
+    let outside_request = text(&outside.join("secret.mol"));
+    assert_eq!(
+        alias
+            .read(&outside_request, 64, FORMATS)
+            .unwrap_err()
+            .code(),
+        "path_not_granted"
+    );
 }

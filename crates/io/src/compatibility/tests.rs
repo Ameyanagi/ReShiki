@@ -34,3 +34,72 @@ fn native_extensions_accept_previous_drawings() {
     assert!(is_native_extension("MORUNO"));
     assert!(!is_native_extension("mol"));
 }
+
+#[test]
+fn an_override_wins_and_the_missing_directory_error_is_unchanged() {
+    let project = || Some(PathBuf::from("/platform/data"));
+    let cases = [
+        (
+            Some(OsString::from("/override")),
+            project(),
+            Ok(DataLocation {
+                path: PathBuf::from("/override"),
+                origin: DataLocationOrigin::Override,
+            }),
+        ),
+        (
+            Some(OsString::from("/override")),
+            None,
+            Ok(DataLocation {
+                path: PathBuf::from("/override"),
+                origin: DataLocationOrigin::Override,
+            }),
+        ),
+        (
+            None,
+            project(),
+            Ok(DataLocation {
+                path: PathBuf::from("/platform/data"),
+                origin: DataLocationOrigin::Default,
+            }),
+        ),
+        (None, None, Err("No application data directory".to_owned())),
+    ];
+    for (override_path, project, expected) in cases {
+        let label = format!("{override_path:?} {project:?}");
+        assert_eq!(
+            resolve_data_location(override_path, project),
+            expected,
+            "{label}"
+        );
+    }
+}
+
+#[test]
+fn only_the_platform_directory_imports_earlier_data() {
+    let finish = |origin, outcome: Result<(), String>| {
+        let calls = std::cell::Cell::new(0);
+        let location = DataLocation {
+            path: PathBuf::from("/data"),
+            origin,
+        };
+        let result = finish_data_directory(location, |root| {
+            assert_eq!(root, Path::new("/data"));
+            calls.set(calls.get() + 1);
+            outcome
+        });
+        (result, calls.get())
+    };
+    assert_eq!(
+        finish(DataLocationOrigin::Override, Err("unused".into())),
+        (Ok(PathBuf::from("/data")), 0)
+    );
+    assert_eq!(
+        finish(DataLocationOrigin::Default, Ok(())),
+        (Ok(PathBuf::from("/data")), 1)
+    );
+    assert_eq!(
+        finish(DataLocationOrigin::Default, Err("copy failed".into())),
+        (Err("copy failed".to_owned()), 1)
+    );
+}

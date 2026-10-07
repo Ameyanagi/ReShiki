@@ -41,16 +41,37 @@
 //! - An interrupted publication can leave a `.reshiki-<pid>-<n>.tmp` file
 //!   beside a complete destination.
 //!
+//! # Grant sources and protected folders
+//!
+//! [`load`] is the single startup entry point. It unites the command line's
+//! folders with `agent-access.json` in the data directory ([`AccessConfig`]),
+//! a user-owned file that ReShiki never writes in P1, and refuses any root
+//! that is a file system root, the home folder or one of its ancestors, or
+//! that overlaps ReShiki's data, earlier installations' data or the
+//! executable's folder ([`Protected`]), even before they exist. Unix
+//! `/proc`, `/sys` and `/dev`, and the Windows system folder, are refused
+//! too. [`Grants::narrowed`] can only shrink a grant set.
+//!
+//! Outside this module the crate may not touch the filesystem directly:
+//! `crates/agent/clippy.toml` disallows std, tokio and ambient cap-std
+//! filesystem calls and ReShiki's own ambient file helpers, and
+//! `tests/test_agent_fs_fence.py` checks that fence.
+//!
 //! MCP roots are never consulted: they are deprecated by SEP-2577 and are
 //! informational guidance rather than an access-control mechanism
 //! (<https://modelcontextprotocol.io/specification/2026-07-28/client/roots>).
 use std::{fmt, io};
 
+mod config;
+mod narrow;
 mod path;
+mod protected;
 mod read;
 mod root;
 mod write;
 
+pub use config::AccessConfig;
+pub use protected::{GrantSources, Protected, load};
 pub use root::{GRANT_EXIT_CODE, GrantError, GrantSummary, Grants};
 pub use write::{WriteMode, WriteReceipt};
 

@@ -8,6 +8,8 @@
 //!
 //! The crate forbids unsafe code, so links, FIFOs and privilege checks use
 //! std APIs or bounded subprocesses, never libc calls.
+// The suite builds its layouts with std::fs and tempfile, outside every grant.
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
 use super::{AccessError, Grants, WriteReceipt};
 use std::{
     fs,
