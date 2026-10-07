@@ -3,6 +3,8 @@ mod circles;
 mod ellipses;
 mod finish;
 mod ring_fills;
+#[cfg(test)]
+mod tests;
 use super::{
     ImportPoint, NativeArrow, NativeAtomDisplay, NativeMark, NativeStereo, ObjectMapEntry,
     PreparedAtoms, PreparedCdxml,
