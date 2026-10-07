@@ -58,3 +58,79 @@ fn non_utf8_tokens_are_compared_and_kept_as_bytes() {
         Launch::Cli(vec![token])
     );
 }
+
+#[test]
+fn mcp_options_follow_the_grammar() {
+    use McpUsageError::{Attach, Duplicate, InvalidLevel, MissingLevel, Unknown};
+    let serve = |level| Ok(McpRequest::Serve { level });
+    for (tokens, expected) in [
+        (&[][..], serve(Level::Warn)),
+        (&["--log-level", "error"], serve(Level::Error)),
+        (&["--log-level", "warn"], serve(Level::Warn)),
+        (&["--log-level", "info"], serve(Level::Info)),
+        (&["--log-level", "debug"], serve(Level::Debug)),
+        (&["--help"], Ok(McpRequest::Help)),
+        (&["-h"], Ok(McpRequest::Help)),
+        (&["--log-level", "debug", "--help"], Ok(McpRequest::Help)),
+        (&["--help", "--log-level", "info"], Ok(McpRequest::Help)),
+        (&["--log-level"], Err(MissingLevel)),
+        (&["--log-level", "loud"], Err(InvalidLevel("loud".into()))),
+        (&["--log-level", "WARN"], Err(InvalidLevel("WARN".into()))),
+        (&["--log-level", ""], Err(InvalidLevel(String::new()))),
+        (
+            &["--log-level=debug"],
+            Err(Unknown("--log-level=debug".into())),
+        ),
+        (
+            &["--log-level", "warn", "--log-level", "debug"],
+            Err(Duplicate("--log-level")),
+        ),
+        (&["--help", "--help"], Err(Duplicate("--help"))),
+        (&["-h", "--help"], Err(Duplicate("--help"))),
+        (&["--attach"], Err(Attach)),
+        (&["--log-level", "info", "--attach"], Err(Attach)),
+        (&["--help", "--attach"], Err(Attach)),
+        (&["--bogus"], Err(Unknown("--bogus".into()))),
+        (&["--help", "--bogus"], Err(Unknown("--bogus".into()))),
+        (&["--cli"], Err(Unknown("--cli".into()))),
+        (&["--mcp"], Err(Unknown("--mcp".into()))),
+        (&["--open", "x"], Err(Unknown("--open".into()))),
+        (&["debug"], Err(Unknown("debug".into()))),
+    ] {
+        assert_eq!(mcp_request(&args(tokens)), expected, "{tokens:?}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_mcp_tokens_are_usage_errors() {
+    use std::os::unix::ffi::OsStringExt;
+    let token = OsString::from_vec(b"debug\xff".to_vec());
+    assert_eq!(
+        mcp_request(&[OsString::from("--log-level"), token.clone()]),
+        Err(McpUsageError::InvalidLevel("debug\u{fffd}".into()))
+    );
+    assert_eq!(
+        mcp_request(&[token]),
+        Err(McpUsageError::Unknown("debug\u{fffd}".into()))
+    );
+}
+
+#[test]
+fn mcp_usage_errors_name_the_problem() {
+    assert_eq!(
+        McpUsageError::Attach.to_string(),
+        "reshiki --mcp --attach connects to a running ReShiki app and is not available in this \
+         version"
+    );
+    assert_eq!(
+        McpUsageError::InvalidLevel("loud".into()).to_string(),
+        "reshiki --mcp: unknown log level `loud`; expected one of error, warn, info or debug"
+    );
+    assert_eq!(
+        McpUsageError::Duplicate("--log-level").to_string(),
+        "reshiki --mcp: --log-level given more than once"
+    );
+    assert!(MCP_USAGE.starts_with("Experimental: "));
+    assert!(MCP_USAGE.contains("Usage: reshiki --mcp [--log-level <level>]\n"));
+}

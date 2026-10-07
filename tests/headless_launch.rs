@@ -41,14 +41,11 @@ fn unknown_cli_commands_are_usage_errors() {
 }
 
 #[test]
-fn mcp_is_a_placeholder() {
-    let output = run(&["--mcp"], Duration::from_secs(60));
+fn unknown_mcp_options_are_usage_errors() {
+    let output = run(&["--mcp", "--bogus"], Duration::from_secs(60));
     assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
-    assert_eq!(
-        text(&output.stderr),
-        "reshiki --mcp: not available in this build\n"
-    );
+    assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
+    assert!(text(&output.stderr).contains("unknown option `--bogus`"));
 }
 
 /// The same ethanol check as scripts/check_runtime_dependencies.py.
