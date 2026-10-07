@@ -521,6 +521,32 @@ async fn cancelling_a_queued_call_returns_cancelled_without_running_it() {
     assert_idle(&exec);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_cancel_racing_the_permit_still_keeps_the_queued_call_from_running() {
+    let exec = executor(1, 8);
+    let gate = Gate::new();
+    let running = spawn_gated(&exec, 1, &gate);
+    wait(&gate.started).await;
+    // Request 2 is cancelled once its wait has seen no cancel and won the
+    // permit, as when the cancel lands between the wait's two polls.
+    let canceller = exec.clone();
+    exec.set_hooks(Hooks {
+        acquired: Some(Arc::new(move || canceller.cancel(&who(), &id(2)))),
+        ..Hooks::default()
+    });
+    let ran = Arc::new(AtomicBool::new(false));
+    let queued = spawn_flagged(&exec, 2, &ran);
+    until(|| exec.queued() == 1).await;
+
+    wait(&gate.release).await;
+    assert_eq!(bounded(running).await.unwrap(), Ok(()));
+    assert_eq!(bounded(queued).await.unwrap(), Err(cancelled()));
+    assert!(!ran.load(Ordering::SeqCst));
+    // Drops the hook's handle on the executor.
+    exec.set_hooks(Hooks::default());
+    assert_idle(&exec);
+}
+
 /// Counts an operation as ended when its future completes or is dropped.
 struct Ended(Arc<AtomicUsize>);
 
@@ -582,6 +608,7 @@ async fn a_cancel_parked_after_the_effect_keeps_the_effect_and_returns_cancelled
     exec.set_hooks(Hooks {
         before_effect: Some(before.clone()),
         after_effect: Some(after.clone()),
+        ..Hooks::default()
     });
     let effects = Arc::new(AtomicUsize::new(0));
     let returned = Arc::new(AtomicBool::new(false));

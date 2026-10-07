@@ -217,7 +217,7 @@ impl Executor {
             let mut permit = pin!(Arc::clone(&self.shared.permits).acquire_owned());
             let mut cancel = pin!(token.cancelled());
             poll_fn(|cx| {
-                // Cancellation wins a tie, so a cancelled call never starts.
+                // Cancellation wins a tie.
                 if cancel.as_mut().poll(cx).is_ready() {
                     return Poll::Ready(None);
                 }
@@ -231,8 +231,26 @@ impl Executor {
             Some(Err(_)) => return Err(internal()),
             None => return Err(cancelled()),
         };
+        #[cfg(test)]
+        let hooks = self
+            .shared
+            .hooks
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        #[cfg(test)]
+        if let Some(acquired) = &hooks.acquired {
+            acquired();
+        }
         {
             let mut registry = self.shared.registry();
+            // The wait above misses a cancel landing between its two polls.
+            // `cancel` and `drained` set tokens under this lock, so a call
+            // leaves the queue only if it was not cancelled while waiting and
+            // `f` never runs otherwise. The guard drops first on return.
+            if token.is_cancelled() {
+                return Err(cancelled());
+            }
             registry.waiting = registry.waiting.saturating_sub(1);
             admission.queued = false;
         }
@@ -248,12 +266,7 @@ impl Executor {
             committed: false,
             lease: Arc::clone(&lease),
             #[cfg(test)]
-            hooks: self
-                .shared
-                .hooks
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone(),
+            hooks,
         };
         let finish = FinishGuard(progress);
         let task = tokio::spawn(async move {
@@ -329,7 +342,7 @@ impl Executor {
         }
     }
 
-    /// Installs barriers around every later effect job.
+    /// Installs `hooks` for every call that wins its permit afterwards.
     #[cfg(test)]
     pub(crate) fn set_hooks(&self, hooks: Hooks) {
         *self
@@ -346,10 +359,14 @@ impl Executor {
     }
 }
 
-/// Test barriers around [`Context::effect`] jobs.
+/// Test hooks: a callback once a call wins its permit, and barriers around
+/// [`Context::effect`] jobs.
 #[cfg(test)]
 #[derive(Clone, Default)]
 pub(crate) struct Hooks {
+    /// Called once the call wins its permit, before it checks for a cancel
+    /// and leaves the queue.
+    pub(crate) acquired: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Waited on by the blocking job just before the effect runs.
     pub(crate) before_effect: Option<Arc<Barrier>>,
     /// Waited on by the blocking job just after the effect returns.
