@@ -8,7 +8,7 @@
 use reshiki_mcp::{
     framing::Limits,
     log::Log,
-    server::{self, Finished, Identity, Quit, SUPPORTED, ServeError},
+    server::{self, EOF_GRACE, Finished, Identity, Quit, SUPPORTED, ServeError},
 };
 use serde::{Deserialize, de::IgnoredAny};
 use serde_json::{Value, json};
@@ -33,8 +33,32 @@ struct Session {
     served: Option<JoinHandle<Result<Finished, ServeError>>>,
 }
 
+/// The output pipe, with its first write held until the gate's sender is
+/// dropped: a client that stops reading.
+struct Gated {
+    gate: Option<mpsc::Receiver<()>>,
+    output: PipeWriter,
+}
+
+impl Write for Gated {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if let Some(gate) = self.gate.take() {
+            let _ = gate.recv();
+        }
+        self.output.write(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.output.flush()
+    }
+}
+
 impl Session {
     fn start() -> Self {
+        Self::with_gate(None)
+    }
+
+    fn with_gate(gate: Option<mpsc::Receiver<()>>) -> Self {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -53,7 +77,10 @@ impl Session {
         });
         let served = runtime.spawn(server::serve(
             reader,
-            move || output_writer,
+            move || Gated {
+                gate,
+                output: output_writer,
+            },
             Identity {
                 app_version: "0.0.0-test".into(),
             },
@@ -287,4 +314,30 @@ fn a_ping_right_before_eof_is_answered() {
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     assert_eq!(answers, [json!({"jsonrpc": "2.0", "id": 7, "result": {}})]);
+}
+
+/// A client that stops reading cannot hold `serve` past [`EOF_GRACE`], even
+/// before a lifecycle started. The blocked writer holds one line and the
+/// outbound queue 16, so of ten -32700 replies and eight pre-init pongs the
+/// last pong never fits, and rmcp's bootstrap waits on that send.
+#[test]
+fn a_blocked_writer_cannot_hold_the_bootstrap_past_the_grace() {
+    let (open, gate) = mpsc::channel();
+    let mut session = Session::with_gate(Some(gate));
+    for _ in 0..10 {
+        session.send("garbage");
+    }
+    for id in 0..8 {
+        session.send(&format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"ping"}}"#));
+    }
+    let (finished, elapsed) = session.close();
+    assert_eq!(finished.reason, Quit::Eof);
+    // An unblocked close returns within a second, so this waited out the
+    // grace.
+    assert!(elapsed > EOF_GRACE - Duration::from_secs(1), "{elapsed:?}");
+    assert!(elapsed < EOF_GRACE + Duration::from_secs(3), "{elapsed:?}");
+    // `serve` dropped every sender, so the writer ends once released.
+    drop(open);
+    assert!(finished.writer.wait(LINE_TIMEOUT));
+    assert_eq!(session.rest().len(), 17);
 }

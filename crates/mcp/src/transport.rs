@@ -19,6 +19,9 @@ use serde::Serialize;
 use std::{fmt, future::Future, sync::Arc};
 use tokio::sync::mpsc::{Receiver, Sender, error::SendError};
 
+#[cfg(test)]
+mod tests;
+
 const INVALID_REQUEST: i64 = -32600;
 const INTERNAL_ERROR: i64 = -32603;
 
@@ -39,6 +42,11 @@ pub(crate) struct Stdio {
     /// it has, `notifications/initialized` is dropped: rmcp ends the
     /// connection on a notification before its lifecycle starts.
     pub(crate) initialize_delivered: bool,
+    /// The error reply to an admitted request rmcp never sees, held until
+    /// the outbound queue has room. rmcp drops [`Transport::receive`]
+    /// whenever another event wins its select, so the reply must outlive
+    /// the call that dequeued its request.
+    pub(crate) pending: Option<Outbound>,
 }
 
 /// The writer is gone, so nothing more can be sent.
@@ -105,6 +113,20 @@ impl Transport<RoleServer> for Stdio {
 
     async fn receive(&mut self) -> Option<ClientJsonRpcMessage> {
         loop {
+            // Cancel-safe: the reply leaves `pending` only once a permit is
+            // in hand, and sending on a permit never waits.
+            if self.pending.is_some() {
+                let Ok(permit) = self.outbound.reserve().await else {
+                    // The writer is gone and will never complete it.
+                    if let Some(Outbound { key: Some(key), .. }) = self.pending.take() {
+                        self.tracker.complete(&key);
+                    }
+                    return None;
+                };
+                if let Some(reply) = self.pending.take() {
+                    permit.send(reply);
+                }
+            }
             let inbound = tokio::select! {
                 inbound = self.inbound.recv() => inbound?,
                 () = writer_failed(&self.status) => return None,
@@ -117,21 +139,15 @@ impl Transport<RoleServer> for Stdio {
                         }
                         return Some(JsonRpcMessage::Request(request));
                     }
-                    // The framing admitted it, so answer it here.
+                    // The framing admitted it, so answer it here; the
+                    // next turn of the loop queues the reply.
                     Ok(_) | Err(_) => {
                         self.log.event(Level::Debug, "invalid request", &[]);
                         let line = error_line(Some(&key), INVALID_REQUEST, "Invalid Request");
-                        let reply = Outbound {
+                        self.pending = Some(Outbound {
                             key: Some(key),
                             line,
-                        };
-                        if let Err(SendError(reply)) = self.outbound.send(reply).await {
-                            // The writer is gone and will never complete it.
-                            if let Some(key) = &reply.key {
-                                self.tracker.complete(key);
-                            }
-                            return None;
-                        }
+                        });
                     }
                 },
                 Inbound::Initialized { line } => match parse(&line) {
@@ -146,6 +162,19 @@ impl Transport<RoleServer> for Stdio {
 
     fn close(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send {
         std::future::ready(Ok(()))
+    }
+}
+
+impl Drop for Stdio {
+    /// rmcp dropped the transport with a reply still pending: queue it if
+    /// there is room, else free its slot, as the writer never will.
+    fn drop(&mut self) {
+        if let Some(reply) = self.pending.take()
+            && let Err(refused) = self.outbound.try_send(reply)
+            && let Some(key) = refused.into_inner().key
+        {
+            self.tracker.complete(&key);
+        }
     }
 }
 

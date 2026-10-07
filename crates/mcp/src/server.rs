@@ -25,6 +25,7 @@ use std::{
     borrow::Cow,
     fmt,
     io::{Read, Write},
+    pin::pin,
     sync::Arc,
     time::Duration,
 };
@@ -86,7 +87,8 @@ pub struct Finished {
     /// Signalled once everything queued was written.
     pub writer: WriterDone,
     /// The connection's admission tracker; nothing is outstanding once the
-    /// writer finished.
+    /// writer finished, unless [`EOF_GRACE`] ran out before a response was
+    /// sent.
     pub tracker: Arc<Tracker>,
 }
 
@@ -111,9 +113,10 @@ impl std::error::Error for ServeError {}
 /// `make_writer` runs on the writer thread, as in [`framing::start`].
 ///
 /// Once the input ended or the output failed, this waits at most
-/// [`EOF_GRACE`] for rmcp's service task. It holds no outbound sender when
-/// it returns; the service task drops its own when its drain ends, so the
-/// writer finishes once the framing's reader has ended too.
+/// [`EOF_GRACE`] for rmcp, whether it is still starting or already
+/// serving. It holds no outbound sender when it returns; the service task
+/// drops its own when its drain ends, so the writer finishes once the
+/// framing's reader has ended too.
 pub async fn serve<R, W, F>(
     reader: R,
     make_writer: F,
@@ -141,30 +144,39 @@ where
         log: log.clone(),
         max_line: limits.max_result_bytes.saturating_add(ENVELOPE_BYTES),
         initialize_delivered: false,
+        pending: None,
     };
-    match rmcp::serve_server(Server { identity }, transport).await {
-        Ok(running) => {
-            let grace = async {
-                status.closed().await;
-                tokio::time::sleep(EOF_GRACE).await;
-            };
+    // One deadline for starting and serving alike: rmcp's bootstrap awaits
+    // each pre-lifecycle reply inline, so a blocked writer stalls it too.
+    let mut grace = pin!(async {
+        status.closed().await;
+        tokio::time::sleep(EOF_GRACE).await;
+    });
+    let started = tokio::select! {
+        started = rmcp::serve_server(Server { identity }, transport) => Some(started),
+        () = grace.as_mut() => None,
+    };
+    match started {
+        Some(Ok(running)) => {
             tokio::select! {
                 stopped = running.waiting() => {
                     if stopped.is_err() {
                         log.event(Level::Error, "service task failed", &[]);
                     }
                 }
-                () = grace => log.event(Level::Warn, "service did not stop in time", &[]),
+                () = grace.as_mut() => log.event(Level::Warn, "service did not stop in time", &[]),
             }
         }
         // The input ended before a lifecycle started.
-        Err(ServerInitializeError::ConnectionClosed(_)) => {}
+        Some(Err(ServerInitializeError::ConnectionClosed(_))) => {}
         // A send failed: the writer is gone.
-        Err(_) if status.writer_failed() => {}
-        Err(_) => {
+        Some(Err(_)) if status.writer_failed() => {}
+        Some(Err(_)) => {
             log.event(Level::Error, "initialization failed", &[]);
             return Err(ServeError::Init);
         }
+        // Dropping the bootstrap dropped its transport and senders.
+        None => log.event(Level::Warn, "service did not stop in time", &[]),
     }
     let reason = if status.writer_failed() {
         Quit::WriterFailed
