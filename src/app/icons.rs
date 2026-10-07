@@ -685,3 +685,6 @@ impl Glyph {
         }
     }
 }
+
+#[cfg(test)]
+mod pixel_tests;
