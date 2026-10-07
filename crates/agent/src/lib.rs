@@ -36,6 +36,8 @@ pub mod canvas_tools;
 pub mod composition;
 pub mod envelope;
 mod layout;
+#[doc(hidden)]
+pub mod ops;
 pub mod progress;
 pub mod review;
 pub mod sketch;

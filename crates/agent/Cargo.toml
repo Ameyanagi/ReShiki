@@ -29,3 +29,4 @@ libc = "=0.2.189"
 anyhow = "1"
 tempfile = "3"
 reshiki-process-heap = { path = "../process-heap", features = ["allocation-metrics"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
