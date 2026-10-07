@@ -85,3 +85,33 @@ fn ops_documents_schema_and_decoder_parity() {
         Err(failures) => panic!("{failures}"),
     }
 }
+
+const IMPORT: Contract = Contract {
+    name: "ops-import",
+    schema: || tools_schema(&["import"]),
+    decode: decode_tool_call,
+    cases: "ops-import-cases.json",
+};
+
+#[test]
+fn ops_import_schema_and_decoder_parity() {
+    match corpus::check(&IMPORT) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}
+
+const INSPECT: Contract = Contract {
+    name: "ops-inspect",
+    schema: || tools_schema(&["inspect"]),
+    decode: decode_tool_call,
+    cases: "ops-inspect-cases.json",
+};
+
+#[test]
+fn ops_inspect_schema_and_decoder_parity() {
+    match corpus::check(&INSPECT) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}

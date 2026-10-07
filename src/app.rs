@@ -52,6 +52,8 @@ mod label_refresh;
 mod molecule_shortcuts;
 mod numeric_transforms;
 mod object_toolbar;
+#[cfg(test)]
+mod ops_parity_tests;
 mod optimization;
 mod pages;
 mod palettes;

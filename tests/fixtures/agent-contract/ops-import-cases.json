@@ -1,0 +1,78 @@
+{
+  "rules": [
+    {
+      "id": "arguments.object",
+      "cite": "crates/agent/src/ops/catalog.rs:41,57-68; crates/agent/src/ops/import.rs:94-95"
+    },
+    {
+      "id": "import.format_required",
+      "cite": "crates/agent/src/ops/import.rs:38-48,83-89"
+    },
+    {
+      "id": "import.format_enum",
+      "cite": "crates/agent/src/ops/documents.rs:22-24; crates/agent/src/ops/import.rs:42,50-63"
+    },
+    {
+      "id": "import.text_required",
+      "cite": "crates/agent/src/ops/import.rs:43,45,88"
+    },
+    {
+      "id": "import.no_unknown_fields",
+      "cite": "crates/agent/src/ops/import.rs:46,85"
+    },
+    {
+      "id": "import.text_budget",
+      "cite": "crates/agent/src/ops/import.rs:91-111; crates/agent/src/ops/budget.rs:17-18,80"
+    },
+    {
+      "id": "import.cdx_budget",
+      "cite": "crates/agent/src/ops/import.rs:91-111; crates/agent/src/ops/budget.rs:19-21,81"
+    }
+  ],
+  "bases": {
+    "smiles": {"tool": "import", "arguments": {"format": "smiles", "text": "CCO"}},
+    "cdx": {"tool": "import", "arguments": {"format": "cdx", "text": "AAAA"}}
+  },
+  "cases": [
+    {"name": "arguments_object", "rule": "arguments.object", "base": "smiles", "expect": "both_accept"},
+    {"name": "arguments_array", "rule": "arguments.object", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments", "value": ["smiles", "CCO"]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "arguments_null", "rule": "arguments.object", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments", "value": null}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+
+    {"name": "format_given", "rule": "import.format_required", "base": "smiles", "expect": "both_accept"},
+    {"name": "format_omitted", "rule": "import.format_required", "base": "smiles", "patch": [{"op": "remove", "path": "/arguments/format"}], "expect": "both_reject", "message": "missing field `format`"},
+    {"name": "format_null", "rule": "import.format_required", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": null}], "expect": "both_reject"},
+    {"name": "format_number", "rule": "import.format_required", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": 1}], "expect": "both_reject"},
+
+    {"name": "format_auto", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "auto"}], "expect": "both_accept"},
+    {"name": "format_smiles", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "smiles"}], "expect": "both_accept"},
+    {"name": "format_mol", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "mol"}], "expect": "both_accept"},
+    {"name": "format_rxn", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "rxn"}], "expect": "both_accept"},
+    {"name": "format_rsmi", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "rsmi"}], "expect": "both_accept"},
+    {"name": "format_inchi", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "inchi"}], "expect": "both_accept"},
+    {"name": "format_cdxml", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "cdxml"}], "expect": "both_accept"},
+    {"name": "format_cdx", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "cdx"}], "expect": "both_accept"},
+    {"name": "format_reshiki", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "reshiki"}], "expect": "both_accept"},
+    {"name": "format_emf", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "emf"}], "expect": "both_reject", "message": "unknown variant `emf`, expected one of `auto`, `smiles`, `mol`, `rxn`, `rsmi`, `inchi`, `cdxml`, `cdx`, `reshiki`"},
+    {"name": "format_export_only", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "png"}], "expect": "both_reject"},
+    {"name": "format_upper_case", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": "SMILES"}], "expect": "both_reject"},
+    {"name": "format_empty", "rule": "import.format_enum", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/format", "value": ""}], "expect": "both_reject"},
+
+    {"name": "text_empty", "rule": "import.text_required", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/text", "value": ""}], "expect": "both_accept"},
+    {"name": "text_omitted", "rule": "import.text_required", "base": "smiles", "patch": [{"op": "remove", "path": "/arguments/text"}], "expect": "both_reject", "message": "missing field `text`"},
+    {"name": "text_null", "rule": "import.text_required", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/text", "value": null}], "expect": "both_reject"},
+    {"name": "text_number", "rule": "import.text_required", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/text", "value": 12}], "expect": "both_reject"},
+    {"name": "text_array", "rule": "import.text_required", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/text", "value": ["CCO"]}], "expect": "both_reject"},
+
+    {"name": "known_fields_only", "rule": "import.no_unknown_fields", "base": "cdx", "expect": "both_accept"},
+    {"name": "unknown_null_field", "rule": "import.no_unknown_fields", "base": "smiles", "patch": [{"op": "add", "path": "/arguments/document", "value": null}], "expect": "both_reject", "message": "unknown field `document`, expected `format` or `text`"},
+    {"name": "unknown_field", "rule": "import.no_unknown_fields", "base": "smiles", "patch": [{"op": "add", "path": "/arguments/idempotency_key", "value": "k"}], "expect": "both_reject"},
+
+    {"name": "text_at_max_text_bytes", "rule": "import.text_budget", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/text", "value": {"$text": "C", "count": 16777216}}], "expect": "both_accept"},
+    {"name": "text_over_max_text_bytes", "rule": "import.text_budget", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/text", "value": {"$text": "C", "count": 16777217}}], "expect": "decoder_rejects_only", "message": "The text is 16777217 bytes; max_text_bytes allows at most 16777216"},
+    {"name": "text_at_max_cdx_base64_is_not_cdx", "rule": "import.text_budget", "base": "smiles", "patch": [{"op": "replace", "path": "/arguments/text", "value": {"$text": "C", "count": 22369624}}], "expect": "decoder_rejects_only", "message": "The text is 22369624 bytes; max_text_bytes allows at most 16777216"},
+
+    {"name": "cdx_over_max_text_bytes", "rule": "import.cdx_budget", "base": "cdx", "patch": [{"op": "replace", "path": "/arguments/text", "value": {"$text": "A", "count": 16777217}}], "expect": "both_accept"},
+    {"name": "cdx_at_max_cdx_base64", "rule": "import.cdx_budget", "base": "cdx", "patch": [{"op": "replace", "path": "/arguments/text", "value": {"$text": "A", "count": 22369624}}], "expect": "both_accept"},
+    {"name": "cdx_over_max_cdx_base64", "rule": "import.cdx_budget", "base": "cdx", "patch": [{"op": "replace", "path": "/arguments/text", "value": {"$text": "A", "count": 22369625}}], "expect": "decoder_rejects_only", "message": "The text is 22369625 bytes; max_cdx_base64 allows at most 22369624"}
+  ]
+}

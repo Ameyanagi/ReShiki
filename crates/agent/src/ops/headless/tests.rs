@@ -42,7 +42,14 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
     let names: Vec<_> = host().catalog().iter().map(|spec| spec.name).collect();
     assert_eq!(
         names,
-        ["info", "document_new", "document_list", "document_close"]
+        [
+            "info",
+            "document_new",
+            "document_list",
+            "document_close",
+            "import",
+            "inspect"
+        ]
     );
     let unique: HashSet<_> = names.iter().collect();
     assert_eq!(unique.len(), names.len());
@@ -57,6 +64,8 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
         hints(false, false, false),
         hints(true, false, true),
         hints(false, true, true),
+        hints(false, false, false),
+        hints(true, false, true),
     ];
     for (spec, hints) in catalog::SPECS.iter().zip(expected) {
         assert!(valid_name(spec.name), "{}", spec.name);
@@ -70,12 +79,12 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
         assert_eq!(schema["type"], "object", "{}", spec.name);
         assert_eq!(schema["additionalProperties"], false, "{}", spec.name);
         assert!(
-            catalog::decode(spec.name, json!({})).is_some(),
+            catalog::decode(spec.name, json!({}), &Budgets::default()).is_some(),
             "{}",
             spec.name
         );
     }
-    assert!(catalog::decode("canvas_preview", json!({})).is_none());
+    assert!(catalog::decode("canvas_preview", json!({}), &Budgets::default()).is_none());
 }
 
 #[test]

@@ -6,6 +6,7 @@ use super::{
     error::{ErrorKind, OpError},
     exec::{Context, Executor},
     host::{Call, ToolHost},
+    import, inspect,
     result::ToolResult,
     session::SessionStore,
     store::Documents,
@@ -19,10 +20,6 @@ use std::sync::Arc;
 pub struct HeadlessHost {
     exec: Executor,
     store: Arc<SessionStore>,
-    #[expect(
-        dead_code,
-        reason = "the import, analyze and export operations of later steps use it"
-    )]
     engine: LocalEngine,
     budgets: Budgets,
     versions: Versions,
@@ -58,6 +55,7 @@ async fn run(
     ctx: Context,
     who: Principal,
     store: Arc<dyn Documents>,
+    engine: LocalEngine,
     versions: Versions,
     budgets: Budgets,
 ) -> Result<ToolResult, OpError> {
@@ -69,6 +67,8 @@ async fn run(
         Op::DocumentNew => documents::document_new(ctx, store, who, versions).await,
         Op::DocumentList => documents::document_list(ctx, store, who, versions).await,
         Op::DocumentClose(args) => documents::document_close(ctx, store, who, versions, args).await,
+        Op::Import(args) => import::import(ctx, store, engine, who, versions, args).await,
+        Op::Inspect(args) => inspect::inspect(ctx, store, who, versions, budgets, args).await,
     }
 }
 
@@ -88,7 +88,7 @@ impl ToolHost for HeadlessHost {
             arguments,
             progress,
         } = call;
-        let op = match catalog::decode(&tool, arguments) {
+        let op = match catalog::decode(&tool, arguments, &self.budgets) {
             None => {
                 return Err(OpError::new(
                     ErrorKind::UnknownTool,
@@ -100,12 +100,13 @@ impl ToolHost for HeadlessHost {
         };
         let who = principal.clone();
         let store: Arc<dyn Documents> = self.store.clone();
+        let engine = self.engine.clone();
         let versions = self.versions.clone();
         let budgets = self.budgets.clone();
         let outcome = self
             .exec
             .run(principal, request, progress, move |ctx| {
-                run(op, ctx, who, store, versions, budgets)
+                run(op, ctx, who, store, engine, versions, budgets)
             })
             .await;
         match outcome {
