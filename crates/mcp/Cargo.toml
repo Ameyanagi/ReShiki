@@ -7,9 +7,11 @@ license = "MIT OR Apache-2.0"
 description = "Experimental MCP transport for ReShiki"
 
 [dependencies]
+rmcp = { version = "=3.5.1", default-features = false, features = ["server"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "rt", "macros", "time"] }
 
 [dev-dependencies]
+rmcp = { version = "=3.5.1", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }

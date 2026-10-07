@@ -4,7 +4,9 @@
 //! owns the bounded line framing that `reshiki --mcp` serves over stdio:
 //! [`framing`] reads and writes one JSON-RPC message per line on dedicated
 //! threads, with admission, backpressure and cancellation tracking, and
-//! [`log`] is the bounded, content-free stderr log.
+//! [`log`] is the bounded, content-free stderr log. [`server`] serves the
+//! MCP protocol over that framing with rmcp, through the crate's own
+//! transport.
 //!
 //! The crate never installs a tracing subscriber and holds no static
 //! connection state: every tracker, status and log belongs to one
@@ -29,3 +31,5 @@
 
 pub mod framing;
 pub mod log;
+pub mod server;
+mod transport;
