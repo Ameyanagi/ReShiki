@@ -190,9 +190,14 @@ fn mcp_request(args: &[OsString]) -> Result<McpRequest, McpUsageError> {
 /// Stdout carries MCP messages only: the framing's writer thread takes its
 /// lock for the whole connection, and nothing else here writes it. Stderr
 /// gets usage errors before the log starts and only the bounded,
-/// content-free log after, so neither stream can block shutdown: stdin is
-/// read on its own thread, every wait below shares one deadline, and
-/// [`exit`] never locks a std stream.
+/// content-free log after, so neither stream can block shutdown once the
+/// input ended: stdin is read on its own thread, every wait below shares
+/// one deadline, and [`exit`] never locks a std stream.
+///
+/// A client that stops reading stdout also stops the reader (the framing's
+/// backpressure), so input it sent after that point, including its end, is
+/// read only once it reads stdout again or closes it; closing it fails the
+/// writer and exits 1.
 pub(crate) fn mcp(args: Vec<OsString>) -> ! {
     let level = match mcp_request(&args) {
         Ok(McpRequest::Serve { level }) => level,
@@ -242,20 +247,43 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
     let code = match result {
         Ok(finished) => {
             let delivered = finished.writer.wait(remaining());
-            match finished.reason {
-                Quit::Eof if delivered => 0,
-                Quit::Eof => {
-                    log.event(Level::Warn, "output not delivered before exit", &[]);
-                    1
-                }
-                Quit::WriterFailed => 1,
-            }
+            exit_code(
+                finished.reason,
+                delivered,
+                finished.tracker.unanswered(),
+                &log,
+            )
         }
         // `serve` already logged the failure at error level.
         Err(ServeError::Init) => 1,
     };
     log_done.finish(remaining().min(LOG_GRACE));
     exit(runtime, code, RUNTIME_GRACE)
+}
+
+/// The exit code once serving ended: 0 only when the input ended, the writer
+/// finished with everything queued written (`delivered`) and no request the
+/// client did not cancel is `unanswered`. Once the writer finished, nothing
+/// can answer such a request: rmcp abandoned its response while stdout was
+/// blocked, or dropped the request with the service.
+fn exit_code(reason: Quit, delivered: bool, unanswered: usize, log: &Log) -> i32 {
+    match reason {
+        Quit::WriterFailed => 1,
+        Quit::Eof if !delivered => {
+            log.event(Level::Warn, "output not delivered before exit", &[]);
+            1
+        }
+        Quit::Eof if unanswered > 0 => {
+            let requests = u64::try_from(unanswered).unwrap_or(u64::MAX);
+            log.event(
+                Level::Warn,
+                "requests left unanswered",
+                &[("requests", requests)],
+            );
+            1
+        }
+        Quit::Eof => 0,
+    }
 }
 
 #[cfg(test)]

@@ -134,3 +134,22 @@ fn mcp_usage_errors_name_the_problem() {
     assert!(MCP_USAGE.starts_with("Experimental: "));
     assert!(MCP_USAGE.contains("Usage: reshiki --mcp [--log-level <level>]\n"));
 }
+
+#[test]
+fn mcp_exits_0_only_when_every_request_was_answered() {
+    let log = Log::silent();
+    for (reason, delivered, unanswered, code) in [
+        (Quit::Eof, true, 0, 0),
+        (Quit::Eof, true, 1, 1),
+        (Quit::Eof, false, 0, 1),
+        (Quit::Eof, false, 2, 1),
+        (Quit::WriterFailed, true, 0, 1),
+        (Quit::WriterFailed, false, 3, 1),
+    ] {
+        assert_eq!(
+            exit_code(reason, delivered, unanswered, &log),
+            code,
+            "{reason:?} delivered={delivered} unanswered={unanswered}"
+        );
+    }
+}

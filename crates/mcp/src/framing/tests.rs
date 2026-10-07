@@ -415,6 +415,18 @@ fn the_tracker_marks_cancellation_once() {
     assert!(!tracker.is_cancelled(&Key::Int(1)));
 }
 
+#[test]
+fn cancelled_requests_are_not_unanswered() {
+    let tracker = Tracker::new(&limits(4, 100));
+    assert_eq!(tracker.admit(&Key::Int(1), 1), Admit::Ok);
+    assert_eq!(tracker.admit(&text("2"), 1), Admit::Ok);
+    assert_eq!(tracker.unanswered(), 2);
+    assert!(tracker.cancel(&Key::Int(1)));
+    assert_eq!((tracker.outstanding(), tracker.unanswered()), (2, 1));
+    tracker.complete(&text("2"));
+    assert_eq!((tracker.outstanding(), tracker.unanswered()), (1, 0));
+}
+
 /// Admits `key` on another thread and reports the outcome.
 fn admit_later(tracker: &Arc<Tracker>, key: Key, bytes: usize) -> std_mpsc::Receiver<Admit> {
     let (sender, receiver) = std_mpsc::channel();

@@ -72,6 +72,15 @@ pub enum StderrMode {
     Unread,
 }
 
+/// What an [`McpSession`] does with the child's stdout.
+enum StdoutMode {
+    Read,
+    /// Read only once [`McpSession::release_stdout`] is called.
+    Held,
+    /// The read end is closed at once.
+    Closed,
+}
+
 enum StderrPipe {
     /// Chunks as they are read, and what arrived so far.
     Captured(Receiver<Vec<u8>>, Vec<u8>),
@@ -88,6 +97,8 @@ pub struct McpSession {
     lines: Receiver<Vec<u8>>,
     unclaimed: VecDeque<Value>,
     stderr: StderrPipe,
+    /// Dropping it lets stdout be read.
+    stdout_hold: Option<Sender<()>>,
     /// Dropping it stops the watchdog.
     _watchdog: Sender<()>,
 }
@@ -95,16 +106,22 @@ pub struct McpSession {
 impl McpSession {
     /// Starts `reshiki --mcp` followed by `args`.
     pub fn start(args: &[&str], stderr: StderrMode) -> Self {
-        Self::spawn(args, stderr, true)
+        Self::spawn(args, stderr, StdoutMode::Read)
+    }
+
+    /// Starts `reshiki --mcp` followed by `args` without reading its stdout
+    /// until [`McpSession::release_stdout`], like a client that stalls.
+    pub fn with_held_stdout(args: &[&str], stderr: StderrMode) -> Self {
+        Self::spawn(args, stderr, StdoutMode::Held)
     }
 
     /// Starts `reshiki --mcp` followed by `args` and closes the read end of
     /// its stdout at once, like a client that went away.
     pub fn without_stdout(args: &[&str], stderr: StderrMode) -> Self {
-        Self::spawn(args, stderr, false)
+        Self::spawn(args, stderr, StdoutMode::Closed)
     }
 
-    fn spawn(args: &[&str], stderr: StderrMode, read_stdout: bool) -> Self {
+    fn spawn(args: &[&str], stderr: StderrMode, stdout_mode: StdoutMode) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_reshiki"))
             .arg("--mcp")
             .args(args)
@@ -133,10 +150,14 @@ impl McpSession {
             StderrMode::Unread => StderrPipe::Unread(pipe),
         };
         let (sender, lines) = mpsc::channel();
+        let (hold, held) = mpsc::channel::<()>();
+        let read_stdout = !matches!(stdout_mode, StdoutMode::Closed);
         thread::spawn(move || {
             if !read_stdout {
                 return;
             }
+            // Returns once the session drops `hold`.
+            let _ = held.recv();
             let mut stdout = BufReader::new(stdout);
             loop {
                 let mut line = Vec::new();
@@ -164,6 +185,7 @@ impl McpSession {
             lines,
             unclaimed: VecDeque::new(),
             stderr,
+            stdout_hold: matches!(stdout_mode, StdoutMode::Held).then_some(hold),
             _watchdog: watchdog,
         }
     }
@@ -220,6 +242,11 @@ impl McpSession {
                 Err(_) => return,
             }
         }
+    }
+
+    /// Starts reading stdout held by [`McpSession::with_held_stdout`].
+    pub fn release_stdout(&mut self) {
+        drop(self.stdout_hold.take());
     }
 
     /// Closes stdin: end of input for the server.

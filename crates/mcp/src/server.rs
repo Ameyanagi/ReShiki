@@ -90,7 +90,8 @@ pub struct Finished {
     /// writer finished, unless a response was abandoned before it was
     /// queued: rmcp stops draining 5 s after its input closes, and
     /// [`EOF_GRACE`] bounds the whole wait. Either can happen while the
-    /// output is blocked.
+    /// output is blocked; [`Tracker::unanswered`] then counts the ones the
+    /// client did not cancel.
     pub tracker: Arc<Tracker>,
 }
 

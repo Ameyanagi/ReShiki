@@ -134,6 +134,16 @@ impl Tracker {
         self.state().outstanding.len()
     }
 
+    /// Outstanding requests that were not cancelled: responses the client
+    /// still expects. Once the writer ended, none of them can be answered.
+    pub fn unanswered(&self) -> usize {
+        self.state()
+            .outstanding
+            .values()
+            .filter(|entry| !entry.cancelled)
+            .count()
+    }
+
     /// The most requests ever outstanding at once.
     pub fn high_water(&self) -> usize {
         self.state().high_water

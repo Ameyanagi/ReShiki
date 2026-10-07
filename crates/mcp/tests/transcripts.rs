@@ -365,6 +365,7 @@ fn a_blocked_writer_after_startup_leaves_the_abandoned_request_outstanding() {
     drop(open);
     assert!(finished.writer.wait(LINE_TIMEOUT));
     assert_eq!(finished.tracker.outstanding(), 1);
+    assert_eq!(finished.tracker.unanswered(), 1);
     let rest = session.rest();
     assert_eq!(rest.len(), 17);
     for line in &rest {
