@@ -2,13 +2,15 @@
 //! cancellation, deadlines and an uncancellable effect phase.
 //!
 //! [`Executor::run`] admits a call, waits for one of
-//! [`Budgets::concurrency`] permits and runs the operation on its own task.
-//! The admission, the permit and the progress finisher move into that task,
-//! which is never aborted. They are released only once the operation has
-//! ended, including every [`Context::blocking`] and [`Context::effect`] job
-//! it awaits, whether it returned, panicked or lost its caller. Blocking work
-//! keeps running when its future is dropped, so a permit released earlier
-//! would let detached work exceed the concurrency budget.
+//! [`Budgets::concurrency`] permits and runs the operation on its own task,
+//! which is never aborted. The admission and the permit form a lease shared
+//! by that task and every [`Context::blocking`] and [`Context::effect`] job
+//! the operation launches. They are released only once the operation and
+//! all of those jobs have ended, whether the operation returned, panicked,
+//! lost its caller or dropped a job's future. Blocking work keeps running
+//! when its future is dropped, so a permit released earlier would let
+//! detached work exceed the concurrency budget. The call's progress finishes
+//! when the operation's task ends.
 //!
 //! Cancellation and deadlines are cooperative: an operation observes them at
 //! [`Context::checkpoint`], which [`Context::blocking`] calls before and after
@@ -26,8 +28,6 @@ use super::{
     progress::{Monotonic, Sink},
     wire::{Principal, RequestId},
 };
-#[cfg(test)]
-use std::sync::Barrier;
 use std::{
     collections::HashMap,
     future::{Future, poll_fn},
@@ -39,7 +39,9 @@ use std::{
     task::Poll,
     time::Instant,
 };
-use tokio::sync::{Notify, Semaphore};
+#[cfg(test)]
+pub(crate) use tests::Barrier;
+use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 
 type Key = (Principal, RequestId);
 
@@ -142,6 +144,14 @@ impl Drop for Admission {
     }
 }
 
+/// The call's admission and permit, shared by the operation's task and every
+/// job it launches on the blocking pool. The last holder to end releases the
+/// permit, then the admission.
+struct Lease {
+    _permit: OwnedSemaphorePermit,
+    _admission: Admission,
+}
+
 /// Finishes the call's progress when the operation ends.
 struct FinishGuard(Option<Arc<Monotonic>>);
 
@@ -187,7 +197,8 @@ impl Executor {
     /// - [`ErrorKind::Failed`] when `f` panics.
     ///
     /// Dropping the returned future never stops `f` once it has started:
-    /// `f` keeps its permit until it ends.
+    /// `f` keeps its permit until it ends. So does every job `f` launched,
+    /// even one whose future `f` dropped; `id` stays in use until then.
     pub async fn run<T, F, Fut>(
         &self,
         who: Principal,
@@ -225,12 +236,17 @@ impl Executor {
             registry.waiting = registry.waiting.saturating_sub(1);
             admission.queued = false;
         }
+        let lease = Arc::new(Lease {
+            _permit: permit,
+            _admission: admission,
+        });
         let progress = progress.map(|sink| Arc::new(Monotonic::new(sink)));
         let ctx = Context {
             token: token.clone(),
             deadline,
             progress: progress.clone(),
             committed: false,
+            lease: Arc::clone(&lease),
             #[cfg(test)]
             hooks: self
                 .shared
@@ -242,15 +258,13 @@ impl Executor {
         let finish = FinishGuard(progress);
         let task = tokio::spawn(async move {
             // Dropped in reverse order when `f` returns or unwinds: the
-            // progress finishes, the permit returns, then the call leaves the
-            // registry.
-            let _admission = admission;
-            let _permit = permit;
+            // progress finishes, then this task's share of the lease goes.
+            let _lease = lease;
             let _finish = finish;
             f(ctx).await
         });
         // Awaited but never aborted. Dropping the handle detaches the task,
-        // which keeps the permit until `f` ends.
+        // which keeps its share of the lease until `f` ends.
         let result = task.await.unwrap_or_else(|_| Err(internal()));
         if token.is_cancelled() {
             return Err(cancelled());
@@ -371,6 +385,7 @@ pub struct Context {
     progress: Option<Arc<Monotonic>>,
     /// Set when the effect starts. Later checkpoints always pass.
     committed: bool,
+    lease: Arc<Lease>,
     #[cfg(test)]
     hooks: Hooks,
 }
@@ -404,9 +419,7 @@ impl Context {
         f: impl FnOnce() -> Result<R, OpError> + Send + 'static,
     ) -> Result<R, OpError> {
         self.checkpoint()?;
-        let result = tokio::task::spawn_blocking(f)
-            .await
-            .unwrap_or_else(|_| Err(internal()));
+        let result = self.spawn(f).await;
         self.checkpoint()?;
         result
     }
@@ -423,9 +436,23 @@ impl Context {
         self.committed = true;
         #[cfg(test)]
         let f = self.hooks.around(f);
-        tokio::task::spawn_blocking(f)
-            .await
-            .unwrap_or_else(|_| Err(internal()))
+        self.spawn(f).await
+    }
+
+    /// Runs `f` on the blocking pool under a share of the call's lease, so
+    /// the permit and the admission outlive `f` even when the returned
+    /// future is dropped first.
+    async fn spawn<R: Send + 'static>(
+        &self,
+        f: impl FnOnce() -> Result<R, OpError> + Send + 'static,
+    ) -> Result<R, OpError> {
+        let lease = Arc::clone(&self.lease);
+        tokio::task::spawn_blocking(move || {
+            let _lease = lease;
+            f()
+        })
+        .await
+        .unwrap_or_else(|_| Err(internal()))
     }
 
     /// The call's progress, when the client asked for it.

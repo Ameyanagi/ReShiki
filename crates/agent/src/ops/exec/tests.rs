@@ -1,10 +1,60 @@
 use super::*;
 use crate::ops::progress::Progress;
-use std::{sync::atomic::AtomicUsize, time::Duration};
+use std::{
+    sync::{Condvar, atomic::AtomicUsize},
+    time::Duration,
+};
 use tokio::task::JoinHandle;
 
 /// A generous bound for every wait, so a bug fails instead of hanging.
 const BOUND: Duration = Duration::from_secs(60);
+
+/// A [`std::sync::Barrier`] whose waits fail after [`BOUND`]. A failing test
+/// then never leaves a blocking thread parked for good, which would hang the
+/// runtime's teardown: it joins every blocking thread.
+pub(crate) struct Barrier {
+    parties: usize,
+    round: Mutex<Round>,
+    turned: Condvar,
+}
+
+#[derive(Default)]
+struct Round {
+    arrived: usize,
+    generation: usize,
+}
+
+impl Barrier {
+    pub(crate) fn new(parties: usize) -> Self {
+        Self {
+            parties,
+            round: Mutex::default(),
+            turned: Condvar::new(),
+        }
+    }
+
+    /// Blocks until `parties` threads wait; panics after [`BOUND`].
+    pub(crate) fn wait(&self) {
+        let mut round = self.round.lock().unwrap();
+        round.arrived += 1;
+        if round.arrived == self.parties {
+            round.arrived = 0;
+            round.generation += 1;
+            self.turned.notify_all();
+            return;
+        }
+        let generation = round.generation;
+        let (mut round, wait) = self
+            .turned
+            .wait_timeout_while(round, BOUND, |round| round.generation == generation)
+            .unwrap();
+        if wait.timed_out() {
+            round.arrived -= 1;
+            drop(round);
+            panic!("barrier timed out");
+        }
+    }
+}
 
 async fn bounded<F: Future>(future: F) -> F::Output {
     tokio::time::timeout(BOUND, future)
@@ -22,14 +72,13 @@ async fn until(mut condition: impl FnMut() -> bool) {
     .await;
 }
 
-/// Waits on a std barrier without blocking a runtime worker.
+/// Waits on a barrier without blocking a runtime worker. The barrier bounds
+/// the wait.
 async fn wait(barrier: &Arc<Barrier>) {
     let barrier = barrier.clone();
-    bounded(tokio::task::spawn_blocking(move || {
-        barrier.wait();
-    }))
-    .await
-    .unwrap();
+    tokio::task::spawn_blocking(move || barrier.wait())
+        .await
+        .unwrap();
 }
 
 fn executor(concurrency: usize, queue: usize) -> Executor {
@@ -164,6 +213,62 @@ async fn a_cancelled_and_dropped_call_keeps_its_permit_until_its_blocking_job_en
     wait(&gate.release).await;
     until(|| live(&exec) == 0).await;
     assert_idle(&exec);
+}
+
+/// Starts `job`, then drops it, as `try_join!` does when a sibling fails.
+async fn abandon<T>(job: impl Future<Output = T>) {
+    let mut job = pin!(job);
+    poll_fn(|cx| {
+        assert!(job.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+}
+
+fn sibling_failed() -> OpError {
+    OpError::new(ErrorKind::Failed, "sibling failed")
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_job_whose_future_was_dropped_keeps_the_call_until_it_ends() {
+    for case in ["blocking", "effect", "panic"] {
+        let exec = executor(2, 8);
+        let gate = Gate::new();
+        let job = gate.job();
+        let call = spawn_op(&exec, 1, move |mut ctx| async move {
+            if case == "effect" {
+                abandon(ctx.effect(job)).await;
+            } else {
+                abandon(ctx.blocking(job)).await;
+            }
+            if case == "panic" {
+                bug()
+            } else {
+                Err(sibling_failed())
+            }
+        });
+        let expected = if case == "panic" {
+            internal()
+        } else {
+            sibling_failed()
+        };
+        assert_eq!(bounded(call).await.unwrap(), Err(expected), "{case}");
+        wait(&gate.started).await;
+        // The operation has ended, but its job still holds the call.
+        assert_eq!((permits(&exec), live(&exec)), (1, 1), "{case}");
+        let duplicate = exec.run(who(), id(1), None, |_| async { Ok(()) }).await;
+        assert_eq!(duplicate, Err(busy("request id already in use")), "{case}");
+        let drain = tokio::spawn({
+            let exec = exec.clone();
+            async move { exec.drained().await }
+        });
+        tokio::task::yield_now().await;
+        assert!(!drain.is_finished(), "{case}");
+
+        wait(&gate.release).await;
+        bounded(drain).await.unwrap();
+        assert_idle(&exec);
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
