@@ -199,6 +199,30 @@ fn probe_id_reads_the_top_level_id_from_a_truncated_prefix() {
     for (line, expected) in rows {
         assert_eq!(probe_id(&prefix(line.clone())), expected, "{}", &line[..40]);
     }
+    // The prefix keeps the first `kept` bytes of the id: a number it ends
+    // may continue past the cut, so only a terminated one is echoed.
+    let straddle = |value: &str, kept: usize| {
+        let pad = "x".repeat(PROBE_BYTES - r#"{"p":"","id":"#.len() - kept);
+        format!(r#"{{"p":"{pad}","id":{value},"q":0}}"#)
+    };
+    let rows = [
+        ("1234", 2, None),
+        ("12.5", 2, None),
+        ("12e3", 2, None),
+        ("-12", 2, None),
+        ("92233720368547758070", 19, None),
+        ("1234", 4, None),
+        ("1234", 5, int(1234)),
+        (r#""ab""#, 4, Some(text("ab"))),
+    ];
+    for (value, kept, expected) in rows {
+        let line = straddle(value, kept);
+        assert_eq!(
+            probe_id(&prefix(line)),
+            expected,
+            "{value} cut after {kept}"
+        );
+    }
 }
 
 #[test]
@@ -350,9 +374,10 @@ fn the_tracker_marks_cancellation_once() {
     assert!(!tracker.is_cancelled(&Key::Int(1)));
     assert!(tracker.cancel(&Key::Int(1)));
     assert!(!tracker.cancel(&Key::Int(1)));
+    // The writer's check leaves the mark, so a repeated cancellation
+    // before the slot completes never counts as new.
     assert!(tracker.is_cancelled(&Key::Int(1)));
-    assert!(tracker.take_cancelled(&Key::Int(1)));
-    assert!(!tracker.take_cancelled(&Key::Int(1)));
+    assert!(!tracker.cancel(&Key::Int(1)));
     tracker.complete(&Key::Int(1));
     assert!(!tracker.cancel(&Key::Int(1)));
     assert!(!tracker.is_cancelled(&Key::Int(1)));
@@ -414,6 +439,7 @@ struct Sink {
     bytes: Arc<Mutex<Vec<u8>>>,
     gate: Option<Arc<Gate>>,
     broken: bool,
+    flush_fails: bool,
 }
 
 impl Sink {
@@ -463,6 +489,9 @@ impl Write for Sink {
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        if self.flush_fails {
+            return Err(io::ErrorKind::BrokenPipe.into());
+        }
         Ok(())
     }
 }
@@ -890,12 +919,40 @@ fn the_writer_refuses_multi_line_messages_and_completes_their_slot() {
     outbound.blocking_send(refused).unwrap();
     outbound.blocking_send(kept).unwrap();
     drop(outbound);
-    assert!(writer.wait(TIMEOUT));
+    // The refused message was not delivered, but nothing failed.
+    assert!(!writer.wait(TIMEOUT));
     assert_eq!(
         sink.lines(),
         [json!({"jsonrpc": "2.0", "id": 2, "result": {}})]
     );
     assert_eq!(tracker.outstanding(), 0);
+    assert!(!status.writer_failed());
     drop(inbound);
     wait_until("end of input", || status.eof());
+}
+
+#[test]
+fn a_failed_closing_flush_is_a_writer_failure() {
+    let sink = Sink {
+        flush_fails: true,
+        ..Sink::default()
+    };
+    let Connection {
+        outbound,
+        tracker,
+        status,
+        writer,
+        ..
+    } = start(
+        Cursor::new(Vec::new()),
+        move || sink,
+        Limits::default(),
+        Log::silent(),
+        None,
+    );
+    // Nothing is queued, so only the closing flush runs.
+    drop(outbound);
+    assert!(!writer.wait(TIMEOUT));
+    assert!(status.writer_failed());
+    assert_eq!(tracker.admit(&Key::Int(1), 1), Admit::Closed);
 }

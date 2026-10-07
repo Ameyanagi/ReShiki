@@ -26,7 +26,8 @@
 //! - `jsonrpc` other than "2.0" on a request, or `method` missing or not a
 //!   string: -32600, echoing the id when it is valid.
 //! - An oversize line: -32600 `Request exceeds N bytes`, with the id when
-//!   the first [`PROBE_BYTES`] reveal it.
+//!   the first [`PROBE_BYTES`] reveal it whole (a number id that the cut
+//!   ends is omitted).
 //! - A duplicate in-flight id: -32600 `Duplicate request id` with that id.
 //! - Client responses and unknown or malformed notifications: no output.
 //!
@@ -50,9 +51,10 @@
 //! # Cancellation
 //!
 //! `notifications/cancelled` marks an outstanding request and calls the
-//! `on_cancel` hook once. The writer then drops that request's response,
-//! whenever it arrives, and still completes its slot. A cancellation for an
-//! unknown or already answered id is ignored.
+//! `on_cancel` hook once; the mark stays until the slot completes, so a
+//! repeated cancellation never calls it again. The writer then drops that
+//! request's response, whenever it arrives, and still completes its slot. A
+//! cancellation for an unknown or already answered id is ignored.
 use crate::log::{Level, Log};
 use head::{Class, Ignored, PARSE_ERROR, Reply};
 use serde::{Serialize, Serializer};
@@ -202,8 +204,9 @@ pub struct WriterDone(DoneReceiver<bool>);
 
 impl WriterDone {
     /// Waits up to `timeout` for the writer to end. True only if everything
-    /// queued was written and flushed: every outbound sender was dropped and
-    /// no write failed.
+    /// queued was written and flushed: every outbound sender was dropped, no
+    /// write or flush failed and no message was refused. Responses to
+    /// cancelled requests are dropped by design and do not count.
     pub fn wait(self, timeout: Duration) -> bool {
         self.0.recv_timeout(timeout).unwrap_or(false)
     }
@@ -513,34 +516,47 @@ impl Writer {
         mut queue: mpsc::Receiver<Outbound>,
         done: &SyncSender<bool>,
     ) {
-        let mut ok = true;
+        let mut failed = false;
+        // A refused message is dropped, but the writer keeps going.
+        let mut refused = false;
         while let Some(Outbound { key, mut line }) = queue.blocking_recv() {
             let cancelled = key
                 .as_ref()
-                .is_some_and(|key| self.tracker.take_cancelled(key));
+                .is_some_and(|key| self.tracker.is_cancelled(key));
             if cancelled {
                 // The client cancelled this request: send nothing for it.
             } else if line.contains(&b'\n') {
                 // serde_json's compact output never contains one.
                 self.log
                     .event(Level::Error, "refused multi-line message", &[]);
+                refused = true;
             } else {
                 line.push(b'\n');
                 if out.write_all(&line).and_then(|()| out.flush()).is_err() {
-                    self.status.set(&self.status.writer_failed);
-                    self.tracker.close();
-                    self.log.event(Level::Error, "output write failed", &[]);
-                    ok = false;
+                    self.fail();
+                    failed = true;
                 }
             }
             if let Some(key) = &key {
                 self.tracker.complete(key);
             }
-            if !ok {
+            if failed {
                 break;
             }
         }
-        let ok = ok && out.flush().is_ok();
-        let _ = done.send(ok);
+        if !failed && out.flush().is_err() {
+            self.fail();
+            failed = true;
+        }
+        let _ = done.send(!failed && !refused);
+    }
+
+    /// A write or flush failed: nothing more is admitted. Called before the
+    /// failed message's slot completes, so a blocked admission wakes to the
+    /// close rather than to the free slot.
+    fn fail(&self) {
+        self.status.set(&self.status.writer_failed);
+        self.tracker.close();
+        self.log.event(Level::Error, "output write failed", &[]);
     }
 }

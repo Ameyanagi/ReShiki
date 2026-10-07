@@ -131,8 +131,15 @@ fn notification(method: &str, text: &str, initialize_seen: bool) -> Class {
 /// usually cut mid-value, so any error ends the probe; an id read before
 /// that point is kept.
 pub(super) fn probe_id(prefix: &[u8]) -> Option<Key> {
+    // serde_json accepts a number cut off by the end of its input, so a
+    // number ending the prefix may be the start of another (12 of 1234 or
+    // 12.5): parse only up to the last byte that cannot belong to one.
+    let end = prefix
+        .iter()
+        .rposition(|byte| !matches!(byte, b'0'..=b'9' | b'+' | b'-' | b'.' | b'e' | b'E'))
+        .map_or(0, |last| last.saturating_add(1));
     let mut found = None;
-    let mut input = serde_json::Deserializer::from_slice(prefix);
+    let mut input = serde_json::Deserializer::from_slice(prefix.get(..end).unwrap_or_default());
     let _ = FirstField {
         name: "id",
         found: &mut found,

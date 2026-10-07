@@ -93,7 +93,8 @@ impl Tracker {
     }
 
     /// Marks an outstanding request cancelled. True only when `key` is
-    /// outstanding and was not already marked.
+    /// outstanding and was not already marked. The mark stays until
+    /// [`Tracker::complete`], so each request is newly marked at most once.
     pub fn cancel(&self, key: &Key) -> bool {
         match self.state().outstanding.get_mut(key) {
             Some(entry) if !entry.cancelled => {
@@ -104,16 +105,8 @@ impl Tracker {
         }
     }
 
-    /// Whether `key` was cancelled, clearing the mark. The writer calls this
-    /// to suppress the response.
-    pub fn take_cancelled(&self, key: &Key) -> bool {
-        self.state()
-            .outstanding
-            .get_mut(key)
-            .is_some_and(|entry| std::mem::take(&mut entry.cancelled))
-    }
-
-    /// Whether `key` is outstanding and cancelled.
+    /// Whether `key` is outstanding and cancelled. The writer calls this to
+    /// suppress the response.
     pub fn is_cancelled(&self, key: &Key) -> bool {
         self.state()
             .outstanding
