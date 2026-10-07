@@ -47,6 +47,8 @@ const NOTHING: &str = "No supported drawing objects found";
 const ANCHOR_LABEL: &str = r#"<s font="21" size="10" color="0" face="96">O</s>"#;
 /// The same label as OH2, with H and 2 in two different colors.
 const ANCHOR_LABEL_MIXED_HYDROGEN: &str = r#"<s font="21" size="10" color="0" face="96">O</s><s font="21" size="10" color="4" face="96">H</s><s font="21" size="10" color="5" face="96">2</s>"#;
+/// The same label as OH2, with all of H2 in red (color 4).
+const ANCHOR_LABEL_RED_HYDROGEN: &str = r#"<s font="21" size="10" color="0" face="96">O</s><s font="21" size="10" color="4" face="96">H2</s>"#;
 
 /// `text` with `from` replaced; `from` must occur once.
 fn edit(text: &str, from: &str, to: &str) -> String {
@@ -440,6 +442,43 @@ fn fixture_ids_bindings_and_removed_sources() {
     );
 }
 
+#[test]
+fn objects_after_a_removed_circle_keep_their_source_ordinals() {
+    // The circle (ordinal 20) is the last element, so a graphic inserted after
+    // it in the fragment (21) and the elements injected at the page end
+    // (22-29) all shift down by one in the filtered XML. The arrow precedes a
+    // graphic, so an untranslated claim would hide that graphic.
+    let mut prepared = prepare_cdxml(AROMATIC_CIRCLE).unwrap();
+    prepared.expanded_xml = edit(
+        &prepared.expanded_xml,
+        "</graphic></fragment>",
+        "</graphic><graphic GraphicType='Line' BoundingBox='40 60 50 60'></graphic></fragment>",
+    );
+    inject(
+        &mut prepared,
+        &format!(
+            "{ARROW_38}<graphic GraphicType='Line' BoundingBox='0 30 10 30'/><t p='0 0'><s>a</s></t><group><graphic GraphicType='Line' BoundingBox='0 10 10 10'/><t p='0 20'><s>b</s></t></group>"
+        ),
+    );
+    assert_eq!(
+        ids(&assemble_cdxml(&prepared).unwrap()),
+        Ids {
+            annotations: vec![8, 9],
+            arrows: vec![7],
+            graphics: vec![10, 11, 12],
+            groups: vec![(13, vec![9, 12])],
+            objects: [
+                vec![(7, twice(1..=6).into_iter().chain([10]).collect())],
+                singles([22, 24, 28], 7),
+                singles(8..=13, 1),
+                singles([21, 23, 27], 10),
+            ]
+            .concat(),
+            removed_sources: vec![20],
+        }
+    );
+}
+
 /// Family, bold and exact color of a native text style.
 type Style<'a> = (&'a str, bool, [u8; 3]);
 fn style(style: &NativeTextStyle) -> Style<'_> {
@@ -606,6 +645,75 @@ fn abbreviation_presentations_restore_the_anchor_style() {
 }
 
 #[test]
+fn colored_attached_hydrogen_reaches_the_atom_patch() {
+    let hydrogen_colors = |assembled: CdxmlScene| -> Vec<(u64, Option<Color>)> {
+        let document = assembled.into_document().unwrap().document;
+        document
+            .atoms
+            .iter()
+            .map(|atom| (atom.id, atom.display.hydrogen_color))
+            .collect()
+    };
+    // A styled label: a copy of the methyl carbon (atom 3) with a red H3.
+    let mut prepared = prepare_cdxml(CONTRACTED).unwrap();
+    inject(
+        &mut prepared,
+        "<n p='303.61 359.89'><t><s>C</s><s color='4'>H3</s></t></n>",
+    );
+    let styled = assemble_cdxml(&prepared).unwrap();
+    assert_eq!(
+        patches(&styled),
+        vec![
+            (
+                2,
+                Some([223, 71, 62]),
+                Some(("Helvetica", false, [0, 0, 0])),
+                None,
+                true,
+                0,
+                true
+            ),
+            (
+                3,
+                Some([129, 229, 255]),
+                Some(("Helvetica", false, [0, 0, 0])),
+                Some([255, 0, 0]),
+                false,
+                0,
+                true
+            ),
+            (1, None, None, None, false, 0, true),
+        ]
+    );
+    assert_eq!(
+        hydrogen_colors(styled),
+        vec![(1, None), (2, None), (3, Some(Color::Custom([255, 0, 0])))]
+    );
+    // A restored abbreviation anchor with a red H2.
+    let restored = scene(&edit(CONTRACTED, ANCHOR_LABEL, ANCHOR_LABEL_RED_HYDROGEN));
+    assert_eq!(
+        patches(&restored),
+        vec![
+            (
+                2,
+                Some([223, 71, 62]),
+                Some(("Helvetica", false, [0, 0, 0])),
+                Some([255, 0, 0]),
+                true,
+                0,
+                true
+            ),
+            (3, Some([129, 229, 255]), None, None, false, 0, true),
+            (1, None, None, None, false, 0, true),
+        ]
+    );
+    assert_eq!(
+        hydrogen_colors(restored),
+        vec![(1, None), (2, Some(Color::Custom([255, 0, 0]))), (3, None)]
+    );
+}
+
+#[test]
 fn duplicate_atom_patches_send_updates_to_the_first_and_keep_the_last() {
     // Two styled copies of the first labelled atom (N, id 3) at its p and
     // Element: white, then bold with a highlight. A lone pair names id 3,
@@ -665,6 +773,70 @@ fn duplicate_atom_patches_send_updates_to_the_first_and_keep_the_last() {
     assert_eq!(atom.display.highlight, None);
     assert_eq!(atom.display.number, None);
     assert!(atom.marks.is_empty());
+}
+
+#[test]
+fn abbreviation_restoration_patches_the_last_duplicate() {
+    // A red Helvetica copy of the abbreviation anchor (atom 2), without the
+    // anchor's id. Highlight and display updates go to the first patch, but
+    // the restored anchor style (black, explicit) replaces the copy's.
+    let mut prepared = prepare_cdxml(CONTRACTED).unwrap();
+    inject(
+        &mut prepared,
+        "<n p='275.61 359.89' Element='8'><t><s font='21' size='10' color='4' face='96'>O</s></t></n>",
+    );
+    let scene = assemble_cdxml(&prepared).unwrap();
+    assert_eq!(
+        patches(&scene),
+        vec![
+            (
+                2,
+                Some([223, 71, 62]),
+                Some(("Geneva", false, [0, 0, 0])),
+                None,
+                false,
+                0,
+                true
+            ),
+            (
+                2,
+                None,
+                Some(("Helvetica", false, [0, 0, 0])),
+                None,
+                true,
+                0,
+                false
+            ),
+            (3, Some([129, 229, 255]), None, None, false, 0, true),
+            (1, None, None, None, false, 0, true),
+        ]
+    );
+    assert_eq!(
+        abbreviations(&scene),
+        vec![(2, "OMe", Some(("Geneva", false, Color::Ink)), false)]
+    );
+    assert_eq!(
+        ids(&scene).objects,
+        [
+            vec![(17, twice(1..=3))],
+            singles([18, 20, 23], 1),
+            vec![(25, vec![2])],
+        ]
+        .concat()
+    );
+    // Reconstruction keeps the restored last patch, without the highlight.
+    let document = scene.into_document().unwrap().document;
+    let atom = &document.atoms[1];
+    let text_style = atom.text_style.as_ref().unwrap();
+    assert_eq!(
+        (
+            atom.id,
+            text_style.family.as_str(),
+            text_style.color,
+            atom.display.highlight
+        ),
+        (2, "Helvetica", Color::Ink, None)
+    );
 }
 
 /// A change to a valid prepared snapshot through its public fields.
