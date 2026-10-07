@@ -291,7 +291,7 @@ impl Report {
 )]
 enum Prepared {
     /// The result, with no commit: a replayed receipt, a rejection, or an
-    /// undo or redo with nothing to step.
+    /// unkeyed undo or redo with nothing to step.
     Done(ToolResult),
     /// The change the effect commits.
     Commit(Change),
@@ -398,10 +398,51 @@ fn current(
     Ok(snapshot)
 }
 
-/// Everything before the effect, on the blocking pool: the receipt fast path,
-/// the revision and ID checks, the edit, its reconciliation and the label
-/// precompute.
+/// The stored receipt for `key`, as the result.
+fn replay(
+    store: &dyn Documents,
+    who: &Principal,
+    document: &DocHandle,
+    key: &IdempotencyKey,
+) -> Result<Option<Prepared>, OpError> {
+    Ok(store
+        .receipt(who, document, key)?
+        .map(|receipt| Prepared::Done(Arc::unwrap_or_clone(receipt))))
+}
+
+/// Everything before the effect, on the blocking pool: [`edit`] between two
+/// receipt lookups for a keyed call.
+///
+/// Both lookups are fast paths, as the commit checks the key again under its
+/// lock. The second one serves a call that ends without a commit: another
+/// call with the same key may have committed since the first lookup, and its
+/// receipt (or the key's reuse) then wins over what this call made of the
+/// changed document, such as [`ErrorKind::Stale`], as it does in the commit.
 fn prepare(
+    store: &dyn Documents,
+    who: &Principal,
+    versions: Versions,
+    apply: Apply,
+) -> Result<Prepared, OpError> {
+    let Some(key) = apply.key.clone() else {
+        return edit(store, who, versions, apply);
+    };
+    let document = apply.document.clone();
+    if let Some(replayed) = replay(store, who, &document, &key)? {
+        return Ok(replayed);
+    }
+    match edit(store, who, versions, apply) {
+        Ok(Prepared::Commit(change)) => Ok(Prepared::Commit(change)),
+        outcome => match replay(store, who, &document, &key)? {
+            Some(replayed) => Ok(replayed),
+            None => outcome,
+        },
+    }
+}
+
+/// The revision and ID checks, the edit, its reconciliation and the label
+/// precompute.
+fn edit(
     store: &dyn Documents,
     who: &Principal,
     versions: Versions,
@@ -413,28 +454,30 @@ fn prepare(
         base_revision,
         key,
     } = apply;
-    // A fast path only: the commit checks the key again under its lock.
-    if let Some(key) = &key
-        && let Some(receipt) = store.receipt(who, &document, key)?
-    {
-        return Ok(Prepared::Done(Arc::unwrap_or_clone(receipt)));
-    }
     let (snapshot, edited) = match action {
         Action::Step { redo } => {
             let step = store.step_target(who, &document, redo)?;
             check_base(base_revision, step.revision)?;
             let report = Report::new(document, versions);
-            let Some(target) = step.target else {
-                return Ok(Prepared::Done(report.result(&Applied {
-                    revision: step.revision,
-                    recorded: false,
-                    chemistry_changed: false,
-                    label_notice: None,
-                })));
+            let (chemistry_changed, labels) = match &step.target {
+                // As the app's undo and redo, which clear computed labels
+                // when the chemistry changed and refresh them afterwards.
+                Some(target) => {
+                    let changed = transaction::chemistry_changed(&step.current, target);
+                    (changed, labels(target, changed))
+                }
+                // Nothing to step. A keyed call still commits, which changes
+                // nothing but binds its key to this request.
+                None if key.is_none() => {
+                    return Ok(Prepared::Done(report.result(&Applied {
+                        revision: step.revision,
+                        recorded: false,
+                        chemistry_changed: false,
+                        label_notice: None,
+                    })));
+                }
+                None => (false, None),
             };
-            // As the app's undo and redo, which clear computed labels when
-            // the chemistry changed and refresh them afterwards.
-            let chemistry_changed = transaction::chemistry_changed(&step.current, &target);
             return Ok(Prepared::Commit(Change {
                 base: step.revision,
                 edit: Edit::Step {
@@ -442,7 +485,7 @@ fn prepare(
                     chemistry_changed,
                 },
                 key,
-                labels: labels(&target, chemistry_changed),
+                labels,
                 receipt: report.receipt(),
             }));
         }
@@ -496,8 +539,10 @@ fn prepare(
 ///   the blocking pool. A rejection is an `is_error` result with validation
 ///   `rejected` and no commit.
 /// - Undo and redo: the store's step target, checked against
-///   `base_revision`; nothing to step gives `recorded: false` without a
-///   commit.
+///   `base_revision`; nothing to step gives `recorded: false`, without a
+///   commit unless the call is keyed.
+/// - A keyed call looks for its receipt before this stage and, when it ends
+///   without a commit, again after it (see [`prepare`]).
 /// - The store's commit is the single effect: one history step, with the
 ///   revision, owner and idempotency key checked again under its lock.
 ///   Nothing runs after it. A cancel that arrives after it ends the call as

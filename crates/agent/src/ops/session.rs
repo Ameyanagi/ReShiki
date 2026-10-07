@@ -21,9 +21,10 @@
 //!
 //! [`Documents::commit`] runs entirely under the store's lock, in a fixed
 //! order: it resolves and rechecks the owner, replays a stored receipt,
-//! checks the revision, preflights the budgets and builds the receipt from
-//! what the edit will do, and only then mutates. The mutation cannot fail,
-//! so no commit fails half-way, and a panicking receipt changes nothing.
+//! checks the revision, works out what the edit will do, preflights the
+//! budgets when it records a step, builds the receipt from what it will do,
+//! and only then mutates. The mutation cannot fail, so no commit fails
+//! half-way, and a panicking receipt changes nothing.
 use super::{
     budget::{Budgets, cost, objects, picture_memory},
     error::{ErrorKind, OpError},
@@ -191,7 +192,8 @@ impl Store {
 /// What the read-only part of a commit decided.
 enum Decision {
     Replay(Arc<ToolResult>),
-    Apply,
+    /// Apply the change, which does what [`prospect`] described.
+    Apply(Applied),
 }
 
 impl SessionStore {
@@ -287,7 +289,8 @@ impl SessionStore {
         )
     }
 
-    /// Steps (1) to (4) of a commit: resolve, replay, revision and preflight.
+    /// Steps (1) to (4) of a commit: resolve, replay, revision and, for an
+    /// edit that records a step, preflight.
     fn decide(
         &self,
         store: &mut Store,
@@ -306,12 +309,16 @@ impl SessionStore {
         if entry.revision != change.base.0 {
             return Err(OpError::new(ErrorKind::Stale, STALE));
         }
-        // A step only moves frames between the document and its history, so
-        // it changes no budget.
-        if let Edit::Replace { doc, reconciled } = &change.edit {
+        let applied = prospect(entry, &change.edit, change.labels.as_ref());
+        // A step only moves frames between the document and its history, and
+        // an edit that records nothing keeps both, so neither changes a
+        // budget.
+        if applied.recorded
+            && let Edit::Replace { doc, reconciled } = &change.edit
+        {
             self.preflight(store, who, handle, entry, doc, reconciled.before())?;
         }
-        Ok(Decision::Apply)
+        Ok(Decision::Apply(applied))
     }
 }
 
@@ -481,9 +488,10 @@ impl Documents for SessionStore {
     ) -> Result<Arc<ToolResult>, OpError> {
         let mut store = self.store();
         // (1) to (4): nothing is mutated until every check has passed.
-        if let Decision::Replay(receipt) = self.decide(&mut store, who, handle, &change)? {
-            return Ok(receipt);
-        }
+        let applied = match self.decide(&mut store, who, handle, &change)? {
+            Decision::Replay(receipt) => return Ok(receipt),
+            Decision::Apply(applied) => applied,
+        };
         let entry = store.entries.get_mut(handle).ok_or_else(unknown)?;
         let Change {
             base: _,
@@ -494,7 +502,7 @@ impl Documents for SessionStore {
         } = change;
         // (5) The receipt, built before anything changes: if it panics, the
         // edit is not applied and a retry applies it once.
-        let result = Arc::new(receipt(&prospect(entry, &edit, labels.as_ref())));
+        let result = Arc::new(receipt(&applied));
         // (6) The mutation, which cannot fail, and the receipt's record.
         mutate(entry, edit, labels);
         entry.weight = entry.recount();

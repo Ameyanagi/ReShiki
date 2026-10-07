@@ -15,7 +15,7 @@ use crate::{
 };
 use std::{
     future::Future,
-    sync::atomic::{AtomicI64, Ordering},
+    sync::atomic::{AtomicBool, AtomicI64, Ordering},
     time::{Duration, Instant},
 };
 use tokio::task::JoinHandle;
@@ -25,6 +25,8 @@ const BOUND: Duration = Duration::from_secs(60);
 
 const JOINS: &str =
     "This joins separate reaction participants. Clear their reaction roles before joining them.";
+
+const KEY_REUSED: &str = "idempotency_key was already used with different arguments";
 
 fn host() -> HeadlessHost {
     HeadlessHost::new("9.8.7", Budgets::default())
@@ -221,12 +223,19 @@ async fn race(host: &Arc<HeadlessHost>, first: Value, second: Value) -> [ToolRes
     results.try_into().unwrap()
 }
 
-/// A [`SessionStore`] that runs `hook` after every read of a document: the
-/// insert's source snapshot and the step target, both inside the stage
-/// before the effect.
+/// A read of the store in the stage before the effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Read {
+    Receipt,
+    /// The insert's source snapshot.
+    Source,
+    StepTarget,
+}
+
+/// A [`SessionStore`] that runs `hook` after each [`Read`].
 struct Hooked {
     inner: Arc<SessionStore>,
-    hook: Box<dyn Fn() + Send + Sync>,
+    hook: Box<dyn Fn(Read) + Send + Sync>,
 }
 
 impl Documents for Hooked {
@@ -242,7 +251,7 @@ impl Documents for Hooked {
     ) -> Result<Snapshot, OpError> {
         let snapshot = self.inner.snapshot(who, handle, access);
         if access == Access::Read {
-            (self.hook)();
+            (self.hook)(Read::Source);
         }
         snapshot
     }
@@ -254,7 +263,7 @@ impl Documents for Hooked {
         redo: bool,
     ) -> Result<StepTarget, OpError> {
         let target = self.inner.step_target(who, handle, redo);
-        (self.hook)();
+        (self.hook)(Read::StepTarget);
         target
     }
 
@@ -264,7 +273,9 @@ impl Documents for Hooked {
         handle: &DocHandle,
         key: &IdempotencyKey,
     ) -> Result<Option<Arc<ToolResult>>, OpError> {
-        self.inner.receipt(who, handle, key)
+        let receipt = self.inner.receipt(who, handle, key);
+        (self.hook)(Read::Receipt);
+        receipt
     }
 
     fn commit(
@@ -291,7 +302,7 @@ fn spawn_hooked(
     host: &HeadlessHost,
     id: RequestId,
     arguments: Value,
-    hook: impl Fn() + Send + Sync + 'static,
+    hook: impl Fn(Read) + Send + Sync + 'static,
 ) -> JoinHandle<Result<ToolResult, OpError>> {
     let decoded = decode(arguments, &Budgets::default()).unwrap();
     let store: Arc<dyn Documents> = Arc::new(Hooked {
@@ -591,7 +602,6 @@ async fn concurrent_applies_with_one_key_commit_once_and_return_equal_results() 
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_key_reused_with_other_arguments_is_invalid_and_changes_nothing() {
-    const KEY_REUSED: &str = "idempotency_key was already used with different arguments";
     let host = Arc::new(host());
     let carbon = create(&host, chain(&["C"], 0.));
     let nitrogen = create(&host, chain(&["N"], 0.));
@@ -623,6 +633,29 @@ async fn a_key_reused_with_other_arguments_is_invalid_and_changes_nothing() {
     assert_eq!(revision(&host, &document), 1);
     assert_eq!(stored(&host, &document).atoms.len(), 1);
     assert_eq!(undo_all(&host, &document).await, 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_keyed_step_with_nothing_to_step_still_binds_its_key() {
+    let host = host();
+    let document = create(&host, Document::default());
+    let source = create(&host, chain(&["C"], 0.));
+    let undo = step(&document, "undo", 0, Some("k"));
+    let nothing = apply_ok(&host, undo.clone()).await;
+    assert_eq!(
+        (&nothing["value"]["revision"], &nothing["value"]["recorded"]),
+        (&json!("0"), &json!(false))
+    );
+    let (code, message) = apply_err(&host, insert(&document, &source, None, None, Some("k"))).await;
+    assert_eq!(
+        (code.as_str(), message.as_str()),
+        ("invalid_arguments", KEY_REUSED)
+    );
+    // After another edit, the retry replays its receipt instead of going
+    // stale.
+    apply_ok(&host, insert(&document, &source, None, None, None)).await;
+    assert_eq!(apply_ok(&host, undo).await, nothing);
+    assert_eq!(revision(&host, &document), 1);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -673,9 +706,11 @@ async fn a_redo_overtaken_by_an_insert_is_stale() {
     let (read, resume) = (Arc::new(Barrier::new(2)), Arc::new(Barrier::new(2)));
     let redo = spawn_hooked(&host, request(), step(&document, "redo", 2, None), {
         let (read, resume) = (read.clone(), resume.clone());
-        move || {
-            read.wait();
-            resume.wait();
+        move |at| {
+            if at == Read::StepTarget {
+                read.wait();
+                resume.wait();
+            }
         }
     });
     wait(&read).await;
@@ -685,6 +720,58 @@ async fn a_redo_overtaken_by_an_insert_is_stale() {
     assert_eq!(error.kind, ErrorKind::Stale);
     assert_eq!(revision(&host, &document), 3);
     assert_eq!(stored(&host, &document).atoms.len(), 1);
+}
+
+/// Runs `retry` until it has missed its receipt, then `first` to the end,
+/// then the rest of `retry`; their results.
+async fn overtaken(
+    host: &HeadlessHost,
+    retry: Value,
+    first: Value,
+) -> (Result<ToolResult, OpError>, ToolResult) {
+    let (missed, resume) = (Arc::new(Barrier::new(2)), Arc::new(Barrier::new(2)));
+    let paused = AtomicBool::new(false);
+    let retry = spawn_hooked(host, request(), retry, {
+        let (missed, resume) = (missed.clone(), resume.clone());
+        move |at| {
+            if at == Read::Receipt && !paused.swap(true, Ordering::Relaxed) {
+                missed.wait();
+                resume.wait();
+            }
+        }
+    });
+    wait(&missed).await;
+    let first = host.call(call(first)).await.unwrap();
+    wait(&resume).await;
+    (bounded(retry).await.unwrap(), first)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_keyed_call_overtaken_after_missing_its_receipt_still_honors_the_key() {
+    let host = host();
+    let document = create(&host, chain(&["C", "C", "C"], 0.));
+    // The same request: the retry replays the first one's receipt instead of
+    // finding its base revision stale.
+    let arguments = delete(&document, &[3], 0, Some("k"));
+    let (retried, first) = overtaken(&host, arguments.clone(), arguments).await;
+    assert!(!first.is_error, "{:?}", first.value);
+    assert_eq!(retried.unwrap(), first);
+    assert_eq!(revision(&host, &document), 1);
+    // Other arguments under a used key are invalid, not stale.
+    let (retried, first) = overtaken(
+        &host,
+        step(&document, "undo", 1, Some("u")),
+        delete(&document, &[2], 1, Some("u")),
+    )
+    .await;
+    assert!(!first.is_error, "{:?}", first.value);
+    let error = retried.unwrap_err();
+    assert_eq!(
+        (error.kind, error.message.as_str()),
+        (ErrorKind::InvalidArguments, KEY_REUSED)
+    );
+    assert_eq!(revision(&host, &document), 2);
+    assert_eq!(undo_all(&host, &document).await, 2);
 }
 
 /// A ring, an attachment point over it bonded to iron, and a reaction with
@@ -763,7 +850,11 @@ async fn a_cancel_before_the_effect_changes_nothing() {
     // The cancel lands while the edit and its labels are being prepared.
     let cancelled = spawn_hooked(&host, id.clone(), arguments.clone(), {
         let (exec, id) = (host.exec().clone(), id.clone());
-        move || exec.cancel(&who(), &id)
+        move |at| {
+            if at == Read::Source {
+                exec.cancel(&who(), &id);
+            }
+        }
     });
     let error = bounded(cancelled).await.unwrap().unwrap_err();
     assert_eq!(error.kind, ErrorKind::Cancelled);
@@ -854,4 +945,31 @@ async fn the_history_keeps_history_depth_undo_steps() {
     }
     assert_eq!(undo_all(&host, &document).await, 2);
     assert_eq!(stored(&host, &document).atoms.len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_replacement_that_changes_nothing_fits_a_full_session() {
+    // One atom weighs 2, all the session may hold.
+    let host = HeadlessHost::new(
+        "9.8.7",
+        Budgets {
+            max_session_weight: 2,
+            ..Budgets::default()
+        },
+    );
+    let document = create(&host, chain(&["C"], 0.));
+    // The atom replaced by a copy of the drawing itself, where it was.
+    let same = apply_ok(
+        &host,
+        insert(&document, &document, Some(&[1]), Some(0), None),
+    )
+    .await;
+    assert_eq!(
+        (&same["value"]["revision"], &same["value"]["recorded"]),
+        (&json!("0"), &json!(false))
+    );
+    assert_eq!(*stored(&host, &document), chain(&["C"], 0.));
+    // An edit that records a step still needs room for its undo frame.
+    let (code, _) = apply_err(&host, delete(&document, &[1], 0, None)).await;
+    assert_eq!(code, "budget");
 }

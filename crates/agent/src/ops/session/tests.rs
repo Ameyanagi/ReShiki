@@ -522,6 +522,33 @@ fn a_rejected_preflight_changes_nothing() {
 }
 
 #[test]
+fn a_replacement_that_records_nothing_needs_no_budget() {
+    let store = SessionStore::new(Budgets {
+        max_session_weight: 2,
+        ..Budgets::default()
+    });
+    let handle = store.create(&alice(), with_carbons(1)).unwrap().handle;
+    let same = store
+        .commit(
+            &alice(),
+            &handle,
+            replace(&store, &handle, |_| {}, key("k", 1)),
+        )
+        .unwrap();
+    assert_eq!(
+        (&same.value["revision"], &same.value["recorded"]),
+        (&json!("0"), &json!(false))
+    );
+    assert_eq!(frames(&store, &handle), (0, 0));
+    assert_eq!(weight(&store, &handle), 2);
+    // A recorded edit still preflights its undo frame: 1 + 2 > 2.
+    let error = store
+        .commit(&alice(), &handle, carbons_change(&store, &handle, 0, None))
+        .unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Budget);
+}
+
+#[test]
 fn concurrent_replacements_from_one_base_give_exactly_one_stale() {
     let store = Arc::new(store());
     let handle = create(&store, &alice());
