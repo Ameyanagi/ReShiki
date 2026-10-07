@@ -7,8 +7,9 @@
 //!
 //! 1. [`host::ToolHost`] faces the transport: it lists the tool catalog,
 //!    runs calls, cancels them and drains on shutdown.
-//! 2. The executor owns request IDs, admission, permits, cooperative
-//!    cancellation, deadlines and an explicit uncancellable effect phase.
+//! 2. The executor ([`exec::Executor`]) owns request IDs, admission,
+//!    permits, cooperative cancellation, deadlines and an explicit
+//!    uncancellable effect phase.
 //! 3. The documents store resolves handles and commits mutations, checking
 //!    [`policy::check`] at resolve time and again inside the commit.
 //! 4. The operation functions, shared by every host.
@@ -37,6 +38,7 @@
 //!   is a protocol error, everything else is a tool execution error.
 pub mod budget;
 pub mod error;
+pub mod exec;
 pub mod host;
 pub mod policy;
 pub mod progress;
