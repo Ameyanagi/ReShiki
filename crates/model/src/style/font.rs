@@ -8,4 +8,5 @@ pub(super) fn face(bytes: &[u8], index: u32, weight: u16) -> Option<ttf_parser::
 }
 
 #[cfg(test)]
+#[path = "font/tests.rs"]
 mod tests;

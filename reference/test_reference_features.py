@@ -47,6 +47,7 @@ class ReferenceFeatures(unittest.TestCase):
             ROOT / "crates/io/src/engine/reference.rs",
             *(ROOT / "crates/io/src/engine/reference").rglob("*.rs"),
             ROOT / "crates/io/src/chemistry/cleanup/numeric.rs",
+            *(ROOT / "crates/io/src/chemistry/cleanup/numeric").rglob("*.rs"),
             *(ROOT / "tests").glob("*.rs"),
             *(ROOT / "scripts").glob("*.py"),
         ]
