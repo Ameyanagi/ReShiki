@@ -255,7 +255,10 @@ fn validate_at(schema: &Value, instance: &Value, at: &str, errors: &mut Vec<Erro
                     let detail: Vec<String> = failures
                         .iter()
                         .enumerate()
-                        .map(|(i, f)| format!("branch {i}: {}", f[0]))
+                        .map(|(i, f)| {
+                            let all: Vec<String> = f.iter().map(ToString::to_string).collect();
+                            format!("branch {i}: {}", all.join(", "))
+                        })
                         .collect();
                     errors.push(error(
                         at,
@@ -394,6 +397,8 @@ fn exact(n: &Number) -> Exact {
 fn compare(a: &Number, b: &Number) -> Ordering {
     match (exact(a), exact(b)) {
         (Exact::Integer(a), Exact::Integer(b)) => a.cmp(&b),
+        // `total_cmp` orders -0.0 below 0.0; mathematically they are equal.
+        (Exact::Float(a), Exact::Float(b)) if a == b => Ordering::Equal,
         (Exact::Float(a), Exact::Float(b)) => a.total_cmp(&b),
         (Exact::Integer(a), Exact::Float(b)) => integer_vs_float(a, b),
         (Exact::Float(a), Exact::Integer(b)) => integer_vs_float(b, a).reverse(),
@@ -455,6 +460,20 @@ mod tests {
         ));
         assert!(!accepts(json!({"const":{"a":2}}), json!({"a":2,"b":1})));
         assert!(accepts(json!({"enum":["a",null]}), json!(null)));
+    }
+
+    #[test]
+    fn signed_zeros_are_equal() {
+        let negative: Value = serde_json::from_str("-0").expect("valid JSON");
+        assert_eq!(negative, json!(-0.0), "serde_json parses -0 as a float");
+        for zero in [json!(0), json!(0.0)] {
+            for (schema, instance) in [(zero.clone(), negative.clone()), (negative.clone(), zero)] {
+                assert!(accepts(json!({"const":schema}), instance.clone()));
+                assert!(accepts(json!({"enum":[schema]}), instance.clone()));
+                assert!(accepts(json!({"minimum":schema}), instance.clone()));
+                assert!(accepts(json!({"maximum":schema}), instance));
+            }
+        }
     }
 
     #[test]
@@ -537,6 +556,15 @@ mod tests {
         assert_eq!(
             errors[0].message,
             r#"matches no anyOf branch (branch 0: /1: expected type "null", got -1; branch 1: /1: -1 violates minimum 0)"#
+        );
+        let pair = json!({"anyOf":[{"type":"null"},{"properties":{"a":{"type":"string"},"b":{"type":"string"}}}]});
+        let errors = validate(&pair, &json!({"a":0,"b":0}));
+        let found: Vec<String> = errors.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            found,
+            [
+                r#"(root): matches no anyOf branch (branch 0: (root): expected type "null", got {"a":0,"b":0}; branch 1: /a: expected type "string", got 0, /b: expected type "string", got 0)"#
+            ]
         );
     }
 

@@ -589,8 +589,8 @@
     {"name": "bond-pairs-distinct", "rule": "bond-unique-pairs", "base": "sketch", "patch": [{"op": "add", "path": "/sketch/bonds/-", "value": {"a": 0, "b": 1, "order": 1, "display": "plain", "ring_arc": false}}], "expect": "both_accept"},
     {"name": "bond-pair-reversed", "rule": "bond-unique-pairs", "base": "sketch", "patch": [{"op": "add", "path": "/sketch/bonds/-", "value": {"a": 2, "b": 1, "order": 2, "display": "plain", "ring_arc": false}}], "expect": "decoder_rejects_only"},
 
-    {"name": "bond-length-0.1", "rule": "bond-endpoint-distance", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/x", "value": 1.1}], "expect": "both_accept"},
-    {"name": "bond-length-0.09", "rule": "bond-endpoint-distance", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/x", "value": 1.09}], "expect": "decoder_rejects_only"},
+    {"name": "bond-length-0.1", "rule": "bond-endpoint-distance", "base": "pair_sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/1/x", "value": 0.1}], "expect": "both_accept"},
+    {"name": "bond-length-0.09", "rule": "bond-endpoint-distance", "base": "pair_sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/1/x", "value": 0.09}], "expect": "decoder_rejects_only"},
 
     {"name": "shape-end-x-50", "rule": "shape-bounded", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/shapes/0/end/x", "value": 50}], "expect": "both_accept"},
     {"name": "shape-start-y-51", "rule": "shape-bounded", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/shapes/0/start/y", "value": 51}], "expect": "both_reject"},
