@@ -5,11 +5,16 @@
 mod support;
 
 use reshiki_agent::{
-    Proposal,
-    ops::catalog::{SPECS, decode_check},
+    Proposal, canvas_tools,
+    ops::catalog::{SPECS, catalog_json, decode_check},
+    tool_spec::valid_name,
 };
 use serde_json::{Value, json};
-use support::corpus::{self, Contract};
+use std::collections::{BTreeSet, HashSet};
+use support::{
+    corpus::{self, Contract},
+    json_schema,
+};
 
 /// The Proposal decoder exactly as `canvas_preview` (canvas_tools.rs:101-103)
 /// and the Codex Proposal turn (src/assistant/codex.rs:476-477) run it.
@@ -206,4 +211,112 @@ fn compose_nests_the_pinned_proposal_schema() {
         (spec.input_schema)()["properties"]["proposal"].to_string(),
         golden
     );
+}
+
+/// The operation catalog as hosts list it. See
+/// tests/fixtures/agent-contract/README.md for when the golden may change.
+#[test]
+fn the_operation_catalog_bytes_are_pinned() {
+    let golden = include_str!("../../../tests/fixtures/agent-contract/ops-catalog.json")
+        .strip_suffix('\n')
+        .expect("ops-catalog.json ends in one LF");
+    assert_eq!(catalog_json().to_string(), golden);
+}
+
+/// The pointers below `at` of every object-level subschema of `schema` that
+/// is not strict: `additionalProperties: false` with every property in
+/// `required`. Subtrees equal to `skip` are not walked; their pointers go to
+/// `skipped`.
+fn loose_objects(
+    schema: &Value,
+    at: &str,
+    skip: &Value,
+    loose: &mut Vec<String>,
+    skipped: &mut Vec<String>,
+) {
+    if schema == skip {
+        skipped.push(at.to_owned());
+        return;
+    }
+    let Some(schema) = schema.as_object() else {
+        return;
+    };
+    let properties = schema.get("properties").and_then(Value::as_object);
+    if schema.get("type") == Some(&json!("object")) || properties.is_some() {
+        let listed: BTreeSet<&str> = properties
+            .into_iter()
+            .flat_map(|properties| properties.keys().map(String::as_str))
+            .collect();
+        let required: BTreeSet<&str> = schema
+            .get("required")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
+        if schema.get("additionalProperties") != Some(&Value::Bool(false)) || listed != required {
+            loose.push(at.to_owned());
+        }
+    }
+    for (name, sub) in properties.into_iter().flatten() {
+        loose_objects(
+            sub,
+            &format!("{at}/properties/{name}"),
+            skip,
+            loose,
+            skipped,
+        );
+    }
+    if let Some(items) = schema.get("items") {
+        loose_objects(items, &format!("{at}/items"), skip, loose, skipped);
+    }
+    let branches = schema.get("anyOf").and_then(Value::as_array);
+    for (i, branch) in branches.into_iter().flatten().enumerate() {
+        loose_objects(branch, &format!("{at}/anyOf/{i}"), skip, loose, skipped);
+    }
+}
+
+/// The catalog against the tool rules of both supported MCP revisions,
+/// <https://modelcontextprotocol.io/specification/2026-07-28/server/tools>
+/// and <https://modelcontextprotocol.io/specification/2025-11-25/server/tools>,
+/// which state the same rules:
+///
+/// - names are 1 to 128 characters of `[A-Za-z0-9_.-]` and unique; ReShiki
+///   also keeps them apart from the in-app canvas tools;
+/// - inputSchema is a JSON Schema object with root type "object", read as
+///   2020-12 without `$schema`;
+/// - every annotation hint is explicit, because the spec defaults
+///   destructiveHint and openWorldHint to true.
+///
+/// ReShiki's own rules: every schema uses only the contract harness's
+/// keywords and pattern table, and every object level is strict, except the
+/// verbatim Proposal subtree, which proposal-schema.json pins.
+#[test]
+fn the_operation_catalog_follows_the_mcp_tool_rules() {
+    let proposal = reshiki_agent::schema();
+    let mut names = HashSet::new();
+    for spec in SPECS {
+        let name = spec.name;
+        assert!(valid_name(name), "{name}");
+        assert!(names.insert(name), "duplicate tool {name}");
+        assert!(
+            canvas_tools::SPECS.iter().all(|canvas| canvas.name != name),
+            "{name} is also a canvas tool"
+        );
+        assert!(spec.hints.is_some(), "{name} has no hints");
+        let schema = (spec.input_schema)();
+        assert_eq!(schema["type"], "object", "{name}");
+        assert!(schema.get("$schema").is_none(), "{name}");
+        assert_eq!(json_schema::check_keywords(&schema), [], "{name}");
+        let (mut loose, mut skipped) = (Vec::new(), Vec::new());
+        loose_objects(&schema, "", &proposal, &mut loose, &mut skipped);
+        assert_eq!(loose, Vec::<String>::new(), "{name}: not strict");
+        let verbatim: &[&str] = if name == "compose" {
+            &["/properties/proposal"]
+        } else {
+            &[]
+        };
+        assert_eq!(skipped, verbatim, "{name}");
+    }
+    assert_eq!(catalog_json().as_array().map(Vec::len), Some(SPECS.len()));
 }

@@ -13,7 +13,7 @@ use super::{
 };
 use crate::tool_spec::ToolSpec;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 /// The operation tools, in the fixed order hosts list them.
 pub const SPECS: &[ToolSpec] = &[
@@ -29,6 +29,31 @@ pub const SPECS: &[ToolSpec] = &[
     compose::COMPOSE,
     apply::APPLY,
 ];
+
+/// The catalog as protocol-neutral JSON, in [`SPECS`] order:
+/// `[{name, title, description, inputSchema, annotations: {readOnlyHint,
+/// destructiveHint, idempotentHint, openWorldHint}}]`. A missing title or
+/// hints is `null`. tests/fixtures/agent-contract/ops-catalog.json pins it.
+#[doc(hidden)]
+pub fn catalog_json() -> Value {
+    SPECS
+        .iter()
+        .map(|spec| {
+            json!({
+                "name": spec.name,
+                "title": spec.title,
+                "description": spec.description,
+                "inputSchema": (spec.input_schema)(),
+                "annotations": spec.hints.map(|hints| json!({
+                    "readOnlyHint": hints.read_only,
+                    "destructiveHint": hints.destructive,
+                    "idempotentHint": hints.idempotent,
+                    "openWorldHint": hints.open_world,
+                })),
+            })
+        })
+        .collect()
+}
 
 /// A tool call with decoded arguments.
 pub(crate) enum Op {

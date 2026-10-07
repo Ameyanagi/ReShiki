@@ -21,7 +21,7 @@ The library is split into workspace crates. Each crate depends only on the crate
 1. `reshiki-chemistry` (`crates/chemistry/`): the chemistry core, without GUI dependencies.
 2. `reshiki-model` (`crates/model/`): document, scene, styles, editing, pictures, storage and themes, plus the drawing-to-molecule and abbreviation adapters in `chemistry/`.
 3. `reshiki-io` (`crates/io/`): chemistry engine, drawing interchange, export, recovery, document styles and the template library, plus the CDXML, MOL, reaction and cleanup adapters in `chemistry/`.
-4. `reshiki-agent` (`crates/agent/`): the assistant's GUI-free proposal schema, layout, composition, sketch diagrams, review and canvas inspection and rendering.
+4. `reshiki-agent` (`crates/agent/`): the assistant's GUI-free proposal schema, layout, composition, sketch diagrams, review and canvas inspection and rendering. It also hosts the experimental operation layer `ops`: `ToolHost`, `HeadlessHost`, the session document store, budgets, cancellation and the neutral tool catalog. Its MCP and CLI transports are a later addition to the root crate, behind `reshiki --mcp` and `reshiki --cli` (`src/launch.rs`).
 5. `reshiki` library (`src/lib.rs`): a facade that re-exports the moved modules at their existing `reshiki::<module>` paths, plus the Codex assistant client and its preferences, clipboard, printing, updates, hotkeys, Office and accessibility services.
 6. `reshiki` executable (`src/main.rs`, `src/app/`, `src/canvas/`): the Iced application.
 
@@ -44,7 +44,7 @@ The library is split into workspace crates. Each crate depends only on the crate
 | `src/app/dispatch.rs`                                       | Message dispatch table: one handler per message variant                        |
 | `src/app/canvas_edit/`                                      | Canvas gesture dispatch, direct manipulation, placement and clicks             |
 | `src/app/assistant.rs`, `src/app/assistant/`                | Assistant actions, request lifecycle, attachments, drafts and panel view       |
-| `crates/agent/src/`                                         | Assistant proposals: schema, layout, sketch, review and canvas tools           |
+| `crates/agent/src/`                                         | Assistant proposals and canvas tools; the experimental `ops` operation layer   |
 | `src/app/bond_edits.rs`                                     | Bond drawing settings and edits to selected bonds                              |
 | `src/app/atom_edits.rs`                                     | Element, charge, isotope, radical and mark edits to selected atoms             |
 | `src/app/ring_edits.rs`                                     | Ring tool settings and the selected ring's aromaticity                         |

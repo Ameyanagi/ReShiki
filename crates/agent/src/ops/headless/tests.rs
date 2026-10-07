@@ -1,8 +1,13 @@
 use super::*;
 use crate::{
     canvas_tools,
+    document::{Document, Point},
     envelope::OPERATION_API_VERSION,
-    ops::{exec::Hooks, policy::UNKNOWN_DOCUMENT, wire::versions_json},
+    ops::{
+        exec::{Barrier, Hooks},
+        policy::UNKNOWN_DOCUMENT,
+        wire::versions_json,
+    },
     tool_spec::{Hints, valid_name},
 };
 use serde_json::{Value, json};
@@ -295,4 +300,104 @@ async fn every_tool_times_out_once_its_deadline_has_passed() {
         assert_eq!(error_code(&result), "timeout", "{tool}");
     }
     assert!(host.store().list(&Principal::local()).is_empty());
+}
+
+/// A generous bound for every wait, so a bug fails instead of hanging.
+const BOUND: Duration = Duration::from_secs(60);
+
+async fn bounded<F: Future>(future: F) -> F::Output {
+    tokio::time::timeout(BOUND, future)
+        .await
+        .expect("timed out")
+}
+
+/// Yields until `condition` holds.
+async fn until(mut condition: impl FnMut() -> bool) {
+    bounded(async {
+        while !condition() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cancelled_queued_calls_end_cancelled_while_the_rest_complete() {
+    let host = Arc::new(HeadlessHost::new(
+        "9.8.7",
+        Budgets {
+            concurrency: 2,
+            queue: 8,
+            ..Budgets::default()
+        },
+    ));
+    let exec = host.exec().clone();
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::new(0., 0.));
+    let handle = host
+        .store()
+        .create(&Principal::local(), doc)
+        .unwrap()
+        .handle;
+
+    // Two operations hold both permits until the barrier releases them.
+    let release = Arc::new(Barrier::new(3));
+    let blockers: Vec<_> = (0..2)
+        .map(|n| {
+            let (exec, release) = (exec.clone(), release.clone());
+            tokio::spawn(async move {
+                let id = RequestId::Str(format!("blocker-{n}"));
+                exec.run(Principal::local(), id, None, move |ctx| async move {
+                    ctx.blocking(move || {
+                        release.wait();
+                        Ok(())
+                    })
+                    .await
+                })
+                .await
+            })
+        })
+        .collect();
+    until(|| exec.available_permits() == 0 && exec.queued() == 0).await;
+
+    let renders: Vec<_> = (0..6)
+        .map(|_| {
+            let request = call(
+                "render",
+                json!({"document": handle.as_str(), "format": "svg", "max_width": null, "max_height": null, "ids": null}),
+            );
+            let id = request.request.clone();
+            let host = host.clone();
+            (id, tokio::spawn(async move { host.call(request).await }))
+        })
+        .collect();
+    until(|| exec.queued() == 6).await;
+    for (id, _) in renders.iter().step_by(2) {
+        host.cancel(&Principal::local(), id);
+    }
+    let releaser = release.clone();
+    bounded(tokio::task::spawn_blocking(move || releaser.wait()))
+        .await
+        .unwrap();
+
+    for blocker in blockers {
+        assert_eq!(bounded(blocker).await.unwrap(), Ok(()));
+    }
+    for (i, (_, render)) in renders.into_iter().enumerate() {
+        let outcome = bounded(render).await.unwrap();
+        if i % 2 == 0 {
+            assert_eq!(
+                outcome.unwrap_err().kind,
+                ErrorKind::Cancelled,
+                "render {i}"
+            );
+        } else {
+            let result = outcome.unwrap();
+            assert!(!result.is_error, "render {i}: {:?}", result.value);
+            assert_eq!(result.files.len(), 1, "render {i}");
+        }
+    }
+    bounded(host.drained()).await;
+    assert_eq!(exec.available_permits(), 2);
+    assert_eq!(exec.queued(), 0);
 }

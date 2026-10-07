@@ -357,6 +357,12 @@ impl Executor {
     pub(crate) fn queued(&self) -> usize {
         self.shared.registry().waiting
     }
+
+    /// Permits no call holds.
+    #[cfg(test)]
+    pub(crate) fn available_permits(&self) -> usize {
+        self.shared.permits.available_permits()
+    }
 }
 
 /// Test hooks: a callback once a call wins its permit, and barriers around
