@@ -33,7 +33,36 @@
       "cite": "crates/agent/src/ops/compose.rs:54,66-71"
     }
   ],
-  "import": {"file": "proposal-cases.json", "into": {"tool": "compose", "arguments": {"proposal": null, "style_document": null}}, "at": "/arguments/proposal"},
+  "import": {
+    "file": "proposal-cases.json",
+    "into": {"tool": "compose", "arguments": {"proposal": null, "style_document": null}},
+    "at": "/arguments/proposal",
+    "adjust": {
+      "proposal-all-fields": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "proposal-explicit-defaults": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "proposal-missing-replace-ids": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "proposal-missing-composition": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "proposal-missing-sketch": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "composition-explicit-defaults": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "composition-missing-arrangement": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "composition-missing-columns": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "composition-missing-width": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "composition-missing-preserve-details": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "composition-empty-object": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "null-sketch": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "composition-as-array": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "explanation-12000-bytes": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "columns-1": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "columns-3": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "width-100": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "width-1800": {"expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "width-rounds-up-to-100-in-f32": {"expect": "both_reject", "message": "A drawing needs at least one molecule, reaction or sketch"},
+      "replace-id-1": {"expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
+      "replace-id-u64-max-minus-1": {"expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
+      "replace-ids-distinct": {"expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
+      "replace-ids-5000": {"expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"}
+    }
+  },
   "bases": {},
   "cases": [
     {"name": "arguments_object", "rule": "arguments.object", "base": "reaction", "expect": "both_accept"},

@@ -73,10 +73,16 @@ error; multi-invalid cases use it to pin the order of the checks in
 repeated n times) and `{"$range": [lo, hi]}` (the integers lo..=hi).
 
 An optional `"import": {"file": "sibling-cases.json", "into": wrapper, "at":
-"/json/pointer"}` reuses a sibling file's bases instead of copying them: each
-one replaces the value at `at` in a copy of `into` and keeps its name, which
-must not clash with a local base. `ops-compose-cases.json` wraps the
-`proposal-cases.json` bases as compose arguments this way.
+"/json/pointer", "adjust": {"case": {"expect": "...", "message": "..."}}}`
+reuses a sibling file's rules, bases and cases instead of copying them: each
+base and literal case value replaces the value at `at` in a copy of `into`,
+each patch path gains `at` as its prefix, and names must not clash with local
+ones. `adjust` restates the class and exact decoder message of the imported
+cases the importing decoder judges differently; an adjustment that names no
+imported case or changes nothing fails. Imported rules keep their coverage
+gate in the sibling's own contract. `ops-compose-cases.json` runs the whole
+`proposal-cases.json` corpus as compose arguments this way, adjusting the
+cases compose rejects for replacement IDs or for having no drawing.
 
 ## Rule inventory
 

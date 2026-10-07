@@ -86,7 +86,7 @@ pub fn classify(schema: &Value, decode: fn(Value) -> Result<(), String>, value: 
     Outcome::new(schema, decode, value).class()
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Corpus {
     rules: Vec<Rule>,
@@ -96,21 +96,27 @@ struct Corpus {
     cases: Vec<Case>,
 }
 
-/// Reuses the bases of a sibling cases file: each one, expanded, replaces
-/// the value at the JSON pointer `at` in a copy of `into`, under its own
-/// name.
+/// Reuses a sibling cases file, moved under the JSON pointer `at`: each of
+/// its bases and literal case values replaces the value at `at` in a copy of
+/// `into`, and each patch path gains `at` as its prefix. Its rules and cases
+/// keep their names. `adjust` restates the class and message of the imported
+/// cases this contract's decoder judges differently.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Import {
     file: String,
     into: Value,
     at: String,
+    #[serde(default)]
+    adjust: BTreeMap<String, Adjust>,
 }
 
-/// The bases of an imported cases file; its other fields are not read.
+/// An imported case's class and exact decoder message in this contract.
 #[derive(Deserialize)]
-struct Bases {
-    bases: BTreeMap<String, Value>,
+#[serde(deny_unknown_fields)]
+struct Adjust {
+    expect: Class,
+    message: String,
 }
 
 #[derive(Deserialize)]
@@ -314,14 +320,14 @@ pub fn check(contract: &Contract) -> Result<String, String> {
     for error in json_schema::check_keywords(&schema) {
         failures.push(format!("schema keyword allowlist: {error}"));
     }
-    let path = repository()
-        .join("tests/fixtures/agent-contract")
-        .join(contract.cases);
-    let corpus: Corpus =
-        serde_json::from_str(&read(&path)?).map_err(|e| format!("{}: {e}", path.display()))?;
+    let corpus = load(contract.cases)?;
+    let sibling = match &corpus.import {
+        Some(import) => imported(import, &mut failures)?,
+        None => Corpus::default(),
+    };
     let mut sources = BTreeMap::new();
     let mut rules = BTreeSet::new();
-    for rule in &corpus.rules {
+    for rule in corpus.rules.iter().chain(&sibling.rules) {
         if !rules.insert(rule.id.as_str()) {
             failures.push(format!("rule {:?} is defined twice", rule.id));
         }
@@ -330,24 +336,19 @@ pub fn check(contract: &Contract) -> Result<String, String> {
         }
     }
     let mut bases = BTreeMap::new();
-    for (name, base) in &corpus.bases {
+    for (name, base) in corpus.bases.iter().chain(&sibling.bases) {
         match expand(base.clone()) {
             Ok(base) => {
-                bases.insert(name.clone(), base);
+                if bases.insert(name.as_str(), base).is_some() {
+                    failures.push(format!("base {name:?} is defined twice"));
+                }
             }
             Err(problem) => failures.push(format!("base {name:?}: {problem}")),
         }
     }
-    if let Some(import) = &corpus.import {
-        for (name, base) in imported(import)? {
-            if bases.insert(name.clone(), base).is_some() {
-                failures.push(format!("base {name:?} is defined twice"));
-            }
-        }
-    }
     let mut names = BTreeSet::new();
     let mut tally = Tally::default();
-    for case in &corpus.cases {
+    for case in corpus.cases.iter().chain(&sibling.cases) {
         let label = format!("case {:?} (rule {:?})", case.name, case.rule);
         if !names.insert(case.name.as_str()) {
             failures.push(format!("{label}: the name is used twice"));
@@ -382,6 +383,7 @@ pub fn check(contract: &Contract) -> Result<String, String> {
         }
         tally.add(case, outcome.decoded.err());
     }
+    // An imported rule's coverage is gated by the contract that defines it.
     failures.extend(coverage_failures(&corpus.rules, &tally.covered));
     if !failures.is_empty() {
         return Err(format!(
@@ -391,30 +393,65 @@ pub fn check(contract: &Contract) -> Result<String, String> {
             failures.join("\n")
         ));
     }
-    Ok(tally.report(contract.name, &corpus))
+    Ok(tally.report(
+        contract.name,
+        corpus.cases.len() + sibling.cases.len(),
+        corpus.rules.len() + sibling.rules.len(),
+    ))
 }
 
-/// The bases `import` names, each placed into its wrapper.
-fn imported(import: &Import) -> Result<BTreeMap<String, Value>, String> {
+/// The cases file `file` under tests/fixtures/agent-contract.
+fn load(file: &str) -> Result<Corpus, String> {
     let path = repository()
         .join("tests/fixtures/agent-contract")
-        .join(&import.file);
-    let Bases { bases } =
-        serde_json::from_str(&read(&path)?).map_err(|e| format!("{}: {e}", path.display()))?;
-    bases
+        .join(file);
+    serde_json::from_str(&read(&path)?).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// The sibling corpus `import` names, moved under `at` and adjusted. An
+/// adjustment that names no imported case or changes nothing fails.
+fn imported(import: &Import, failures: &mut Vec<String>) -> Result<Corpus, String> {
+    let mut sibling = load(&import.file)?;
+    if sibling.import.is_some() {
+        return Err(format!("{}: imports do not chain", import.file));
+    }
+    let place = |value: Value| {
+        let mut wrapped = import.into.clone();
+        *wrapped
+            .pointer_mut(&import.at)
+            .ok_or_else(|| format!("import {}: no such location", import.at))? = value;
+        Ok::<_, String>(wrapped)
+    };
+    sibling.bases = std::mem::take(&mut sibling.bases)
         .into_iter()
-        .map(|(name, base)| {
-            let mut wrapped = expand(import.into.clone())?;
-            *wrapped
-                .pointer_mut(&import.at)
-                .ok_or_else(|| format!("import {}: no such location", import.at))? = expand(base)?;
-            Ok((name, wrapped))
-        })
-        .collect()
+        .map(|(name, base)| Ok((name, place(base)?)))
+        .collect::<Result<_, String>>()?;
+    let mut adjust: BTreeMap<&str, &Adjust> = import
+        .adjust
+        .iter()
+        .map(|(name, adjust)| (name.as_str(), adjust))
+        .collect();
+    for case in &mut sibling.cases {
+        case.value = case.value.take().map(place).transpose()?;
+        for patch in &mut case.patch {
+            patch.path.insert_str(0, &import.at);
+        }
+        if let Some(Adjust { expect, message }) = adjust.remove(case.name.as_str()) {
+            if case.expect == *expect && case.message.as_ref() == Some(message) {
+                failures.push(format!("adjust {:?} changes nothing", case.name));
+            }
+            case.expect = *expect;
+            case.message = Some(message.clone());
+        }
+    }
+    for name in adjust.keys() {
+        failures.push(format!("adjust {name:?} names no imported case"));
+    }
+    Ok(sibling)
 }
 
 /// The case's base or literal value with its patches applied.
-fn instantiate(case: &Case, bases: &BTreeMap<String, Value>) -> Result<Value, String> {
+fn instantiate(case: &Case, bases: &BTreeMap<&str, Value>) -> Result<Value, String> {
     let mut value = match (&case.base, &case.value) {
         (Some(base), None) => bases
             .get(base.as_str())
@@ -478,12 +515,8 @@ impl Tally {
     }
 
     /// Message coverage is reported, not gated.
-    fn report(&self, name: &str, corpus: &Corpus) -> String {
-        let mut report = format!(
-            "{name} contract: {} cases over {} rules;",
-            corpus.cases.len(),
-            corpus.rules.len()
-        );
+    fn report(&self, name: &str, cases: usize, rules: usize) -> String {
+        let mut report = format!("{name} contract: {cases} cases over {rules} rules;");
         for (class, count) in &self.classes {
             let _ = write!(report, " {} {count}", class.name());
         }
