@@ -1,6 +1,8 @@
 use crate::canvas::Tool;
 use iced::widget::canvas::{self, Geometry, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
+mod chrome;
+mod commands;
 
 #[derive(Clone, Copy)]
 pub(super) enum Icon {
@@ -52,92 +54,12 @@ impl Glyph {
             Color::from_rgb8(187, 193, 199)
         };
         match self.0 {
-            Icon::ColorTiles(soft) => {
-                for (i, color) in [
-                    Color::from_rgb8(63, 103, 185),
-                    Color::from_rgb8(188, 73, 63),
-                    Color::from_rgb8(48, 132, 100),
-                    Color::from_rgb8(148, 105, 166),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    let at = Point::new(2. + (i % 2) as f32 * 11., 2. + (i / 2) as f32 * 11.);
-                    let tile = Path::rounded_rectangle(at, iced::Size::new(9., 9.), 2.into());
-                    f.fill(
-                        &tile,
-                        if soft {
-                            Color { a: 0.22, ..color }
-                        } else {
-                            color
-                        },
-                    );
-                    if soft {
-                        f.stroke(&tile, Stroke::default().with_width(1.).with_color(ink));
-                    }
-                }
-            }
-            Icon::Trash => {
-                line(f, ink, &[(4., 6.), (20., 6.)]);
-                line(f, ink, &[(9., 6.), (9., 3.), (15., 3.), (15., 6.)]);
-                line(f, ink, &[(6., 6.), (7., 21.), (17., 21.), (18., 6.)]);
-                line(f, ink, &[(10., 9.), (10., 18.)]);
-                line(f, ink, &[(14., 9.), (14., 18.)]);
-            }
-            Icon::Sun => {
-                f.stroke(
-                    &Path::circle(Point::new(12., 12.), 4.2),
-                    Stroke::default().with_width(1.6).with_color(ink),
-                );
-                for i in 0..8 {
-                    let a = i as f32 * std::f32::consts::FRAC_PI_4;
-                    line(
-                        f,
-                        ink,
-                        &[
-                            (12. + 7. * a.cos(), 12. + 7. * a.sin()),
-                            (12. + 10. * a.cos(), 12. + 10. * a.sin()),
-                        ],
-                    );
-                }
-            }
-            Icon::Moon => {
-                let path = Path::new(|p| {
-                    p.move_to(Point::new(17., 3.));
-                    p.bezier_curve_to(
-                        Point::new(0., 0.),
-                        Point::new(0., 23.),
-                        Point::new(16., 21.),
-                    );
-                    p.bezier_curve_to(
-                        Point::new(20., 20.),
-                        Point::new(22., 17.),
-                        Point::new(22., 14.),
-                    );
-                    p.bezier_curve_to(
-                        Point::new(12., 19.),
-                        Point::new(9., 7.),
-                        Point::new(17., 3.),
-                    );
-                    p.close();
-                });
-                f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
-            }
+            Icon::ColorTiles(soft) => chrome::color_tiles(f, ink, soft),
+            Icon::Trash => commands::trash(f, ink),
+            Icon::Sun => chrome::sun(f, ink),
+            Icon::Moon => chrome::moon(f, ink),
 
-            Icon::Keyboard => {
-                let outline = Path::rounded_rectangle(
-                    Point::new(1., 5.),
-                    iced::Size::new(22., 15.),
-                    2.5.into(),
-                );
-                f.stroke(&outline, Stroke::default().with_width(1.3).with_color(ink));
-                for y in [9., 12.5] {
-                    for x in [5., 9.5, 14., 18.5] {
-                        line(f, ink, &[(x, y), (x + 0.6, y)]);
-                    }
-                }
-                line(f, ink, &[(7., 16.5), (17., 16.5)]);
-            }
+            Icon::Keyboard => chrome::keyboard(f, ink),
             Icon::Tool(Tool::Chain(mode)) => {
                 if mode == reshiki::chains::ChainMode::Straight {
                     line(
@@ -205,26 +127,7 @@ impl Glyph {
                     f.fill(&Path::circle(p, 2.5), ink);
                 }
             }
-            Icon::TextAlign(alignment) => {
-                for i in 0..4 {
-                    let width =
-                        if i % 2 == 0 || alignment == reshiki::typography::TextAlign::Justified {
-                            16.0
-                        } else {
-                            10.0
-                        };
-                    let x = match alignment {
-                        reshiki::typography::TextAlign::Right => 20.0 - width,
-                        reshiki::typography::TextAlign::Center => (24.0 - width) / 2.0,
-                        _ => 4.0,
-                    };
-                    line(
-                        f,
-                        ink,
-                        &[(x, 5.0 + i as f32 * 4.5), (x + width, 5.0 + i as f32 * 4.5)],
-                    );
-                }
-            }
+            Icon::TextAlign(alignment) => chrome::text_align(f, ink, alignment),
             Icon::Tool(Tool::Select) => {
                 line(
                     f,
@@ -501,191 +404,18 @@ impl Glyph {
                 );
                 line(f, ink, &[(8., 10.), (16., 18.)]);
             }
-            Icon::New => {
-                line(
-                    f,
-                    ink,
-                    &[
-                        (6., 3.),
-                        (16., 3.),
-                        (20., 7.),
-                        (20., 21.),
-                        (6., 21.),
-                        (6., 3.),
-                    ],
-                );
-                line(f, ink, &[(16., 3.), (16., 7.), (20., 7.)]);
-                line(f, ink, &[(10., 13.), (16., 13.)]);
-                line(f, ink, &[(13., 10.), (13., 16.)]);
-            }
-            Icon::Open => line(
-                f,
-                ink,
-                &[
-                    (3., 20.),
-                    (3., 5.),
-                    (10., 5.),
-                    (13., 8.),
-                    (20., 8.),
-                    (20., 11.),
-                    (6., 11.),
-                    (3., 20.),
-                    (19., 20.),
-                    (22., 11.),
-                    (20., 11.),
-                ],
-            ),
-            Icon::Save => {
-                line(
-                    f,
-                    ink,
-                    &[
-                        (4., 3.),
-                        (18., 3.),
-                        (21., 6.),
-                        (21., 21.),
-                        (4., 21.),
-                        (4., 3.),
-                    ],
-                );
-                line(f, ink, &[(8., 3.), (8., 9.), (17., 9.), (17., 3.)]);
-                line(f, ink, &[(8., 21.), (8., 14.), (17., 14.), (17., 21.)]);
-            }
-            Icon::SaveAs => {
-                line(
-                    f,
-                    ink,
-                    &[
-                        (8., 21.),
-                        (3., 21.),
-                        (3., 3.),
-                        (16., 3.),
-                        (19., 6.),
-                        (19., 8.),
-                    ],
-                );
-                line(f, ink, &[(7., 3.), (7., 9.), (15., 9.), (15., 3.)]);
-                line(f, ink, &[(7., 21.), (7., 14.), (10., 14.)]);
-                line(
-                    f,
-                    ink,
-                    &[
-                        (10., 22.),
-                        (11., 17.),
-                        (19., 9.),
-                        (23., 13.),
-                        (15., 21.),
-                        (10., 22.),
-                    ],
-                );
-                line(f, ink, &[(17., 11.), (21., 15.)]);
-            }
-            Icon::Assistant(working) => {
-                for (x, y, r) in [(9., 13., 7.), (19., 5., 3.)] {
-                    let inset = r * 0.28;
-                    line(
-                        f,
-                        ink,
-                        &[
-                            (x, y - r),
-                            (x + inset, y - inset),
-                            (x + r, y),
-                            (x + inset, y + inset),
-                            (x, y + r),
-                            (x - inset, y + inset),
-                            (x - r, y),
-                            (x - inset, y - inset),
-                            (x, y - r),
-                        ],
-                    );
-                }
-                if working {
-                    f.fill(
-                        &Path::circle(Point::new(20., 20.), 2.2),
-                        Color::from_rgb8(17, 126, 108),
-                    );
-                }
-            }
-            Icon::Check => {
-                f.stroke(
-                    &Path::circle(Point::new(12., 12.), 9.),
-                    Stroke::default().with_width(1.6).with_color(ink),
-                );
-                line(f, ink, &[(7., 12.), (10.5, 15.5), (17., 8.5)]);
-            }
-            Icon::Cleanup => {
-                line(f, ink, &[(18., 2.), (11., 11.)]);
-                line(
-                    f,
-                    ink,
-                    &[(10., 10.), (15., 14.), (10., 22.), (2., 17.), (10., 10.)],
-                );
-                line(f, ink, &[(8., 15.), (5., 18.)]);
-                line(f, ink, &[(11., 17.), (8., 20.)]);
-            }
-            Icon::Undo | Icon::Redo => {
-                let points = [
-                    (5., 9.),
-                    (15., 9.),
-                    (19., 13.),
-                    (19., 17.),
-                    (15., 21.),
-                    (9., 21.),
-                ];
-                let flip = |p: (f32, f32)| {
-                    if matches!(self.0, Icon::Redo) {
-                        (24. - p.0, p.1)
-                    } else {
-                        p
-                    }
-                };
-                line(f, ink, &points.map(flip));
-                line(f, ink, &[(10., 4.), (5., 9.), (10., 14.)].map(flip));
-            }
-            Icon::Import | Icon::Export => {
-                line(f, ink, &[(4., 15.), (4., 21.), (20., 21.), (20., 15.)]);
-                let points = if matches!(self.0, Icon::Import) {
-                    [(7., 10.), (12., 15.), (17., 10.)]
-                } else {
-                    [(7., 8.), (12., 3.), (17., 8.)]
-                };
-                line(f, ink, &points);
-                line(f, ink, &[(12., 3.), (12., 15.)]);
-            }
-            Icon::Inspector => {
-                line(
-                    f,
-                    ink,
-                    &[(3., 4.), (21., 4.), (21., 20.), (3., 20.), (3., 4.)],
-                );
-                line(f, ink, &[(15., 4.), (15., 20.)]);
-            }
-            Icon::More => {
-                for x in [5., 12., 19.] {
-                    f.fill(&Path::circle(Point::new(x, 12.), 1.8), ink);
-                }
-            }
-            // Drawn in a 20 px box; an open lock lifts its shackle clear.
-            Icon::Lock(locked) => {
-                let body = Path::rounded_rectangle(
-                    Point::new(5., 10.),
-                    iced::Size::new(10., 8.),
-                    1.5.into(),
-                );
-                f.stroke(&body, Stroke::default().with_width(1.4).with_color(ink));
-                let lift = if locked { 0. } else { 3. };
-                let shackle = Path::new(|p| {
-                    p.move_to(Point::new(7., 10.));
-                    p.line_to(Point::new(7., 7. - lift));
-                    p.bezier_curve_to(
-                        Point::new(7., 3. - lift),
-                        Point::new(13., 3. - lift),
-                        Point::new(13., 7. - lift),
-                    );
-                    p.line_to(Point::new(13., if locked { 10. } else { 6. }));
-                });
-                f.stroke(&shackle, Stroke::default().with_width(1.4).with_color(ink));
-            }
+            Icon::New => commands::new_document(f, ink),
+            Icon::Open => commands::open(f, ink),
+            Icon::Save => commands::save(f, ink),
+            Icon::SaveAs => commands::save_as(f, ink),
+            Icon::Assistant(working) => commands::assistant(f, ink, working),
+            Icon::Check => commands::check(f, ink),
+            Icon::Cleanup => commands::cleanup(f, ink),
+            Icon::Undo | Icon::Redo => commands::undo_redo(f, ink, self.0),
+            Icon::Import | Icon::Export => commands::import_export(f, ink, self.0),
+            Icon::Inspector => commands::inspector(f, ink),
+            Icon::More => chrome::more(f, ink),
+            Icon::Lock(locked) => chrome::lock(f, ink, locked),
         }
     }
 }
