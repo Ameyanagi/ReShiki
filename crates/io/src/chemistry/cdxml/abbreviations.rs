@@ -236,7 +236,83 @@ struct Expanded {
     atoms: usize,
     bonds: usize,
 }
+struct Definition {
+    highlight: Option<String>,
+    inner: usize,
+    text: usize,
+}
+struct DefinitionAtoms {
+    nodes: Vec<(Option<String>, usize)>,
+    by_id: HashMap<Option<String>, usize>,
+    connections: Vec<usize>,
+}
+struct Site {
+    parent: usize,
+    outer_id: Option<String>,
+    external: Vec<usize>,
+    multiple: bool,
+    target: [f64; 2],
+}
+struct Anchor {
+    anchor: usize,
+    connection: Option<usize>,
+    removed_bonds: Vec<usize>,
+}
+struct Transform {
+    origin: [f64; 2],
+    target: [f64; 2],
+    scale: f64,
+    c: f64,
+    s: f64,
+}
 fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
+    let Definition {
+        highlight,
+        inner,
+        text,
+    } = definition(tree, outer)?;
+    let mut atoms = definition_atoms(tree, outer, inner)?;
+    let Site {
+        parent,
+        outer_id,
+        mut external,
+        multiple,
+        target,
+    } = site(tree, outer, &atoms.connections)?;
+    let Anchor {
+        anchor,
+        connection,
+        removed_bonds,
+    } = attachment_anchor(tree, outer, inner, &mut atoms, &mut external, multiple)?;
+    let (anchor_id, transform) = placement(
+        tree, anchor, connection, &external, parent, &outer_id, target,
+    )?;
+    // Capture bonds before moving nodes out of the discarded definition.
+    let bonds = tree.children(inner, "b")?;
+    let DefinitionAtoms {
+        nodes, connections, ..
+    } = atoms;
+    let members = move_atoms(tree, parent, nodes, &connections, &highlight, transform)?;
+    move_bonds(tree, parent, bonds, &removed_bonds, &highlight)?;
+    rewire_external(tree, external, &outer_id, &anchor_id)?;
+    let presentation = transfer_label(tree, outer, anchor, text, multiple)?;
+    let (label, reverse_label) = label_names(tree, text)?;
+    tree.detach(outer)?;
+    Ok(Expanded {
+        abbreviation: Abbreviation {
+            label,
+            reverse_label,
+            anchor: anchor_id,
+            members,
+            highlight,
+            presentation,
+        },
+        atoms: 1 + connections.len(),
+        bonds: removed_bonds.len(),
+    })
+}
+
+fn definition(tree: &Tree, outer: usize) -> Result<Definition> {
     let highlight = tree.node(outer)?.attr("highlightColor").map(str::to_owned);
     // Python snapshots wrappers before editing, then rebuilds parents from the
     // surviving root for each one. A wrapper discarded by an earlier expansion
@@ -273,6 +349,14 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             ));
         }
     }
+    Ok(Definition {
+        highlight,
+        inner,
+        text,
+    })
+}
+
+fn definition_atoms(tree: &Tree, outer: usize, inner: usize) -> Result<DefinitionAtoms> {
     let mut nodes = Vec::new();
     let mut by_id = HashMap::new();
     let mut connections = Vec::new();
@@ -292,6 +376,14 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             "Multiple abbreviation attachments are not supported yet",
         ));
     }
+    Ok(DefinitionAtoms {
+        nodes,
+        by_id,
+        connections,
+    })
+}
+
+fn site(tree: &Tree, outer: usize, connections: &[usize]) -> Result<Site> {
     let parent = tree
         .node(outer)?
         .parent
@@ -300,7 +392,7 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
         return Err(invalid("Abbreviation outside a molecular fragment"));
     }
     let outer_id = tree.node(outer)?.attr("id").map(str::to_owned);
-    let mut external = attached(tree, parent, outer_id.as_deref())?;
+    let external = attached(tree, parent, outer_id.as_deref())?;
     let multiple = connections.len() > 1;
     if multiple && connections.len() != external.len() {
         return Err(invalid(
@@ -314,82 +406,39 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
     if !target.iter().all(|v| v.is_finite()) {
         return Err(invalid("Invalid abbreviation position"));
     }
+    Ok(Site {
+        parent,
+        outer_id,
+        external,
+        multiple,
+        target,
+    })
+}
+
+fn attachment_anchor(
+    tree: &Tree,
+    outer: usize,
+    inner: usize,
+    atoms: &mut DefinitionAtoms,
+    external: &mut Vec<usize>,
+    multiple: bool,
+) -> Result<Anchor> {
+    let DefinitionAtoms {
+        nodes,
+        by_id,
+        connections,
+    } = atoms;
     let mut removed_bonds = Vec::new();
     let multi_anchor = if multiple {
-        let order: Vec<_> = tree
-            .node(outer)?
-            .attr("BondOrdering")
-            .unwrap_or("")
-            .split_whitespace()
-            .collect();
-        let order_connections: Vec<_> = tree
-            .node(inner)?
-            .attr("ConnectionOrder")
-            .map(|value| value.split_whitespace().map(str::to_owned).collect())
-            .unwrap_or(
-                connections
-                    .iter()
-                    .map(|&key| {
-                        tree.node(key)
-                            .map(|node| node.attr("id").unwrap_or("").to_owned())
-                    })
-                    .collect::<Result<Vec<_>>>()?,
-            );
-        if order.len() != external.len() || order_connections.len() != connections.len() {
-            return Err(invalid("Invalid internal abbreviation attachment ordering"));
-        }
-        let ordered = |keys: &[usize], ids: &[&str]| -> Result<Vec<usize>> {
-            let mut result = Vec::new();
-            for id in ids {
-                let key = keys
-                    .iter()
-                    .copied()
-                    .find(|&key| tree.node(key).is_ok_and(|n| n.attr("id") == Some(*id)))
-                    .ok_or_else(|| invalid("Missing internal abbreviation attachment"))?;
-                if result.contains(&key) {
-                    return Err(invalid("Duplicate internal abbreviation attachment"));
-                }
-                result.push(key);
-            }
-            Ok(result)
-        };
-        external = ordered(&external, &order)?;
-        connections = ordered(
-            &connections,
-            &order_connections
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-        )?;
-        let mut anchor = None;
-        for (&connection, &outside) in connections.iter().zip(&external) {
-            let id = tree.node(connection)?.attr("id");
-            let bonds = attached(tree, inner, id)?;
-            let [bond] = bonds.as_slice() else {
-                return Err(invalid("Invalid abbreviation connection point"));
-            };
-            let b = tree.node(*bond)?;
-            let target = b
-                .attr(if b.attr("B") == id { "E" } else { "B" })
-                .map(str::to_owned);
-            let target = by_id
-                .get(&target)
-                .copied()
-                .ok_or_else(|| invalid("Missing internal abbreviation anchor"))?;
-            if connections.contains(&target) || anchor.is_some_and(|a| a != target) {
-                return Err(invalid(
-                    "Internal abbreviation attachments must share one atom",
-                ));
-            }
-            if b.attr("Order").unwrap_or("1") != tree.node(outside)?.attr("Order").unwrap_or("1") {
-                return Err(invalid(
-                    "Abbreviation attachment bond order conflicts with its definition",
-                ));
-            }
-            anchor = Some(target);
-            removed_bonds.push(*bond);
-        }
-        anchor
+        ordered_attachments(
+            tree,
+            outer,
+            inner,
+            by_id,
+            connections,
+            external,
+            &mut removed_bonds,
+        )?
     } else {
         None
     };
@@ -431,6 +480,107 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
     if !multiple {
         removed_bonds.extend(connection_bond);
     }
+    Ok(Anchor {
+        anchor,
+        connection,
+        removed_bonds,
+    })
+}
+
+fn ordered_attachments(
+    tree: &Tree,
+    outer: usize,
+    inner: usize,
+    by_id: &HashMap<Option<String>, usize>,
+    connections: &mut Vec<usize>,
+    external: &mut Vec<usize>,
+    removed_bonds: &mut Vec<usize>,
+) -> Result<Option<usize>> {
+    let order: Vec<_> = tree
+        .node(outer)?
+        .attr("BondOrdering")
+        .unwrap_or("")
+        .split_whitespace()
+        .collect();
+    let order_connections: Vec<_> = tree
+        .node(inner)?
+        .attr("ConnectionOrder")
+        .map(|value| value.split_whitespace().map(str::to_owned).collect())
+        .unwrap_or(
+            connections
+                .iter()
+                .map(|&key| {
+                    tree.node(key)
+                        .map(|node| node.attr("id").unwrap_or("").to_owned())
+                })
+                .collect::<Result<Vec<_>>>()?,
+        );
+    if order.len() != external.len() || order_connections.len() != connections.len() {
+        return Err(invalid("Invalid internal abbreviation attachment ordering"));
+    }
+    let ordered = |keys: &[usize], ids: &[&str]| -> Result<Vec<usize>> {
+        let mut result = Vec::new();
+        for id in ids {
+            let key = keys
+                .iter()
+                .copied()
+                .find(|&key| tree.node(key).is_ok_and(|n| n.attr("id") == Some(*id)))
+                .ok_or_else(|| invalid("Missing internal abbreviation attachment"))?;
+            if result.contains(&key) {
+                return Err(invalid("Duplicate internal abbreviation attachment"));
+            }
+            result.push(key);
+        }
+        Ok(result)
+    };
+    *external = ordered(external, &order)?;
+    *connections = ordered(
+        connections,
+        &order_connections
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    )?;
+    let mut anchor = None;
+    for (&connection, &outside) in connections.iter().zip(external.iter()) {
+        let id = tree.node(connection)?.attr("id");
+        let bonds = attached(tree, inner, id)?;
+        let [bond] = bonds.as_slice() else {
+            return Err(invalid("Invalid abbreviation connection point"));
+        };
+        let b = tree.node(*bond)?;
+        let target = b
+            .attr(if b.attr("B") == id { "E" } else { "B" })
+            .map(str::to_owned);
+        let target = by_id
+            .get(&target)
+            .copied()
+            .ok_or_else(|| invalid("Missing internal abbreviation anchor"))?;
+        if connections.contains(&target) || anchor.is_some_and(|a| a != target) {
+            return Err(invalid(
+                "Internal abbreviation attachments must share one atom",
+            ));
+        }
+        if b.attr("Order").unwrap_or("1") != tree.node(outside)?.attr("Order").unwrap_or("1") {
+            return Err(invalid(
+                "Abbreviation attachment bond order conflicts with its definition",
+            ));
+        }
+        anchor = Some(target);
+        removed_bonds.push(*bond);
+    }
+    Ok(anchor)
+}
+
+fn placement(
+    tree: &Tree,
+    anchor: usize,
+    connection: Option<usize>,
+    external: &[usize],
+    parent: usize,
+    outer_id: &Option<String>,
+    target: [f64; 2],
+) -> Result<(Option<String>, Transform)> {
     let anchor_id = tree.node(anchor)?.attr("id").map(str::to_owned);
     let origin = position(tree, anchor, "Missing abbreviation atom position")?;
     let (mut rotation, mut scale) = (0.0_f64, 1.0_f64);
@@ -460,9 +610,34 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
         }
     }
     let (c, s) = (rotation.cos(), rotation.sin());
+    Ok((
+        anchor_id,
+        Transform {
+            origin,
+            target,
+            scale,
+            c,
+            s,
+        },
+    ))
+}
+
+fn move_atoms(
+    tree: &mut Tree,
+    parent: usize,
+    nodes: Vec<(Option<String>, usize)>,
+    connections: &[usize],
+    highlight: &Option<String>,
+    transform: Transform,
+) -> Result<Vec<Option<String>>> {
+    let Transform {
+        origin,
+        target,
+        scale,
+        c,
+        s,
+    } = transform;
     let mut members = Vec::new();
-    // Capture bonds before moving nodes out of the discarded definition.
-    let bonds = tree.children(inner, "b")?;
     for (id, node) in nodes {
         if connections.contains(&node) {
             continue;
@@ -481,7 +656,7 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             significant(target[1] + x * s + y * c)
         );
         tree.node_mut(node)?.set("p", p.clone());
-        if let Some(color) = &highlight
+        if let Some(color) = highlight
             && tree.node(node)?.attr("highlightColor").is_none()
         {
             tree.node_mut(node)?.set("highlightColor", color.clone());
@@ -492,9 +667,19 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
         tree.append(parent, node)?;
         members.push(id);
     }
+    Ok(members)
+}
+
+fn move_bonds(
+    tree: &mut Tree,
+    parent: usize,
+    bonds: Vec<usize>,
+    removed_bonds: &[usize],
+    highlight: &Option<String>,
+) -> Result<()> {
     for bond in bonds {
         if !removed_bonds.contains(&bond) {
-            if let Some(color) = &highlight
+            if let Some(color) = highlight
                 && tree.node(bond)?.attr("highlightColor").is_none()
             {
                 tree.node_mut(bond)?.set("highlightColor", color.clone());
@@ -502,6 +687,15 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             tree.append(parent, bond)?;
         }
     }
+    Ok(())
+}
+
+fn rewire_external(
+    tree: &mut Tree,
+    external: Vec<usize>,
+    outer_id: &Option<String>,
+    anchor_id: &Option<String>,
+) -> Result<()> {
     for bond in external {
         let side = if tree.node(bond)?.attr("B") == outer_id.as_deref() {
             "B"
@@ -515,6 +709,16 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
                 .ok_or_else(|| invalid("Missing abbreviation attachment atom ID"))?,
         );
     }
+    Ok(())
+}
+
+fn transfer_label(
+    tree: &mut Tree,
+    outer: usize,
+    anchor: usize,
+    text: usize,
+    multiple: bool,
+) -> Result<Option<AbbreviationPresentation>> {
     let presentation = Some(AbbreviationPresentation {
         label: atom_presentation(tree, outer)?,
         anchor: atom_presentation(tree, anchor)?,
@@ -532,6 +736,10 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             .set("LabelJustification", "Auto".into());
     }
     tree.append(anchor, label_text)?;
+    Ok(presentation)
+}
+
+fn label_names(tree: &Tree, text: usize) -> Result<(String, String)> {
     let mut label = String::new();
     for span in tree.children(text, "s")? {
         label.push_str(&tree.node(span)?.text);
@@ -559,19 +767,7 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             break;
         }
     }
-    tree.detach(outer)?;
-    Ok(Expanded {
-        abbreviation: Abbreviation {
-            label,
-            reverse_label,
-            anchor: anchor_id,
-            members,
-            highlight,
-            presentation,
-        },
-        atoms: 1 + connections.len(),
-        bonds: removed_bonds.len(),
-    })
+    Ok((label, reverse_label))
 }
 
 /// Python's .8g spelling, including exponent padding and signed zero.
