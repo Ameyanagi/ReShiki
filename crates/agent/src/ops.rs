@@ -10,9 +10,14 @@
 //! 2. The executor ([`exec::Executor`]) owns request IDs, admission,
 //!    permits, cooperative cancellation, deadlines and an explicit
 //!    uncancellable effect phase.
-//! 3. The documents store resolves handles and commits mutations, checking
-//!    [`policy::check`] at resolve time and again inside the commit.
+//! 3. The documents store ([`store::Documents`], implemented over session
+//!    documents by [`session::SessionStore`]) resolves handles and commits
+//!    mutations, checking [`policy::check`] at resolve time and again inside
+//!    the commit.
 //! 4. The operation functions, shared by every host.
+//!
+//! [`headless::HeadlessHost`] puts the layers together for a process without
+//! the app: the [`catalog`] tools over session documents.
 //!
 //! # Effect rule
 //!
@@ -37,10 +42,15 @@
 //! - Errors are an [`error::OpError`]; only [`error::ErrorKind::UnknownTool`]
 //!   is a protocol error, everything else is a tool execution error.
 pub mod budget;
+pub mod catalog;
+pub mod documents;
 pub mod error;
 pub mod exec;
+pub mod headless;
 pub mod host;
 pub mod policy;
 pub mod progress;
 pub mod result;
+pub mod session;
+pub mod store;
 pub mod wire;
