@@ -37,6 +37,7 @@ pub use reshiki_io::{
 
 pub mod accessibility;
 pub mod assistant;
+pub mod cli;
 pub mod clipboard;
 pub mod hotkeys;
 pub mod keyboard_drawing;
