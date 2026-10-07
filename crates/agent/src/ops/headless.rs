@@ -1,6 +1,6 @@
 //! The tool host for a process without the app: session documents only.
 use super::{
-    analyze,
+    analyze, apply,
     budget::Budgets,
     catalog::{self, Op},
     compose, documents,
@@ -45,8 +45,10 @@ impl HeadlessHost {
         &self.exec
     }
 
-    #[cfg(test)]
-    pub(crate) fn store(&self) -> &Arc<SessionStore> {
+    /// The host's session documents, for this crate's tests and the app's
+    /// parity tests, which read the stored drawing back.
+    #[doc(hidden)]
+    pub fn store(&self) -> &Arc<SessionStore> {
         &self.store
     }
 }
@@ -77,6 +79,7 @@ async fn run(
         Op::Compose(args) => {
             compose::compose(ctx, store, engine, who, versions, budgets, *args).await
         }
+        Op::Apply(args) => apply::apply(ctx, store, who, versions, args).await,
     }
 }
 

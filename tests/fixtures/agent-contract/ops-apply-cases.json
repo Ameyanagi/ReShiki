@@ -1,0 +1,197 @@
+{
+  "rules": [
+    {
+      "id": "arguments.object",
+      "cite": "crates/agent/src/ops/catalog.rs:62,77-88; crates/agent/src/ops/apply.rs:167-176"
+    },
+    {
+      "id": "apply.document_required",
+      "cite": "crates/agent/src/ops/apply.rs:79,89,108"
+    },
+    {
+      "id": "apply.document_handle",
+      "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,183-185"
+    },
+    {
+      "id": "apply.edit_enum",
+      "cite": "crates/agent/src/ops/apply.rs:80,89,95-102,109"
+    },
+    {
+      "id": "apply.source_nullable_required",
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/apply.rs:81,89,110-111"
+    },
+    {
+      "id": "apply.source_handle",
+      "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,183-185"
+    },
+    {
+      "id": "apply.ids_nullable_required",
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/apply.rs:82,89,112-113"
+    },
+    {
+      "id": "apply.ids_items",
+      "cite": "crates/agent/src/ops/wire.rs:59-70,145-152,172-175"
+    },
+    {
+      "id": "apply.ids_count",
+      "cite": "crates/agent/src/ops/ids.rs:11-25; crates/agent/src/ops/apply.rs:186-188; crates/agent/src/ops/wire.rs:187-190; crates/agent/src/ops/budget.rs:26-27,84"
+    },
+    {
+      "id": "apply.base_revision_nullable_required",
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/apply.rs:83,89,114-115"
+    },
+    {
+      "id": "apply.base_revision_decimal",
+      "cite": "crates/agent/src/ops/wire.rs:59-66,72-78,154-161,177-180"
+    },
+    {
+      "id": "apply.idempotency_key_nullable_required",
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/apply.rs:84-87,89,116-117"
+    },
+    {
+      "id": "apply.idempotency_key_bytes",
+      "cite": "crates/agent/src/ops/apply.rs:84-87,177-185; crates/agent/src/ops/budget.rs:56-57,103"
+    },
+    {
+      "id": "apply.insert_needs_source",
+      "cite": "crates/agent/src/ops/apply.rs:46-47,190-194"
+    },
+    {
+      "id": "apply.delete_takes_no_source",
+      "cite": "crates/agent/src/ops/apply.rs:49-50,195"
+    },
+    {
+      "id": "apply.delete_needs_ids",
+      "cite": "crates/agent/src/ops/apply.rs:52-53,196-197"
+    },
+    {
+      "id": "apply.step_takes_no_source_or_ids",
+      "cite": "crates/agent/src/ops/apply.rs:55-56,198-201"
+    },
+    {
+      "id": "apply.base_revision_guard",
+      "cite": "crates/agent/src/ops/apply.rs:58-60,203-209"
+    },
+    {
+      "id": "apply.no_unknown_fields",
+      "cite": "crates/agent/src/ops/apply.rs:90,106-107"
+    }
+  ],
+  "bases": {
+    "insert": {"tool": "apply", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "edit": "insert", "source": "doc_fedcba9876543210fedcba9876543210", "ids": null, "base_revision": null, "idempotency_key": null}},
+    "replace": {"tool": "apply", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "edit": "insert", "source": "doc_fedcba9876543210fedcba9876543210", "ids": ["1", "12"], "base_revision": "3", "idempotency_key": "retry-1"}},
+    "delete": {"tool": "apply", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "edit": "delete", "source": null, "ids": ["7"], "base_revision": "0", "idempotency_key": null}},
+    "undo": {"tool": "apply", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "edit": "undo", "source": null, "ids": null, "base_revision": "2", "idempotency_key": "undo-2"}},
+    "redo": {"tool": "apply", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "edit": "redo", "source": null, "ids": null, "base_revision": "4", "idempotency_key": null}}
+  },
+  "cases": [
+    {"name": "arguments_object", "rule": "arguments.object", "base": "insert", "expect": "both_accept"},
+    {"name": "arguments_array", "rule": "arguments.object", "base": "insert", "patch": [{"op": "replace", "path": "/arguments", "value": ["doc_1", "insert", "doc_2", null, null, null]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "arguments_null", "rule": "arguments.object", "base": "insert", "patch": [{"op": "replace", "path": "/arguments", "value": null}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+
+    {"name": "document_given", "rule": "apply.document_required", "base": "delete", "expect": "both_accept"},
+    {"name": "document_omitted", "rule": "apply.document_required", "base": "delete", "patch": [{"op": "remove", "path": "/arguments/document"}], "expect": "both_reject", "message": "missing field `document`"},
+    {"name": "document_null", "rule": "apply.document_required", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/document", "value": null}], "expect": "both_reject"},
+
+    {"name": "document_handle_64_characters", "rule": "apply.document_handle", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 64}}], "expect": "both_accept"},
+    {"name": "document_handle_65_characters", "rule": "apply.document_handle", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 65}}], "expect": "both_reject", "message": "Document handles are 1 to 64 characters of A-Z, a-z, 0-9, \"_\" and \"-\""},
+    {"name": "document_handle_empty", "rule": "apply.document_handle", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/document", "value": ""}], "expect": "both_reject"},
+    {"name": "document_handle_dot", "rule": "apply.document_handle", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/document", "value": "doc.1"}], "expect": "both_reject"},
+
+    {"name": "edit_insert", "rule": "apply.edit_enum", "base": "insert", "expect": "both_accept"},
+    {"name": "edit_delete", "rule": "apply.edit_enum", "base": "delete", "expect": "both_accept"},
+    {"name": "edit_undo", "rule": "apply.edit_enum", "base": "undo", "expect": "both_accept"},
+    {"name": "edit_redo", "rule": "apply.edit_enum", "base": "redo", "expect": "both_accept"},
+    {"name": "edit_unknown", "rule": "apply.edit_enum", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/edit", "value": "replace"}], "expect": "both_reject", "message": "unknown variant `replace`, expected one of `insert`, `delete`, `undo`, `redo`"},
+    {"name": "edit_capitalized", "rule": "apply.edit_enum", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/edit", "value": "Undo"}], "expect": "both_reject"},
+    {"name": "edit_null", "rule": "apply.edit_enum", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/edit", "value": null}], "expect": "both_reject"},
+    {"name": "edit_omitted", "rule": "apply.edit_enum", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/edit"}], "expect": "both_reject", "message": "missing field `edit`"},
+
+    {"name": "source_given", "rule": "apply.source_nullable_required", "base": "replace", "expect": "both_accept"},
+    {"name": "source_null", "rule": "apply.source_nullable_required", "base": "delete", "expect": "both_accept"},
+    {"name": "source_omitted", "rule": "apply.source_nullable_required", "base": "delete", "patch": [{"op": "remove", "path": "/arguments/source"}], "expect": "both_reject", "message": "missing field `source`"},
+    {"name": "source_object", "rule": "apply.source_nullable_required", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/source", "value": {"document": "doc_1"}}], "expect": "both_reject"},
+
+    {"name": "source_handle_one_character", "rule": "apply.source_handle", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/source", "value": "x"}], "expect": "both_accept"},
+    {"name": "source_handle_same_document", "rule": "apply.source_handle", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/source", "value": "doc_0123456789abcdef0123456789abcdef"}], "expect": "both_accept"},
+    {"name": "source_handle_space", "rule": "apply.source_handle", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/source", "value": "doc 2"}], "expect": "both_reject", "message": "Document handles are 1 to 64 characters of A-Z, a-z, 0-9, \"_\" and \"-\""},
+    {"name": "source_handle_number", "rule": "apply.source_handle", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/source", "value": 2}], "expect": "both_reject"},
+
+    {"name": "ids_null", "rule": "apply.ids_nullable_required", "base": "insert", "expect": "both_accept"},
+    {"name": "ids_empty_insert", "rule": "apply.ids_nullable_required", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "both_accept"},
+    {"name": "ids_omitted", "rule": "apply.ids_nullable_required", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/ids"}], "expect": "both_reject", "message": "missing field `ids`"},
+    {"name": "ids_string", "rule": "apply.ids_nullable_required", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": "7"}], "expect": "both_reject"},
+
+    {"name": "id_one", "rule": "apply.ids_items", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["1"]}], "expect": "both_accept"},
+    {"name": "id_below_u64_max", "rule": "apply.ids_items", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["18446744073709551614"]}], "expect": "both_accept"},
+    {"name": "id_duplicates", "rule": "apply.ids_items", "base": "replace", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["12", "12"]}], "expect": "both_accept"},
+    {"name": "id_zero", "rule": "apply.ids_items", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "0"}], "expect": "both_reject", "message": "Object IDs are decimal strings such as \"12\""},
+    {"name": "id_leading_zero", "rule": "apply.ids_items", "base": "replace", "patch": [{"op": "replace", "path": "/arguments/ids/1", "value": "012"}], "expect": "both_reject"},
+    {"name": "id_number", "rule": "apply.ids_items", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": 7}], "expect": "both_reject"},
+    {"name": "id_u64_max", "rule": "apply.ids_items", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "18446744073709551615"}], "expect": "decoder_rejects_only", "message": "Object IDs are decimal strings such as \"12\""},
+
+    {"name": "ids_at_max_ids", "rule": "apply.ids_count", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": {"$repeat": "7", "count": 5000}}], "expect": "both_accept"},
+    {"name": "ids_over_max_ids", "rule": "apply.ids_count", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": {"$repeat": "7", "count": 5001}}], "expect": "both_reject", "message": "5001 object IDs were given; at most 5000 are allowed per request"},
+    {"name": "ids_over_max_ids_before_the_source_rule", "rule": "apply.ids_count", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/source", "value": null}, {"op": "replace", "path": "/arguments/ids", "value": {"$repeat": "7", "count": 5001}}], "expect": "both_reject", "message": "5001 object IDs were given; at most 5000 are allowed per request"},
+
+    {"name": "base_revision_null", "rule": "apply.base_revision_nullable_required", "base": "insert", "expect": "both_accept"},
+    {"name": "base_revision_given", "rule": "apply.base_revision_nullable_required", "base": "undo", "expect": "both_accept"},
+    {"name": "base_revision_omitted", "rule": "apply.base_revision_nullable_required", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/base_revision"}], "expect": "both_reject", "message": "missing field `base_revision`"},
+    {"name": "base_revision_number", "rule": "apply.base_revision_nullable_required", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": 0}], "expect": "both_reject", "message": "invalid type: integer `0`, expected Revisions are decimal strings such as \"0\" or \"12\""},
+
+    {"name": "base_revision_zero", "rule": "apply.base_revision_decimal", "base": "delete", "expect": "both_accept"},
+    {"name": "base_revision_u64_max", "rule": "apply.base_revision_decimal", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": "18446744073709551615"}], "expect": "both_accept"},
+    {"name": "base_revision_leading_zero", "rule": "apply.base_revision_decimal", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": "02"}], "expect": "both_reject", "message": "Revisions are decimal strings such as \"0\" or \"12\""},
+    {"name": "base_revision_double_zero", "rule": "apply.base_revision_decimal", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": "00"}], "expect": "both_reject"},
+    {"name": "base_revision_negative", "rule": "apply.base_revision_decimal", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": "-1"}], "expect": "both_reject"},
+    {"name": "base_revision_empty", "rule": "apply.base_revision_decimal", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": ""}], "expect": "both_reject"},
+    {"name": "base_revision_21_digits", "rule": "apply.base_revision_decimal", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": "123456789012345678901"}], "expect": "both_reject"},
+    {"name": "base_revision_above_u64_max", "rule": "apply.base_revision_decimal", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": "99999999999999999999"}], "expect": "decoder_rejects_only", "message": "Revisions are decimal strings such as \"0\" or \"12\""},
+
+    {"name": "idempotency_key_null", "rule": "apply.idempotency_key_nullable_required", "base": "insert", "expect": "both_accept"},
+    {"name": "idempotency_key_given", "rule": "apply.idempotency_key_nullable_required", "base": "replace", "expect": "both_accept"},
+    {"name": "idempotency_key_omitted", "rule": "apply.idempotency_key_nullable_required", "base": "insert", "patch": [{"op": "remove", "path": "/arguments/idempotency_key"}], "expect": "both_reject", "message": "missing field `idempotency_key`"},
+    {"name": "idempotency_key_number", "rule": "apply.idempotency_key_nullable_required", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": 7}], "expect": "both_reject"},
+
+    {"name": "idempotency_key_empty", "rule": "apply.idempotency_key_bytes", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": ""}], "expect": "both_accept"},
+    {"name": "idempotency_key_128_bytes", "rule": "apply.idempotency_key_bytes", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "a", "count": 128}}], "expect": "both_accept"},
+    {"name": "idempotency_key_64_two_byte_characters", "rule": "apply.idempotency_key_bytes", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "é", "count": 64}}], "expect": "both_accept"},
+    {"name": "idempotency_key_129_bytes", "rule": "apply.idempotency_key_bytes", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "a", "count": 129}}], "expect": "both_reject", "message": "idempotency_key is 129 bytes; at most 128 are allowed"},
+    {"name": "idempotency_key_65_two_byte_characters", "rule": "apply.idempotency_key_bytes", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "é", "count": 65}}], "expect": "decoder_rejects_only", "message": "idempotency_key is 130 bytes; at most 128 are allowed"},
+    {"name": "idempotency_key_128_two_byte_characters", "rule": "apply.idempotency_key_bytes", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "é", "count": 128}}], "expect": "decoder_rejects_only", "message": "idempotency_key is 256 bytes; at most 128 are allowed"},
+    {"name": "idempotency_key_bytes_before_the_step_rule", "rule": "apply.idempotency_key_bytes", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["1"]}, {"op": "replace", "path": "/arguments/idempotency_key", "value": {"$text": "a", "count": 129}}], "expect": "both_reject", "message": "idempotency_key is 129 bytes; at most 128 are allowed"},
+
+    {"name": "insert_with_source", "rule": "apply.insert_needs_source", "base": "insert", "expect": "both_accept"},
+    {"name": "insert_without_source", "rule": "apply.insert_needs_source", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/source", "value": null}], "expect": "decoder_rejects_only", "message": "insert needs a source document"},
+    {"name": "replace_without_source_or_base", "rule": "apply.insert_needs_source", "base": "replace", "patch": [{"op": "replace", "path": "/arguments/source", "value": null}, {"op": "replace", "path": "/arguments/base_revision", "value": null}], "expect": "decoder_rejects_only", "message": "insert needs a source document"},
+
+    {"name": "delete_without_source", "rule": "apply.delete_takes_no_source", "base": "delete", "expect": "both_accept"},
+    {"name": "delete_with_source", "rule": "apply.delete_takes_no_source", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/source", "value": "doc_fedcba9876543210fedcba9876543210"}], "expect": "decoder_rejects_only", "message": "delete takes no source; pass null"},
+    {"name": "delete_with_source_and_no_ids", "rule": "apply.delete_takes_no_source", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/source", "value": "doc_2"}, {"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "decoder_rejects_only", "message": "delete takes no source; pass null"},
+
+    {"name": "delete_one_id", "rule": "apply.delete_needs_ids", "base": "delete", "expect": "both_accept"},
+    {"name": "delete_empty_ids", "rule": "apply.delete_needs_ids", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "decoder_rejects_only", "message": "delete needs at least one object ID in ids"},
+    {"name": "delete_null_ids", "rule": "apply.delete_needs_ids", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": null}], "expect": "decoder_rejects_only", "message": "delete needs at least one object ID in ids"},
+    {"name": "delete_no_ids_before_the_base_rule", "rule": "apply.delete_needs_ids", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/ids", "value": null}, {"op": "replace", "path": "/arguments/base_revision", "value": null}], "expect": "decoder_rejects_only", "message": "delete needs at least one object ID in ids"},
+
+    {"name": "undo_alone", "rule": "apply.step_takes_no_source_or_ids", "base": "undo", "expect": "both_accept"},
+    {"name": "redo_alone", "rule": "apply.step_takes_no_source_or_ids", "base": "redo", "expect": "both_accept"},
+    {"name": "undo_with_source", "rule": "apply.step_takes_no_source_or_ids", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/source", "value": "doc_2"}], "expect": "decoder_rejects_only", "message": "undo and redo take no source or ids; pass null for both"},
+    {"name": "undo_with_ids", "rule": "apply.step_takes_no_source_or_ids", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["1"]}], "expect": "decoder_rejects_only", "message": "undo and redo take no source or ids; pass null for both"},
+    {"name": "redo_with_empty_ids", "rule": "apply.step_takes_no_source_or_ids", "base": "redo", "patch": [{"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "decoder_rejects_only", "message": "undo and redo take no source or ids; pass null for both"},
+    {"name": "redo_with_source_before_the_base_rule", "rule": "apply.step_takes_no_source_or_ids", "base": "redo", "patch": [{"op": "replace", "path": "/arguments/source", "value": "doc_2"}, {"op": "replace", "path": "/arguments/base_revision", "value": null}], "expect": "decoder_rejects_only", "message": "undo and redo take no source or ids; pass null for both"},
+
+    {"name": "addition_without_base", "rule": "apply.base_revision_guard", "base": "insert", "expect": "both_accept"},
+    {"name": "addition_with_empty_ids_without_base", "rule": "apply.base_revision_guard", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "both_accept"},
+    {"name": "addition_with_base", "rule": "apply.base_revision_guard", "base": "insert", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": "5"}], "expect": "both_accept"},
+    {"name": "replacement_with_base", "rule": "apply.base_revision_guard", "base": "replace", "expect": "both_accept"},
+    {"name": "replacement_without_base", "rule": "apply.base_revision_guard", "base": "replace", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": null}], "expect": "decoder_rejects_only", "message": "base_revision is required for delete, for insert with ids, and for undo and redo"},
+    {"name": "delete_without_base", "rule": "apply.base_revision_guard", "base": "delete", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": null}], "expect": "decoder_rejects_only", "message": "base_revision is required for delete, for insert with ids, and for undo and redo"},
+    {"name": "undo_without_base", "rule": "apply.base_revision_guard", "base": "undo", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": null}], "expect": "decoder_rejects_only", "message": "base_revision is required for delete, for insert with ids, and for undo and redo"},
+    {"name": "redo_without_base", "rule": "apply.base_revision_guard", "base": "redo", "patch": [{"op": "replace", "path": "/arguments/base_revision", "value": null}], "expect": "decoder_rejects_only", "message": "base_revision is required for delete, for insert with ids, and for undo and redo"},
+
+    {"name": "known_fields_only", "rule": "apply.no_unknown_fields", "base": "replace", "expect": "both_accept"},
+    {"name": "unknown_null_field", "rule": "apply.no_unknown_fields", "base": "insert", "patch": [{"op": "add", "path": "/arguments/force", "value": null}], "expect": "both_reject", "message": "unknown field `force`, expected one of `document`, `edit`, `source`, `ids`, `base_revision`, `idempotency_key`"},
+    {"name": "unknown_field", "rule": "apply.no_unknown_fields", "base": "undo", "patch": [{"op": "add", "path": "/arguments/steps", "value": 2}], "expect": "both_reject"}
+  ]
+}

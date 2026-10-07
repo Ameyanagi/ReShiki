@@ -42,6 +42,7 @@
 //! - Errors are an [`error::OpError`]; only [`error::ErrorKind::UnknownTool`]
 //!   is a protocol error, everything else is a tool execution error.
 pub mod analyze;
+pub mod apply;
 pub mod budget;
 pub mod catalog;
 pub mod compose;

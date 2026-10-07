@@ -187,3 +187,143 @@ fn ops_compose_settings_follow_the_app_drawing_defaults() {
     assert_ne!(settings.arrow_style, defaults.arrow_style);
     assert_ne!(settings.labels, defaults.labels);
 }
+
+/// The apply results of the operation API, read back from its session store.
+mod apply {
+    use super::*;
+    use reshiki_agent::ops::{
+        budget::Budgets,
+        headless::HeadlessHost,
+        host::{Call, ToolHost},
+        policy::Access,
+        store::Documents,
+        wire::{DocHandle, Principal, RequestId},
+    };
+    use serde_json::{Value, json};
+    use std::sync::atomic::{AtomicI64, Ordering};
+
+    async fn call(host: &HeadlessHost, tool: &str, arguments: Value) -> Value {
+        static NEXT: AtomicI64 = AtomicI64::new(1);
+        let result = host
+            .call(Call {
+                principal: Principal::local(),
+                request: RequestId::Int(NEXT.fetch_add(1, Ordering::Relaxed)),
+                tool: tool.into(),
+                arguments,
+                progress: None,
+            })
+            .await
+            .unwrap();
+        assert!(!result.is_error, "{tool}: {:?}", result.value);
+        Value::Object(result.value)
+    }
+
+    async fn import(host: &HeadlessHost, native: &str) -> DocHandle {
+        let imported = call(host, "import", json!({"format": "reshiki", "text": native})).await;
+        DocHandle::new(imported["value"]["document"].as_str().unwrap()).unwrap()
+    }
+
+    fn stored(host: &HeadlessHost, handle: &DocHandle) -> (Document, String) {
+        let snapshot = host
+            .store()
+            .snapshot(&Principal::local(), handle, Access::Read)
+            .unwrap();
+        ((*snapshot.doc).clone(), snapshot.revision.to_string())
+    }
+
+    /// The document's undo and redo frames, counted by stepping through them
+    /// with apply: none to redo, then every undo.
+    async fn frames(host: &HeadlessHost, handle: &DocHandle) -> usize {
+        let step = |edit: &str, base: String| json!({"document": handle.as_str(), "edit": edit, "source": null, "ids": null, "base_revision": base, "idempotency_key": null});
+        let redone = call(host, "apply", step("redo", stored(host, handle).1)).await;
+        assert_eq!(redone["value"]["recorded"], false);
+        let mut frames = 0;
+        loop {
+            let undone = call(host, "apply", step("undo", stored(host, handle).1)).await;
+            if undone["value"]["recorded"] == false {
+                return frames;
+            }
+            frames += 1;
+        }
+    }
+
+    /// The app applies a draft and refreshes its labels as the event loop
+    /// would: the label task runs to completion before anything else.
+    async fn app_apply(base: &Document, fragment: &Document, replace: Vec<u64>) -> App {
+        use iced::futures::StreamExt;
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = base.clone();
+        app.assistant.draft = Some(assistant::Draft {
+            proposal: Default::default(),
+            fragment: fragment.clone(),
+            review: Default::default(),
+            revision: app.tab.revision,
+            epoch: app.tab.file_epoch,
+            replace,
+        });
+        let _ = app.assistant_action(assistant::Action::Apply);
+        assert!(app.assistant.draft.is_none(), "The draft was not applied");
+        let mut labels = iced_runtime::task::into_stream(app.start_label_refresh())
+            .expect("The chemistry changed, so a label refresh starts");
+        let Some(iced_runtime::Action::Output(Message::LabelsReady(key, result))) =
+            labels.next().await
+        else {
+            panic!("The label task must return its completion");
+        };
+        app.labels_ready(key, result);
+        app
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn ops_apply_inserts_as_the_app_applies_a_draft_with_its_label_refresh() {
+        let (doc, [member, _, _, caption], ring, _) = analysis_drawing();
+        // Ethanol: its oxygen gets a computed hydrogen.
+        let mut fragment = Document::default();
+        let atoms = [
+            fragment.add_atom("C", Point::default()),
+            fragment.add_atom("C", Point::new(42., 0.)),
+            fragment.add_atom("O", Point::new(63., 36.373)),
+        ];
+        fragment.add_bond(atoms[0], atoms[1], 1, "plain");
+        fragment.add_bond(atoms[1], atoms[2], 1, "plain");
+        // Both sides start from the drawings the ops import reads.
+        let base_native = String::from_utf8(doc.file_json().unwrap()).unwrap();
+        let fragment_native = String::from_utf8(fragment.file_json().unwrap()).unwrap();
+        let base = Document::from_native_file(base_native.as_bytes()).unwrap();
+        let fragment = Document::from_native_file(fragment_native.as_bytes()).unwrap();
+        let host = HeadlessHost::new("9.8.7", Budgets::default());
+        for ids in [vec![], vec![member], vec![caption], ring] {
+            let app = app_apply(&base, &fragment, base.expand_abbreviation_selection(&ids)).await;
+            let document = import(&host, &base_native).await;
+            let source = import(&host, &fragment_native).await;
+            let ids: Vec<String> = ids.iter().map(u64::to_string).collect();
+            call(
+                &host,
+                "apply",
+                json!({
+                    "document": document.as_str(),
+                    "edit": "insert",
+                    "source": source.as_str(),
+                    "ids": ids,
+                    "base_revision": "0",
+                    "idempotency_key": null,
+                }),
+            )
+            .await;
+            let (applied, _) = stored(&host, &document);
+            assert_eq!(applied, app.tab.doc, "{ids:?}");
+            assert!(
+                applied
+                    .atoms
+                    .iter()
+                    .any(|atom| atom.element == "O" && atom.label_h == 1)
+            );
+            assert_eq!(
+                frames(&host, &document).await,
+                app.tab.history.frames(),
+                "{ids:?}"
+            );
+        }
+    }
+}

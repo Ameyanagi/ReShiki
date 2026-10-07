@@ -176,6 +176,21 @@ fn ops_compose_schema_and_decoder_parity() {
     }
 }
 
+const APPLY: Contract = Contract {
+    name: "ops-apply",
+    schema: || tools_schema(&["apply"]),
+    decode: decode_tool_call,
+    cases: "ops-apply-cases.json",
+};
+
+#[test]
+fn ops_apply_schema_and_decoder_parity() {
+    match corpus::check(&APPLY) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}
+
 /// compose nests the Proposal schema verbatim: the bytes the assistant's
 /// `canvas_preview` publishes, pinned by the ops-1 golden.
 #[test]

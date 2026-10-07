@@ -1,6 +1,7 @@
 //! The operation tool catalog and the argument decoder for each tool.
 use super::{
     analyze::{self, Analyze},
+    apply::{self, Apply},
     budget::Budgets,
     compose::{self, Compose},
     documents::{self, Close},
@@ -26,6 +27,7 @@ pub const SPECS: &[ToolSpec] = &[
     render::RENDER,
     export::EXPORT,
     compose::COMPOSE,
+    apply::APPLY,
 ];
 
 /// A tool call with decoded arguments.
@@ -40,6 +42,7 @@ pub(crate) enum Op {
     Render(Render),
     Export(Export),
     Compose(Box<Compose>),
+    Apply(Apply),
 }
 
 /// Decodes `args` for `tool`, with every input budget check, before any work
@@ -56,6 +59,7 @@ pub(crate) fn decode(tool: &str, args: Value, budgets: &Budgets) -> Option<Resul
         "render" => render::decode(args, budgets).map(Op::Render),
         "export" => export::decode(args).map(Op::Export),
         "compose" => compose::decode(args).map(|compose| Op::Compose(Box::new(compose))),
+        "apply" => apply::decode(args, budgets).map(Op::Apply),
         _ => return None,
     })
 }
