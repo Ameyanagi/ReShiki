@@ -160,6 +160,8 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python }}
       RESHIKI_REQUIRE_INCHI_HELPER: "1"
+      # Windows symlink escape tests fail instead of skipping without the privilege.
+      RESHIKI_REQUIRE_LINK_TESTS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux libraries

@@ -255,4 +255,6 @@ fn io_error(error: io::Error, path: &str) -> AccessError {
 }
 
 #[cfg(test)]
+mod escape_tests;
+#[cfg(test)]
 mod tests;
