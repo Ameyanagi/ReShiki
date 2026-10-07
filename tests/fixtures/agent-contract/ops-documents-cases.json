@@ -2,23 +2,23 @@
   "rules": [
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:48-59"
+      "cite": "crates/agent/src/ops/catalog.rs:69-80"
     },
     {
       "id": "info.no_arguments",
-      "cite": "crates/agent/src/ops/documents.rs:30-34,82-84,95-103; crates/agent/src/ops/catalog.rs:30"
+      "cite": "crates/agent/src/ops/documents.rs:30-34,82-84,95-103; crates/agent/src/ops/catalog.rs:46"
     },
     {
       "id": "document_new.no_arguments",
-      "cite": "crates/agent/src/ops/documents.rs:43-47,82-84,95-103; crates/agent/src/ops/catalog.rs:31"
+      "cite": "crates/agent/src/ops/documents.rs:43-47,82-84,95-103; crates/agent/src/ops/catalog.rs:47"
     },
     {
       "id": "document_list.no_arguments",
-      "cite": "crates/agent/src/ops/documents.rs:56-60,82-84,95-103; crates/agent/src/ops/catalog.rs:32"
+      "cite": "crates/agent/src/ops/documents.rs:56-60,82-84,95-103; crates/agent/src/ops/catalog.rs:48"
     },
     {
       "id": "document_close.document_required",
-      "cite": "crates/agent/src/ops/documents.rs:86-93,105-114; crates/agent/src/ops/catalog.rs:33"
+      "cite": "crates/agent/src/ops/documents.rs:86-93,105-114; crates/agent/src/ops/catalog.rs:49"
     },
     {
       "id": "document_close.no_unknown_fields",

@@ -1,12 +1,14 @@
 //! The tool host for a process without the app: session documents only.
 use super::{
+    analyze,
     budget::Budgets,
     catalog::{self, Op},
     documents,
     error::{ErrorKind, OpError},
     exec::{Context, Executor},
+    export,
     host::{Call, ToolHost},
-    import, inspect,
+    import, inspect, render,
     result::ToolResult,
     session::SessionStore,
     store::Documents,
@@ -69,6 +71,9 @@ async fn run(
         Op::DocumentClose(args) => documents::document_close(ctx, store, who, versions, args).await,
         Op::Import(args) => import::import(ctx, store, engine, who, versions, args).await,
         Op::Inspect(args) => inspect::inspect(ctx, store, who, versions, budgets, args).await,
+        Op::Analyze(args) => analyze::analyze(ctx, store, engine, who, versions, args).await,
+        Op::Render(args) => render::render(ctx, store, who, versions, budgets, args).await,
+        Op::Export(args) => export::export(ctx, store, engine, who, versions, budgets, args).await,
     }
 }
 

@@ -227,11 +227,11 @@ impl App {
         })
     }
 
-    fn property_document(&self, key: &PropertyKey) -> Document {
+    pub(super) fn property_document(&self, key: &PropertyKey) -> Document {
         reshiki::editing::analysis_document(&self.tab.doc, &key.atoms)
     }
 
-    fn property_request_key(&self) -> PropertyKey {
+    pub(super) fn property_request_key(&self) -> PropertyKey {
         self.property_key().unwrap_or_else(|| PropertyKey {
             revision: self.tab.revision,
             epoch: self.tab.file_epoch,

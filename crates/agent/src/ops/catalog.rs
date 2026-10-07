@@ -1,10 +1,13 @@
 //! The operation tool catalog and the argument decoder for each tool.
 use super::{
+    analyze::{self, Analyze},
     budget::Budgets,
     documents::{self, Close},
     error::{ErrorKind, OpError},
+    export::{self, Export},
     import::{self, Import},
     inspect::{self, Inspect},
+    render::{self, Render},
 };
 use crate::tool_spec::ToolSpec;
 use serde::de::DeserializeOwned;
@@ -18,6 +21,9 @@ pub const SPECS: &[ToolSpec] = &[
     documents::CLOSE,
     import::IMPORT,
     inspect::INSPECT,
+    analyze::ANALYZE,
+    render::RENDER,
+    export::EXPORT,
 ];
 
 /// A tool call with decoded arguments.
@@ -28,6 +34,9 @@ pub(crate) enum Op {
     DocumentClose(Close),
     Import(Import),
     Inspect(Inspect),
+    Analyze(Analyze),
+    Render(Render),
+    Export(Export),
 }
 
 /// Decodes `args` for `tool`, with every input budget check, before any work
@@ -40,6 +49,9 @@ pub(crate) fn decode(tool: &str, args: Value, budgets: &Budgets) -> Option<Resul
         "document_close" => documents::decode_close(args).map(Op::DocumentClose),
         "import" => import::decode(args, budgets).map(Op::Import),
         "inspect" => inspect::decode(args, budgets).map(Op::Inspect),
+        "analyze" => analyze::decode(args, budgets).map(Op::Analyze),
+        "render" => render::decode(args, budgets).map(Op::Render),
+        "export" => export::decode(args).map(Op::Export),
         _ => return None,
     })
 }

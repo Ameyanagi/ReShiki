@@ -41,11 +41,13 @@
 //!   object, valid as `structuredContent` in every supported MCP revision.
 //! - Errors are an [`error::OpError`]; only [`error::ErrorKind::UnknownTool`]
 //!   is a protocol error, everything else is a tool execution error.
+pub mod analyze;
 pub mod budget;
 pub mod catalog;
 pub mod documents;
 pub mod error;
 pub mod exec;
+pub mod export;
 pub mod headless;
 pub mod host;
 mod ids;
@@ -53,6 +55,7 @@ pub mod import;
 pub mod inspect;
 pub mod policy;
 pub mod progress;
+pub mod render;
 pub mod result;
 pub mod session;
 pub mod store;

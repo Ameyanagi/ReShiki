@@ -115,3 +115,48 @@ fn ops_inspect_schema_and_decoder_parity() {
         Err(failures) => panic!("{failures}"),
     }
 }
+
+const ANALYZE: Contract = Contract {
+    name: "ops-analyze",
+    schema: || tools_schema(&["analyze"]),
+    decode: decode_tool_call,
+    cases: "ops-analyze-cases.json",
+};
+
+#[test]
+fn ops_analyze_schema_and_decoder_parity() {
+    match corpus::check(&ANALYZE) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}
+
+const RENDER: Contract = Contract {
+    name: "ops-render",
+    schema: || tools_schema(&["render"]),
+    decode: decode_tool_call,
+    cases: "ops-render-cases.json",
+};
+
+#[test]
+fn ops_render_schema_and_decoder_parity() {
+    match corpus::check(&RENDER) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}
+
+const EXPORT: Contract = Contract {
+    name: "ops-export",
+    schema: || tools_schema(&["export"]),
+    decode: decode_tool_call,
+    cases: "ops-export-cases.json",
+};
+
+#[test]
+fn ops_export_schema_and_decoder_parity() {
+    match corpus::check(&EXPORT) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}

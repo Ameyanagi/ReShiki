@@ -260,7 +260,8 @@ async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Rea
     })
 }
 
-fn warnings(messages: Vec<String>) -> Vec<Warning> {
+/// Each message as an envelope [`Warning`], in order.
+pub(crate) fn warnings(messages: Vec<String>) -> Vec<Warning> {
     messages
         .into_iter()
         .map(|message| Warning { message })
