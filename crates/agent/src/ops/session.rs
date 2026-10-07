@@ -21,8 +21,9 @@
 //!
 //! [`Documents::commit`] runs entirely under the store's lock, in a fixed
 //! order: it resolves and rechecks the owner, replays a stored receipt,
-//! checks the revision and preflights the budgets, and only then mutates.
-//! The mutation cannot fail, so no commit fails half-way.
+//! checks the revision, preflights the budgets and builds the receipt from
+//! what the edit will do, and only then mutates. The mutation cannot fail,
+//! so no commit fails half-way, and a panicking receipt changes nothing.
 use super::{
     budget::{Budgets, cost, objects, picture_memory},
     error::{ErrorKind, OpError},
@@ -36,6 +37,7 @@ use super::{
 use crate::{
     atom_labels::{self, refresh::Refresh},
     document::{Document, History},
+    transaction,
 };
 use std::{
     collections::{HashMap, VecDeque},
@@ -204,8 +206,8 @@ impl SessionStore {
         }
     }
 
-    /// Recovers from poisoning: a commit mutates only after every fallible
-    /// step, so a panicking receipt can leave at most its own receipt unset.
+    /// Recovers from poisoning: a commit builds its receipt before it mutates
+    /// anything, so a panicking receipt leaves the store as it was.
     fn lock(&self) -> MutexGuard<'_, Store> {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -313,9 +315,49 @@ impl SessionStore {
     }
 }
 
-/// Step (5) of a commit: the history mutation and the label refresh. It
-/// cannot fail.
-fn mutate(entry: &mut Entry, edit: Edit, labels: Option<Result<Refresh, String>>) -> Applied {
+/// What [`mutate`] will do, worked out before it runs, so the receipt is
+/// built while nothing has changed yet.
+fn prospect(entry: &Entry, edit: &Edit, labels: Option<&Result<Refresh, String>>) -> Applied {
+    let (recorded, chemistry_changed) = match edit {
+        // As `Reconciled::commit`: history records unless the document equals
+        // the snapshot once computed labels are cleared after a chemistry
+        // change. `chemistry_changed` ignores those labels, so a document
+        // whose chemistry changed always differs.
+        Edit::Replace { doc, reconciled } => {
+            let before = reconciled.before();
+            let chemistry_changed = transaction::chemistry_changed(before, doc);
+            (chemistry_changed || before != doc, chemistry_changed)
+        }
+        // As `History::undo` and `History::redo`.
+        Edit::Step {
+            redo,
+            chemistry_changed,
+        } => {
+            let changed = entry.history.peek(*redo).is_some();
+            (changed, changed && *chemistry_changed)
+        }
+    };
+    let label_notice = match labels {
+        Some(Ok(refresh)) if chemistry_changed => refresh.notice.clone(),
+        Some(Err(error)) if chemistry_changed => Some(error.clone()),
+        _ => None,
+    };
+    let revision = if recorded {
+        entry.revision.wrapping_add(1)
+    } else {
+        entry.revision
+    };
+    Applied {
+        revision: Revision(revision),
+        recorded,
+        chemistry_changed,
+        label_notice,
+    }
+}
+
+/// Step (6) of a commit: the history mutation and the label refresh, as
+/// [`prospect`] described them. It cannot fail.
+fn mutate(entry: &mut Entry, edit: Edit, labels: Option<Result<Refresh, String>>) {
     let (mut doc, recorded, chemistry_changed) = match edit {
         Edit::Replace {
             mut doc,
@@ -342,26 +384,12 @@ fn mutate(entry: &mut Entry, edit: Edit, labels: Option<Result<Refresh, String>>
             (doc, changed, chemistry_changed)
         }
     };
-    let mut label_notice = None;
-    if chemistry_changed {
-        match labels {
-            Some(Ok(refresh)) => {
-                refresh.apply(&mut doc);
-                label_notice = refresh.notice;
-            }
-            Some(Err(error)) => label_notice = Some(error),
-            None => {}
-        }
+    if chemistry_changed && let Some(Ok(refresh)) = labels {
+        refresh.apply(&mut doc);
     }
     if recorded {
         entry.revision = entry.revision.wrapping_add(1);
         entry.doc = Arc::new(doc);
-    }
-    Applied {
-        revision: Revision(entry.revision),
-        recorded,
-        chemistry_changed,
-        label_notice,
     }
 }
 
@@ -464,11 +492,12 @@ impl Documents for SessionStore {
             labels,
             receipt,
         } = change;
-        // (5) The mutation, which cannot fail.
-        let applied = mutate(entry, edit, labels);
-        // (6) The receipt.
+        // (5) The receipt, built before anything changes: if it panics, the
+        // edit is not applied and a retry applies it once.
+        let result = Arc::new(receipt(&prospect(entry, &edit, labels.as_ref())));
+        // (6) The mutation, which cannot fail, and the receipt's record.
+        mutate(entry, edit, labels);
         entry.weight = entry.recount();
-        let result = Arc::new(receipt(&applied));
         if let Some(key) = key {
             entry
                 .receipts

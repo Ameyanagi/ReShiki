@@ -6,7 +6,13 @@ use crate::{
     transaction,
 };
 use serde_json::{Map, Value, json};
-use std::{cell::Cell, sync::Barrier, thread, time::Duration};
+use std::{
+    cell::Cell,
+    panic::{AssertUnwindSafe, catch_unwind},
+    sync::Barrier,
+    thread,
+    time::Duration,
+};
 
 thread_local! {
     /// This thread's fake time, set on first use.
@@ -411,6 +417,40 @@ fn a_shared_picture_counts_once_and_until_its_last_holder_closes() {
 }
 
 #[test]
+fn a_frame_the_history_limit_evicts_no_longer_counts_its_pictures() {
+    let first = picture();
+    let size = first.png().len() as u64;
+    for (history_depth, fits) in [(1, true), (2, false)] {
+        let store = SessionStore::new(Budgets {
+            history_depth,
+            max_session_picture_bytes: size,
+            ..Budgets::default()
+        });
+        let handle = create(&store, &alice());
+        let add = |picture: &Picture| {
+            let graphic = picture.graphic(1, Point::new(0., 0.));
+            replace(&store, &handle, |doc| doc.graphics.push(graphic), None)
+        };
+        store.commit(&alice(), &handle, add(&first)).unwrap();
+        store
+            .commit(
+                &alice(),
+                &handle,
+                replace(&store, &handle, |doc| doc.graphics.clear(), None),
+            )
+            .unwrap();
+        // The newest undo frame holds the first picture. With one frame,
+        // the next commit evicts it, so a second picture fits.
+        let result = store.commit(&alice(), &handle, add(&picture()));
+        assert_eq!(
+            result.map(drop).map_err(|error| error.kind),
+            if fits { Ok(()) } else { Err(ErrorKind::Budget) },
+            "history_depth {history_depth}"
+        );
+    }
+}
+
+#[test]
 fn a_rejected_preflight_changes_nothing() {
     let shared = picture();
     let pictures = shared.png().len() as u64 - 1;
@@ -509,6 +549,82 @@ fn concurrent_replacements_from_one_base_give_exactly_one_stale() {
     assert_eq!(stale.message, STALE);
     assert_eq!(revision(&store, &handle), Revision(1));
     assert_eq!(frames(&store, &handle), (1, 0));
+}
+
+#[test]
+fn concurrent_commits_with_one_key_apply_once_and_share_the_receipt() {
+    let store = Arc::new(store());
+    let handle = create(&store, &alice());
+    let barrier = Arc::new(Barrier::new(2));
+    let threads: Vec<_> = (0..2)
+        .map(|_| {
+            let (store, handle, barrier) = (store.clone(), handle.clone(), barrier.clone());
+            thread::spawn(move || {
+                let change = carbons_change(&store, &handle, 1, key("k", 1));
+                barrier.wait();
+                store.commit(&alice(), &handle, change).unwrap()
+            })
+        })
+        .collect();
+    let results: Vec<_> = threads
+        .into_iter()
+        .map(|thread| thread.join().unwrap())
+        .collect();
+    assert!(Arc::ptr_eq(&results[0], &results[1]));
+    assert_eq!(results[0].value["revision"], "1");
+    assert_eq!(revision(&store, &handle), Revision(1));
+    assert_eq!(frames(&store, &handle), (1, 0));
+}
+
+#[test]
+fn a_panicking_receipt_changes_nothing_and_a_retry_applies_once() {
+    let store = store();
+    let handle = create(&store, &alice());
+    // The document, and its revision, frames and weight.
+    let state = || {
+        (
+            store.snapshot(&alice(), &handle, Access::Read).unwrap().doc,
+            (
+                revision(&store, &handle),
+                frames(&store, &handle),
+                weight(&store, &handle),
+            ),
+        )
+    };
+    let panicking = |mut change: Change| {
+        let key = change.key.clone().unwrap();
+        change.receipt = Box::new(|_| panic!("receipt bug"));
+        let before = state();
+        let commit = AssertUnwindSafe(|| store.commit(&alice(), &handle, change));
+        assert!(catch_unwind(commit).is_err());
+        let after = state();
+        assert!(Arc::ptr_eq(&before.0, &after.0));
+        assert_eq!(before.1, after.1);
+        assert_eq!(store.receipt(&alice(), &handle, &key), Ok(None));
+    };
+
+    panicking(carbons_change(&store, &handle, 1, key("edit", 1)));
+    let edit = || {
+        store
+            .commit(
+                &alice(),
+                &handle,
+                carbons_change(&store, &handle, 1, key("edit", 1)),
+            )
+            .unwrap()
+    };
+    let first = edit();
+    assert_eq!(first.value["revision"], "1");
+    assert!(Arc::ptr_eq(&first, &edit()));
+    assert_eq!(frames(&store, &handle), (1, 0));
+
+    panicking(step(1, false, key("undo", 1)));
+    let undo = store
+        .commit(&alice(), &handle, step(1, false, key("undo", 1)))
+        .unwrap();
+    assert_eq!(undo.value["revision"], "2");
+    assert_eq!(frames(&store, &handle), (0, 1));
+    assert_eq!(weight(&store, &handle), recount(&store, &handle));
 }
 
 #[test]
@@ -708,4 +824,37 @@ fn labels_apply_only_when_the_chemistry_changed() {
     assert_eq!(applied.value["recorded"], false);
     assert_eq!(applied.value["revision"], "2");
     assert_eq!(frames(&store, &handle), (2, 0));
+}
+
+#[test]
+fn a_computed_label_refresh_is_applied_with_its_notice() {
+    let store = store();
+    let handle = create(&store, &alice());
+    let mut change = replace(
+        &store,
+        &handle,
+        |doc| {
+            let carbon = doc.add_atom("C", Point::new(0., 0.));
+            let oxygen = doc.add_atom("O", Point::new(42., 0.));
+            doc.add_bond(carbon, oxygen, 1, "plain");
+            // Six-valent oxygen: its labels fail, and the refresh says so.
+            let invalid = doc.add_atom("O", Point::new(100., 100.));
+            doc.atom_mut(invalid).unwrap().explicit_h = 5;
+        },
+        None,
+    );
+    let Edit::Replace { doc, .. } = &change.edit else {
+        unreachable!()
+    };
+    assert!(doc.atoms.iter().all(|atom| atom.label_h == 0));
+    let refresh = Refresh::calculate(doc, &Refresh::default()).unwrap();
+    let notice = refresh.notice.clone();
+    assert!(notice.is_some());
+    change.labels = Some(Ok(refresh));
+    let applied = store.commit(&alice(), &handle, change).unwrap();
+    assert_eq!(applied.value["chemistry_changed"], true);
+    assert_eq!(applied.value["label_notice"], json!(notice));
+    let doc = store.snapshot(&alice(), &handle, Access::Read).unwrap().doc;
+    let label_h: Vec<_> = doc.atoms.iter().map(|atom| atom.label_h).collect();
+    assert_eq!(label_h, [3, 1, 0]);
 }

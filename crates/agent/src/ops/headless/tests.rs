@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use std::{
     collections::HashSet,
     sync::atomic::{AtomicI64, Ordering},
+    time::{Duration, Instant},
 };
 
 fn host() -> HeadlessHost {
@@ -248,5 +249,31 @@ async fn a_cancelled_call_returns_err_and_never_runs() {
     });
     let error = host.call(request).await.unwrap_err();
     assert_eq!(error.kind, ErrorKind::Cancelled);
+    assert!(host.store().list(&Principal::local()).is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn every_tool_times_out_once_its_deadline_has_passed() {
+    let host = HeadlessHost::new(
+        "9.8.7",
+        Budgets {
+            op_deadline: Duration::from_nanos(1),
+            ..Budgets::default()
+        },
+    );
+    // Each call wins its permit only after its deadline has passed.
+    host.exec().set_hooks(Hooks {
+        acquired: Some(Arc::new(|| {
+            let until = Instant::now() + Duration::from_nanos(1);
+            while Instant::now() < until {
+                std::hint::spin_loop();
+            }
+        })),
+        ..Hooks::default()
+    });
+    for tool in ["info", "document_new", "document_list"] {
+        let result = host.call(call(tool, json!({}))).await.unwrap();
+        assert_eq!(error_code(&result), "timeout", "{tool}");
+    }
     assert!(host.store().list(&Principal::local()).is_empty());
 }

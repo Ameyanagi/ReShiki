@@ -62,7 +62,10 @@ async fn run(
     budgets: Budgets,
 ) -> Result<ToolResult, OpError> {
     match op {
-        Op::Info => Ok(documents::info(&versions, &budgets)),
+        // The other tools check through `blocking` or `effect`.
+        Op::Info => ctx
+            .checkpoint()
+            .map(|()| documents::info(&versions, &budgets)),
         Op::DocumentNew => documents::document_new(ctx, store, who, versions).await,
         Op::DocumentList => documents::document_list(ctx, store, who, versions).await,
         Op::DocumentClose(args) => documents::document_close(ctx, store, who, versions, args).await,

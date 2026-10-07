@@ -88,8 +88,9 @@ pub enum Edit {
     Step { redo: bool, chemistry_changed: bool },
 }
 
-/// Builds the result of a commit from what it did. It runs under the store's
-/// lock, so it must be cheap: JSON from data computed beforehand.
+/// Builds the result of a commit from what it does. It runs under the store's
+/// lock before the commit changes anything, so it must be cheap: JSON from
+/// data computed beforehand.
 pub type Receipt = Box<dyn FnOnce(&Applied) -> ToolResult + Send>;
 
 /// One atomic mutation of a document.
@@ -107,7 +108,7 @@ pub struct Change {
     pub receipt: Receipt,
 }
 
-/// What a commit did, as its [`Receipt`] sees it.
+/// What a commit does, as its [`Receipt`] sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Applied {
     /// The revision after the commit; unchanged when nothing was recorded.
