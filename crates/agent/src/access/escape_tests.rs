@@ -29,6 +29,8 @@ const LIMIT: usize = 4096;
 const SENTINEL: &[u8] = b"RESHIKI ESCAPE SENTINEL: this file is outside the granted root";
 /// The bytes of files inside the root.
 const INSIDE: &[u8] = b"inside the granted root";
+/// The [`read_outcome`] of a read that returned [`INSIDE`].
+const INSIDE_READ: &str = "ok (inside bytes)";
 
 /// A canonical temporary folder holding `root/` and `outside/secret.mol`.
 struct Sandbox {
@@ -116,7 +118,7 @@ fn read_outcome(result: &Result<Vec<u8>, AccessError>) -> String {
         Ok(bytes) => {
             assert_never_sentinel(bytes);
             if bytes == INSIDE {
-                "ok (inside bytes)".into()
+                INSIDE_READ.into()
             } else {
                 format!("ok ({} bytes)", bytes.len())
             }

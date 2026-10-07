@@ -253,8 +253,14 @@ impl Drop for StopOnDrop {
     }
 }
 
+/// How long a race keeps reading past its iterations for the flipper to
+/// make progress and for both layouts to be observed.
+const RACE_GRACE: Duration = Duration::from_secs(10);
+
 /// Flip `root/sub` between a real directory and symlinks to outside/ while
-/// reading `sub/secret.mol`.
+/// reading `sub/secret.mol`. The run only counts when the flipper completed a
+/// cycle during the reads and the reads saw both the directory and a symlink;
+/// a descheduled flipper would otherwise pass without any concurrent swap.
 fn directory_swap_race(iterations: usize) {
     let sandbox = Sandbox::new();
     let sub = sandbox.root.join("sub");
@@ -269,44 +275,75 @@ fn directory_swap_race(iterations: usize) {
     let request = sandbox.path("sub/secret.mol");
 
     let stop = StopOnDrop(Arc::new(AtomicBool::new(false)));
-    let flips = Arc::new(AtomicU64::new(0));
-    let (running, flipping) = mpsc::channel();
+    let cycles = Arc::new(AtomicU64::new(0));
+    let (installed, first_layout) = mpsc::channel();
     let flipper = {
         let stop = Arc::clone(&stop.0);
-        let flips = Arc::clone(&flips);
+        let cycles = Arc::clone(&cycles);
         thread::spawn(move || {
             let parked = [&parked_dir, &parked_relative, &parked_dir, &parked_absolute];
-            let _ = running.send(());
+            let mut installed = Some(installed);
             while !stop.load(Ordering::Relaxed) {
                 for entry in parked {
                     fs::rename(entry, &sub).unwrap();
+                    if let Some(installed) = installed.take() {
+                        let _ = installed.send(());
+                    }
                     fs::rename(&sub, entry).unwrap();
                 }
-                flips.fetch_add(1, Ordering::Relaxed);
+                cycles.fetch_add(1, Ordering::Relaxed);
             }
         })
     };
-    flipping.recv().unwrap();
-    let started = Instant::now();
-    let mut outcomes = BTreeMap::<String, usize>::new();
-    for _ in 0..iterations {
+    first_layout
+        .recv_timeout(BOUND)
+        .expect("the flipper installed no layout");
+    let window_start = cycles.load(Ordering::Relaxed);
+    let raced = |outcomes: &BTreeMap<String, usize>| {
+        cycles.load(Ordering::Relaxed) > window_start
+            && outcomes.contains_key(INSIDE_READ)
+            && outcomes.contains_key("path_escapes_root")
+    };
+    let read = |outcomes: &mut BTreeMap<String, usize>| {
         let read = grants.read(&request, LIMIT, FORMATS);
         *outcomes.entry(read_outcome(&read)).or_default() += 1;
+    };
+    let started = Instant::now();
+    let mut outcomes = BTreeMap::new();
+    for _ in 0..iterations {
+        read(&mut outcomes);
+    }
+    let grace_end = Instant::now() + RACE_GRACE;
+    while !raced(&outcomes) && !flipper.is_finished() && Instant::now() < grace_end {
+        read(&mut outcomes);
     }
     let elapsed = started.elapsed();
+    let window_cycles = cycles.load(Ordering::Relaxed) - window_start;
     drop(stop);
     flipper.join().unwrap();
+    let reads: usize = outcomes.values().sum();
     let rows: Vec<_> = outcomes
-        .into_iter()
-        .map(|(outcome, count)| (outcome, format!("{count} reads")))
+        .iter()
+        .map(|(outcome, count)| (outcome.clone(), format!("{count} reads")))
         .collect();
     print_outcomes(
         ["outcome", "count"],
         &format!(
-            "{iterations} reads of sub/secret.mol against {} flip cycles in {elapsed:?}",
-            flips.load(Ordering::Relaxed)
+            "{reads} reads of sub/secret.mol against {window_cycles} flip cycles in {elapsed:?}"
         ),
         &rows,
+    );
+    assert!(
+        window_cycles > 0,
+        "no flip cycle completed during the reads"
+    );
+    assert!(
+        outcomes.contains_key(INSIDE_READ),
+        "no read saw sub as the real directory"
+    );
+    assert!(
+        outcomes.contains_key("path_escapes_root"),
+        "no read saw sub as a symlink to outside"
     );
     sandbox.assert_outside_untouched();
 }
@@ -423,42 +460,66 @@ fn a_read_only_parent_fails_the_write_without_a_temporary_file() {
 #[cfg(target_os = "macos")]
 #[test]
 fn macos_unicode_and_case_variants_of_a_root_fail_closed() {
+    use std::os::unix::fs::MetadataExt as _;
     let sandbox = Sandbox::new();
-    let nfc = sandbox.base.join("caf\u{e9}");
-    fs::create_dir(&nfc).unwrap();
-    fs::write(nfc.join("a.mol"), INSIDE).unwrap();
-    let grants = Grants::open(std::slice::from_ref(&nfc), std::slice::from_ref(&nfc)).unwrap();
+    // Every spelling is built from fixture-owned names, so neither the temp
+    // folder's location nor the volume's case sensitivity matters.
+    let granted = sandbox.base.join("Granted").join("caf\u{e9}");
+    fs::create_dir_all(&granted).unwrap();
+    fs::write(granted.join("a.mol"), INSIDE).unwrap();
+    let grants = Grants::open(
+        std::slice::from_ref(&granted),
+        std::slice::from_ref(&granted),
+    )
+    .unwrap();
     assert_eq!(
         grants
-            .read(&text(&nfc.join("a.mol")), LIMIT, FORMATS)
+            .read(&text(&granted.join("a.mol")), LIMIT, FORMATS)
             .unwrap(),
         INSIDE
     );
-    // APFS resolves every one of these spellings to the granted folder;
-    // matching is exact, so each fails closed.
-    let base = text(&sandbox.base);
-    let upper_prefix = base.replacen("/private/", "/PRIVATE/", 1);
-    assert_ne!(upper_prefix, base, "the sandbox is not under /private");
-    let variants = [
-        sandbox.base.join("cafe\u{301}"),
-        sandbox.base.join("CAF\u{c9}"),
-        Path::new(&upper_prefix).join("caf\u{e9}"),
-    ];
-    for variant in variants {
-        assert!(
-            variant.is_dir(),
-            "{variant:?} does not name the granted folder"
-        );
+    let identity = |path: &Path| {
+        fs::metadata(path)
+            .ok()
+            .map(|found| (found.dev(), found.ino()))
+    };
+    let folder = identity(&granted).unwrap();
+    // Matching is exact, so each spelling fails closed, whether or not this
+    // volume resolves it to the granted folder (APFS is normalization-
+    // insensitive and case-insensitive unless formatted case-sensitive).
+    let mut rows = Vec::new();
+    for (case, variant) in [
+        ("NFD name", sandbox.base.join("Granted").join("cafe\u{301}")),
+        (
+            "case-variant name",
+            sandbox.base.join("Granted").join("CAF\u{c9}"),
+        ),
+        (
+            "case-variant prefix",
+            sandbox.base.join("GRANTED").join("caf\u{e9}"),
+        ),
+    ] {
         let read = grants.read(&text(&variant.join("a.mol")), LIMIT, FORMATS);
-        assert_eq!(code(read), "path_not_granted", "{variant:?}");
+        assert_eq!(code(read), "path_not_granted", "{case}");
         let write = grants.write_atomic(
             &text(&variant.join("b.rsk")),
             b"x",
             WriteMode::CreateNew,
             FORMATS,
         );
-        assert_eq!(code(write), "path_not_granted", "{variant:?}");
+        assert_eq!(code(write), "path_not_granted", "{case}");
+        let volume = if identity(&variant) == Some(folder) {
+            "an alias of the granted folder"
+        } else {
+            "not an alias on this volume; only the lexical refusal ran"
+        };
+        rows.push((case.to_owned(), volume.to_owned()));
     }
-    assert!(!nfc.join("b.rsk").exists());
+    print_outcomes(
+        ["spelling", "on this volume"],
+        "macOS root spellings",
+        &rows,
+    );
+    assert!(!granted.join("b.rsk").exists());
     sandbox.assert_outside_untouched();
 }
