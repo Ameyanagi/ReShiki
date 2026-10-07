@@ -290,6 +290,100 @@ impl Objects {
 /// Assemble native helper values without narrowing numbers or changing the
 /// prepared snapshot. All source identities refer to its expanded XML.
 pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
+    check_scene_limits(prepared)?;
+    let source = presentation::parse(&prepared.expanded_xml)?;
+    let nodes = source
+        .descendants()
+        .filter(Node::is_element)
+        .collect::<Vec<_>>();
+    let ordinals: HashMap<_, _> = nodes.iter().enumerate().map(|(i, n)| (n.id(), i)).collect();
+    let root = source.root_element();
+    let reader = TextReader::new(root)?;
+    let next_id = first_scene_id(prepared)?;
+    let mut objects = seed_objects(prepared, &nodes)?;
+    let mut base = base_scene(prepared);
+    let next_id = read_captions_and_arrows(
+        prepared,
+        &nodes,
+        &ordinals,
+        &reader,
+        &mut base,
+        &mut objects,
+        next_id,
+    )?;
+    let association = PreparedAtoms::new(
+        &prepared.molecule.state.graph.atoms,
+        &prepared.molecule.positions,
+    )?;
+    let mut tree = Tree::parse_import(&prepared.expanded_xml)?;
+    let order = tree.descendants(0)?;
+    let source_by_index: HashMap<_, _> = order
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(ordinal, index)| (index, ordinal))
+        .collect();
+    let mut slots = styled_label_atoms(
+        prepared,
+        &nodes,
+        &reader,
+        &association,
+        &tree,
+        &order,
+        &mut base,
+    )?;
+    highlighted_atoms(
+        prepared,
+        &nodes,
+        &association,
+        &tree,
+        &order,
+        &mut base,
+        &mut slots,
+    )?;
+    mark_patches(prepared, &association, &mut base, &mut slots, &mut objects)?;
+    label_patches(
+        prepared,
+        &nodes,
+        &reader,
+        &association,
+        &mut base,
+        &mut slots,
+        &mut objects,
+    )?;
+    let Remap {
+        removed,
+        old_to_new,
+        new_to_old,
+        filtered,
+    } = remove_owned_circles(&mut tree, prepared, &source_by_index)?;
+    let filtered_source = presentation::parse(&filtered)?;
+    for (source, fill) in ring_fills::read(&nodes, &order, &tree, prepared, &association)? {
+        objects.put(source, fill.atoms.clone())?;
+        base.ring_fills.push(fill);
+    }
+    graphic_objects(
+        &filtered_source,
+        prepared,
+        next_id,
+        &old_to_new,
+        &new_to_old,
+        &mut base,
+        &mut objects,
+    )?;
+    extend_fragment_objects(&nodes, &order, &tree, &source_by_index, &mut objects)?;
+    groups_and_abbreviations(
+        prepared,
+        &filtered,
+        &objects,
+        &old_to_new,
+        next_id,
+        &mut base,
+    )?;
+    restore_abbreviation_presentations(prepared, root, &reader, &mut base)?;
+    scene_result(prepared, base, objects, removed, &source_by_index)
+}
+fn check_scene_limits(prepared: &PreparedCdxml) -> Result<()> {
     let members = prepared
         .fragment_bindings
         .iter()
@@ -305,15 +399,10 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     {
         return Err(SceneError::Limit);
     }
-    let source = presentation::parse(&prepared.expanded_xml)?;
-    let nodes = source
-        .descendants()
-        .filter(Node::is_element)
-        .collect::<Vec<_>>();
-    let ordinals: HashMap<_, _> = nodes.iter().enumerate().map(|(i, n)| (n.id(), i)).collect();
-    let root = source.root_element();
-    let reader = TextReader::new(root)?;
-    let mut next_id = u64::try_from(prepared.molecule.ids.len())
+    Ok(())
+}
+fn first_scene_id(prepared: &PreparedCdxml) -> Result<u64> {
+    let next_id = u64::try_from(prepared.molecule.ids.len())
         .map_err(|_| SceneError::Limit)?
         .checked_add(1)
         .ok_or(SceneError::Limit)?;
@@ -326,6 +415,9 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     {
         return Err(SceneError::Invalid("Prepared CDXML atom IDs changed"));
     }
+    Ok(next_id)
+}
+fn seed_objects(prepared: &PreparedCdxml, nodes: &[Node<'_, '_>]) -> Result<Objects> {
     let mut objects = Objects::new();
     for binding in &prepared.fragment_bindings {
         if binding.source >= nodes.len() {
@@ -333,7 +425,10 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         }
         objects.put(binding.source, binding.atoms.clone())?;
     }
-    let mut base = NativeScene {
+    Ok(objects)
+}
+fn base_scene(prepared: &PreparedCdxml) -> NativeScene {
+    NativeScene {
         drawing_style: prepared.drawing_style.clone(),
         atoms: Vec::new(),
         bonds: prepared
@@ -352,7 +447,17 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         ring_fills: Vec::new(),
         groups: Vec::new(),
         abbreviations: Vec::new(),
-    };
+    }
+}
+fn read_captions_and_arrows(
+    prepared: &PreparedCdxml,
+    nodes: &[Node<'_, '_>],
+    ordinals: &HashMap<roxmltree::NodeId, usize>,
+    reader: &TextReader<'_, '_>,
+    base: &mut NativeScene,
+    objects: &mut Objects,
+    mut next_id: u64,
+) -> Result<u64> {
     let arrows = super::ArrowReader::new(&prepared.expanded_xml)?;
     for page in nodes.iter().filter(|n| n.has_tag_name("page")) {
         let defaults = attributes(*page);
@@ -398,18 +503,17 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
             next_id = next_id.checked_add(1).ok_or(SceneError::Limit)?;
         }
     }
-    let association = PreparedAtoms::new(
-        &prepared.molecule.state.graph.atoms,
-        &prepared.molecule.positions,
-    )?;
-    let mut tree = Tree::parse_import(&prepared.expanded_xml)?;
-    let order = tree.descendants(0)?;
-    let source_by_index: HashMap<_, _> = order
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(ordinal, index)| (index, ordinal))
-        .collect();
+    Ok(next_id)
+}
+fn styled_label_atoms(
+    prepared: &PreparedCdxml,
+    nodes: &[Node<'_, '_>],
+    reader: &TextReader<'_, '_>,
+    association: &PreparedAtoms<'_>,
+    tree: &Tree,
+    order: &[usize],
+    base: &mut NativeScene,
+) -> Result<HashMap<u64, usize>> {
     let synthetic = presentation::parse("<t><s/></t>")?;
     let mut slots = HashMap::new();
     for (ordinal, node) in nodes
@@ -439,7 +543,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
             prepared.source_scale,
         )?;
         let id = association.identify_with_tolerance(
-            &tree,
+            tree,
             *order.get(ordinal).ok_or(SceneError::Limit)?,
             p,
             0.01,
@@ -461,6 +565,17 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
             display: None,
         });
     }
+    Ok(slots)
+}
+fn highlighted_atoms(
+    prepared: &PreparedCdxml,
+    nodes: &[Node<'_, '_>],
+    association: &PreparedAtoms<'_>,
+    tree: &Tree,
+    order: &[usize],
+    base: &mut NativeScene,
+    slots: &mut HashMap<u64, usize>,
+) -> Result<()> {
     // Use the same checked coordinate/element association as text and marks.
     // A highlighted skeletal carbon has no label, so this cannot be folded
     // into the styled-label loop above.
@@ -479,18 +594,27 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
             prepared.source_scale,
         )?;
         let id = association.identify_with_tolerance(
-            &tree,
+            tree,
             *order.get(ordinal).ok_or(SceneError::Limit)?,
             position,
             0.01,
             "Could not safely associate CDXML highlight with its atom",
         )?;
-        let slot = atom_slot(&mut base.atoms, &mut slots, id)?;
+        let slot = atom_slot(&mut base.atoms, slots, id)?;
         base.atoms.get_mut(slot).ok_or(SceneError::Limit)?.highlight = Some(color.into_document()?);
     }
-    let marks = super::read_marks(&prepared.expanded_xml, &association, prepared.source_scale)?;
+    Ok(())
+}
+fn mark_patches(
+    prepared: &PreparedCdxml,
+    association: &PreparedAtoms<'_>,
+    base: &mut NativeScene,
+    slots: &mut HashMap<u64, usize>,
+    objects: &mut Objects,
+) -> Result<()> {
+    let marks = super::read_marks(&prepared.expanded_xml, association, prepared.source_scale)?;
     for patch in marks.atoms {
-        let slot = atom_slot(&mut base.atoms, &mut slots, patch.id)?;
+        let slot = atom_slot(&mut base.atoms, slots, patch.id)?;
         base.atoms
             .get_mut(slot)
             .ok_or(SceneError::Limit)?
@@ -500,6 +624,17 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     for patch in marks.objects {
         objects.put(patch.source, patch.atoms)?;
     }
+    Ok(())
+}
+fn label_patches(
+    prepared: &PreparedCdxml,
+    nodes: &[Node<'_, '_>],
+    reader: &TextReader<'_, '_>,
+    association: &PreparedAtoms<'_>,
+    base: &mut NativeScene,
+    slots: &mut HashMap<u64, usize>,
+    objects: &mut Objects,
+) -> Result<()> {
     let endpoints = base
         .bonds
         .iter()
@@ -507,7 +642,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         .collect::<Vec<_>>();
     let labels = super::read_labels(
         &prepared.expanded_xml,
-        &association,
+        association,
         &endpoints,
         prepared.source_scale,
         |ordinal, attrs| {
@@ -520,7 +655,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     )?;
     base.atom_labels = labels.atom_labels;
     for patch in labels.atoms {
-        let slot = atom_slot(&mut base.atoms, &mut slots, patch.id)?;
+        let slot = atom_slot(&mut base.atoms, slots, patch.id)?;
         base.atoms.get_mut(slot).ok_or(SceneError::Limit)?.display = Some(patch.display);
     }
     for patch in labels.bonds {
@@ -532,7 +667,20 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     for patch in labels.objects {
         objects.put(patch.source, patch.atoms)?;
     }
-    let removed = circles::remove(&mut tree, prepared)?;
+    Ok(())
+}
+struct Remap {
+    removed: Vec<usize>,
+    old_to_new: HashMap<usize, usize>,
+    new_to_old: Vec<usize>,
+    filtered: String,
+}
+fn remove_owned_circles(
+    tree: &mut Tree,
+    prepared: &PreparedCdxml,
+    source_by_index: &HashMap<usize, usize>,
+) -> Result<Remap> {
+    let removed = circles::remove(tree, prepared)?;
     let remaining = tree.descendants(0)?;
     let old_to_new: HashMap<_, _> = remaining
         .iter()
@@ -550,11 +698,22 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         .map(|index| source_by_index.get(index).copied().ok_or(SceneError::Limit))
         .collect::<Result<Vec<_>>>()?;
     let filtered = tree.serialize()?;
-    let filtered_source = presentation::parse(&filtered)?;
-    for (source, fill) in ring_fills::read(&nodes, &order, &tree, prepared, &association)? {
-        objects.put(source, fill.atoms.clone())?;
-        base.ring_fills.push(fill);
-    }
+    Ok(Remap {
+        removed,
+        old_to_new,
+        new_to_old,
+        filtered,
+    })
+}
+fn graphic_objects(
+    filtered_source: &roxmltree::Document<'_>,
+    prepared: &PreparedCdxml,
+    next_id: u64,
+    old_to_new: &HashMap<usize, usize>,
+    new_to_old: &[usize],
+    base: &mut NativeScene,
+    objects: &mut Objects,
+) -> Result<()> {
     let claimed: BTreeSet<_> = objects
         .entries
         .iter()
@@ -570,6 +729,15 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         objects.put(*new_to_old.get(source).ok_or(SceneError::Limit)?, vec![id])?;
     }
     base.graphics = graphics.graphics;
+    Ok(())
+}
+fn extend_fragment_objects(
+    nodes: &[Node<'_, '_>],
+    order: &[usize],
+    tree: &Tree,
+    source_by_index: &HashMap<usize, usize>,
+    objects: &mut Objects,
+) -> Result<()> {
     // Extend only original fragment bindings, in native dict insertion order.
     let fragments = objects
         .entries
@@ -595,6 +763,16 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         }
         objects.put(ordinal, ids)?;
     }
+    Ok(())
+}
+fn groups_and_abbreviations(
+    prepared: &PreparedCdxml,
+    filtered: &str,
+    objects: &Objects,
+    old_to_new: &HashMap<usize, usize>,
+    next_id: u64,
+    base: &mut NativeScene,
+) -> Result<()> {
     let translated = objects
         .entries
         .iter()
@@ -608,14 +786,22 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     let group_id = next_id
         .checked_add(u64::try_from(base.graphics.len()).map_err(|_| SceneError::Limit)?)
         .ok_or(SceneError::Limit)?;
-    base.groups = super::read_groups(&filtered, &translated, group_id)?;
+    base.groups = super::read_groups(filtered, &translated, group_id)?;
     base.abbreviations = super::read_abbreviations(
         &prepared.abbreviations,
-        &filtered,
+        filtered,
         &prepared.fragments,
         &prepared.molecule.positions,
         prepared.source_scale,
     )?;
+    Ok(())
+}
+fn restore_abbreviation_presentations(
+    prepared: &PreparedCdxml,
+    root: Node<'_, '_>,
+    reader: &TextReader<'_, '_>,
+    base: &mut NativeScene,
+) -> Result<()> {
     // Chemistry still uses the original flattened XML and checked atom IDs.
     // Restore independent presentations only after that association succeeds.
     // Equal automatic presentations keep the legacy anchor-style fallback.
@@ -666,6 +852,15 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         atom.hydrogen_color = anchor_hydrogen;
         atom.color_override = anchor_explicit;
     }
+    Ok(())
+}
+fn scene_result(
+    prepared: &PreparedCdxml,
+    base: NativeScene,
+    objects: Objects,
+    removed: Vec<usize>,
+    source_by_index: &HashMap<usize, usize>,
+) -> Result<CdxmlScene> {
     if prepared.molecule.ids.is_empty()
         && base.annotations.is_empty()
         && base.arrows.is_empty()
