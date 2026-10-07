@@ -76,3 +76,32 @@ fn canvas_image_parity_dump() {
         println!("{name} {width}x{height} {:016x}", hasher.finish());
     }
 }
+
+#[test]
+fn image_matches_image_within_default() {
+    for bytes in [
+        include_bytes!("../../../../tests/fixtures/bond-join-regression.rsk").as_slice(),
+        include_bytes!("../../../../tests/fixtures/coordination-layout.rsk").as_slice(),
+        include_bytes!("../../../../tests/fixtures/adjustable-arcs.rsk").as_slice(),
+    ] {
+        let doc = Document::from_json(bytes).unwrap();
+        assert_eq!(
+            super::image(&doc).unwrap(),
+            super::image_within(&doc, 1600, 1000).unwrap()
+        );
+    }
+}
+
+#[test]
+fn image_within_rejects_an_empty_budget() {
+    let doc: Document = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/bond-join-regression.rsk"
+    ))
+    .unwrap();
+    assert_eq!(
+        super::image_within(&doc, 0, 1000).unwrap_err(),
+        "Preview size must be at least 1 × 1 pixels"
+    );
+    assert!(super::image_within(&doc, 1600, 0).is_err());
+    assert!(super::image_within(&doc, 1600, 1000).is_ok());
+}

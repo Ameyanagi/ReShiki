@@ -39,6 +39,7 @@ mod layout;
 pub mod progress;
 pub mod review;
 pub mod sketch;
+pub mod tool_spec;
 use crate::{
     document::{Document, Point},
     engine::LocalEngine,

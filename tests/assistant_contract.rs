@@ -20,7 +20,7 @@ fn golden(name: &str) -> &'static str {
 #[test]
 fn codex_dynamic_tools_bytes_are_pinned() {
     assert_eq!(
-        assistant::canvas_tools::definitions().to_string(),
+        assistant::codex::dynamic_tools(&assistant::canvas_tools::SPECS).to_string(),
         golden("codex-dynamic-tools.json")
     );
 }
@@ -43,7 +43,7 @@ fn critique_schema_bytes_are_pinned() {
 
 #[test]
 fn canvas_tools_keep_plan_inspect_preview_order() {
-    let tools = assistant::canvas_tools::definitions();
+    let tools = assistant::codex::dynamic_tools(&assistant::canvas_tools::SPECS);
     let names: Vec<&str> = tools
         .as_array()
         .unwrap()

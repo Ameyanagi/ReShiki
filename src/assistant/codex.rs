@@ -20,6 +20,7 @@ const IMAGE_INSTRUCTIONS: &str = "When a source image is attached, reconstruct i
 use super::settings::Preferences;
 use super::{canvas_tools::ToolOutput, progress::Event};
 use base64::Engine as _;
+use reshiki_agent::tool_spec::ToolSpec;
 
 #[derive(Debug, Clone)]
 pub enum Progress {
@@ -41,6 +42,16 @@ impl From<Event> for Progress {
             Event::Preview(document) => Self::Preview(document),
         }
     }
+}
+/// The `dynamicTools` array of Codex `thread/start`, one function entry per
+/// spec in slice order. Title and hints have no Codex field.
+pub fn dynamic_tools(specs: &[ToolSpec]) -> Value {
+    Value::Array(
+        specs
+            .iter()
+            .map(|spec| json!({"type":"function","name":spec.name,"description":spec.description,"inputSchema":(spec.input_schema)()}))
+            .collect(),
+    )
 }
 /// Codex dynamic-tool content for a canvas tool result.
 #[doc(hidden)]
@@ -461,7 +472,7 @@ async fn generate(
             Some(prepare_source_image(server.directory.path(), image).await?)
         } else { None };
         let instructions = format!("{INSTRUCTIONS} {IMAGE_INSTRUCTIONS}");
-        let thread = server.request("thread/start", json!({"cwd":server.directory.path(),"sandbox":"read-only","approvalPolicy":"never","ephemeral":true,"developerInstructions":instructions,"config":{"mcp_servers":{}},"model":model_id,"dynamicTools":super::canvas_tools::definitions()})).await?;
+        let thread = server.request("thread/start", json!({"cwd":server.directory.path(),"sandbox":"read-only","approvalPolicy":"never","ephemeral":true,"developerInstructions":instructions,"config":{"mcp_servers":{}},"model":model_id,"dynamicTools":dynamic_tools(&super::canvas_tools::SPECS)})).await?;
         let id = thread.pointer("/thread/id").and_then(Value::as_str).ok_or("Missing Codex conversation")?.to_string();
         let turn = Turn { thread: &id, effort: &effort, tier: tier.as_deref(), progress: &progress, canvas: canvas.as_ref(), source: source.as_deref() };
         let mut outcome = if let Some(seed) = seed { seed } else {
