@@ -34,7 +34,9 @@ pub async fn run(args: Vec<OsString>) -> i32 {
 /// A write or flush error on `out` returns [`FAILURE`] after one best-effort
 /// line on `err`.
 pub async fn run_with(args: Vec<OsString>, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
-    let code = match command(&args, out, err).and_then(|code| out.flush().map(|()| code)) {
+    let result = command(&args, out, err);
+    let flushed = out.flush();
+    let code = match result.and_then(|code| flushed.map(|()| code)) {
         Ok(code) => code,
         Err(error) => {
             let _ = writeln!(err, "reshiki: could not write output: {error}");

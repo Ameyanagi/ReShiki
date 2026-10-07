@@ -78,9 +78,10 @@ async fn unknown_commands_point_to_help() {
     );
 }
 
-/// Fails every write when `on_write`, and every flush.
+/// Fails every write when `on_write`, and every flush, counting the flushes.
 struct Broken {
     on_write: bool,
+    flushes: usize,
 }
 
 impl Write for Broken {
@@ -93,6 +94,7 @@ impl Write for Broken {
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        self.flushes += 1;
         Err(io::Error::other("closed"))
     }
 }
@@ -101,10 +103,15 @@ impl Write for Broken {
 async fn output_write_and_flush_errors_fail_with_one_line() {
     for on_write in [true, false] {
         for name in ["help", "info"] {
+            let mut out = Broken {
+                on_write,
+                flushes: 0,
+            };
             let mut err = Vec::new();
             let args = vec![OsString::from(name)];
-            let code = run_with(args, &mut Broken { on_write }, &mut err).await;
+            let code = run_with(args, &mut out, &mut err).await;
             assert_eq!(code, FAILURE, "{name}, on_write {on_write}");
+            assert_eq!(out.flushes, 1, "{name}, on_write {on_write}");
             let err = String::from_utf8(err).unwrap();
             assert_eq!(err.lines().count(), 1, "{err}");
             assert!(err.starts_with("reshiki: could not write output:"), "{err}");

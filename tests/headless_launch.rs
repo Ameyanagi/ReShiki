@@ -72,6 +72,21 @@ fn a_later_headless_token_never_diverts_the_engine_check() {
     }
 }
 
+/// A process left holding the output pipes cannot outlast the watchdog.
+#[cfg(unix)]
+#[test]
+#[should_panic(expected = "did not exit and close its output")]
+fn the_watchdog_bounds_output_held_open_by_a_descendant() {
+    let child = std::process::Command::new("sh")
+        .args(["-c", "sleep 5 & exit 0"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start sh");
+    headless::wait_with_watchdog(child, Duration::from_millis(200));
+}
+
 #[cfg(windows)]
 #[test]
 fn a_later_cli_token_never_diverts_graphics_info() {
