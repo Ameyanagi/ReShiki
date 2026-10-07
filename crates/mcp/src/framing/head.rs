@@ -11,6 +11,10 @@ use std::{borrow::Cow, fmt, sync::Arc};
 pub(super) const PARSE_ERROR: i64 = -32700;
 pub(super) const INVALID_REQUEST: i64 = -32600;
 
+/// serde_json's recursion limit: a value with containers nested this deep
+/// fails to parse, so the server would reject it too.
+const MAX_DEPTH: usize = 128;
+
 /// What the reader does with one line.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Class {
@@ -79,11 +83,12 @@ pub(super) enum Ignored {
 
 /// Classifies a complete line, without its newline.
 pub(super) fn classify(line: &[u8], initialize_seen: bool) -> Class {
-    // One pass that stores nothing checks the syntax, and serde_json's
-    // recursion limit makes deep nesting a parse error.
+    // Neither check converts a number or decodes a string. The depth check
+    // runs first because serde_json skips an ignored value iteratively,
+    // without its recursion limit, keeping one byte per open container.
     let Some(text) = std::str::from_utf8(line)
         .ok()
-        .filter(|text| serde_json::from_str::<Skip>(text).is_ok())
+        .filter(|text| shallow(text) && serde_json::from_str::<IgnoredAny>(text).is_ok())
     else {
         return Class::Reply(Reply::parse_error());
     };
@@ -192,59 +197,28 @@ impl<'de> Deserialize<'de> for CancelParams {
     }
 }
 
-/// Any JSON value, skipped without being stored. Unlike [`IgnoredAny`],
-/// which serde_json skips iteratively, it walks containers through
-/// `deserialize_any`, so the recursion limit applies.
-struct Skip;
-
-impl<'de> Deserialize<'de> for Skip {
-    fn deserialize<D: Deserializer<'de>>(input: D) -> Result<Self, D::Error> {
-        input.deserialize_any(SkipVisitor)
+/// Whether every container of `text` nests less than [`MAX_DEPTH`] deep,
+/// counted over the bytes; brackets inside strings do not count. The answer
+/// matters only for valid JSON, since anything else is a parse error.
+fn shallow(text: &str) -> bool {
+    let (mut depth, mut in_string, mut escaped) = (0_usize, false, false);
+    for byte in text.bytes() {
+        match byte {
+            _ if escaped => escaped = false,
+            b'\\' if in_string => escaped = true,
+            b'"' => in_string = !in_string,
+            _ if in_string => {}
+            b'[' | b'{' => {
+                depth = depth.saturating_add(1);
+                if depth >= MAX_DEPTH {
+                    return false;
+                }
+            }
+            b']' | b'}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
     }
-}
-
-struct SkipVisitor;
-
-impl<'de> Visitor<'de> for SkipVisitor {
-    type Value = Skip;
-
-    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("any JSON value")
-    }
-
-    fn visit_bool<E>(self, _: bool) -> Result<Skip, E> {
-        Ok(Skip)
-    }
-
-    fn visit_i64<E>(self, _: i64) -> Result<Skip, E> {
-        Ok(Skip)
-    }
-
-    fn visit_u64<E>(self, _: u64) -> Result<Skip, E> {
-        Ok(Skip)
-    }
-
-    fn visit_f64<E>(self, _: f64) -> Result<Skip, E> {
-        Ok(Skip)
-    }
-
-    fn visit_str<E>(self, _: &str) -> Result<Skip, E> {
-        Ok(Skip)
-    }
-
-    fn visit_unit<E>(self) -> Result<Skip, E> {
-        Ok(Skip)
-    }
-
-    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Skip, A::Error> {
-        while seq.next_element::<Skip>()?.is_some() {}
-        Ok(Skip)
-    }
-
-    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Skip, A::Error> {
-        while map.next_entry::<Skip, Skip>()?.is_some() {}
-        Ok(Skip)
-    }
+    true
 }
 
 /// A JSON value reduced to what an id, method or version needs. Strings and

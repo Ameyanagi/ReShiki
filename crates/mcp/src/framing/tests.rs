@@ -100,6 +100,25 @@ fn classify_follows_the_framing_table() {
             format!(r#"  {{"method":"m","params":"{pad}","id":3,"jsonrpc":"2.0"}}"#),
             request(Key::Int(3)),
         ),
+        // Params scalars are skipped without conversion or decoding: a
+        // number outside f64 and a lone surrogate escape, which converting
+        // or decoding rejects, and brackets inside strings do not nest.
+        (
+            r#"{"jsonrpc":"2.0","id":7,"method":"m","params":{"x":1e400}}"#.into(),
+            request(Key::Int(7)),
+        ),
+        (
+            r#"{"jsonrpc":"2.0","id":7,"method":"m","params":{"\ud800":"\udc00\ud800"}}"#.into(),
+            request(Key::Int(7)),
+        ),
+        (
+            format!(
+                r#"{{"jsonrpc":"2.0","id":7,"method":"m","params":["\"\\{}\\","{}"]}}"#,
+                "[".repeat(200),
+                "{".repeat(200)
+            ),
+            request(Key::Int(7)),
+        ),
         (
             r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#.into(),
             Class::Request {
@@ -167,6 +186,19 @@ fn classify_follows_the_framing_table() {
     let initialized = br#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
     assert_eq!(classify(initialized, false), NOTIFICATION);
     assert_eq!(classify(initialized, true), Class::Initialized);
+}
+
+#[test]
+fn nesting_fails_exactly_where_serde_json_fails() {
+    for depth in 120..=136 {
+        let nested = format!("{}{}", "[".repeat(depth), "]".repeat(depth));
+        let line = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"m","params":{nested}}}"#);
+        let expected = match serde_json::from_str::<Value>(&line) {
+            Ok(_) => request(Key::Int(1)),
+            Err(_) => parse_error(),
+        };
+        assert_eq!(classify(line.as_bytes(), false), expected, "depth {depth}");
+    }
 }
 
 #[test]
