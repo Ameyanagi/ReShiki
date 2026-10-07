@@ -1,18 +1,24 @@
 //! End-to-end scenarios for HeadlessHost, driven through `ToolHost::call`
 //! only, as a transport drives it. This file does not declare `mod support;`:
 //! it needs none of those helpers, and unused ones would fail -D warnings.
-use reshiki_agent::ops::{
-    budget::Budgets,
-    error::ErrorKind,
-    headless::HeadlessHost,
-    host::{Call, ToolHost},
-    result::ToolResult,
-    wire::{Principal, RequestId},
+use reshiki_agent::{
+    access::Grants,
+    ops::{
+        budget::Budgets,
+        error::ErrorKind,
+        headless::HeadlessHost,
+        host::{Call, ToolHost},
+        result::ToolResult,
+        wire::{Principal, RequestId},
+    },
 };
 use serde_json::{Value, json};
 use std::{
     collections::HashSet,
-    sync::atomic::{AtomicI64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicI64, Ordering},
+    },
 };
 
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
@@ -318,4 +324,103 @@ async fn a_17_mib_import_is_refused_as_over_budget() {
     assert!(message.contains("max_text_bytes"), "{message}");
     let listed = ok(&host, "document_list", json!({})).await;
     assert_eq!(listed.value["documents"], json!([]));
+}
+
+// The test builds its folders with std::fs and tempfile, outside every grant.
+#[allow(clippy::disallowed_methods, clippy::disallowed_types)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn files_open_and_save_only_inside_granted_folders() {
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().to_path_buf();
+    let path = |name: &str| folder.join(name).to_str().unwrap().to_owned();
+    let granted = Grants::open(std::slice::from_ref(&folder), std::slice::from_ref(&folder));
+    let host = host().with_grants(Arc::new(granted.unwrap()));
+    let info = ok(&host, "info", json!({})).await;
+    let spelled = folder.to_str().unwrap();
+    assert_eq!(
+        info.value["grants"],
+        json!({"read": [spelled], "write": [spelled]})
+    );
+    assert!(
+        info.value["files"]["write"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("rsk"))
+    );
+
+    let imported = ok(&host, "import", json!({"format": "smiles", "text": "CCO"})).await;
+    let document = handle(&imported);
+    let save = |overwrite: bool| json!({"document": document, "path": path("ethanol.mol"), "format": null, "overwrite": overwrite, "pages": null});
+    let saved = ok(&host, "file_save", save(false)).await;
+    assert!(saved.files.is_empty());
+    let bytes = std::fs::read(folder.join("ethanol.mol")).unwrap();
+    assert!(String::from_utf8_lossy(&bytes).contains("M  END"));
+    assert_eq!(
+        saved.value["value"]["receipt"],
+        json!({"path": path("ethanol.mol"), "format": "mol", "byte_len": bytes.len(), "replaced": false, "detail": null})
+    );
+
+    let opened = ok(
+        &host,
+        "file_open",
+        json!({"path": path("ethanol.mol"), "format": "auto"}),
+    )
+    .await;
+    assert_eq!(
+        opened.value["value"]["counts"],
+        imported.value["value"]["counts"]
+    );
+    assert_eq!(
+        opened.value["value"]["source"],
+        json!({"path": path("ethanol.mol"), "bytes": bytes.len()})
+    );
+    assert_ne!(handle(&opened), document);
+
+    assert_eq!(error_code(&host, "file_save", save(false)).await, "failed");
+    let replaced = ok(&host, "file_save", save(true)).await;
+    assert_eq!(replaced.value["value"]["receipt"]["replaced"], true);
+
+    let other = tempfile::tempdir().unwrap();
+    let outside = other.path().join("ethanol.mol");
+    std::fs::write(&outside, &bytes).unwrap();
+    let outside = outside.to_str().unwrap();
+    assert_eq!(
+        error_code(
+            &host,
+            "file_open",
+            json!({"path": outside, "format": "auto"})
+        )
+        .await,
+        "access_denied"
+    );
+    let ungranted = HeadlessHost::new("9.8.7", Budgets::default());
+    let ungranted_document = handle(
+        &ok(
+            &ungranted,
+            "import",
+            json!({"format": "smiles", "text": "C"}),
+        )
+        .await,
+    );
+    for (tool, arguments) in [
+        (
+            "file_open",
+            json!({"path": path("ethanol.mol"), "format": "auto"}),
+        ),
+        (
+            "file_save",
+            json!({"document": ungranted_document, "path": path("methane.svg"), "format": null, "overwrite": true, "pages": null}),
+        ),
+    ] {
+        assert_eq!(
+            error_code(&ungranted, tool, arguments).await,
+            "access_denied",
+            "{tool}"
+        );
+    }
+    let names: Vec<_> = std::fs::read_dir(&folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["ethanol.mol"]);
 }

@@ -1,5 +1,5 @@
 //! Operation errors and their stable wire codes.
-use crate::transaction::Rejection;
+use crate::{access::AccessError, transaction::Rejection};
 use std::fmt;
 
 /// Why an operation failed.
@@ -21,6 +21,9 @@ pub enum ErrorKind {
     Timeout,
     Rejected,
     Unsupported,
+    /// A file request outside the granted folders or extensions, or one the
+    /// operating system denied.
+    Access,
     Failed,
     /// The caller cancelled the request; no response is sent.
     Cancelled,
@@ -40,6 +43,7 @@ impl ErrorKind {
             Self::Timeout => "timeout",
             Self::Rejected => "rejected",
             Self::Unsupported => "unsupported",
+            Self::Access => "access_denied",
             Self::Failed => "failed",
             Self::Cancelled => "cancelled",
         }
@@ -87,5 +91,41 @@ impl std::error::Error for OpError {}
 impl From<Rejection> for OpError {
     fn from(rejection: Rejection) -> Self {
         Self::new(ErrorKind::Rejected, rejection.message())
+    }
+}
+
+/// Appended to `path_not_granted`: only the user can grant a folder.
+const GRANT_HINT: &str = ". Folders are granted by the user when the server starts, with --allow-read and --allow-write or in agent-access.json in ReShiki's data folder; info lists them.";
+
+/// The message is `"{access code}: {message}"`, so clients and tests can
+/// read the specific reason under the operation code; `path_not_granted`
+/// adds how folders are granted.
+///
+/// - `path_invalid` is [`ErrorKind::InvalidArguments`];
+/// - `extension_not_allowed`, `path_not_granted`, `path_escapes_root` and
+///   `os_denied` are [`ErrorKind::Access`];
+/// - `file_too_large` is [`ErrorKind::Budget`];
+/// - `file_exists`, `file_not_found`, `not_a_regular_file`,
+///   `no_clobber_unsupported` and `io_error` are [`ErrorKind::Failed`].
+impl From<AccessError> for OpError {
+    fn from(error: AccessError) -> Self {
+        let kind = match error {
+            AccessError::PathInvalid { .. } => ErrorKind::InvalidArguments,
+            AccessError::ExtensionNotAllowed { .. }
+            | AccessError::PathNotGranted { .. }
+            | AccessError::PathEscapesRoot { .. }
+            | AccessError::OsDenied { .. } => ErrorKind::Access,
+            AccessError::FileTooLarge { .. } => ErrorKind::Budget,
+            AccessError::FileExists { .. }
+            | AccessError::FileNotFound { .. }
+            | AccessError::NotARegularFile { .. }
+            | AccessError::NoClobberUnsupported { .. }
+            | AccessError::Io { .. } => ErrorKind::Failed,
+        };
+        let hint = match error {
+            AccessError::PathNotGranted { .. } => GRANT_HINT,
+            _ => "",
+        };
+        Self::new(kind, format!("{}: {error}{hint}", error.code()))
     }
 }

@@ -57,6 +57,8 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
             "analyze",
             "render",
             "export",
+            "file_open",
+            "file_save",
             "compose",
             "apply"
         ]
@@ -79,6 +81,8 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
         hints(true, false, true),
         hints(true, false, true),
         hints(true, false, true),
+        hints(false, false, false),
+        hints(false, true, false),
         hints(false, false, false),
         hints(false, true, false),
     ];

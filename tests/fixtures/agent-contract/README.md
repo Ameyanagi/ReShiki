@@ -58,6 +58,7 @@ adds an entry there and a cases file here.
 - `ops-documents-cases.json` (info, document_new, document_list and
   document_close), `ops-import-cases.json`, `ops-inspect-cases.json`,
   `ops-analyze-cases.json`, `ops-render-cases.json`, `ops-export-cases.json`,
+  `ops-files-cases.json` (file_open and file_save),
   `ops-compose-cases.json` and `ops-apply-cases.json`: each operation tool's
   inputSchema against `reshiki_agent::ops::catalog::decode_check`, the decoder
   the tool host runs, on `{"tool": name, "arguments": {...}}` values.

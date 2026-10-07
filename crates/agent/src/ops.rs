@@ -50,6 +50,7 @@ pub mod documents;
 pub mod error;
 pub mod exec;
 pub mod export;
+pub mod files;
 pub mod headless;
 pub mod host;
 mod ids;

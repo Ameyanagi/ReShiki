@@ -10,6 +10,10 @@ use super::{
     wire::{DocHandle, Principal, handle_schema, versions_json},
 };
 use crate::{
+    access::{
+        Grants,
+        extensions::{READ, WRITE},
+    },
     document::Document,
     envelope::{OPERATION_API_VERSION, Versions},
     tool_spec::{Hints, ToolSpec},
@@ -128,8 +132,12 @@ fn ok<const N: usize>(fields: [(&str, Value); N], versions: &Versions) -> ToolRe
     }
 }
 
-/// `{operation_api, versions, budgets, formats: {import, export}}`.
-pub(crate) fn info(versions: &Versions, budgets: &Budgets) -> ToolResult {
+/// `{operation_api, versions, budgets, formats: {import, export}, grants:
+/// {read, write}, files: {read, write}}`: `grants` are the granted folders as
+/// the user spelled them, `files` the extensions file_open and file_save
+/// accept.
+pub(crate) fn info(versions: &Versions, budgets: &Budgets, grants: &Grants) -> ToolResult {
+    let granted = grants.summary();
     ok(
         [
             ("operation_api", json!(OPERATION_API_VERSION)),
@@ -138,6 +146,11 @@ pub(crate) fn info(versions: &Versions, budgets: &Budgets) -> ToolResult {
                 "formats",
                 json!({"import": IMPORT_FORMATS, "export": EXPORT_FORMATS}),
             ),
+            (
+                "grants",
+                json!({"read": granted.read, "write": granted.write}),
+            ),
+            ("files", json!({"read": *READ, "write": *WRITE})),
         ],
         versions,
     )

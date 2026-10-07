@@ -34,7 +34,7 @@ FS_FUNCTIONS = (
 REQUIRED_METHODS = frozenset(
     [f"std::fs::{name}" for name in (*FS_FUNCTIONS, "exists")]
     + [f"tokio::fs::{name}" for name in (*FS_FUNCTIONS, "try_exists")]
-    + ["cap_std::ambient_authority"]
+    + ["cap_std::ambient_authority", "reshiki_model::storage::write_atomic"]
 )
 REQUIRED_TYPES = frozenset(
     ["std::fs::File", "std::fs::OpenOptions", "tokio::fs::File", "tokio::fs::OpenOptions"]
@@ -48,11 +48,13 @@ TOKENS = (
     "OpenOptions",
     "NamedTempFile",
     "ambient_authority",
-    "write_atomic",
     "data_directory(",
     "reqwest",
 )
 UPDATES = re.compile(r"updates::(?!CURRENT_VERSION\b)")
+# ReShiki's ambient write helper, as a free function or by path; the grants'
+# own `.write_atomic(` method is the way to write.
+WRITE_ATOMIC = re.compile(r"(?<![.\w])write_atomic\b")
 
 
 def fenced_crates() -> list[Path]:
@@ -103,6 +105,7 @@ def violations(text: str) -> list[str]:
     for number, line in enumerate(text.splitlines(), start=1):
         found += [f"{number}: {token}" for token in TOKENS if token in line]
         found += [f"{number}: {match.group(0)}" for match in UPDATES.finditer(line)]
+        found += [f"{number}: {match.group(0)}" for match in WRITE_ATOMIC.finditer(line)]
     return found
 
 
@@ -139,6 +142,23 @@ class SourceFenceTests(unittest.TestCase):
         )
         self.assertEqual(violations("use crate::updates::check;"), ["1: updates::"])
         self.assertEqual(violations("let v = updates::CURRENT_VERSION;"), [])
+
+    def test_the_scanner_flags_write_atomic_only_as_a_free_function_or_path(self):
+        for line in (
+            "reshiki_model::storage::write_atomic(&path, &bytes)?;",
+            "use reshiki::storage::write_atomic;",
+            "write_atomic(&path, &bytes)?;",
+            "let save = storage::write_atomic;",
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(violations(line), ["1: write_atomic"])
+        for line in (
+            "grants.write_atomic(&path, &bytes, mode, &WRITE)?;",
+            "self.grants\n    .write_atomic(&path, &bytes, mode, &WRITE)",
+            "let n = write_atomically;",
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(violations(line), [])
 
     def test_test_files_and_the_access_module_are_not_scanned(self):
         sources = scanned_sources()

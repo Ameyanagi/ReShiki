@@ -6,7 +6,7 @@ use super::{
     compose, documents,
     error::{ErrorKind, OpError},
     exec::{Context, Executor},
-    export,
+    export, files,
     host::{Call, ToolHost},
     import, inspect, render,
     result::ToolResult,
@@ -14,7 +14,7 @@ use super::{
     store::Documents,
     wire::{Principal, RequestId},
 };
-use crate::{engine::LocalEngine, envelope::Versions, tool_spec::ToolSpec};
+use crate::{access::Grants, engine::LocalEngine, envelope::Versions, tool_spec::ToolSpec};
 use std::sync::Arc;
 
 /// Serves the [`catalog`] tools over a [`SessionStore`], running every call
@@ -25,11 +25,13 @@ pub struct HeadlessHost {
     engine: LocalEngine,
     budgets: Budgets,
     versions: Versions,
+    grants: Arc<Grants>,
 }
 
 impl HeadlessHost {
     /// A host whose results report `app_version`; the app passes
-    /// `reshiki::updates::CURRENT_VERSION`.
+    /// `reshiki::updates::CURRENT_VERSION`. It starts with
+    /// [`Grants::none`], so file_open and file_save refuse every path.
     pub fn new(app_version: &'static str, budgets: Budgets) -> Self {
         Self {
             exec: Executor::new(budgets.clone()),
@@ -37,7 +39,13 @@ impl HeadlessHost {
             engine: LocalEngine::default(),
             budgets,
             versions: Versions::current(app_version),
+            grants: Arc::new(Grants::none()),
         }
+    }
+
+    /// The folders file_open and file_save may use, opened once at startup.
+    pub fn with_grants(self, grants: Arc<Grants>) -> Self {
+        Self { grants, ..self }
     }
 
     #[cfg(test)]
@@ -54,6 +62,7 @@ impl HeadlessHost {
 }
 
 /// Runs one decoded call on the executor.
+#[allow(clippy::too_many_arguments)]
 async fn run(
     op: Op,
     ctx: Context,
@@ -62,12 +71,13 @@ async fn run(
     engine: LocalEngine,
     versions: Versions,
     budgets: Budgets,
+    grants: Arc<Grants>,
 ) -> Result<ToolResult, OpError> {
     match op {
         // The other tools check through `blocking` or `effect`.
         Op::Info => ctx
             .checkpoint()
-            .map(|()| documents::info(&versions, &budgets)),
+            .map(|()| documents::info(&versions, &budgets, &grants)),
         Op::DocumentNew => documents::document_new(ctx, store, who, versions).await,
         Op::DocumentList => documents::document_list(ctx, store, who, versions).await,
         Op::DocumentClose(args) => documents::document_close(ctx, store, who, versions, args).await,
@@ -76,6 +86,12 @@ async fn run(
         Op::Analyze(args) => analyze::analyze(ctx, store, engine, who, versions, args).await,
         Op::Render(args) => render::render(ctx, store, who, versions, budgets, args).await,
         Op::Export(args) => export::export(ctx, store, engine, who, versions, budgets, args).await,
+        Op::FileOpen(args) => {
+            files::file_open(ctx, store, engine, grants, who, versions, budgets, args).await
+        }
+        Op::FileSave(args) => {
+            files::file_save(ctx, store, engine, grants, who, versions, budgets, args).await
+        }
         Op::Compose(args) => {
             compose::compose(ctx, store, engine, who, versions, budgets, *args).await
         }
@@ -114,10 +130,11 @@ impl ToolHost for HeadlessHost {
         let engine = self.engine.clone();
         let versions = self.versions.clone();
         let budgets = self.budgets.clone();
+        let grants = Arc::clone(&self.grants);
         let outcome = self
             .exec
             .run(principal, request, progress, move |ctx| {
-                run(op, ctx, who, store, engine, versions, budgets)
+                run(op, ctx, who, store, engine, versions, budgets, grants)
             })
             .await;
         match outcome {

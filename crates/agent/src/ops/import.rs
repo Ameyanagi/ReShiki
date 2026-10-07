@@ -65,7 +65,7 @@ pub(crate) enum Format {
 impl Format {
     /// The name in [`IMPORT_FORMATS`], which is also the engine's format name
     /// for every format but `auto` and `reshiki`.
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Auto => "auto",
             Self::Smiles => "smiles",
@@ -84,8 +84,8 @@ impl Format {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Import {
-    format: Format,
-    text: String,
+    pub(crate) format: Format,
+    pub(crate) text: String,
 }
 
 /// Decodes the arguments and checks the text budget before any parse or
@@ -189,6 +189,16 @@ struct Imported {
     revision: Revision,
     counts: Counts,
     analysis: Option<AnalysisJson>,
+    /// Only for a document opened from a file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<Source>,
+}
+
+/// The file a document was opened from: the requested path and its size.
+#[derive(Debug, Serialize)]
+pub(crate) struct Source {
+    pub(crate) path: String,
+    pub(crate) bytes: usize,
 }
 
 /// Finalizes an engine import's drawing exactly as `App::structure_replaced`
@@ -295,23 +305,37 @@ pub(crate) fn rejected(
     }
 }
 
-/// Imports into a new session document.
-///
-/// `reshiki` text opens as the app opens a native file; every other format
-/// goes to the engine, and its drawing is [`finalize`]d. The store's create is
-/// the effect. It is not idempotent: a cancel that arrives after it leaves a
-/// listed document the caller can close.
+/// Imports into a new session document, through [`import_document`].
 ///
 /// `{value: {document, revision, counts: {atoms, bonds, arrows, annotations,
 /// graphics}, analysis}, warnings, validation, versions}`; `analysis` is
 /// `null` when the engine returned none.
 pub(crate) async fn import(
+    ctx: Context,
+    store: Arc<dyn Documents>,
+    engine: LocalEngine,
+    who: Principal,
+    versions: Versions,
+    import: Import,
+) -> Result<ToolResult, OpError> {
+    import_document(ctx, store, engine, who, versions, import, None).await
+}
+
+/// Reads `import` into a new session document; `source`, when given, joins
+/// the result's value.
+///
+/// `reshiki` text opens as the app opens a native file; every other format
+/// goes to the engine, and its drawing is [`finalize`]d. The store's create is
+/// the effect. It is not idempotent: a cancel that arrives after it leaves a
+/// listed document the caller can close.
+pub(crate) async fn import_document(
     mut ctx: Context,
     store: Arc<dyn Documents>,
     engine: LocalEngine,
     who: Principal,
     versions: Versions,
     import: Import,
+    source: Option<Source>,
 ) -> Result<ToolResult, OpError> {
     let Read {
         doc,
@@ -330,6 +354,7 @@ pub(crate) async fn import(
             revision: created.revision,
             counts,
             analysis: analysis.map(AnalysisJson::from),
+            source,
         },
         warnings: warnings(messages),
         validation: ValidationStatus::Valid,

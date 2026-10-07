@@ -3824,6 +3824,7 @@ name = "reshiki-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "cap-std",
  "libc",
  "reshiki-io",

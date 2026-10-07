@@ -16,6 +16,9 @@
 //!   prefix, and the remainder is resolved relative to that root's handle.
 //!   cap-std rejects `..`, absolute paths and symlinks that leave the root
 //!   during that resolution (<https://github.com/bytecodealliance/cap-std>).
+//! - Every request names the extensions it accepts; the file tools take
+//!   theirs from [`extensions::FILE_FORMATS`], one table of each extension's
+//!   import and export format.
 //! - Writes go to a temporary file beside the destination. A new file is
 //!   published with a no-clobber hard link; a replacement with a rename. The
 //!   destination name is never removed, truncated or renamed on a failure
@@ -65,6 +68,7 @@
 use std::{fmt, io};
 
 mod config;
+pub mod extensions;
 mod narrow;
 mod path;
 mod protected;

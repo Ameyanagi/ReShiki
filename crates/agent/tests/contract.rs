@@ -166,6 +166,21 @@ fn ops_export_schema_and_decoder_parity() {
     }
 }
 
+const FILES: Contract = Contract {
+    name: "ops-files",
+    schema: || tools_schema(&["file_open", "file_save"]),
+    decode: decode_tool_call,
+    cases: "ops-files-cases.json",
+};
+
+#[test]
+fn ops_files_schema_and_decoder_parity() {
+    match corpus::check(&FILES) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}
+
 const COMPOSE: Contract = Contract {
     name: "ops-compose",
     schema: || tools_schema(&["compose"]),
