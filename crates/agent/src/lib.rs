@@ -26,6 +26,7 @@ use reshiki_io::exchange;
 use reshiki_io::{chemistry, engine, export};
 use reshiki_model::*;
 
+pub mod access;
 mod branching;
 pub mod canvas_tools;
 pub mod composition;
