@@ -242,7 +242,13 @@ fn loose_objects(
         return;
     };
     let properties = schema.get("properties").and_then(Value::as_object);
-    if schema.get("type") == Some(&json!("object")) || properties.is_some() {
+    // `type` may be one name or, as the keyword allowlist permits, an array.
+    let object_type = schema.get("type").is_some_and(|t| {
+        t == "object"
+            || t.as_array()
+                .is_some_and(|types| types.iter().any(|t| t == "object"))
+    });
+    if object_type || properties.is_some() {
         let listed: BTreeSet<&str> = properties
             .into_iter()
             .flat_map(|properties| properties.keys().map(String::as_str))
@@ -274,6 +280,38 @@ fn loose_objects(
     for (i, branch) in branches.into_iter().flatten().enumerate() {
         loose_objects(branch, &format!("{at}/anyOf/{i}"), skip, loose, skipped);
     }
+}
+
+/// `loose_objects` finds object levels by a `type` name, a `type` array or
+/// `properties`, through properties, items and anyOf, and skips `skip`.
+#[test]
+fn loose_objects_finds_every_non_strict_object_level() {
+    let strict =
+        json!({"type": "object", "properties": {}, "required": [], "additionalProperties": false});
+    let schema = json!({
+        "type": "object",
+        "properties": {
+            "nullable": {"type": ["object", "null"]},
+            "untyped": {"properties": {"a": {"type": "string"}}, "additionalProperties": false},
+            "list": {"type": "array", "items": {"anyOf": [{"type": "null"}, {"type": "object"}]}},
+            "strict": {"type": ["null", "object"], "properties": {"a": {"type": "string"}}, "required": ["a"], "additionalProperties": false},
+            "verbatim": strict.clone(),
+        },
+        "required": ["nullable", "untyped", "list", "strict", "verbatim"],
+        "additionalProperties": false,
+    });
+    let (mut loose, mut skipped) = (Vec::new(), Vec::new());
+    loose_objects(&schema, "", &strict, &mut loose, &mut skipped);
+    loose.sort();
+    assert_eq!(
+        loose,
+        [
+            "/properties/list/items/anyOf/1",
+            "/properties/nullable",
+            "/properties/untyped",
+        ]
+    );
+    assert_eq!(skipped, ["/properties/verbatim"]);
 }
 
 /// The catalog against the tool rules of both supported MCP revisions,
