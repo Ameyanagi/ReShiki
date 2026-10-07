@@ -1081,6 +1081,23 @@ fn projection_canonicalizes_the_existing_part_and_appends_the_rest() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn projection_follows_a_symlink_reached_through_dotdot_after_an_absent_folder() {
+    let (_dir, base) = sandbox();
+    let outside = folder(&base, "outside");
+    let inner = folder(&base, "inner");
+    std::os::unix::fs::symlink(&outside, inner.join("alias")).unwrap();
+    // Once the app creates `missing`, `..` leads back to `inner` and
+    // `alias` leads outside, so the data lands in `outside`.
+    let data = inner.join("missing").join("..").join("alias").join("data");
+    let protected = Protected::new(vec![data.clone()], None, None).unwrap();
+    assert_eq!(protected.paths, [outside.join("data")]);
+    assert_refused(&protected, &outside, GrantError::Protected(outside.clone()));
+    fs::create_dir_all(&data).unwrap();
+    assert!(outside.join("data").is_dir());
+}
+
 #[test]
 fn the_system_root_and_everything_inside_it_are_protected() {
     let (_dir, base) = sandbox();

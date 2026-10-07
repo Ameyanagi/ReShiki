@@ -115,15 +115,14 @@ impl Protected {
 }
 
 /// The canonical form of `path`, whether it exists or not: its longest
-/// existing ancestor canonicalized, then the missing components appended
-/// lexically. Windows paths get [`Root::open`]'s plain drive spelling.
+/// existing ancestor canonicalized, then the missing components followed as
+/// creating the folders would: `..` returns to the parent, and a folder that
+/// exists again past it is canonicalized, absent ones appended. Windows
+/// paths get [`Root::open`]'s plain drive spelling.
 ///
 /// Only absence (not found, or under a file) moves on to a shorter
 /// ancestor. Any other failure, such as a folder without search permission,
 /// may hide an existing symlink whose target is unknown, so it is an error.
-// Protected locations lie outside every grant by definition, so they are
-// resolved with ambient authority; nothing is opened or created.
-#[allow(clippy::disallowed_methods)]
 pub(super) fn project(path: &Path) -> Result<PathBuf, GrantError> {
     let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
     let components: Vec<Component<'_>> = absolute.components().collect();
@@ -132,38 +131,52 @@ pub(super) fn project(path: &Path) -> Result<PathBuf, GrantError> {
             continue;
         };
         let known: PathBuf = known.iter().collect();
-        let canonical = match std::fs::canonicalize(&known) {
-            Ok(canonical) => canonical,
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
-                ) =>
-            {
-                continue;
-            }
-            Err(error) => {
-                return Err(GrantError::Config(format!(
-                    "cannot resolve the protected location {}: {error}",
-                    path.display()
-                )));
-            }
+        let Some(mut projected) = resolve(&known, path)? else {
+            continue;
         };
-        // A network or device location stays as the operating system spells
-        // it; no grantable root can match it either way.
-        let mut projected = normalize(canonical.clone()).unwrap_or(canonical);
         for part in missing {
             match part {
+                // `projected` is canonical, or will be a real folder once
+                // created, so its parent is lexical.
                 Component::ParentDir => {
                     projected.pop();
                 }
-                Component::Normal(name) => projected.push(name),
+                // After `..` the name may exist, even as a symlink.
+                Component::Normal(name) => {
+                    let next = projected.join(name);
+                    projected = resolve(&next, path)?.unwrap_or(next);
+                }
                 Component::CurDir | Component::RootDir | Component::Prefix(_) => {}
             }
         }
         return Ok(projected);
     }
     Ok(absolute)
+}
+
+/// `path` canonicalized in [`Root::open`]'s spelling, or `None` when it is
+/// absent. Errors name the protected `location` being projected.
+// Protected locations lie outside every grant by definition, so they are
+// resolved with ambient authority; nothing is opened or created.
+#[allow(clippy::disallowed_methods)]
+fn resolve(path: &Path, location: &Path) -> Result<Option<PathBuf>, GrantError> {
+    match std::fs::canonicalize(path) {
+        // A network or device location stays as the operating system spells
+        // it; no grantable root can match it either way.
+        Ok(canonical) => Ok(Some(normalize(canonical.clone()).unwrap_or(canonical))),
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(GrantError::Config(format!(
+            "cannot resolve the protected location {}: {error}",
+            location.display()
+        ))),
+    }
 }
 
 /// The `.app` bundle around a macOS executable folder `X.app/Contents/MacOS`.
