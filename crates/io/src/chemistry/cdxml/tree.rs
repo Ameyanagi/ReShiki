@@ -120,6 +120,10 @@ impl Tree {
             .set(self.work.get().checked_sub(amount).ok_or(Error::Limit)?);
         Ok(())
     }
+    #[cfg(test)]
+    pub(super) fn remaining_work(&self) -> usize {
+        self.work.get()
+    }
     pub fn node(&self, index: usize) -> Result<&Element> {
         self.spend(1)?;
         self.elements

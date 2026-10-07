@@ -4,6 +4,9 @@ use super::{Error, Result, tree::Tree};
 use serde::Serialize;
 use std::{borrow::Cow, collections::HashMap};
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Abbreviation {
     pub label: String,
