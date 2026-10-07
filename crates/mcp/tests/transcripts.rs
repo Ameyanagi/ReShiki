@@ -341,3 +341,35 @@ fn a_blocked_writer_cannot_hold_the_bootstrap_past_the_grace() {
     assert!(finished.writer.wait(LINE_TIMEOUT));
     assert_eq!(session.rest().len(), 17);
 }
+
+/// Once the lifecycle started, rmcp's own drain gives up 5 s after EOF,
+/// before [`EOF_GRACE`] runs out, and abandons a response it could not
+/// queue: the writer still finishes, with that request outstanding. The
+/// blocked writer and the outbound queue hold seventeen -32700 replies, so
+/// the tools/list that starts the lifecycle is never answered.
+#[test]
+fn a_blocked_writer_after_startup_leaves_the_abandoned_request_outstanding() {
+    let (open, gate) = mpsc::channel();
+    let mut session = Session::with_gate(Some(gate));
+    for _ in 0..17 {
+        session.send("garbage");
+    }
+    session.send(&format!(
+        r#"{{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{{{MODERN_META}}}}}"#
+    ));
+    let (finished, elapsed) = session.close();
+    assert_eq!(finished.reason, Quit::Eof);
+    // rmcp's drain ended the service, not the grace.
+    assert!(elapsed > Duration::from_secs(4), "{elapsed:?}");
+    assert!(elapsed < EOF_GRACE, "{elapsed:?}");
+    drop(open);
+    assert!(finished.writer.wait(LINE_TIMEOUT));
+    assert_eq!(finished.tracker.outstanding(), 1);
+    let rest = session.rest();
+    assert_eq!(rest.len(), 17);
+    for line in &rest {
+        let reply: Value = serde_json::from_str(line).unwrap();
+        assert_eq!(reply["error"]["code"], -32700, "{line}");
+        assert!(reply.get("id").is_none(), "{line}");
+    }
+}

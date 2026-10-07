@@ -87,8 +87,10 @@ pub struct Finished {
     /// Signalled once everything queued was written.
     pub writer: WriterDone,
     /// The connection's admission tracker; nothing is outstanding once the
-    /// writer finished, unless [`EOF_GRACE`] ran out before a response was
-    /// sent.
+    /// writer finished, unless a response was abandoned before it was
+    /// queued: rmcp stops draining 5 s after its input closes, and
+    /// [`EOF_GRACE`] bounds the whole wait. Either can happen while the
+    /// output is blocked.
     pub tracker: Arc<Tracker>,
 }
 
