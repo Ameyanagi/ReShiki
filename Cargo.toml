@@ -29,10 +29,18 @@ members = [
   "crates/chemistry",
   "crates/depict-math",
   "crates/io",
+  "crates/mcp",
   "crates/model",
   "crates/process-heap",
 ]
-default-members = [".", "crates/agent", "crates/chemistry", "crates/io", "crates/model"]
+default-members = [
+  ".",
+  "crates/agent",
+  "crates/chemistry",
+  "crates/io",
+  "crates/mcp",
+  "crates/model",
+]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 reshiki-macos = { path = "native/macos" }
