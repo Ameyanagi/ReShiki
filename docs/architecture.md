@@ -53,7 +53,7 @@ The library is split into workspace crates. Each crate depends only on the crate
 | `src/app/view_settings.rs`                                  | Window, camera and view-aid preferences                                        |
 | `src/app/engine_jobs.rs`                                    | Chemistry engine requests and the handling of their results                    |
 | `src/app/workspace.rs`                                      | Command bar, context row, compact palette, inspector and status bar            |
-| `src/app/icons.rs`                                          | Original vector tool and command icons                                         |
+| `src/app/icons.rs`, `src/app/icons/`                        | Original vector tool and command icons; one submodule per icon family          |
 | `crates/io/src/engine.rs`                                   | Chemistry interface, native routing and response validation                    |
 | `crates/chemistry/src/`                                     | Molecule preparation, bounded graph, properties and stereo calculations        |
 | `crates/model/src/chemistry/`                               | Drawing-to-molecule preparation and abbreviation detection and replacement     |

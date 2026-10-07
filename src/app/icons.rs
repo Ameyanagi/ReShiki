@@ -1,8 +1,11 @@
 use crate::canvas::Tool;
 use iced::widget::canvas::{self, Geometry, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
+mod arrows;
+mod bonds;
 mod chrome;
 mod commands;
+mod rings;
 mod tools;
 
 #[derive(Clone, Copy)]
@@ -68,194 +71,16 @@ impl Glyph {
             Icon::Tool(Tool::Select) => tools::select(f, ink),
             Icon::Tool(Tool::Lasso) => tools::lasso(f, ink),
             Icon::Tool(Tool::Tilt) => tools::tilt(f, ink),
-            Icon::Tool(Tool::Bond(order)) => {
-                let offsets: &[f32] = match order {
-                    2 => &[-2., 2.],
-                    3 => &[-4., 0., 4.],
-                    _ => &[0.],
-                };
-                for dy in offsets {
-                    line(f, ink, &[(4., 18. + dy), (20., 6. + dy)]);
-                }
-            }
-            Icon::Tool(Tool::StyledBond(preset)) => {
-                use reshiki::bonds::BondPreset as P;
-                match preset {
-                    P::Dative => {
-                        line(f, ink, &[(3., 19.), (20., 5.), (13., 6.)]);
-                        line(f, ink, &[(20., 5.), (18., 12.)]);
-                    }
-                    P::Quadruple => {
-                        for dy in [-4.5, -1.5, 1.5, 4.5] {
-                            line(f, ink, &[(4., 17. + dy), (20., 7. + dy)]);
-                        }
-                    }
-                    P::HollowWedge => line(f, ink, &[(4., 19.), (17., 3.), (22., 10.), (4., 19.)]),
-                    P::Bold => f.stroke(
-                        &Path::line(Point::new(4., 19.), Point::new(20., 5.)),
-                        Stroke::default().with_width(4.).with_color(ink),
-                    ),
-                    P::Dotted => {
-                        for i in 0..6 {
-                            let t = i as f32 / 5.;
-                            f.fill(
-                                &Path::circle(Point::new(4. + 16. * t, 19. - 14. * t), 1.1),
-                                ink,
-                            );
-                        }
-                    }
-                    P::Dashed => {
-                        for i in 0..4 {
-                            let t = i as f32 / 4.;
-                            line(
-                                f,
-                                ink,
-                                &[
-                                    (4. + 16. * t, 19. - 14. * t),
-                                    (4. + 16. * (t + 0.13), 19. - 14. * (t + 0.13)),
-                                ],
-                            );
-                        }
-                    }
-                    P::Hashed => {
-                        for i in 0..6 {
-                            let t = i as f32 / 5.;
-                            let x = 5. + 14. * t;
-                            let y = 19. - 13. * t;
-                            line(f, ink, &[(x - 2.5, y - 2.5), (x + 2.5, y + 2.5)]);
-                        }
-                    }
-                    P::CrossedDouble => {
-                        line(f, ink, &[(4., 19.), (20., 5.)]);
-                        line(f, ink, &[(4., 15.), (20., 9.)]);
-                    }
-                    _ => {
-                        line(f, ink, &[(4., 19.), (20., 7.)]);
-                        line(f, ink, &[(4., 15.), (20., 3.)]);
-                    }
-                }
-            }
-            Icon::Tool(Tool::Wedge) => polygon(f, ink, &[(4., 19.), (17., 3.), (22., 10.)]),
-            Icon::Tool(Tool::Hash) => {
-                for i in 0..6 {
-                    let t = i as f32 / 5.;
-                    let x = 5. + 14. * t;
-                    let y = 19. - 13. * t;
-                    line(
-                        f,
-                        ink,
-                        &[(x - 3. * t, y - 3. * t), (x + 3. * t, y + 3. * t)],
-                    );
-                }
-            }
-            Icon::Tool(Tool::Wavy) => {
-                use reshiki::{document::Point as World, graphics::PathCommand};
-                let path = Path::new(|p| {
-                    for command in
-                        reshiki::bonds::wavy_path(World::new(3., 12.), World::new(21., 12.), 6., 3.)
-                    {
-                        match command {
-                            PathCommand::Move(a) => p.move_to(Point::new(a.x, a.y)),
-                            PathCommand::Cubic(a, b, c) => p.bezier_curve_to(
-                                Point::new(a.x, a.y),
-                                Point::new(b.x, b.y),
-                                Point::new(c.x, c.y),
-                            ),
-                            _ => {}
-                        }
-                    }
-                });
-                f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
-            }
-            Icon::Tool(Tool::RingPreset(preset)) => {
-                let doc = preset.document(7., false);
-                for bond in &doc.bonds {
-                    let (Some(a), Some(b)) = (doc.atom(bond.a), doc.atom(bond.b)) else {
-                        continue;
-                    };
-                    let (a, b) = (a.position, b.position);
-                    line(f, ink, &[(12. + a.x, 12. + a.y), (12. + b.x, 12. + b.y)]);
-                    if bond.order == 2 {
-                        line(
-                            f,
-                            ink,
-                            &[
-                                (12. + a.x * 0.68, 12. + a.y * 0.68),
-                                (12. + b.x * 0.68, 12. + b.y * 0.68),
-                            ],
-                        );
-                    }
-                }
-            }
+            Icon::Tool(Tool::Bond(order)) => bonds::bond(f, ink, order),
+            Icon::Tool(Tool::StyledBond(preset)) => bonds::styled_bond(f, ink, preset),
+            Icon::Tool(Tool::Wedge) => bonds::wedge(f, ink),
+            Icon::Tool(Tool::Hash) => bonds::hash(f, ink),
+            Icon::Tool(Tool::Wavy) => bonds::wavy(f, ink),
+            Icon::Tool(Tool::RingPreset(preset)) => rings::ring_preset(f, ink, preset),
             Icon::Ring(_, _) | Icon::Tool(Tool::Ring | Tool::Template) => {
-                let (size, aromatic) = match self.0 {
-                    Icon::Ring(size, aromatic) => (size, aromatic),
-                    _ => (6, false),
-                };
-                let points: Vec<_> = (0..=size)
-                    .map(|i| {
-                        let a = i as f32 * std::f32::consts::TAU / size as f32;
-                        (12. + 9. * a.cos(), 12. + 9. * a.sin())
-                    })
-                    .collect();
-                line(f, ink, &points);
-                if aromatic {
-                    f.stroke(
-                        &Path::circle(Point::new(12., 12.), 5.7),
-                        Stroke::default().with_width(1.4).with_color(ink),
-                    );
-                }
+                rings::ring(f, ink, self.0)
             }
-            Icon::Arrow(_) | Icon::Tool(Tool::Arrow) => {
-                use reshiki::{
-                    arrows::{ArrowStyle, Preset},
-                    document::{Arrow, Point as World},
-                    graphics::PathCommand,
-                };
-                let preset = match self.0 {
-                    Icon::Arrow(preset) => preset,
-                    _ => Preset::Forward,
-                };
-                if preset == Preset::Forward {
-                    line(f, ink, &[(3., 12.), (21., 12.)]);
-                    line(f, ink, &[(15., 6.), (21., 12.), (15., 18.)]);
-                    return;
-                }
-                let style = ArrowStyle {
-                    head_length_pt: 8.,
-                    head_width_pt: 4.,
-                    gap_pt: 3.2,
-                    ..ArrowStyle::preset(preset)
-                };
-                let arrow = Arrow::new(1, World::default(), World::new(80., 0.), preset, style);
-                let (lo, hi) = arrow.bounds();
-                let scale = (20. / (hi.x - lo.x).max(1.)).min(18. / (hi.y - lo.y).max(1.));
-                let point = |p: World| {
-                    Point::new(
-                        12. + (p.x - (lo.x + hi.x) / 2.) * scale,
-                        12. + (p.y - (lo.y + hi.y) / 2.) * scale,
-                    )
-                };
-                for part in arrow.paths() {
-                    let path = Path::new(|b| {
-                        for command in part.commands {
-                            match command {
-                                PathCommand::Move(p) => b.move_to(point(p)),
-                                PathCommand::Line(p) => b.line_to(point(p)),
-                                PathCommand::Cubic(a, z, p) => {
-                                    b.bezier_curve_to(point(a), point(z), point(p))
-                                }
-                                PathCommand::Close => b.close(),
-                            }
-                        }
-                    });
-                    if part.filled {
-                        f.fill(&path, ink);
-                    } else {
-                        f.stroke(&path, Stroke::default().with_width(1.4).with_color(ink));
-                    }
-                }
-            }
+            Icon::Arrow(_) | Icon::Tool(Tool::Arrow) => arrows::arrow(f, ink, self.0),
             Icon::Tool(Tool::Text) => tools::text(f, ink),
             Icon::Tool(Tool::Atom) => tools::atom(f, ink),
             Icon::Tool(Tool::Erase) => tools::erase(f, ink),
