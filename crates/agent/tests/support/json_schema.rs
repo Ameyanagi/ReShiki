@@ -121,7 +121,7 @@ fn check_schema(schema: &Value, at: &str, errors: &mut Vec<Error>) {
                 errors.push(bad("only additionalProperties: false is supported"));
             }
             "items" => check_schema(value, &here, errors),
-            "minItems" | "maxItems" | "minLength" | "maxLength" if !value.is_u64() => {
+            "minItems" | "maxItems" | "minLength" | "maxLength" if !non_negative_integer(value) => {
                 errors.push(bad("must be a non-negative integer"));
             }
             "minimum" | "maximum" if !value.is_number() => {
@@ -147,6 +147,15 @@ fn check_schema(schema: &Value, at: &str, errors: &mut Vec<Error>) {
             _ => {}
         }
     }
+}
+
+/// 2020-12 counts like `minLength` are non-negative integers, mathematically:
+/// 1.0 qualifies, as it does for `type: integer`.
+fn non_negative_integer(value: &Value) -> bool {
+    has_type("integer", value)
+        && value
+            .as_number()
+            .is_some_and(|n| compare(n, &Number::from(0)) != Ordering::Less)
 }
 
 fn matcher(pattern: &Value) -> Option<Matcher> {
@@ -328,14 +337,15 @@ fn bound(
     at: &str,
     errors: &mut Vec<Error>,
 ) {
-    let limit = limit
-        .as_u64()
-        .and_then(|l| usize::try_from(l).ok())
-        .unwrap_or(usize::MAX);
+    let Value::Number(limit) = limit else {
+        panic!("{at}: {keyword} {limit} is not a number")
+    };
+    // Exact comparison, so a whole-float limit such as 3.0 counts as 3.
+    let order = compare(&Number::from(actual), limit);
     let ok = if keyword.starts_with("min") {
-        actual >= limit
+        order != Ordering::Less
     } else {
-        actual <= limit
+        order != Ordering::Greater
     };
     if !ok {
         errors.push(error(
@@ -528,6 +538,28 @@ mod tests {
         assert!(accepts(items.clone(), json!([1, 2])));
         assert!(!accepts(items.clone(), json!([])));
         assert!(!accepts(items, json!([1, 2, 3])));
+    }
+
+    #[test]
+    fn length_and_item_bounds_accept_whole_float_limits() {
+        let text = json!({"minLength":2.0,"maxLength":3.0});
+        assert!(accepts(text.clone(), json!("ab")));
+        assert!(accepts(text.clone(), json!("abc")));
+        assert!(!accepts(text.clone(), json!("a")));
+        assert!(!accepts(text, json!("abcd")));
+        let items = json!({"minItems":1.0,"maxItems":2.0});
+        assert!(accepts(items.clone(), json!([1])));
+        assert!(accepts(items.clone(), json!([1, 2])));
+        assert!(!accepts(items.clone(), json!([])));
+        assert!(!accepts(items, json!([1, 2, 3])));
+        assert!(accepts(json!({"maxItems":1e20}), json!([1, 2, 3])));
+        assert!(!accepts(json!({"minLength":1e20}), json!("abc")));
+        for keyword in ["minItems", "maxItems", "minLength", "maxLength"] {
+            for limit in [json!(1.5), json!(-1), json!(-1.0), json!("1"), json!(null)] {
+                let schema = json!({ keyword: limit });
+                assert_ne!(check_keywords(&schema), [], "{schema}");
+            }
+        }
     }
 
     #[test]

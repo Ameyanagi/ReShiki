@@ -552,10 +552,12 @@
 
     {"name": "atom-element-three-letters", "rule": "atom-element-length", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/element", "value": "Uuo"}], "expect": "both_accept"},
     {"name": "atom-element-four-letters", "rule": "atom-element-length", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/element", "value": "Abcd"}], "expect": "decoder_rejects_only"},
+    {"name": "atom-element-four-letters-that-parse", "rule": "atom-element-length", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/element", "value": "UuoH"}], "expect": "decoder_rejects_only"},
 
     {"name": "atom-element-wildcard", "rule": "atom-element-alphabetic", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/3/variable", "value": null}], "expect": "both_accept"},
     {"name": "atom-element-with-digit", "rule": "atom-element-alphabetic", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/element", "value": "C1"}], "expect": "decoder_rejects_only"},
     {"name": "atom-element-two-wildcards", "rule": "atom-element-alphabetic", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/element", "value": "**"}], "expect": "decoder_rejects_only"},
+    {"name": "atom-element-digit-that-parses", "rule": "atom-element-alphabetic", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/element", "value": "CH4"}], "expect": "decoder_rejects_only"},
 
     {"name": "atom-element-two-letter-symbol", "rule": "atom-element-parses", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/element", "value": "Cl"}], "expect": "both_accept"},
     {"name": "atom-element-unknown-symbol", "rule": "atom-element-parses", "base": "sketch", "patch": [{"op": "replace", "path": "/sketch/atoms/2/element", "value": "Xx"}], "expect": "decoder_rejects_only"},
