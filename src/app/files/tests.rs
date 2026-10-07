@@ -82,6 +82,38 @@ fn native_worker_rejects_invalid_drawing_and_preserves_import_format() {
 }
 
 #[test]
+fn native_open_raises_old_versions_and_clears_computed_labels() {
+    let mut document = Document::default();
+    let carbon = document.add_atom("C", Point::default());
+    let oxygen = document.add_atom("O", Point::new(42., 0.));
+    document.add_bond(carbon, oxygen, 1, "plain");
+    document.version = 14;
+    for atom in &mut document.atoms {
+        atom.cip_label = Some("R".into());
+    }
+    document.bonds[0].cip_label = Some("E".into());
+    // An explicit light canvas: dark drawings before version 17 migrate to 17.
+    let mut json = serde_json::to_value(&document).unwrap();
+    json["canvas_theme"] = serde_json::json!("light");
+    let Prepared::Native(opened) = prepare(
+        std::path::Path::new("old.rsk"),
+        serde_json::to_vec(&json).unwrap(),
+    )
+    .unwrap() else {
+        panic!("A native drawing opens natively");
+    };
+    assert_eq!(opened.version, 15);
+    assert!(opened.atoms.iter().all(|atom| atom.cip_label.is_none()));
+    assert!(opened.bonds[0].cip_label.is_none());
+    let mut expected = document;
+    expected.version = 15;
+    reshiki::atom_labels::clear_computed(&mut expected);
+    assert_eq!(*opened, expected);
+    let error = prepare(std::path::Path::new("bad.rsk"), b"not JSON".to_vec()).unwrap_err();
+    assert!(error.starts_with("Could not open document: "), "{error}");
+}
+
+#[test]
 fn save_dialog_answers_map_to_save_discard_and_cancel() {
     for answer in [Answer::Custom(SAVE.into()), Answer::Yes] {
         assert!(matches!(save_answer(answer), Message::Save));

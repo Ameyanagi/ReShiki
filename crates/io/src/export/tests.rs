@@ -181,3 +181,74 @@ fn physical_scale_survives_svg_and_png_export() {
         (22.4_f32 / 72.0 * 1200.0).ceil() as u32
     );
 }
+
+fn parity_fixtures() -> [(&'static str, Document); 2] {
+    [
+        (
+            "bond-join-regression",
+            Document::from_json(include_bytes!(
+                "../../../../tests/fixtures/bond-join-regression.rsk"
+            ))
+            .unwrap(),
+        ),
+        (
+            "coordination-layout",
+            Document::from_json(include_bytes!(
+                "../../../../tests/fixtures/coordination-layout.rsk"
+            ))
+            .unwrap(),
+        ),
+    ]
+}
+
+/// Export fingerprints to compare before and after an export refactor. Bytes
+/// depend on the installed fonts, so compare runs on the same machine only.
+#[test]
+#[ignore = "prints export fingerprints for a same-machine before/after comparison"]
+fn export_parity_dump() {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    for (name, doc) in parity_fixtures() {
+        for (clipboard, format) in [
+            (false, "png"),
+            (false, "svg"),
+            (false, "pdf"),
+            (true, "png"),
+            (true, "svg"),
+        ] {
+            let kind = if clipboard {
+                "clipboard_figure"
+            } else {
+                "figure"
+            };
+            let result = if clipboard {
+                clipboard_figure(&doc, format)
+            } else {
+                figure(&doc, format)
+            };
+            match result {
+                Ok(figure) => {
+                    let mut hasher = DefaultHasher::new();
+                    figure.bytes.hash(&mut hasher);
+                    println!(
+                        "{name} {kind}({format}): byte_len={} hash={:016x} detail={:?}",
+                        figure.bytes.len(),
+                        hasher.finish(),
+                        figure.detail
+                    );
+                }
+                Err(error) => println!("{name} {kind}({format}): error={error:?}"),
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+#[test]
+fn clipboard_png_keeps_the_fixed_preferred_resolution() {
+    let [(_, doc), _] = parity_fixtures();
+    let detail = clipboard_figure(&doc, "png").unwrap().detail.unwrap();
+    assert!(
+        detail.ends_with(&format!("at {} dpi", crate::style::DEFAULT.png_dpi)),
+        "{detail}"
+    );
+}

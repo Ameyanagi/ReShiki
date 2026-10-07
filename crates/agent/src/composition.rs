@@ -266,3 +266,6 @@ pub fn straighten_all(doc: &mut Document) -> usize {
         .filter(|ids| !ids.iter().any(|id| diagram_ids.contains(id)) && straighten(doc, ids))
         .count()
 }
+
+#[cfg(test)]
+mod tests;
