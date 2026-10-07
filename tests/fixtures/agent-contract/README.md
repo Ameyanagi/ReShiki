@@ -15,3 +15,91 @@ tests/assistant_contract.rs compares them byte for byte.
 
 Never regenerate these files. A diff is a contract change that needs owner
 approval.
+
+# Schema and decoder parity corpora
+
+The hand-written JSON Schemas the agent publishes and the Rust decoders that
+consume the same JSON are separate code. `*-cases.json` files pin how the two
+classify boundary values, so drift on either side fails a test.
+crates/agent/tests/contract.rs runs each registered contract
+(`support::corpus::Contract { name, schema, decode, cases }`); a new contract
+adds an entry there and a cases file here.
+
+- `proposal-cases.json`: `reshiki_agent::schema()` against the Proposal
+  decoder, exactly `serde_json::from_value::<Proposal>` and then
+  `Proposal::validate()` (canvas_tools.rs `canvas_preview` and the Codex
+  Proposal turn in src/assistant/codex.rs).
+
+## Classification vocabulary
+
+Each case names the class it must produce:
+
+- `both_accept`: the schema and the decoder accept the value.
+- `both_reject`: both reject it.
+- `schema_rejects_only`: the decoder accepts what the schema forbids. Typical
+  causes: serde defaults or `Option` fields that the schema requires, Point
+  objects (no `deny_unknown_fields` in reshiki_model) under
+  `additionalProperties: false`, structs that serde also reads from JSON
+  arrays, and f32 rounding (30.0004 passes the 30-degree tolerance; 50.000001
+  rounds to 50).
+- `decoder_rejects_only`: `validate()` or the Rust type forbids what the
+  schema allows. Typical causes: byte limits the schema does not state
+  (lengths count bytes in Rust, code points in the schema), cross-field rules,
+  index ranges, uniqueness, and whole floats such as `1.0` that 2020-12
+  `integer` accepts but serde's integer types do not.
+
+The schema side is a test-only validator for the 2020-12 keywords the agent
+uses: type, enum, const, properties, required, additionalProperties (false
+only), items, minItems, maxItems, minLength, maxLength, minimum, maximum, anyOf
+and pattern, with description ignored. `pattern` accepts only the table in
+support/json_schema.rs (object IDs, revisions, handles). Any other keyword
+fails the gate.
+
+## File format
+
+```json
+{
+  "rules": [{"id": "...", "cite": "path:line[-line][,line]; path:line", "exempt_reason": "optional"}],
+  "bases": {"name": {"...": "a full valid value"}},
+  "cases": [{"name": "...", "rule": "...", "base": "name", "patch": [{"op": "add|replace|remove", "path": "/json/pointer", "value": 1}], "expect": "both_accept", "message": "optional exact decoder error"}]
+}
+```
+
+A case starts from `base` or from a literal `value`, then applies RFC 6902
+`add`, `replace` and `remove` patches. `message` pins the decoder's exact
+error; multi-invalid cases use it to pin the order of the checks in
+`validate()`. Values may use generators, expanded before patching:
+`{"$repeat": v, "count": n}` (n copies of v), `{"$text": "s", "count": n}` (s
+repeated n times) and `{"$range": [lo, hi]}` (the integers lo..=hi).
+
+## Rule inventory
+
+Every rule cites the lines that implement it (the cite must name existing
+lines). The Proposal inventory covers:
+
+- serde shape: required fields, serde defaults and `Option` fields per struct,
+  `deny_unknown_fields` per struct (Point excepted), nullable fields, wrong
+  JSON types, structs read from arrays and whole floats for integers;
+- Proposal::validate: replace_ids items, sentinels, uniqueness and count;
+  explanation, reaction and molecule limits; SMILES, label, condition and title
+  sizes; rotation steps and range; coefficients; directions; arrows; compact
+  versus preserve_details; sketch exclusivity; each branching rule; and the
+  order of the checks;
+- Composition: arrangement, columns and width;
+- Sketch::validate and Ligand::validate: every count limit, every atom
+  predicate and every ligand predicate as its own rule even where they share a
+  message, plus variables, colors, bonds, shapes, arrows, captions,
+  abbreviations, tilts and centroids.
+
+## Exemption policy
+
+The gate requires every rule to have at least one `both_accept` case at its
+boundary and one rejected case just beyond it. A rule that cannot have one of
+them carries an `exempt_reason` that says why and which case pins the
+boundary instead (for example by message). An exemption on a rule that is
+fully covered fails the gate, so exemptions cannot go stale. Decoder messages
+reached are reported (`cargo test -p reshiki-agent --test contract --
+--nocapture`) but are not gated.
+
+Unlike the byte goldens above, cases files change with the code they cite:
+an intentional schema or decoder change updates its cases in the same PR.
