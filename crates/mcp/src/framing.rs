@@ -429,7 +429,7 @@ impl Reader {
                     line: bytes,
                 };
                 if self.inbound.blocking_send(request).is_err() {
-                    self.tracker.complete(&key);
+                    self.tracker.abandon(&key);
                     return false;
                 }
                 *initialize_seen |= is_initialize;

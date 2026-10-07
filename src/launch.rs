@@ -265,7 +265,8 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
 /// finished with everything queued written (`delivered`) and no request the
 /// client did not cancel is `unanswered`. Once the writer finished, nothing
 /// can answer such a request: rmcp abandoned its response while stdout was
-/// blocked, or dropped the request with the service.
+/// blocked, the transport abandoned the error reply it owed, or the request
+/// was dropped with the service.
 fn exit_code(reason: Quit, delivered: bool, unanswered: usize, log: &Log) -> i32 {
     match reason {
         Quit::WriterFailed => 1,

@@ -75,11 +75,12 @@ async fn a_dropped_receive_keeps_the_reply_it_owes() {
 
 #[tokio::test]
 async fn dropping_the_transport_settles_a_pending_reply() {
-    // No room: the slot is freed, since the writer never sees the reply.
+    // No room: the slot is freed, since the writer never sees the reply,
+    // but the client still expects one.
     let (mut stdio, _requests, mut written, tracker) = blocked();
     receive_then_drop(&mut stdio).await;
     drop(stdio);
-    assert_eq!(tracker.outstanding(), 0);
+    assert_eq!((tracker.outstanding(), tracker.unanswered()), (0, 1));
     assert_eq!(written.recv().await.unwrap().line, b"filler");
     assert!(written.recv().await.is_none());
 
@@ -88,6 +89,13 @@ async fn dropping_the_transport_settles_a_pending_reply() {
     receive_then_drop(&mut stdio).await;
     assert_eq!(written.recv().await.unwrap().line, b"filler");
     drop(stdio);
-    assert_eq!(tracker.outstanding(), 1);
+    assert_eq!((tracker.outstanding(), tracker.unanswered()), (1, 1));
     assert_eq!(written.recv().await.unwrap().key, Some(Key::Int(7)));
+
+    // No room, but cancelled: nothing is expected.
+    let (mut stdio, _requests, _written, tracker) = blocked();
+    receive_then_drop(&mut stdio).await;
+    assert!(tracker.cancel(&Key::Int(7)));
+    drop(stdio);
+    assert_eq!((tracker.outstanding(), tracker.unanswered()), (0, 0));
 }

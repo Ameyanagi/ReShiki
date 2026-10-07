@@ -427,6 +427,25 @@ fn cancelled_requests_are_not_unanswered() {
     assert_eq!((tracker.outstanding(), tracker.unanswered()), (1, 0));
 }
 
+#[test]
+fn abandoned_requests_free_their_slot_but_stay_unanswered() {
+    let tracker = Tracker::new(&limits(2, 100));
+    assert_eq!(tracker.admit(&Key::Int(1), 1), Admit::Ok);
+    assert_eq!(tracker.admit(&Key::Int(2), 1), Admit::Ok);
+    assert!(tracker.cancel(&Key::Int(2)));
+    tracker.abandon(&Key::Int(1));
+    assert_eq!((tracker.outstanding(), tracker.unanswered()), (1, 1));
+    // A cancelled request is not expected, abandoned or not.
+    tracker.abandon(&Key::Int(2));
+    assert_eq!((tracker.outstanding(), tracker.unanswered()), (0, 1));
+    // Only a held slot counts, once.
+    tracker.abandon(&Key::Int(1));
+    assert_eq!(tracker.unanswered(), 1);
+    assert_eq!(tracker.admit(&Key::Int(3), 1), Admit::Ok);
+    assert_eq!(tracker.admit(&Key::Int(4), 1), Admit::Ok);
+    assert_eq!(tracker.high_water(), 2);
+}
+
 /// Admits `key` on another thread and reports the outcome.
 fn admit_later(tracker: &Arc<Tracker>, key: Key, bytes: usize) -> std_mpsc::Receiver<Admit> {
     let (sender, receiver) = std_mpsc::channel();

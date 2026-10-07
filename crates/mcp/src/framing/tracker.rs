@@ -8,7 +8,8 @@ use std::{
 /// The outcome of [`Tracker::admit`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Admit {
-    /// Admitted: the request now holds a slot until [`Tracker::complete`].
+    /// Admitted: the request now holds a slot until [`Tracker::complete`] or
+    /// [`Tracker::abandon`].
     Ok,
     /// A request with the same id is still outstanding.
     Duplicate,
@@ -26,12 +27,15 @@ struct State {
     outstanding: HashMap<Key, Entry>,
     retained: usize,
     high_water: usize,
+    /// Requests abandoned without a reply that the client did not cancel.
+    abandoned: usize,
     closed: bool,
 }
 
 /// Requests read but not yet answered. The reader admits each request
 /// before forwarding it, and the writer completes it once its response is
-/// written or suppressed, so every slot is held for exactly one response.
+/// written or suppressed, so every slot is held for exactly one response. A
+/// request whose response can no longer reach the writer is abandoned.
 pub struct Tracker {
     state: Mutex<State>,
     /// Notified when a slot frees or the tracker closes.
@@ -116,9 +120,23 @@ impl Tracker {
 
     /// Frees the slot of `key`, if it holds one.
     pub fn complete(&self, key: &Key) {
+        self.free(key, false);
+    }
+
+    /// Frees the slot of `key`, if it holds one, when its reply can no
+    /// longer be sent. Unless the client cancelled it, the request still
+    /// counts as [`Tracker::unanswered`].
+    pub fn abandon(&self, key: &Key) {
+        self.free(key, true);
+    }
+
+    fn free(&self, key: &Key, abandoned: bool) {
         let mut state = self.state();
         if let Some(entry) = state.outstanding.remove(key) {
             state.retained = state.retained.saturating_sub(entry.bytes);
+            if abandoned && !entry.cancelled {
+                state.abandoned = state.abandoned.saturating_add(1);
+            }
             self.space.notify_all();
         }
     }
@@ -134,14 +152,17 @@ impl Tracker {
         self.state().outstanding.len()
     }
 
-    /// Outstanding requests that were not cancelled: responses the client
-    /// still expects. Once the writer ended, none of them can be answered.
+    /// Requests the client did not cancel that are outstanding or were
+    /// abandoned: responses it still expects. Once the writer ended, none of
+    /// them can be answered.
     pub fn unanswered(&self) -> usize {
-        self.state()
+        let state = self.state();
+        state
             .outstanding
             .values()
             .filter(|entry| !entry.cancelled)
             .count()
+            .saturating_add(state.abandoned)
     }
 
     /// The most requests ever outstanding at once.

@@ -256,11 +256,15 @@ fn a_closed_stdout_exits_1() {
 /// A response rmcp abandons because stdout stayed full for 5 s after EOF
 /// makes the exit 1, though the writer later delivers everything queued.
 ///
-/// On 64 KiB pipes (Linux, macOS) the pipe, the line the writer holds and
-/// the outbound queue take 1009 -32700 replies, so after 1003 of them only
-/// six of the twelve tools/list responses fit; the reader still reaches EOF,
-/// as twelve requests stay within admission. Elsewhere the counts differ,
-/// but exit 0 must still mean every request was answered.
+/// On 64 KiB pipes (the usual Linux and macOS size) the pipe, the line the
+/// writer holds and the outbound queue take 1009 -32700 replies, so after
+/// 1003 of them only six of the twelve tools/list responses fit; the reader
+/// still reaches EOF, as twelve requests stay within admission. A smaller
+/// pipe (Linux caps new pipes at two pages once a user exceeds
+/// `pipe-user-pages-soft`) stalls the reader before EOF instead, and then
+/// every request is answered. Either way exit 0 must mean every request was
+/// answered; the crate's blocked-writer transcripts check abandonment
+/// whatever the pipe size.
 #[test]
 fn a_response_abandoned_behind_a_full_stdout_exits_1() {
     const REQUESTS: i64 = 12;
@@ -284,8 +288,6 @@ fn a_response_abandoned_behind_a_full_stdout_exits_1() {
     let answered: Vec<&Value> = rest.iter().filter_map(|line| line.get("id")).collect();
     let every = (0..REQUESTS).all(|id| answered.iter().filter(|seen| ***seen == id).count() == 1);
     assert_eq!(code, Some(if every { 0 } else { 1 }), "{answered:?}");
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    assert!(!every, "nothing was abandoned: {answered:?}");
     let stderr = session.stderr(LINE_TIMEOUT);
     assert_eq!(
         stderr.contains("reshiki-mcp: warn: requests left unanswered requests="),

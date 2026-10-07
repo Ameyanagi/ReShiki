@@ -103,7 +103,7 @@ impl Transport<RoleServer> for Stdio {
                 Err(SendError(Outbound { key, .. })) => {
                     // The writer is gone and will never complete this slot.
                     if let Some(key) = &key {
-                        tracker.complete(key);
+                        tracker.abandon(key);
                     }
                     Err(Error)
                 }
@@ -119,7 +119,7 @@ impl Transport<RoleServer> for Stdio {
                 let Ok(permit) = self.outbound.reserve().await else {
                     // The writer is gone and will never complete it.
                     if let Some(Outbound { key: Some(key), .. }) = self.pending.take() {
-                        self.tracker.complete(&key);
+                        self.tracker.abandon(&key);
                     }
                     return None;
                 };
@@ -167,13 +167,14 @@ impl Transport<RoleServer> for Stdio {
 
 impl Drop for Stdio {
     /// rmcp dropped the transport with a reply still pending: queue it if
-    /// there is room, else free its slot, as the writer never will.
+    /// there is room, else abandon its request, as the writer never sees
+    /// the reply.
     fn drop(&mut self) {
         if let Some(reply) = self.pending.take()
             && let Err(refused) = self.outbound.try_send(reply)
             && let Some(key) = refused.into_inner().key
         {
-            self.tracker.complete(&key);
+            self.tracker.abandon(&key);
         }
     }
 }

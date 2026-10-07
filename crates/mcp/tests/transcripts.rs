@@ -185,6 +185,7 @@ fn run(name: &str, transcript: &str) {
     let tracker = finished.tracker;
     assert!(finished.writer.wait(Duration::from_secs(1)), "{name}");
     assert_eq!(tracker.outstanding(), 0, "{name}");
+    assert_eq!(tracker.unanswered(), 0, "{name}");
     assert_eq!(
         session.rest(),
         Vec::<String>::new(),
@@ -373,4 +374,32 @@ fn a_blocked_writer_after_startup_leaves_the_abandoned_request_outstanding() {
         assert_eq!(reply["error"]["code"], -32700, "{line}");
         assert!(reply.get("id").is_none(), "{line}");
     }
+}
+
+/// The transport answers a request rmcp cannot parse (1e400 overflows f64)
+/// itself, once the outbound queue has room. Behind seventeen -32700
+/// replies the blocked writer leaves none, so the bootstrap waits on that
+/// reply until [`EOF_GRACE`] drops the transport with it: the slot frees,
+/// but the request still counts as unanswered.
+#[test]
+fn a_reply_the_transport_abandons_counts_as_unanswered() {
+    let (open, gate) = mpsc::channel();
+    let mut session = Session::with_gate(Some(gate));
+    for _ in 0..17 {
+        session.send("garbage");
+    }
+    session.send(r#"{"jsonrpc":"2.0","id":7,"method":"tools/list","params":{"n":1e400}}"#);
+    let (finished, elapsed) = session.close();
+    assert_eq!(finished.reason, Quit::Eof);
+    assert!(elapsed > EOF_GRACE - Duration::from_secs(1), "{elapsed:?}");
+    drop(open);
+    assert!(finished.writer.wait(LINE_TIMEOUT));
+    assert_eq!(finished.tracker.outstanding(), 0);
+    assert_eq!(finished.tracker.unanswered(), 1);
+    let rest = session.rest();
+    assert_eq!(rest.len(), 17);
+    assert!(
+        rest.iter().all(|line| !line.contains(r#""id""#)),
+        "{rest:?}"
+    );
 }
