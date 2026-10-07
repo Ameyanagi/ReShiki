@@ -51,7 +51,8 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
             "inspect",
             "analyze",
             "render",
-            "export"
+            "export",
+            "compose"
         ]
     );
     let unique: HashSet<_> = names.iter().collect();
@@ -72,6 +73,7 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
         hints(true, false, true),
         hints(true, false, true),
         hints(true, false, true),
+        hints(false, false, false),
     ];
     for (spec, hints) in catalog::SPECS.iter().zip(expected) {
         assert!(valid_name(spec.name), "{}", spec.name);

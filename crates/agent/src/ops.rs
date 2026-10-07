@@ -44,6 +44,7 @@
 pub mod analyze;
 pub mod budget;
 pub mod catalog;
+pub mod compose;
 pub mod documents;
 pub mod error;
 pub mod exec;

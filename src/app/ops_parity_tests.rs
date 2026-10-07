@@ -161,3 +161,29 @@ async fn ops_export_details_match_the_app_figure_export() {
         assert!(exported.files[0].bytes == app.bytes, "{format}");
     }
 }
+
+#[test]
+fn ops_compose_settings_follow_the_app_drawing_defaults() {
+    use reshiki_agent::DrawingSettings;
+    let mut style = reshiki::style::DrawingStyle::default();
+    style.set_bond_length(18.);
+    style.font_family = "Helvetica".into();
+    style.font_size_pt = 12.;
+    style.line_width_pt = 1.;
+    let (mut app, _) = App::new();
+    let defaults = DrawingSettings::for_document(&app.tab.doc);
+    app.tab.doc.drawing_style = style;
+    app.tab.doc.atom_labels.stereo = !app.tab.doc.atom_labels.stereo;
+    app.sync_drawing_defaults();
+    let settings = DrawingSettings::for_document(&app.tab.doc);
+    assert_eq!(settings.bond_length, app.tab.bond_drawing.length);
+    assert_eq!(settings.format, app.tab.caption_format);
+    assert_eq!(settings.arrow_style, app.tab.arrows.style);
+    assert_eq!(settings.drawing_style, app.tab.doc.drawing_style);
+    assert_eq!(settings.labels, app.tab.doc.atom_labels);
+    // Every derived field changed, so none matches by default alone.
+    assert_ne!(settings.bond_length, defaults.bond_length);
+    assert_ne!(settings.format, defaults.format);
+    assert_ne!(settings.arrow_style, defaults.arrow_style);
+    assert_ne!(settings.labels, defaults.labels);
+}

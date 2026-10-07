@@ -72,6 +72,12 @@ error; multi-invalid cases use it to pin the order of the checks in
 `{"$repeat": v, "count": n}` (n copies of v), `{"$text": "s", "count": n}` (s
 repeated n times) and `{"$range": [lo, hi]}` (the integers lo..=hi).
 
+An optional `"import": {"file": "sibling-cases.json", "into": wrapper, "at":
+"/json/pointer"}` reuses a sibling file's bases instead of copying them: each
+one replaces the value at `at` in a copy of `into` and keeps its name, which
+must not clash with a local base. `ops-compose-cases.json` wraps the
+`proposal-cases.json` bases as compose arguments this way.
+
 ## Rule inventory
 
 Every rule cites the lines that implement it (the cite must name existing

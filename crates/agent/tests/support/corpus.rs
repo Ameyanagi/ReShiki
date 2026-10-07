@@ -90,8 +90,27 @@ pub fn classify(schema: &Value, decode: fn(Value) -> Result<(), String>, value: 
 #[serde(deny_unknown_fields)]
 struct Corpus {
     rules: Vec<Rule>,
+    #[serde(default)]
+    import: Option<Import>,
     bases: BTreeMap<String, Value>,
     cases: Vec<Case>,
+}
+
+/// Reuses the bases of a sibling cases file: each one, expanded, replaces
+/// the value at the JSON pointer `at` in a copy of `into`, under its own
+/// name.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Import {
+    file: String,
+    into: Value,
+    at: String,
+}
+
+/// The bases of an imported cases file; its other fields are not read.
+#[derive(Deserialize)]
+struct Bases {
+    bases: BTreeMap<String, Value>,
 }
 
 #[derive(Deserialize)]
@@ -314,9 +333,16 @@ pub fn check(contract: &Contract) -> Result<String, String> {
     for (name, base) in &corpus.bases {
         match expand(base.clone()) {
             Ok(base) => {
-                bases.insert(name.as_str(), base);
+                bases.insert(name.clone(), base);
             }
             Err(problem) => failures.push(format!("base {name:?}: {problem}")),
+        }
+    }
+    if let Some(import) = &corpus.import {
+        for (name, base) in imported(import)? {
+            if bases.insert(name.clone(), base).is_some() {
+                failures.push(format!("base {name:?} is defined twice"));
+            }
         }
     }
     let mut names = BTreeSet::new();
@@ -368,8 +394,27 @@ pub fn check(contract: &Contract) -> Result<String, String> {
     Ok(tally.report(contract.name, &corpus))
 }
 
+/// The bases `import` names, each placed into its wrapper.
+fn imported(import: &Import) -> Result<BTreeMap<String, Value>, String> {
+    let path = repository()
+        .join("tests/fixtures/agent-contract")
+        .join(&import.file);
+    let Bases { bases } =
+        serde_json::from_str(&read(&path)?).map_err(|e| format!("{}: {e}", path.display()))?;
+    bases
+        .into_iter()
+        .map(|(name, base)| {
+            let mut wrapped = expand(import.into.clone())?;
+            *wrapped
+                .pointer_mut(&import.at)
+                .ok_or_else(|| format!("import {}: no such location", import.at))? = expand(base)?;
+            Ok((name, wrapped))
+        })
+        .collect()
+}
+
 /// The case's base or literal value with its patches applied.
-fn instantiate(case: &Case, bases: &BTreeMap<&str, Value>) -> Result<Value, String> {
+fn instantiate(case: &Case, bases: &BTreeMap<String, Value>) -> Result<Value, String> {
     let mut value = match (&case.base, &case.value) {
         (Some(base), None) => bases
             .get(base.as_str())

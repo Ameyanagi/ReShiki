@@ -2,6 +2,7 @@
 use super::{
     analyze::{self, Analyze},
     budget::Budgets,
+    compose::{self, Compose},
     documents::{self, Close},
     error::{ErrorKind, OpError},
     export::{self, Export},
@@ -24,6 +25,7 @@ pub const SPECS: &[ToolSpec] = &[
     analyze::ANALYZE,
     render::RENDER,
     export::EXPORT,
+    compose::COMPOSE,
 ];
 
 /// A tool call with decoded arguments.
@@ -37,6 +39,7 @@ pub(crate) enum Op {
     Analyze(Analyze),
     Render(Render),
     Export(Export),
+    Compose(Box<Compose>),
 }
 
 /// Decodes `args` for `tool`, with every input budget check, before any work
@@ -52,6 +55,7 @@ pub(crate) fn decode(tool: &str, args: Value, budgets: &Budgets) -> Option<Resul
         "analyze" => analyze::decode(args, budgets).map(Op::Analyze),
         "render" => render::decode(args, budgets).map(Op::Render),
         "export" => export::decode(args).map(Op::Export),
+        "compose" => compose::decode(args).map(|compose| Op::Compose(Box::new(compose))),
         _ => return None,
     })
 }

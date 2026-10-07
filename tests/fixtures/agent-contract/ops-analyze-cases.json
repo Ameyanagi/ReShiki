@@ -2,7 +2,7 @@
   "rules": [
     {
       "id": "arguments.object",
-      "cite": "crates/agent/src/ops/catalog.rs:52,69-80; crates/agent/src/ops/analyze.rs:67-68"
+      "cite": "crates/agent/src/ops/catalog.rs:55,73-84; crates/agent/src/ops/analyze.rs:67-68"
     },
     {
       "id": "analyze.document_required",

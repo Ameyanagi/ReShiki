@@ -1,0 +1,78 @@
+{
+  "rules": [
+    {
+      "id": "arguments.object",
+      "cite": "crates/agent/src/ops/catalog.rs:58,73-84; crates/agent/src/ops/compose.rs:91-94"
+    },
+    {
+      "id": "compose.proposal_required",
+      "cite": "crates/agent/src/ops/compose.rs:56,59,66-68,95-96"
+    },
+    {
+      "id": "compose.proposal_as_assistant",
+      "cite": "crates/agent/src/ops/compose.rs:56,95-97; crates/agent/src/lib.rs:110-186,191-204; src/assistant/codex.rs:487-488"
+    },
+    {
+      "id": "compose.replace_ids_empty",
+      "cite": "crates/agent/src/ops/compose.rs:29-31,97-100; crates/agent/src/lib.rs:117-127"
+    },
+    {
+      "id": "compose.has_drawing",
+      "cite": "crates/agent/src/ops/compose.rs:33-34,101-103; crates/agent/src/lib.rs:187-189"
+    },
+    {
+      "id": "compose.style_document_nullable_required",
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/compose.rs:57,59,69-70"
+    },
+    {
+      "id": "compose.style_document_handle",
+      "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,182-185"
+    },
+    {
+      "id": "compose.no_unknown_fields",
+      "cite": "crates/agent/src/ops/compose.rs:54,66-71"
+    }
+  ],
+  "import": {"file": "proposal-cases.json", "into": {"tool": "compose", "arguments": {"proposal": null, "style_document": null}}, "at": "/arguments/proposal"},
+  "bases": {},
+  "cases": [
+    {"name": "arguments_object", "rule": "arguments.object", "base": "reaction", "expect": "both_accept"},
+    {"name": "arguments_array", "rule": "arguments.object", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments", "value": [null, null]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "arguments_string", "rule": "arguments.object", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments", "value": "{}"}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "proposal_given", "rule": "compose.proposal_required", "base": "molecule", "expect": "both_accept"},
+    {"name": "proposal_omitted", "rule": "compose.proposal_required", "base": "reaction", "patch": [{"op": "remove", "path": "/arguments/proposal"}], "expect": "both_reject", "message": "missing field `proposal`"},
+    {"name": "proposal_null", "rule": "compose.proposal_required", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal", "value": null}], "expect": "both_reject", "message": "invalid type: null, expected struct Proposal"},
+    {"name": "proposal_array", "rule": "compose.proposal_required", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal", "value": []}], "expect": "both_reject"},
+    {"name": "molecules_accepted", "rule": "compose.proposal_as_assistant", "base": "molecule", "expect": "both_accept"},
+    {"name": "reaction_accepted", "rule": "compose.proposal_as_assistant", "base": "reaction", "expect": "both_accept"},
+    {"name": "branching_accepted", "rule": "compose.proposal_as_assistant", "base": "branching", "expect": "both_accept"},
+    {"name": "sketch_accepted", "rule": "compose.proposal_as_assistant", "base": "sketch", "expect": "both_accept"},
+    {"name": "pair_sketch_accepted", "rule": "compose.proposal_as_assistant", "base": "pair_sketch", "expect": "both_accept"},
+    {"name": "ligand_sketch_accepted", "rule": "compose.proposal_as_assistant", "base": "ligand_sketch", "expect": "both_accept"},
+    {"name": "rotation_45", "rule": "compose.proposal_as_assistant", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/reactions/0/reactants/0/rotation", "value": 45}], "expect": "both_reject", "message": "Use at most 32 molecules with short labels and valid SMILES"},
+    {"name": "molecules_33", "rule": "compose.proposal_as_assistant", "base": "molecule", "patch": [{"op": "replace", "path": "/arguments/proposal/molecules", "value": {"$repeat": {"smiles": "C", "label": "", "coefficient": 1, "rotation": 0, "compact": false}, "count": 33}}], "expect": "decoder_rejects_only", "message": "Use at most 32 molecules with short labels and valid SMILES"},
+    {"name": "sketch_and_molecules", "rule": "compose.proposal_as_assistant", "base": "sketch", "patch": [{"op": "add", "path": "/arguments/proposal/molecules/-", "value": {"smiles": "C", "label": "", "coefficient": 1, "rotation": 0, "compact": false}}], "expect": "decoder_rejects_only", "message": "Use either a diagram or SMILES molecules/reactions, not both"},
+    {"name": "explanation_omitted", "rule": "compose.proposal_as_assistant", "base": "reaction", "patch": [{"op": "remove", "path": "/arguments/proposal/explanation"}], "expect": "both_reject", "message": "missing field `explanation`"},
+    {"name": "proposal_unknown_field", "rule": "compose.proposal_as_assistant", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/proposal/style_document", "value": null}], "expect": "both_reject"},
+    {"name": "replace_ids_empty", "rule": "compose.replace_ids_empty", "base": "reaction", "expect": "both_accept"},
+    {"name": "replace_ids_one", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": [1]}], "expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
+    {"name": "replace_ids_decimal_string", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": ["1"]}], "expect": "both_reject"},
+    {"name": "replace_ids_zero_validated_first", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": [0]}], "expect": "both_reject", "message": "The proposal is too large; request a smaller drawing"},
+    {"name": "replace_ids_duplicate_validated_first", "rule": "compose.replace_ids_empty", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": [1, 1]}], "expect": "decoder_rejects_only", "message": "The proposal is too large; request a smaller drawing"},
+    {"name": "drawing_present", "rule": "compose.has_drawing", "base": "pair_sketch", "expect": "both_accept"},
+    {"name": "drawing_missing", "rule": "compose.has_drawing", "base": "empty", "expect": "decoder_rejects_only", "message": "A drawing needs at least one molecule, reaction or sketch"},
+    {"name": "replace_ids_checked_before_drawing", "rule": "compose.has_drawing", "base": "empty", "patch": [{"op": "replace", "path": "/arguments/proposal/replace_ids", "value": [7]}], "expect": "decoder_rejects_only", "message": "compose creates a new document; pass replacement IDs to apply as decimal strings"},
+    {"name": "style_document_null", "rule": "compose.style_document_nullable_required", "base": "reaction", "expect": "both_accept"},
+    {"name": "style_document_handle", "rule": "compose.style_document_nullable_required", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/style_document", "value": "doc_0123456789abcdef0123456789abcdef"}], "expect": "both_accept"},
+    {"name": "style_document_omitted", "rule": "compose.style_document_nullable_required", "base": "reaction", "patch": [{"op": "remove", "path": "/arguments/style_document"}], "expect": "both_reject", "message": "missing field `style_document`"},
+    {"name": "style_document_number", "rule": "compose.style_document_nullable_required", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/style_document", "value": 7}], "expect": "both_reject"},
+    {"name": "style_document_object", "rule": "compose.style_document_nullable_required", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/style_document", "value": {"document": "doc_1"}}], "expect": "both_reject"},
+    {"name": "handle_64_characters", "rule": "compose.style_document_handle", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/style_document", "value": {"$text": "a", "count": 64}}], "expect": "both_accept"},
+    {"name": "handle_65_characters", "rule": "compose.style_document_handle", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/style_document", "value": {"$text": "a", "count": 65}}], "expect": "both_reject", "message": "Document handles are 1 to 64 characters of A-Z, a-z, 0-9, \"_\" and \"-\""},
+    {"name": "handle_empty", "rule": "compose.style_document_handle", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/style_document", "value": ""}], "expect": "both_reject"},
+    {"name": "handle_dot", "rule": "compose.style_document_handle", "base": "reaction", "patch": [{"op": "replace", "path": "/arguments/style_document", "value": "doc.1"}], "expect": "both_reject"},
+    {"name": "known_fields_only", "rule": "compose.no_unknown_fields", "base": "molecule", "expect": "both_accept"},
+    {"name": "unknown_null_field", "rule": "compose.no_unknown_fields", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/replace_ids", "value": null}], "expect": "both_reject", "message": "unknown field `replace_ids`, expected `proposal` or `style_document`"},
+    {"name": "unknown_field", "rule": "compose.no_unknown_fields", "base": "reaction", "patch": [{"op": "add", "path": "/arguments/document", "value": "doc_1"}], "expect": "both_reject"}
+  ]
+}

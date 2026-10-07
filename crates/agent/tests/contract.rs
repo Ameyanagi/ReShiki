@@ -160,3 +160,35 @@ fn ops_export_schema_and_decoder_parity() {
         Err(failures) => panic!("{failures}"),
     }
 }
+
+const COMPOSE: Contract = Contract {
+    name: "ops-compose",
+    schema: || tools_schema(&["compose"]),
+    decode: decode_tool_call,
+    cases: "ops-compose-cases.json",
+};
+
+#[test]
+fn ops_compose_schema_and_decoder_parity() {
+    match corpus::check(&COMPOSE) {
+        Ok(report) => eprintln!("{report}"),
+        Err(failures) => panic!("{failures}"),
+    }
+}
+
+/// compose nests the Proposal schema verbatim: the bytes the assistant's
+/// `canvas_preview` publishes, pinned by the ops-1 golden.
+#[test]
+fn compose_nests_the_pinned_proposal_schema() {
+    let golden = include_str!("../../../tests/fixtures/agent-contract/proposal-schema.json")
+        .strip_suffix('\n')
+        .expect("proposal-schema.json ends in one LF");
+    let spec = SPECS
+        .iter()
+        .find(|spec| spec.name == "compose")
+        .expect("compose is in the catalog");
+    assert_eq!(
+        (spec.input_schema)()["properties"]["proposal"].to_string(),
+        golden
+    );
+}

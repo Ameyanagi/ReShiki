@@ -3,7 +3,7 @@ use super::{
     analyze,
     budget::Budgets,
     catalog::{self, Op},
-    documents,
+    compose, documents,
     error::{ErrorKind, OpError},
     exec::{Context, Executor},
     export,
@@ -74,6 +74,9 @@ async fn run(
         Op::Analyze(args) => analyze::analyze(ctx, store, engine, who, versions, args).await,
         Op::Render(args) => render::render(ctx, store, who, versions, budgets, args).await,
         Op::Export(args) => export::export(ctx, store, engine, who, versions, budgets, args).await,
+        Op::Compose(args) => {
+            compose::compose(ctx, store, engine, who, versions, budgets, *args).await
+        }
     }
 }
 
