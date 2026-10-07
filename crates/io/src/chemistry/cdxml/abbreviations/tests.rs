@@ -94,6 +94,9 @@ const GROUP_PARENT: [(&str, &str); 2] = [
 /// Both orders reversed, so the first pair is connection 12 with bond 6.
 const REVERSED: [(&str, &str); 2] = [("'5 6'", "'6 5'"), ("'11 12'", "'12 11'")];
 
+/// ConnectionOrder removed, so connections fall back to node order.
+const UNORDERED: [(&str, &str); 1] = [(" ConnectionOrder='11 12'", "")];
+
 #[test]
 fn single_attachment_diagnostics_and_precedence() {
     let inner = "<fragment id='4'>";
@@ -203,7 +206,7 @@ fn multiple_attachment_diagnostics_and_precedence() {
         &[
             (&[], "ok"),
             (&REVERSED, "ok"),
-            (&[(" ConnectionOrder='11 12'", "")], "ok"),
+            (&UNORDERED, "ok"),
             (&[(" BondOrdering='5 6'", "")], MULTIPLE),
             // The multiple-connection check wins over the non-fragment parent.
             (
@@ -279,10 +282,7 @@ fn multiple_attachments_place_by_the_first_reordered_pair() {
     let reversed = edit(ASYMMETRIC_TWO_CONNECTIONS, &REVERSED);
     assert_eq!(accepted(&reversed), pair(xml, abbreviations));
     // (iii) An absent ConnectionOrder falls back to node order, giving (i).
-    let unordered = edit(
-        ASYMMETRIC_TWO_CONNECTIONS,
-        &[(" ConnectionOrder='11 12'", "")],
-    );
+    let unordered = edit(ASYMMETRIC_TWO_CONNECTIONS, &UNORDERED);
     assert_eq!(accepted(&unordered), written);
 }
 
@@ -332,6 +332,12 @@ fn expansion_work_is_pinned() {
     assert_eq!(
         expansions(&edit(ASYMMETRIC_TWO_CONNECTIONS, &REVERSED)),
         [(248, 3, 2)]
+    );
+    // The node-order fallback is built whether or not ConnectionOrder is
+    // present, so dropping it spends the same work as the written order.
+    assert_eq!(
+        expansions(&edit(ASYMMETRIC_TWO_CONNECTIONS, &UNORDERED)),
+        [(247, 3, 2)]
     );
     assert_eq!(expansions(HIGHLIGHTED), [(233, 2, 1)]);
     assert_eq!(expansions(LABELED), [(140, 1, 0)]);
