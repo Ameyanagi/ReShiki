@@ -99,7 +99,9 @@ const GRANT_HINT: &str = ". Folders are granted by the user when the server star
 
 /// The message is `"{access code}: {message}"`, so clients and tests can
 /// read the specific reason under the operation code; `path_not_granted`
-/// adds how folders are granted.
+/// adds how folders are granted. When that would be cut at
+/// [`OpError::MAX_MESSAGE_CHARS`], the echoed path and lists are
+/// [`shortened`] instead, so the reason and the hint stay whole.
 ///
 /// - `path_invalid` is [`ErrorKind::InvalidArguments`];
 /// - `extension_not_allowed`, `path_not_granted`, `path_escapes_root` and
@@ -126,6 +128,69 @@ impl From<AccessError> for OpError {
             AccessError::PathNotGranted { .. } => GRANT_HINT,
             _ => "",
         };
-        Self::new(kind, format!("{}: {error}{hint}", error.code()))
+        let message = |error: &AccessError| format!("{}: {error}{hint}", error.code());
+        let full = message(&error);
+        if full.chars().count() <= Self::MAX_MESSAGE_CHARS {
+            return Self::new(kind, full);
+        }
+        Self::new(kind, message(&shortened(error)))
+    }
+}
+
+/// A message too long for [`OpError::MAX_MESSAGE_CHARS`] keeps this many
+/// characters of each echoed path and list, so the reason and the grant hint
+/// always fit.
+const SHORT_CHARS: usize = 100;
+
+/// `error` with its path, its lists and its I/O message cut to
+/// [`SHORT_CHARS`] each.
+fn shortened(mut error: AccessError) -> AccessError {
+    match &mut error {
+        AccessError::PathNotGranted { path, roots, .. } => {
+            *path = shorten(path);
+            shorten_list(roots);
+        }
+        AccessError::ExtensionNotAllowed { path, allowed } => {
+            *path = shorten(path);
+            shorten_list(allowed);
+        }
+        AccessError::Io { path, message } => {
+            *path = shorten(path);
+            *message = shorten(message);
+        }
+        AccessError::PathInvalid { path, .. }
+        | AccessError::PathEscapesRoot { path }
+        | AccessError::NotARegularFile { path }
+        | AccessError::FileTooLarge { path, .. }
+        | AccessError::FileExists { path }
+        | AccessError::FileNotFound { path }
+        | AccessError::OsDenied { path }
+        | AccessError::NoClobberUnsupported { path } => *path = shorten(path),
+    }
+    error
+}
+
+/// `text` as at most [`SHORT_CHARS`] characters: its start and its end around
+/// an ellipsis, so a path keeps its root and its file name.
+fn shorten(text: &str) -> String {
+    let count = text.chars().count();
+    if count <= SHORT_CHARS {
+        return text.to_owned();
+    }
+    let head = (SHORT_CHARS - 1) / 2;
+    let tail = SHORT_CHARS - 1 - head;
+    text.chars()
+        .take(head)
+        .chain(['…'])
+        .chain(text.chars().skip(count.saturating_sub(tail)))
+        .collect()
+}
+
+/// A list displayed joined by ", ", as one [`shorten`]ed entry when the
+/// joined list is longer than [`SHORT_CHARS`].
+fn shorten_list(list: &mut Vec<String>) {
+    let joined = list.join(", ");
+    if joined.chars().count() > SHORT_CHARS {
+        *list = vec![shorten(&joined)];
     }
 }

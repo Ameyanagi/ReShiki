@@ -24,6 +24,7 @@ use crate::{
         Grants, WriteMode,
         extensions::{FileFormat, READ, WRITE, extension_not_allowed},
     },
+    document::Document,
     engine::LocalEngine,
     envelope::{Envelope, ExportReceipt, ValidationStatus, Versions},
     tool_spec::{Hints, ToolSpec},
@@ -52,7 +53,7 @@ pub const FILE_OPEN: ToolSpec = ToolSpec {
 pub const FILE_SAVE: ToolSpec = ToolSpec {
     name: "file_save",
     title: Some("Save file"),
-    description: "Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg, pdf or png figures, or cdxml, mol, smiles or inchi chemistry, made exactly as export makes them. Use an absolute path inside a folder the user granted for writing when the server started; info lists the granted folders and the extensions files save to. The parent folder must exist; folders are never created. format null follows the extension; any other format must be the extension's own. Existing files are kept unless overwrite is true, which replaces them. pages: true saves every publication page as one PDF; pass null or false otherwise. Returns a receipt {path, format, byte_len, replaced, detail}.",
+    description: "Save a session document as a file: a native ReShiki drawing (reshiki, .rsk), svg, pdf or png figures, or cdxml, mol, smiles or inchi chemistry, made exactly as export makes them. Every file is at most max_output_bytes. Use an absolute path inside a folder the user granted for writing when the server started; info lists the granted folders and the extensions files save to. The parent folder must exist; folders are never created. format null follows the extension; any other format must be the extension's own. Existing files are kept unless overwrite is true, which replaces them. pages: true saves every publication page as one PDF; pass null or false otherwise. Returns a receipt {path, format, byte_len, replaced, detail}.",
     input_schema: save_schema,
     hints: Some(Hints {
         read_only: false,
@@ -341,10 +342,31 @@ struct Saved {
     receipt: SaveReceipt,
 }
 
+/// The native file of `doc`, `Document::file_json` as the app saves it, at
+/// most `limit` ([`Budgets::max_output_bytes`]) bytes, as [`export_bytes`]
+/// bounds every other format.
+fn native_bytes(doc: &Document, limit: usize) -> Result<Vec<u8>, OpError> {
+    let bytes = doc
+        .file_json()
+        .map_err(|error| OpError::new(ErrorKind::Failed, error))?;
+    if bytes.len() > limit {
+        return Err(OpError::new(
+            ErrorKind::Budget,
+            format!(
+                "The reshiki file is {} bytes; max_output_bytes allows at most {limit}. Reduce the drawing",
+                bytes.len()
+            ),
+        ));
+    }
+    Ok(bytes)
+}
+
 /// Saves a snapshot of the document to a granted file.
 ///
-/// - reshiki: the native file, `Document::file_json`, as the app saves;
-/// - every other format: [`export_bytes`], with the export tool's budgets.
+/// - reshiki: the native file, [`native_bytes`];
+/// - every other format: [`export_bytes`].
+///
+/// Both are at most [`Budgets::max_output_bytes`], as export's files are.
 ///
 /// The write is the effect, after the last cancellation point: a new file is
 /// published without clobbering anything, and `overwrite: true` replaces a
@@ -378,12 +400,8 @@ pub(crate) async fn file_save(
     let (bytes, receipt, mut messages) = match format.export() {
         Some(export) => export_bytes(&ctx, &engine, doc, export, pages, &budgets).await?,
         None => {
-            let bytes = ctx
-                .blocking(move || {
-                    doc.file_json()
-                        .map_err(|error| OpError::new(ErrorKind::Failed, error))
-                })
-                .await?;
+            let limit = budgets.max_output_bytes;
+            let bytes = ctx.blocking(move || native_bytes(&doc, limit)).await?;
             let receipt = ExportReceipt {
                 format: format.name().to_owned(),
                 byte_len: bytes.len(),

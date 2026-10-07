@@ -191,12 +191,83 @@ fn access_errors_keep_their_code_under_the_operation_kind() {
             assert_eq!(mapped.message, expected);
         }
     }
-    // A long echoed path stays within the message cap.
-    let long = OpError::from(AccessError::FileExists {
-        path: "a".repeat(512),
-    });
-    assert_eq!(long.message.chars().count(), OpError::MAX_MESSAGE_CHARS);
-    assert!(long.message.starts_with("file_exists: \""));
+}
+
+#[test]
+fn long_paths_and_lists_are_shortened_so_the_reason_and_hint_fit() {
+    let short = || "/x/a.mol".to_owned();
+    let long = || format!("/{}/a.mol", "p".repeat(4090));
+    let errors: [fn(String) -> AccessError; 10] = [
+        |path| AccessError::PathInvalid {
+            path,
+            rule: "dotdot",
+        },
+        |path| AccessError::PathEscapesRoot { path },
+        |path| AccessError::NotARegularFile { path },
+        |path| AccessError::FileTooLarge { path, limit: 9 },
+        |path| AccessError::FileExists { path },
+        |path| AccessError::FileNotFound { path },
+        |path| AccessError::OsDenied { path },
+        |path| AccessError::NoClobberUnsupported { path },
+        |path| AccessError::ExtensionNotAllowed {
+            path,
+            allowed: READ.iter().map(|&ext| ext.into()).collect(),
+        },
+        |path| AccessError::PathNotGranted {
+            path,
+            access: "reading",
+            roots: Vec::new(),
+        },
+    ];
+    for error in errors {
+        let expected = OpError::from(error(short())).message;
+        let (head, rest) = expected.split_once(&short()).unwrap();
+        let mapped = OpError::from(error(long())).message;
+        assert!(
+            mapped.chars().count() < OpError::MAX_MESSAGE_CHARS,
+            "{mapped}"
+        );
+        assert!(
+            mapped.starts_with(head) && mapped.ends_with(rest),
+            "{mapped}"
+        );
+        assert!(mapped.contains("pp…pp"), "{mapped}");
+        assert!(mapped.contains("a.mol"), "{mapped}");
+    }
+    // A path that fits is echoed whole.
+    let fits = format!("/{}/a.mol", "p".repeat(400));
+    let whole = OpError::from(AccessError::FileExists { path: fits.clone() }).message;
+    assert_eq!(whole, format!("file_exists: \"{fits}\" already exists"));
+    let granted = OpError::from(AccessError::PathNotGranted {
+        path: long(),
+        access: "writing",
+        roots: (0..40).map(|n| format!("/granted/folder-{n}")).collect(),
+    })
+    .message;
+    assert!(granted.chars().count() < OpError::MAX_MESSAGE_CHARS);
+    assert!(
+        granted.contains(
+            "\" is not inside a folder granted for writing; granted folders: /granted/folder-0, "
+        ),
+        "{granted}"
+    );
+    assert!(
+        granted.contains("/granted/folder-39. Folders are granted by the user"),
+        "{granted}"
+    );
+    assert!(granted.ends_with("info lists them."), "{granted}");
+    let failed = OpError::from(AccessError::Io {
+        path: long(),
+        message: "x".repeat(600),
+    })
+    .message;
+    assert!(failed.chars().count() < OpError::MAX_MESSAGE_CHARS);
+    assert!(
+        failed.starts_with("io_error: I/O error on \"/pp"),
+        "{failed}"
+    );
+    let message = format!("\": {}…{}", "x".repeat(49), "x".repeat(50));
+    assert!(failed.ends_with(&message), "{failed}");
 }
 
 #[test]
@@ -452,6 +523,20 @@ async fn without_grants_every_path_is_refused_and_nothing_is_touched() {
     assert_eq!(code, "access_denied");
     assert!(message.starts_with("path_not_granted: "), "{message}");
     assert!(message.contains("no folders are granted for writing"));
+    // A long path still leaves room for the reason and the hint.
+    let long = ["a", "b", "c"]
+        .iter()
+        .fold(dir.path().to_path_buf(), |path, name| {
+            path.join(name.repeat(200))
+        })
+        .join("a.mol");
+    assert!(text(&long).chars().count() > OpError::MAX_MESSAGE_CHARS);
+    let (code, message) = failure(&host, "file_open", open_args(&long)).await;
+    assert_eq!(code, "access_denied");
+    assert!(message.starts_with("path_not_granted: "), "{message}");
+    assert!(message.contains("…"), "{message}");
+    assert!(message.contains("no folders are granted for reading"));
+    assert!(message.ends_with("info lists them."), "{message}");
     assert_eq!(inventory(dir.path()), before);
     assert_eq!(documents(&host), 1);
 }
@@ -547,6 +632,39 @@ async fn an_oversize_file_is_refused_before_the_engine() {
     assert!(message.starts_with("file_too_large: "), "{message}");
     assert!(message.contains("64-byte limit"), "{message}");
     assert_eq!(documents(&host), 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_file_over_max_output_bytes_is_refused_and_nothing_is_touched() {
+    let dir = tempfile::tempdir().unwrap();
+    for name in ["kept.rsk", "kept.svg"] {
+        fs::write(dir.path().join(name), b"kept").unwrap();
+    }
+    let before = inventory(dir.path());
+    let budgets = Budgets {
+        max_output_bytes: 1,
+        ..Budgets::default()
+    };
+    let host = HeadlessHost::new("9.8.7", budgets).with_grants(Arc::new(both(dir.path())));
+    let empty = ok(&host, "document_new", json!({})).await["document"].clone();
+    let document = ethanol(&host).await;
+    for (document, name, overwrite) in [
+        (&empty, "new.rsk", false),
+        (&document, "new.rsk", false),
+        (&document, "kept.rsk", true),
+        (&document, "new.svg", false),
+        (&document, "kept.svg", true),
+    ] {
+        let path = dir.path().join(name);
+        let (code, message) =
+            failure(&host, "file_save", save_args(document, &path, overwrite)).await;
+        assert_eq!(code, "budget", "{name}");
+        assert!(
+            message.contains("bytes; max_output_bytes allows at most 1."),
+            "{message}"
+        );
+    }
+    assert_eq!(inventory(dir.path()), before);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
