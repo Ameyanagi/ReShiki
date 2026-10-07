@@ -50,7 +50,9 @@
 //! that overlaps ReShiki's data, earlier installations' data or the
 //! executable's folder ([`Protected`]), even before they exist. Unix
 //! `/proc`, `/sys` and `/dev`, and the Windows system folder, are refused
-//! too. [`Grants::narrowed`] can only shrink a grant set.
+//! too. A protected location that cannot be resolved (other than by being
+//! absent) is a startup error. [`Grants::narrowed`] can only shrink a grant
+//! set.
 //!
 //! Outside this module the crate may not touch the filesystem directly:
 //! `crates/agent/clippy.toml` disallows std, tokio and ambient cap-std

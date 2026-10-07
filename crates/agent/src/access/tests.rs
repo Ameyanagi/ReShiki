@@ -896,7 +896,7 @@ fn a_symlinked_configuration_loads() {
 }
 
 fn unprotected() -> Protected {
-    Protected::new(Vec::new(), None, None)
+    Protected::new(Vec::new(), None, None).unwrap()
 }
 
 fn sources(config: AccessConfig, read: &[PathBuf], write: &[PathBuf], cwd: &Path) -> GrantSources {
@@ -1018,7 +1018,7 @@ fn home_and_its_ancestors_are_too_broad() {
     let users = folder(&base, "users");
     let home = folder(&users, "me");
     let documents = folder(&home, "documents");
-    let protected = Protected::new(Vec::new(), Some(home.clone()), None);
+    let protected = Protected::new(Vec::new(), Some(home.clone()), None).unwrap();
     for refused in [&home, &users, &base] {
         assert_refused(&protected, refused, GrantError::TooBroad(refused.clone()));
     }
@@ -1033,7 +1033,7 @@ fn protected_folders_cannot_be_granted_inside_or_around() {
     let data = folder(&parent, "data");
     let inside = folder(&data, "inside");
     let sibling = folder(&parent, "sibling");
-    let protected = Protected::new(vec![data.clone()], None, None);
+    let protected = Protected::new(vec![data.clone()], None, None).unwrap();
     for refused in [&data, &inside, &parent, &base] {
         assert_refused(&protected, refused, GrantError::Protected(refused.clone()));
     }
@@ -1045,7 +1045,7 @@ fn an_absent_data_folder_stays_protected() {
     let (_dir, base) = sandbox();
     let parent = folder(&base, "parent");
     let data = parent.join("data");
-    let protected = Protected::new(vec![data.clone()], None, None);
+    let protected = Protected::new(vec![data.clone()], None, None).unwrap();
     assert_eq!(protected.paths, slice::from_ref(&data));
     assert_refused(&protected, &parent, GrantError::Protected(parent.clone()));
     // Once the app creates it, it is protected itself.
@@ -1057,19 +1057,26 @@ fn an_absent_data_folder_stays_protected() {
 fn projection_canonicalizes_the_existing_part_and_appends_the_rest() {
     let (_dir, base) = sandbox();
     let real = folder(&base, "real");
-    assert_eq!(project(&real), real);
-    assert_eq!(project(&real.join("a").join("b")), real.join("a").join("b"));
+    assert_eq!(project(&real).unwrap(), real);
     assert_eq!(
-        project(&real.join("a").join("..").join("b")),
+        project(&real.join("a").join("b")).unwrap(),
+        real.join("a").join("b")
+    );
+    assert_eq!(
+        project(&real.join("a").join("..").join("b")).unwrap(),
         real.join("b")
     );
+    // Nothing can exist under a file, so that is absence too.
+    let file = base.join("file");
+    fs::write(&file, b"").unwrap();
+    assert_eq!(project(&file.join("x")).unwrap(), file.join("x"));
     #[cfg(unix)]
     {
         let alias = base.join("alias");
         std::os::unix::fs::symlink(&real, &alias).unwrap();
-        assert_eq!(project(&alias.join("absent")), real.join("absent"));
+        assert_eq!(project(&alias.join("absent")).unwrap(), real.join("absent"));
         // A data folder reached through a symlink protects the real folder.
-        let protected = Protected::new(vec![alias.join("absent")], None, None);
+        let protected = Protected::new(vec![alias.join("absent")], None, None).unwrap();
         assert_refused(&protected, &real, GrantError::Protected(real.clone()));
     }
 }
@@ -1079,7 +1086,7 @@ fn the_system_root_and_everything_inside_it_are_protected() {
     let (_dir, base) = sandbox();
     let windows = folder(&base, "Windows");
     let system32 = folder(&windows, "System32");
-    let protected = Protected::new(Vec::new(), None, Some(windows.clone()));
+    let protected = Protected::new(Vec::new(), None, Some(windows.clone())).unwrap();
     for refused in [&windows, &system32] {
         assert_refused(&protected, refused, GrantError::Protected(refused.clone()));
     }
@@ -1101,6 +1108,30 @@ fn the_macos_app_bundle_encloses_its_executable_folder() {
     assert_eq!(app_bundle(&executables), Some(bundle));
     assert_eq!(app_bundle(&applications), None);
     assert_eq!(app_bundle(&applications.join("MacOS")), None);
+    // An ordinary folder with that layout is not a bundle, so its siblings
+    // stay grantable.
+    let project = PathBuf::from(absolute("project"));
+    assert_eq!(app_bundle(&project.join("Contents").join("MacOS")), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_protected_location_that_cannot_be_resolved_is_an_error() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let (_dir, base) = sandbox();
+    let locked = folder(&base, "locked");
+    let target = folder(&base, "target");
+    std::os::unix::fs::symlink(&target, locked.join("data")).unwrap();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    let result = Protected::new(vec![locked.join("data")], None, None);
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+    // Without search permission the symlink's target is unknown: never guess
+    // it from the spelling. (Root ignores the permission and finds it.)
+    match result {
+        Err(GrantError::Config(message)) => assert!(message.contains("data"), "{message}"),
+        Ok(protected) => assert_eq!(protected.paths, [target]),
+        Err(other) => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
@@ -1227,4 +1258,45 @@ fn narrowing_opens_sub_roots_through_the_root_handle() {
             .code(),
         "path_not_granted"
     );
+}
+
+#[test]
+fn narrowing_judges_a_relative_grant_by_where_it_resolves() {
+    let (_dir, base) = sandbox();
+    let a = folder(&base, "a");
+    let b = folder(&base, "b");
+    fs::write(b.join("f.mol"), b"mol").unwrap();
+    // Granted from cwd `a` as `../b`: the root is `b`, spelled `a/../b`.
+    let up = [PathBuf::from("..").join("b")];
+    let grants = Grants::from_sources(
+        &sources(AccessConfig::empty(), &up, &up, &a),
+        &unprotected(),
+    )
+    .unwrap();
+    let request = text(&b.join("f.mol"));
+    let created = text(&b.join("new.mol"));
+    assert_eq!(grants.read(&request, 64, FORMATS).unwrap(), b"mol");
+    // `a/../b` lies in `b`, not `a`: narrowing to `a` keeps nothing, and
+    // neither does a limit spelled with `..`.
+    for limits in [slice::from_ref(&a), &[a.join("..").join("b")]] {
+        let narrowed = grants.narrowed(limits);
+        assert!(narrowed.read.is_empty() && narrowed.write.is_empty());
+        assert_eq!(
+            narrowed.read(&request, 64, FORMATS).unwrap_err().code(),
+            "path_not_granted"
+        );
+        assert_eq!(
+            narrowed
+                .write_atomic(&created, b"new", WriteMode::CreateNew, FORMATS)
+                .unwrap_err()
+                .code(),
+            "path_not_granted"
+        );
+    }
+    // Narrowing to where it really is keeps it for reading and writing.
+    let kept = grants.narrowed(slice::from_ref(&b));
+    assert_eq!(kept.read(&request, 64, FORMATS).unwrap(), b"mol");
+    kept.write_atomic(&created, b"new", WriteMode::CreateNew, FORMATS)
+        .unwrap();
+    assert_eq!(fs::read(b.join("new.mol")).unwrap(), b"new");
 }

@@ -8,7 +8,10 @@ use super::{
 use reshiki_io::compatibility::{
     data_directory_location, home_directory, legacy_data_directory_location,
 };
-use std::path::{Component, Path, PathBuf};
+use std::{
+    io,
+    path::{Component, Path, PathBuf},
+};
 
 /// Pseudo file systems that expose the system and other processes.
 #[cfg(unix)]
@@ -37,7 +40,7 @@ impl Protected {
         })?;
         // The canonical executable, so a symlinked launcher protects the
         // real installation folder.
-        let executable = project(&executable);
+        let executable = project(&executable)?;
         if let Some(folder) = executable.parent() {
             paths.push(folder.to_path_buf());
             #[cfg(target_os = "macos")]
@@ -47,17 +50,27 @@ impl Protected {
         let system_root = std::env::var_os("SystemRoot").map(PathBuf::from);
         #[cfg(not(windows))]
         let system_root = None;
-        Ok(Self::new(paths, home_directory(), system_root))
+        Self::new(paths, home_directory(), system_root)
     }
 
     /// Protected locations from explicit paths, projected as
     /// [`Protected::current`] projects its own. For tests and embedders.
-    pub fn new(paths: Vec<PathBuf>, home: Option<PathBuf>, system_root: Option<PathBuf>) -> Self {
-        Self {
-            paths: paths.iter().map(|path| project(path)).collect(),
-            home: home.as_deref().map(project),
-            system_root: system_root.as_deref().map(project),
-        }
+    ///
+    /// A location that cannot be resolved (other than by being absent) is an
+    /// error: its real place is unknown, so nothing could be checked against it.
+    pub fn new(
+        paths: Vec<PathBuf>,
+        home: Option<PathBuf>,
+        system_root: Option<PathBuf>,
+    ) -> Result<Self, GrantError> {
+        Ok(Self {
+            paths: paths
+                .iter()
+                .map(|path| project(path))
+                .collect::<Result<_, _>>()?,
+            home: home.as_deref().map(project).transpose()?,
+            system_root: system_root.as_deref().map(project).transpose()?,
+        })
     }
 
     /// Refuse a root whose canonical path is too broad or protected.
@@ -104,10 +117,14 @@ impl Protected {
 /// The canonical form of `path`, whether it exists or not: its longest
 /// existing ancestor canonicalized, then the missing components appended
 /// lexically. Windows paths get [`Root::open`]'s plain drive spelling.
+///
+/// Only absence (not found, or under a file) moves on to a shorter
+/// ancestor. Any other failure, such as a folder without search permission,
+/// may hide an existing symlink whose target is unknown, so it is an error.
 // Protected locations lie outside every grant by definition, so they are
 // resolved with ambient authority; nothing is opened or created.
 #[allow(clippy::disallowed_methods)]
-pub(super) fn project(path: &Path) -> PathBuf {
+pub(super) fn project(path: &Path) -> Result<PathBuf, GrantError> {
     let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
     let components: Vec<Component<'_>> = absolute.components().collect();
     for existing in (1..=components.len()).rev() {
@@ -115,8 +132,22 @@ pub(super) fn project(path: &Path) -> PathBuf {
             continue;
         };
         let known: PathBuf = known.iter().collect();
-        let Ok(canonical) = std::fs::canonicalize(&known) else {
-            continue;
+        let canonical = match std::fs::canonicalize(&known) {
+            Ok(canonical) => canonical,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                ) =>
+            {
+                continue;
+            }
+            Err(error) => {
+                return Err(GrantError::Config(format!(
+                    "cannot resolve the protected location {}: {error}",
+                    path.display()
+                )));
+            }
         };
         // A network or device location stays as the operating system spells
         // it; no grantable root can match it either way.
@@ -130,9 +161,9 @@ pub(super) fn project(path: &Path) -> PathBuf {
                 Component::CurDir | Component::RootDir | Component::Prefix(_) => {}
             }
         }
-        return projected;
+        return Ok(projected);
     }
-    absolute
+    Ok(absolute)
 }
 
 /// The `.app` bundle around a macOS executable folder `X.app/Contents/MacOS`.
@@ -141,7 +172,11 @@ pub(super) fn app_bundle(folder: &Path) -> Option<PathBuf> {
     if !folder.ends_with("Contents/MacOS") {
         return None;
     }
-    folder.parent()?.parent().map(Path::to_path_buf)
+    let bundle = folder.parent()?.parent()?;
+    bundle
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("app"))
+        .then(|| bundle.to_path_buf())
 }
 
 /// Every source of grants for one process.
