@@ -51,29 +51,6 @@ impl Glyph {
         } else {
             Color::from_rgb8(187, 193, 199)
         };
-        let line = |f: &mut crate::canvas::layered::Frame<'_>, points: &[(f32, f32)]| {
-            let path = Path::new(|p| {
-                if let Some((x, y)) = points.first() {
-                    p.move_to(Point::new(*x, *y));
-                }
-                for (x, y) in points.iter().skip(1) {
-                    p.line_to(Point::new(*x, *y));
-                }
-            });
-            f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
-        };
-        let polygon = |f: &mut crate::canvas::layered::Frame<'_>, points: &[(f32, f32)]| {
-            let path = Path::new(|p| {
-                if let Some((x, y)) = points.first() {
-                    p.move_to(Point::new(*x, *y));
-                }
-                for (x, y) in points.iter().skip(1) {
-                    p.line_to(Point::new(*x, *y));
-                }
-                p.close();
-            });
-            f.fill(&path, ink);
-        };
         match self.0 {
             Icon::ColorTiles(soft) => {
                 for (i, color) in [
@@ -101,11 +78,11 @@ impl Glyph {
                 }
             }
             Icon::Trash => {
-                line(f, &[(4., 6.), (20., 6.)]);
-                line(f, &[(9., 6.), (9., 3.), (15., 3.), (15., 6.)]);
-                line(f, &[(6., 6.), (7., 21.), (17., 21.), (18., 6.)]);
-                line(f, &[(10., 9.), (10., 18.)]);
-                line(f, &[(14., 9.), (14., 18.)]);
+                line(f, ink, &[(4., 6.), (20., 6.)]);
+                line(f, ink, &[(9., 6.), (9., 3.), (15., 3.), (15., 6.)]);
+                line(f, ink, &[(6., 6.), (7., 21.), (17., 21.), (18., 6.)]);
+                line(f, ink, &[(10., 9.), (10., 18.)]);
+                line(f, ink, &[(14., 9.), (14., 18.)]);
             }
             Icon::Sun => {
                 f.stroke(
@@ -116,6 +93,7 @@ impl Glyph {
                     let a = i as f32 * std::f32::consts::FRAC_PI_4;
                     line(
                         f,
+                        ink,
                         &[
                             (12. + 7. * a.cos(), 12. + 7. * a.sin()),
                             (12. + 10. * a.cos(), 12. + 10. * a.sin()),
@@ -155,17 +133,22 @@ impl Glyph {
                 f.stroke(&outline, Stroke::default().with_width(1.3).with_color(ink));
                 for y in [9., 12.5] {
                     for x in [5., 9.5, 14., 18.5] {
-                        line(f, &[(x, y), (x + 0.6, y)]);
+                        line(f, ink, &[(x, y), (x + 0.6, y)]);
                     }
                 }
-                line(f, &[(7., 16.5), (17., 16.5)]);
+                line(f, ink, &[(7., 16.5), (17., 16.5)]);
             }
             Icon::Tool(Tool::Chain(mode)) => {
                 if mode == reshiki::chains::ChainMode::Straight {
-                    line(f, &[(2., 15.), (7., 8.), (12., 15.), (17., 8.), (22., 15.)]);
+                    line(
+                        f,
+                        ink,
+                        &[(2., 15.), (7., 8.), (12., 15.), (17., 8.), (22., 15.)],
+                    );
                 } else {
                     line(
                         f,
+                        ink,
                         &[
                             (2., 19.),
                             (7., 13.),
@@ -213,7 +196,7 @@ impl Glyph {
                 f.stroke(&path, Stroke::default().with_color(ink).with_width(1.5));
             }
             Icon::Tool(Tool::EditPoints) => {
-                line(f, &[(4., 19.), (9., 5.), (20., 12.)]);
+                line(f, ink, &[(4., 19.), (9., 5.), (20., 12.)]);
                 for p in [
                     Point::new(4., 19.),
                     Point::new(9., 5.),
@@ -237,6 +220,7 @@ impl Glyph {
                     };
                     line(
                         f,
+                        ink,
                         &[(x, 5.0 + i as f32 * 4.5), (x + width, 5.0 + i as f32 * 4.5)],
                     );
                 }
@@ -244,6 +228,7 @@ impl Glyph {
             Icon::Tool(Tool::Select) => {
                 line(
                     f,
+                    ink,
                     &[
                         (5., 3.),
                         (5., 20.),
@@ -281,6 +266,7 @@ impl Glyph {
                 // A foreshortened ring and curved rotation arrow.
                 line(
                     f,
+                    ink,
                     &[
                         (3., 13.),
                         (8., 8.),
@@ -296,7 +282,7 @@ impl Glyph {
                     p.bezier_curve_to(Point::new(8., 0.), Point::new(19., 0.), Point::new(22., 6.));
                 });
                 f.stroke(&arc, Stroke::default().with_width(1.6).with_color(ink));
-                line(f, &[(17., 4.), (22., 6.), (22., 1.)]);
+                line(f, ink, &[(17., 4.), (22., 6.), (22., 1.)]);
             }
             Icon::Tool(Tool::Bond(order)) => {
                 let offsets: &[f32] = match order {
@@ -305,22 +291,22 @@ impl Glyph {
                     _ => &[0.],
                 };
                 for dy in offsets {
-                    line(f, &[(4., 18. + dy), (20., 6. + dy)]);
+                    line(f, ink, &[(4., 18. + dy), (20., 6. + dy)]);
                 }
             }
             Icon::Tool(Tool::StyledBond(preset)) => {
                 use reshiki::bonds::BondPreset as P;
                 match preset {
                     P::Dative => {
-                        line(f, &[(3., 19.), (20., 5.), (13., 6.)]);
-                        line(f, &[(20., 5.), (18., 12.)]);
+                        line(f, ink, &[(3., 19.), (20., 5.), (13., 6.)]);
+                        line(f, ink, &[(20., 5.), (18., 12.)]);
                     }
                     P::Quadruple => {
                         for dy in [-4.5, -1.5, 1.5, 4.5] {
-                            line(f, &[(4., 17. + dy), (20., 7. + dy)]);
+                            line(f, ink, &[(4., 17. + dy), (20., 7. + dy)]);
                         }
                     }
-                    P::HollowWedge => line(f, &[(4., 19.), (17., 3.), (22., 10.), (4., 19.)]),
+                    P::HollowWedge => line(f, ink, &[(4., 19.), (17., 3.), (22., 10.), (4., 19.)]),
                     P::Bold => f.stroke(
                         &Path::line(Point::new(4., 19.), Point::new(20., 5.)),
                         Stroke::default().with_width(4.).with_color(ink),
@@ -339,6 +325,7 @@ impl Glyph {
                             let t = i as f32 / 4.;
                             line(
                                 f,
+                                ink,
                                 &[
                                     (4. + 16. * t, 19. - 14. * t),
                                     (4. + 16. * (t + 0.13), 19. - 14. * (t + 0.13)),
@@ -351,26 +338,30 @@ impl Glyph {
                             let t = i as f32 / 5.;
                             let x = 5. + 14. * t;
                             let y = 19. - 13. * t;
-                            line(f, &[(x - 2.5, y - 2.5), (x + 2.5, y + 2.5)]);
+                            line(f, ink, &[(x - 2.5, y - 2.5), (x + 2.5, y + 2.5)]);
                         }
                     }
                     P::CrossedDouble => {
-                        line(f, &[(4., 19.), (20., 5.)]);
-                        line(f, &[(4., 15.), (20., 9.)]);
+                        line(f, ink, &[(4., 19.), (20., 5.)]);
+                        line(f, ink, &[(4., 15.), (20., 9.)]);
                     }
                     _ => {
-                        line(f, &[(4., 19.), (20., 7.)]);
-                        line(f, &[(4., 15.), (20., 3.)]);
+                        line(f, ink, &[(4., 19.), (20., 7.)]);
+                        line(f, ink, &[(4., 15.), (20., 3.)]);
                     }
                 }
             }
-            Icon::Tool(Tool::Wedge) => polygon(f, &[(4., 19.), (17., 3.), (22., 10.)]),
+            Icon::Tool(Tool::Wedge) => polygon(f, ink, &[(4., 19.), (17., 3.), (22., 10.)]),
             Icon::Tool(Tool::Hash) => {
                 for i in 0..6 {
                     let t = i as f32 / 5.;
                     let x = 5. + 14. * t;
                     let y = 19. - 13. * t;
-                    line(f, &[(x - 3. * t, y - 3. * t), (x + 3. * t, y + 3. * t)]);
+                    line(
+                        f,
+                        ink,
+                        &[(x - 3. * t, y - 3. * t), (x + 3. * t, y + 3. * t)],
+                    );
                 }
             }
             Icon::Tool(Tool::Wavy) => {
@@ -399,10 +390,11 @@ impl Glyph {
                         continue;
                     };
                     let (a, b) = (a.position, b.position);
-                    line(f, &[(12. + a.x, 12. + a.y), (12. + b.x, 12. + b.y)]);
+                    line(f, ink, &[(12. + a.x, 12. + a.y), (12. + b.x, 12. + b.y)]);
                     if bond.order == 2 {
                         line(
                             f,
+                            ink,
                             &[
                                 (12. + a.x * 0.68, 12. + a.y * 0.68),
                                 (12. + b.x * 0.68, 12. + b.y * 0.68),
@@ -422,7 +414,7 @@ impl Glyph {
                         (12. + 9. * a.cos(), 12. + 9. * a.sin())
                     })
                     .collect();
-                line(f, &points);
+                line(f, ink, &points);
                 if aromatic {
                     f.stroke(
                         &Path::circle(Point::new(12., 12.), 5.7),
@@ -441,8 +433,8 @@ impl Glyph {
                     _ => Preset::Forward,
                 };
                 if preset == Preset::Forward {
-                    line(f, &[(3., 12.), (21., 12.)]);
-                    line(f, &[(15., 6.), (21., 12.), (15., 18.)]);
+                    line(f, ink, &[(3., 12.), (21., 12.)]);
+                    line(f, ink, &[(15., 6.), (21., 12.), (15., 18.)]);
                     return;
                 }
                 let style = ArrowStyle {
@@ -481,9 +473,9 @@ impl Glyph {
                 }
             }
             Icon::Tool(Tool::Text) => {
-                line(f, &[(4., 7.), (4., 4.), (20., 4.), (20., 7.)]);
-                line(f, &[(12., 4.), (12., 21.)]);
-                line(f, &[(8., 21.), (16., 21.)]);
+                line(f, ink, &[(4., 7.), (4., 4.), (20., 4.), (20., 7.)]);
+                line(f, ink, &[(12., 4.), (12., 21.)]);
+                line(f, ink, &[(8., 21.), (16., 21.)]);
             }
             Icon::Tool(Tool::Atom) => {
                 f.fill_text(canvas::Text {
@@ -497,6 +489,7 @@ impl Glyph {
             Icon::Tool(Tool::Erase) => {
                 line(
                     f,
+                    ink,
                     &[
                         (3., 15.),
                         (14., 4.),
@@ -506,11 +499,12 @@ impl Glyph {
                         (3., 15.),
                     ],
                 );
-                line(f, &[(8., 10.), (16., 18.)]);
+                line(f, ink, &[(8., 10.), (16., 18.)]);
             }
             Icon::New => {
                 line(
                     f,
+                    ink,
                     &[
                         (6., 3.),
                         (16., 3.),
@@ -520,12 +514,13 @@ impl Glyph {
                         (6., 3.),
                     ],
                 );
-                line(f, &[(16., 3.), (16., 7.), (20., 7.)]);
-                line(f, &[(10., 13.), (16., 13.)]);
-                line(f, &[(13., 10.), (13., 16.)]);
+                line(f, ink, &[(16., 3.), (16., 7.), (20., 7.)]);
+                line(f, ink, &[(10., 13.), (16., 13.)]);
+                line(f, ink, &[(13., 10.), (13., 16.)]);
             }
             Icon::Open => line(
                 f,
+                ink,
                 &[
                     (3., 20.),
                     (3., 5.),
@@ -543,6 +538,7 @@ impl Glyph {
             Icon::Save => {
                 line(
                     f,
+                    ink,
                     &[
                         (4., 3.),
                         (18., 3.),
@@ -552,12 +548,13 @@ impl Glyph {
                         (4., 3.),
                     ],
                 );
-                line(f, &[(8., 3.), (8., 9.), (17., 9.), (17., 3.)]);
-                line(f, &[(8., 21.), (8., 14.), (17., 14.), (17., 21.)]);
+                line(f, ink, &[(8., 3.), (8., 9.), (17., 9.), (17., 3.)]);
+                line(f, ink, &[(8., 21.), (8., 14.), (17., 14.), (17., 21.)]);
             }
             Icon::SaveAs => {
                 line(
                     f,
+                    ink,
                     &[
                         (8., 21.),
                         (3., 21.),
@@ -567,10 +564,11 @@ impl Glyph {
                         (19., 8.),
                     ],
                 );
-                line(f, &[(7., 3.), (7., 9.), (15., 9.), (15., 3.)]);
-                line(f, &[(7., 21.), (7., 14.), (10., 14.)]);
+                line(f, ink, &[(7., 3.), (7., 9.), (15., 9.), (15., 3.)]);
+                line(f, ink, &[(7., 21.), (7., 14.), (10., 14.)]);
                 line(
                     f,
+                    ink,
                     &[
                         (10., 22.),
                         (11., 17.),
@@ -580,13 +578,14 @@ impl Glyph {
                         (10., 22.),
                     ],
                 );
-                line(f, &[(17., 11.), (21., 15.)]);
+                line(f, ink, &[(17., 11.), (21., 15.)]);
             }
             Icon::Assistant(working) => {
                 for (x, y, r) in [(9., 13., 7.), (19., 5., 3.)] {
                     let inset = r * 0.28;
                     line(
                         f,
+                        ink,
                         &[
                             (x, y - r),
                             (x + inset, y - inset),
@@ -612,16 +611,17 @@ impl Glyph {
                     &Path::circle(Point::new(12., 12.), 9.),
                     Stroke::default().with_width(1.6).with_color(ink),
                 );
-                line(f, &[(7., 12.), (10.5, 15.5), (17., 8.5)]);
+                line(f, ink, &[(7., 12.), (10.5, 15.5), (17., 8.5)]);
             }
             Icon::Cleanup => {
-                line(f, &[(18., 2.), (11., 11.)]);
+                line(f, ink, &[(18., 2.), (11., 11.)]);
                 line(
                     f,
+                    ink,
                     &[(10., 10.), (15., 14.), (10., 22.), (2., 17.), (10., 10.)],
                 );
-                line(f, &[(8., 15.), (5., 18.)]);
-                line(f, &[(11., 17.), (8., 20.)]);
+                line(f, ink, &[(8., 15.), (5., 18.)]);
+                line(f, ink, &[(11., 17.), (8., 20.)]);
             }
             Icon::Undo | Icon::Redo => {
                 let points = [
@@ -639,22 +639,26 @@ impl Glyph {
                         p
                     }
                 };
-                line(f, &points.map(flip));
-                line(f, &[(10., 4.), (5., 9.), (10., 14.)].map(flip));
+                line(f, ink, &points.map(flip));
+                line(f, ink, &[(10., 4.), (5., 9.), (10., 14.)].map(flip));
             }
             Icon::Import | Icon::Export => {
-                line(f, &[(4., 15.), (4., 21.), (20., 21.), (20., 15.)]);
+                line(f, ink, &[(4., 15.), (4., 21.), (20., 21.), (20., 15.)]);
                 let points = if matches!(self.0, Icon::Import) {
                     [(7., 10.), (12., 15.), (17., 10.)]
                 } else {
                     [(7., 8.), (12., 3.), (17., 8.)]
                 };
-                line(f, &points);
-                line(f, &[(12., 3.), (12., 15.)]);
+                line(f, ink, &points);
+                line(f, ink, &[(12., 3.), (12., 15.)]);
             }
             Icon::Inspector => {
-                line(f, &[(3., 4.), (21., 4.), (21., 20.), (3., 20.), (3., 4.)]);
-                line(f, &[(15., 4.), (15., 20.)]);
+                line(
+                    f,
+                    ink,
+                    &[(3., 4.), (21., 4.), (21., 20.), (3., 20.), (3., 4.)],
+                );
+                line(f, ink, &[(15., 4.), (15., 20.)]);
             }
             Icon::More => {
                 for x in [5., 12., 19.] {
@@ -684,6 +688,31 @@ impl Glyph {
             }
         }
     }
+}
+
+fn line(f: &mut crate::canvas::layered::Frame<'_>, ink: Color, points: &[(f32, f32)]) {
+    let path = Path::new(|p| {
+        if let Some((x, y)) = points.first() {
+            p.move_to(Point::new(*x, *y));
+        }
+        for (x, y) in points.iter().skip(1) {
+            p.line_to(Point::new(*x, *y));
+        }
+    });
+    f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
+}
+
+fn polygon(f: &mut crate::canvas::layered::Frame<'_>, ink: Color, points: &[(f32, f32)]) {
+    let path = Path::new(|p| {
+        if let Some((x, y)) = points.first() {
+            p.move_to(Point::new(*x, *y));
+        }
+        for (x, y) in points.iter().skip(1) {
+            p.line_to(Point::new(*x, *y));
+        }
+        p.close();
+    });
+    f.fill(&path, ink);
 }
 
 #[cfg(test)]
