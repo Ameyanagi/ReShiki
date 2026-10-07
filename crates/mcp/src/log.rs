@@ -10,7 +10,7 @@
 //! tool names, arguments and document text are never logged, and the API
 //! enforces this by construction: [`Log::event`] takes a `&'static str` and
 //! numeric fields, [`Log::panicked`] a source location, and [`Log::notice`]
-//! exists for the startup banner's version string.
+//! exists for the startup banner's version string and granted folders.
 use std::{
     fmt,
     io::Write,
@@ -154,7 +154,8 @@ impl Log {
     }
 
     /// Logs `what value` whatever the level. Its only caller is the startup
-    /// banner, whose value is the version string.
+    /// banner, whose value is the version string and the granted folders,
+    /// whose paths it lists only at debug level.
     pub fn notice(&self, what: &'static str, value: &str) {
         self.send(Level::Info, &format!("{what} {value}"));
     }

@@ -5,6 +5,10 @@
 //! other argv keeps the existing worker, Office, engine-check and GUI routing.
 
 use reshiki::updates::CURRENT_VERSION;
+use reshiki_agent::{
+    access::{self, GRANT_EXIT_CODE, GrantSummary, Grants},
+    ops::{budget::Budgets, headless::HeadlessHost, host::ToolHost, wire::Principal},
+};
 use reshiki_mcp::{
     framing::Limits,
     log::{Level, Log, UnknownLevel},
@@ -14,7 +18,9 @@ use std::{
     ffi::OsString,
     fmt,
     io::{self, IsTerminal, Write},
+    path::PathBuf,
     process,
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::runtime::{Builder, Runtime};
@@ -85,21 +91,28 @@ pub(crate) fn cli(args: Vec<OsString>) -> ! {
 
 const MCP_USAGE: &str = "\
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
-Usage: reshiki --mcp [--log-level <level>]
+Usage: reshiki --mcp [--log-level <level>] [--allow-read <folder>]... [--allow-write <folder>]...
 
 Serves the Model Context Protocol on stdin and stdout; it is meant to be
 launched by an MCP client. Diagnostics go to stderr.
 
 Options:
-  --log-level <level>  error, warn (default), info or debug
-  -h, --help           Show this help
+  --log-level <level>     error, warn (default), info or debug
+  --allow-read <folder>   Let file_open read files in <folder>; repeatable
+  --allow-write <folder>  Let file_save write files in <folder>; repeatable
+  -h, --help              Show this help
+
+Folders listed in agent-access.json in ReShiki's data folder are granted too.
 ";
 
 /// The startup banner, logged whatever the level.
 const BANNER: &str = "ReShiki agent API (experimental)";
 
-/// How long shutdown may wait for the output to drain and the log to stop.
+/// How long shutdown may wait for running calls to end, the output to
+/// drain and the log to stop.
 const SHUTDOWN: Duration = Duration::from_secs(3);
+/// The longest wait for running calls to end once serving stopped.
+const DRAIN_GRACE: Duration = Duration::from_secs(1);
 /// The longest wait for the log to flush before exiting.
 const LOG_GRACE: Duration = Duration::from_millis(200);
 /// How long the runtime's leftover tasks get before the process exits.
@@ -108,7 +121,13 @@ const RUNTIME_GRACE: Duration = Duration::from_millis(500);
 /// What `reshiki --mcp <args>` asks for.
 #[derive(Debug, PartialEq, Eq)]
 enum McpRequest {
-    Serve { level: Level },
+    Serve {
+        level: Level,
+        /// `--allow-read` folders, in order.
+        read: Vec<PathBuf>,
+        /// `--allow-write` folders, in order.
+        write: Vec<PathBuf>,
+    },
     Help,
 }
 
@@ -121,6 +140,9 @@ enum McpUsageError {
     Duplicate(&'static str),
     /// `--log-level` without a value.
     MissingLevel,
+    /// `--allow-read` or `--allow-write` without a folder, or with an empty
+    /// one.
+    MissingFolder(&'static str),
     /// `--log-level` with an unknown value, lossily decoded.
     InvalidLevel(String),
     /// Any other token, lossily decoded.
@@ -136,6 +158,7 @@ impl fmt::Display for McpUsageError {
             ),
             Self::Duplicate(option) => write!(f, "reshiki --mcp: {option} given more than once"),
             Self::MissingLevel => f.write_str("reshiki --mcp: --log-level needs a value"),
+            Self::MissingFolder(option) => write!(f, "reshiki --mcp: {option} needs a folder"),
             Self::InvalidLevel(level) => {
                 write!(
                     f,
@@ -147,14 +170,29 @@ impl fmt::Display for McpUsageError {
     }
 }
 
-/// Parses the tokens after `--mcp`. Each option may appear at most once and
-/// the first problem wins; `--help` counts only when nothing is wrong.
+/// Parses the tokens after `--mcp`. `--allow-read` and `--allow-write` may
+/// repeat, every other option appears at most once, and the first problem
+/// wins; `--help` counts only when nothing is wrong.
 fn mcp_request(args: &[OsString]) -> Result<McpRequest, McpUsageError> {
     let mut level = None;
     let mut help = false;
+    let mut read = Vec::new();
+    let mut write = Vec::new();
     let mut tokens = args.iter();
     while let Some(token) = tokens.next() {
-        if token == "--log-level" {
+        let folders = if token == "--allow-read" {
+            Some(("--allow-read", &mut read))
+        } else if token == "--allow-write" {
+            Some(("--allow-write", &mut write))
+        } else {
+            None
+        };
+        if let Some((option, folders)) = folders {
+            let folder = tokens.next().filter(|folder| !folder.is_empty());
+            folders.push(PathBuf::from(
+                folder.ok_or(McpUsageError::MissingFolder(option))?,
+            ));
+        } else if token == "--log-level" {
             if level.is_some() {
                 return Err(McpUsageError::Duplicate("--log-level"));
             }
@@ -180,16 +218,51 @@ fn mcp_request(args: &[OsString]) -> Result<McpRequest, McpUsageError> {
     } else {
         McpRequest::Serve {
             level: level.unwrap_or(Level::Warn),
+            read,
+            write,
         }
     })
+}
+
+/// The folders granted on the command line and in `agent-access.json`;
+/// relative command-line folders resolve against the current folder.
+fn load_grants(read: Vec<PathBuf>, write: Vec<PathBuf>) -> Result<Grants, String> {
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(_) if read.iter().chain(&write).all(|folder| folder.is_absolute()) => PathBuf::new(),
+        Err(error) => return Err(format!("cannot resolve relative folders: {error}")),
+    };
+    access::load(read, write, cwd).map_err(|error| error.to_string())
+}
+
+/// The startup banner's value: the version and the granted folders, counted,
+/// or listed at debug level. Paths never reach stderr otherwise.
+fn banner(version: &str, grants: &GrantSummary, level: Level) -> String {
+    if level == Level::Debug {
+        // Debug formatting escapes control characters, keeping one line.
+        format!(
+            "{version}; granted folders: read {:?}, write {:?}",
+            grants.read, grants.write
+        )
+    } else {
+        format!(
+            "{version}; granted folders: {} read, {} write",
+            grants.read.len(),
+            grants.write.len()
+        )
+    }
 }
 
 /// `reshiki --mcp`: serves MCP on stdin and stdout until stdin ends or
 /// stdout fails, then exits 0 if every response was delivered, else 1.
 ///
+/// The granted folders are opened before anything is read: a folder that
+/// cannot be granted, or an unreadable `agent-access.json`, prints one
+/// stderr line and exits [`GRANT_EXIT_CODE`].
+///
 /// Stdout carries MCP messages only: the framing's writer thread takes its
 /// lock for the whole connection, and nothing else here writes it. Stderr
-/// gets usage errors before the log starts and only the bounded,
+/// gets usage and grant errors before the log starts and only the bounded,
 /// content-free log after, so neither stream can block shutdown once the
 /// input ended: stdin is read on its own thread, every wait below shares
 /// one deadline, and [`exit`] never locks a std stream.
@@ -199,8 +272,8 @@ fn mcp_request(args: &[OsString]) -> Result<McpRequest, McpUsageError> {
 /// read only once it reads stdout again or closes it; closing it fails the
 /// writer and exits 1.
 pub(crate) fn mcp(args: Vec<OsString>) -> ! {
-    let level = match mcp_request(&args) {
-        Ok(McpRequest::Serve { level }) => level,
+    let (level, read, write) = match mcp_request(&args) {
+        Ok(McpRequest::Serve { level, read, write }) => (level, read, write),
         Ok(McpRequest::Help) => {
             let _ = io::stderr().write_all(MCP_USAGE.as_bytes());
             process::exit(0)
@@ -214,9 +287,21 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
             process::exit(2)
         }
     };
+    let grants = match load_grants(read, write) {
+        Ok(grants) => grants,
+        Err(error) => {
+            // One line, even for a folder name with a line break in it.
+            let error: String = error
+                .chars()
+                .map(|c| if c.is_control() { ' ' } else { c })
+                .collect();
+            let _ = writeln!(io::stderr(), "reshiki --mcp: {error}");
+            process::exit(GRANT_EXIT_CODE)
+        }
+    };
     let (log, log_done) = Log::start(io::stderr, level);
     reshiki_mcp::install_panic_hook(log.clone());
-    log.notice(BANNER, CURRENT_VERSION);
+    log.notice(BANNER, &banner(CURRENT_VERSION, &grants.summary(), level));
     if io::stdin().is_terminal() {
         log.event(
             Level::Warn,
@@ -232,7 +317,12 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
             process::exit(1)
         }
     };
+    let host = Arc::new(
+        HeadlessHost::new(CURRENT_VERSION, Budgets::default()).with_grants(Arc::new(grants)),
+    );
     let result = runtime.block_on(server::serve(
+        Arc::clone(&host),
+        Principal::local(),
         io::stdin(),
         || io::stdout().lock(),
         Identity {
@@ -244,6 +334,13 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
     // One deadline, set before any waiting, bounds the rest of shutdown.
     let started = Instant::now();
     let remaining = || SHUTDOWN.saturating_sub(started.elapsed());
+    // Running calls are cancelled; their blocking work may outlast this.
+    let drain = remaining().min(DRAIN_GRACE);
+    let drained =
+        runtime.block_on(async { tokio::time::timeout(drain, host.drained()).await.is_ok() });
+    if !drained {
+        log.event(Level::Warn, "calls still running at exit", &[]);
+    }
     let code = match result {
         Ok(finished) => {
             let delivered = finished.writer.wait(remaining());
@@ -255,7 +352,7 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
             )
         }
         // `serve` already logged the failure at error level.
-        Err(ServeError::Init) => 1,
+        Err(ServeError::Init | ServeError::Catalog) => 1,
     };
     log_done.finish(remaining().min(LOG_GRACE));
     exit(runtime, code, RUNTIME_GRACE)

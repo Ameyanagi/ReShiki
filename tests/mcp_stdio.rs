@@ -1,8 +1,8 @@
 //! `reshiki --mcp` served over the real process's stdin and stdout.
 //!
-//! Every session runs under a 60 s watchdog. Stdout must carry only
-//! JSON-RPC 2.0 objects, one per line, and stderr never carries client
-//! content.
+//! Every session runs under a 60 s watchdog, with an empty data folder.
+//! Stdout must carry only JSON-RPC 2.0 objects, one per line, and stderr
+//! never carries client content.
 #[path = "common/headless.rs"]
 mod headless;
 
@@ -18,6 +18,8 @@ const LINE_TIMEOUT: Duration = Duration::from_secs(10);
 const WATCHDOG: Duration = Duration::from_secs(60);
 const CANARY: &str = "RESHIKI-CANARY-7f3a";
 const BANNER: &str = "reshiki-mcp: info: ReShiki agent API (experimental) ";
+/// The banner's end when no folder is granted.
+const NO_GRANTS: &str = "; granted folders: 0 read, 0 write\n";
 
 fn modern_meta() -> Value {
     json!({
@@ -71,7 +73,7 @@ fn run_fixture(name: &str, transcript: &str) {
     let stderr = session.stderr(LINE_TIMEOUT);
     assert_eq!(
         stderr,
-        format!("{BANNER}{}\n", env!("CARGO_PKG_VERSION")),
+        format!("{BANNER}{}{NO_GRANTS}", env!("CARGO_PKG_VERSION")),
         "{name}"
     );
 }
@@ -152,6 +154,9 @@ fn usage_errors_exit_2_without_output() {
         &["--mcp", "--log-level"],
         &["--mcp", "--log-level", "loud"],
         &["--mcp", "--log-level", "warn", "--log-level", "debug"],
+        &["--mcp", "--allow-read"],
+        &["--mcp", "--allow-write"],
+        &["--mcp", "--allow-read", ""],
     ] {
         let output = run(args);
         assert_eq!(output.status.code(), Some(2), "{args:?}");
@@ -175,6 +180,98 @@ fn usage_errors_exit_2_without_output() {
         "{stderr}"
     );
     assert!(stderr.contains("Usage: reshiki --mcp"), "{stderr}");
+}
+
+fn info(session: &mut McpSession, id: i64) -> Value {
+    session.send(json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tools/call",
+        "params": {"name": "info", "arguments": {}, "_meta": modern_meta()},
+    }));
+    let reply = session.recv_for(Some(&json!(id)), LINE_TIMEOUT);
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    reply["result"]["structuredContent"].clone()
+}
+
+/// A folder that cannot be granted exits 2 with one stderr line, before
+/// stdin is read: stdin stays open and nothing is written to stdout.
+#[test]
+fn a_grant_error_exits_2_before_reading_stdin() {
+    let folders = tempfile::tempdir().unwrap();
+    let missing = folders.path().join("missing");
+    let file = folders.path().join("file.txt");
+    std::fs::write(&file, "not a folder").unwrap();
+    // Windows may report a file differently; Unix says it is no folder.
+    let not_a_folder = if cfg!(unix) {
+        "granted path is not a folder: "
+    } else {
+        ""
+    };
+    for (option, folder, reason) in [
+        ("--allow-read", &missing, "granted folder not found: "),
+        ("--allow-write", &missing, "granted folder not found: "),
+        ("--allow-read", &file, not_a_folder),
+    ] {
+        let folder = folder.to_str().unwrap();
+        let mut session = McpSession::start(&[option, folder], StderrMode::Captured);
+        let status = session.wait_exit(LINE_TIMEOUT);
+        assert_eq!(status.code(), Some(2), "{option} {folder}");
+        assert_eq!(session.rest(LINE_TIMEOUT), Vec::<Value>::new());
+        let stderr = session.stderr(LINE_TIMEOUT);
+        assert!(
+            stderr.starts_with(&format!("reshiki --mcp: {reason}")),
+            "{stderr}"
+        );
+        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+        assert!(stderr.ends_with('\n'), "{stderr}");
+    }
+}
+
+/// Granted folders reach info and the banner: counted at the default level,
+/// listed at debug level.
+#[test]
+fn granted_folders_reach_info_and_the_banner() {
+    let folders = tempfile::tempdir().unwrap();
+    let read = folders.path().join("in");
+    let write = folders.path().join("out");
+    std::fs::create_dir(&read).unwrap();
+    std::fs::create_dir(&write).unwrap();
+    let (read, write) = (read.to_str().unwrap(), write.to_str().unwrap());
+    let args = ["--allow-read", read, "--allow-write", write];
+    let mut session = McpSession::start(&args, StderrMode::Captured);
+    assert_eq!(
+        info(&mut session, 1)["grants"],
+        json!({"read": [read], "write": [write]})
+    );
+    session.close_stdin();
+    assert_eq!(session.wait_exit(LINE_TIMEOUT).code(), Some(0));
+    let stderr = session.stderr(LINE_TIMEOUT);
+    assert_eq!(
+        stderr,
+        format!(
+            "{BANNER}{}; granted folders: 1 read, 1 write\n",
+            env!("CARGO_PKG_VERSION")
+        )
+    );
+    assert!(
+        !stderr.contains(read) && !stderr.contains(write),
+        "{stderr}"
+    );
+
+    let debug = [&args[..], &["--log-level", "debug"]].concat();
+    let mut session = McpSession::start(&debug, StderrMode::Captured);
+    session.await_stderr(BANNER, WATCHDOG);
+    session.close_stdin();
+    assert_eq!(session.wait_exit(LINE_TIMEOUT).code(), Some(0));
+    let stderr = session.stderr(LINE_TIMEOUT);
+    let banner = format!(
+        "{BANNER}{}; granted folders: read {:?}, write {:?}\n",
+        env!("CARGO_PKG_VERSION"),
+        [read],
+        [write]
+    );
+    assert!(stderr.starts_with(&banner), "{stderr}");
 }
 
 #[test]
@@ -296,19 +393,25 @@ fn a_response_abandoned_behind_a_full_stdout_exits_1() {
     );
 }
 
-/// The rmcp client discovers the server, lists its tools and, once
-/// dropped, closes stdin so the server exits 0.
+/// The rmcp client discovers the server, lists the operation tools, calls
+/// info and, once dropped, closes stdin so the server exits 0.
 #[test]
 fn the_rmcp_client_interoperates() {
-    use rmcp::{ClientLifecycleMode, model::ProtocolVersion, serve_client_with_lifecycle};
+    use rmcp::{
+        ClientLifecycleMode,
+        model::{CallToolRequestParams, ProtocolVersion},
+        serve_client_with_lifecycle,
+    };
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
         .expect("runtime");
+    let data = headless::data_dir();
     runtime.block_on(async {
         let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_reshiki"))
             .arg("--mcp")
+            .env("RESHIKI_DATA_DIR", data.path())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -333,7 +436,19 @@ fn the_rmcp_client_interoperates() {
             assert_eq!(server.name, "reshiki");
             assert_eq!(server.version, env!("CARGO_PKG_VERSION"));
             let tools = client.list_tools(None).await.expect("tools/list");
-            assert!(tools.tools.is_empty(), "{:?}", tools.tools);
+            let names: Vec<&str> = tools.tools.iter().map(|tool| tool.name.as_ref()).collect();
+            let catalog: Vec<&str> = reshiki_agent::ops::catalog::SPECS
+                .iter()
+                .map(|spec| spec.name)
+                .collect();
+            assert_eq!(names, catalog);
+            let info = client
+                .call_tool(CallToolRequestParams::new("info"))
+                .await
+                .expect("tools/call info");
+            assert_eq!(info.is_error, Some(false));
+            let structured = info.structured_content.expect("structuredContent");
+            assert_eq!(structured["operation_api"], 1, "{structured}");
             drop(client);
             child.wait().await.expect("wait for reshiki --mcp")
         };

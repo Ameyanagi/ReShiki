@@ -192,7 +192,7 @@ fn parse(line: &[u8]) -> serde_json::Result<ClientJsonRpcMessage> {
     serde_json::from_slice(line)
 }
 
-fn key_of(id: &NumberOrString) -> Key {
+pub(crate) fn key_of(id: &NumberOrString) -> Key {
     match id {
         NumberOrString::Number(value) => Key::Int(*value),
         NumberOrString::String(text) => Key::Str(Arc::clone(text)),

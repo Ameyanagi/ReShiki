@@ -62,7 +62,13 @@ fn non_utf8_tokens_are_compared_and_kept_as_bytes() {
 #[test]
 fn mcp_options_follow_the_grammar() {
     use McpUsageError::{Attach, Duplicate, InvalidLevel, MissingLevel, Unknown};
-    let serve = |level| Ok(McpRequest::Serve { level });
+    let serve = |level| {
+        Ok(McpRequest::Serve {
+            level,
+            read: Vec::new(),
+            write: Vec::new(),
+        })
+    };
     for (tokens, expected) in [
         (&[][..], serve(Level::Warn)),
         (&["--log-level", "error"], serve(Level::Error)),
@@ -101,6 +107,109 @@ fn mcp_options_follow_the_grammar() {
     }
 }
 
+#[test]
+fn grant_folders_repeat_and_keep_their_order() {
+    use McpUsageError::{Attach, Duplicate, MissingFolder, MissingLevel, Unknown};
+    let folders = |tokens: &[&str]| tokens.iter().map(PathBuf::from).collect::<Vec<_>>();
+    let serve = |level, read: &[&str], write: &[&str]| {
+        Ok(McpRequest::Serve {
+            level,
+            read: folders(read),
+            write: folders(write),
+        })
+    };
+    for (tokens, expected) in [
+        (
+            &["--allow-read", "/in"][..],
+            serve(Level::Warn, &["/in"], &[]),
+        ),
+        (&["--allow-write", "out"], serve(Level::Warn, &[], &["out"])),
+        (
+            &[
+                "--allow-read",
+                "/a",
+                "--allow-write",
+                "/w",
+                "--allow-read",
+                "b",
+                "--log-level",
+                "debug",
+                "--allow-read",
+                "/a",
+            ],
+            serve(Level::Debug, &["/a", "b", "/a"], &["/w"]),
+        ),
+        // A folder is any token, even one that looks like an option.
+        (
+            &["--allow-read", "--log-level"],
+            serve(Level::Warn, &["--log-level"], &[]),
+        ),
+        (&["--allow-read", "/in", "--help"], Ok(McpRequest::Help)),
+        (&["--allow-read"], Err(MissingFolder("--allow-read"))),
+        (&["--allow-write"], Err(MissingFolder("--allow-write"))),
+        (&["--allow-read", ""], Err(MissingFolder("--allow-read"))),
+        (
+            &["--allow-write", "/w", "--allow-write", ""],
+            Err(MissingFolder("--allow-write")),
+        ),
+        (&["--allow-read", "/in", "--attach"], Err(Attach)),
+        (&["--allow-read", "/in", "--log-level"], Err(MissingLevel)),
+        (
+            &["--help", "--allow-write", "/w", "--help"],
+            Err(Duplicate("--help")),
+        ),
+        (
+            &["--allow-read=/in"],
+            Err(Unknown("--allow-read=/in".into())),
+        ),
+        (&["--allow-dir", "/in"], Err(Unknown("--allow-dir".into()))),
+    ] {
+        assert_eq!(mcp_request(&args(tokens)), expected, "{tokens:?}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_folders_are_kept_as_bytes() {
+    use std::os::unix::ffi::OsStringExt;
+    let folder = OsString::from_vec(b"/in\xff".to_vec());
+    assert_eq!(
+        mcp_request(&[OsString::from("--allow-read"), folder.clone()]),
+        Ok(McpRequest::Serve {
+            level: Level::Warn,
+            read: vec![PathBuf::from(folder)],
+            write: Vec::new(),
+        })
+    );
+}
+
+#[test]
+fn the_banner_counts_folders_and_lists_them_only_at_debug() {
+    let grants = GrantSummary {
+        read: vec!["/in".into(), "/a \"b\"\nc".into()],
+        write: vec!["/out".into()],
+    };
+    for level in [Level::Error, Level::Warn, Level::Info] {
+        assert_eq!(
+            banner("1.2.3", &grants, level),
+            "1.2.3; granted folders: 2 read, 1 write",
+            "{level:?}"
+        );
+    }
+    assert_eq!(
+        banner("1.2.3", &grants, Level::Debug),
+        r#"1.2.3; granted folders: read ["/in", "/a \"b\"\nc"], write ["/out"]"#
+    );
+    let none = GrantSummary {
+        read: Vec::new(),
+        write: Vec::new(),
+    };
+    assert_eq!(
+        banner("1.2.3", &none, Level::Warn),
+        "1.2.3; granted folders: 0 read, 0 write"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn non_utf8_mcp_tokens_are_usage_errors() {
@@ -131,8 +240,15 @@ fn mcp_usage_errors_name_the_problem() {
         McpUsageError::Duplicate("--log-level").to_string(),
         "reshiki --mcp: --log-level given more than once"
     );
+    assert_eq!(
+        McpUsageError::MissingFolder("--allow-write").to_string(),
+        "reshiki --mcp: --allow-write needs a folder"
+    );
     assert!(MCP_USAGE.starts_with("Experimental: "));
-    assert!(MCP_USAGE.contains("Usage: reshiki --mcp [--log-level <level>]\n"));
+    assert!(MCP_USAGE.contains(
+        "Usage: reshiki --mcp [--log-level <level>] [--allow-read <folder>]... \
+         [--allow-write <folder>]...\n"
+    ));
 }
 
 #[test]

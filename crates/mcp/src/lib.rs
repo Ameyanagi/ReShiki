@@ -4,9 +4,10 @@
 //! owns the bounded line framing that `reshiki --mcp` serves over stdio:
 //! [`framing`] reads and writes one JSON-RPC message per line on dedicated
 //! threads, with admission, backpressure and cancellation tracking, and
-//! [`log`] is the bounded, content-free stderr log. [`server`] serves the
-//! MCP protocol over that framing with rmcp, through the crate's own
-//! transport, and [`install_panic_hook`] keeps panic payloads off stderr.
+//! [`log`] is the bounded, content-free stderr log. [`server`] serves a
+//! `reshiki_agent` tool host's tools over that framing with rmcp, through
+//! the crate's own transport, and [`install_panic_hook`] keeps panic
+//! payloads off stderr.
 //!
 //! The crate never installs a tracing subscriber and holds no static
 //! connection state: every tracker, status and log belongs to one
@@ -29,10 +30,15 @@
     )
 )]
 
+mod content;
+#[cfg(test)]
+#[path = "../tests/common/fake_host.rs"]
+mod fake_host;
 pub mod framing;
 pub mod log;
 mod panic;
 pub mod server;
+mod tools;
 mod transport;
 
 pub use panic::install_panic_hook;

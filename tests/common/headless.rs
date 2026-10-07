@@ -13,6 +13,7 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
+use tempfile::TempDir;
 
 /// Starts the reshiki binary with `args`, piping stdout and stderr.
 pub fn spawn(args: &[&str], stdin: Stdio) -> Child {
@@ -87,10 +88,17 @@ enum StderrPipe {
     Unread(ChildStderr),
 }
 
+/// An empty data folder for one child, so a developer's own
+/// `agent-access.json` never grants it anything.
+pub fn data_dir() -> TempDir {
+    tempfile::tempdir().expect("temporary data folder")
+}
+
 /// `reshiki --mcp` with piped stdin and stdout. Every stdout line is
 /// asserted to be one JSON-RPC 2.0 object when it is received. A watchdog
 /// kills the child after [`MCP_WATCHDOG`], so a hung server fails the test
-/// instead of stalling it.
+/// instead of stalling it. The child's `RESHIKI_DATA_DIR` is an empty
+/// temporary folder.
 pub struct McpSession {
     child: Arc<Mutex<Child>>,
     stdin: Option<ChildStdin>,
@@ -101,6 +109,8 @@ pub struct McpSession {
     stdout_hold: Option<Sender<()>>,
     /// Dropping it stops the watchdog.
     _watchdog: Sender<()>,
+    /// The child's data folder.
+    _data: TempDir,
 }
 
 impl McpSession {
@@ -122,9 +132,11 @@ impl McpSession {
     }
 
     fn spawn(args: &[&str], stderr: StderrMode, stdout_mode: StdoutMode) -> Self {
+        let data = data_dir();
         let mut child = Command::new(env!("CARGO_BIN_EXE_reshiki"))
             .arg("--mcp")
             .args(args)
+            .env("RESHIKI_DATA_DIR", data.path())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -187,6 +199,7 @@ impl McpSession {
             stderr,
             stdout_hold: matches!(stdout_mode, StdoutMode::Held).then_some(hold),
             _watchdog: watchdog,
+            _data: data,
         }
     }
 
@@ -320,7 +333,9 @@ impl McpSession {
 
     /// `message` with the app version and each tool's definition reduced to
     /// stable placeholders: `serverInfo.version` becomes `<app>` and each
-    /// tool becomes its name.
+    /// tool becomes its name. In a tool result, `versions.app` becomes
+    /// `<app>` and `versions.engine_protocol` `<engine>`, and the text copy
+    /// of `structuredContent`, once checked, becomes `<structuredContent>`.
     pub fn normalize(mut message: Value) -> Value {
         if let Some(result) = message.get_mut("result") {
             let modern = result
@@ -336,6 +351,18 @@ impl McpSession {
             if let Some(Value::Array(tools)) = result.get_mut("tools") {
                 for tool in tools {
                     *tool = tool["name"].clone();
+                }
+            }
+            if let Some(structured) = result.get("structuredContent").cloned() {
+                let copy = result["content"][0]["text"]
+                    .as_str()
+                    .expect("a text copy of structuredContent comes first");
+                let copy: Value = serde_json::from_str(copy).expect("the copy is JSON");
+                assert_eq!(copy, structured, "the text copy matches structuredContent");
+                result["content"][0]["text"] = Value::from("<structuredContent>");
+                if let Some(versions) = result["structuredContent"].get_mut("versions") {
+                    versions["app"] = Value::from("<app>");
+                    versions["engine_protocol"] = Value::from("<engine>");
                 }
             }
         }
