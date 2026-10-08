@@ -31,11 +31,14 @@ The valid test policy does not establish production readiness. Its certificate
 is not publicly trusted. See SignPath's [test and release certificate
 documentation](https://docs.signpath.io/managing-certificates).
 
-The GitHub App installation was not confirmed during the inspection. In GitHub's
-**Settings → Applications → Installed GitHub Apps**, inspect the
-[SignPath App](https://github.com/apps/signpath). Install or configure it with
-**Only select repositories → ReShiki**. Then verify the project is still linked to the active
-GitHub.com trusted build system. SignPath documents the App and GitHub-hosted
+The official [SignPath App](https://github.com/apps/signpath) was installed on
+**2026-10-09** with **Only select repositories → ReShiki**. Its installation ID is
+`169339604`. GitHub confirmed read access to Actions, code and metadata, plus
+read/write access to repository administration. The maintainer approved those
+permissions and completed GitHub re-authentication. When checking or restoring
+this integration, inspect **Settings → Applications → Installed GitHub Apps**
+and verify that the App is active, limited to ReShiki, and the project remains
+linked to the active GitHub.com trusted build system. SignPath documents the App and GitHub-hosted
 runner requirements in its [GitHub integration
 guide](https://docs.signpath.io/trusted-build-systems/github).
 
