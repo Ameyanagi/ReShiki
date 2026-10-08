@@ -224,10 +224,14 @@ class ReleaseTests(unittest.TestCase):
             destination = Path(temporary) / "Licenses"
             with (
                 patch("build_release.run") as run,
+                patch("build_release.verify_agent_dependencies") as dependencies,
                 patch("geometry_source.verify") as geometry,
             ):
                 run.return_value = subprocess.CompletedProcess([], 0, stdout='{"packages": []}')
                 notices(destination)
+            dependencies.assert_called_once_with(
+                Path(__file__).resolve().parents[1], {"packages": []}
+            )
             geometry.assert_called_once_with(
                 Path(__file__).resolve().parents[1], cargo_metadata={"packages": []}
             )

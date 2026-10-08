@@ -189,6 +189,10 @@ jobs:
       - name: Check the native application without reference dependencies
         run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
       - run: cargo check --workspace --all-targets --locked --no-default-features
+      - name: Audit agent API dependencies for every release target
+        # cargo tree resolves all six release triples from one host.
+        if: runner.os == 'macOS'
+        run: uv run --no-project python scripts/check_agent_dependencies.py
       - name: Test rendered numeric-field focus on Windows
         if: runner.os == 'Windows'
         # The Windows renderer includes Tiny Skia when WGPU is unavailable.

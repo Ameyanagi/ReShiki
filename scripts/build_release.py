@@ -18,6 +18,7 @@ import zipfile
 from pathlib import Path
 
 from build_inchi_helper import RELEASE_TARGETS
+from check_agent_dependencies import verify as verify_agent_dependencies
 from check_runtime_dependencies import (
     verify_agent_api,
     verify_macos_workers,
@@ -430,6 +431,7 @@ def notices(destination):
             text=True,
         ).stdout
     )
+    verify_agent_dependencies(ROOT, metadata)
     verify_geometry_source(ROOT, cargo_metadata=metadata)
     write_notices(ROOT, destination, metadata)
 
