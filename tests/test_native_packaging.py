@@ -305,9 +305,19 @@ class NativeRuntimeTests(unittest.TestCase):
             source = Path(temporary) / "source"
             source.mkdir()
             (source / "reshiki.exe").write_bytes(b"MZ new")
-            for outcome in ("upgraded", "failed_intact", "hang", "server_kept", "failed_damaged"):
+            for outcome, failure in (
+                ("upgraded", None),
+                ("failed_intact", None),
+                ("hang", "hung"),
+                ("server_kept", "kept running"),
+                ("failed_damaged", "damaged the old install"),
+                # A failed setup must not leave an install that cannot be removed.
+                ("failed_uninstaller_lost", "broke the uninstaller"),
+                ("failed_unregistered", "broke the uninstaller"),
+            ):
                 with self.subTest(outcome=outcome):
                     setups = []
+                    registered = False
                     server = types.SimpleNamespace(
                         process=types.SimpleNamespace(
                             wait=lambda timeout: None,
@@ -319,7 +329,7 @@ class NativeRuntimeTests(unittest.TestCase):
                     ended = False
 
                     def run(command, **kwargs):
-                        nonlocal ended
+                        nonlocal ended, registered
                         executable = Path(command[0])
                         if executable.name == "setup.exe":
                             destination = Path(
@@ -333,29 +343,36 @@ class NativeRuntimeTests(unittest.TestCase):
                             if len(setups) == 2:
                                 if outcome == "hang":
                                     raise subprocess.TimeoutExpired(command, kwargs["timeout"])
-                                if outcome in {"failed_intact", "failed_damaged"}:
+                                if outcome.startswith("failed_"):
                                     if outcome == "failed_damaged":
                                         (destination / "reshiki.exe").unlink()
+                                    if outcome == "failed_uninstaller_lost":
+                                        (destination / "unins000.exe").unlink()
+                                    registered = outcome != "failed_unregistered"
                                     raise subprocess.CalledProcessError(5, command)
                                 ended = outcome != "server_kept"
                             shutil.copytree(source, destination, dirs_exist_ok=True)
                             (destination / "unins000.exe").touch()
+                            (destination / "unins000.dat").touch()
+                            registered = True
                         elif executable.name == "unins000.exe":
                             shutil.rmtree(executable.parent)
+                            registered = False
                         return subprocess.CompletedProcess(command, 0)
 
                     with (
                         patch("installers.sys.platform", "win32"),
                         patch("installers.run", side_effect=run),
                         patch("installers.StdioClient", return_value=server) as client,
+                        patch("installers._uninstall_registered", side_effect=lambda: registered),
                     ):
-                        if outcome in {"upgraded", "failed_intact"}:
+                        if failure is None:
                             recorded = installers.verify_windows_upgrade_with_running_agent(
                                 Path("setup.exe"), source
                             )
                             self.assertIn("upgraded" if ended else "kept", recorded)
                         else:
-                            with self.assertRaises(ValueError):
+                            with self.assertRaisesRegex(ValueError, failure):
                                 installers.verify_windows_upgrade_with_running_agent(
                                     Path("setup.exe"), source
                                 )

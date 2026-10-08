@@ -48,30 +48,54 @@ def modern_meta(version=MODERN):
     }
 
 
+def _reject_constant(name):
+    raise ValueError(f"{name} is not JSON")
+
+
+def _integer(value):
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def parse_line(raw):
-    """One stdout line as a JSON-RPC 2.0 message a server may send, or ProtocolError."""
+    """One stdout line as a JSON-RPC 2.0 message a server may send, or ProtocolError.
+
+    An id is a string or an integer, never null, a bool or a float; an error
+    response omits it when the server could not read one (`id?: RequestId`).
+    A response has exactly one of `result` and `error`.
+    """
     try:
         text = raw.decode("utf-8")
         if not text.endswith("\n"):
             raise ValueError("unterminated line")
-        message = json.loads(text)
+        message = json.loads(text, parse_constant=_reject_constant)
     except ValueError as error:
         raise ProtocolError(f"Invalid stdout line {raw[:200]!r}: {error}") from None
     if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
         raise ProtocolError(f"Not a JSON-RPC 2.0 object: {raw[:200]!r}")
-    if isinstance(message.get("method"), str):
+    if "id" in message and not (isinstance(message["id"], str) or _integer(message["id"])):
+        raise ProtocolError(f"Invalid id: {raw[:200]!r}")
+    if "method" in message:
+        if (
+            not isinstance(message["method"], str)
+            or not isinstance(message.get("params", {}), (dict, list))
+            or "result" in message
+            or "error" in message
+        ):
+            raise ProtocolError(f"Malformed request or notification: {raw[:200]!r}")
         return message
-    error = message.get("error")
-    if ("result" in message) == (error is not None):
+    if ("result" in message) == ("error" in message):
         raise ProtocolError(f"Neither one result nor one error: {raw[:200]!r}")
-    if error is not None and not (
+    if "result" in message:
+        if "id" not in message:
+            raise ProtocolError(f"Result without an id: {raw[:200]!r}")
+        return message
+    error = message["error"]
+    if not (
         isinstance(error, dict)
-        and isinstance(error.get("code"), int)
+        and _integer(error.get("code"))
         and isinstance(error.get("message"), str)
     ):
         raise ProtocolError(f"Malformed error object: {raw[:200]!r}")
-    if "result" in message and "id" not in message:
-        raise ProtocolError(f"Result without an id: {raw[:200]!r}")
     return message
 
 
@@ -80,8 +104,9 @@ class StdioClient:
 
     Reader threads move stdout lines and stderr chunks to queues, so every wait
     has a timeout. Every stdout line is recorded in `lines` and must be a
-    JSON-RPC message (`parse_line`). `revision` is None for 2026-07-28, whose
-    requests carry `_meta`, or the revision `initialize` negotiated.
+    JSON-RPC message (`parse_line`); `request_ids` lists the requests sent.
+    `revision` is None for 2026-07-28, whose requests carry `_meta`, or the
+    revision `initialize` negotiated.
     """
 
     def __init__(self, command, *, cwd=None, env=None):
@@ -101,8 +126,8 @@ class StdioClient:
         self.revision = None
         self.lines = []
         self.unclaimed = []
+        self.request_ids = []
         self.eof = False
-        self._next_id = 0
         self._stdout = queue.Queue()
         self._stderr = queue.Queue()
         self._stderr_text = []
@@ -127,8 +152,13 @@ class StdioClient:
         sink.put(None)
 
     def _take(self, deadline, waiting_for):
+        # Checked before each line, so that a stream of other output cannot
+        # extend the wait.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ProtocolError(f"No answer to {waiting_for} in time")
         try:
-            raw = self._stdout.get(timeout=max(0.0, deadline - time.monotonic()))
+            raw = self._stdout.get(timeout=remaining)
         except queue.Empty:
             raise ProtocolError(f"No answer to {waiting_for} in time") from None
         if raw is None:
@@ -148,23 +178,24 @@ class StdioClient:
         self.send(message)
 
     def receive(self, request_id, timeout):
-        """The message with `request_id`; others are kept in `unclaimed`."""
+        """The response to `request_id`; other messages are kept in `unclaimed`."""
         for message in self.unclaimed:
-            if message.get("id") == request_id:
+            if _answers(message, request_id):
                 self.unclaimed.remove(message)
                 return message
         deadline = time.monotonic() + timeout
         while True:
             message = self._take(deadline, f"request {request_id!r}")
-            if message.get("id") == request_id:
+            if _answers(message, request_id):
                 return message
             self.unclaimed.append(message)
 
     def start_request(self, method, params):
         """Sends a request without waiting; returns its id."""
-        self._next_id += 1
-        self.send({"jsonrpc": "2.0", "id": self._next_id, "method": method, "params": params})
-        return self._next_id
+        request_id = len(self.request_ids) + 1
+        self.request_ids.append(request_id)
+        self.send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params})
+        return request_id
 
     def request(self, method, params, timeout):
         return self.receive(self.start_request(method, params), timeout)
@@ -233,6 +264,11 @@ class StdioClient:
         if self.process.poll() is None:
             self.process.kill()
             self.process.wait()
+
+
+def _answers(message, request_id):
+    """Whether `message` is the response to `request_id`, not a server request."""
+    return "method" not in message and message.get("id") == request_id
 
 
 def result(response):

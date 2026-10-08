@@ -23,6 +23,7 @@ from check_runtime_dependencies import (
 
 # An upgrade over a running MCP server that takes longer than this has hung.
 UPGRADE_LIMIT = 300
+UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\dev.reshiki.editor_is1"
 
 
 class InstallerCheckDirectory(tempfile.TemporaryDirectory):
@@ -176,14 +177,35 @@ def installed_intact(destination, source):
     )
 
 
+def _uninstall_registered():
+    """Whether Windows lists the per-user install under Apps (Inno Setup's
+    `{AppId}_is1` key; PrivilegesRequired=lowest in packaging/windows/reshiki.iss)."""
+    if sys.platform != "win32":
+        raise ValueError("Windows installer verification requires Windows")
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY):
+            return True
+    except OSError:
+        return False
+
+
+def uninstall_state(destination):
+    """Which of setup's uninstaller files exist, and whether Windows lists the app."""
+    files = tuple((destination / name).is_file() for name in ("unins000.exe", "unins000.dat"))
+    return files, _uninstall_registered()
+
+
 def verify_windows_upgrade_with_running_agent(installer, source):
     """Upgrade over a running `reshiki.exe --mcp` and record what setup does.
 
     Setup closes running copies without restarting them (CloseApplications=yes,
     RestartApplications=no in packaging/windows/reshiki.iss). Either outcome
     passes: setup succeeds with a working new install and the old server
-    ended, or setup fails nonzero and leaves the old install intact. Setup
-    still running after UPGRADE_LIMIT seconds fails.
+    ended, or setup fails nonzero and leaves the old install intact. Either
+    way the uninstaller and its Apps entry must stay as the first install left
+    them. Setup still running after UPGRADE_LIMIT seconds fails.
     """
     if sys.platform != "win32":
         raise ValueError("Windows installer verification requires Windows")
@@ -204,6 +226,7 @@ def verify_windows_upgrade_with_running_agent(installer, source):
         server = None
         try:
             run([installer, *flags], timeout=180)
+            uninstall = uninstall_state(destination)
             server = StdioClient([binary, "--mcp"], cwd=root, env=environment)
             result(server.discover(AGENT_CALL))
             try:
@@ -220,6 +243,8 @@ def verify_windows_upgrade_with_running_agent(installer, source):
             except subprocess.TimeoutExpired:
                 pass
             ended = server.process.poll() is not None
+            if uninstall_state(destination) != uninstall:
+                raise ValueError(f"Setup ({code}) over a running MCP server broke the uninstaller")
             if code == 0:
                 if not ended:
                     raise ValueError("Setup succeeded while the old MCP server kept running")

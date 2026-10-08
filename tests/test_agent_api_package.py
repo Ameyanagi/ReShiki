@@ -1,6 +1,8 @@
 """The packaged agent API check must pass a well-behaved server and fail closed."""
 
 import base64
+import io
+import itertools
 import json
 import os
 import queue
@@ -8,6 +10,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,7 +19,14 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import check_runtime_dependencies as runtime
-from agent_api_client import LEGACY_REVISIONS, MODERN, TOOLS, ProtocolError
+from agent_api_client import (
+    LEGACY_REVISIONS,
+    MODERN,
+    TOOLS,
+    ProtocolError,
+    StdioClient,
+    parse_line,
+)
 
 
 class Pipe:
@@ -59,6 +70,7 @@ class Server:
         self.returncode = None
         self.renders = 0
         self.held = None
+        self.late = None
         self.sent = []
         label = "agent API" if "unlabelled_stderr" in faults else "agent API (experimental)"
         self.stderr.lines.put(f"reshiki-mcp: info: ReShiki {label}\n".encode())
@@ -73,6 +85,9 @@ class Server:
             if method == "notifications/cancelled" and isinstance(params, dict):
                 if self.held is not None and self.held["id"] == params.get("requestId"):
                     self.held = None
+            elif method == "notifications/cancelled" and "late_error" in self.faults:
+                # Answered only after the next response.
+                self.late = {"code": -32600, "message": "Invalid Request"}
             return
         version = ((params or {}).get("_meta") or {}).get(
             "io.modelcontextprotocol/protocolVersion", MODERN
@@ -85,6 +100,9 @@ class Server:
             self.held = reply
         elif reply["result"] is not None:
             self.send(reply)
+            if self.late is not None:
+                self.send({"jsonrpc": "2.0", "error": self.late})
+                self.late = None
 
     def result(self, method, params):
         if method == "server/discover":
@@ -212,11 +230,65 @@ class PackagedAgentApiTests(unittest.TestCase):
             ("unlabelled", ValueError, "not labelled experimental"),
             ("unlabelled_stderr", ValueError, "stderr is unexpected"),
             ("stray_file", ValueError, "outside Out/: \\['stray.txt'\\]"),
+            # An answer to the malformed notification after the sentinel's.
+            ("late_error", ValueError, "not one to each"),
             ("lingering", ValueError, "Processes outlived"),
             ("silent", ProtocolError, "No answer"),
         ):
             with self.subTest(fault=fault), self.assertRaisesRegex(error, message):
                 self.verify(fault, running=fault == "lingering")
+
+    def test_a_call_times_out_while_other_output_keeps_arriving(self):
+        process = types.SimpleNamespace(pid=1, stdin=io.BytesIO(), stdout=Pipe(), stderr=Pipe())
+        for _ in range(20):
+            process.stdout.lines.put(b'{"jsonrpc":"2.0","method":"notifications/message"}\n')
+        process.stdout.lines.put(b'{"jsonrpc":"2.0","id":1,"result":{}}\n')
+        with patch("agent_api_client.subprocess.Popen", return_value=process):
+            client = StdioClient(["reshiki", "--mcp"])
+        queued = time.monotonic() + 10
+        while client._stdout.qsize() < 21 and time.monotonic() < queued:
+            time.sleep(0.01)
+        # Each reading of the clock is a second later: the deadline passes
+        # before the queued response is reached.
+        clock = itertools.count()
+        with (
+            patch("agent_api_client.time.monotonic", side_effect=lambda: float(next(clock))),
+            self.assertRaisesRegex(ProtocolError, "No answer to request 1"),
+        ):
+            client.receive(1, timeout=5)
+
+    def test_invalid_json_rpc_lines_are_rejected(self):
+        for line in (
+            '{"jsonrpc":"2.0","id":1,"result":NaN}',
+            '{"jsonrpc":"2.0","id":1,"result":{"size":-Infinity}}',
+            '{"jsonrpc":"2.0","id":true,"result":{}}',
+            '{"jsonrpc":"2.0","id":1.0,"result":{}}',
+            '{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"Invalid Request"}}',
+            '{"jsonrpc":"2.0","id":1,"result":{},"error":null}',
+            '{"jsonrpc":"2.0","id":1}',
+            '{"jsonrpc":"2.0","result":{}}',
+            '{"jsonrpc":"2.0","id":1,"error":{"code":true,"message":"Invalid Request"}}',
+            '{"jsonrpc":"2.0","id":1,"error":{"code":-32600.5,"message":"Invalid Request"}}',
+            '{"jsonrpc":"2.0","id":1,"error":{"code":-32600}}',
+            '{"jsonrpc":"2.0","id":1,"method":"ping","result":{}}',
+            '{"jsonrpc":"2.0","method":7}',
+            '{"jsonrpc":"2.0","method":"notifications/message","params":3}',
+            '{"jsonrpc":"1.0","id":1,"result":{}}',
+        ):
+            with self.subTest(line=line), self.assertRaises(ProtocolError):
+                parse_line(line.encode() + b"\n")
+
+    def test_valid_json_rpc_lines_parse(self):
+        for line in (
+            '{"jsonrpc":"2.0","id":1,"result":{}}',
+            '{"jsonrpc":"2.0","id":"a","error":{"code":-32601,"message":"Not found","data":{}}}',
+            # No id when none could be read (crates/mcp/src/framing.rs).
+            '{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"}}',
+            '{"jsonrpc":"2.0","method":"notifications/message","params":{"level":"info"}}',
+            '{"jsonrpc":"2.0","id":"ping-1","method":"ping"}',
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(parse_line(line.encode() + b"\n"), json.loads(line))
 
     def test_tools_match_the_operation_catalog(self):
         catalog = json.loads(

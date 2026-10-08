@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from pathlib import Path
 
 from agent_api_client import (
@@ -226,9 +227,22 @@ def _ethanol(client):
     return document
 
 
-def _finish(client, binary):
+def _finish(client, binary, cancelled=None):
+    """Ends a session: exit 0 at the end of input, and through the end of stdout
+    one response to each request, except at most one to the `cancelled` one."""
     if client.close(_exit_limit(binary)) != 0:
         raise ValueError("Packaged MCP server did not exit 0 at the end of its input")
+    answered = Counter(
+        message.get("id") for message in map(json.loads, client.lines) if "method" not in message
+    )
+    if cancelled is not None and answered.pop(cancelled, 0) > 1:
+        raise ValueError("Packaged MCP server answered a cancelled request twice")
+    expected = Counter(request for request in client.request_ids if request != cancelled)
+    if answered != expected:
+        raise ValueError(
+            f"Packaged MCP server sent responses {dict(answered)}, not one to each of "
+            f"{sorted(expected)}"
+        )
 
 
 def _listening_sockets(pid):
@@ -412,10 +426,8 @@ def _main_session(binary, root, environment, clients):
     sockets = _listening_sockets(client.pid)
     if sockets:
         raise ValueError(f"Packaged MCP server listens on TCP: {sockets}")
-    _finish(client, binary)
-    answers = [json.loads(line) for line in client.lines]
-    if len([message for message in answers if message.get("id") == cancelled]) > 1:
-        raise ValueError("Packaged MCP server answered a cancelled request twice")
+    # Also catches a late answer to the malformed notification.
+    _finish(client, binary, cancelled)
     return "unavailable" if sockets is None else "none"
 
 
