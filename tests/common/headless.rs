@@ -546,7 +546,7 @@ pub fn esterification() -> Value {
             "conditions": "H₂SO₄\nheat",
             "arrow": "forward",
             "title": "",
-            "role": "main",
+            "role": "reaction",
             "direction": null,
         }],
         "composition": {"arrangement": "rows", "columns": 2, "width_pt": 540, "preserve_details": false},
