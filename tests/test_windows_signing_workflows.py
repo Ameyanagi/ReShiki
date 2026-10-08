@@ -108,6 +108,7 @@ class WindowsSigningWorkflowTests(unittest.TestCase):
                     expected,
                 )
 
+    @unittest.skipUnless(os.name == "posix", "production source guard executes on Ubuntu")
     @unittest.skipUnless(shutil.which("git") and shutil.which("bash"), "requires Git and Bash")
     def test_production_source_guard_checks_ref_and_actual_main_ancestry(self):
         guard = re.search(
