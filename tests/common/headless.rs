@@ -532,6 +532,28 @@ pub fn compose_32() -> Value {
     })
 }
 
+/// The esterification Proposal of tests/assistant.rs (`reaction`), with
+/// every field spelled out.
+pub fn esterification() -> Value {
+    let molecule = |smiles: &str, label: &str| serde_json::json!({"smiles": smiles, "label": label, "coefficient": 1, "rotation": 0, "compact": false});
+    serde_json::json!({
+        "explanation": "Esterification",
+        "replace_ids": [],
+        "molecules": [],
+        "reactions": [{
+            "reactants": [molecule("CC(=O)O", "Acetic acid"), molecule("CCO", "Ethanol")],
+            "products": [molecule("CCOC(C)=O", "Ethyl acetate"), molecule("O", "Water")],
+            "conditions": "H₂SO₄\nheat",
+            "arrow": "forward",
+            "title": "",
+            "role": "main",
+            "direction": null,
+        }],
+        "composition": {"arrangement": "rows", "columns": 2, "width_pt": 540, "preserve_details": false},
+        "sketch": null,
+    })
+}
+
 /// One stdout line: a single JSON-RPC 2.0 object ending in a newline.
 fn parse_message(line: &[u8]) -> Value {
     let text = std::str::from_utf8(line)

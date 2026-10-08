@@ -1,5 +1,5 @@
 use super::{
-    args::{Convert, Input, Output, Source, parse},
+    args::{Compose, Convert, Export, Input, Output, Render, Source, parse},
     *,
 };
 use reshiki_agent::ops::documents::{EXPORT_FORMATS, IMPORT_FORMATS};
@@ -26,17 +26,23 @@ fn parsed(tokens: &[&str]) -> Result<Command, String> {
     parse(name.as_ref(), &rest)
 }
 
+fn export(to: &str, output: Output) -> Export {
+    Export {
+        format: to.into(),
+        output,
+        pages: false,
+        force: false,
+        receipt: false,
+    }
+}
+
 fn convert(source: Source, from: &str, to: &str, output: Output) -> Command {
     Command::Convert(Convert {
         input: Input {
             source,
             format: from.into(),
         },
-        format: to.into(),
-        output,
-        pages: false,
-        force: false,
-        receipt: false,
+        export: export(to, output),
     })
 }
 
@@ -58,6 +64,8 @@ async fn help_prints_the_experimental_usage_to_stdout() {
 async fn help_describes_one_command() {
     for (topic, usage) in [
         ("convert", "Usage: reshiki --cli convert "),
+        ("render", "Usage: reshiki --cli render "),
+        ("compose", "Usage: reshiki --cli compose "),
         ("analyze", "Usage: reshiki --cli analyze "),
         ("info", "Usage: reshiki --cli info"),
         ("help", "Usage: reshiki --cli <command> [options]"),
@@ -71,6 +79,34 @@ async fn help_describes_one_command() {
     let (_, out, _) = call(&["help", "convert"]).await;
     assert!(out.contains(&EXPORT_FORMATS.join(", ")), "{out}");
     assert!(out.contains(&IMPORT_FORMATS.join(", ")), "{out}");
+    let (_, out, _) = call(&["help", "compose"]).await;
+    assert!(out.contains(&EXPORT_FORMATS.join(", ")), "{out}");
+    let (_, out, _) = call(&["help", "render"]).await;
+    assert!(out.contains("The image format: png, svg."), "{out}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn help_shows_the_examples() {
+    let (_, out, _) = call(&["help"]).await;
+    for example in [
+        "reshiki --cli convert --smiles 'CCO' -o ethanol.mol",
+        "reshiki --cli convert scheme.rsk -o figure.pdf",
+        "reshiki --cli render scheme.rsk -o preview.png",
+        "reshiki --cli analyze --smiles 'c1ccccc1O'",
+        "reshiki --cli compose proposal.json -o scheme.svg",
+    ] {
+        assert!(
+            out.contains(&format!("\n  {example}\n")),
+            "{example}: {out}"
+        );
+        // Every example parses.
+        let tokens: Vec<&str> = example
+            .split(' ')
+            .skip(2)
+            .map(|token| token.trim_matches('\''))
+            .collect();
+        assert!(parsed(&tokens).is_ok(), "{example}");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -143,6 +179,7 @@ async fn unknown_commands_point_to_help() {
 fn the_format_sets_are_the_ops_enums() {
     assert_eq!(input_formats(), IMPORT_FORMATS);
     assert_eq!(output_formats(), EXPORT_FORMATS);
+    assert_eq!(render_formats(), ["png", "svg"]);
 }
 
 #[test]
@@ -234,7 +271,7 @@ fn convert_command_lines_parse() {
     let Ok(Command::Convert(flags)) = flags else {
         panic!("{flags:?}");
     };
-    assert!(flags.pages && flags.force && flags.receipt);
+    assert!(flags.export.pages && flags.export.force && flags.export.receipt);
 }
 
 #[test]
@@ -255,6 +292,101 @@ fn analyze_command_lines_parse() {
     );
 }
 
+#[test]
+fn render_command_lines_parse() {
+    let render = |source: Source, from: &str, to: &str, output: Output| Render {
+        input: Input {
+            source,
+            format: from.into(),
+        },
+        format: to.into(),
+        output,
+        width: None,
+        height: None,
+        force: false,
+    };
+    for (tokens, expected) in [
+        (
+            &["render", "a.rsk", "-o", "b.PNG"][..],
+            render(
+                Source::File("a.rsk".into()),
+                "reshiki",
+                "png",
+                Output::File("b.PNG".into()),
+            ),
+        ),
+        (
+            &["render", "--smiles", "CCO", "--to", "svg"],
+            render(
+                Source::Smiles("CCO".into()),
+                "smiles",
+                "svg",
+                Output::Stdout,
+            ),
+        ),
+        (
+            &[
+                "render", "-", "--from", "mol", "--to", "png", "-o", "-", "--width", "640",
+                "--height", "+480", "--force",
+            ],
+            Render {
+                width: Some(640),
+                height: Some(480),
+                force: true,
+                ..render(Source::Stdin, "mol", "png", Output::Stdout)
+            },
+        ),
+        // The render tool, not the parser, checks the size's range.
+        (
+            &["render", "a.mol", "--to", "svg", "--width", "0"],
+            Render {
+                width: Some(0),
+                ..render(Source::File("a.mol".into()), "mol", "svg", Output::Stdout)
+            },
+        ),
+    ] {
+        assert_eq!(parsed(tokens), Ok(Command::Render(expected)), "{tokens:?}");
+    }
+}
+
+#[test]
+fn compose_command_lines_parse() {
+    assert_eq!(
+        parsed(&["compose", "p.json", "-o", "s.svg"]),
+        Ok(Command::Compose(Compose {
+            proposal: Some("p.json".into()),
+            export: export("svg", Output::File("s.svg".into())),
+        }))
+    );
+    assert_eq!(
+        parsed(&[
+            "compose",
+            "-",
+            "-o",
+            "s.pdf",
+            "--pages",
+            "--force",
+            "--receipt"
+        ]),
+        Ok(Command::Compose(Compose {
+            proposal: None,
+            export: Export {
+                pages: true,
+                force: true,
+                receipt: true,
+                ..export("pdf", Output::File("s.pdf".into()))
+            },
+        }))
+    );
+    assert_eq!(
+        parsed(&["compose", "p.json", "--to", "smiles"]),
+        Ok(Command::Compose(Compose {
+            proposal: Some("p.json".into()),
+            export: export("smiles", Output::Stdout),
+        }))
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn usage_errors_exit_2_before_any_work() {
     let unsupported = |format: &str| {
@@ -263,6 +395,8 @@ async fn usage_errors_exit_2_before_any_work() {
             EXPORT_FORMATS.join(", ")
         )
     };
+    let unsupported_render =
+        |format: &str| format!("unsupported output format `{format}`; supported: png, svg");
     let unknown_from = format!(
         "unknown input format `xyz`; supported: {}",
         IMPORT_FORMATS.join(", ")
@@ -377,6 +511,91 @@ async fn usage_errors_exit_2_before_any_work() {
             &["analyze", "-"],
             "reading standard input (-) needs --from FORMAT".into(),
         ),
+        (
+            &["analyze", "--smiles", "C", "--width", "5"],
+            "analyze does not take --width".into(),
+        ),
+        (
+            &["convert", "a.mol", "--to", "png", "--height", "5"],
+            "convert does not take --height".into(),
+        ),
+        (
+            &["render"],
+            "render needs an input: a file, - for standard input, or --smiles TEXT".into(),
+        ),
+        (
+            &["render", "a.mol", "-o", "x.pdf"],
+            unsupported_render("pdf"),
+        ),
+        (
+            &["render", "a.mol", "--to", "mol"],
+            unsupported_render("mol"),
+        ),
+        (
+            &["render", "a.mol", "-o", "x.smi"],
+            unsupported_render("smiles"),
+        ),
+        (
+            &["render", "a.mol"],
+            "writing to standard output needs --to FORMAT".into(),
+        ),
+        (
+            &["render", "a.mol", "--to", "png", "--width", "wide"],
+            "--width must be a whole number of pixels, not `wide`".into(),
+        ),
+        (
+            &["render", "a.mol", "--to", "png", "--height", "-1"],
+            "--height must be a whole number of pixels, not `-1`".into(),
+        ),
+        (
+            &["render", "a.mol", "--to", "png", "--width", "4294967296"],
+            "--width must be a whole number of pixels, not `4294967296`".into(),
+        ),
+        (
+            &["render", "a.mol", "--to", "png", "--width"],
+            "--width needs a value".into(),
+        ),
+        (
+            &["render", "a.mol", "--to", "png", "--pages"],
+            "render does not take --pages".into(),
+        ),
+        (
+            &["render", "a.mol", "-o", "x.png", "--receipt"],
+            "render does not take --receipt".into(),
+        ),
+        (
+            &["compose"],
+            "compose needs a proposal: a JSON file, or - for standard input".into(),
+        ),
+        (
+            &["compose", "a.json", "b.json", "--to", "svg"],
+            "compose takes one input; unexpected `b.json`".into(),
+        ),
+        (
+            &["compose", "--smiles", "C", "--to", "svg"],
+            "compose does not take --smiles".into(),
+        ),
+        (
+            &["compose", "-", "--from", "mol", "--to", "svg"],
+            "compose does not take --from".into(),
+        ),
+        (
+            &["compose", "p.json", "--to", "png", "--width", "5"],
+            "compose does not take --width".into(),
+        ),
+        (
+            &["compose", "p.json"],
+            "writing to standard output needs --to FORMAT".into(),
+        ),
+        (&["compose", "p.json", "-o", "s.rsk"], unsupported("rsk")),
+        (
+            &["compose", "p.json", "--pages", "--to", "svg"],
+            "--pages is valid only with pdf output".into(),
+        ),
+        (
+            &["compose", "p.json", "--to", "svg", "--receipt"],
+            "--receipt needs -o FILE".into(),
+        ),
     ];
     for (tokens, message) in cases {
         let (code, out, err) = call(tokens).await;
@@ -397,8 +616,8 @@ async fn paths_need_not_be_utf8() {
     };
     assert_eq!(convert.input.source, Source::File(PathBuf::from(name)));
     assert_eq!(convert.input.format, "mol");
-    assert_eq!(convert.output, Output::File(PathBuf::from(name)));
-    assert_eq!(convert.format, "mol");
+    assert_eq!(convert.export.output, Output::File(PathBuf::from(name)));
+    assert_eq!(convert.export.format, "mol");
     // Reading it fails as an input error, not a usage error.
     let args = vec![
         "convert".into(),
@@ -511,5 +730,59 @@ async fn output_write_and_flush_errors_fail_with_one_line() {
             assert_eq!(err.lines().count(), 1, "{err}");
             assert!(err.starts_with("reshiki: could not write output:"), "{err}");
         }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn compose_input_errors_exit_1() {
+    use reshiki_agent::ops::compose::{NO_DRAWING, REPLACE_IDS};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("proposal.json");
+    let compose = |path: &std::path::Path| -> Vec<OsString> {
+        vec!["compose".into(), path.into(), "--to".into(), "svg".into()]
+    };
+    std::fs::write(&path, b"{\"explanation\": ").unwrap();
+    let (code, out, err) = call_os(compose(&path)).await;
+    assert_eq!(code, FAILURE, "{err}");
+    assert!(out.is_empty());
+    assert!(
+        err.starts_with("reshiki: error: PROPOSAL is not valid JSON: EOF while parsing"),
+        "{err}"
+    );
+    let proposal = |replace_ids: Value| {
+        json!({
+            "explanation": "", "replace_ids": replace_ids, "molecules": [], "reactions": [],
+            "composition": {"arrangement": "rows", "columns": 2, "width_pt": 540, "preserve_details": false},
+            "sketch": null,
+        })
+    };
+    for (replace_ids, message) in [(json!([1]), REPLACE_IDS), (json!([]), NO_DRAWING)] {
+        std::fs::write(&path, proposal(replace_ids).to_string()).unwrap();
+        let (code, out, err) = call_os(compose(&path)).await;
+        assert_eq!(code, FAILURE, "{err}");
+        assert!(out.is_empty());
+        assert_eq!(err, format!("reshiki: error: {message}\n"));
+    }
+    let (code, _, err) = call_os(compose(&dir.path().join("missing.json"))).await;
+    assert_eq!(code, FAILURE, "{err}");
+    assert!(err.starts_with("reshiki: error: cannot read "), "{err}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn binary_output_never_goes_to_a_terminal() {
+    for tokens in [
+        &["render", "--smiles", "C", "--to", "png"][..],
+        &["compose", "-", "--to", "pdf"],
+        &["convert", "--smiles", "C", "--to", "png"],
+    ] {
+        let args = tokens.iter().map(OsString::from).collect();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = execute(args, &mut out, &mut err, true).await;
+        assert_eq!(code, USAGE, "{tokens:?}");
+        assert!(out.is_empty(), "{tokens:?}");
+        assert_eq!(
+            String::from_utf8(err).unwrap(),
+            "reshiki: refusing to write binary data to a terminal; use -o FILE\n"
+        );
     }
 }

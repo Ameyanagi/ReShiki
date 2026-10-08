@@ -1,5 +1,5 @@
-//! `reshiki --cli convert` and `analyze` through the real binary: the
-//! stdout/stderr and exit-code contract.
+//! `reshiki --cli convert`, `render`, `compose` and `analyze` through the
+//! real binary: the stdout/stderr and exit-code contract.
 //!
 //! Every run has an empty data folder, a temporary working folder and a
 //! watchdog, and inherits RESHIKI_INCHI_HELPER as CI sets it
@@ -7,6 +7,7 @@
 #[path = "common/headless.rs"]
 mod headless;
 
+use reshiki::assistant::Proposal;
 use std::{fs, path::Path, process::Output, time::Duration};
 use tempfile::TempDir;
 
@@ -183,4 +184,153 @@ fn unknown_commands_exit_2_quickly() {
     let dir = tempfile::tempdir().expect("working folder");
     let stderr = assert_usage(&dir, &["bogus"]);
     assert!(stderr.contains("unknown command `bogus`"), "{stderr}");
+}
+
+/// Runs a command that writes `name` in `dir` and must leave stdout empty;
+/// returns the file.
+fn to_file(dir: &Path, args: &[&str], name: &str) -> Vec<u8> {
+    let output = cli(dir, args);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert!(
+        output.stdout.is_empty(),
+        "{args:?}: {}",
+        text(&output.stdout)
+    );
+    fs::read(dir.join(name)).expect("the output file")
+}
+
+/// A PNG's width and height, from its IHDR chunk.
+fn png_size(png: &[u8]) -> (u32, u32) {
+    assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"), "not a PNG");
+    assert_eq!(png.get(12..16), Some(&b"IHDR"[..]));
+    let side = |at: usize| u32::from_be_bytes(png[at..at + 4].try_into().expect("4 bytes"));
+    (side(16), side(20))
+}
+
+#[test]
+fn render_writes_a_png_or_svg_preview() {
+    let dir = tempfile::tempdir().expect("working folder");
+    let png = to_file(
+        dir.path(),
+        &["render", "--smiles", "CCO", "-o", "eth.png"],
+        "eth.png",
+    );
+    let (width, height) = png_size(&png);
+    assert!(width <= 1600 && height <= 1000, "{width} × {height}");
+    let output = cli(
+        dir.path(),
+        &[
+            "render", "--smiles", "CCO", "--to", "png", "--width", "120", "--height", "90",
+        ],
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let (width, height) = png_size(&output.stdout);
+    assert!(width <= 120 && height <= 90, "{width} × {height}");
+    let output = cli(dir.path(), &["render", "--smiles", "CCO", "--to", "svg"]);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert!(
+        output.stdout.starts_with(b"<svg"),
+        "{}",
+        text(&output.stdout)
+    );
+    assert_eq!(files(&dir), ["eth.png"]);
+}
+
+#[test]
+fn render_usage_and_size_errors() {
+    let dir = tempfile::tempdir().expect("working folder");
+    let pdf = assert_usage(&dir, &["render", "--smiles", "CCO", "-o", "x.pdf"]);
+    assert!(
+        pdf.contains("unsupported output format `pdf`; supported: png, svg"),
+        "{pdf}"
+    );
+    let width = assert_usage(
+        &dir,
+        &["render", "--smiles", "CCO", "--to", "png", "--width", "1.5"],
+    );
+    assert!(width.contains("--width must be a whole number"), "{width}");
+    // The render tool checks the size: a budget error exits 1.
+    let output = cli(
+        dir.path(),
+        &[
+            "render", "--smiles", "CCO", "-o", "big.png", "--width", "8192", "--height", "8192",
+        ],
+    );
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(output.stdout.is_empty());
+    assert!(
+        stderr.starts_with("reshiki: error: 8192 × 8192 is 67108864 pixels;"),
+        "{stderr}"
+    );
+    assert!(files(&dir).is_empty(), "no file is written");
+}
+
+/// The working folder with the esterification Proposal as `proposal.json`.
+fn with_proposal() -> TempDir {
+    let dir = tempfile::tempdir().expect("working folder");
+    let proposal = headless::esterification().to_string();
+    fs::write(dir.path().join("proposal.json"), proposal).expect("proposal.json");
+    dir
+}
+
+#[test]
+fn compose_writes_the_scheme_as_convert_does() {
+    let dir = with_proposal();
+    let pdf = to_file(
+        dir.path(),
+        &["compose", "proposal.json", "-o", "scheme.pdf"],
+        "scheme.pdf",
+    );
+    assert!(pdf.starts_with(b"%PDF"));
+    let proposal = fs::read(dir.path().join("proposal.json")).expect("proposal.json");
+    let output = headless::run_cli(
+        dir.path(),
+        &["compose", "-", "--to", "svg"],
+        &proposal,
+        CONVERT,
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert!(
+        output.stdout.starts_with(b"<svg"),
+        "{}",
+        text(&output.stdout)
+    );
+    let pages = assert_usage(
+        &dir,
+        &["compose", "proposal.json", "--pages", "--to", "svg"],
+    );
+    assert!(
+        pages.contains("--pages is valid only with pdf output"),
+        "{pages}"
+    );
+    assert_eq!(files(&dir), ["proposal.json", "scheme.pdf"]);
+}
+
+#[test]
+fn compose_rejects_an_invalid_proposal_as_the_assistant_does() {
+    let dir = tempfile::tempdir().expect("working folder");
+    let mut proposal = headless::esterification();
+    proposal["reactions"][0]["reactants"][0]["rotation"] = 45.into();
+    let expected = serde_json::from_value::<Proposal>(proposal.clone())
+        .expect("a Proposal")
+        .validate()
+        .expect_err("45 degrees is off the 30-degree grid");
+    fs::write(dir.path().join("p.json"), proposal.to_string()).expect("p.json");
+    let output = cli(dir.path(), &["compose", "p.json", "-o", "s.svg"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        text(&output.stderr),
+        format!("reshiki: error: {expected}\n")
+    );
+    fs::write(dir.path().join("p.json"), b"{").expect("p.json");
+    let output = cli(dir.path(), &["compose", "p.json", "-o", "s.svg"]);
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.starts_with("reshiki: error: PROPOSAL is not valid JSON: "),
+        "{stderr}"
+    );
+    assert_eq!(files(&dir), ["p.json"]);
 }

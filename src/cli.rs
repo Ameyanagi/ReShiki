@@ -3,14 +3,14 @@
 //!
 //! Each command runs on an in-process `HeadlessHost` through
 //! `ToolHost::call`, the operation layer `reshiki --mcp` serves, so both
-//! share the same import, analyze and export semantics.
+//! share the same import, analyze, render, compose and export semantics.
 //!
 //! # Output contract
 //!
-//! - stdout carries only the primary output: the converted file, the
-//!   analyze or info JSON line, or exactly one receipt JSON line when
-//!   `--receipt` is given with `-o FILE`. With `-o FILE` and no `--receipt`,
-//!   stdout stays empty.
+//! - stdout carries only the primary output: the converted, rendered or
+//!   composed file, the analyze or info JSON line, or exactly one receipt
+//!   JSON line when `--receipt` is given with `-o FILE`. With `-o FILE` and
+//!   no `--receipt`, stdout stays empty.
 //! - Warnings go to stderr as `reshiki: warning: {message}`, errors as
 //!   `reshiki: error: {message}` and usage errors as `reshiki: {message}`.
 //! - An operation, input or file error exits [`FAILURE`] (1), a usage error
@@ -23,9 +23,11 @@
 
 mod analyze;
 mod args;
+mod compose;
 mod convert;
 mod host;
 mod io;
+mod render;
 
 use args::{Command, Topic};
 use host::{CliError, Session, api};
@@ -49,13 +51,22 @@ Usage: reshiki --cli <command> [options]
 
 Commands:
   convert  Convert a structure or drawing to another file format
+  render   Render a preview image of a structure or drawing
+  compose  Lay out an assistant Proposal (JSON) and write it as a file
   analyze  Print molecular properties as one JSON line
   info     Print versions, limits and formats as one JSON line
   help     Show this help, or a command's help: reshiki --cli help <command>
 
+Examples:
+  reshiki --cli convert --smiles 'CCO' -o ethanol.mol
+  reshiki --cli convert scheme.rsk -o figure.pdf
+  reshiki --cli render scheme.rsk -o preview.png
+  reshiki --cli analyze --smiles 'c1ccccc1O'
+  reshiki --cli compose proposal.json -o scheme.svg
+
 Output:
-  stdout carries only the result: the converted file, one JSON line, or one
-  receipt line with --receipt. With -o FILE and no --receipt it stays empty.
+  stdout carries only the result: the file, one JSON line, or one receipt
+  line with --receipt. With -o FILE and no --receipt it stays empty.
   Warnings and errors go to stderr.
 
 Exit status:
@@ -145,6 +156,8 @@ async fn command(
             .map_err(CliError::Stdout),
         Ok(Command::Info) => info(out, err).await,
         Ok(Command::Convert(convert)) => convert::run(convert, out, err, terminal).await,
+        Ok(Command::Render(render)) => render::run(render, out, err, terminal).await,
+        Ok(Command::Compose(compose)) => compose::run(compose, out, err, terminal).await,
         Ok(Command::Analyze(input)) => analyze::run(input, out, err).await,
     };
     match result {
@@ -166,6 +179,8 @@ fn help(topic: Option<Topic>) -> String {
     let body = match topic {
         None | Some(Topic::Help) => HELP.to_owned(),
         Some(Topic::Convert) => convert_help(),
+        Some(Topic::Render) => render_help(),
+        Some(Topic::Compose) => compose_help(),
         Some(Topic::Analyze) => ANALYZE_HELP.to_owned(),
         Some(Topic::Info) => INFO_HELP.to_owned(),
     };
@@ -212,6 +227,68 @@ rsmi, cdx and emf files cannot be written.
     )
 }
 
+fn render_help() -> String {
+    let render = Budgets::default().render;
+    format!(
+        "\
+Usage: reshiki --cli render (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
+                            [-o OUTPUT|-] [--width N] [--height N] [--force]
+
+Renders the preview the assistant looks at: png on white, scaled to fit
+--width × --height, or svg with a transparent surround. For figures to
+publish, use convert. The input is read as for convert
+(reshiki --cli help convert).
+
+Options:
+  --to FORMAT  The image format: {formats}.
+               Without --to, the extension of OUTPUT picks it.
+  -o OUTPUT    Write the image to OUTPUT. Without -o, or with -o -, it goes
+               to stdout and needs --to; png is never written to a terminal.
+  --width N    The widest a png may be, in pixels (default {width}).
+  --height N   The tallest a png may be, in pixels (default {height}).
+               Each is {min} to {max}, and a png has at most {pixels} pixels.
+  --force      Replace OUTPUT if it exists; otherwise that is an error.
+",
+        formats = render_formats().join(", "),
+        width = render.default_width,
+        height = render.default_height,
+        min = render.min_side,
+        max = render.max_side,
+        pixels = render.max_pixels,
+    )
+}
+
+fn compose_help() -> String {
+    format!(
+        "\
+Usage: reshiki --cli compose (PROPOSAL | -) [--to FORMAT] [-o OUTPUT|-] [--pages]
+                             [--force] [--receipt]
+
+Lays out a Proposal as ReShiki's assistant composes its drafts, in the
+default style, then writes the drawing as convert does.
+
+PROPOSAL is a JSON file, or - for standard input, of at most {text} bytes.
+It follows the assistant's Proposal schema, which `reshiki --mcp` publishes
+with its compose tool; replace_ids must be empty.
+
+Options:
+  --to FORMAT  The output format: {outputs}.
+               Without --to, the extension of OUTPUT picks it (.smi is smiles).
+  -o OUTPUT    Write the file to OUTPUT. Without -o, or with -o -, the file
+               goes to stdout and needs --to; pdf and png are never written
+               to a terminal.
+  --pages      Export every publication page as one PDF (pdf only).
+  --force      Replace OUTPUT if it exists; otherwise that is an error.
+  --receipt    With -o OUTPUT, print one receipt JSON line to stdout, as
+               convert does.
+
+A ReShiki drawing (.rsk) cannot be written.
+",
+        text = Budgets::default().max_text_bytes,
+        outputs = output_formats().join(", "),
+    )
+}
+
 /// `{info value, cli: {input_formats, output_formats}, api}`.
 async fn info(out: &mut dyn Write, err: &mut dyn Write) -> Result<(), CliError> {
     let mut session = Session::new();
@@ -252,6 +329,11 @@ pub(crate) fn input_formats() -> Vec<String> {
 /// The `--to` values: the export tool's `format` enum.
 pub(crate) fn output_formats() -> Vec<String> {
     schema_formats("export")
+}
+
+/// The render `--to` values: the render tool's `format` enum.
+pub(crate) fn render_formats() -> Vec<String> {
+    schema_formats("render")
 }
 
 /// `properties.format.enum` of the ops tool `tool`'s input schema.

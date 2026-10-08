@@ -1,6 +1,6 @@
 //! `reshiki --cli convert`: import, then export through the ops tools.
 use super::{
-    args::{Convert, Output},
+    args::{Convert, Export, Output},
     host::{CliError, Session, api},
     io::write_output,
 };
@@ -20,21 +20,39 @@ pub(crate) async fn run(
     err: &mut dyn Write,
     terminal: bool,
 ) -> Result<(), CliError> {
-    let Convert {
-        input,
+    let Convert { input, export } = convert;
+    refuse_binary(&export.format, &export.output, terminal)?;
+    let mut session = Session::new();
+    let document = session.import(input, err).await?;
+    write(&mut session, document, export, out, err).await
+}
+
+/// Refuses to write pdf or png to stdout when it is a terminal.
+pub(crate) fn refuse_binary(format: &str, output: &Output, terminal: bool) -> Result<(), CliError> {
+    if *output == Output::Stdout && terminal && BINARY.contains(&format) {
+        return Err(CliError::Usage(
+            "refusing to write binary data to a terminal; use -o FILE".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Exports the session document `document` and writes the file as `export`
+/// says, as convert and compose do.
+pub(crate) async fn write(
+    session: &mut Session,
+    document: Value,
+    export: Export,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<(), CliError> {
+    let Export {
         format,
         output,
         pages,
         force,
         receipt,
-    } = convert;
-    if output == Output::Stdout && terminal && BINARY.contains(&format.as_str()) {
-        return Err(CliError::Usage(
-            "refusing to write binary data to a terminal; use -o FILE".into(),
-        ));
-    }
-    let mut session = Session::new();
-    let document = session.import(input, err).await?;
+    } = export;
     let pages = if pages {
         Value::Bool(true)
     } else {
@@ -52,11 +70,7 @@ pub(crate) async fn run(
             "internal error: export returned no file".into(),
         ));
     };
-    let path = match output {
-        Output::Stdout => return out.write_all(&file.bytes).map_err(CliError::Stdout),
-        Output::File(path) => path,
-    };
-    write_output(&path, &file.bytes, force).map_err(CliError::Failed)?;
+    emit(&file.bytes, &output, force, out)?;
     if receipt {
         let receipt = result
             .value
@@ -68,4 +82,17 @@ pub(crate) async fn run(
         writeln!(out, "{line}").map_err(CliError::Stdout)?;
     }
     Ok(())
+}
+
+/// Writes `bytes` to `out`, or to the file `output` names.
+pub(crate) fn emit(
+    bytes: &[u8],
+    output: &Output,
+    force: bool,
+    out: &mut dyn Write,
+) -> Result<(), CliError> {
+    match output {
+        Output::Stdout => out.write_all(bytes).map_err(CliError::Stdout),
+        Output::File(path) => write_output(path, bytes, force).map_err(CliError::Failed),
+    }
 }
