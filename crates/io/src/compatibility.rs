@@ -71,15 +71,26 @@ pub fn legacy_data_directory_location() -> Option<PathBuf> {
 }
 
 /// Every folder that may be the user's home: the platform's (on Windows the
-/// profile known folder, which needs no other known folder; on Unix `HOME`
-/// or the user's account entry) and the environment's ([`std::env::home_dir`]:
-/// `HOME` on Unix, `USERPROFILE` on Windows). Callers refuse every one, so an
-/// overridden `USERPROFILE` and the real profile are both covered.
+/// profile known folder; on Unix `HOME` or the user's account entry) and the
+/// environment's ([`std::env::home_dir`]: `HOME` on Unix, `USERPROFILE` on
+/// Windows). Callers refuse every one, so an overridden `USERPROFILE` and the
+/// real profile are both covered.
 pub fn home_directories() -> Vec<PathBuf> {
-    distinct_homes([
-        directories_next::UserDirs::new().map(|user| user.home_dir().to_path_buf()),
-        std::env::home_dir(),
-    ])
+    distinct_homes([platform_home(), std::env::home_dir()])
+}
+
+/// The profile known folder, which needs no other known folder (`BaseDirs`
+/// would also need the AppData folders).
+#[cfg(windows)]
+fn platform_home() -> Option<PathBuf> {
+    directories_next::UserDirs::new().map(|user| user.home_dir().to_path_buf())
+}
+
+/// `HOME` or the user's account entry, without reading any file (`UserDirs`
+/// would also parse Linux's `user-dirs.dirs`, which can panic or block).
+#[cfg(not(windows))]
+fn platform_home() -> Option<PathBuf> {
+    directories_next::BaseDirs::new().map(|base| base.home_dir().to_path_buf())
 }
 
 /// The absolute candidates, each once, in order. An empty path is not

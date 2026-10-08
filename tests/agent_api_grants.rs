@@ -111,7 +111,12 @@ impl Tree {
     /// Starts `reshiki --mcp args`, which must refuse to start: exit 2 with
     /// stdin still open, nothing on stdout and one stderr line, returned.
     fn refused(&self, args: &[&str], data: &str) -> String {
-        let mut client = self.start(args, data, &[]);
+        self.refused_with(args, data, &[])
+    }
+
+    /// [`Tree::refused`] with the variables `extra`.
+    fn refused_with(&self, args: &[&str], data: &str, extra: &[(&'static str, PathBuf)]) -> String {
+        let mut client = self.start(args, data, extra);
         let status = client.session.wait_exit(REFUSED_EXIT);
         assert_eq!(status.code(), Some(2), "{args:?}");
         assert_eq!(client.session.rest(LINE_TIMEOUT), Vec::<Value>::new());
@@ -361,6 +366,47 @@ fn granting_the_home_folder_exits_2() {
         stderr.starts_with("reshiki --mcp: folder is too broad to grant: "),
         "{stderr}"
     );
+}
+
+/// Finding the home folder reads no file: with `make` creating Linux's
+/// `user-dirs.dirs`, granting the home folder is still refused at once.
+/// (Only Linux ever reads that file; elsewhere this checks the setup.)
+#[cfg(unix)]
+fn home_refused_beside_user_dirs(make: impl FnOnce(&Path)) {
+    let tree = Tree::new();
+    let config = tree.path("config");
+    fs::create_dir(&config).expect("create a folder");
+    make(&config.join("user-dirs.dirs"));
+    let home = tree.child_home();
+    let home = home.to_str().expect("a UTF-8 home folder");
+    let extra = [("XDG_CONFIG_HOME", config)];
+    let stderr = tree.refused_with(&["--allow-write", home], "data", &extra);
+    assert!(
+        stderr.starts_with("reshiki --mcp: folder is too broad to grant: "),
+        "{stderr}"
+    );
+}
+
+/// A truncated entry, which the `dirs` parser would slice as `[1..0]`.
+#[cfg(unix)]
+#[test]
+fn a_malformed_user_dirs_file_does_not_stop_the_home_refusal() {
+    home_refused_beside_user_dirs(|path| {
+        fs::write(path, "XDG_DESKTOP_DIR=\"\n").expect("user-dirs.dirs");
+    });
+}
+
+/// A FIFO, which would block a reader until a writer appears.
+#[cfg(unix)]
+#[test]
+fn a_fifo_user_dirs_file_does_not_stop_the_home_refusal() {
+    home_refused_beside_user_dirs(|path| {
+        let made = std::process::Command::new("mkfifo")
+            .arg(path)
+            .status()
+            .expect("run mkfifo");
+        assert!(made.success(), "mkfifo failed");
+    });
 }
 
 /// The real profile is refused whether or not the child takes it as a
