@@ -269,3 +269,43 @@ fn mcp_exits_0_only_when_every_request_was_answered() {
         );
     }
 }
+
+#[test]
+fn the_heap_budget_is_2_gib_or_whole_mib_from_256_to_16384() {
+    const MIB: usize = 1024 * 1024;
+    let error: Result<usize, String> =
+        Err("RESHIKI_AGENT_HEAP_MB must be a whole number of MiB from 256 to 16384".into());
+    for (value, expected) in [
+        (None, Ok(2048 * MIB)),
+        (Some("256"), Ok(256 * MIB)),
+        (Some("4096"), Ok(4096 * MIB)),
+        (Some("16384"), Ok(16384 * MIB)),
+        (Some("0256"), Ok(256 * MIB)),
+        (Some("255"), error.clone()),
+        (Some("16385"), error.clone()),
+        (Some("0"), error.clone()),
+        (Some("1"), error.clone()),
+        (Some(""), error.clone()),
+        (Some(" 512"), error.clone()),
+        (Some("512 "), error.clone()),
+        (Some("+512"), error.clone()),
+        (Some("-512"), error.clone()),
+        (Some("512.0"), error.clone()),
+        (Some("1e3"), error.clone()),
+        (Some("512MiB"), error.clone()),
+        (Some("99999999999999999999999"), error.clone()),
+    ] {
+        assert_eq!(
+            heap_budget(value.map(OsString::from)),
+            expected,
+            "{value:?}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_non_utf8_heap_budget_is_refused() {
+    use std::os::unix::ffi::OsStringExt;
+    assert!(heap_budget(Some(OsString::from_vec(b"512\xff".to_vec()))).is_err());
+}

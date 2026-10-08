@@ -18,6 +18,7 @@ use std::{
     ffi::OsString,
     fmt,
     io::{self, IsTerminal, Write},
+    ops::RangeInclusive,
     path::PathBuf,
     process,
     sync::Arc,
@@ -57,6 +58,34 @@ pub(crate) fn mode(args: impl IntoIterator<Item = OsString>) -> Launch {
     }
 }
 
+/// The environment variable that sets the heap ceiling of `--mcp` and
+/// `--cli`.
+const HEAP_VARIABLE: &str = "RESHIKI_AGENT_HEAP_MB";
+const MIB: usize = 1024 * 1024;
+/// The heap ceiling without [`HEAP_VARIABLE`]: 2 GiB.
+const DEFAULT_HEAP_MIB: usize = 2048;
+/// The ceilings [`HEAP_VARIABLE`] may set, in MiB.
+const HEAP_MIB: RangeInclusive<usize> = 256..=16384;
+
+/// The heap ceiling in bytes for `--mcp` and `--cli`, from the value of
+/// [`HEAP_VARIABLE`]: 2 GiB when it is unset, else its whole number of MiB
+/// from 256 to 16384.
+///
+/// Past the ceiling the bounded allocator prints `RESHIKI_HEAP_LIMIT ...` to
+/// stderr and exits 75 (`reshiki_process_heap::RESOURCE_EXIT`).
+fn heap_budget(value: Option<OsString>) -> Result<usize, String> {
+    let Some(value) = value else {
+        return Ok(DEFAULT_HEAP_MIB * MIB);
+    };
+    value
+        .to_str()
+        .filter(|text| text.bytes().all(|byte| byte.is_ascii_digit()))
+        .and_then(|text| text.parse::<usize>().ok())
+        .filter(|mib| HEAP_MIB.contains(mib))
+        .and_then(|mib| mib.checked_mul(MIB))
+        .ok_or_else(|| format!("{HEAP_VARIABLE} must be a whole number of MiB from 256 to 16384"))
+}
+
 /// The headless runtime: two workers and at least two blocking threads.
 pub(crate) fn runtime(blocking: usize) -> io::Result<Runtime> {
     Builder::new_multi_thread()
@@ -77,7 +106,16 @@ pub(crate) fn exit(runtime: Runtime, code: i32, grace: Duration) -> ! {
 }
 
 /// `reshiki --cli`: runs one command and exits with its code.
+///
+/// An invalid [`HEAP_VARIABLE`] is a usage error: one stderr line, exit 2.
 pub(crate) fn cli(args: Vec<OsString>) -> ! {
+    match heap_budget(std::env::var_os(HEAP_VARIABLE)) {
+        Ok(bytes) => reshiki_process_heap::begin(bytes),
+        Err(error) => {
+            let _ = writeln!(io::stderr(), "reshiki: {error}");
+            process::exit(reshiki::cli::USAGE)
+        }
+    }
     // The blocking pool runs the in-process host's operations, with room
     // for two more.
     let runtime = match runtime(Budgets::default().concurrency.saturating_add(2)) {
@@ -258,9 +296,10 @@ fn banner(version: &str, grants: &GrantSummary, level: Level) -> String {
 /// `reshiki --mcp`: serves MCP on stdin and stdout until stdin ends or
 /// stdout fails, then exits 0 if every response was delivered, else 1.
 ///
-/// The granted folders are opened before anything is read: a folder that
-/// cannot be granted, or an unreadable `agent-access.json`, prints one
-/// stderr line and exits [`GRANT_EXIT_CODE`].
+/// The heap ceiling starts and the granted folders are opened before
+/// anything is read: an invalid [`HEAP_VARIABLE`], a folder that cannot be
+/// granted, or an unreadable `agent-access.json`, prints one stderr line and
+/// exits 2 ([`GRANT_EXIT_CODE`]).
 ///
 /// Stdout carries MCP messages only: the framing's writer thread takes its
 /// lock for the whole connection, and nothing else here writes it. Stderr
@@ -289,6 +328,13 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
             process::exit(2)
         }
     };
+    match heap_budget(std::env::var_os(HEAP_VARIABLE)) {
+        Ok(bytes) => reshiki_process_heap::begin(bytes),
+        Err(error) => {
+            let _ = writeln!(io::stderr(), "reshiki --mcp: {error}");
+            process::exit(2)
+        }
+    }
     let grants = match load_grants(read, write) {
         Ok(grants) => grants,
         Err(error) => {

@@ -4,6 +4,7 @@
 use serde_json::Value;
 use std::{
     collections::VecDeque,
+    ffi::OsStr,
     io::{BufRead, BufReader, Read, Write},
     path::Path,
     process::{Child, ChildStderr, ChildStdin, Command, ExitStatus, Output, Stdio},
@@ -57,6 +58,12 @@ pub fn wait_with_watchdog(mut child: Child, limit: Duration) -> Output {
 /// folder, writing `input` to its stdin and then closing it; kills it and
 /// panics if it runs past `limit`.
 pub fn run_cli(dir: &Path, args: &[&str], input: &[u8], limit: Duration) -> Output {
+    let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+    run_cli_os(dir, &args, input, limit)
+}
+
+/// [`run_cli`] with arguments that need not be UTF-8.
+pub fn run_cli_os(dir: &Path, args: &[&OsStr], input: &[u8], limit: Duration) -> Output {
     let data = data_dir();
     let mut child = Command::new(env!("CARGO_BIN_EXE_reshiki"))
         .arg("--cli")
@@ -144,28 +151,41 @@ pub struct McpSession {
 impl McpSession {
     /// Starts `reshiki --mcp` followed by `args`.
     pub fn start(args: &[&str], stderr: StderrMode) -> Self {
-        Self::spawn(args, stderr, StdoutMode::Read)
+        Self::spawn(args, &[], stderr, StdoutMode::Read)
+    }
+
+    /// Starts `reshiki --mcp` followed by `args`, with the variables `env`
+    /// set after the empty data folder, so a `RESHIKI_DATA_DIR` in `env`
+    /// replaces it.
+    pub fn start_with_env(args: &[&str], env: &[(&str, &OsStr)], stderr: StderrMode) -> Self {
+        Self::spawn(args, env, stderr, StdoutMode::Read)
     }
 
     /// Starts `reshiki --mcp` followed by `args` without reading its stdout
     /// until [`McpSession::release_stdout`], like a client that stalls, or
     /// until [`McpSession::close_held_stdout`] closes it unread.
     pub fn with_held_stdout(args: &[&str], stderr: StderrMode) -> Self {
-        Self::spawn(args, stderr, StdoutMode::Held)
+        Self::spawn(args, &[], stderr, StdoutMode::Held)
     }
 
     /// Starts `reshiki --mcp` followed by `args` and closes the read end of
     /// its stdout at once, like a client that went away.
     pub fn without_stdout(args: &[&str], stderr: StderrMode) -> Self {
-        Self::spawn(args, stderr, StdoutMode::Closed)
+        Self::spawn(args, &[], stderr, StdoutMode::Closed)
     }
 
-    fn spawn(args: &[&str], stderr: StderrMode, stdout_mode: StdoutMode) -> Self {
+    fn spawn(
+        args: &[&str],
+        env: &[(&str, &OsStr)],
+        stderr: StderrMode,
+        stdout_mode: StdoutMode,
+    ) -> Self {
         let data = data_dir();
         let mut child = Command::new(env!("CARGO_BIN_EXE_reshiki"))
             .arg("--mcp")
             .args(args)
             .env("RESHIKI_DATA_DIR", data.path())
+            .envs(env.iter().copied())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -269,6 +289,14 @@ impl McpSession {
             }
             self.unclaimed.push_back(message);
         }
+    }
+
+    /// Every message received and not yet claimed, without waiting.
+    pub fn take_ready(&mut self) -> Vec<Value> {
+        while let Ok(line) = self.lines.try_recv() {
+            self.unclaimed.push_back(parse_message(&line));
+        }
+        self.unclaimed.drain(..).collect()
     }
 
     /// Asserts that no message with `id` arrives within `duration`.
