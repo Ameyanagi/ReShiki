@@ -26,7 +26,10 @@ jobs:
     secrets: inherit
     with:
       nightly: true
-      sign_windows: ${{ vars.SIGNPATH_NIGHTLY_ENABLED == 'true' }}
+      sign_windows: ${{ vars.SIGNPATH_NIGHTLY_ENABLED == 'true' || vars.SIGNPATH_NIGHTLY_TEST_ENABLED == 'true' }}
+      # Production takes precedence. Test signatures remain CI artifacts;
+      # public downloads continue to use the qualified unsigned Windows build.
+      windows_signing_policy: ${{ vars.SIGNPATH_NIGHTLY_ENABLED == 'true' && 'release-signing' || 'test-signing' }}
 
   publish:
     needs: packages
@@ -47,13 +50,13 @@ jobs:
           path: release
           merge-multiple: true
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: needs.packages.outputs.windows_signing_enabled == 'true'
+        if: needs.packages.outputs.windows_signing_enabled == 'true' && needs.packages.outputs.windows_signing_policy == 'release-signing'
         with:
           pattern: signed-windows-*
           path: release
           merge-multiple: true
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: needs.packages.outputs.windows_signing_enabled != 'true'
+        if: needs.packages.outputs.windows_signing_enabled != 'true' || needs.packages.outputs.windows_signing_policy != 'release-signing'
         with:
           pattern: unsigned-windows-*
           path: release
@@ -71,8 +74,8 @@ jobs:
           NIGHTLY_VERSION: ${{ needs.packages.outputs.nightly_version }}
           NIGHTLY_COMMIT: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          WINDOWS_SIGNING: ${{ needs.packages.outputs.windows_signing_enabled == 'true' && 'required' || 'unsigned' }}
-          WINDOWS_SIGNING_DESCRIPTION: ${{ needs.packages.outputs.windows_signing_enabled == 'true' && 'Windows application executables and installers are signed through SignPath.' || 'Windows packages remain unsigned.' }}
+          WINDOWS_SIGNING: ${{ needs.packages.outputs.windows_signing_enabled == 'true' && needs.packages.outputs.windows_signing_policy == 'release-signing' && 'required' || 'unsigned' }}
+          WINDOWS_SIGNING_DESCRIPTION: ${{ needs.packages.outputs.windows_signing_enabled == 'true' && needs.packages.outputs.windows_signing_policy == 'release-signing' && 'Windows application executables and installers are signed through SignPath.' || 'Windows packages remain unsigned.' }}
         run: |
           set -euo pipefail
           cat > notes.md <<EOF

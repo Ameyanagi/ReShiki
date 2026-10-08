@@ -2,10 +2,10 @@
 
 See the [Code signing policy](code-signing-policy.md) for current platform signing
 status. SignPath Open Source Code Signing access is approved; production Windows
-signing remains inactive while the release certificate and CI setup are pending.
+signing remains inactive while the release certificate and its pin are pending.
 Follow [SignPath setup](signpath-setup.md) to validate and activate it. Existing
-Windows downloads remain unsigned. Repository variables control stable and nightly
-Windows signing separately; enabling one makes that publication path require
+Windows downloads remain unsigned. Production repository variables control stable
+and nightly Windows signing separately; enabling one makes that publication path require
 verified release-signed Windows packages.
 
 The Release builds workflow produces signed macOS disk images, Windows x64/ARM64 setup programs, and portable packages for all six targets. macOS supports Apple Silicon and Intel; Windows and Linux support x64 and ARM64. Each package has one Rust application executable; InChI and macOS clipboard/printing run in isolated modes of that executable. Drawing and chemistry work offline without Python, RDKit or uv.
@@ -56,6 +56,17 @@ Linux packages remain unsigned. Installers replace the
 existing installation; use a portable archive in a separate folder to retain Stable.
 Older nightlies published before this installer workflow contain unsigned archives.
 
+After a manual nightly-version test-signing run passes, enable
+`SIGNPATH_NIGHTLY_TEST_ENABLED=true` to retain internal test-signed Windows
+nightly artifacts. The same six-target build supplies both the public unsigned
+Windows packages and the input for four test-policy requests: application and
+setup for x64 and ARM64. Completed test packages are workflow artifacts named
+`test-signed-windows-x64` and `test-signed-windows-arm64`; the public release
+continues to publish unsigned Windows downloads with matching notes and checksums.
+Keep the production switches disabled while the release certificate is pending.
+If `SIGNPATH_NIGHTLY_ENABLED=true`, release signing takes precedence over this
+internal test mode. See [internal test-signed nightlies](signpath-setup.md#run-internal-test-signed-nightlies).
+
 ```sh
 gh workflow run nightly.yml --ref main
 ```
@@ -65,7 +76,8 @@ The workflow publishes only runs from `main` and only
 after all six package jobs, both macOS signing jobs, and any enabled Windows
 signing jobs pass. Signing failures
 prevent publication; there is no unsigned macOS fallback, or unsigned Windows
-fallback when nightly Windows signing is enabled. Standard build runners do not establish hardware
+fallback when production nightly Windows signing is enabled. An enabled internal
+test-signing job must also pass before the nightly publishes. Standard build runners do not establish hardware
 GPU performance: use the [Windows renderer checks](windows.md#release-performance-and-debugging)
 on the test machine and record its adapter separately.
 
@@ -166,6 +178,9 @@ configurations, configure the `windows-signing` environment and certificate pins
 validate the test policy, then validate the issued Foundation release certificate
 with manual approvals. Keep `SIGNPATH_ENABLED` and `SIGNPATH_NIGHTLY_ENABLED`
 disabled until their respective production checks pass.
+Keep `SIGNPATH_NIGHTLY_TEST_ENABLED=false` until both architectures pass a manual
+nightly-version test-policy run, then enable it separately for internal nightly
+workflow artifacts. It does not activate public Windows signatures.
 
 For each architecture, signing starts from the qualified portable archive,
 verifies its checksum and provenance, and signs `reshiki.exe`. The workflow builds

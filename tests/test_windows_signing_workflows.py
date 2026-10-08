@@ -31,7 +31,7 @@ def evaluate(expression: str, **context):
 
 
 class WindowsSigningWorkflowTests(unittest.TestCase):
-    def test_stable_and_nightly_policies_cannot_be_selected_by_the_test_input(self):
+    def test_stable_tags_force_release_policy_and_callers_select_their_policy(self):
         enabled = re.search(r"^          SIGN_WINDOWS: (.*)$", RELEASE, re.M)[1]
         policy = re.search(r"^          SIGNING_POLICY: (.*)$", RELEASE, re.M)[1]
         cases = (
@@ -40,9 +40,10 @@ class WindowsSigningWorkflowTests(unittest.TestCase):
             ("workflow_dispatch", "true", False, "test-signing", False, "test-signing"),
             ("workflow_dispatch", "false", True, "test-signing", True, "test-signing"),
             ("workflow_dispatch", "false", True, "release-signing", True, "release-signing"),
-            # A manually dispatched nightly caller has no windows_signing_policy input.
-            ("workflow_dispatch", "false", True, None, True, "release-signing"),
-            ("schedule", "false", True, None, True, "release-signing"),
+            # Omitted reusable inputs receive the declared release-signing default.
+            ("schedule", "false", True, "release-signing", True, "release-signing"),
+            ("schedule", "false", True, "test-signing", True, "test-signing"),
+            ("workflow_dispatch", "false", True, "", True, ""),
         )
         for event, flag, requested, chosen, expected_enabled, expected_policy in cases:
             with self.subTest(event=event, flag=flag, requested=requested, chosen=chosen):
@@ -53,6 +54,75 @@ class WindowsSigningWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(bool(evaluate(enabled, **context)), expected_enabled)
                 self.assertEqual(evaluate(policy, **context), expected_policy)
+
+    @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "selector executes on Ubuntu")
+    def test_policy_selector_rejects_empty_or_unknown_inputs(self):
+        selector = re.search(
+            r"      - name: Select the Windows signing mode.*?        run: \|\n"
+            r"((?:          [^\n]*\n)+)",
+            RELEASE,
+            re.S,
+        )[1]
+        selector = "\n".join(line.removeprefix("          ") for line in selector.splitlines())
+        for policy in ("test-signing", "release-signing", "", "unknown"):
+            with self.subTest(policy=policy), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "output"
+                result = subprocess.run(
+                    ["bash", "-e", "-o", "pipefail", "-c", selector],
+                    env={
+                        **os.environ,
+                        "SIGNING_POLICY": policy,
+                        "SIGN_WINDOWS": "true",
+                        "GITHUB_OUTPUT": str(output),
+                    },
+                    capture_output=True,
+                    text=True,
+                )
+                accepted = policy in ("test-signing", "release-signing")
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+                if accepted:
+                    self.assertEqual(output.read_text(), f"enabled=true\npolicy={policy}\n")
+                else:
+                    self.assertFalse(output.exists())
+
+    def test_nightly_test_signatures_remain_ci_artifacts_and_production_takes_precedence(self):
+        packages = job(NIGHTLY, "packages")
+        requested = re.search(r"^      sign_windows: (.*)$", packages, re.M)[1]
+        selected = re.search(r"^      windows_signing_policy: (.*)$", packages, re.M)[1]
+        publication = re.search(r"^          WINDOWS_SIGNING: (.*)$", NIGHTLY, re.M)[1]
+        description = re.search(r"^          WINDOWS_SIGNING_DESCRIPTION: (.*)$", NIGHTLY, re.M)[1]
+        downloads = re.findall(r"^        if: (.*)$", job(NIGHTLY, "publish"), re.M)
+        self.assertEqual(len(downloads), 2)
+        for production, testing, enabled, policy, published in (
+            ("false", "false", False, "test-signing", "unsigned"),
+            ("false", "true", True, "test-signing", "unsigned"),
+            ("true", "false", True, "release-signing", "required"),
+            ("true", "true", True, "release-signing", "required"),
+        ):
+            with self.subTest(production=production, testing=testing):
+                variables = SimpleNamespace(
+                    SIGNPATH_NIGHTLY_ENABLED=production, SIGNPATH_NIGHTLY_TEST_ENABLED=testing
+                )
+                self.assertEqual(evaluate(requested, vars=variables), enabled)
+                self.assertEqual(evaluate(selected, vars=variables), policy)
+                needs = SimpleNamespace(
+                    packages=SimpleNamespace(
+                        outputs=SimpleNamespace(
+                            windows_signing_enabled=str(enabled).lower(),
+                            windows_signing_policy=policy,
+                        )
+                    )
+                )
+                self.assertEqual(evaluate(publication, needs=needs), published)
+                signed = published == "required"
+                self.assertEqual(evaluate(downloads[0], needs=needs), signed)
+                self.assertEqual(evaluate(downloads[1], needs=needs), not signed)
+                self.assertEqual(
+                    evaluate(description, needs=needs),
+                    "Windows application executables and installers are signed through SignPath."
+                    if signed
+                    else "Windows packages remain unsigned.",
+                )
 
     def test_stable_publication_accepts_disabled_signing_but_blocks_signing_failure(self):
         gate = condition(RELEASE, "publish")

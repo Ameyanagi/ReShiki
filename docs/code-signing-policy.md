@@ -62,7 +62,7 @@ are never published as public releases. SignPath holds the release certificate's
 private key in its HSM. No private signing key is checked into ReShiki's repository
 or distributed with the application.
 
-Before enabling signing, review the installer privacy-disclosure and update-check
+Before enabling production signing, review the installer privacy-disclosure and update-check
 opt-out requirements with SignPath Foundation.
 
 Unsigned development builds may continue to be published with their signing

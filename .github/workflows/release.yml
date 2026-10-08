@@ -28,14 +28,20 @@ on:
         type: boolean
         default: false
       sign_windows:
-        description: Sign qualified Windows packages with the release-signing policy
+        description: Sign qualified Windows packages through SignPath
         type: boolean
         default: false
+      windows_signing_policy:
+        description: SignPath policy; test signing creates internal CI artifacts only
+        type: string
+        default: release-signing
     outputs:
       nightly_version:
         value: ${{ jobs.validate.outputs.nightly_version }}
       windows_signing_enabled:
         value: ${{ jobs.validate.outputs.windows_signing_enabled }}
+      windows_signing_policy:
+        value: ${{ jobs.validate.outputs.windows_signing_policy }}
 permissions:
   contents: read
 concurrency:
@@ -65,10 +71,14 @@ jobs:
         id: windows-signing
         env:
           SIGN_WINDOWS: ${{ (github.event_name == 'push' && vars.SIGNPATH_ENABLED == 'true') || (github.event_name != 'push' && inputs.sign_windows) }}
-          # Reusable/nightly callers cannot choose the test policy. Their event
-          # may be workflow_dispatch, but they have no policy input.
-          SIGNING_POLICY: ${{ github.event_name == 'workflow_dispatch' && inputs.windows_signing_policy || 'release-signing' }}
+          # Stable tags always use the release policy. Manual and reusable
+          # callers may request test signatures for internal CI artifacts.
+          SIGNING_POLICY: ${{ github.event_name == 'push' && 'release-signing' || inputs.windows_signing_policy }}
         run: |
+          case "$SIGNING_POLICY" in
+            test-signing|release-signing) ;;
+            *) echo 'Unknown Windows signing policy' >&2; exit 1 ;;
+          esac
           echo "enabled=$SIGN_WINDOWS" >> "$GITHUB_OUTPUT"
           echo "policy=$SIGNING_POLICY" >> "$GITHUB_OUTPUT"
       - name: Prepare nightly version
@@ -350,7 +360,7 @@ jobs:
         id: app-input
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: signing-input-windows-app-${{ matrix.architecture }}
+          name: signing-input-windows-app-${{ matrix.architecture }}-attempt-${{ github.run_attempt }}
           path: signing-input/app/
           if-no-files-found: error
           compression-level: 0
@@ -384,7 +394,7 @@ jobs:
         id: installer-input
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: signing-input-windows-installer-${{ matrix.architecture }}
+          name: signing-input-windows-installer-${{ matrix.architecture }}-attempt-${{ github.run_attempt }}
           path: signing-input/installer/reshiki-${{ steps.prepare.outputs.version }}-windows-${{ matrix.architecture }}-setup.exe
           if-no-files-found: error
           compression-level: 0
