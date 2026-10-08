@@ -38,7 +38,7 @@ On Mac, open the disk image and drag ReShiki to Applications. On Windows, run se
 
 [Code signing policy](docs/code-signing-policy.md) · [Privacy policy](docs/privacy-policy.md).
 macOS downloads are signed and notarized. Windows downloads are currently unsigned;
-SignPath Foundation approval and integration are pending.
+SignPath access is provisioned; the release certificate and Windows signing activation are pending.
 
 Want to test upcoming changes? [Nightly builds](https://reshiki.com/guide/install/#nightly-builds) are optional prereleases. Stable is the recommended download for everyday work.
 

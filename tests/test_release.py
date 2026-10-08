@@ -84,18 +84,29 @@ class ReleaseTests(unittest.TestCase):
             with (
                 patch("installers.inno_compiler", return_value=Path("ISCC.exe")),
                 patch("installers.run", side_effect=compile_setup),
+                patch("installers.normalize_windows_installer_metadata") as normalize,
                 patch("installers.verify_windows_installer") as verify,
                 patch("installers.verify_windows_upgrade_with_running_agent") as upgrade,
             ):
                 result = windows_installer(folder, root)
+            normalize.assert_called_once_with(result, nightly)
             verify.assert_called_once_with(result, folder)
             upgrade.assert_called_once_with(result, folder)
             self.assertTrue(Path(str(result) + ".sha256").is_file())
             script = (
                 Path(__file__).resolve().parents[1] / "packaging/windows/reshiki.iss"
             ).read_text()
+            self.assertEqual(
+                [
+                    line
+                    for line in script.splitlines()
+                    if line.startswith("VersionInfoProductName=")
+                ],
+                ["VersionInfoProductName=ReShiki"],
+            )
             self.assertIn("VersionInfoVersion={#AppNumericVersion}", script)
             self.assertIn("VersionInfoTextVersion={#AppVersion}", script)
+            self.assertIn("VersionInfoProductTextVersion={#AppVersion}", script)
 
     def test_nightly_signing_requires_stamped_version_and_matching_source(self):
         from prepare_nightly import stamp

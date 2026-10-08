@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <!-- GitHub's upload-artifact action wraps the staged executable in a ZIP. -->
+  <zip-file>
+    <pe-file path="reshiki.exe"
+             product-name="ReShiki"
+             product-version="${version}"
+             file-version="${version}">
+      <authenticode-sign hash-algorithm="sha256" />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

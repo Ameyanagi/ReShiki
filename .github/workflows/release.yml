@@ -12,15 +12,36 @@ on:
         description: Sign and notarize macOS test packages (requires signing secrets)
         type: boolean
         default: false
+      sign_windows:
+        description: Sign Windows test packages through SignPath
+        type: boolean
+        default: false
+      windows_signing_policy:
+        description: SignPath policy for manually requested Windows signing
+        type: choice
+        options: [test-signing, release-signing]
+        default: test-signing
   workflow_call:
     inputs:
       nightly:
         description: Build nightly packages with installers and a unique version
         type: boolean
         default: false
+      sign_windows:
+        description: Sign qualified Windows packages through SignPath
+        type: boolean
+        default: false
+      windows_signing_policy:
+        description: SignPath policy; test signing creates internal CI artifacts only
+        type: string
+        default: release-signing
     outputs:
       nightly_version:
         value: ${{ jobs.validate.outputs.nightly_version }}
+      windows_signing_enabled:
+        value: ${{ jobs.validate.outputs.windows_signing_enabled }}
+      windows_signing_policy:
+        value: ${{ jobs.validate.outputs.windows_signing_policy }}
 permissions:
   contents: read
 concurrency:
@@ -37,6 +58,8 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       nightly_version: ${{ steps.nightly.outputs.version }}
+      windows_signing_enabled: ${{ steps.windows-signing.outputs.enabled }}
+      windows_signing_policy: ${{ steps.windows-signing.outputs.policy }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -44,6 +67,20 @@ jobs:
           version: "0.12.3"
           python-version: "3.12"
           enable-cache: false
+      - name: Select the Windows signing mode
+        id: windows-signing
+        env:
+          SIGN_WINDOWS: ${{ (github.event_name == 'push' && vars.SIGNPATH_ENABLED == 'true') || (github.event_name != 'push' && inputs.sign_windows) }}
+          # Stable tags always use the release policy. Manual and reusable
+          # callers may request test signatures for internal CI artifacts.
+          SIGNING_POLICY: ${{ github.event_name == 'push' && 'release-signing' || inputs.windows_signing_policy }}
+        run: |
+          case "$SIGNING_POLICY" in
+            test-signing|release-signing) ;;
+            *) echo 'Unknown Windows signing policy' >&2; exit 1 ;;
+          esac
+          echo "enabled=$SIGN_WINDOWS" >> "$GITHUB_OUTPUT"
+          echo "policy=$SIGNING_POLICY" >> "$GITHUB_OUTPUT"
       - name: Prepare nightly version
         if: inputs.nightly
         id: nightly
@@ -51,9 +88,13 @@ jobs:
           uv run --no-project --python 3.12 python -m unittest tests.test_prepare_nightly
           version=$(uv run --no-project --python 3.12 python scripts/prepare_nightly.py --identifier "$(date -u +%Y%m%d).${{ github.run_id }}.${{ github.run_attempt }}")
           echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Require stable release tags to belong to main
-        if: github.event_name == 'push'
+      - name: Require production signing and stable release tags to belong to main
+        if: github.event_name == 'push' || (steps.windows-signing.outputs.enabled == 'true' && steps.windows-signing.outputs.policy == 'release-signing')
         run: |
+          case "$GITHUB_REF" in
+            refs/heads/main|refs/tags/v*) ;;
+            *) echo 'Production Windows signing requires main or a v* tag belonging to main' >&2; exit 1 ;;
+          esac
           git fetch --no-tags --unshallow origin main
           git merge-base --is-ancestor HEAD FETCH_HEAD
       - name: Require tag and package versions to match
@@ -254,9 +295,143 @@ jobs:
           name: signed-${{ matrix.artifact }}
           path: dist/releases/*
           if-no-files-found: error
+  sign_windows:
+    needs: [validate, build]
+    if: needs.validate.outputs.windows_signing_enabled == 'true'
+    environment: windows-signing
+    # Two sequential signing requests may each require manual approval.
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            architecture: x64
+          - os: windows-11-arm
+            architecture: arm64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      WINDOWS_SIGNING_POLICY: ${{ needs.validate.outputs.windows_signing_policy }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.3"
+          python-version: cpython-3.12-windows-x86_64-none
+          enable-cache: false
+      - name: Select the native Windows tools for package verification
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.architecture }}
+      - name: Match the nightly version of the qualified archive
+        if: inputs.nightly
+        env:
+          NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
+        run: uv run --no-project --python 3.12 python scripts/prepare_nightly.py --version "$env:NIGHTLY_VERSION"
+      - name: Select and require the signing certificate pin
+        env:
+          SIGNPATH_RELEASE_CERTIFICATE_SHA256: ${{ vars.SIGNPATH_RELEASE_CERTIFICATE_SHA256 }}
+          SIGNPATH_TEST_CERTIFICATE_SHA256: ${{ vars.SIGNPATH_TEST_CERTIFICATE_SHA256 }}
+        run: |
+          if ($env:WINDOWS_SIGNING_POLICY -eq 'release-signing') {
+            $certificate = $env:SIGNPATH_RELEASE_CERTIFICATE_SHA256
+          } elseif ($env:WINDOWS_SIGNING_POLICY -eq 'test-signing') {
+            $certificate = $env:SIGNPATH_TEST_CERTIFICATE_SHA256
+          } else {
+            throw 'Unknown Windows signing policy'
+          }
+          if ($certificate -notmatch '^[0-9a-fA-F]{64}$') { throw 'Configure the SHA-256 certificate pin for the selected signing policy' }
+          "CERTIFICATE_SHA256=$certificate" >> $env:GITHUB_ENV
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: unsigned-windows-${{ matrix.architecture }}
+          path: unsigned
+      - name: Verify and stage the qualified application
+        id: prepare
+        run: uv run --no-project --isolated --python 3.12 python scripts/sign_windows_release.py prepare --architecture ${{ matrix.architecture }} --policy "$env:WINDOWS_SIGNING_POLICY" --certificate-sha256 "$env:CERTIFICATE_SHA256"
+      # upload-artifact wraps only reshiki.exe in the ZIP expected by windows-app.
+      - name: Upload the application signing input
+        id: app-input
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signing-input-windows-app-${{ matrix.architecture }}-attempt-${{ github.run_attempt }}
+          path: signing-input/app/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+      - name: Sign the application with SignPath
+        uses: SignPath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'ReShiki' }}
+          signing-policy-slug: ${{ needs.validate.outputs.windows_signing_policy }}
+          artifact-configuration-slug: windows-app
+          github-artifact-id: ${{ steps.app-input.outputs.artifact-id }}
+          parameters: |
+            version: ${{ toJSON(steps.prepare.outputs.version) }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-app
+      - name: Install pinned Windows installer compiler
+        run: |
+          $compilerInstaller = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $compilerInstaller
+          if ((Get-FileHash $compilerInstaller -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732') { throw 'Inno Setup checksum mismatch' }
+          $compilerDir = Join-Path $env:RUNNER_TEMP 'InnoSetup'
+          $installerProcess = Start-Process $compilerInstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$compilerDir`"") -Wait -PassThru
+          if ($installerProcess.ExitCode -ne 0) { throw 'Inno Setup installation failed' }
+          "RESHIKI_ISCC=$compilerDir\ISCC.exe" >> $env:GITHUB_ENV
+      - name: Verify the signed application and package it into the installer
+        run: uv run --no-project --isolated --python 3.12 python scripts/sign_windows_release.py package --architecture ${{ matrix.architecture }} --policy "$env:WINDOWS_SIGNING_POLICY" --certificate-sha256 "$env:CERTIFICATE_SHA256"
+      - name: Upload the installer signing input
+        id: installer-input
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signing-input-windows-installer-${{ matrix.architecture }}-attempt-${{ github.run_attempt }}
+          path: signing-input/installer/reshiki-${{ steps.prepare.outputs.version }}-windows-${{ matrix.architecture }}-setup.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+      - name: Sign the installer with SignPath
+        uses: SignPath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'ReShiki' }}
+          signing-policy-slug: ${{ needs.validate.outputs.windows_signing_policy }}
+          artifact-configuration-slug: windows-installer
+          github-artifact-id: ${{ steps.installer-input.outputs.artifact-id }}
+          parameters: |
+            version: ${{ toJSON(steps.prepare.outputs.version) }}
+            architecture: ${{ toJSON(matrix.architecture) }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-installer
+      - name: Verify both signatures, smoke test the installer, and checksum final packages
+        run: uv run --no-project --isolated --python 3.12 python scripts/sign_windows_release.py verify --architecture ${{ matrix.architecture }} --policy "$env:WINDOWS_SIGNING_POLICY" --certificate-sha256 "$env:CERTIFICATE_SHA256"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          # Test certificates are never eligible for a release download.
+          name: ${{ needs.validate.outputs.windows_signing_policy == 'test-signing' && 'test-signed' || 'signed' }}-windows-${{ matrix.architecture }}
+          path: dist/releases/*
+          if-no-files-found: error
   publish:
-    needs: [build, sign, reference]
-    if: github.event_name == 'push'
+    needs: [validate, build, sign, sign_windows, reference]
+    if: >-
+      ${{ always() && github.event_name == 'push'
+          && needs.validate.result == 'success'
+          && needs.build.result == 'success'
+          && needs.sign.result == 'success'
+          && needs.reference.result == 'success'
+          && ((needs.validate.outputs.windows_signing_enabled == 'true' && needs.sign_windows.result == 'success')
+              || (needs.validate.outputs.windows_signing_enabled == 'false' && needs.sign_windows.result == 'skipped')) }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -269,10 +444,17 @@ jobs:
           enable-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: signed-*
+          pattern: signed-macos-*
           path: release
           merge-multiple: true
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: needs.validate.outputs.windows_signing_enabled == 'true'
+        with:
+          pattern: signed-windows-*
+          path: release
+          merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: needs.validate.outputs.windows_signing_enabled != 'true'
         with:
           name: unsigned-windows-x64
           path: release
@@ -281,6 +463,7 @@ jobs:
           name: unsigned-linux-x64
           path: release
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: needs.validate.outputs.windows_signing_enabled != 'true'
         with:
           name: unsigned-windows-arm64
           path: release
@@ -294,9 +477,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
+          WINDOWS_SIGNING: ${{ needs.validate.outputs.windows_signing_enabled == 'true' && 'required' || 'unsigned' }}
         run: |
           set -euo pipefail
-          uv run --no-project --python 3.12 python ../scripts/release_downloads.py --directory . --repository "$GH_REPO" --tag "$RELEASE_TAG" --notes notes.md
+          uv run --no-project --python 3.12 python ../scripts/release_downloads.py --directory . --repository "$GH_REPO" --tag "$RELEASE_TAG" --notes notes.md --windows-signing "$WINDOWS_SIGNING"
           highlights="../.github/release-notes/$RELEASE_TAG.md"
           if [[ -f "$highlights" ]]; then
             cat "$highlights" notes.md > release-notes.md

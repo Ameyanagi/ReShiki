@@ -46,7 +46,9 @@ def filenames(version: str) -> list[str]:
     ]
 
 
-def verify_assets(directory: Path, version: str) -> list[str]:
+def verify_assets(directory: Path, version: str, windows_signing: str = "unsigned") -> list[str]:
+    if windows_signing not in {"required", "unsigned"}:
+        raise ValueError("Expected required or unsigned Windows signing mode")
     expected = filenames(version)
     found = {path.name for path in directory.glob("reshiki-*")}
     required = set(expected) | {name + ".sha256" for name in expected}
@@ -79,14 +81,50 @@ def verify_assets(directory: Path, version: str) -> list[str]:
         }
         if any(metadata.get(key) != value for key, value in expected_metadata.items()):
             raise ValueError(f"macOS archive is not the signed, notarized release: {name}")
+    for architecture in ("arm64", "x64"):
+        name = f"reshiki-{version}-windows-{architecture}"
+        with zipfile.ZipFile(directory / f"{name}.zip") as archive:
+            metadata = json.loads(archive.read(f"{name}/build.json"))
+            expected_metadata = {
+                "version": version,
+                "platform": "windows",
+                "architecture": architecture,
+                "signed": windows_signing == "required",
+                "notarized": False,
+            }
+            if any(metadata.get(key) != value for key, value in expected_metadata.items()):
+                raise ValueError(
+                    f"Windows archive signing status does not match publication: {name}"
+                )
+            signing = metadata.get("signing", {})
+            if windows_signing == "required":
+                evidence = signing.get("application", {})
+                certificate = signing.get("certificate_sha256", "")
+                binary_digest = hashlib.sha256(archive.read(f"{name}/reshiki.exe")).hexdigest()
+                if (
+                    signing.get("provider") != "SignPath"
+                    or signing.get("policy") != "release-signing"
+                    or signing.get("publicly_trusted") is not True
+                    or not re.fullmatch(r"[0-9a-f]{64}", certificate)
+                    or evidence.get("certificate_sha256") != certificate
+                    or evidence.get("file_sha256") != binary_digest
+                    or not evidence.get("timestamp_subject")
+                ):
+                    raise ValueError(
+                        f"Windows archive lacks verified release signature evidence: {name}"
+                    )
+            elif signing:
+                raise ValueError(
+                    f"Test or signed Windows artifacts cannot publish as unsigned: {name}"
+                )
     return checksums
 
 
-def prepare(directory: Path, repository: str, tag: str) -> str:
+def prepare(directory: Path, repository: str, tag: str, windows_signing: str = "unsigned") -> str:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Expected an owner/repository name")
     version = release_version(tag)
-    checksums = verify_assets(directory, version)
+    checksums = verify_assets(directory, version, windows_signing)
     base = f"https://github.com/{repository}/releases/download/{quote(tag, safe='')}"
 
     def link(name: str, label: str) -> str:
@@ -110,7 +148,12 @@ def prepare(directory: Path, repository: str, tag: str) -> str:
     lines.extend(
         [
             "",
-            "macOS downloads are signed and notarized. Windows and Linux downloads are unsigned.",
+            (
+                "macOS downloads are signed and notarized. Windows applications and setup programs "
+                "are signed with SignPath Foundation. Linux downloads are unsigned."
+                if windows_signing == "required"
+                else "macOS downloads are signed and notarized. Windows and Linux downloads are unsigned."
+            ),
             "Installers replace an existing ReShiki installation. To retain another version, extract a portable archive into a separate folder and keep its contents together.",
             "",
             f"Verify downloads with {link('SHA256SUMS', 'SHA256SUMS')}. "
@@ -131,8 +174,9 @@ def main():
     parser.add_argument("--tag", required=True)
     parser.add_argument("--notes", type=Path, required=True)
     parser.add_argument("--append", action="store_true")
+    parser.add_argument("--windows-signing", choices=("required", "unsigned"), default="unsigned")
     args = parser.parse_args()
-    table = prepare(args.directory, args.repository, args.tag)
+    table = prepare(args.directory, args.repository, args.tag, args.windows_signing)
     prefix = args.notes.read_text(encoding="utf-8").rstrip() + "\n\n" if args.append else ""
     args.notes.write_text(prefix + table, encoding="utf-8", newline="\n")
 

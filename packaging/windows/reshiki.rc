@@ -1,1 +1,32 @@
+#include <winver.h>
+#include "reshiki-version.h"
+
 1 ICON "reshiki.ico"
+
+1 VERSIONINFO
+FILEVERSION RESHIKI_NUMERIC_VERSION
+PRODUCTVERSION RESHIKI_NUMERIC_VERSION
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS RESHIKI_FILE_FLAGS
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "ReShiki contributors\0"
+            VALUE "FileDescription", "ReShiki molecular drawing workspace\0"
+            VALUE "FileVersion", RESHIKI_VERSION_STRING
+            VALUE "InternalName", "reshiki\0"
+            VALUE "OriginalFilename", "reshiki.exe\0"
+            VALUE "ProductName", "ReShiki\0"
+            VALUE "ProductVersion", RESHIKI_VERSION_STRING
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

@@ -20,14 +20,20 @@ jobs:
     # Its build jobs explicitly reduce this permission to contents: read.
     permissions:
       contents: write
+      actions: read
     uses: ./.github/workflows/release.yml
     # Required for the reusable signing jobs to resolve their environment secrets.
     secrets: inherit
     with:
       nightly: true
+      sign_windows: ${{ vars.SIGNPATH_NIGHTLY_ENABLED == 'true' || vars.SIGNPATH_NIGHTLY_TEST_ENABLED == 'true' }}
+      # Production takes precedence. Test signatures remain CI artifacts;
+      # public downloads continue to use the qualified unsigned Windows build.
+      windows_signing_policy: ${{ vars.SIGNPATH_NIGHTLY_ENABLED == 'true' && 'release-signing' || 'test-signing' }}
 
   publish:
     needs: packages
+    if: ${{ always() && github.ref == 'refs/heads/main' && needs.packages.result == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -40,10 +46,17 @@ jobs:
           enable-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: signed-*
+          pattern: signed-macos-*
           path: release
           merge-multiple: true
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: needs.packages.outputs.windows_signing_enabled == 'true' && needs.packages.outputs.windows_signing_policy == 'release-signing'
+        with:
+          pattern: signed-windows-*
+          path: release
+          merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: needs.packages.outputs.windows_signing_enabled != 'true' || needs.packages.outputs.windows_signing_policy != 'release-signing'
         with:
           pattern: unsigned-windows-*
           path: release
@@ -61,6 +74,8 @@ jobs:
           NIGHTLY_VERSION: ${{ needs.packages.outputs.nightly_version }}
           NIGHTLY_COMMIT: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          WINDOWS_SIGNING: ${{ needs.packages.outputs.windows_signing_enabled == 'true' && needs.packages.outputs.windows_signing_policy == 'release-signing' && 'required' || 'unsigned' }}
+          WINDOWS_SIGNING_DESCRIPTION: ${{ needs.packages.outputs.windows_signing_enabled == 'true' && needs.packages.outputs.windows_signing_policy == 'release-signing' && 'Windows application executables and installers are signed through SignPath.' || 'Windows packages remain unsigned.' }}
         run: |
           set -euo pipefail
           cat > notes.md <<EOF
@@ -70,7 +85,7 @@ jobs:
 
           Linux 0.9.1 users must download and extract the archive manually because that version's updater expects the retired companion executable.
 
-          macOS applications and disk images are signed with Developer ID, notarized and stapled. Windows and Linux packages remain unsigned.
+          macOS applications and disk images are signed with Developer ID, notarized and stapled. $WINDOWS_SIGNING_DESCRIPTION Linux packages remain unsigned.
 
           Windows includes WGPU and Tiny Skia. Automatic selection uses Tiny Skia when only CPU adapters are available. To force WGPU in PowerShell, set \$env:ICED_BACKEND = 'wgpu' before launching the extracted executable. Run reshiki.exe --graphics-info to inspect available adapters; a CPU adapter is not hardware acceleration.
 
@@ -78,7 +93,7 @@ jobs:
 
           This prerelease is excluded from stable automatic updates. Verify downloads against SHA256SUMS.
           EOF
-          uv run --no-project --python 3.12 python ../scripts/release_downloads.py --directory . --repository "$GH_REPO" --tag "nightly-$NIGHTLY_VERSION" --notes notes.md --append
+          uv run --no-project --python 3.12 python ../scripts/release_downloads.py --directory . --repository "$GH_REPO" --tag "nightly-$NIGHTLY_VERSION" --notes notes.md --append --windows-signing "$WINDOWS_SIGNING"
           gh release create "nightly-$NIGHTLY_VERSION" --target "$NIGHTLY_COMMIT" \
             --title "Nightly $NIGHTLY_VERSION" --prerelease --latest=false \
             --generate-notes --notes-file notes.md *.zip *.tar.gz *.dmg *-setup.exe SHA256SUMS

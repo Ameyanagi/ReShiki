@@ -3,6 +3,7 @@
 AppId=dev.reshiki.editor
 AppName=ReShiki
 AppVersion={#AppVersion}
+VersionInfoProductName=ReShiki
 VersionInfoVersion={#AppNumericVersion}
 VersionInfoTextVersion={#AppVersion}
 VersionInfoProductTextVersion={#AppVersion}
