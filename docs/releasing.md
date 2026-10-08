@@ -1,8 +1,12 @@
-# Release builds and macOS signing
+# Release builds and code signing
 
 See the [Code signing policy](code-signing-policy.md) for current platform signing
-status and the proposed SignPath Foundation process. Windows signing is pending;
-the workflow described below currently publishes unsigned Windows packages.
+status. SignPath Open Source Code Signing access is approved; production Windows
+signing remains inactive while the release certificate and CI setup are pending.
+Follow [SignPath setup](signpath-setup.md) to validate and activate it. Existing
+Windows downloads remain unsigned. Repository variables control stable and nightly
+Windows signing separately; enabling one makes that publication path require
+verified release-signed Windows packages.
 
 The Release builds workflow produces signed macOS disk images, Windows x64/ARM64 setup programs, and portable packages for all six targets. macOS supports Apple Silicon and Intel; Windows and Linux support x64 and ARM64. Each package has one Rust application executable; InChI and macOS clipboard/printing run in isolated modes of that executable. Drawing and chemistry work offline without Python, RDKit or uv.
 
@@ -47,7 +51,8 @@ and [Inno Setup version fields](https://jrsoftware.org/ishelp/topic_setup_versio
 The workflow stamps only its temporary checkout. Published nightly tags start with
 `nightly-`, so they do not trigger the stable `v*` release workflow. Prereleases are
 excluded from the stable updater. Keep the stable installation and test with copies
-of drawings. Windows and Linux packages remain unsigned. Installers replace the
+of drawings. Windows packages are unsigned unless `SIGNPATH_NIGHTLY_ENABLED=true`;
+Linux packages remain unsigned. Installers replace the
 existing installation; use a portable archive in a separate folder to retain Stable.
 Older nightlies published before this installer workflow contain unsigned archives.
 
@@ -57,15 +62,22 @@ gh workflow run nightly.yml --ref main
 
 GitHub schedules run from the repository's default branch, `main`.
 The workflow publishes only runs from `main` and only
-after all six package jobs and both macOS signing jobs pass. Signing failures
-prevent publication; there is no unsigned macOS fallback. Standard build runners do not establish hardware
+after all six package jobs, both macOS signing jobs, and any enabled Windows
+signing jobs pass. Signing failures
+prevent publication; there is no unsigned macOS fallback, or unsigned Windows
+fallback when nightly Windows signing is enabled. Standard build runners do not establish hardware
 GPU performance: use the [Windows renderer checks](windows.md#release-performance-and-debugging)
 on the test machine and record its adapter separately.
 
 For an individual PR, run **Actions → Release builds → Run workflow** on its
 feature branch to produce unsigned test artifacts without publishing. Enable
-**Sign and notarize macOS test packages** on `main` to exercise the full signing
-path after configuring credentials.
+**Sign and notarize macOS test packages** on `main` to exercise the Apple signing
+path after configuring credentials. Use `sign_windows=true` with
+`windows_signing_policy=test-signing` to exercise Windows signing internally;
+release-policy validation must run from `main` or an eligible release tag.
+Test-signed Windows artifacts are never published. The
+[SignPath setup guide](signpath-setup.md#validate-with-the-test-policy) describes
+the credentials, certificate pins and approval sequence.
 
 ```sh
 gh workflow run release.yml --ref YOUR_FEATURE_BRANCH
@@ -73,6 +85,8 @@ gh workflow run release.yml --ref YOUR_FEATURE_BRANCH
 gh workflow run release.yml --ref YOUR_FEATURE_BRANCH -f nightly=true
 # Includes Developer ID and Apple notarization checks:
 gh workflow run release.yml --ref main -f sign_macos=true
+# Internal Windows signing and installer validation; does not publish:
+gh workflow run release.yml --ref main -f sign_windows=true -f windows_signing_policy=test-signing
 ```
 
 Each archive is extracted into a temporary directory with spaces outside the checkout. Two launches must return the expected ethanol formula and SMILES with an empty executable search path and unavailable Python/uv overrides. Packages must contain no Python worker or interpreter and create no chemistry environment. The relocated app must relaunch itself for InChI work; packages with companion executables are rejected. macOS signatures are checked again afterward. Record graphical acceptance separately.
@@ -96,11 +110,12 @@ git tag -a v0.11.0 -m "ReShiki 0.11.0"
 git push origin v0.11.0
 ```
 
-A `v*` tag triggers builds. A mismatched version or a tagged commit outside `main` fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual **Release builds** runs never publish a release; **Nightly builds** runs publish prereleases from `main`.
+A `v*` tag triggers builds. A mismatched version or a tagged commit outside `main` fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. With `SIGNPATH_ENABLED=true`, the Windows application and final setup program must also pass release-signature verification before publication; missing credentials, approval, or signature verification fail the release. Until activation, Windows packages are unsigned. Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual **Release builds** runs never publish a release; **Nightly builds** runs publish prereleases from `main`.
 
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
-Packaging and signing use only Python's standard library. Intel macOS runs the native Rust chemistry tests, packaging/clipboard/print checks and extracted-application tests without installing RDKit: the pinned reference release has no Intel macOS wheel. Full live RDKit comparisons remain required on macOS ARM64, Windows x64 and Linux x64 before any package is published.
+Packaging and macOS signing use Python's standard library. Windows signing uses
+the SignPath GitHub action and a PowerShell verification helper. Intel macOS runs the native Rust chemistry tests, packaging/clipboard/print checks and extracted-application tests without installing RDKit: the pinned reference release has no Intel macOS wheel. Full live RDKit comparisons remain required on macOS ARM64, Windows x64 and Linux x64 before any package is published.
 
 Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple Silicon. Intel's native tests exercise every predefined group as an isolated and attached fragment; these are application checks, not an independent Intel RDKit geometry capture. The updater selects a separate DMG for each Mac architecture.
 
@@ -143,6 +158,28 @@ Create an app-specific password at [Apple Account](https://account.apple.com/). 
 The configuration script limits the environment to main and `v*` tags. Signing jobs are separate from compilation and use a temporary keychain that is removed afterward. The application executable and app bundle are signed with Hardened Runtime and a timestamp. Signing verifies the input archive's checksum and commit before submitting to Apple. The final extracted app must pass signature, stapling, Gatekeeper and chemistry checks.
 
 Setup references: [Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [GitHub certificate guidance](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications).
+
+## Configure Windows signing
+
+Follow [SignPath setup](signpath-setup.md) to register the checked-in artifact
+configurations, configure the `windows-signing` environment and certificate pins,
+validate the test policy, then validate the issued Foundation release certificate
+with manual approvals. Keep `SIGNPATH_ENABLED` and `SIGNPATH_NIGHTLY_ENABLED`
+disabled until their respective production checks pass.
+
+For each architecture, signing starts from the qualified portable archive,
+verifies its checksum and provenance, and signs `reshiki.exe`. The workflow builds
+the portable ZIP and Inno installer from that same signed application, signs the
+final setup executable, repeats package and installer checks, then generates the
+final checksum sidecars. The portable ZIP is a container for the signed app; it
+does not receive its own Authenticode signature. The Inno-generated uninstaller
+remains unsigned. Publication uses checksums of the final signed packages in
+`SHA256SUMS`.
+
+Production uses only `release-signing`, with separate manual application and setup
+approvals for x64 and ARM64. Internal `test-signing` requests use a pinned untrusted
+certificate and cannot enter public stable or nightly releases. Nightly production
+signing is separately enabled because it requires approvals for each daily build.
 
 ## Build locally
 

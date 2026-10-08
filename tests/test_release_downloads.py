@@ -23,18 +23,19 @@ class ReleaseDownloadTests(unittest.TestCase):
     def assets(self, version):
         for name in filenames(version):
             path = self.directory / name
-            if "-macos-" in name and name.endswith(".zip"):
+            if any(system in name for system in ("-macos-", "-windows-")) and name.endswith(".zip"):
                 architecture = "arm64" if "-arm64" in name else "x64"
+                macos = "-macos-" in name
                 with zipfile.ZipFile(path, "w") as archive:
                     archive.writestr(
                         f"{path.stem}/build.json",
                         json.dumps(
                             dict(
                                 version=version,
-                                platform="macos",
+                                platform="macos" if macos else "windows",
                                 architecture=architecture,
-                                signed=True,
-                                notarized=True,
+                                signed=macos,
+                                notarized=macos,
                             )
                         ),
                     )
@@ -95,6 +96,53 @@ class ReleaseDownloadTests(unittest.TestCase):
                 release_version(tag)
         with self.assertRaises(ValueError):
             prepare(self.directory, "owner/repo/../../other", "v0.9.1")
+
+    def signed_windows_assets(self, policy="release-signing", *, tampered=False):
+        certificate = "ab" * 32
+        for architecture in ("x64", "arm64"):
+            name = f"reshiki-0.9.1-windows-{architecture}"
+            path = self.directory / f"{name}.zip"
+            binary = b"signed Windows fixture"
+            metadata = {
+                "version": "0.9.1",
+                "platform": "windows",
+                "architecture": architecture,
+                "signed": True,
+                "notarized": False,
+                "signing": {
+                    "provider": "SignPath",
+                    "policy": policy,
+                    "certificate_sha256": certificate,
+                    "publicly_trusted": policy == "release-signing",
+                    "application": {
+                        "certificate_sha256": certificate,
+                        "file_sha256": hashlib.sha256(binary).hexdigest(),
+                        "timestamp_subject": "Timestamp authority fixture",
+                    },
+                },
+            }
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr(f"{name}/build.json", json.dumps(metadata))
+                archive.writestr(f"{name}/reshiki.exe", b"tampered" if tampered else binary)
+            self.checksum(path)
+
+    def test_enabled_windows_signing_requires_production_evidence(self):
+        self.assets("0.9.1")
+        with self.assertRaisesRegex(ValueError, "signing status"):
+            prepare(self.directory, "Ameyanagi/ReShiki", "v0.9.1", "required")
+        self.signed_windows_assets()
+        notes = prepare(self.directory, "Ameyanagi/ReShiki", "v0.9.1", "required")
+        self.assertIn("signed with SignPath Foundation", notes)
+        self.signed_windows_assets(tampered=True)
+        with self.assertRaisesRegex(ValueError, "signature evidence"):
+            prepare(self.directory, "Ameyanagi/ReShiki", "v0.9.1", "required")
+
+    def test_test_signatures_cannot_publish_in_either_mode(self):
+        self.assets("0.9.1")
+        self.signed_windows_assets("test-signing")
+        for mode in ("required", "unsigned"):
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                prepare(self.directory, "Ameyanagi/ReShiki", "v0.9.1", mode)
 
 
 if __name__ == "__main__":
