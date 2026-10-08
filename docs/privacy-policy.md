@@ -1,7 +1,7 @@
 # Privacy policy
 
 This page describes ReShiki's application and project website. Updated
-2026-10-05. ReShiki is maintained by
+2026-10-08. ReShiki is maintained by
 [@Ameyanagi](https://github.com/Ameyanagi); its source and documentation are
 available in the [project repository](https://github.com/Ameyanagi/ReShiki).
 
@@ -66,6 +66,44 @@ configure another provider, consult that provider's privacy policy as well.
 Ordinary drawing and chemistry do not require connecting the assistant. Read
 [Set up Codex](assistant-setup.md#what-happens-when-you-send-a-request) before
 sending a request or image.
+
+## Optional agent API and command line (experimental)
+
+ReShiki has an experimental agent API: `reshiki --mcp`, a Model Context
+Protocol (MCP) server for AI clients such as Claude Code, Claude Desktop and
+Codex, and `reshiki --cli`, a command line for conversions, renders and
+analysis. It is in Nightly builds only, not in ReShiki 0.11.0. Both modes run
+only when you, or an MCP client you configured, start `reshiki --mcp` or
+`reshiki --cli ...`. Neither opens a network listener or makes network
+requests: they make no update checks, downloads or telemetry.
+
+**MCP mode.** `reshiki --mcp` talks only to the client that started it, over
+standard input and output.
+
+- The client, and the model service it uses, receive what the tools return:
+  structures, analysis, rendered images and inspection text of the session
+  documents the agent creates or opens, including embedded pictures and
+  content that was not selected.
+- ReShiki cannot see drawings open in the app in this version.
+- Files are read and written only inside folders you grant with
+  `--allow-read` and `--allow-write` or in `agent-access.json`. Reading a
+  cloud-synced placeholder in such a folder may make your sync client download
+  it.
+- With `--log-level debug`, ReShiki's stderr lists the granted folders, and
+  clients may store stderr in their logs; for example, Claude Desktop keeps it
+  in `mcp-server-NAME.log`
+  ([connecting local servers](https://modelcontextprotocol.io/docs/develop/connect-local-servers)).
+  At other levels stderr counts the granted folders and never carries drawing
+  or file content.
+- The client's privacy terms, and those of its model service, apply to
+  everything it receives.
+
+**Command-line mode.** `reshiki --cli` reads and writes exactly the paths you
+pass on the command line, with your own permissions. Folder grants do not
+apply.
+
+See [Connect AI agents](https://reshiki.com/guide/agents/) for setup and the
+[agent API reference](agent-api.md) for its limits.
 
 ## Optional Office integrations
 

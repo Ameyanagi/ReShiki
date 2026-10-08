@@ -100,6 +100,7 @@ export default defineConfig({
             { label: "Draw a reaction", slug: "guide/reactions" },
             { label: "Set up Codex", slug: "guide/assistant-setup" },
             { label: "Draw with the assistant", slug: "guide/assistant" },
+            { label: "Connect AI agents (experimental)", slug: "guide/agents" },
             { label: "Prepare a figure", slug: "guide/figures" },
             { label: "Color palettes", slug: "guide/color-palettes" },
             { label: "Save and share", slug: "guide/sharing" },
@@ -135,6 +136,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 "abbreviations",
+                "agent-api",
                 "arrows",
                 "assistant",
                 "atom-labels",
