@@ -239,7 +239,7 @@ Bond Z order is presentation metadata. A bounded sweep detects unconnected cross
 
 ## Agent API (experimental)
 
-`reshiki --mcp` serves the [agent API](agent-api.md) to an MCP client over standard input and output, and `reshiki --cli` runs the same operations once from the command line. Both are modes of the single `reshiki` executable, chosen in `src/main.rs` after the worker modes and before Office registration and the GUI. Only a first argument of exactly `--mcp` or `--cli` selects them.
+The agent API is in Nightly builds only, not in ReShiki 0.11.0. `reshiki --mcp` serves the [agent API](agent-api.md) to an MCP client over standard input and output, and `reshiki --cli` runs the same operations once from the command line. Both are modes of the single `reshiki` executable, chosen in `src/main.rs` after the worker modes and before Office registration and the GUI. Only a first argument of exactly `--mcp` or `--cli` selects them.
 
 ```mermaid
 flowchart LR

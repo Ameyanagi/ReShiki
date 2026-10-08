@@ -129,7 +129,8 @@ declared; files travel inline. Every `structuredContent` carries `versions`
 
 A tool failure is a result with `isError: true` and
 `{"error": {"code", "message"}, "versions"}`. Messages are at most 500
-characters and never echo file contents.
+characters and may quote part of the input: a path, an argument, or a value
+from an opened file that could not be read.
 
 | Code                | Meaning                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------- |
