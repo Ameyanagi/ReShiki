@@ -105,12 +105,33 @@ pub(crate) fn exit(runtime: Runtime, code: i32, grace: Duration) -> ! {
     process::exit(code)
 }
 
+/// Keeps the standard handles out of the worker processes this mode starts
+/// (`--inchi-worker`, `--geometry-worker`), so a worker still running when
+/// this process exits cannot hold a client's pipe open. On failure prints
+/// one stderr line and exits 1.
+#[cfg(windows)]
+fn protect_standard_handles() -> reshiki_windows::Protected {
+    match reshiki_windows::disinherit_standard_handles() {
+        Ok(protected) => protected,
+        Err(error) => {
+            let _ = writeln!(
+                io::stderr(),
+                "reshiki: could not protect the client's pipes from worker processes: {error}"
+            );
+            process::exit(1)
+        }
+    }
+}
+
 /// `reshiki --cli`: runs one command and exits with its code.
 ///
-/// The command line is parsed first, so its usage errors take precedence;
-/// then an invalid [`HEAP_VARIABLE`] is a usage error too: one stderr line,
-/// exit 2.
+/// On Windows the standard handles are first kept out of worker processes;
+/// failing that exits 1. The command line is parsed next, so its usage
+/// errors take precedence; then an invalid [`HEAP_VARIABLE`] is a usage
+/// error too: one stderr line, exit 2.
 pub(crate) fn cli(args: Vec<OsString>) -> ! {
+    #[cfg(windows)]
+    protect_standard_handles();
     let command = match reshiki::cli::parse(&args, &mut io::stderr()) {
         Ok(command) => command,
         Err(code) => process::exit(code),
@@ -302,6 +323,9 @@ fn banner(version: &str, grants: &GrantSummary, level: Level) -> String {
 /// `reshiki --mcp`: serves MCP on stdin and stdout until stdin ends or
 /// stdout fails, then exits 0 if every response was delivered, else 1.
 ///
+/// On Windows the standard handles are first kept out of worker processes;
+/// failing that prints one stderr line and exits 1.
+///
 /// The heap ceiling starts and the granted folders are opened before
 /// anything is read: an invalid [`HEAP_VARIABLE`], a folder that cannot be
 /// granted, or an unreadable `agent-access.json`, prints one stderr line and
@@ -319,6 +343,8 @@ fn banner(version: &str, grants: &GrantSummary, level: Level) -> String {
 /// read only once it reads stdout again or closes it; closing it fails the
 /// writer and exits 1.
 pub(crate) fn mcp(args: Vec<OsString>) -> ! {
+    #[cfg(windows)]
+    let protected = protect_standard_handles();
     let (level, read, write) = match mcp_request(&args) {
         Ok(McpRequest::Serve { level, read, write }) => (level, read, write),
         Ok(McpRequest::Help) => {
@@ -356,6 +382,16 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
     let (log, log_done) = Log::start(io::stderr, level);
     reshiki_mcp::install_panic_hook(log.clone());
     log.notice(BANNER, &banner(CURRENT_VERSION, &grants.summary(), level));
+    #[cfg(windows)]
+    log.event(
+        Level::Debug,
+        "stdio: standard pipes protected from worker processes",
+        &[
+            ("stdin", u64::from(protected.stdin)),
+            ("stdout", u64::from(protected.stdout)),
+            ("stderr", u64::from(protected.stderr)),
+        ],
+    );
     if io::stdin().is_terminal() {
         log.event(
             Level::Warn,

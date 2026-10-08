@@ -169,6 +169,15 @@ jobs:
           RESHIKI_REQUIRE_GEOMETRY_APP: "1"
           RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
         run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_distribution.HelperTests.test_packaged_application_worker_executes_when_supplied_for_validation tests.test_geometry_distribution.GeometryWorkerTests.test_packaged_application_worker_executes_when_supplied_for_validation
+      - name: Check that worker processes do not inherit the MCP client's pipes
+        if: runner.os == 'Windows'
+        # bash stops at the first failing command; pwsh would run the second.
+        shell: bash
+        env:
+          RESHIKI_REQUIRE_INCHI_HELPER: "1"
+        run: |
+          cargo test --release --locked --no-default-features -p reshiki-windows --target ${{ matrix.target }}
+          cargo test --release --locked --no-default-features -p reshiki --test agent_api_windows_pipes --target ${{ matrix.target }}
       - name: Compare geometry energies and gradients with the pinned independent oracle
         if: matrix.native_only != true
         env:
