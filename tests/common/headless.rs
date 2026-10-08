@@ -85,7 +85,8 @@ enum StdoutMode {
 enum StderrPipe {
     /// Chunks as they are read, and what arrived so far.
     Captured(Receiver<Vec<u8>>, Vec<u8>),
-    Unread(ChildStderr),
+    /// Held open until [`McpSession::unread_stderr`] takes it.
+    Unread(Option<ChildStderr>),
 }
 
 /// An empty data folder for one child, so a developer's own
@@ -160,7 +161,7 @@ impl McpSession {
                 });
                 StderrPipe::Captured(receiver, Vec::new())
             }
-            StderrMode::Unread => StderrPipe::Unread(pipe),
+            StderrMode::Unread => StderrPipe::Unread(Some(pipe)),
         };
         let (sender, lines) = mpsc::channel();
         let (hold, held) = mpsc::channel::<()>();
@@ -369,6 +370,26 @@ impl McpSession {
             }
         }
         String::from_utf8(seen.clone()).expect("UTF-8 stderr")
+    }
+
+    /// Everything the child left in the stderr nobody read
+    /// ([`StderrMode::Unread`]), once it exited and the pipe closed within
+    /// `timeout`.
+    pub fn unread_stderr(&mut self, timeout: Duration) -> String {
+        let StderrPipe::Unread(pipe) = &mut self.stderr else {
+            panic!("stderr is captured");
+        };
+        let mut pipe = pipe.take().expect("stderr not read yet");
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let mut bytes = Vec::new();
+            let _ = pipe.read_to_end(&mut bytes);
+            let _ = sender.send(bytes);
+        });
+        let bytes = receiver
+            .recv_timeout(timeout)
+            .unwrap_or_else(|error| panic!("stderr did not close within {timeout:?} ({error})"));
+        String::from_utf8(bytes).expect("UTF-8 stderr")
     }
 
     /// `message` with the app version and each tool's definition reduced to
