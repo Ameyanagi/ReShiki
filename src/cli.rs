@@ -1,40 +1,120 @@
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 //! `reshiki --cli`: experimental command-line access to the agent tools.
 //!
-//! Results go to `out` and diagnostics to `err`. Each command returns a
-//! process exit code: [`SUCCESS`], [`FAILURE`] or [`USAGE`].
+//! Each command runs on an in-process `HeadlessHost` through
+//! `ToolHost::call`, the operation layer `reshiki --mcp` serves, so both
+//! share the same import, analyze and export semantics.
+//!
+//! # Output contract
+//!
+//! - stdout carries only the primary output: the converted file, the
+//!   analyze or info JSON line, or exactly one receipt JSON line when
+//!   `--receipt` is given with `-o FILE`. With `-o FILE` and no `--receipt`,
+//!   stdout stays empty.
+//! - Warnings go to stderr as `reshiki: warning: {message}`, errors as
+//!   `reshiki: error: {message}` and usage errors as `reshiki: {message}`.
+//! - An operation, input or file error exits [`FAILURE`] (1), a usage error
+//!   [`USAGE`] (2), and a failed write to stdout [`FAILURE`].
+//!
+//! Paths on the command line are read and written with the user's own
+//! authority (no folder grants, no extension allowlist). An existing output
+//! file is replaced only with `--force`. Release builds on Windows are GUI
+//! programs without a console, so their output must be redirected.
 
+mod analyze;
+mod args;
+mod convert;
+mod host;
+mod io;
+
+use args::{Command, Topic};
+use host::{CliError, Session, api};
+use reshiki_agent::ops::{budget::Budgets, catalog::SPECS};
+use serde_json::{Value, json};
 use std::{
     ffi::OsString,
-    io::{self, Write},
+    io::{IsTerminal, Write},
 };
 
 pub const SUCCESS: i32 = 0;
 pub const FAILURE: i32 = 1;
 pub const USAGE: i32 = 2;
 
+/// The first line of every help text.
+const NOTICE: &str =
+    "Experimental: ReShiki's agent tools, schemas and results may change between releases.";
+
 const HELP: &str = "\
-Experimental: ReShiki's agent tools, schemas and results may change between releases.
 Usage: reshiki --cli <command> [options]
 
 Commands:
-  help    Show this help
-  info    Print version information as one JSON line
+  convert  Convert a structure or drawing to another file format
+  analyze  Print molecular properties as one JSON line
+  info     Print versions, limits and formats as one JSON line
+  help     Show this help, or a command's help: reshiki --cli help <command>
+
+Output:
+  stdout carries only the result: the converted file, one JSON line, or one
+  receipt line with --receipt. With -o FILE and no --receipt it stays empty.
+  Warnings and errors go to stderr.
+
+Exit status:
+  0  success
+  1  the operation failed, or reading the input or writing the output failed
+  2  usage error
+
+Files named on the command line are read and written with your own
+permissions. On Windows, release builds cannot write to a console window:
+redirect the output, for example `reshiki --cli info > info.json`.
+";
+
+const ANALYZE_HELP: &str = "\
+Usage: reshiki --cli analyze (INPUT | - | --smiles TEXT) [--from FORMAT]
+
+Prints the molecular properties of a structure or drawing as one JSON line:
+SMILES, formula, mass, exact mass, logP, TPSA, hydrogen-bond donors and
+acceptors, rings, unpaired electrons, InChI and InChIKey, under
+value.analysis. The input is read as for convert (reshiki --cli help convert).
+";
+
+const INFO_HELP: &str = "\
+Usage: reshiki --cli info
+
+Prints ReShiki's versions, the limits it enforces and the input and output
+formats as one JSON line.
 ";
 
 /// Runs one command against the process's stdout and stderr.
+///
+/// Each write locks its stream only while it writes, so no lock is held
+/// while the operation runs.
 pub async fn run(args: Vec<OsString>) -> i32 {
-    let mut out = io::stdout().lock();
-    let mut err = io::stderr().lock();
-    run_with(args, &mut out, &mut err).await
+    let terminal = std::io::stdout().is_terminal();
+    execute(
+        args,
+        &mut std::io::stdout(),
+        &mut std::io::stderr(),
+        terminal,
+    )
+    .await
 }
 
-/// Runs one command and flushes both writers before returning.
+/// Runs one command and flushes both writers before returning. `out` is
+/// never a terminal, so pdf and png may go to it.
 ///
 /// A write or flush error on `out` returns [`FAILURE`] after one best-effort
 /// line on `err`.
 pub async fn run_with(args: Vec<OsString>, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
-    let result = command(&args, out, err);
+    execute(args, out, err, false).await
+}
+
+async fn execute(
+    args: Vec<OsString>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+    terminal: bool,
+) -> i32 {
+    let result = command(&args, out, err, terminal).await;
     let flushed = out.flush();
     let code = match result.and_then(|code| flushed.map(|()| code)) {
         Ok(code) => code,
@@ -47,48 +127,149 @@ pub async fn run_with(args: Vec<OsString>, out: &mut dyn Write, err: &mut dyn Wr
     code
 }
 
-/// Dispatches on the first token; only writes to `out` can fail.
-fn command(args: &[OsString], out: &mut dyn Write, err: &mut dyn Write) -> io::Result<i32> {
+/// Parses and runs one command; only writes to `out` are `Err`.
+async fn command(
+    args: &[OsString],
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+    terminal: bool,
+) -> std::io::Result<i32> {
     let Some((name, rest)) = args.split_first() else {
-        let _ = err.write_all(HELP.as_bytes());
+        let _ = err.write_all(help(None).as_bytes());
         return Ok(USAGE);
     };
-    if name == "help" || name == "--help" || name == "-h" {
-        if !rest.is_empty() {
-            let _ = writeln!(err, "reshiki: help takes no arguments");
-            return Ok(USAGE);
+    let result = match args::parse(name, rest) {
+        Err(message) => Err(CliError::Usage(message)),
+        Ok(Command::Help(topic)) => out
+            .write_all(help(topic).as_bytes())
+            .map_err(CliError::Stdout),
+        Ok(Command::Info) => info(out, err).await,
+        Ok(Command::Convert(convert)) => convert::run(convert, out, err, terminal).await,
+        Ok(Command::Analyze(input)) => analyze::run(input, out, err).await,
+    };
+    match result {
+        Ok(()) => Ok(SUCCESS),
+        Err(CliError::Stdout(error)) => Err(error),
+        Err(CliError::Usage(message)) => {
+            let _ = writeln!(err, "reshiki: {message}");
+            Ok(USAGE)
         }
-        out.write_all(HELP.as_bytes())?;
-    } else if name == "info" {
-        if !rest.is_empty() {
-            let _ = writeln!(err, "reshiki: info takes no arguments");
-            return Ok(USAGE);
+        Err(CliError::Tool(message) | CliError::Failed(message)) => {
+            let _ = writeln!(err, "reshiki: error: {message}");
+            Ok(FAILURE)
         }
-        writeln!(out, "{}", info())?;
-    } else {
-        let _ = writeln!(
-            err,
-            "reshiki: unknown command `{}`; run `reshiki --cli help`",
-            name.to_string_lossy()
-        );
-        return Ok(USAGE);
     }
-    Ok(SUCCESS)
 }
 
-fn info() -> serde_json::Value {
-    let versions = crate::envelope::Versions::current(crate::updates::CURRENT_VERSION);
-    serde_json::json!({
-        "app": versions.app,
-        "operation_api": versions.operation_api,
-        "engine_protocol": versions.engine_protocol,
-        "document": versions.document,
-        "platform": std::env::consts::OS,
-        "api": {
-            "stability": "experimental",
-            "operation_api": crate::envelope::OPERATION_API_VERSION,
-        },
-    })
+/// The help text for `topic`, or the overview.
+fn help(topic: Option<Topic>) -> String {
+    let body = match topic {
+        None | Some(Topic::Help) => HELP.to_owned(),
+        Some(Topic::Convert) => convert_help(),
+        Some(Topic::Analyze) => ANALYZE_HELP.to_owned(),
+        Some(Topic::Info) => INFO_HELP.to_owned(),
+    };
+    format!("{NOTICE}\n{body}")
+}
+
+fn convert_help() -> String {
+    let budgets = Budgets::default();
+    format!(
+        "\
+Usage: reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
+                             [-o OUTPUT|-] [--pages] [--force] [--receipt]
+
+Converts a structure or drawing, making the file as the app's Export does.
+
+Input, exactly one of:
+  INPUT          A file. Without --from, its extension picks the format:
+                 .rsk, .reshiki and .moruno are ReShiki drawings; .mol, .rxn,
+                 .rsmi, .cdxml, .cdx and .inchi are read as such; anything
+                 else is read as SMILES.
+  -              Standard input; needs --from.
+  --smiles TEXT  SMILES text; cannot be combined with --from.
+
+Options:
+  --from FORMAT  The input format: {inputs}.
+  --to FORMAT    The output format: {outputs}.
+                 Without --to, the extension of OUTPUT picks it (.smi is smiles).
+  -o OUTPUT      Write the file to OUTPUT. Without -o, or with -o -, the file
+                 goes to stdout and needs --to; pdf and png are never written
+                 to a terminal.
+  --pages        Export every publication page as one PDF (pdf only).
+  --force        Replace OUTPUT if it exists; otherwise that is an error.
+  --receipt      With -o OUTPUT, print one JSON line to stdout:
+                 {{\"receipt\": {{\"format\", \"byte_len\", \"detail\"}}, \"api\": {{…}}}}.
+
+Inputs are at most {text} bytes ({cdx} for cdx), so a ReShiki drawing with
+large embedded pictures that the app opens can be too large here. rsk, rxn,
+rsmi, cdx and emf files cannot be written.
+",
+        inputs = input_formats().join(", "),
+        outputs = output_formats().join(", "),
+        text = budgets.max_text_bytes,
+        cdx = io::limit("cdx", &budgets),
+    )
+}
+
+/// `{info value, cli: {input_formats, output_formats}, api}`.
+async fn info(out: &mut dyn Write, err: &mut dyn Write) -> Result<(), CliError> {
+    let mut session = Session::new();
+    let mut value = session.call("info", json!({}), err).await?.value;
+    value.insert(
+        "cli".into(),
+        json!({"input_formats": input_formats(), "output_formats": output_formats()}),
+    );
+    value.insert("api".into(), api());
+    writeln!(out, "{}", Value::Object(value)).map_err(CliError::Stdout)
+}
+
+/// The import format the app picks for a file with `extension`, as
+/// `prepare` in src/app/files.rs does: a native extension is `reshiki`; mol,
+/// rxn, rsmi, cdxml, cdx and inchi are themselves; anything else, including
+/// smi, smiles and no extension, is `smiles`. Case is ignored.
+pub fn input_format(extension: &str) -> &'static str {
+    let extension = extension.to_ascii_lowercase();
+    if crate::compatibility::is_native_extension(&extension) {
+        return "reshiki";
+    }
+    match extension.as_str() {
+        "mol" => "mol",
+        "rxn" => "rxn",
+        "rsmi" => "rsmi",
+        "cdxml" => "cdxml",
+        "cdx" => "cdx",
+        "inchi" => "inchi",
+        _ => "smiles",
+    }
+}
+
+/// The `--from` values: the import tool's `format` enum.
+pub(crate) fn input_formats() -> Vec<String> {
+    schema_formats("import")
+}
+
+/// The `--to` values: the export tool's `format` enum.
+pub(crate) fn output_formats() -> Vec<String> {
+    schema_formats("export")
+}
+
+/// `properties.format.enum` of the ops tool `tool`'s input schema.
+fn schema_formats(tool: &str) -> Vec<String> {
+    let schema = SPECS
+        .iter()
+        .find(|spec| spec.name == tool)
+        .map(|spec| (spec.input_schema)());
+    let formats = schema
+        .as_ref()
+        .and_then(|schema| schema.pointer("/properties/format/enum"))
+        .and_then(Value::as_array);
+    formats
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect()
 }
 
 #[cfg(test)]

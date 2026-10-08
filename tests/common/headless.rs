@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::{
     collections::VecDeque,
     io::{BufRead, BufReader, Read, Write},
+    path::Path,
     process::{Child, ChildStderr, ChildStdin, Command, ExitStatus, Output, Stdio},
     sync::{
         Arc, Mutex,
@@ -50,6 +51,32 @@ pub fn wait_with_watchdog(mut child: Child, limit: Duration) -> Output {
         }
         thread::sleep(Duration::from_millis(20));
     }
+}
+
+/// Runs `reshiki --cli` followed by `args` in `dir` with an empty data
+/// folder, writing `input` to its stdin and then closing it; kills it and
+/// panics if it runs past `limit`.
+pub fn run_cli(dir: &Path, args: &[&str], input: &[u8], limit: Duration) -> Output {
+    let data = data_dir();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_reshiki"))
+        .arg("--cli")
+        .args(args)
+        .current_dir(dir)
+        .env("RESHIKI_DATA_DIR", data.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start reshiki --cli");
+    let mut stdin = child.stdin.take().expect("piped stdin");
+    let input = input.to_vec();
+    // A command that never reads stdin fails this write once it exits.
+    let writer = thread::spawn(move || {
+        let _ = stdin.write_all(&input);
+    });
+    let output = wait_with_watchdog(child, limit);
+    writer.join().expect("write stdin");
+    output
 }
 
 fn drain(pipe: Option<impl Read + Send + 'static>) -> JoinHandle<Vec<u8>> {

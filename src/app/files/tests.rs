@@ -230,3 +230,34 @@ fn edits_during_a_save_reopen_the_pending_dialog() {
     assert!(app.pending.is_none());
     assert_eq!(app.tab.doc, edited);
 }
+
+/// `reshiki --cli` picks the import format for a file's extension exactly as
+/// opening the file in the app does.
+#[test]
+fn cli_input_formats_match_the_app() {
+    let native = Document::default().file_json().unwrap();
+    for extension in [
+        "rsk", "RSK", "reshiki", "moruno", "mol", "rxn", "rsmi", "cdxml", "CDXML", "cdx", "inchi",
+        "smi", "smiles", "txt", "",
+    ] {
+        let path = if extension.is_empty() {
+            PathBuf::from("drawing")
+        } else {
+            PathBuf::from(format!("drawing.{extension}"))
+        };
+        let contents = if reshiki::compatibility::is_native_extension(extension) {
+            native.clone()
+        } else {
+            b"C".to_vec()
+        };
+        let chosen = match prepare(&path, contents).unwrap() {
+            Prepared::Native(_) => "reshiki",
+            Prepared::Import { format, .. } => format,
+        };
+        assert_eq!(
+            chosen,
+            reshiki::cli::input_format(extension),
+            "{extension:?}"
+        );
+    }
+}

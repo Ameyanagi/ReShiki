@@ -78,7 +78,9 @@ pub(crate) fn exit(runtime: Runtime, code: i32, grace: Duration) -> ! {
 
 /// `reshiki --cli`: runs one command and exits with its code.
 pub(crate) fn cli(args: Vec<OsString>) -> ! {
-    let runtime = match runtime(4) {
+    // The blocking pool runs the in-process host's operations, with room
+    // for two more.
+    let runtime = match runtime(Budgets::default().concurrency.saturating_add(2)) {
         Ok(runtime) => runtime,
         Err(error) => {
             let _ = writeln!(io::stderr(), "reshiki: could not start runtime: {error}");
