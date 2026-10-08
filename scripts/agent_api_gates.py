@@ -18,6 +18,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from check_agent_dependencies import BASELINE_COMMIT
+
 ROOT = Path(__file__).resolve().parents[1]
 RECORD = "docs/agent-api-p1-validation.md"
 OUTPUT_TAIL = 40
@@ -34,16 +36,15 @@ OLD_CALL = "assistant::canvas_tools::definitions()"
 NEW_CALL = "assistant::codex::dynamic_tools(&assistant::canvas_tools::SPECS)"
 
 APP_PATHS = ("src/app.rs", "src/app", "src/canvas.rs", "src/canvas")
-# Reviewed GUI source changes as (added, removed) lines: ops-4's characterized
-# extractions, ops-9's pub(super) on two inspector helpers, and the
-# registration of the ops parity test module.
+# Blob ids (`git rev-parse <reviewed tip>:<path>`) of the reviewed GUI sources:
+# ops-4's characterized extractions, ops-9's pub(super) on two inspector
+# helpers, and the registration of the ops parity test module.
 REVIEWED_APP_SOURCES = {
-    "src/app.rs": (2, 0),
-    "src/app/figure_export.rs": (13, 16),
-    "src/app/files.rs": (1, 3),
-    "src/app/inspector.rs": (4, 19),
+    "src/app.rs": "c4dcaa29a901b0d99cf3c6d11b11314db5ea3ded",
+    "src/app/figure_export.rs": "f88ffad17eafae0f835aed2d2fbf70a76e59389a",
+    "src/app/files.rs": "fbd83770cc4aca37ccf7f5e1fdf40a96fe3579ee",
+    "src/app/inspector.rs": "245588ddcce97f3585dd10bfa0fd2004b2a45fef",
 }
-PARITY_REGISTRATION = ["#[cfg(test)]", "mod ops_parity_tests;"]
 # #[cfg(test)] modules: the ops parity tests and the characterization tests.
 REVIEWED_APP_TESTS = frozenset(
     {"src/app/ops_parity_tests.rs", "src/app/files/tests.rs", "src/app/inspector/tests.rs"}
@@ -99,6 +100,7 @@ TEST_RESULT = re.compile(
 UNITTEST_RAN = re.compile(r"^Ran (\d+) tests? in ", re.MULTILINE)
 UNITTEST_SKIPPED = re.compile(r"skipped=(\d+)")
 DIFF_HEADER = re.compile(r"^diff --git a/\S+ b/(?P<path>\S+)$")
+DIFF_INDEX = re.compile(r"^index [0-9a-f]+\.\.(?P<blob>[0-9a-f]+)")
 COMMIT_MARKER = "COMMIT\t"
 
 
@@ -186,6 +188,21 @@ def diff_changes(patch: str) -> dict[str, tuple[list[str], list[str]]]:
     return changes
 
 
+def diff_blobs(patch: str) -> dict[str, str | None]:
+    """Map each path in a `git diff --full-index` to its new blob id, if it has one."""
+    blobs: dict[str, str | None] = {}
+    path = None
+    for line in patch.splitlines():
+        header = DIFF_HEADER.match(line)
+        index = DIFF_INDEX.match(line)
+        if header:
+            path = header["path"]
+            blobs[path] = None
+        elif index and path is not None:
+            blobs[path] = index["blob"]
+    return blobs
+
+
 def commit_patches(log: str) -> list[tuple[str, str]]:
     """Split `git log -p --format=COMMIT%x09%h%x09%s` output into (subject, patch)."""
     commits: list[tuple[str, list[str]]] = []
@@ -221,23 +238,19 @@ def codex_pin_test_unchanged(returncode: int, output: str) -> Verdict:
 
 
 def reviewed_app_changes(returncode: int, output: str) -> Verdict:
-    """GUI sources differ from the base only by the reviewed changes."""
-    changes = diff_changes(output)
+    """Each changed GUI source is byte for byte its reviewed version."""
+    blobs = diff_blobs(output)
     problems = exit_problems(returncode)
-    for path, (added, removed) in sorted(changes.items()):
+    for path, blob in sorted(blobs.items()):
         if path in REVIEWED_APP_TESTS:
             continue
         reviewed = REVIEWED_APP_SOURCES.get(path)
-        counts = (len(added), len(removed))
         if reviewed is None:
             problems.append(f"{path} has an unreviewed change")
-        elif counts != reviewed:
-            problems.append(f"{path} changes {counts[0]}+/{counts[1]}-, reviewed {reviewed}")
-    registration = changes.get("src/app.rs")
-    if registration and [line.strip() for line in registration[0]] != PARITY_REGISTRATION:
-        problems.append("src/app.rs changes more than the ops parity registration")
-    tests = len(changes.keys() & REVIEWED_APP_TESTS)
-    detail = f"{len(changes) - tests} reviewed sources, {tests} test modules"
+        elif blob != reviewed:
+            problems.append(f"{path} is not its reviewed version {reviewed[:8]}")
+    tests = len(blobs.keys() & REVIEWED_APP_TESTS)
+    detail = f"{len(blobs) - tests} reviewed sources, {tests} test modules"
     return Verdict(detail, tuple(problems))
 
 
@@ -273,7 +286,7 @@ def git(*arguments: str) -> tuple[str, ...]:
     return ("git", "--no-pager", *arguments)
 
 
-def local_checks(base: str = "main") -> list[Check]:
+def local_checks(base: str = BASELINE_COMMIT) -> list[Check]:
     """Every locally automatable gate check, in gate order."""
     agent = ("-p", "reshiki-agent")
     binary = ("--no-default-features", "-p", "reshiki", "--test")
@@ -353,7 +366,7 @@ def local_checks(base: str = "main") -> list[Check]:
         Check(
             "G8",
             "GUI sources: reviewed changes only",
-            git("diff", *patch, f"{base}...HEAD", "--", *APP_PATHS),
+            git("diff", *patch, "--full-index", f"{base}...HEAD", "--", *APP_PATHS),
             reviewed_app_changes,
         ),
         Check(
@@ -410,7 +423,11 @@ def run_local(checks: list[Check], root: Path = ROOT) -> bool:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--local", action="store_true", help="run the local checks")
-    parser.add_argument("--base", default="main", help="the branch the G8 diffs compare with")
+    parser.add_argument(
+        "--base",
+        default=BASELINE_COMMIT,
+        help="the commit the G8 history and diff checks compare with (default: main before P1)",
+    )
     args = parser.parse_args(argv)
     checks = local_checks(args.base)
     if not args.local:

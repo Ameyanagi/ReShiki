@@ -15,26 +15,25 @@ import agent_api_gates as gates
 GATES = ("G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8")
 OPS_3 = "refactor(agent): split canvas tool definitions into a neutral ToolSpec and a Codex adapter"
 CARGO = "running 3 tests\ntest result: ok. 3 passed; 0 failed; 1 ignored; 0 measured\n"
+OLD_BLOB, NEW_BLOB = "0" * 40, "1" * 40
 
 
-def diff(files):
-    """A unified diff with one hunk per path, as `git diff --unified=0` prints it."""
+def diff(files, blobs=None):
+    """A unified diff with one hunk per path, as `git diff --full-index --unified=0` prints it."""
     lines = []
     for path, (added, removed) in files.items():
-        lines += [f"diff --git a/{path} b/{path}", f"--- a/{path}", f"+++ b/{path}", "@@ -1 +1 @@"]
+        blob = (blobs or {}).get(path, NEW_BLOB)
+        lines += [f"diff --git a/{path} b/{path}", f"index {OLD_BLOB}..{blob} 100644"]
+        lines += [f"--- a/{path}", f"+++ b/{path}", "@@ -1 +1 @@"]
         lines += [f"-{line}" for line in removed] + [f"+{line}" for line in added]
     return "\n".join(lines) + "\n"
 
 
-def reviewed_app(**changes):
-    files = {
-        path: (["changed"] * added, ["changed"] * removed)
-        for path, (added, removed) in gates.REVIEWED_APP_SOURCES.items()
-    }
-    files["src/app.rs"] = (list(gates.PARITY_REGISTRATION), [])
-    files.update({path: (["#[test]"], []) for path in gates.REVIEWED_APP_TESTS})
-    files.update(changes)
-    return diff(files)
+def reviewed_app(**blobs):
+    """The stack's GUI diff, with `blobs` as the new blob ids of some paths."""
+    paths = [*gates.REVIEWED_APP_SOURCES, *sorted(gates.REVIEWED_APP_TESTS), *blobs]
+    files = {path: (["changed"], ["changed"]) for path in paths}
+    return diff(files, {**gates.REVIEWED_APP_SOURCES, **blobs})
 
 
 def contract_log(*later):
@@ -124,11 +123,16 @@ class CommandTests(unittest.TestCase):
             )
 
     def test_the_base_reaches_every_diff_check(self):
-        for check in gates.local_checks("origin/main"):
-            if check.command[0] == "git" and "grep" not in check.command:
-                self.assertTrue(
-                    {"origin/main..HEAD", "origin/main...HEAD"} & set(check.command), check.name
-                )
+        for base, checks in (
+            (gates.BASELINE_COMMIT, gates.local_checks()),
+            ("origin/main", gates.local_checks("origin/main")),
+        ):
+            for check in checks:
+                if check.command[0] == "git" and "grep" not in check.command:
+                    self.assertTrue({f"{base}..HEAD", f"{base}...HEAD"} & set(check.command))
+
+    def test_the_default_base_is_main_before_p1_so_it_survives_landing(self):
+        self.assertEqual(gates.BASELINE_COMMIT, "40c8d82a5ed213685a7eedd150a0b7adf6899846")
 
     def test_printed_command_lines_round_trip(self):
         for check in gates.local_checks():
@@ -191,15 +195,28 @@ class ParsingTests(unittest.TestCase):
         self.assertTrue(verdict.passed, verdict.problems)
         self.assertEqual(verdict.detail, "4 reviewed sources, 3 test modules")
         self.assertTrue(gates.reviewed_app_changes(0, "").passed)
-        canvas = gates.reviewed_app_changes(0, reviewed_app(**{"src/canvas/tools.rs": (["x"], [])}))
+        canvas = gates.reviewed_app_changes(0, reviewed_app(**{"src/canvas/tools.rs": NEW_BLOB}))
         self.assertEqual(canvas.problems, ("src/canvas/tools.rs has an unreviewed change",))
-        grown = reviewed_app(**{"src/app/files.rs": (["x", "y"], ["z"] * 3)})
-        self.assertFalse(gates.reviewed_app_changes(0, grown).passed)
-        other = reviewed_app(**{"src/app.rs": (["#[cfg(test)]", "mod other_tests;"], [])})
+        other = reviewed_app(**{"src/app.rs": NEW_BLOB})
         self.assertEqual(
             gates.reviewed_app_changes(0, other).problems,
-            ("src/app.rs changes more than the ops parity registration",),
+            ("src/app.rs is not its reviewed version c4dcaa29",),
         )
+
+    def test_an_edit_that_keeps_the_reviewed_line_counts_still_fails(self):
+        # ops-4 adds 1 line to src/app/files.rs and removes 3; so does this edit.
+        removed = ["let text = read(&path)?;", "let document =", "    from_native_file(&text)?;"]
+        files = {"src/app/files.rs": (["Document::from_json(&read(&path)?)?"], removed)}
+        edited = diff(files, {"src/app/files.rs": NEW_BLOB})
+        self.assertEqual(
+            gates.reviewed_app_changes(0, edited).problems,
+            ("src/app/files.rs is not its reviewed version fbd83770",),
+        )
+
+    def test_a_change_without_a_new_blob_is_not_the_reviewed_version(self):
+        mode_only = "diff --git a/src/app.rs b/src/app.rs\nold mode 100644\nnew mode 100755\n"
+        self.assertEqual(gates.diff_blobs(mode_only), {"src/app.rs": None})
+        self.assertFalse(gates.reviewed_app_changes(0, mode_only).passed)
 
     def test_dispatch_order_is_pinned(self):
         self.assertTrue(gates.dispatch_order(0, dispatch()).passed)
