@@ -2,10 +2,11 @@
 
 ReShiki has SignPath Open Source Code Signing access. Production Windows signing
 is not active yet: the Foundation release certificate is pending, the release
-certificate pin must be configured, and the complete signing path must pass a
+certificate pin must be configured, and the production signing path must pass a
 manual run. The two artifact configurations and GitHub environment are
-configured, including the CI token and test certificate pin. Existing Windows
-downloads remain unsigned. This record describes
+configured, including the CI token and test certificate pin. Nightly-version test
+signing passed on x64 and ARM64, and internal test signing is enabled for daily
+nightlies. Existing Windows downloads remain unsigned. This record describes
 the configuration inspected on **2026-10-09** and the remaining setup.
 
 ## Confirm the SignPath project
@@ -110,16 +111,16 @@ Add the following secret and environment variables. The signing switches are
 **repository variables**, so publication and the reusable release workflow can
 read them outside the signing environment.
 
-| Location             | Name                                  | Value                                                                                              |
-| -------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Environment secret   | `SIGNPATH_API_TOKEN`                  | API token for the `CI builds` submitter                                                            |
-| Environment variable | `SIGNPATH_ORGANIZATION_ID`            | `c91a089d-e2bc-458e-8453-0d11619e584e`                                                             |
-| Environment variable | `SIGNPATH_PROJECT_SLUG`               | `ReShiki`                                                                                          |
-| Environment variable | `SIGNPATH_TEST_CERTIFICATE_SHA256`    | SHA-256 of the test policy's DER-encoded public certificate                                        |
-| Environment variable | `SIGNPATH_RELEASE_CERTIFICATE_SHA256` | SHA-256 of the issued release policy's DER-encoded public certificate                              |
-| Repository variable  | `SIGNPATH_ENABLED`                    | `false` until production validation completes                                                      |
-| Repository variable  | `SIGNPATH_NIGHTLY_ENABLED`            | `false`; enable separately to require signed nightlies                                             |
-| Repository variable  | `SIGNPATH_NIGHTLY_TEST_ENABLED`       | `false` until a manual nightly-version test-signing run passes; enables internal CI artifacts only |
+| Location             | Name                                  | Value                                                                                           |
+| -------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Environment secret   | `SIGNPATH_API_TOKEN`                  | API token for the `CI builds` submitter                                                         |
+| Environment variable | `SIGNPATH_ORGANIZATION_ID`            | `c91a089d-e2bc-458e-8453-0d11619e584e`                                                          |
+| Environment variable | `SIGNPATH_PROJECT_SLUG`               | `ReShiki`                                                                                       |
+| Environment variable | `SIGNPATH_TEST_CERTIFICATE_SHA256`    | SHA-256 of the test policy's DER-encoded public certificate                                     |
+| Environment variable | `SIGNPATH_RELEASE_CERTIFICATE_SHA256` | SHA-256 of the issued release policy's DER-encoded public certificate                           |
+| Repository variable  | `SIGNPATH_ENABLED`                    | `false` until production validation completes                                                   |
+| Repository variable  | `SIGNPATH_NIGHTLY_ENABLED`            | `false`; enable separately to require signed nightlies                                          |
+| Repository variable  | `SIGNPATH_NIGHTLY_TEST_ENABLED`       | `true`; the manual nightly-version test-signing run passed, enabling internal CI artifacts only |
 
 In SignPath's **Users and Groups**, open the existing `CI builds` CI user and
 reuse its previously saved API token, or regenerate it if it was not saved. Verify that this user is a submitter for the two intended
@@ -146,8 +147,11 @@ used by the policy, and update the pin deliberately when that certificate is
 rotated. CI checks returned signatures against these pins; it does not trust a
 publisher name alone.
 
-Restrict `windows-signing` deployment branches to `main` and `v*` release tags.
-The workflow has its own origin gates as well. The nightly reusable call must
+The active `windows-signing` environment permits `main` only. The temporary
+`signing/signpath-windows` validation-branch allowance was removed after merging
+the integration. Add a `v*` release-tag policy when activating production signing;
+retain the `main` branch policy. The workflow has its own origin gates as well.
+The nightly reusable call must
 retain `secrets: inherit`, and signing jobs need `actions: read` and
 `contents: read` permissions. The integration uses
 `signpath/github-action-submit-signing-request@v3`, explicitly passes each artifact
@@ -199,6 +203,22 @@ The installer privacy disclosure and update-check opt-out requirements must also
 be reviewed with SignPath Foundation before production activation.
 
 ## Run internal test-signed nightlies
+
+The [manual nightly-version validation](https://github.com/Ameyanagi/ReShiki/actions/runs/37822934801)
+completed successfully on **2026-10-09**, at commit
+`29bd9cfc65befe4f46b8a985bdbe33e5f3d9f00f`, using package version
+`0.11.0-nightly.20261008.37822934801.1`. All six platform builds passed, and
+SignPath completed the application and installer requests for both Windows
+architectures. Both native signing jobs passed certificate-pin, timestamp,
+metadata, content-integrity, final installation/upgrade/uninstallation, chemistry
+and packaged MCP checks. One initial ARM64 PowerShell startup timeout passed on
+an unchanged failed-job retry; the other five qualified builds were reused.
+
+[PR #270](https://github.com/Ameyanagi/ReShiki/pull/270) is merged, and repository
+variable `SIGNPATH_NIGHTLY_TEST_ENABLED` is now `true`. Daily nightlies are
+scheduled for **03:37 Japan time**; GitHub may start scheduled runs later. Both
+production switches remain `false`, and the release certificate remains CSR
+pending.
 
 After the manual test-policy run passes for both architectures, repeat it with
 `-f nightly=true` and verify the full nightly version in the signed packages.
