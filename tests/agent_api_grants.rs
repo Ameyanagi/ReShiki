@@ -284,10 +284,11 @@ fn read_and_write_grants_are_separate_and_only_out_changes() {
 
     let stderr = client.finish();
     assert!(stderr.starts_with(BANNER), "{stderr}");
-    assert!(
-        !stderr.contains(&input) && !stderr.contains(&output),
-        "{stderr}"
-    );
+    // Every granted path contains the tree's unique folder name, which no
+    // quoting or escaping of a path changes.
+    let unique = tree.root.path().file_name().expect("a temporary folder");
+    let unique = unique.to_str().expect("a UTF-8 temporary folder");
+    assert!(!stderr.contains(unique), "{stderr}");
     let changed = changes(&before, &inventory(tree.root.path()));
     assert_eq!(changed, BTreeSet::from([Path::new("out").join("e.svg")]));
 }

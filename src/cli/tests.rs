@@ -775,9 +775,10 @@ async fn binary_output_never_goes_to_a_terminal() {
         &["compose", "-", "--to", "pdf"],
         &["convert", "--smiles", "C", "--to", "png"],
     ] {
-        let args = tokens.iter().map(OsString::from).collect();
+        let args: Vec<OsString> = tokens.iter().map(OsString::from).collect();
         let (mut out, mut err) = (Vec::new(), Vec::new());
-        let code = execute(args, &mut out, &mut err, true).await;
+        let parsed = super::parse(&args, &mut err);
+        let code = execute(parsed, &mut out, &mut err, true).await;
         assert_eq!(code, USAGE, "{tokens:?}");
         assert!(out.is_empty(), "{tokens:?}");
         assert_eq!(

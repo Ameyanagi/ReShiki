@@ -107,8 +107,14 @@ pub(crate) fn exit(runtime: Runtime, code: i32, grace: Duration) -> ! {
 
 /// `reshiki --cli`: runs one command and exits with its code.
 ///
-/// An invalid [`HEAP_VARIABLE`] is a usage error: one stderr line, exit 2.
+/// The command line is parsed first, so its usage errors take precedence;
+/// then an invalid [`HEAP_VARIABLE`] is a usage error too: one stderr line,
+/// exit 2.
 pub(crate) fn cli(args: Vec<OsString>) -> ! {
+    let command = match reshiki::cli::parse(&args, &mut io::stderr()) {
+        Ok(command) => command,
+        Err(code) => process::exit(code),
+    };
     match heap_budget(std::env::var_os(HEAP_VARIABLE)) {
         Ok(bytes) => reshiki_process_heap::begin(bytes),
         Err(error) => {
@@ -125,7 +131,7 @@ pub(crate) fn cli(args: Vec<OsString>) -> ! {
             process::exit(1)
         }
     };
-    let code = runtime.block_on(reshiki::cli::run(args));
+    let code = runtime.block_on(reshiki::cli::run(command));
     exit(runtime, code, Duration::from_secs(1))
 }
 

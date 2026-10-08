@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     ffi::OsStr,
-    process::{Command, Stdio},
+    process::{Command, Output, Stdio},
     time::Duration,
 };
 
@@ -106,34 +106,47 @@ fn collect(session: &mut McpSession, ids: &[i64], seen: &mut Vec<Value>, timeout
     seen.extend(session.take_ready());
 }
 
-/// (a) 14 renders at the largest size sent back to back: each gets exactly
-/// one response, and `busy` never answers more of them than were sent
-/// while the client already had concurrency + queue (2 + 8) unanswered.
+/// (a) Admission. First concurrency + queue (2 + 8) renders at the largest
+/// size, sent back to back with nothing else outstanding: none may be
+/// `busy`. Then 14 more back to back: each gets exactly one response, and
+/// `busy` never answers more of them than were sent while the client
+/// already had concurrency + queue unanswered.
 ///
 /// The server holds only calls the client sent and has not seen answered,
-/// so each refusal needs that many outstanding. The count is compared
+/// so each refusal needs that many outstanding. The burst compares counts
 /// rather than which calls were refused: each request runs on its own
 /// task, so the executor may admit them in another order than they were
 /// sent. A limit before the executor's below concurrency + queue refuses
-/// more and fails this.
+/// a call of the first batch, or more of the burst, and fails this.
 #[test]
 fn busy_answers_only_calls_beyond_the_executor_queue() {
-    const RENDERS: i64 = 14;
+    const BURST: i64 = 14;
     let budgets = Budgets::default();
     let capacity = budgets.concurrency + budgets.queue;
     let (mut session, render) = with_drawing();
-    let ids: Vec<i64> = (100..100 + RENDERS).collect();
+
+    let batch: Vec<i64> = (100..).take(capacity).collect();
+    for id in &batch {
+        session.send(modern_call(*id, "render", render.clone()));
+    }
     let mut seen = Vec::new();
+    collect(&mut session, &batch, &mut seen, BURST_TIMEOUT);
+    for reply in &seen {
+        assert!(!is_busy(reply), "{reply}");
+    }
+
+    let burst: Vec<i64> = (200..200 + BURST).collect();
+    let mut answered = Vec::new();
     let mut beyond = 0;
-    for (sent, id) in ids.iter().enumerate() {
-        seen.extend(session.take_ready());
-        if sent - seen.len() >= capacity {
+    for (sent, id) in burst.iter().enumerate() {
+        answered.extend(session.take_ready());
+        if sent - answered.len() >= capacity {
             beyond += 1;
         }
         session.send(modern_call(*id, "render", render.clone()));
     }
-    collect(&mut session, &ids, &mut seen, BURST_TIMEOUT);
-    let busy = seen.iter().filter(|reply| is_busy(reply)).count();
+    collect(&mut session, &burst, &mut answered, BURST_TIMEOUT);
+    let busy = answered.iter().filter(|reply| is_busy(reply)).count();
     assert!(
         busy <= beyond,
         "{busy} busy replies; {beyond} calls sent beyond {capacity} outstanding"
@@ -141,8 +154,13 @@ fn busy_answers_only_calls_beyond_the_executor_queue() {
     assert_responsive(&mut session, "sentinel", LINE_TIMEOUT);
     session.close_stdin();
     assert_eq!(session.wait_exit(LINE_TIMEOUT).code(), Some(0));
+    seen.extend(answered);
     seen.extend(session.rest(LINE_TIMEOUT));
-    let expected: HashMap<String, usize> = ids.iter().map(|id| (id.to_string(), 1)).collect();
+    let expected: HashMap<String, usize> = batch
+        .iter()
+        .chain(&burst)
+        .map(|id| (id.to_string(), 1))
+        .collect();
     assert_eq!(id_counts(&seen), expected);
 }
 
@@ -194,31 +212,48 @@ fn cancelled_renders_get_at_most_one_response() {
 
 /// (c) A request reusing the id of one still running gets transport-2's
 /// -32600 with that id; the running call is still answered.
+///
+/// Both lines go in one write, so the framing reads the second while the
+/// render runs unless it is held up for the whole render. Then the
+/// render's response comes first and the second request is answered: its
+/// id was free again, a legal reuse, and the check is retried with a new
+/// id, a few times at most.
 #[test]
 fn a_duplicate_in_flight_id_is_an_invalid_request() {
+    const ATTEMPTS: i64 = 5;
     let (mut session, render) = with_drawing();
-    // One write: the framing reads both lines while the render runs.
-    let mut lines = modern_call(7, "render", render).to_string();
-    lines.push('\n');
-    lines.push_str(&headless::modern_list(7).to_string());
-    lines.push('\n');
-    session.send_raw(lines.as_bytes());
-    let mut replies = [
-        session.recv_for(Some(&json!(7)), BURST_TIMEOUT),
-        session.recv_for(Some(&json!(7)), BURST_TIMEOUT),
-    ];
-    // The refusal is written at once, but no order is promised.
-    replies.sort_by_key(|reply| reply.get("result").is_some());
-    let [duplicate, rendered] = replies;
-    assert_eq!(
-        duplicate,
-        json!({
-            "jsonrpc": "2.0",
-            "id": 7,
-            "error": {"code": -32600, "message": "Duplicate request id"},
-        })
+    let refused = (7..7 + ATTEMPTS).find(|&id| {
+        let mut lines = modern_call(id, "render", render.clone()).to_string();
+        lines.push('\n');
+        lines.push_str(&headless::modern_list(id).to_string());
+        lines.push('\n');
+        session.send_raw(lines.as_bytes());
+        // In the order they arrived.
+        let first = session.recv_for(Some(&json!(id)), BURST_TIMEOUT);
+        let second = session.recv_for(Some(&json!(id)), BURST_TIMEOUT);
+        if first["result"]["content"].is_array() && second["result"]["tools"].is_array() {
+            assert!(!is_busy(&first), "{first}");
+            return false;
+        }
+        // The refusal is written at once, but no order is promised.
+        let mut replies = [first, second];
+        replies.sort_by_key(|reply| reply.get("result").is_some());
+        let [duplicate, rendered] = replies;
+        assert_eq!(
+            duplicate,
+            json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": {"code": -32600, "message": "Duplicate request id"},
+            })
+        );
+        assert!(!is_busy(&rendered), "{rendered}");
+        true
+    });
+    assert!(
+        refused.is_some(),
+        "each render ended before its duplicate was read"
     );
-    assert!(!is_busy(&rendered), "{rendered}");
     session.close_stdin();
     assert_eq!(session.wait_exit(LINE_TIMEOUT).code(), Some(0));
     assert_eq!(session.rest(LINE_TIMEOUT), Vec::<Value>::new());
@@ -290,41 +325,62 @@ fn import_text_past_the_budget_is_a_budget_error() {
     assert_eq!(session.wait_exit(LINE_TIMEOUT).code(), Some(0));
 }
 
-/// (f) RESHIKI_AGENT_HEAP_MB outside 256 to 16384 MiB is refused before
-/// anything is read, by `--mcp` and `--cli` alike; 256 MiB serves.
-#[test]
-fn the_heap_ceiling_is_validated_and_applied() {
-    const VARIABLE: &str = "RESHIKI_AGENT_HEAP_MB";
-    let mut session =
-        McpSession::start_with_env(&[], &[(VARIABLE, OsStr::new("1"))], StderrMode::Captured);
-    assert_eq!(session.wait_exit(LINE_TIMEOUT).code(), Some(2));
-    assert_eq!(session.rest(LINE_TIMEOUT), Vec::<Value>::new());
-    let stderr = session.stderr(LINE_TIMEOUT);
-    assert_eq!(
-        stderr,
-        format!("reshiki --mcp: {VARIABLE} must be a whole number of MiB from 256 to 16384\n")
-    );
-
+/// Runs `reshiki --cli args` with an empty data folder and
+/// RESHIKI_AGENT_HEAP_MB set to `heap`.
+fn cli_with_heap(args: &[&str], heap: &str) -> Output {
     let data = headless::data_dir();
     let child = Command::new(env!("CARGO_BIN_EXE_reshiki"))
-        .args(["--cli", "info"])
+        .arg("--cli")
+        .args(args)
         .env("RESHIKI_DATA_DIR", data.path())
-        .env(VARIABLE, "16385")
+        .env(HEAP_VARIABLE, heap)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .expect("start reshiki --cli");
-    let output = headless::wait_with_watchdog(child, LINE_TIMEOUT);
-    assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
+    headless::wait_with_watchdog(child, LINE_TIMEOUT)
+}
+
+const HEAP_VARIABLE: &str = "RESHIKI_AGENT_HEAP_MB";
+
+/// (f) RESHIKI_AGENT_HEAP_MB outside 256 to 16384 MiB is refused before
+/// anything is read, by `--mcp` and `--cli` alike, once the command line
+/// parsed: a usage error in it is reported instead. 256 MiB serves.
+#[test]
+fn the_heap_ceiling_is_validated_and_applied() {
+    let refusal = format!("{HEAP_VARIABLE} must be a whole number of MiB from 256 to 16384\n");
+    let tiny = [(HEAP_VARIABLE, OsStr::new("1"))];
+    let mut session = McpSession::start_with_env(&[], &tiny, StderrMode::Captured);
+    assert_eq!(session.wait_exit(LINE_TIMEOUT).code(), Some(2));
+    assert_eq!(session.rest(LINE_TIMEOUT), Vec::<Value>::new());
+    let stderr = session.stderr(LINE_TIMEOUT);
+    assert_eq!(stderr, format!("reshiki --mcp: {refusal}"));
+
+    let mut session = McpSession::start_with_env(&["--bogus"], &tiny, StderrMode::Captured);
+    assert_eq!(session.wait_exit(LINE_TIMEOUT).code(), Some(2));
+    assert_eq!(session.rest(LINE_TIMEOUT), Vec::<Value>::new());
+    let stderr = session.stderr(LINE_TIMEOUT);
     assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        format!("reshiki: {VARIABLE} must be a whole number of MiB from 256 to 16384\n")
+        stderr.lines().next(),
+        Some("reshiki --mcp: unknown option `--bogus`"),
+        "{stderr}"
     );
 
-    let mut session =
-        McpSession::start_with_env(&[], &[(VARIABLE, OsStr::new("256"))], StderrMode::Captured);
+    let output = cli_with_heap(&["info"], "16385");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(stderr, format!("reshiki: {refusal}"));
+
+    let output = cli_with_heap(&["convert", "--bogus"], "1");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(stderr, "reshiki: unknown option `--bogus`\n");
+
+    let fits = [(HEAP_VARIABLE, OsStr::new("256"))];
+    let mut session = McpSession::start_with_env(&[], &fits, StderrMode::Captured);
     assert_responsive(&mut session, "ceiling", LINE_TIMEOUT);
     session.close_stdin();
     assert_eq!(session.wait_exit(LINE_TIMEOUT).code(), Some(0));

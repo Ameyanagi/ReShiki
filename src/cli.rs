@@ -95,14 +95,31 @@ Prints ReShiki's versions, the limits it enforces and the input and output
 formats as one JSON line.
 ";
 
-/// Runs one command against the process's stdout and stderr.
+/// A command line [`parse`] accepted, for [`run`].
+pub struct Parsed(Command);
+
+/// Parses the tokens after `--cli` before anything is read or run. A usage
+/// error, including a missing command, is written to `err` and returned as
+/// [`USAGE`].
+pub fn parse(args: &[OsString], err: &mut dyn Write) -> Result<Parsed, i32> {
+    let Some((name, rest)) = args.split_first() else {
+        let _ = err.write_all(help(None).as_bytes());
+        return Err(USAGE);
+    };
+    args::parse(name, rest).map(Parsed).map_err(|message| {
+        let _ = writeln!(err, "reshiki: {message}");
+        USAGE
+    })
+}
+
+/// Runs a parsed command against the process's stdout and stderr.
 ///
 /// Each write locks its stream only while it writes, so no lock is held
 /// while the operation runs.
-pub async fn run(args: Vec<OsString>) -> i32 {
+pub async fn run(command: Parsed) -> i32 {
     let terminal = std::io::stdout().is_terminal();
     execute(
-        args,
+        Ok(command),
         &mut std::io::stdout(),
         &mut std::io::stderr(),
         terminal,
@@ -110,22 +127,26 @@ pub async fn run(args: Vec<OsString>) -> i32 {
     .await
 }
 
-/// Runs one command and flushes both writers before returning. `out` is
-/// never a terminal, so pdf and png may go to it.
+/// Parses and runs one command and flushes both writers before returning.
+/// `out` is never a terminal, so pdf and png may go to it.
 ///
 /// A write or flush error on `out` returns [`FAILURE`] after one best-effort
 /// line on `err`.
 pub async fn run_with(args: Vec<OsString>, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
-    execute(args, out, err, false).await
+    let parsed = parse(&args, err);
+    execute(parsed, out, err, false).await
 }
 
 async fn execute(
-    args: Vec<OsString>,
+    parsed: Result<Parsed, i32>,
     out: &mut dyn Write,
     err: &mut dyn Write,
     terminal: bool,
 ) -> i32 {
-    let result = command(&args, out, err, terminal).await;
+    let result = match parsed {
+        Ok(Parsed(command)) => run_command(command, out, err, terminal).await,
+        Err(code) => Ok(code),
+    };
     let flushed = out.flush();
     let code = match result.and_then(|code| flushed.map(|()| code)) {
         Ok(code) => code,
@@ -138,27 +159,22 @@ async fn execute(
     code
 }
 
-/// Parses and runs one command; only writes to `out` are `Err`.
-async fn command(
-    args: &[OsString],
+/// Runs one parsed command; only writes to `out` are `Err`.
+async fn run_command(
+    command: Command,
     out: &mut dyn Write,
     err: &mut dyn Write,
     terminal: bool,
 ) -> std::io::Result<i32> {
-    let Some((name, rest)) = args.split_first() else {
-        let _ = err.write_all(help(None).as_bytes());
-        return Ok(USAGE);
-    };
-    let result = match args::parse(name, rest) {
-        Err(message) => Err(CliError::Usage(message)),
-        Ok(Command::Help(topic)) => out
+    let result = match command {
+        Command::Help(topic) => out
             .write_all(help(topic).as_bytes())
             .map_err(CliError::Stdout),
-        Ok(Command::Info) => info(out, err).await,
-        Ok(Command::Convert(convert)) => convert::run(convert, out, err, terminal).await,
-        Ok(Command::Render(render)) => render::run(render, out, err, terminal).await,
-        Ok(Command::Compose(compose)) => compose::run(compose, out, err, terminal).await,
-        Ok(Command::Analyze(input)) => analyze::run(input, out, err).await,
+        Command::Info => info(out, err).await,
+        Command::Convert(convert) => convert::run(convert, out, err, terminal).await,
+        Command::Render(render) => render::run(render, out, err, terminal).await,
+        Command::Compose(compose) => compose::run(compose, out, err, terminal).await,
+        Command::Analyze(input) => analyze::run(input, out, err).await,
     };
     match result {
         Ok(()) => Ok(SUCCESS),
