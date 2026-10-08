@@ -368,6 +368,40 @@ fn line_buffers_never_exceed_the_limit_plus_one_chunk() {
     }
 }
 
+// --- limits --------------------------------------------------------------
+
+#[test]
+fn limits_derive_from_the_budgets() {
+    const MIB: usize = 1024 * 1024;
+    let limits = Limits::from_budgets(&Budgets::default());
+    assert_eq!(limits, Limits::default());
+    assert_eq!(
+        limits,
+        Limits {
+            max_line_bytes: 24 * MIB,
+            max_outstanding: 2 + 8 + 2,
+            max_retained_bytes: 48 * MIB,
+            max_result_bytes: 3 * 16 * MIB,
+        }
+    );
+    let huge = Budgets {
+        max_request_bytes: usize::MAX,
+        concurrency: usize::MAX - 1,
+        queue: 2,
+        max_output_bytes: usize::MAX / 2,
+        ..Budgets::default()
+    };
+    assert_eq!(
+        Limits::from_budgets(&huge),
+        Limits {
+            max_line_bytes: usize::MAX,
+            max_outstanding: usize::MAX,
+            max_retained_bytes: usize::MAX,
+            max_result_bytes: usize::MAX,
+        }
+    );
+}
+
 // --- tracker -------------------------------------------------------------
 
 fn limits(max_outstanding: usize, max_retained_bytes: usize) -> Limits {

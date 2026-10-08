@@ -309,7 +309,10 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
             &[],
         );
     }
-    let runtime = match runtime(4) {
+    let budgets = Budgets::default();
+    // The blocking pool runs the host's operations, with room for two more;
+    // stdin and stdout have their own threads and never use it.
+    let runtime = match runtime(budgets.concurrency.saturating_add(2)) {
         Ok(runtime) => runtime,
         Err(_) => {
             log.event(Level::Error, "could not start the runtime", &[]);
@@ -317,9 +320,8 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
             process::exit(1)
         }
     };
-    let host = Arc::new(
-        HeadlessHost::new(CURRENT_VERSION, Budgets::default()).with_grants(Arc::new(grants)),
-    );
+    let limits = Limits::from_budgets(&budgets);
+    let host = Arc::new(HeadlessHost::new(CURRENT_VERSION, budgets).with_grants(Arc::new(grants)));
     let result = runtime.block_on(server::serve(
         Arc::clone(&host),
         Principal::local(),
@@ -328,7 +330,7 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
         Identity {
             app_version: CURRENT_VERSION.into(),
         },
-        Limits::default(),
+        limits,
         log.clone(),
     ));
     // One deadline, set before any waiting, bounds the rest of shutdown.

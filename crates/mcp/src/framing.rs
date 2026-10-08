@@ -57,6 +57,7 @@
 //! cancellation for an unknown or already answered id is ignored.
 use crate::log::{Level, Log};
 use head::{Class, Ignored, PARSE_ERROR, Reply};
+use reshiki_agent::ops::budget::Budgets;
 use serde::{Serialize, Serializer};
 use std::{
     io::{self, BufRead, BufReader, Read, Write},
@@ -105,8 +106,8 @@ impl Serialize for Key {
     }
 }
 
-/// Connection limits. The defaults are provisional; a later step derives
-/// them from the operation layer's budgets.
+/// Connection limits, derived from the operation layer's budgets by
+/// [`Limits::from_budgets`]; the defaults are those of the default budgets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
     /// The longest line read, in bytes, before its newline.
@@ -120,6 +121,8 @@ pub struct Limits {
 }
 
 impl Default for Limits {
+    /// 24 MiB lines, 12 outstanding requests, 48 MiB retained and 48 MiB
+    /// results: [`Limits::from_budgets`] of the default [`Budgets`].
     fn default() -> Self {
         const MIB: usize = 1024 * 1024;
         Self {
@@ -127,6 +130,31 @@ impl Default for Limits {
             max_outstanding: 12,
             max_retained_bytes: 48 * MIB,
             max_result_bytes: 48 * MIB,
+        }
+    }
+}
+
+impl Limits {
+    /// The limits for a host with budgets `b`; each saturates rather than
+    /// overflows.
+    /// - `max_line_bytes` is `b.max_request_bytes`, which the operation layer
+    ///   publishes for this cap: the 16 MiB exchange limit base64-expanded,
+    ///   plus JSON overhead.
+    /// - `max_outstanding` is `b.concurrency + b.queue + 2`: every call the
+    ///   host's executor runs or queues, plus two more, such as a
+    ///   `tools/list` or a call the executor refuses as busy.
+    /// - `max_retained_bytes` is twice `max_line_bytes`.
+    /// - `max_result_bytes` is three times `b.max_output_bytes`, room for
+    ///   base64 expansion, the text copy of `structuredContent` and JSON
+    ///   escaping; the protocol layer counts each result's exact size
+    ///   against it.
+    pub fn from_budgets(b: &Budgets) -> Self {
+        let max_line_bytes = b.max_request_bytes;
+        Self {
+            max_line_bytes,
+            max_outstanding: b.concurrency.saturating_add(b.queue).saturating_add(2),
+            max_retained_bytes: max_line_bytes.saturating_mul(2),
+            max_result_bytes: b.max_output_bytes.saturating_mul(3),
         }
     }
 }

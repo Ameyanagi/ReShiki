@@ -120,7 +120,8 @@ impl McpSession {
     }
 
     /// Starts `reshiki --mcp` followed by `args` without reading its stdout
-    /// until [`McpSession::release_stdout`], like a client that stalls.
+    /// until [`McpSession::release_stdout`], like a client that stalls, or
+    /// until [`McpSession::close_held_stdout`] closes it unread.
     pub fn with_held_stdout(args: &[&str], stderr: StderrMode) -> Self {
         Self::spawn(args, stderr, StdoutMode::Held)
     }
@@ -168,8 +169,10 @@ impl McpSession {
             if !read_stdout {
                 return;
             }
-            // Returns once the session drops `hold`.
-            let _ = held.recv();
+            // Ok once the session closes stdout, Err once it drops `hold`.
+            if held.recv().is_ok() {
+                return;
+            }
             let mut stdout = BufReader::new(stdout);
             loop {
                 let mut line = Vec::new();
@@ -262,9 +265,27 @@ impl McpSession {
         drop(self.stdout_hold.take());
     }
 
+    /// Closes the read end of stdout held by [`McpSession::with_held_stdout`]
+    /// without reading it, like a client that went away.
+    pub fn close_held_stdout(&mut self) {
+        let hold = self.stdout_hold.take().expect("stdout is held");
+        hold.send(()).expect("close stdout");
+    }
+
     /// Closes stdin: end of input for the server.
     pub fn close_stdin(&mut self) {
         drop(self.stdin.take());
+    }
+
+    /// Takes stdin, for a writer that may block; dropping it closes stdin.
+    pub fn take_stdin(&mut self) -> ChildStdin {
+        self.stdin.take().expect("stdin is open")
+    }
+
+    /// Whether the child is still running.
+    pub fn is_running(&mut self) -> bool {
+        let status = self.child.lock().expect("child lock").try_wait();
+        status.expect("poll reshiki --mcp").is_none()
     }
 
     /// Waits up to `timeout` for the child to exit; kills it and panics if
@@ -293,6 +314,25 @@ impl McpSession {
             let left = deadline.saturating_duration_since(Instant::now());
             match self.lines.recv_timeout(left) {
                 Ok(line) => self.unclaimed.push_back(parse_message(&line)),
+                Err(RecvTimeoutError::Disconnected) => return self.unclaimed.drain(..).collect(),
+                Err(RecvTimeoutError::Timeout) => panic!("stdout did not close within {timeout:?}"),
+            }
+        }
+    }
+
+    /// Every message on a complete line not yet received, once stdout closed
+    /// within `timeout`. A last line the server could not finish before it
+    /// exited is skipped.
+    pub fn complete_rest(&mut self, timeout: Duration) -> Vec<Value> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            match self.lines.recv_timeout(left) {
+                Ok(line) if line.ends_with(b"\n") => {
+                    self.unclaimed.push_back(parse_message(&line));
+                }
+                // Only the last line can lack its newline.
+                Ok(_) => {}
                 Err(RecvTimeoutError::Disconnected) => return self.unclaimed.drain(..).collect(),
                 Err(RecvTimeoutError::Timeout) => panic!("stdout did not close within {timeout:?}"),
             }
@@ -377,6 +417,71 @@ impl Drop for McpSession {
             let _ = child.wait();
         }
     }
+}
+
+/// The `_meta` every MCP 2026-07-28 request carries.
+pub fn modern_meta() -> Value {
+    serde_json::json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+    })
+}
+
+/// A 2026-07-28 `tools/call` of `tool` with `arguments`.
+pub fn modern_call(id: i64, tool: &str, arguments: Value) -> Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tools/call",
+        "params": {"name": tool, "arguments": arguments, "_meta": modern_meta()},
+    })
+}
+
+/// A 2026-07-28 `tools/list`.
+pub fn modern_list(id: i64) -> Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "tools/list",
+        "params": {"_meta": modern_meta()},
+    })
+}
+
+/// `notifications/cancelled` for the request `id`.
+pub fn cancel(id: i64) -> Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/cancelled",
+        "params": {"requestId": id, "reason": "test"},
+    })
+}
+
+/// `compose` arguments for a grid of 32 molecules, the most a Proposal
+/// allows: long enough a layout for a cancellation or an end of input to
+/// arrive while it runs.
+pub fn compose_32() -> Value {
+    let molecules: Vec<Value> = (1..=32)
+        .map(|n| {
+            serde_json::json!({
+                "smiles": "c1ccc2ccccc2c1C(=O)NCCc1ccccc1",
+                "label": format!("Amide {n}"),
+                "coefficient": 1,
+                "rotation": 0,
+                "compact": false,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "proposal": {
+            "explanation": "Thirty-two amides",
+            "replace_ids": [],
+            "molecules": molecules,
+            "reactions": [],
+            "composition": {"arrangement": "grid", "columns": 3, "width_pt": 540, "preserve_details": false},
+            "sketch": null,
+        },
+        "style_document": null,
+    })
 }
 
 /// One stdout line: a single JSON-RPC 2.0 object ending in a newline.
