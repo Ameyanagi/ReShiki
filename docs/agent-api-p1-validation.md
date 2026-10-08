@@ -8,8 +8,8 @@ every row in it has passed. The experimental label can be removed only after a
 stable release ships with all eight gates passing
 ([experimental status](agent-api.md#experimental-status)).
 
-P1 is a stack of changes on `main` at `40c8d82a`. This record is its last
-step but one; fix-1 follows it ([landing task 1](#landing-tasks)). CI runs
+P1 is a stack of changes on `main` at `40c8d82a`. Two Windows fixes, fix-1
+and fix-2, follow this record ([landing task 1](#landing-tasks)). CI runs
 once, on the landed tip. Until then every CI and manual row reads **Pending**
 and no gate has passed.
 
@@ -101,10 +101,10 @@ and then outside it.
 
 ## G3: filesystem escape suite
 
-| Check                              | Command                                                                                  | Passes when                                                                                                                                                                                                                                                                                                                 | Local                     | CI                                            |
-| ---------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------------------- |
-| Escape suite                       | `RESHIKI_REQUIRE_LINK_TESTS=1 cargo test --locked -p reshiki-agent access::escape_tests` | Every case the command runs passes: the Unix cases on macos-14 and ubuntu-22.04, the Windows cases on windows-2022. It runs the 2,000-read directory-swap race, not the ignored 200,000-read one. With `RESHIKI_REQUIRE_LINK_TESTS=1`, a Windows account that cannot create symlinks fails the suite instead of skipping it | Passed on macOS: 15 tests | Pending: checks.yml rust job, 3 OSes          |
-| Home-folder grant refusal, Windows | `cargo test --locked --no-default-features -p reshiki --test agent_api_grants`           | `granting_the_home_folder_exits_2` passes on windows-2022 once fix-1 (`p1/fix-windows-home-grant`) grants the child's own home folder; before it, the test failed there on every PR from #259                                                                                                                               | Passes on macOS: 8 tests  | Pending: checks.yml windows-2022, after fix-1 |
+| Check                              | Command                                                                                  | Passes when                                                                                                                                                                                                                                                                                                                 | Local                     | CI                                                 |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------- |
+| Escape suite                       | `RESHIKI_REQUIRE_LINK_TESTS=1 cargo test --locked -p reshiki-agent access::escape_tests` | Every case the command runs passes: the Unix cases on macos-14 and ubuntu-22.04, the Windows cases on windows-2022. It runs the 2,000-read directory-swap race, not the ignored 200,000-read one. With `RESHIKI_REQUIRE_LINK_TESTS=1`, a Windows account that cannot create symlinks fails the suite instead of skipping it | Passed on macOS: 15 tests | Pending: checks.yml rust job, 3 OSes               |
+| Home-folder grant refusal, Windows | `cargo test --locked --no-default-features -p reshiki --test agent_api_grants`           | `granting_the_home_folder_exits_2` and `granting_the_real_profile_folder_exits_2` pass on windows-2022. fix-1 grants the child's own home folder; fix-2 refuses every home candidate (the profile known folder and `USERPROFILE`), where the old lookup also needed the AppData folders and failed open                     | Passes on macOS: 10 tests | Passed: PR #268 CI, windows-2022 (run 37747164384) |
 
 The ignored 200,000-read race is extra stress evidence outside the gate, and
 CI does not run it. It passed on macOS on 2026-10-08 with
@@ -184,8 +184,8 @@ change.
 The stack lands on `main` as one fast-forward, and CI then runs once. Each
 task fills the slots named beside it.
 
-1. Land fix-1 (`p1/fix-windows-home-grant`) on top of this record. It fixes
-   the Windows-only home-grant test that G3 lists.
+1. Land fix-1 (`p1/fix-windows-home-grant`) and fix-2 (`p1/fix-home-folder-sources`)
+   on top of this record. They fix the Windows home-grant refusal that G3 lists.
 2. Push the tip to `main`. checks.yml runs on the push: G8's full checks and
    the CI rows of G1, G3, G4 and G5.
 3. Run `gh workflow run checks.yml --ref main -f live_reference=true`: G8's
