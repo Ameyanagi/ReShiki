@@ -30,6 +30,14 @@ same PR.
   2026-07-28: 2025-11-25 and 2025-06-18).
 - `platform` (optional): `"unix"` runs the case only on Unix.
 - `within_ms` (optional): the longest the replies may take.
+- `attempts` (optional): how many times the case may be sent. While attempts
+  are left and every reply is a result, the case is sent again after the
+  sentinel instead of being checked. `duplicate_in_flight_id` needs it: the
+  framing frees an id once its response is written, so a compose that ends
+  before its duplicate is read makes the duplicate a legal reuse, answered
+  normally. The shared process reads stdout all the time, so nothing can hold
+  that response back; `a_duplicate_in_flight_id_is_an_invalid_request` in
+  tests/agent_api_runtime.rs retries the same way.
 - `source`: where the expected outcome comes from; see below.
 - `lines`: what is written, in one write. Each piece ends in a newline, which
   is added when it has none.
@@ -80,8 +88,10 @@ folder `folder.mol` and, on Unix, the FIFO `pipe.mol`. `outside/eth.mol` exists
 but is not granted. RESHIKI_DATA_DIR, HOME, USERPROFILE, APPDATA and
 LOCALAPPDATA point into the same tree. When its input ends, each process must
 exit 0 within 10 s. Every stdout line must be one JSON-RPC 2.0 object, stderr
-must have no `panicked at`, and nothing outside `<tree>/out` may be created or
-removed.
+must have no `panicked at`, and nothing outside `<tree>/out` may be created,
+removed or changed. A watchdog kills a process that hangs. It restarts for
+each attempt of a case with the time the send, each reply and the sentinel
+may take, 30 s each, so a shared process lives as long as its cases need.
 
 ## Provenance
 

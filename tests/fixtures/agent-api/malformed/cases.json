@@ -163,6 +163,7 @@
   {
     "name": "duplicate_in_flight_id",
     "phase": "modern",
+    "attempts": 5,
     "source": "framing:duplicate",
     "lines": [{"json":{"jsonrpc":"2.0","id":"dup","method":"tools/call","params":{"name":"compose","arguments":"${generated:compose-32}","_meta":"${meta}"}}},{"json":{"jsonrpc":"2.0","id":"dup","method":"tools/list","params":{"_meta":"${meta}"}}}],
     "expect": [{"error":-32600,"id":"dup","message":"Duplicate request id"},{"result":true,"id":"dup"}]

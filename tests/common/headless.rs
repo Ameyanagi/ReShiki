@@ -96,7 +96,8 @@ fn drain(pipe: Option<impl Read + Send + 'static>) -> JoinHandle<Vec<u8>> {
     })
 }
 
-/// How long one [`McpSession`] may live before its child is killed.
+/// How long one [`McpSession`] may live before its child is killed, unless
+/// [`McpSession::rearm_watchdog`] restarts the count.
 pub const MCP_WATCHDOG: Duration = Duration::from_secs(60);
 
 /// What an [`McpSession`] does with the child's stderr.
@@ -131,7 +132,8 @@ pub fn data_dir() -> TempDir {
 
 /// `reshiki --mcp` with piped stdin and stdout. Every stdout line is
 /// asserted to be one JSON-RPC 2.0 object when it is received. A watchdog
-/// kills the child after [`MCP_WATCHDOG`], so a hung server fails the test
+/// kills the child after [`MCP_WATCHDOG`], or after the limit
+/// [`McpSession::rearm_watchdog`] last set, so a hung server fails the test
 /// instead of stalling it. The child's `RESHIKI_DATA_DIR` is an empty
 /// temporary folder.
 pub struct McpSession {
@@ -142,8 +144,9 @@ pub struct McpSession {
     stderr: StderrPipe,
     /// Dropping it lets stdout be read.
     stdout_hold: Option<Sender<()>>,
-    /// Dropping it stops the watchdog.
-    _watchdog: Sender<()>,
+    /// Each limit sent restarts the watchdog; dropping it stops the
+    /// watchdog.
+    watchdog: Sender<Duration>,
     /// The child's data folder.
     _data: TempDir,
 }
@@ -235,11 +238,19 @@ impl McpSession {
             }
         });
         let child = Arc::new(Mutex::new(child));
-        let (watchdog, stop) = mpsc::channel::<()>();
+        let (watchdog, limits) = mpsc::channel::<Duration>();
         let watched = Arc::clone(&child);
         thread::spawn(move || {
-            if stop.recv_timeout(MCP_WATCHDOG) == Err(RecvTimeoutError::Timeout) {
-                let _ = watched.lock().expect("child lock").kill();
+            let mut limit = MCP_WATCHDOG;
+            loop {
+                match limits.recv_timeout(limit) {
+                    Ok(next) => limit = next,
+                    Err(RecvTimeoutError::Disconnected) => return,
+                    Err(RecvTimeoutError::Timeout) => {
+                        let _ = watched.lock().expect("child lock").kill();
+                        return;
+                    }
+                }
             }
         });
         Self {
@@ -249,9 +260,16 @@ impl McpSession {
             unclaimed: VecDeque::new(),
             stderr,
             stdout_hold: matches!(stdout_mode, StdoutMode::Held).then_some(hold),
-            _watchdog: watchdog,
+            watchdog,
             _data: data,
         }
+    }
+
+    /// Restarts the watchdog: the child is killed unless the session ends
+    /// within `limit` or the watchdog is restarted again.
+    pub fn rearm_watchdog(&mut self, limit: Duration) {
+        // Fails only once the watchdog has killed the child.
+        let _ = self.watchdog.send(limit);
     }
 
     /// Sends `message` as one line.

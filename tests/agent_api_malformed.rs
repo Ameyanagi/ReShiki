@@ -18,7 +18,7 @@
 //! folders inside the same tree; it inherits RESHIKI_INCHI_HELPER as CI sets
 //! it (.github/workflows/checks.yml). Once its input ends it must exit 0
 //! within 10 s, with every stdout line one JSON-RPC 2.0 object, no
-//! `panicked at` on stderr and nothing created or removed outside
+//! `panicked at` on stderr and nothing created, removed or changed outside
 //! `<tree>/out`.
 #[path = "common/headless.rs"]
 mod headless;
@@ -66,6 +66,9 @@ struct Case {
     /// The longest the replies may take, in milliseconds.
     #[serde(default)]
     within_ms: Option<u64>,
+    /// How many times the case may be sent while every reply is a result.
+    #[serde(default)]
+    attempts: Option<u32>,
     source: String,
     lines: Value,
     expect: Value,
@@ -192,23 +195,9 @@ impl Tree {
         McpSession::start_with_env(&args, &env, StderrMode::Captured)
     }
 
-    /// Every path in the tree outside `out`, relative to the tree.
-    fn outside_out(&self) -> BTreeSet<PathBuf> {
-        let root = self.root.path();
-        let out = self.path("out");
-        let mut paths = BTreeSet::new();
-        let mut folders = vec![root.to_path_buf()];
-        while let Some(folder) = folders.pop() {
-            for entry in fs::read_dir(&folder).expect("list a folder") {
-                let path = entry.expect("a folder entry").path();
-                let kind = fs::symlink_metadata(&path).expect("metadata").file_type();
-                if kind.is_dir() && path != out {
-                    folders.push(path.clone());
-                }
-                paths.insert(path.strip_prefix(root).expect("inside").to_path_buf());
-            }
-        }
-        paths
+    /// Every path in the tree outside `out`, with each regular file's bytes.
+    fn outside_out(&self) -> Snapshot {
+        snapshot(self.root.path(), Some(&self.path("out")))
     }
 }
 
@@ -439,7 +428,7 @@ fn check(expect: &Value, message: &Value, supported: &[String]) -> Result<(), St
 struct Process {
     tree: Tree,
     session: McpSession,
-    before: BTreeSet<PathBuf>,
+    before: Snapshot,
     phase: Phase,
     revision: Option<String>,
     sentinels: usize,
@@ -530,7 +519,13 @@ impl Process {
     }
 
     /// Sends `case`'s lines, checks the replies it expects, then the
-    /// sentinel; nothing else may have arrived by then.
+    /// sentinel; nothing else may have arrived by then. A case with
+    /// `attempts` is sent again, after the sentinel, while every reply is a
+    /// result and attempts are left.
+    ///
+    /// The watchdog restarts for each attempt with the time its send, its
+    /// replies and the sentinel may each take, so a shared process lives as
+    /// long as its cases need.
     fn run(&mut self, case: &Case) {
         let context = format!("{}: {}", self.context(), case.name);
         let expects: Vec<&Value> = match &case.expect {
@@ -543,47 +538,60 @@ impl Process {
             revision: self.revision.as_deref(),
         }
         .bytes(&case.lines);
-        let started = Instant::now();
-        self.session.send_raw(&bytes);
-        let mut replies: Vec<Value> = expects
-            .iter()
-            .map(|expect| self.session.recv_for(expect.get("id"), REPLY_TIMEOUT))
-            .collect();
-        if let Some(limit) = case.within_ms {
-            let elapsed = started.elapsed();
-            assert!(
-                elapsed <= Duration::from_millis(limit),
-                "{context}: replied after {elapsed:?}"
-            );
-        }
-        // Replies sharing an id may arrive in any order.
-        for expect in &expects {
-            let reasons: Vec<String> = replies
+        let watchdog = REPLY_TIMEOUT * (expects.len() as u32 + 2);
+        let attempts = case.attempts.unwrap_or(1);
+        for attempt in 1..=attempts {
+            self.session.rearm_watchdog(watchdog);
+            let started = Instant::now();
+            self.session.send_raw(&bytes);
+            let mut replies: Vec<Value> = expects
                 .iter()
-                .map(|reply| {
-                    check(expect, reply, &self.supported)
-                        .err()
-                        .unwrap_or_default()
-                })
+                .map(|expect| self.session.recv_for(expect.get("id"), REPLY_TIMEOUT))
                 .collect();
-            let Some(index) = reasons.iter().position(String::is_empty) else {
-                panic!("{context}: {reasons:?} in {replies:?}");
-            };
-            replies.remove(index);
+            if let Some(limit) = case.within_ms {
+                let elapsed = started.elapsed();
+                assert!(
+                    elapsed <= Duration::from_millis(limit),
+                    "{context}: replied after {elapsed:?}"
+                );
+            }
+            let again =
+                attempt < attempts && replies.iter().all(|reply| reply.get("result").is_some());
+            if !again {
+                // Replies sharing an id may arrive in any order.
+                for expect in &expects {
+                    let reasons: Vec<String> = replies
+                        .iter()
+                        .map(|reply| {
+                            check(expect, reply, &self.supported)
+                                .err()
+                                .unwrap_or_default()
+                        })
+                        .collect();
+                    let Some(index) = reasons.iter().position(String::is_empty) else {
+                        panic!("{context}: attempt {attempt}: {reasons:?} in {replies:?}");
+                    };
+                    replies.remove(index);
+                }
+            }
+            self.sentinel(&case.name);
+            let unexpected = self.session.take_ready();
+            assert_eq!(
+                unexpected,
+                Vec::<Value>::new(),
+                "{context}: unexpected output"
+            );
+            if !again {
+                return;
+            }
         }
-        self.sentinel(&case.name);
-        let unexpected = self.session.take_ready();
-        assert_eq!(
-            unexpected,
-            Vec::<Value>::new(),
-            "{context}: unexpected output"
-        );
     }
 
     /// Ends the input: the process must exit 0 in time without writing
     /// anything else, panicking or touching anything outside `out`.
     fn finish(mut self) {
         let context = self.context();
+        self.session.rearm_watchdog(EXIT_TIMEOUT + 2 * LINE_TIMEOUT);
         self.session.close_stdin();
         let status = self.session.wait_exit(EXIT_TIMEOUT);
         assert_eq!(status.code(), Some(0), "{context}");
@@ -591,10 +599,11 @@ impl Process {
         assert_eq!(rest, Vec::<Value>::new(), "{context}: unexpected output");
         let stderr = self.session.stderr(LINE_TIMEOUT);
         assert!(!stderr.contains("panicked at"), "{context}: {stderr}");
-        assert_eq!(
-            self.tree.outside_out(),
-            self.before,
-            "{context}: the tree changed outside out"
+        let after = self.tree.outside_out();
+        assert!(
+            after == self.before,
+            "{context}: the tree changed outside out: {:?}",
+            after.iter().map(|(path, _)| path).collect::<Vec<_>>()
         );
     }
 }
@@ -650,19 +659,27 @@ fn each_legacy_case_before_initialize_gets_a_fresh_process() {
     }
 }
 
-/// Every path under `root`, relative to it, with each file's bytes.
-fn snapshot(root: &Path) -> Vec<(PathBuf, Option<Vec<u8>>)> {
+/// Paths relative to a root, each regular file with its bytes.
+type Snapshot = Vec<(PathBuf, Option<Vec<u8>>)>;
+
+/// Every path under `root`, relative to it, with each regular file's bytes;
+/// what the folder `skip` holds is left out. A FIFO is never opened.
+fn snapshot(root: &Path, skip: Option<&Path>) -> Snapshot {
     let mut entries = Vec::new();
     let mut folders = vec![root.to_path_buf()];
     while let Some(folder) = folders.pop() {
         for entry in fs::read_dir(&folder).expect("list a folder") {
             let path = entry.expect("a folder entry").path();
-            let relative = path.strip_prefix(root).expect("inside").to_path_buf();
-            if path.is_dir() {
+            let kind = fs::symlink_metadata(&path).expect("metadata").file_type();
+            let bytes = kind
+                .is_file()
+                .then(|| fs::read(&path).expect("read a file"));
+            entries.push((
+                path.strip_prefix(root).expect("inside").to_path_buf(),
+                bytes,
+            ));
+            if kind.is_dir() && skip != Some(path.as_path()) {
                 folders.push(path);
-                entries.push((relative, None));
-            } else {
-                entries.push((relative, Some(fs::read(&path).expect("read a file"))));
             }
         }
     }
@@ -684,7 +701,7 @@ fn cli_corpus() {
         r#"{"version":19,"atoms":[{"id":1,"element":"C","position":{"x":0,"y":0}}],"bonds":[]}"#;
     fs::write(root.join("in.rsk"), drawing).expect("in.rsk");
     fs::write(root.join("existing.svg"), "keep me\n").expect("existing.svg");
-    let before = snapshot(root);
+    let before = snapshot(root, None);
     let cases: [(&[&str], i32, &str); 8] = [
         (&["bogus"], 2, "reshiki: unknown command `bogus`"),
         (&["convert"], 2, "reshiki: convert needs an input"),
@@ -731,7 +748,7 @@ fn cli_corpus() {
         assert!(text.starts_with(stderr), "{args:?}: {text}");
         // Compared with assert!, so a failure does not print 16 MiB.
         assert!(
-            snapshot(root) == before,
+            snapshot(root, None) == before,
             "{args:?}: the working folder changed"
         );
     }
