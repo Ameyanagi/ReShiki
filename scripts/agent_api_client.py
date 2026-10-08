@@ -131,12 +131,13 @@ class StdioClient:
         self._stdout = queue.Queue()
         self._stderr = queue.Queue()
         self._stderr_text = []
-        self._stderr_closed = False
-        for stream, sink in (
-            (self.process.stdout, self._stdout),
-            (self.process.stderr, self._stderr),
-        ):
-            threading.Thread(target=self._pump, args=(stream, sink), daemon=True).start()
+        threading.Thread(
+            target=self._pump, args=(self.process.stdout, self._stdout), daemon=True
+        ).start()
+        self._stderr_reader = threading.Thread(
+            target=self._pump, args=(self.process.stderr, self._stderr), daemon=True
+        )
+        self._stderr_reader.start()
 
     @property
     def pid(self):
@@ -227,16 +228,14 @@ class StdioClient:
         return result(self.call("tools/call", {"name": name, "arguments": arguments}, timeout))
 
     def stderr(self, timeout=0.0):
-        """The stderr read so far, after waiting up to `timeout` for it to close."""
-        deadline = time.monotonic() + timeout
-        while not self._stderr_closed:
-            try:
-                chunk = self._stderr.get(timeout=max(0.0, deadline - time.monotonic()))
-            except queue.Empty:
-                break
-            if chunk is None:
-                self._stderr_closed = True
-            else:
+        """The stderr read so far, after waiting up to `timeout` for it to close.
+
+        Only the chunks queued when the wait ends are taken, so a writer that
+        never stops cannot extend it."""
+        self._stderr_reader.join(timeout)
+        for _ in range(self._stderr.qsize()):
+            chunk = self._stderr.get_nowait()
+            if chunk is not None:
                 self._stderr_text.append(chunk.decode("utf-8", "replace"))
         return "".join(self._stderr_text)
 

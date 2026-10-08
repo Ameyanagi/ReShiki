@@ -229,12 +229,15 @@ def _ethanol(client):
 
 def _finish(client, binary, cancelled=None):
     """Ends a session: exit 0 at the end of input, and through the end of stdout
-    one response to each request, except at most one to the `cancelled` one."""
+    one response to each request, except at most one to the `cancelled` one, and
+    no request or notification from the server (P1 sends none)."""
     if client.close(_exit_limit(binary)) != 0:
         raise ValueError("Packaged MCP server did not exit 0 at the end of its input")
-    answered = Counter(
-        message.get("id") for message in map(json.loads, client.lines) if "method" not in message
-    )
+    messages = [json.loads(line) for line in client.lines]
+    initiated = [message for message in messages if "method" in message]
+    if initiated:
+        raise ValueError(f"Packaged MCP server sent requests or notifications: {initiated}")
+    answered = Counter(message.get("id") for message in messages)
     if cancelled is not None and answered.pop(cancelled, 0) > 1:
         raise ValueError("Packaged MCP server answered a cancelled request twice")
     expected = Counter(request for request in client.request_ids if request != cancelled)
@@ -426,7 +429,7 @@ def _main_session(binary, root, environment, clients):
     sockets = _listening_sockets(client.pid)
     if sockets:
         raise ValueError(f"Packaged MCP server listens on TCP: {sockets}")
-    # Also catches a late answer to the malformed notification.
+    # Also catches output the malformed notification caused after the sentinel.
     _finish(client, binary, cancelled)
     return "unavailable" if sockets is None else "none"
 
@@ -504,11 +507,13 @@ def _verify_quarantined(binary):
             subprocess.run(
                 ["xattr", "-w", "com.apple.quarantine", stamp, str(target)], check=True, timeout=60
             )
-        client = StdioClient([inner, "--mcp"], cwd=root, env=_sanitized_environment(root))
+        environment = _sanitized_environment(root)
+        client = None
         try:
             try:
+                client = StdioClient([inner, "--mcp"], cwd=root, env=environment)
                 result(client.discover(QUARANTINE_STARTUP))
-            except ProtocolError:
+            except (OSError, ProtocolError):
                 print(
                     "Gatekeeper blocked or delayed the quarantined executable: an MCP client "
                     "starting a downloaded copy may fail the same way (open question).",
@@ -517,7 +522,8 @@ def _verify_quarantined(binary):
                 raise
             _finish(client, inner)
         finally:
-            client.kill()
+            if client is not None:
+                client.kill()
         _check_lingering([copy])
     print("Quarantined app copy served MCP.")
 

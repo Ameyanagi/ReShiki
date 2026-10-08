@@ -1,6 +1,7 @@
 """The packaged agent API check must pass a well-behaved server and fail closed."""
 
 import base64
+import contextlib
 import io
 import itertools
 import json
@@ -85,9 +86,14 @@ class Server:
             if method == "notifications/cancelled" and isinstance(params, dict):
                 if self.held is not None and self.held["id"] == params.get("requestId"):
                     self.held = None
-            elif method == "notifications/cancelled" and "late_error" in self.faults:
-                # Answered only after the next response.
-                self.late = {"code": -32600, "message": "Invalid Request"}
+            elif method == "notifications/cancelled":
+                # Output caused by the malformed notification, after the next response.
+                if "late_error" in self.faults:
+                    error = {"code": -32600, "message": "Invalid Request"}
+                    self.late = {"jsonrpc": "2.0", "error": error}
+                elif "late_notification" in self.faults:
+                    log = {"level": "warning", "data": "malformed notification"}
+                    self.late = {"jsonrpc": "2.0", "method": "notifications/message", "params": log}
             return
         version = ((params or {}).get("_meta") or {}).get(
             "io.modelcontextprotocol/protocolVersion", MODERN
@@ -101,7 +107,7 @@ class Server:
         elif reply["result"] is not None:
             self.send(reply)
             if self.late is not None:
-                self.send({"jsonrpc": "2.0", "error": self.late})
+                self.send(self.late)
                 self.late = None
 
     def result(self, method, params):
@@ -232,6 +238,7 @@ class PackagedAgentApiTests(unittest.TestCase):
             ("stray_file", ValueError, "outside Out/: \\['stray.txt'\\]"),
             # An answer to the malformed notification after the sentinel's.
             ("late_error", ValueError, "not one to each"),
+            ("late_notification", ValueError, "requests or notifications"),
             ("lingering", ValueError, "Processes outlived"),
             ("silent", ProtocolError, "No answer"),
         ):
@@ -256,6 +263,52 @@ class PackagedAgentApiTests(unittest.TestCase):
             self.assertRaisesRegex(ProtocolError, "No answer to request 1"),
         ):
             client.receive(1, timeout=5)
+
+    def test_stderr_returns_while_output_keeps_arriving(self):
+        class Flood:
+            """stderr chunks from a leaked writer that never stops: never empty."""
+
+            taken = 0
+
+            def qsize(self):
+                return 3
+
+            def get(self, block=True, timeout=None):
+                self.taken += 1
+                if self.taken > 100:
+                    raise AssertionError("stderr kept reading after its deadline")
+                return b"x"
+
+            def get_nowait(self):
+                return self.get(block=False)
+
+        process = types.SimpleNamespace(pid=1, stdin=io.BytesIO(), stdout=Pipe(), stderr=Pipe())
+        with patch("agent_api_client.subprocess.Popen", return_value=process):
+            client = StdioClient(["reshiki", "--mcp"])
+        client._stderr = Flood()
+        self.assertEqual(client.stderr(timeout=0.05), "xxx")
+
+    def test_failed_quarantined_launch_names_gatekeeper(self):
+        def silent(command, **kwargs):
+            return Server({"silent"}, kwargs["cwd"])
+
+        for launch, error in (
+            (PermissionError("Operation not permitted"), PermissionError),
+            (silent, ProtocolError),
+        ):
+            diagnostic = io.StringIO()
+            with self.subTest(error=error.__name__):
+                with (
+                    tempfile.TemporaryDirectory() as temporary,
+                    patch("check_runtime_dependencies.subprocess.run"),
+                    patch("agent_api_client.subprocess.Popen", side_effect=launch),
+                    patch("check_runtime_dependencies.QUARANTINE_STARTUP", 0.2),
+                    contextlib.redirect_stderr(diagnostic),
+                    self.assertRaises(error),
+                ):
+                    binary = Path(temporary, "ReShiki.app/Contents/MacOS/reshiki")
+                    runtime._verify_quarantined(binary)
+                self.assertIn("Gatekeeper blocked or delayed", diagnostic.getvalue())
 
     def test_invalid_json_rpc_lines_are_rejected(self):
         for line in (
