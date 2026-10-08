@@ -82,14 +82,11 @@ impl Tree {
         ]
     }
 
-    /// The folder the child takes as its home. Windows reports the profile
-    /// folder whatever USERPROFILE says.
+    /// The folder the child takes as its home: the one its HOME and
+    /// USERPROFILE point to. It follows HOME on Unix and USERPROFILE on
+    /// Windows, where the profile known folder expands %USERPROFILE%.
     fn child_home(&self) -> PathBuf {
-        if cfg!(windows) {
-            reshiki_io::compatibility::home_directory().expect("a home folder")
-        } else {
-            self.path("home")
-        }
+        self.path("home")
     }
 
     /// Starts `reshiki --mcp args` in this tree with `data` as its data
