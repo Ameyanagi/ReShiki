@@ -155,7 +155,7 @@ jobs:
         if: matrix.native_only == true
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_helper_protocol tests.test_native_packaging tests.test_geometry_distribution tests.test_license_notices tests.test_native_clipboard tests.test_native_print
+        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_helper_protocol tests.test_native_packaging tests.test_agent_api_package tests.test_geometry_distribution tests.test_license_notices tests.test_native_clipboard tests.test_native_print
       - name: Verify reference dependencies
         if: matrix.native_only != true
         run: uv run --locked python scripts/check_reference_dependencies.py

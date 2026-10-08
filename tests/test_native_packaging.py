@@ -140,17 +140,26 @@ class NativeRuntimeTests(unittest.TestCase):
             with zipfile.ZipFile(archive, "w") as stream:
                 stream.writestr("package/build.json", json.dumps(metadata))
                 stream.writestr("package/reshiki.exe", b"MZbinary")
+            order = []
             with (
                 patch("build_release.platform.system", return_value="Windows"),
                 patch("build_release.verify_binary"),
                 patch("build_release.verify_inchi_worker") as helper,
-                patch("build_release.verify_runtime") as check,
+                patch(
+                    "build_release.verify_runtime", side_effect=lambda *_: order.append("runtime")
+                ) as check,
+                patch(
+                    "build_release.verify_agent_api",
+                    side_effect=lambda *_, **__: order.append("agent"),
+                ) as agent,
                 patch("build_release.verify_geometry_worker") as geometry,
             ):
                 build_release.verify_archive(archive)
             self.assertEqual(helper.call_args.args[0].name, "reshiki.exe")
             self.assertEqual(check.call_args.args[0].parent, check.call_args.args[1])
             self.assertEqual(check.call_count, 1)
+            self.assertEqual(order, ["runtime", "agent"])
+            agent.assert_called_once_with(*check.call_args.args, quarantine=False)
             geometry.assert_called_once_with(check.call_args.args[0], "2026.03.6", signed=False)
 
     def test_signed_mac_archive_preserves_bundle_for_geometry_admission(self):
@@ -173,18 +182,27 @@ class NativeRuntimeTests(unittest.TestCase):
                     with zipfile.ZipFile(command[3]) as stream:
                         stream.extractall(command[4])
 
+            order = []
             with (
                 patch("build_release.platform.system", return_value="Darwin"),
                 patch("build_release.run", side_effect=run),
                 patch("build_release.verify_binary"),
                 patch("build_release.verify_inchi_worker"),
-                patch("build_release.verify_runtime"),
+                patch(
+                    "build_release.verify_runtime", side_effect=lambda *_: order.append("runtime")
+                ) as check,
+                patch(
+                    "build_release.verify_agent_api",
+                    side_effect=lambda *_, **__: order.append("agent"),
+                ) as agent,
                 patch("build_release.verify_macos_workers"),
                 patch("sign_macos.verify_app") as signature,
                 patch("build_release.verify_geometry_worker") as geometry,
             ):
                 build_release.verify_archive(archive, signed=True)
             signature.assert_called_once()
+            self.assertEqual(order, ["runtime", "agent"])
+            agent.assert_called_once_with(*check.call_args.args, quarantine=True)
             geometry.assert_called_once_with(
                 signature.call_args.args[0] / "Contents/MacOS/reshiki", "2026.03.6", signed=True
             )
@@ -273,11 +291,76 @@ class NativeRuntimeTests(unittest.TestCase):
                         patch("installers.verify_binary"),
                         patch("installers.verify_inchi_worker"),
                         patch("installers.verify_runtime"),
+                        patch("installers.verify_agent_api"),
                     ):
                         with self.assertRaises(ValueError):
                             installers.verify_windows_installer(Path("setup.exe"), source)
                     self.assertEqual(len(installations), 2)
                     self.assertEqual(len(uninstalled), 1)
+
+    def test_windows_upgrade_over_a_running_agent_passes_only_clean_outcomes(self):
+        import installers
+
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source"
+            source.mkdir()
+            (source / "reshiki.exe").write_bytes(b"MZ new")
+            for outcome in ("upgraded", "failed_intact", "hang", "server_kept", "failed_damaged"):
+                with self.subTest(outcome=outcome):
+                    setups = []
+                    server = types.SimpleNamespace(
+                        process=types.SimpleNamespace(
+                            wait=lambda timeout: None,
+                            poll=lambda: 0 if ended else None,
+                        ),
+                        discover=lambda _timeout: {"result": {}},
+                        kill=lambda: None,
+                    )
+                    ended = False
+
+                    def run(command, **kwargs):
+                        nonlocal ended
+                        executable = Path(command[0])
+                        if executable.name == "setup.exe":
+                            destination = Path(
+                                next(
+                                    str(arg).removeprefix("/DIR=")
+                                    for arg in command
+                                    if str(arg).startswith("/DIR=")
+                                )
+                            )
+                            setups.append(kwargs["timeout"])
+                            if len(setups) == 2:
+                                if outcome == "hang":
+                                    raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+                                if outcome in {"failed_intact", "failed_damaged"}:
+                                    if outcome == "failed_damaged":
+                                        (destination / "reshiki.exe").unlink()
+                                    raise subprocess.CalledProcessError(5, command)
+                                ended = outcome != "server_kept"
+                            shutil.copytree(source, destination, dirs_exist_ok=True)
+                            (destination / "unins000.exe").touch()
+                        elif executable.name == "unins000.exe":
+                            shutil.rmtree(executable.parent)
+                        return subprocess.CompletedProcess(command, 0)
+
+                    with (
+                        patch("installers.sys.platform", "win32"),
+                        patch("installers.run", side_effect=run),
+                        patch("installers.StdioClient", return_value=server) as client,
+                    ):
+                        if outcome in {"upgraded", "failed_intact"}:
+                            recorded = installers.verify_windows_upgrade_with_running_agent(
+                                Path("setup.exe"), source
+                            )
+                            self.assertIn("upgraded" if ended else "kept", recorded)
+                        else:
+                            with self.assertRaises(ValueError):
+                                installers.verify_windows_upgrade_with_running_agent(
+                                    Path("setup.exe"), source
+                                )
+                    self.assertEqual(client.call_args.args[0][1:], ["--mcp"])
+                    self.assertEqual(setups, [180, installers.UPGRADE_LIMIT])
 
     def test_reused_mac_worker_symlink_does_not_remove_its_external_target(self):
         with tempfile.TemporaryDirectory() as temporary:

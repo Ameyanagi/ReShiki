@@ -9,6 +9,7 @@ import plistlib
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 import zipfile
 from pathlib import Path
@@ -84,9 +85,11 @@ class ReleaseTests(unittest.TestCase):
                 patch("installers.inno_compiler", return_value=Path("ISCC.exe")),
                 patch("installers.run", side_effect=compile_setup),
                 patch("installers.verify_windows_installer") as verify,
+                patch("installers.verify_windows_upgrade_with_running_agent") as upgrade,
             ):
                 result = windows_installer(folder, root)
             verify.assert_called_once_with(result, folder)
+            upgrade.assert_called_once_with(result, folder)
             self.assertTrue(Path(str(result) + ".sha256").is_file())
             script = (
                 Path(__file__).resolve().parents[1] / "packaging/windows/reshiki.iss"
@@ -321,6 +324,19 @@ class ReleaseTests(unittest.TestCase):
                     b"Windows 11 on ARM is required",
                     stream.read("reshiki-1.2.3-windows-arm64/README.txt"),
                 )
+
+    def test_packages_build_only_the_single_application_executable(self):
+        root = Path(__file__).resolve().parents[1]
+        manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+        # The default binary is src/main.rs; the InChI helper is a development tool.
+        self.assertEqual(manifest["package"]["default-run"], "reshiki")
+        self.assertTrue((root / "src/main.rs").is_file())
+        # Cargo would also build every src/bin target automatically.
+        self.assertFalse((root / "src/bin").exists())
+        self.assertEqual([entry["name"] for entry in manifest["bin"]], ["reshiki-inchi-helper"])
+        script = (root / "scripts/build_release.py").read_text(encoding="utf-8")
+        self.assertEqual(script.count('"--bin"'), 1)
+        self.assertIn('"--bin", "reshiki", "--target"', script)
 
     def test_native_headers_reject_mislabeled_or_damaged_archives(self):
         elf = bytearray(64)
