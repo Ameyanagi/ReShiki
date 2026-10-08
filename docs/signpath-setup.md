@@ -68,6 +68,16 @@ GitHub's run ID. The installer request's architecture is supplied by the workflo
 and validated as `x64` or `arm64` before submission. XML parameters themselves do
 not define an architecture enumeration.
 
+Inno Setup 6.7.3 writes these text fields into fixed placeholders: shorter values
+retain padding spaces, and a full nightly file version exceeds its 20-character
+placeholder. The packager writes exact, terminated product-name and version
+strings into the existing VERSIONINFO allocation before signing, then recomputes
+the PE checksum. It preserves file offsets, other resources and the installer
+payload, and rejects a version block that cannot fit. This keeps the strict
+SignPath identity checks intact and avoids truncating nightly version strings.
+The pinned compiler's behavior is defined in its
+[version-resource updater](https://github.com/jrsoftware/issrc/blob/is-6_7_3/Projects/Src/Compiler.ExeUpdateFunc.pas).
+
 Both configurations were registered and reported `VALID` during setup. Their
 signing directives specify SHA-256 and preserve the Open Source account's
 required signature watermark; custom signature descriptions or description URLs

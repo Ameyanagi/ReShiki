@@ -4,10 +4,12 @@ import json
 import os
 import platform
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from agent_api_client import StdioClient, result
@@ -58,6 +60,186 @@ def inno_compiler():
     raise ValueError("Install Inno Setup 6.7.3, or set RESHIKI_ISCC to ISCC.exe")
 
 
+@dataclass
+class _VersionInfoNode:
+    key: str
+    kind: int
+    value: bytes
+    children: list["_VersionInfoNode"]
+
+
+def _read_version_info(data, start=0, limit=None):
+    limit = len(data) if limit is None else limit
+    if start + 6 > limit:
+        raise ValueError("Truncated Windows version resource")
+    length, value_length, kind = struct.unpack_from("<HHH", data, start)
+    end = start + length
+    if length < 6 or end > limit or kind not in {0, 1}:
+        raise ValueError("Invalid Windows version resource node")
+    key_end = start + 6
+    while key_end + 2 <= end and data[key_end : key_end + 2] != b"\0\0":
+        key_end += 2
+    if key_end + 2 > end:
+        raise ValueError("Unterminated Windows version resource key")
+    key = data[start + 6 : key_end].decode("utf-16le")
+    value_start = (key_end + 2 + 3) & ~3
+    value_end = value_start + value_length * (2 if kind == 1 else 1)
+    if value_end > end:
+        raise ValueError("Invalid Windows version resource value length")
+    children = []
+    child_start = (value_end + 3) & ~3
+    while child_start < end:
+        child, child_end = _read_version_info(data, child_start, end)
+        children.append(child)
+        child_start = (child_end + 3) & ~3
+    return _VersionInfoNode(key, kind, bytes(data[value_start:value_end]), children), end
+
+
+def _write_version_info(node):
+    data = bytearray(6) + (node.key + "\0").encode("utf-16le")
+    data += bytes(-len(data) % 4)
+    data += node.value
+    for child in node.children:
+        data += bytes(-len(data) % 4)
+        data += _write_version_info(child)
+    value_length = len(node.value) // 2 if node.kind == 1 else len(node.value)
+    if len(data) > 65535 or value_length > 65535:
+        raise ValueError("Windows version resource node exceeds its 16-bit length field")
+    struct.pack_into("<HHH", data, 0, len(data), value_length, node.kind)
+    return bytes(data)
+
+
+def _windows_version_resource_locations(data):
+    """Locate RT_VERSION data without loading the executable or moving its overlay."""
+
+    def bounded(offset, size):
+        if offset < 0 or size < 0 or offset + size > len(data):
+            raise ValueError("Truncated Windows installer PE resource")
+        return offset
+
+    bounded(0, 64)
+    pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
+    bounded(pe_offset, 24)
+    if data[:2] != b"MZ" or data[pe_offset : pe_offset + 4] != b"PE\0\0":
+        raise ValueError("Windows installer must be a PE executable")
+    sections_count = struct.unpack_from("<H", data, pe_offset + 6)[0]
+    optional_size = struct.unpack_from("<H", data, pe_offset + 20)[0]
+    optional = bounded(pe_offset + 24, optional_size)
+    magic = struct.unpack_from("<H", data, bounded(optional, 2))[0]
+    directory_start = {0x10B: 96, 0x20B: 112}.get(magic)
+    if directory_start is None or optional_size < directory_start + 40:
+        raise ValueError("Unsupported Windows installer PE optional header")
+    directory_count = struct.unpack_from("<I", data, optional + directory_start - 4)[0]
+    if directory_count < 5:
+        raise ValueError("Windows installer lacks PE resource/security directories")
+    security = struct.unpack_from("<II", data, optional + directory_start + 32)
+    if security != (0, 0):
+        raise ValueError("Only an unsigned Windows installer can have its metadata normalized")
+    resource_rva, resource_size = struct.unpack_from("<II", data, optional + directory_start + 16)
+    sections = bounded(optional + optional_size, sections_count * 40)
+
+    def file_offset(rva, size):
+        for index in range(sections_count):
+            section = sections + index * 40
+            virtual_address, raw_size, raw_offset = struct.unpack_from("<III", data, section + 12)
+            relative = rva - virtual_address
+            if relative >= 0 and relative + size <= raw_size:
+                return bounded(raw_offset + relative, size)
+        raise ValueError("Windows version resource lies outside PE section data")
+
+    resource_start = file_offset(resource_rva, resource_size)
+
+    def resource_offset(offset, size):
+        if offset < 0 or offset + size > resource_size:
+            raise ValueError("Windows resource directory exceeds its allocation")
+        return resource_start + offset
+
+    def entries(offset):
+        directory = resource_offset(offset, 16)
+        named, numeric = struct.unpack_from("<HH", data, directory + 12)
+        table = resource_offset(offset + 16, (named + numeric) * 8)
+        return [
+            struct.unpack_from("<II", data, table + index * 8) for index in range(named + numeric)
+        ]
+
+    locations = []
+    for resource_type, names_offset in entries(0):
+        if resource_type != 16:
+            continue
+        if not names_offset & 0x80000000:
+            raise ValueError("Invalid RT_VERSION resource directory")
+        for _name, languages_offset in entries(names_offset & 0x7FFFFFFF):
+            if not languages_offset & 0x80000000:
+                raise ValueError("Invalid Windows version language directory")
+            for _language, value_offset in entries(languages_offset & 0x7FFFFFFF):
+                if value_offset & 0x80000000:
+                    raise ValueError("Invalid Windows version resource data entry")
+                entry = resource_offset(value_offset, 16)
+                value_rva, size = struct.unpack_from("<II", data, entry)
+                location = file_offset(value_rva, size)
+                if location < resource_start or location + size > resource_start + resource_size:
+                    raise ValueError("Windows version data exceeds its resource allocation")
+                locations.append((location, size))
+    if not locations:
+        raise ValueError("Windows installer has no version resource")
+    ordered = sorted(locations)
+    if any(left + size > right for (left, size), (right, _) in zip(ordered, ordered[1:])):
+        raise ValueError("Windows version resource allocations overlap")
+    return locations, optional + 64
+
+
+def _pe_checksum(data, checksum_offset):
+    even_size = len(data) & ~1
+    if sys.byteorder == "little":
+        total = sum(memoryview(data)[:even_size].cast("H"))
+    else:
+        total = sum(value[0] for value in struct.iter_unpack("<H", data[:even_size]))
+    total -= sum(struct.unpack_from("<HH", data, checksum_offset))
+    if len(data) % 2:
+        total += data[-1]
+    while total >> 16:
+        total = (total & 0xFFFF) + (total >> 16)
+    return total + len(data)
+
+
+def normalize_windows_installer_metadata(installer, version):
+    """Set exact identity strings inside Inno's existing unsigned resource allocation.
+
+    Inno 6.7.3 overwrites space-filled strings without terminating shorter values,
+    and its FileVersion placeholder truncates nightly identities to 20 characters.
+    Rebuilding only RT_VERSION within its allocation fixes both while preserving
+    the loader's RCDATA offset/CRC table and every byte of its appended payload.
+    """
+    data = bytearray(installer.read_bytes())
+    locations, checksum_offset = _windows_version_resource_locations(data)
+    major, minor, patch = map(int, numeric_version(version).split("."))
+    numeric = (major << 16 | minor, patch << 16) * 2
+    replacements = {"ProductName": "ReShiki", "ProductVersion": version, "FileVersion": version}
+    for offset, size in locations:
+        root, _end = _read_version_info(data[offset : offset + size])
+        if root.key != "VS_VERSION_INFO" or root.kind != 0 or len(root.value) != 52:
+            raise ValueError("Windows installer has an invalid fixed version resource")
+        if struct.unpack_from("<I", root.value)[0] != 0xFEEF04BD:
+            raise ValueError("Windows installer has an invalid fixed version signature")
+        if struct.unpack_from("<IIII", root.value, 8) != numeric:
+            raise ValueError("Windows installer numeric versions do not match the package")
+        string_info = [child for child in root.children if child.key == "StringFileInfo"]
+        if len(string_info) != 1 or not string_info[0].children:
+            raise ValueError("Windows installer lacks version string tables")
+        for table in string_info[0].children:
+            for key, value in replacements.items():
+                fields = [child for child in table.children if child.key == key]
+                if len(fields) != 1 or fields[0].kind != 1:
+                    raise ValueError(f"Windows installer lacks one text version field: {key}")
+                fields[0].value = (value + "\0").encode("utf-16le")
+        resource = _write_version_info(root)
+        if len(resource) > size:
+            raise ValueError("Exact Windows installer identity exceeds its resource allocation")
+        data[offset : offset + size] = resource + bytes(size - len(resource))
+    struct.pack_into("<I", data, checksum_offset, _pe_checksum(data, checksum_offset))
+    installer.write_bytes(data)
+
+
 def windows_installer(folder, output_dir):
     metadata = json.loads((folder / "build.json").read_text(encoding="utf-8"))
     architecture = metadata["architecture"]
@@ -79,6 +261,7 @@ def windows_installer(folder, output_dir):
         ]
     )
     output = output_dir / f"{name}.exe"
+    normalize_windows_installer_metadata(output, metadata["version"])
     verify_windows_installer(output, folder)
     verify_windows_upgrade_with_running_agent(output, folder)
     checksum(output)
