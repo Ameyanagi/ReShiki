@@ -177,7 +177,9 @@ time.
 src/cli/args.rs and the exit codes in src/cli.rs: 2 for a usage error and 1 for
 a failure. Each run must exit within 30 s, so a GUI started by mistake fails
 by timeout. It must also print nothing on stdout and leave the working folder
-unchanged.
+unchanged. RESHIKI_DATA_DIR, HOME, USERPROFILE, APPDATA and LOCALAPPDATA
+point at folders inside the working folder, so that check also covers what
+the CLI might write there.
 
 - An unknown command, `convert` without an input, and `--to xyz` exit 2.
 - A missing input, a folder as input, an input over `Budgets::max_text_bytes`,

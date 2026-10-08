@@ -140,16 +140,8 @@ impl Tree {
     fn new() -> Self {
         let root = tempfile::tempdir().expect("temporary tree");
         let tree = Self { root };
-        for folder in [
-            "home",
-            "appdata",
-            "localappdata",
-            "data",
-            "in",
-            "in/folder.mol",
-            "out",
-            "outside",
-        ] {
+        create_private_folders(tree.root.path());
+        for folder in ["in", "in/folder.mol", "out", "outside"] {
             fs::create_dir(tree.path(folder)).expect("create a folder");
         }
         fs::write(tree.path("outside/eth.mol"), "never read\n").expect("outside/eth.mol");
@@ -181,24 +173,41 @@ impl Tree {
             "--allow-write",
             write.to_str().expect("a UTF-8 temporary path"),
         ];
-        let vars = [
-            ("RESHIKI_DATA_DIR", self.path("data")),
-            ("HOME", self.path("home")),
-            ("USERPROFILE", self.path("home")),
-            ("APPDATA", self.path("appdata")),
-            ("LOCALAPPDATA", self.path("localappdata")),
-        ];
-        let env: Vec<(&str, &OsStr)> = vars
-            .iter()
-            .map(|(name, value)| (*name, value.as_os_str()))
-            .collect();
-        McpSession::start_with_env(&args, &env, StderrMode::Captured)
+        let vars = private_env(self.root.path());
+        McpSession::start_with_env(&args, &os_env(&vars), StderrMode::Captured)
     }
 
     /// Every path in the tree outside `out`, with each regular file's bytes.
     fn outside_out(&self) -> Snapshot {
         snapshot(self.root.path(), Some(&self.path("out")))
     }
+}
+
+/// The variables that point the child's data, home and application data
+/// folders at folders inside `root`, so a snapshot of `root` sees what the
+/// child writes there.
+fn private_env(root: &Path) -> [(&'static str, PathBuf); 5] {
+    [
+        ("RESHIKI_DATA_DIR", root.join("data")),
+        ("HOME", root.join("home")),
+        ("USERPROFILE", root.join("home")),
+        ("APPDATA", root.join("appdata")),
+        ("LOCALAPPDATA", root.join("localappdata")),
+    ]
+}
+
+/// Creates the folders [`private_env`] names, empty.
+fn create_private_folders(root: &Path) {
+    for (_, folder) in private_env(root) {
+        fs::create_dir_all(folder).expect("create a private folder");
+    }
+}
+
+/// `vars` as [`Command::env`](std::process::Command::env) pairs.
+fn os_env<'a>(vars: &'a [(&'static str, PathBuf)]) -> Vec<(&'static str, &'a OsStr)> {
+    vars.iter()
+        .map(|(name, value)| (*name, value.as_os_str()))
+        .collect()
 }
 
 /// What the `"${…}"` placeholders of a case's lines stand for.
@@ -689,11 +698,16 @@ fn snapshot(root: &Path, skip: Option<&Path>) -> Snapshot {
 
 /// `reshiki --cli` refuses malformed command lines and inputs with exit 2
 /// (usage) or 1 (failure) within 30 s, so a GUI started by mistake fails
-/// by timeout, with nothing on stdout and no file created or changed.
+/// by timeout, with nothing on stdout and no file created or changed, in
+/// the working folder or in the data, home and application data folders,
+/// which are inside it.
 #[test]
 fn cli_corpus() {
     let dir = tempfile::tempdir().expect("working folder");
     let root = dir.path();
+    create_private_folders(root);
+    let vars = private_env(root);
+    let env = os_env(&vars);
     fs::create_dir(root.join("folder.smi")).expect("folder.smi");
     let over = Budgets::default().max_text_bytes + 1;
     fs::write(root.join("big.txt"), "C".repeat(over)).expect("big.txt");
@@ -737,7 +751,8 @@ fn cli_corpus() {
         ),
     ];
     for (args, code, stderr) in cases {
-        let output = headless::run_cli(root, args, b"", Duration::from_secs(30));
+        let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+        let output = headless::run_cli_with_env(root, &args, &env, b"", Duration::from_secs(30));
         let text = String::from_utf8_lossy(&output.stderr);
         assert_eq!(output.status.code(), Some(code), "{args:?}: {text}");
         assert!(

@@ -64,12 +64,25 @@ pub fn run_cli(dir: &Path, args: &[&str], input: &[u8], limit: Duration) -> Outp
 
 /// [`run_cli`] with arguments that need not be UTF-8.
 pub fn run_cli_os(dir: &Path, args: &[&OsStr], input: &[u8], limit: Duration) -> Output {
+    run_cli_with_env(dir, args, &[], input, limit)
+}
+
+/// [`run_cli_os`] with the variables `env` set after the empty data folder,
+/// so a `RESHIKI_DATA_DIR` in `env` replaces it.
+pub fn run_cli_with_env(
+    dir: &Path,
+    args: &[&OsStr],
+    env: &[(&str, &OsStr)],
+    input: &[u8],
+    limit: Duration,
+) -> Output {
     let data = data_dir();
     let mut child = Command::new(env!("CARGO_BIN_EXE_reshiki"))
         .arg("--cli")
         .args(args)
         .current_dir(dir)
         .env("RESHIKI_DATA_DIR", data.path())
+        .envs(env.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
