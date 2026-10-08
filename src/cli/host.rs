@@ -4,12 +4,15 @@ use super::{
     args::{Input, Source},
     io::{limit, read_input, text},
 };
-use reshiki_agent::ops::{
-    budget::Budgets,
-    headless::HeadlessHost,
-    host::{Call, ToolHost},
-    result::ToolResult,
-    wire::{Principal, RequestId},
+use reshiki_agent::{
+    ops::{
+        budget::Budgets,
+        headless::HeadlessHost,
+        host::{Call, ToolHost},
+        result::ToolResult,
+        wire::{Principal, RequestId},
+    },
+    stability::STABILITY,
 };
 use serde_json::{Map, Value, json};
 use std::io::{self, Write};
@@ -129,10 +132,16 @@ fn warn(value: &Map<String, Value>, err: &mut dyn Write) {
     }
 }
 
-/// The `api` object every JSON result carries.
-pub(crate) fn api() -> Value {
-    json!({
-        "stability": "experimental",
-        "operation_api": crate::envelope::OPERATION_API_VERSION,
-    })
+/// A JSON result as the CLI prints it: `value` plus `"experimental": true`
+/// and the `api` object every JSON result carries.
+pub(crate) fn labelled(mut value: Map<String, Value>) -> Value {
+    value.insert("experimental".into(), Value::Bool(true));
+    value.insert(
+        "api".into(),
+        json!({
+            "stability": STABILITY,
+            "operation_api": crate::envelope::OPERATION_API_VERSION,
+        }),
+    );
+    Value::Object(value)
 }

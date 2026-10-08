@@ -373,3 +373,87 @@ fn the_operation_catalog_follows_the_mcp_tool_rules() {
     }
     assert_eq!(catalog_json().as_array().map(Vec::len), Some(SPECS.len()));
 }
+
+/// What a tool does to state, read against the MCP ToolAnnotations
+/// (<https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/schema/2026-07-28/schema.ts>):
+/// the defaults are readOnlyHint false, destructiveHint true,
+/// idempotentHint false and openWorldHint true, and destructiveHint false
+/// means the tool performs only additive updates.
+#[derive(Clone, Copy, Debug)]
+enum Effect {
+    /// Changes nothing.
+    ReadOnly,
+    /// Only adds: a new document.
+    Additive,
+    /// Changes, replaces or removes something that exists.
+    Destructive,
+}
+
+/// Every operation tool's effect class.
+const EFFECTS: [(&str, Effect); 13] = [
+    ("info", Effect::ReadOnly),
+    ("document_list", Effect::ReadOnly),
+    ("inspect", Effect::ReadOnly),
+    ("analyze", Effect::ReadOnly),
+    ("render", Effect::ReadOnly),
+    ("export", Effect::ReadOnly),
+    ("document_new", Effect::Additive),
+    ("import", Effect::Additive),
+    ("compose", Effect::Additive),
+    ("file_open", Effect::Additive),
+    ("document_close", Effect::Destructive),
+    ("apply", Effect::Destructive),
+    ("file_save", Effect::Destructive),
+];
+
+/// The ToolSpec hints, which every MCP tools/list renders, tell the truth
+/// about each tool's effect; no tool reaches beyond the local machine. A
+/// tool missing from [`EFFECTS`] fails.
+#[test]
+fn hints_follow_effects() {
+    for spec in SPECS {
+        let name = spec.name;
+        let (_, effect) = EFFECTS
+            .iter()
+            .find(|(tool, _)| *tool == name)
+            .unwrap_or_else(|| panic!("{name} has no effect class"));
+        let hints = spec.hints.unwrap_or_else(|| panic!("{name} has no hints"));
+        match effect {
+            Effect::ReadOnly => assert!(hints.read_only, "{name}"),
+            Effect::Additive => assert!(!hints.read_only && !hints.destructive, "{name}"),
+            Effect::Destructive => assert!(!hints.read_only && hints.destructive, "{name}"),
+        }
+        assert!(!hints.open_world, "{name}");
+    }
+    for (tool, _) in EFFECTS {
+        assert!(SPECS.iter().any(|spec| spec.name == tool), "{tool}");
+    }
+    // Every hint is explicit, so no MCP default applies.
+    let catalog = catalog_json();
+    for tool in catalog.as_array().into_iter().flatten() {
+        let annotations = tool["annotations"].as_object();
+        let keys: BTreeSet<&str> = annotations
+            .into_iter()
+            .flat_map(|annotations| annotations.keys().map(String::as_str))
+            .collect();
+        assert_eq!(
+            keys,
+            BTreeSet::from([
+                "destructiveHint",
+                "idempotentHint",
+                "openWorldHint",
+                "readOnlyHint"
+            ]),
+            "{}",
+            tool["name"]
+        );
+        assert!(
+            annotations
+                .into_iter()
+                .flatten()
+                .all(|(_, hint)| hint.is_boolean()),
+            "{}",
+            tool["name"]
+        );
+    }
+}

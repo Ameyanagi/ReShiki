@@ -41,6 +41,7 @@ pub mod ops;
 pub mod progress;
 pub mod review;
 pub mod sketch;
+pub mod stability;
 pub mod tool_spec;
 use crate::{
     document::{Document, Point},

@@ -2,12 +2,12 @@
 //! the ops tools.
 use super::{
     args::Input,
-    host::{CliError, Session, api},
+    host::{CliError, Session, labelled},
 };
-use serde_json::{Value, json};
+use serde_json::json;
 use std::io::Write;
 
-/// Prints the analyze result's value plus `api` as one JSON line.
+/// Prints the analyze result's value, labelled, as one JSON line.
 pub(crate) async fn run(
     input: Input,
     out: &mut dyn Write,
@@ -18,7 +18,5 @@ pub(crate) async fn run(
     let result = session
         .call("analyze", json!({"document": document, "ids": null}), err)
         .await?;
-    let mut value = result.value;
-    value.insert("api".into(), api());
-    writeln!(out, "{}", Value::Object(value)).map_err(CliError::Stdout)
+    writeln!(out, "{}", labelled(result.value)).map_err(CliError::Stdout)
 }

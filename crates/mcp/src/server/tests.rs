@@ -56,7 +56,14 @@ fn get_info_labels_the_server_experimental() {
     );
     assert_eq!(
         serde_json::to_value(&info.server_info).unwrap(),
-        json!({"name": "reshiki", "title": "ReShiki (experimental)", "version": "1.2.3"})
+        json!({
+            "name": "reshiki",
+            "title": "ReShiki (experimental)",
+            "version": "1.2.3",
+            "description": "Experimental: ReShiki's agent tools, schemas and results may change \
+                            between releases.",
+            "websiteUrl": "https://reshiki.com/guide/agents/",
+        })
     );
     assert_eq!(
         info.instructions.as_deref(),

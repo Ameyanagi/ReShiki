@@ -1,10 +1,10 @@
 //! `reshiki --cli convert`: import, then export through the ops tools.
 use super::{
     args::{Convert, Export, Output},
-    host::{CliError, Session, api},
+    host::{CliError, Session, labelled},
     io::write_output,
 };
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::io::Write;
 
 /// Formats never written to a terminal.
@@ -13,7 +13,8 @@ const BINARY: &[&str] = &["pdf", "png"];
 /// Converts as `convert` says. `terminal` tells whether stdout is one.
 ///
 /// The file goes to `out`, or to the -o file with, given `--receipt`, one
-/// `{"receipt": {format, byte_len, detail}, "api": …}` line on `out`.
+/// `{"receipt": {format, byte_len, detail}, "experimental": true, "api": …}`
+/// line on `out`.
 pub(crate) async fn run(
     convert: Convert,
     out: &mut dyn Write,
@@ -78,7 +79,7 @@ pub(crate) async fn write(
             .and_then(|value| value.get("receipt"))
             .cloned()
             .unwrap_or(Value::Null);
-        let line = json!({"receipt": receipt, "api": api()});
+        let line = labelled(Map::from_iter([("receipt".to_owned(), receipt)]));
         writeln!(out, "{line}").map_err(CliError::Stdout)?;
     }
     Ok(())

@@ -10,7 +10,8 @@
 //! - stdout carries only the primary output: the converted, rendered or
 //!   composed file, the analyze or info JSON line, or exactly one receipt
 //!   JSON line when `--receipt` is given with `-o FILE`. With `-o FILE` and
-//!   no `--receipt`, stdout stays empty.
+//!   no `--receipt`, stdout stays empty. Every JSON line carries
+//!   `"experimental": true`; plain-text output carries no banner.
 //! - Warnings go to stderr as `reshiki: warning: {message}`, errors as
 //!   `reshiki: error: {message}` and usage errors as `reshiki: {message}`.
 //! - An operation, input or file error exits [`FAILURE`] (1), a usage error
@@ -30,8 +31,11 @@ mod io;
 mod render;
 
 use args::{Command, Topic};
-use host::{CliError, Session, api};
-use reshiki_agent::ops::{budget::Budgets, catalog::SPECS};
+use host::{CliError, Session, labelled};
+use reshiki_agent::{
+    ops::{budget::Budgets, catalog::SPECS},
+    stability::NOTICE,
+};
 use serde_json::{Value, json};
 use std::{
     ffi::OsString,
@@ -41,10 +45,6 @@ use std::{
 pub const SUCCESS: i32 = 0;
 pub const FAILURE: i32 = 1;
 pub const USAGE: i32 = 2;
-
-/// The first line of every help text.
-const NOTICE: &str =
-    "Experimental: ReShiki's agent tools, schemas and results may change between releases.";
 
 const HELP: &str = "\
 Usage: reshiki --cli <command> [options]
@@ -190,7 +190,7 @@ async fn run_command(
     }
 }
 
-/// The help text for `topic`, or the overview.
+/// The help text for `topic`, or the overview, after the [`NOTICE`] line.
 fn help(topic: Option<Topic>) -> String {
     let body = match topic {
         None | Some(Topic::Help) => HELP.to_owned(),
@@ -305,7 +305,7 @@ A ReShiki drawing (.rsk) cannot be written.
     )
 }
 
-/// `{info value, cli: {input_formats, output_formats}, api}`.
+/// `{info value, cli: {input_formats, output_formats}, experimental, api}`.
 async fn info(out: &mut dyn Write, err: &mut dyn Write) -> Result<(), CliError> {
     let mut session = Session::new();
     let mut value = session.call("info", json!({}), err).await?.value;
@@ -313,8 +313,7 @@ async fn info(out: &mut dyn Write, err: &mut dyn Write) -> Result<(), CliError> 
         "cli".into(),
         json!({"input_formats": input_formats(), "output_formats": output_formats()}),
     );
-    value.insert("api".into(), api());
-    writeln!(out, "{}", Value::Object(value)).map_err(CliError::Stdout)
+    writeln!(out, "{}", labelled(value)).map_err(CliError::Stdout)
 }
 
 /// The import format the app picks for a file with `extension`, as

@@ -16,6 +16,7 @@ use crate::{
     },
     document::Document,
     envelope::{OPERATION_API_VERSION, Versions},
+    stability::STABILITY,
     tool_spec::{Hints, ToolSpec},
 };
 use serde::Deserialize;
@@ -132,15 +133,16 @@ fn ok<const N: usize>(fields: [(&str, Value); N], versions: &Versions) -> ToolRe
     }
 }
 
-/// `{operation_api, versions, budgets, formats: {import, export}, grants:
-/// {read, write}, files: {read, write}}`: `grants` are the granted folders as
-/// the user spelled them, `files` the extensions file_open and file_save
-/// accept.
+/// `{operation_api, stability, versions, budgets, formats: {import, export},
+/// grants: {read, write}, files: {read, write}}`: `stability` is
+/// [`STABILITY`], `grants` are the granted folders as the user spelled them,
+/// `files` the extensions file_open and file_save accept.
 pub(crate) fn info(versions: &Versions, budgets: &Budgets, grants: &Grants) -> ToolResult {
     let granted = grants.summary();
     ok(
         [
             ("operation_api", json!(OPERATION_API_VERSION)),
+            ("stability", json!(STABILITY)),
             ("budgets", budgets_json(budgets)),
             (
                 "formats",

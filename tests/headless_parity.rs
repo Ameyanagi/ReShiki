@@ -264,11 +264,10 @@ fn analyze_json_is_the_same_over_cli_and_mcp() {
     for input in &INPUTS {
         let stdout = cli_ok(dir.path(), &with(input, &["analyze"]));
         let mut cli: Value = serde_json::from_slice(&stdout).expect("analyze JSON");
-        let api = cli
-            .as_object_mut()
-            .and_then(|cli| cli.remove("api"))
-            .expect("api");
+        let labels = cli.as_object_mut().expect("analyze object");
+        let api = labels.remove("api").expect("api");
         assert_eq!(api["stability"], "experimental");
+        assert_eq!(labels.remove("experimental"), Some(Value::Bool(true)));
         let document = mcp.import(input);
         let analyzed = mcp.ok("analyze", json!({"document": document, "ids": null}));
         let structured = analyzed["structuredContent"].clone();
