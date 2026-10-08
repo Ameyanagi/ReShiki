@@ -1,0 +1,76 @@
+{
+  "rules": [
+    {
+      "id": "arguments.object",
+      "cite": "crates/agent/src/ops/catalog.rs:57,77-88; crates/agent/src/ops/inspect.rs:68-69"
+    },
+    {
+      "id": "inspect.document_required",
+      "cite": "crates/agent/src/ops/inspect.rs:51,54,63"
+    },
+    {
+      "id": "inspect.document_handle",
+      "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,182-185"
+    },
+    {
+      "id": "inspect.ids_nullable_required",
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/inspect.rs:52,54,64-65"
+    },
+    {
+      "id": "inspect.ids_items",
+      "cite": "crates/agent/src/ops/wire.rs:59-70,145-152,172-175"
+    },
+    {
+      "id": "inspect.ids_count",
+      "cite": "crates/agent/src/ops/ids.rs:11-25; crates/agent/src/ops/inspect.rs:70-72; crates/agent/src/ops/wire.rs:187-190; crates/agent/src/ops/budget.rs:26-27,84"
+    },
+    {
+      "id": "inspect.no_unknown_fields",
+      "cite": "crates/agent/src/ops/inspect.rs:55,61"
+    }
+  ],
+  "bases": {
+    "whole": {"tool": "inspect", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "ids": null}},
+    "selection": {"tool": "inspect", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "ids": ["1", "12"]}}
+  },
+  "cases": [
+    {"name": "arguments_object", "rule": "arguments.object", "base": "whole", "expect": "both_accept"},
+    {"name": "arguments_array", "rule": "arguments.object", "base": "whole", "patch": [{"op": "replace", "path": "/arguments", "value": ["doc_1", null]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "arguments_string", "rule": "arguments.object", "base": "whole", "patch": [{"op": "replace", "path": "/arguments", "value": "{}"}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+
+    {"name": "document_given", "rule": "inspect.document_required", "base": "selection", "expect": "both_accept"},
+    {"name": "document_omitted", "rule": "inspect.document_required", "base": "whole", "patch": [{"op": "remove", "path": "/arguments/document"}], "expect": "both_reject", "message": "missing field `document`"},
+    {"name": "document_null", "rule": "inspect.document_required", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/document", "value": null}], "expect": "both_reject"},
+
+    {"name": "handle_64_characters", "rule": "inspect.document_handle", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 64}}], "expect": "both_accept"},
+    {"name": "handle_65_characters", "rule": "inspect.document_handle", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 65}}], "expect": "both_reject", "message": "Document handles are 1 to 64 characters of A-Z, a-z, 0-9, \"_\" and \"-\""},
+    {"name": "handle_empty", "rule": "inspect.document_handle", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/document", "value": ""}], "expect": "both_reject"},
+    {"name": "handle_number", "rule": "inspect.document_handle", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/document", "value": 7}], "expect": "both_reject"},
+
+    {"name": "ids_null", "rule": "inspect.ids_nullable_required", "base": "whole", "expect": "both_accept"},
+    {"name": "ids_empty", "rule": "inspect.ids_nullable_required", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "both_accept"},
+    {"name": "ids_omitted", "rule": "inspect.ids_nullable_required", "base": "whole", "patch": [{"op": "remove", "path": "/arguments/ids"}], "expect": "both_reject", "message": "missing field `ids`"},
+    {"name": "ids_string", "rule": "inspect.ids_nullable_required", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/ids", "value": "1"}], "expect": "both_reject"},
+    {"name": "ids_object", "rule": "inspect.ids_nullable_required", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/ids", "value": {"1": true}}], "expect": "both_reject"},
+
+    {"name": "id_one", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["1"]}], "expect": "both_accept"},
+    {"name": "id_below_u64_max", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["18446744073709551614"]}], "expect": "both_accept"},
+    {"name": "id_above_2_pow_53", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["9007199254740993"]}], "expect": "both_accept"},
+    {"name": "id_duplicates", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["1", "1"]}], "expect": "both_accept"},
+    {"name": "id_zero", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "0"}], "expect": "both_reject", "message": "Object IDs are decimal strings such as \"12\""},
+    {"name": "id_leading_zero", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "012"}], "expect": "both_reject"},
+    {"name": "id_negative", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "-1"}], "expect": "both_reject"},
+    {"name": "id_number", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": 1}], "expect": "both_reject"},
+    {"name": "id_null", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids/1", "value": null}], "expect": "both_reject"},
+    {"name": "id_21_digits", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "123456789012345678901"}], "expect": "both_reject"},
+    {"name": "id_u64_max", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "18446744073709551615"}], "expect": "decoder_rejects_only", "message": "Object IDs are decimal strings such as \"12\""},
+    {"name": "id_above_u64_max", "rule": "inspect.ids_items", "base": "selection", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "99999999999999999999"}], "expect": "decoder_rejects_only"},
+
+    {"name": "ids_at_max_ids", "rule": "inspect.ids_count", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/ids", "value": {"$repeat": "7", "count": 5000}}], "expect": "both_accept"},
+    {"name": "ids_over_max_ids", "rule": "inspect.ids_count", "base": "whole", "patch": [{"op": "replace", "path": "/arguments/ids", "value": {"$repeat": "7", "count": 5001}}], "expect": "both_reject", "message": "5001 object IDs were given; at most 5000 are allowed per request"},
+
+    {"name": "known_fields_only", "rule": "inspect.no_unknown_fields", "base": "selection", "expect": "both_accept"},
+    {"name": "unknown_null_field", "rule": "inspect.no_unknown_fields", "base": "whole", "patch": [{"op": "add", "path": "/arguments/verbose", "value": null}], "expect": "both_reject", "message": "unknown field `verbose`, expected `document` or `ids`"},
+    {"name": "unknown_field", "rule": "inspect.no_unknown_fields", "base": "whole", "patch": [{"op": "add", "path": "/arguments/max_objects", "value": 10}], "expect": "both_reject"}
+  ]
+}

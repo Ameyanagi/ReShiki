@@ -18,6 +18,11 @@ pub mod accessibility;
 mod clipboard;
 mod ole;
 mod printing;
+mod stdio;
+
+pub use stdio::{
+    Protected, StdHandle, StdioError, disinherit_standard_handles, standard_handle_inheritable,
+};
 
 /// Select Iced's CPU renderer for this process when startup finds no GPU.
 /// The caller preserves any explicit ICED_BACKEND override.

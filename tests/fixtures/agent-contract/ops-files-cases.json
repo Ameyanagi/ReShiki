@@ -1,0 +1,136 @@
+{
+  "rules": [
+    {"id": "arguments.object", "cite": "crates/agent/src/ops/catalog.rs:91-92,111-120; crates/agent/src/ops/files.rs:239,253-259"},
+    {"id": "file_open.path_required", "cite": "crates/agent/src/ops/files.rs:78,81,103-107"},
+    {"id": "file_open.path_length", "cite": "crates/agent/src/ops/files.rs:37,70-72,78,203-211,240"},
+    {"id": "file_open.format_enum", "cite": "crates/agent/src/ops/documents.rs:26-28; crates/agent/src/ops/import.rs:51-63; crates/agent/src/ops/files.rs:79,81,106"},
+    {"id": "file_open.format_matches_extension", "cite": "crates/agent/src/ops/files.rs:213-234,241-247; crates/agent/src/access/extensions.rs:35-50,71-77"},
+    {"id": "file_open.extension_readable", "cite": "crates/agent/src/ops/files.rs:223-226,242; crates/agent/src/access/extensions.rs:52-54,71-77,80-85"},
+    {"id": "file_open.no_unknown_fields", "cite": "crates/agent/src/ops/files.rs:82,103"},
+    {"id": "file_save.document_required", "cite": "crates/agent/src/ops/files.rs:90,96,180"},
+    {"id": "file_save.document_handle", "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,183-185"},
+    {"id": "file_save.path_required", "cite": "crates/agent/src/ops/files.rs:91,96,181"},
+    {"id": "file_save.path_length", "cite": "crates/agent/src/ops/files.rs:37,70-72,91,203-211,260"},
+    {"id": "file_save.format_nullable_enum", "cite": "crates/agent/src/ops/wire.rs:3-10,193-195; crates/agent/src/ops/files.rs:66-68,92,96,128-140,182-183"},
+    {"id": "file_save.format_matches_extension", "cite": "crates/agent/src/ops/files.rs:213-234,261-266; crates/agent/src/access/extensions.rs:35-50,71-77"},
+    {"id": "file_save.extension_writable", "cite": "crates/agent/src/ops/files.rs:223-226,262; crates/agent/src/access/extensions.rs:56-58,71-77,80-85"},
+    {"id": "file_save.overwrite_required_boolean", "cite": "crates/agent/src/ops/files.rs:93,96,184"},
+    {"id": "file_save.pages_nullable_required", "cite": "crates/agent/src/ops/wire.rs:3-10,193-195; crates/agent/src/ops/files.rs:94,96,185-186"},
+    {"id": "file_save.pages_pdf_only", "cite": "crates/agent/src/ops/files.rs:267-270"},
+    {"id": "file_save.no_unknown_fields", "cite": "crates/agent/src/ops/files.rs:97,178"}
+  ],
+  "bases": {
+    "open": {"tool": "file_open", "arguments": {"path": "/data/ethanol.mol", "format": "auto"}},
+    "save": {"tool": "file_save", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "path": "/data/ethanol.svg", "format": null, "overwrite": false, "pages": null}},
+    "save_pages": {"tool": "file_save", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "path": "/data/scheme.pdf", "format": "pdf", "overwrite": true, "pages": true}}
+  },
+  "cases": [
+    {"name": "open_arguments_object", "rule": "arguments.object", "base": "open", "expect": "both_accept"},
+    {"name": "save_arguments_object", "rule": "arguments.object", "base": "save", "expect": "both_accept"},
+    {"name": "open_arguments_array", "rule": "arguments.object", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": ["/data/ethanol.mol", "auto"]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "save_arguments_null", "rule": "arguments.object", "base": "save", "patch": [{"op": "replace", "path": "/arguments", "value": null}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+
+    {"name": "open_path_given", "rule": "file_open.path_required", "base": "open", "expect": "both_accept"},
+    {"name": "open_path_omitted", "rule": "file_open.path_required", "base": "open", "patch": [{"op": "remove", "path": "/arguments/path"}], "expect": "both_reject", "message": "missing field `path`"},
+    {"name": "open_path_null", "rule": "file_open.path_required", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": null}], "expect": "both_reject"},
+    {"name": "open_path_number", "rule": "file_open.path_required", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": 7}], "expect": "both_reject"},
+
+    {"name": "open_path_4096_bytes", "rule": "file_open.path_length", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": {"$text": "/aaa.mol", "count": 512}}], "expect": "both_accept"},
+    {"name": "open_path_4097_bytes", "rule": "file_open.path_length", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": {"$text": "/aaaaaaaaaaaa.mol", "count": 241}}], "expect": "both_reject", "message": "path_invalid: the path is 4097 bytes; at most 4096 are allowed"},
+    {"name": "open_path_3600_characters_4200_bytes", "rule": "file_open.path_length", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": {"$text": "/é.mol", "count": 600}}], "expect": "decoder_rejects_only", "message": "path_invalid: the path is 4200 bytes; at most 4096 are allowed"},
+
+    {"name": "open_format_auto", "rule": "file_open.format_enum", "base": "open", "expect": "both_accept"},
+    {"name": "open_format_mol", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments/format", "value": "mol"}], "expect": "both_accept"},
+    {"name": "open_format_reshiki", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/drawing.rsk", "format": "reshiki"}}], "expect": "both_accept"},
+    {"name": "open_format_rxn", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/esterification.rxn", "format": "rxn"}}], "expect": "both_accept"},
+    {"name": "open_format_rsmi", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/esterification.rsmi", "format": "rsmi"}}], "expect": "both_accept"},
+    {"name": "open_format_inchi", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/ethanol.inchi", "format": "inchi"}}], "expect": "both_accept"},
+    {"name": "open_format_cdxml", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/ethanol.cdxml", "format": "cdxml"}}], "expect": "both_accept"},
+    {"name": "open_format_cdx", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/ethanol.cdx", "format": "cdx"}}], "expect": "both_accept"},
+    {"name": "open_format_smiles", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/ethanol.smi", "format": "smiles"}}], "expect": "both_accept"},
+    {"name": "open_format_emf", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments/format", "value": "emf"}], "expect": "both_reject", "message": "unknown variant `emf`, expected one of `auto`, `smiles`, `mol`, `rxn`, `rsmi`, `inchi`, `cdxml`, `cdx`, `reshiki`"},
+    {"name": "open_format_upper_case", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments/format", "value": "MOL"}], "expect": "both_reject"},
+    {"name": "open_format_omitted", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "remove", "path": "/arguments/format"}], "expect": "both_reject", "message": "missing field `format`"},
+    {"name": "open_format_null", "rule": "file_open.format_enum", "base": "open", "patch": [{"op": "replace", "path": "/arguments/format", "value": null}], "expect": "both_reject"},
+
+    {"name": "open_auto_follows_any_case_extension", "rule": "file_open.format_matches_extension", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.CDXML"}], "expect": "both_accept"},
+    {"name": "open_native_alias", "rule": "file_open.format_matches_extension", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/drawing.moruno", "format": "reshiki"}}], "expect": "both_accept"},
+    {"name": "open_format_mismatch", "rule": "file_open.format_matches_extension", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/ethanol.cdxml", "format": "mol"}}], "expect": "decoder_rejects_only", "message": "format mol does not match the .cdxml extension, which opens as cdxml"},
+    {"name": "open_smiles_file_as_mol", "rule": "file_open.format_matches_extension", "base": "open", "patch": [{"op": "replace", "path": "/arguments", "value": {"path": "/data/ethanol.smi", "format": "mol"}}], "expect": "decoder_rejects_only", "message": "format mol does not match the .smi extension, which opens as smiles"},
+
+    {"name": "open_readable_extension", "rule": "file_open.extension_readable", "base": "open", "expect": "both_accept"},
+    {"name": "open_executable", "rule": "file_open.extension_readable", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/tool.exe"}], "expect": "decoder_rejects_only", "message": "extension_not_allowed: \"/data/tool.exe\" does not have an allowed extension (rsk, reshiki, moruno, mol, rxn, rsmi, cdxml, cdx, smi, smiles, inchi)"},
+    {"name": "open_export_only_extension", "rule": "file_open.extension_readable", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.svg"}], "expect": "decoder_rejects_only"},
+    {"name": "open_no_extension", "rule": "file_open.extension_readable", "base": "open", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol"}], "expect": "decoder_rejects_only"},
+
+    {"name": "open_known_fields_only", "rule": "file_open.no_unknown_fields", "base": "open", "expect": "both_accept"},
+    {"name": "open_unknown_field", "rule": "file_open.no_unknown_fields", "base": "open", "patch": [{"op": "add", "path": "/arguments/overwrite", "value": false}], "expect": "both_reject", "message": "unknown field `overwrite`, expected `path` or `format`"},
+    {"name": "open_unknown_null_field", "rule": "file_open.no_unknown_fields", "base": "open", "patch": [{"op": "add", "path": "/arguments/text", "value": null}], "expect": "both_reject"},
+
+    {"name": "save_document_given", "rule": "file_save.document_required", "base": "save_pages", "expect": "both_accept"},
+    {"name": "save_document_omitted", "rule": "file_save.document_required", "base": "save", "patch": [{"op": "remove", "path": "/arguments/document"}], "expect": "both_reject", "message": "missing field `document`"},
+    {"name": "save_document_null", "rule": "file_save.document_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/document", "value": null}], "expect": "both_reject"},
+
+    {"name": "save_handle_64_characters", "rule": "file_save.document_handle", "base": "save", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 64}}], "expect": "both_accept"},
+    {"name": "save_handle_65_characters", "rule": "file_save.document_handle", "base": "save", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 65}}], "expect": "both_reject", "message": "Document handles are 1 to 64 characters of A-Z, a-z, 0-9, \"_\" and \"-\""},
+    {"name": "save_handle_number", "rule": "file_save.document_handle", "base": "save", "patch": [{"op": "replace", "path": "/arguments/document", "value": 7}], "expect": "both_reject"},
+
+    {"name": "save_path_given", "rule": "file_save.path_required", "base": "save", "expect": "both_accept"},
+    {"name": "save_path_omitted", "rule": "file_save.path_required", "base": "save", "patch": [{"op": "remove", "path": "/arguments/path"}], "expect": "both_reject", "message": "missing field `path`"},
+    {"name": "save_path_null", "rule": "file_save.path_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": null}], "expect": "both_reject"},
+    {"name": "save_path_array", "rule": "file_save.path_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": ["/data", "ethanol.svg"]}], "expect": "both_reject"},
+
+    {"name": "save_path_4096_bytes", "rule": "file_save.path_length", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": {"$text": "/aaa.svg", "count": 512}}], "expect": "both_accept"},
+    {"name": "save_path_4097_bytes", "rule": "file_save.path_length", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": {"$text": "/aaaaaaaaaaaa.svg", "count": 241}}], "expect": "both_reject", "message": "path_invalid: the path is 4097 bytes; at most 4096 are allowed"},
+    {"name": "save_path_3600_characters_4200_bytes", "rule": "file_save.path_length", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": {"$text": "/é.svg", "count": 600}}], "expect": "decoder_rejects_only", "message": "path_invalid: the path is 4200 bytes; at most 4096 are allowed"},
+
+    {"name": "save_format_null", "rule": "file_save.format_nullable_enum", "base": "save", "expect": "both_accept"},
+    {"name": "save_format_reshiki", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/drawing.rsk"}, {"op": "replace", "path": "/arguments/format", "value": "reshiki"}], "expect": "both_accept"},
+    {"name": "save_format_svg", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/format", "value": "svg"}], "expect": "both_accept"},
+    {"name": "save_format_pdf", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.pdf"}, {"op": "replace", "path": "/arguments/format", "value": "pdf"}], "expect": "both_accept"},
+    {"name": "save_format_png", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.png"}, {"op": "replace", "path": "/arguments/format", "value": "png"}], "expect": "both_accept"},
+    {"name": "save_format_cdxml", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.cdxml"}, {"op": "replace", "path": "/arguments/format", "value": "cdxml"}], "expect": "both_accept"},
+    {"name": "save_format_mol", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.mol"}, {"op": "replace", "path": "/arguments/format", "value": "mol"}], "expect": "both_accept"},
+    {"name": "save_format_smiles", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.smiles"}, {"op": "replace", "path": "/arguments/format", "value": "smiles"}], "expect": "both_accept"},
+    {"name": "save_format_inchi", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.inchi"}, {"op": "replace", "path": "/arguments/format", "value": "inchi"}], "expect": "both_accept"},
+    {"name": "save_format_emf", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/format", "value": "emf"}], "expect": "both_reject", "message": "unknown variant `emf`, expected one of `reshiki`, `svg`, `pdf`, `png`, `cdxml`, `mol`, `smiles`, `inchi`"},
+    {"name": "save_format_cdx", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/format", "value": "cdx"}], "expect": "both_reject"},
+    {"name": "save_format_import_only", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/format", "value": "rxn"}], "expect": "both_reject"},
+    {"name": "save_format_auto", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/format", "value": "auto"}], "expect": "both_reject"},
+    {"name": "save_format_upper_case", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "replace", "path": "/arguments/format", "value": "SVG"}], "expect": "both_reject"},
+    {"name": "save_format_omitted", "rule": "file_save.format_nullable_enum", "base": "save", "patch": [{"op": "remove", "path": "/arguments/format"}], "expect": "both_reject", "message": "missing field `format`"},
+
+    {"name": "save_null_follows_any_case_extension", "rule": "file_save.format_matches_extension", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.PNG"}], "expect": "both_accept"},
+    {"name": "save_smiles_alias", "rule": "file_save.format_matches_extension", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.smi"}, {"op": "replace", "path": "/arguments/format", "value": "smiles"}], "expect": "both_accept"},
+    {"name": "save_format_mismatch", "rule": "file_save.format_matches_extension", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.png"}, {"op": "replace", "path": "/arguments/format", "value": "svg"}], "expect": "decoder_rejects_only", "message": "format svg does not match the .png extension, which saves as png"},
+    {"name": "save_native_needs_rsk", "rule": "file_save.format_matches_extension", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.mol"}, {"op": "replace", "path": "/arguments/format", "value": "reshiki"}], "expect": "decoder_rejects_only", "message": "format reshiki does not match the .mol extension, which saves as mol"},
+
+    {"name": "save_writable_extension", "rule": "file_save.extension_writable", "base": "save", "expect": "both_accept"},
+    {"name": "save_executable", "rule": "file_save.extension_writable", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/tool.exe"}], "expect": "decoder_rejects_only", "message": "extension_not_allowed: \"/data/tool.exe\" does not have an allowed extension (rsk, mol, cdxml, smi, smiles, inchi, svg, pdf, png)"},
+    {"name": "save_import_only_extension", "rule": "file_save.extension_writable", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/esterification.rxn"}], "expect": "decoder_rejects_only"},
+    {"name": "save_cdx_extension", "rule": "file_save.extension_writable", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.cdx"}], "expect": "decoder_rejects_only"},
+    {"name": "save_emf_extension", "rule": "file_save.extension_writable", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/ethanol.emf"}], "expect": "decoder_rejects_only"},
+    {"name": "save_native_alias_extension", "rule": "file_save.extension_writable", "base": "save", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/drawing.reshiki"}, {"op": "replace", "path": "/arguments/format", "value": "reshiki"}], "expect": "decoder_rejects_only"},
+
+    {"name": "save_overwrite_false", "rule": "file_save.overwrite_required_boolean", "base": "save", "expect": "both_accept"},
+    {"name": "save_overwrite_true", "rule": "file_save.overwrite_required_boolean", "base": "save", "patch": [{"op": "replace", "path": "/arguments/overwrite", "value": true}], "expect": "both_accept"},
+    {"name": "save_overwrite_omitted", "rule": "file_save.overwrite_required_boolean", "base": "save", "patch": [{"op": "remove", "path": "/arguments/overwrite"}], "expect": "both_reject", "message": "missing field `overwrite`"},
+    {"name": "save_overwrite_null", "rule": "file_save.overwrite_required_boolean", "base": "save", "patch": [{"op": "replace", "path": "/arguments/overwrite", "value": null}], "expect": "both_reject"},
+    {"name": "save_overwrite_string", "rule": "file_save.overwrite_required_boolean", "base": "save", "patch": [{"op": "replace", "path": "/arguments/overwrite", "value": "true"}], "expect": "both_reject"},
+    {"name": "save_overwrite_number", "rule": "file_save.overwrite_required_boolean", "base": "save", "patch": [{"op": "replace", "path": "/arguments/overwrite", "value": 1}], "expect": "both_reject"},
+
+    {"name": "save_pages_null", "rule": "file_save.pages_nullable_required", "base": "save", "expect": "both_accept"},
+    {"name": "save_pages_false", "rule": "file_save.pages_nullable_required", "base": "save", "patch": [{"op": "replace", "path": "/arguments/pages", "value": false}], "expect": "both_accept"},
+    {"name": "save_pages_omitted", "rule": "file_save.pages_nullable_required", "base": "save", "patch": [{"op": "remove", "path": "/arguments/pages"}], "expect": "both_reject", "message": "missing field `pages`"},
+    {"name": "save_pages_string", "rule": "file_save.pages_nullable_required", "base": "save_pages", "patch": [{"op": "replace", "path": "/arguments/pages", "value": "true"}], "expect": "both_reject"},
+
+    {"name": "save_pages_with_pdf", "rule": "file_save.pages_pdf_only", "base": "save_pages", "expect": "both_accept"},
+    {"name": "save_pages_with_pdf_extension", "rule": "file_save.pages_pdf_only", "base": "save_pages", "patch": [{"op": "replace", "path": "/arguments/format", "value": null}], "expect": "both_accept"},
+    {"name": "save_pages_with_svg", "rule": "file_save.pages_pdf_only", "base": "save", "patch": [{"op": "replace", "path": "/arguments/pages", "value": true}], "expect": "decoder_rejects_only", "message": "pages is valid only with format pdf"},
+    {"name": "save_pages_with_native", "rule": "file_save.pages_pdf_only", "base": "save_pages", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/data/scheme.rsk"}, {"op": "replace", "path": "/arguments/format", "value": "reshiki"}], "expect": "decoder_rejects_only", "message": "pages is valid only with format pdf"},
+
+    {"name": "save_known_fields_only", "rule": "file_save.no_unknown_fields", "base": "save_pages", "expect": "both_accept"},
+    {"name": "save_unknown_field", "rule": "file_save.no_unknown_fields", "base": "save", "patch": [{"op": "add", "path": "/arguments/text", "value": "CCO"}], "expect": "both_reject", "message": "unknown field `text`, expected one of `document`, `path`, `format`, `overwrite`, `pages`"},
+    {"name": "save_unknown_null_field", "rule": "file_save.no_unknown_fields", "base": "save", "patch": [{"op": "add", "path": "/arguments/dpi", "value": null}], "expect": "both_reject"}
+  ]
+}

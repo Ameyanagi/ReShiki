@@ -188,3 +188,24 @@ async fn labels_match_full_analysis_for_aromatic_charged_radical_and_stereo_inpu
         assert_eq!(actual, expected, "{smiles}");
     }
 }
+
+/// Mirrors the app's clipboard table (src/clipboard/tests.rs).
+#[test]
+fn typed_text_formats_follow_cheap_markers() {
+    for (text, format) in [
+        ("  InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3", "inchi"),
+        ("$RXN\n\n  ReShiki\n\n  1  1\n$MOL\nM  END", "rxn"),
+        (
+            "ethanol\n\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\nM  END",
+            "mol",
+        ),
+        ("\n\n\n  0  0  0     0  0            999 V3000\n", "mol"),
+        ("<?xml version=\"1.0\"?><CDXML><page/></CDXML>", "cdxml"),
+        ("CCO>>CC=O", "rsmi"),
+        ("CCO>O=O>CC=O", "rsmi"),
+        ("C->C", "smiles"),
+        ("c1ccccc1", "smiles"),
+    ] {
+        assert_eq!(text_format(text), format, "{text}");
+    }
+}

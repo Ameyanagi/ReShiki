@@ -21,23 +21,20 @@ impl App {
         let engine = self.engine.clone();
         Task::perform(
             async move {
-                let (doc, notice) = reshiki::export::figure_document(&engine, doc).await?;
-                let figure = tokio::task::spawn_blocking(move || {
-                    if pages {
-                        reshiki::export::pages_pdf(&doc).map(|bytes| reshiki::export::Figure {
-                            bytes,
-                            detail: None,
-                        })
-                    } else {
-                        reshiki::export::figure(&doc, format)
-                    }
-                })
-                .await
-                .map_err(|error| error.to_string())??;
-                let details = figure.detail.into_iter().chain(notice).collect();
-                Ok(super::save_export(figure.bytes, format)
+                let p = reshiki::export::publication(
+                    &engine,
+                    doc,
+                    format,
+                    pages,
+                    reshiki::export::FILE_PIXELS,
+                )
+                .await?;
+                Ok(super::save_export(p.bytes, format)
                     .await?
-                    .map(|path| Saved { path, details }))
+                    .map(|path| Saved {
+                        path,
+                        details: p.details,
+                    }))
             },
             Message::FigureExported,
         )

@@ -530,3 +530,38 @@ fn figure_menu_lists_vector_formats_before_raster_and_closes_after_a_choice() {
     let _ = app.update(Message::Inspector(InspectorTab::Import));
     assert!(!app.tab.inspector_ui.figure_menu);
 }
+
+#[test]
+fn abbreviation_member_selection_analyzes_the_whole_abbreviation_without_labels() {
+    use reshiki::document::Point;
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let member = app.tab.doc.add_atom("C", Point::default());
+    let anchor = app.tab.doc.add_atom("O", Point::new(42., 0.));
+    let outside = app.tab.doc.add_atom("C", Point::new(84., 0.));
+    app.tab.doc.add_bond(member, anchor, 1, "plain");
+    app.tab.doc.add_bond(anchor, outside, 1, "plain");
+    app.tab
+        .doc
+        .contract(&[anchor, member], "OMe", "MeO")
+        .unwrap();
+    for atom in &mut app.tab.doc.atoms {
+        atom.cip_label = Some("R".into());
+    }
+    for bond in &mut app.tab.doc.bonds {
+        bond.cip_label = Some("E".into());
+    }
+    let before = app.tab.doc.clone();
+    app.tab.selected = vec![member];
+    let key = app.property_request_key();
+    assert_eq!(key.atoms, [member, anchor], "Expanded, in document order");
+    let part = app.property_document(&key);
+    assert_eq!(
+        part.atoms.iter().map(|a| a.id).collect::<Vec<_>>(),
+        [member, anchor]
+    );
+    assert!(part.atoms.iter().all(|a| a.cip_label.is_none()));
+    assert!(part.bonds.iter().all(|b| b.cip_label.is_none()));
+    assert_eq!(part.bonds.len(), 1);
+    assert_eq!(app.tab.doc, before);
+}

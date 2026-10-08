@@ -1,0 +1,555 @@
+[
+  {
+    "name": "invalid_json",
+    "phase": "modern",
+    "source": "framing:parse",
+    "lines": "this is not JSON",
+    "expect": {"error":-32700,"message":"Parse error"}
+  },
+  {
+    "name": "truncated_object",
+    "phase": "modern",
+    "source": "framing:parse",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",",
+    "expect": {"error":-32700}
+  },
+  {
+    "name": "invalid_utf8",
+    "phase": "modern",
+    "source": "framing:parse",
+    "lines": {"base64":"eyJqc29ucnBjIjoiMi4wIiwiaWQiOjMsIm1ldGhvZCI6InRvb2xzL2xpc3T//iJ9"},
+    "expect": {"error":-32700}
+  },
+  {
+    "name": "raw_nul_in_string",
+    "phase": "modern",
+    "source": "framing:parse",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/\u0000list\"}",
+    "expect": {"error":-32700}
+  },
+  {
+    "name": "raw_nul_between_members",
+    "phase": "modern",
+    "source": "framing:parse",
+    "lines": "{\"jsonrpc\":\"2.0\",\u0000\"id\":5,\"method\":\"tools/list\"}",
+    "expect": {"error":-32700}
+  },
+  {
+    "name": "top_level_array",
+    "phase": "modern",
+    "source": "framing:not-object",
+    "lines": "[{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/list\",\"params\":{\"_meta\":\"${meta}\"}}]",
+    "expect": {"error":-32600,"message":"Invalid Request"}
+  },
+  {
+    "name": "top_level_scalar",
+    "phase": "modern",
+    "source": "framing:not-object",
+    "lines": "42",
+    "expect": {"error":-32600}
+  },
+  {
+    "name": "utf8_bom_before_request",
+    "phase": "modern",
+    "source": "framing:parse",
+    "lines": "\ufeff{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"server/discover\",\"params\":{\"_meta\":\"${meta}\"}}",
+    "expect": {"error":-32700}
+  },
+  {
+    "name": "crlf_line",
+    "phase": "modern",
+    "source": "framing:crlf",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"server/discover\",\"params\":{\"_meta\":\"${meta}\"}}\r\n",
+    "expect": {"result":{"supportedVersions":["2026-07-28","2025-11-25","2025-06-18"]},"id":9}
+  },
+  {
+    "name": "blank_lines",
+    "phase": "modern",
+    "source": "framing:blank",
+    "lines": "\n\n\r\n\n",
+    "expect": "silent"
+  },
+  {
+    "name": "whitespace_only_line",
+    "phase": "modern",
+    "source": "framing:parse",
+    "lines": "   \t ",
+    "expect": {"error":-32700}
+  },
+  {
+    "name": "nesting_depth_200",
+    "phase": "modern",
+    "source": "framing:parse",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"tools/list\",\"params\":{\"deep\":\"${generated:depth-200}\",\"_meta\":\"${meta}\"}}",
+    "expect": {"error":-32700}
+  },
+  {
+    "name": "jsonrpc_1_0",
+    "phase": "modern",
+    "source": "framing:version-or-method",
+    "lines": "{\"jsonrpc\":\"1.0\",\"id\":13,\"method\":\"tools/list\"}",
+    "expect": {"error":-32600,"id":13,"message":"Invalid Request"}
+  },
+  {
+    "name": "jsonrpc_missing",
+    "phase": "modern",
+    "source": "framing:version-or-method",
+    "lines": "{\"id\":14,\"method\":\"tools/list\"}",
+    "expect": {"error":-32600,"id":14}
+  },
+  {
+    "name": "method_missing",
+    "phase": "modern",
+    "source": "framing:version-or-method",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":15,\"params\":{}}",
+    "expect": {"error":-32600,"id":15}
+  },
+  {
+    "name": "method_not_a_string",
+    "phase": "modern",
+    "source": "framing:version-or-method",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":16,\"method\":7}",
+    "expect": {"error":-32600,"id":16}
+  },
+  {
+    "name": "id_object",
+    "phase": "modern",
+    "source": "framing:invalid-id",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":{\"n\":17},\"method\":\"tools/list\"}",
+    "expect": {"error":-32600}
+  },
+  {
+    "name": "id_float",
+    "phase": "modern",
+    "source": "framing:invalid-id",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":18.5,\"method\":\"tools/list\"}",
+    "expect": {"error":-32600}
+  },
+  {
+    "name": "id_bool",
+    "phase": "modern",
+    "source": "framing:invalid-id",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":true,\"method\":\"tools/list\"}",
+    "expect": {"error":-32600}
+  },
+  {
+    "name": "id_null",
+    "phase": "modern",
+    "source": "framing:invalid-id",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"tools/list\"}",
+    "expect": {"error":-32600}
+  },
+  {
+    "name": "id_2_pow_64",
+    "phase": "modern",
+    "source": "framing:invalid-id",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":18446744073709551616,\"method\":\"tools/list\"}",
+    "expect": {"error":-32600}
+  },
+  {
+    "name": "id_string_over_256_bytes",
+    "phase": "modern",
+    "source": "framing:invalid-id",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":\"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\",\"method\":\"tools/list\"}",
+    "expect": {"error":-32600}
+  },
+  {
+    "name": "id_i64_max",
+    "phase": "modern",
+    "source": "framing:valid-id",
+    "lines": {"json":{"jsonrpc":"2.0","id":9223372036854775807,"method":"server/discover","params":{"_meta":"${meta}"}}},
+    "expect": {"result":true,"id":9223372036854775807}
+  },
+  {
+    "name": "duplicate_in_flight_id",
+    "phase": "modern",
+    "attempts": 5,
+    "source": "framing:duplicate",
+    "lines": [{"json":{"jsonrpc":"2.0","id":"dup","method":"tools/call","params":{"name":"compose","arguments":"${generated:compose-32}","_meta":"${meta}"}}},{"json":{"jsonrpc":"2.0","id":"dup","method":"tools/list","params":{"_meta":"${meta}"}}}],
+    "expect": [{"error":-32600,"id":"dup","message":"Duplicate request id"},{"result":true,"id":"dup"}]
+  },
+  {
+    "name": "client_result_response",
+    "phase": "modern",
+    "source": "framing:ignored",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":25,\"result\":{}}",
+    "expect": "silent"
+  },
+  {
+    "name": "client_error_response",
+    "phase": "modern",
+    "source": "framing:ignored",
+    "lines": "{\"jsonrpc\":\"2.0\",\"id\":26,\"error\":{\"code\":-32601,\"message\":\"no\"}}",
+    "expect": "silent"
+  },
+  {
+    "name": "unknown_notification",
+    "phase": "modern",
+    "source": "framing:ignored",
+    "lines": {"json":{"jsonrpc":"2.0","method":"notifications/unknown","params":{"x":1}}},
+    "expect": "silent"
+  },
+  {
+    "name": "unknown_method",
+    "phase": "modern",
+    "source": "protocol:method-not-found",
+    "lines": {"json":{"jsonrpc":"2.0","id":28,"method":"no/such_method","params":{"_meta":"${meta}"}}},
+    "expect": {"error":-32601,"id":28,"message":"Method not found"}
+  },
+  {
+    "name": "meta_without_protocol_version",
+    "phase": "modern",
+    "source": "protocol:invalid-params",
+    "lines": {"json":{"jsonrpc":"2.0","id":29,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/clientCapabilities":{}}}}},
+    "expect": {"error":-32602,"id":29,"message":"request _meta is missing or has malformed required fields: io.modelcontextprotocol/protocolVersion"}
+  },
+  {
+    "name": "meta_absent",
+    "phase": "modern",
+    "source": "protocol:invalid-params",
+    "lines": {"json":{"jsonrpc":"2.0","id":30,"method":"tools/list"}},
+    "expect": {"error":-32602,"id":30,"message":"request _meta is missing or has malformed required fields: io.modelcontextprotocol/protocolVersion, io.modelcontextprotocol/clientCapabilities"}
+  },
+  {
+    "name": "unsupported_protocol_version",
+    "phase": "modern",
+    "source": "protocol:unsupported-version",
+    "lines": {"json":{"jsonrpc":"2.0","id":31,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"1900-01-01","io.modelcontextprotocol/clientCapabilities":{}}}}},
+    "expect": {"error":-32022,"id":31,"message":"Unsupported protocol version","data":{"requested":"1900-01-01","supported":["2026-07-28","2025-11-25","2025-06-18"]}}
+  },
+  {
+    "name": "unknown_tool",
+    "phase": "modern",
+    "source": "protocol:invalid-params",
+    "lines": {"json":{"jsonrpc":"2.0","id":32,"method":"tools/call","params":{"name":"no_such_tool","arguments":{},"_meta":"${meta}"}}},
+    "expect": {"error":-32602,"id":32,"message":"Unknown tool: no_such_tool"}
+  },
+  {
+    "name": "arguments_array",
+    "phase": "modern",
+    "source": "protocol:invalid-params",
+    "lines": {"json":{"jsonrpc":"2.0","id":33,"method":"tools/call","params":{"name":"info","arguments":[],"_meta":"${meta}"}}},
+    "expect": {"error":-32602,"id":33,"message":"Invalid params for tools/call"}
+  },
+  {
+    "name": "arguments_string",
+    "phase": "modern",
+    "source": "protocol:invalid-params",
+    "lines": {"json":{"jsonrpc":"2.0","id":34,"method":"tools/call","params":{"name":"info","arguments":"{}","_meta":"${meta}"}}},
+    "expect": {"error":-32602,"id":34,"message":"Invalid params for tools/call"}
+  },
+  {
+    "name": "extra_property",
+    "phase": "modern",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":35,"method":"tools/call","params":{"name":"info","arguments":{"extra":true},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":35}
+  },
+  {
+    "name": "wrong_argument_type",
+    "phase": "modern",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":36,"method":"tools/call","params":{"name":"import","arguments":{"format":"smiles","text":5},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":36}
+  },
+  {
+    "name": "unknown_import_format",
+    "phase": "modern",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":37,"method":"tools/call","params":{"name":"import","arguments":{"format":"xyz","text":"C"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":37}
+  },
+  {
+    "name": "object_id_json_number",
+    "phase": "modern",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":38,"method":"tools/call","params":{"name":"inspect","arguments":{"document":"doc_0000000000000000000000000000000f","ids":[12]},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":38,"contains":"Object IDs are decimal strings such as \"12\""}
+  },
+  {
+    "name": "object_id_zero",
+    "phase": "modern",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":39,"method":"tools/call","params":{"name":"inspect","arguments":{"document":"doc_0000000000000000000000000000000f","ids":["0"]},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":39,"message":"Object IDs are decimal strings such as \"12\""}
+  },
+  {
+    "name": "object_id_negative",
+    "phase": "modern",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":40,"method":"tools/call","params":{"name":"inspect","arguments":{"document":"doc_0000000000000000000000000000000f","ids":["-1"]},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":40,"message":"Object IDs are decimal strings such as \"12\""}
+  },
+  {
+    "name": "object_id_2_pow_64",
+    "phase": "modern",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":41,"method":"tools/call","params":{"name":"inspect","arguments":{"document":"doc_0000000000000000000000000000000f","ids":["18446744073709551616"]},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":41,"message":"Object IDs are decimal strings such as \"12\""}
+  },
+  {
+    "name": "object_id_exponent",
+    "phase": "modern",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"inspect","arguments":{"document":"doc_0000000000000000000000000000000f","ids":["1e3"]},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":42,"message":"Object IDs are decimal strings such as \"12\""}
+  },
+  {
+    "name": "unknown_handle",
+    "phase": "modern",
+    "source": "ops:unknown_document",
+    "lines": {"json":{"jsonrpc":"2.0","id":43,"method":"tools/call","params":{"name":"inspect","arguments":{"document":"doc_0000000000000000000000000000000f","ids":null},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"unknown_document","prefix":null,"id":43}
+  },
+  {
+    "name": "malformed_handle",
+    "phase": "modern",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":44,"method":"tools/call","params":{"name":"inspect","arguments":{"document":"../doc","ids":null},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":44}
+  },
+  {
+    "name": "cdx_base64_over_budget",
+    "phase": "modern",
+    "source": "ops:budget",
+    "lines": {"json":{"jsonrpc":"2.0","id":45,"method":"tools/call","params":{"name":"import","arguments":{"format":"cdx","text":"${generated:cdx-over-budget}"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"budget","prefix":null,"id":45,"contains":"max_cdx_base64"}
+  },
+  {
+    "name": "cdx_invalid_base64",
+    "phase": "modern",
+    "source": "ops:failed",
+    "lines": {"json":{"jsonrpc":"2.0","id":46,"method":"tools/call","params":{"name":"import","arguments":{"format":"cdx","text":"!!not base64!!"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":null,"id":46}
+  },
+  {
+    "name": "proposal_smiles_over_4000",
+    "phase": "modern",
+    "source": "proposal:validate",
+    "lines": {"json":{"jsonrpc":"2.0","id":47,"method":"tools/call","params":{"name":"compose","arguments":{"proposal":{"explanation":"Malformed","replace_ids":[],"molecules":[{"smiles":"CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC","label":"A","coefficient":1,"rotation":0,"compact":false}],"reactions":[],"composition":{"arrangement":"grid","columns":3,"width_pt":540,"preserve_details":false},"sketch":null},"style_document":null},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":47,"message":"Use at most 32 molecules with short labels and valid SMILES"}
+  },
+  {
+    "name": "proposal_33_molecules",
+    "phase": "modern",
+    "source": "proposal:validate",
+    "lines": {"json":{"jsonrpc":"2.0","id":48,"method":"tools/call","params":{"name":"compose","arguments":{"proposal":{"explanation":"Malformed","replace_ids":[],"molecules":[{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false},{"smiles":"C","label":"A","coefficient":1,"rotation":0,"compact":false}],"reactions":[],"composition":{"arrangement":"grid","columns":3,"width_pt":540,"preserve_details":false},"sketch":null},"style_document":null},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":48,"message":"Use at most 32 molecules with short labels and valid SMILES"}
+  },
+  {
+    "name": "proposal_rotation_45",
+    "phase": "modern",
+    "source": "proposal:validate",
+    "lines": {"json":{"jsonrpc":"2.0","id":49,"method":"tools/call","params":{"name":"compose","arguments":{"proposal":{"explanation":"Malformed","replace_ids":[],"molecules":[{"smiles":"C","label":"A","coefficient":1,"rotation":45,"compact":false}],"reactions":[],"composition":{"arrangement":"grid","columns":3,"width_pt":540,"preserve_details":false},"sketch":null},"style_document":null},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":49,"message":"Use at most 32 molecules with short labels and valid SMILES"}
+  },
+  {
+    "name": "malformed_smiles",
+    "phase": "modern",
+    "source": "ops:failed",
+    "lines": {"json":{"jsonrpc":"2.0","id":50,"method":"tools/call","params":{"name":"import","arguments":{"format":"smiles","text":"C1CC(("},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":null,"id":50}
+  },
+  {
+    "name": "malformed_native_json",
+    "phase": "modern",
+    "source": "ops:failed",
+    "lines": {"json":{"jsonrpc":"2.0","id":51,"method":"tools/call","params":{"name":"import","arguments":{"format":"reshiki","text":"{\"version\": 19, \"atoms\": ["},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":null,"id":51,"contains":"Could not open document: "}
+  },
+  {
+    "name": "native_version_20",
+    "phase": "modern",
+    "source": "ops:failed",
+    "lines": {"json":{"jsonrpc":"2.0","id":52,"method":"tools/call","params":{"name":"import","arguments":{"format":"reshiki","text":"{\"version\": 20, \"atoms\": [], \"bonds\": []}"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":null,"id":52,"message":"Could not open document: This drawing was made with a newer version of ReShiki (document version 20). Update ReShiki to open it."}
+  },
+  {
+    "name": "truncated_cdx",
+    "phase": "modern",
+    "source": "ops:failed",
+    "lines": {"json":{"jsonrpc":"2.0","id":53,"method":"tools/call","params":{"name":"import","arguments":{"format":"cdx","text":"${fixture-base64:truncated.cdx}"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":null,"id":53}
+  },
+  {
+    "name": "deeply_nested_cdxml",
+    "phase": "modern",
+    "source": "ops:failed",
+    "lines": {"json":{"jsonrpc":"2.0","id":54,"method":"tools/call","params":{"name":"import","arguments":{"format":"cdxml","text":"${fixture-text:deep.cdxml}"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":null,"id":54}
+  },
+  {
+    "name": "mol_malformed_counts_line",
+    "phase": "modern",
+    "source": "ops:failed",
+    "lines": {"json":{"jsonrpc":"2.0","id":55,"method":"tools/call","params":{"name":"import","arguments":{"format":"mol","text":"\n  ReShiki\n\n  x  y  0  0  0  0  0  0  0  0999 V2000\nM  END\n"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":null,"id":55}
+  },
+  {
+    "name": "picture_30000_by_30000",
+    "phase": "modern",
+    "source": "ops:failed",
+    "lines": {"json":{"jsonrpc":"2.0","id":56,"method":"tools/call","params":{"name":"import","arguments":{"format":"reshiki","text":"${generated:picture-30000}"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":null,"id":56,"contains":"Could not open document: Image size exceeds limit"}
+  },
+  {
+    "name": "objects_over_budget",
+    "phase": "modern",
+    "source": "ops:budget",
+    "lines": {"json":{"jsonrpc":"2.0","id":57,"method":"tools/call","params":{"name":"import","arguments":{"format":"reshiki","text":"${generated:objects-over-budget}"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"budget","prefix":null,"id":57,"contains":"objects"}
+  },
+  {
+    "name": "file_open_directory",
+    "phase": "modern",
+    "source": "access:not_a_regular_file",
+    "lines": {"json":{"jsonrpc":"2.0","id":58,"method":"tools/call","params":{"name":"file_open","arguments":{"path":"${in:folder.mol}","format":"auto"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":"not_a_regular_file","id":58}
+  },
+  {
+    "name": "file_open_fifo",
+    "phase": "modern",
+    "platform": "unix",
+    "within_ms": 2000,
+    "source": "access:not_a_regular_file",
+    "lines": {"json":{"jsonrpc":"2.0","id":59,"method":"tools/call","params":{"name":"file_open","arguments":{"path":"${in:pipe.mol}","format":"auto"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":"not_a_regular_file","id":59}
+  },
+  {
+    "name": "file_open_outside_grants",
+    "phase": "modern",
+    "source": "access:path_not_granted",
+    "lines": {"json":{"jsonrpc":"2.0","id":60,"method":"tools/call","params":{"name":"file_open","arguments":{"path":"${outside:eth.mol}","format":"auto"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"access_denied","prefix":"path_not_granted","id":60}
+  },
+  {
+    "name": "cancel_params_not_an_object",
+    "phase": "modern",
+    "source": "framing:cancel",
+    "lines": {"json":{"jsonrpc":"2.0","method":"notifications/cancelled","params":"61"}},
+    "expect": "silent"
+  },
+  {
+    "name": "cancel_without_request_id",
+    "phase": "modern",
+    "source": "framing:cancel",
+    "lines": {"json":{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"reason":"x"}}},
+    "expect": "silent"
+  },
+  {
+    "name": "cancel_float_request_id",
+    "phase": "modern",
+    "source": "framing:cancel",
+    "lines": {"json":{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":1.5}}},
+    "expect": "silent"
+  },
+  {
+    "name": "cancel_unknown_id",
+    "phase": "modern",
+    "source": "framing:cancel",
+    "lines": {"json":{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":424242}}},
+    "expect": "silent"
+  },
+  {
+    "name": "completed_request",
+    "phase": "modern",
+    "source": "protocol:result",
+    "lines": {"json":{"jsonrpc":"2.0","id":"done","method":"tools/list","params":{"_meta":"${meta}"}}},
+    "expect": {"result":true,"id":"done"}
+  },
+  {
+    "name": "cancel_completed_id",
+    "phase": "modern",
+    "source": "framing:cancel",
+    "lines": {"json":{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"done"}}},
+    "expect": "silent"
+  },
+  {
+    "name": "legacy_call_before_initialize",
+    "phase": "legacy_pre_init",
+    "revision": "*",
+    "source": "lifecycle:observed",
+    "lines": {"json":{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"info","arguments":{}}}},
+    "expect": {"error":-32602,"id":1,"message":"request _meta is missing or has malformed required fields: io.modelcontextprotocol/protocolVersion, io.modelcontextprotocol/clientCapabilities"}
+  },
+  {
+    "name": "legacy_initialized_before_initialize",
+    "phase": "legacy_pre_init",
+    "revision": "*",
+    "source": "framing:ignored",
+    "lines": {"json":{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}},
+    "expect": "silent"
+  },
+  {
+    "name": "legacy_initialize_2024_11_05",
+    "phase": "legacy_pre_init",
+    "revision": "*",
+    "source": "lifecycle:fallback",
+    "lines": {"json":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"corpus","version":"1.0.0"}}}},
+    "expect": {"result":{"protocolVersion":"2025-11-25"},"id":1}
+  },
+  {
+    "name": "legacy_initialize_malformed_params",
+    "phase": "legacy_pre_init",
+    "revision": "*",
+    "source": "protocol:invalid-params",
+    "lines": {"json":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":5}}},
+    "expect": {"error":-32602,"id":1}
+  },
+  {
+    "name": "legacy_double_initialize",
+    "phase": "legacy_post_init",
+    "revision": "*",
+    "source": "lifecycle:observed",
+    "lines": {"json":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"${revision}","capabilities":{},"clientInfo":{"name":"corpus","version":"1.0.0"}}}},
+    "expect": {"result":true,"id":1}
+  },
+  {
+    "name": "legacy_invalid_json",
+    "phase": "legacy_post_init",
+    "revision": "*",
+    "source": "framing:parse",
+    "lines": "{not json",
+    "expect": {"error":-32700,"message":"Parse error"}
+  },
+  {
+    "name": "legacy_top_level_array",
+    "phase": "legacy_post_init",
+    "revision": "*",
+    "source": "framing:not-object",
+    "lines": "[]",
+    "expect": {"error":-32600}
+  },
+  {
+    "name": "legacy_unknown_method",
+    "phase": "legacy_post_init",
+    "revision": "*",
+    "source": "protocol:method-not-found",
+    "lines": {"json":{"jsonrpc":"2.0","id":4,"method":"no/such_method"}},
+    "expect": {"error":-32601,"id":4}
+  },
+  {
+    "name": "legacy_unknown_tool",
+    "phase": "legacy_post_init",
+    "revision": "*",
+    "source": "protocol:invalid-params",
+    "lines": {"json":{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"no_such_tool","arguments":{}}}},
+    "expect": {"error":-32602,"id":5,"message":"Unknown tool: no_such_tool"}
+  },
+  {
+    "name": "legacy_extra_property",
+    "phase": "legacy_post_init",
+    "revision": "*",
+    "source": "ops:invalid_arguments",
+    "lines": {"json":{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"info","arguments":{"extra":true}}}},
+    "expect": {"tool_error":"invalid_arguments","prefix":null,"id":6}
+  },
+  {
+    "name": "legacy_cancel_unknown_id",
+    "phase": "legacy_post_init",
+    "revision": "*",
+    "source": "framing:cancel",
+    "lines": {"json":{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":424242}}},
+    "expect": "silent"
+  }
+]

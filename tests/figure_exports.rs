@@ -1,8 +1,105 @@
 use anyhow::Context;
 use reshiki::{
     document::{Document, Point},
+    engine::LocalEngine,
     export,
 };
+
+/// A test-local replica of the app's figure export (src/app/figure_export.rs)
+/// up to the save dialog: the prepared bytes and the status details.
+async fn sequence(
+    engine: &LocalEngine,
+    doc: Document,
+    format: &'static str,
+    pages: bool,
+) -> Result<(Vec<u8>, Vec<String>), String> {
+    let (doc, notice) = export::figure_document(engine, doc).await?;
+    let figure = tokio::task::spawn_blocking(move || {
+        if pages {
+            export::pages_pdf(&doc).map(|bytes| export::Figure {
+                bytes,
+                detail: None,
+            })
+        } else {
+            export::figure(&doc, format)
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    let details = figure.detail.into_iter().chain(notice).collect();
+    Ok((figure.bytes, details))
+}
+
+/// Publication inputs as (case, drawing, format, pages). The aromatic 5-ring
+/// stays unresolved, so its analysis fails and exports carry the review notice.
+fn publication_cases() -> anyhow::Result<Vec<(&'static str, Document, &'static str, bool)>> {
+    let mut ring = Document::default();
+    reshiki::editing::ring(&mut ring, Point::default(), 5, true, 42.);
+    let mut invalid = ring.clone();
+    invalid.bonds.first_mut().context("ring bond")?.b = u64::MAX;
+    let mut cases = vec![
+        ("png", ring.clone(), "png", false),
+        ("svg", ring.clone(), "svg", false),
+        ("pages without layout", ring.clone(), "pdf", true),
+        ("invalid png", invalid.clone(), "png", false),
+        ("invalid pages", invalid, "pdf", true),
+    ];
+    if cfg!(not(windows)) {
+        cases.push(("emf", ring, "emf", false));
+    }
+    Ok(cases)
+}
+
+#[tokio::test]
+async fn publication_sequence_characterization() -> anyhow::Result<()> {
+    let engine = LocalEngine::default();
+    for (case, doc, format, pages) in publication_cases()? {
+        let (_, notice) = export::figure_document(&engine, doc.clone())
+            .await
+            .unwrap_or_default();
+        let result = sequence(&engine, doc, format, pages).await;
+        match case {
+            "png" => {
+                let (bytes, details) = result.map_err(anyhow::Error::msg)?;
+                assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+                let [size, review] = details.as_slice() else {
+                    anyhow::bail!("PNG details: {details:?}");
+                };
+                assert!(size.starts_with("PNG: "), "{size}");
+                assert!(
+                    review.starts_with("Drawing preserved; chemistry needs review: "),
+                    "{review}"
+                );
+            }
+            "svg" => {
+                let (_, details) = result.map_err(anyhow::Error::msg)?;
+                assert_eq!(details, [notice.context("review notice")?]);
+            }
+            "pages without layout" => assert_eq!(
+                result,
+                Err("Set up publication pages before exporting a page PDF.".into())
+            ),
+            "invalid png" | "invalid pages" => assert!(result.is_err(), "{case}"),
+            "emf" => assert_eq!(result, Err("Unsupported drawing export".into())),
+            _ => anyhow::bail!("Uncharacterized publication case {case}"),
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn publication_matches_sequence() -> anyhow::Result<()> {
+    let engine = LocalEngine::default();
+    for (case, doc, format, pages) in publication_cases()? {
+        let expected = sequence(&engine, doc.clone(), format, pages).await;
+        let actual = export::publication(&engine, doc, format, pages, export::FILE_PIXELS)
+            .await
+            .map(|publication| (publication.bytes, publication.details));
+        // Compare without printing raster bytes on a mismatch.
+        assert!(actual == expected, "{case}");
+    }
+    Ok(())
+}
 
 #[tokio::test]
 async fn unresolved_aromatic_drawing_exports_without_assigning_chemistry() -> anyhow::Result<()> {

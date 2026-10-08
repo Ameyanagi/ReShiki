@@ -16,6 +16,10 @@ Evidence comes from ReShiki source, regression tests, saved interchange fixtures
 and desktop editing checks. Detailed feature documents record the tests and
 applicable boundaries.
 
+## Agent API — experimental (unreleased)
+
+`reshiki --mcp` serves an experimental MCP server to AI clients such as Claude Code, Claude Desktop and Codex, and `reshiki --cli` runs the same operations from a terminal. It is in Nightly builds only, not in ReShiki 0.11.0. Agents can import structure text, open files from granted folders, inspect, analyze, render previews, compose molecules and reaction schemes from SMILES, insert and delete structures with undo and redo, export, and save into granted folders. MCP revisions 2026-07-28, 2025-11-25 and 2025-06-18 are served over stdio only. Limits: edits work at the structure and scheme level (no atom, bond or style operations), chemical names are not resolved, drawings open in the app are not reachable, files are limited to folders granted at startup, and there are no progress notifications or output schemas. Tools, schemas and results may change in any build. See the [agent API reference](agent-api.md), the [setup guide](https://reshiki.com/guide/agents/) and [runtime safety](runtime-safety.md#agent-api-p1-experimental).
+
 ## Styles, themes and aromatic fusion — 0.9
 
 Publisher-based journal presets, native/CDS style exchange, independent canvas and interface appearance, and a light/dark theme manager are available. Themes use Jmol-derived or custom reference colors, with live previews and RGB/OKLCH files. Clipboard backgrounds are transparent, and supported ChemDraw exchange preserves visible colors and native ring fills. Benzene, Aromatic circle, and aromatic templates share validated fusion, phenyl attachment, and supported bay/gap closure. See the [0.9 release notes](changes-0.9.md), [drawing-style guide](drawing-styles.md), and [publisher sources](journal-drawing-presets.md).

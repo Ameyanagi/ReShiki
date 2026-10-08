@@ -1,0 +1,73 @@
+{
+  "rules": [
+    {
+      "id": "arguments.object",
+      "cite": "crates/agent/src/ops/catalog.rs:77-88"
+    },
+    {
+      "id": "info.no_arguments",
+      "cite": "crates/agent/src/ops/documents.rs:30-34,82-84,95-103; crates/agent/src/ops/catalog.rs:52"
+    },
+    {
+      "id": "document_new.no_arguments",
+      "cite": "crates/agent/src/ops/documents.rs:43-47,82-84,95-103; crates/agent/src/ops/catalog.rs:53"
+    },
+    {
+      "id": "document_list.no_arguments",
+      "cite": "crates/agent/src/ops/documents.rs:56-60,82-84,95-103; crates/agent/src/ops/catalog.rs:54"
+    },
+    {
+      "id": "document_close.document_required",
+      "cite": "crates/agent/src/ops/documents.rs:86-93,105-114; crates/agent/src/ops/catalog.rs:55"
+    },
+    {
+      "id": "document_close.no_unknown_fields",
+      "cite": "crates/agent/src/ops/documents.rs:91,107"
+    },
+    {
+      "id": "document_close.handle",
+      "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,183-185"
+    }
+  ],
+  "bases": {
+    "info": {"tool": "info", "arguments": {}},
+    "new": {"tool": "document_new", "arguments": {}},
+    "list": {"tool": "document_list", "arguments": {}},
+    "close": {"tool": "document_close", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef"}}
+  },
+  "cases": [
+    {"name": "close_arguments_object", "rule": "arguments.object", "base": "close", "expect": "both_accept"},
+    {"name": "info_arguments_null", "rule": "arguments.object", "base": "info", "patch": [{"op": "replace", "path": "/arguments", "value": null}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "new_arguments_array", "rule": "arguments.object", "base": "new", "patch": [{"op": "replace", "path": "/arguments", "value": []}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "list_arguments_string", "rule": "arguments.object", "base": "list", "patch": [{"op": "replace", "path": "/arguments", "value": "{}"}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "close_arguments_array", "rule": "arguments.object", "base": "close", "patch": [{"op": "replace", "path": "/arguments", "value": ["doc_1"]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+
+    {"name": "info_empty", "rule": "info.no_arguments", "base": "info", "expect": "both_accept"},
+    {"name": "info_unknown_null_field", "rule": "info.no_arguments", "base": "info", "patch": [{"op": "add", "path": "/arguments/verbose", "value": null}], "expect": "both_reject", "message": "unknown field `verbose`, there are no fields"},
+    {"name": "info_unknown_field", "rule": "info.no_arguments", "base": "info", "patch": [{"op": "add", "path": "/arguments/verbose", "value": true}], "expect": "both_reject"},
+
+    {"name": "new_empty", "rule": "document_new.no_arguments", "base": "new", "expect": "both_accept"},
+    {"name": "new_unknown_null_field", "rule": "document_new.no_arguments", "base": "new", "patch": [{"op": "add", "path": "/arguments/document", "value": null}], "expect": "both_reject", "message": "unknown field `document`, there are no fields"},
+    {"name": "new_unknown_field", "rule": "document_new.no_arguments", "base": "new", "patch": [{"op": "add", "path": "/arguments/format", "value": "smiles"}], "expect": "both_reject"},
+
+    {"name": "list_empty", "rule": "document_list.no_arguments", "base": "list", "expect": "both_accept"},
+    {"name": "list_unknown_null_field", "rule": "document_list.no_arguments", "base": "list", "patch": [{"op": "add", "path": "/arguments/document", "value": null}], "expect": "both_reject", "message": "unknown field `document`, there are no fields"},
+    {"name": "list_unknown_field", "rule": "document_list.no_arguments", "base": "list", "patch": [{"op": "add", "path": "/arguments/document", "value": "doc_1"}], "expect": "both_reject"},
+
+    {"name": "close_valid", "rule": "document_close.document_required", "base": "close", "expect": "both_accept"},
+    {"name": "close_omitted_document", "rule": "document_close.document_required", "base": "close", "patch": [{"op": "remove", "path": "/arguments/document"}], "expect": "both_reject", "message": "missing field `document`"},
+    {"name": "close_null_document", "rule": "document_close.document_required", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": null}], "expect": "both_reject"},
+
+    {"name": "close_document_only", "rule": "document_close.no_unknown_fields", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": "doc_1"}], "expect": "both_accept"},
+    {"name": "close_unknown_null_field", "rule": "document_close.no_unknown_fields", "base": "close", "patch": [{"op": "add", "path": "/arguments/force", "value": null}], "expect": "both_reject", "message": "unknown field `force`, expected `document`"},
+
+    {"name": "close_handle_one_character", "rule": "document_close.handle", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": "x"}], "expect": "both_accept"},
+    {"name": "close_handle_64_characters", "rule": "document_close.handle", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 64}}], "expect": "both_accept"},
+    {"name": "close_handle_charset", "rule": "document_close.handle", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": "Az09_-"}], "expect": "both_accept"},
+    {"name": "close_handle_65_characters", "rule": "document_close.handle", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 65}}], "expect": "both_reject", "message": "Document handles are 1 to 64 characters of A-Z, a-z, 0-9, \"_\" and \"-\""},
+    {"name": "close_handle_empty", "rule": "document_close.handle", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": ""}], "expect": "both_reject", "message": "Document handles are 1 to 64 characters of A-Z, a-z, 0-9, \"_\" and \"-\""},
+    {"name": "close_handle_space", "rule": "document_close.handle", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": "doc 1"}], "expect": "both_reject"},
+    {"name": "close_handle_non_ascii", "rule": "document_close.handle", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": "doc_é"}], "expect": "both_reject"},
+    {"name": "close_handle_number", "rule": "document_close.handle", "base": "close", "patch": [{"op": "replace", "path": "/arguments/document", "value": 12}], "expect": "both_reject"}
+  ]
+}

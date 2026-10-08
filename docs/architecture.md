@@ -21,11 +21,12 @@ The library is split into workspace crates. Each crate depends only on the crate
 1. `reshiki-chemistry` (`crates/chemistry/`): the chemistry core, without GUI dependencies.
 2. `reshiki-model` (`crates/model/`): document, scene, styles, editing, pictures, storage and themes, plus the drawing-to-molecule and abbreviation adapters in `chemistry/`.
 3. `reshiki-io` (`crates/io/`): chemistry engine, drawing interchange, export, recovery, document styles and the template library, plus the CDXML, MOL, reaction and cleanup adapters in `chemistry/`.
-4. `reshiki-agent` (`crates/agent/`): the assistant's GUI-free proposal schema, layout, composition, sketch diagrams, review and canvas inspection and rendering.
-5. `reshiki` library (`src/lib.rs`): a facade that re-exports the moved modules at their existing `reshiki::<module>` paths, plus the Codex assistant client and its preferences, clipboard, printing, updates, hotkeys, Office and accessibility services.
-6. `reshiki` executable (`src/main.rs`, `src/app/`, `src/canvas/`): the Iced application.
+4. `reshiki-agent` (`crates/agent/`): the assistant's GUI-free proposal schema, layout, composition, sketch diagrams, review and canvas inspection and rendering. It also hosts the experimental operation layer `ops`: `ToolHost`, `HeadlessHost`, the session document store, budgets, cancellation and the neutral tool catalog, and `access`, the folder grants of the agent file tools. Its transports are `reshiki-mcp` and the root crate's `reshiki::cli`, started by `reshiki --mcp` and `reshiki --cli` (`src/launch.rs`).
+5. `reshiki-mcp` (`crates/mcp/`): the experimental MCP transport behind `reshiki --mcp`: bounded stdio line framing, admission, backpressure and cancellation tracking, the rmcp protocol layer, the bridge to a `ToolHost` and the content-free stderr log. It uses no filesystem APIs.
+6. `reshiki` library (`src/lib.rs`): a facade that re-exports the moved modules at their existing `reshiki::<module>` paths, plus the Codex assistant client and its preferences, clipboard, printing, updates, hotkeys, Office and accessibility services, and the experimental `reshiki --cli` commands.
+7. `reshiki` executable (`src/main.rs`, `src/launch.rs`, `src/app/`, `src/canvas/`): the Iced application, and the headless `--mcp` and `--cli` modes selected by the first argument.
 
-`reshiki::chemistry` combines the core with both adapter layers, so existing imports keep working. Crate boundaries enforce the layering: a lower crate cannot import a higher one. The new crates are workspace default members, so `cargo test` and the pre-commit checks cover them. Release builds still produce exactly one executable with `cargo build --release --bin reshiki`; `build.rs` stays in the root package.
+`reshiki::chemistry` combines the core with both adapter layers, so existing imports keep working. Crate boundaries enforce the layering: a lower crate cannot import a higher one. The new crates are workspace default members, so `cargo test` and the pre-commit checks cover them. Release builds still produce exactly one executable with `cargo build --release --bin reshiki`; `build.rs` stays in the root package. The agent API adds no executable: `reshiki --mcp` and `reshiki --cli` are modes of the same binary, like the chemistry workers.
 
 ## Modules
 
@@ -44,7 +45,10 @@ The library is split into workspace crates. Each crate depends only on the crate
 | `src/app/dispatch.rs`                                       | Message dispatch table: one handler per message variant                        |
 | `src/app/canvas_edit/`                                      | Canvas gesture dispatch, direct manipulation, placement and clicks             |
 | `src/app/assistant.rs`, `src/app/assistant/`                | Assistant actions, request lifecycle, attachments, drafts and panel view       |
-| `crates/agent/src/`                                         | Assistant proposals: schema, layout, sketch, review and canvas tools           |
+| `crates/agent/src/`                                         | Assistant proposals and canvas tools; the experimental `ops` operation layer   |
+| `src/launch.rs`                                             | First-argument `--mcp`/`--cli` dispatch, heap ceiling, grants and shutdown     |
+| `src/cli.rs`, `src/cli/`                                    | Experimental `reshiki --cli` commands on an in-process `HeadlessHost`          |
+| `crates/mcp/src/`                                           | Experimental MCP stdio framing, protocol and `ToolHost` bridge                 |
 | `src/app/bond_edits.rs`                                     | Bond drawing settings and edits to selected bonds                              |
 | `src/app/atom_edits.rs`                                     | Element, charge, isotope, radical and mark edits to selected atoms             |
 | `src/app/ring_edits.rs`                                     | Ring tool settings and the selected ring's aromaticity                         |
@@ -71,7 +75,7 @@ The library is split into workspace crates. Each crate depends only on the crate
 | `crates/model/src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
 | `reference/engine/worker.py`                                | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
 
-Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents are saved as JSON format version 17 and accept versions 1–17 when reading. Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents are saved as JSON format version 19 and accept versions 1–19 when reading. Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. Molecule preparation compensates for neighbor permutations, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
 
@@ -232,3 +236,27 @@ The optional Codex panel uses a local app-server child with structured output. T
 Generation emits public activity, composition plans, actual structure counts and retained draft previews independently of the final structured proposal. Measured layouts support rows, central examples, grids and shared-reactant branches. The same app-server session then reviews overview and close-up images with editable object data. Corrections are validated and rendered again; only an exact final draft with no unresolved findings can pass the automatic-acceptance gate. Cancellation retains completed previews, and closing the panel leaves the job running. Preview geometry is cached independently of the activity timer. See [assistant flows and limits](assistant.md).
 
 Bond Z order is presentation metadata. A bounded sweep detects unconnected crossings, then clips lower-bond line/polygon geometry. Canvas and exports share these primitives. Elbow arrows use two line segments and retain a movable corner through native and supported editable interchange.
+
+## Agent API (experimental)
+
+The agent API is in Nightly builds only, not in ReShiki 0.11.0. `reshiki --mcp` serves the [agent API](agent-api.md) to an MCP client over standard input and output, and `reshiki --cli` runs the same operations once from the command line. Both are modes of the single `reshiki` executable, chosen in `src/main.rs` after the worker modes and before Office registration and the GUI. Only a first argument of exactly `--mcp` or `--cli` selects them.
+
+```mermaid
+flowchart LR
+    Client[MCP client] -- stdin / stdout --> Framing[reshiki-mcp framing: lines, admission, cancellation]
+    Framing --> Protocol[rmcp protocol and ToolHost bridge]
+    CLI[reshiki --cli] --> Host
+    Protocol --> Host[ToolHost: HeadlessHost; AppHost in P2]
+    Host --> Ops[ops: executor, session documents, operations]
+    Ops --> Engine[LocalEngine and export]
+    Ops --> Access[access: folder grants]
+    Access --> Dirs[Granted directory handles]
+```
+
+- The framing reads one bounded JSON-RPC message per line on its own thread, answers malformed lines itself, admits requests and stops reading while too many are outstanding. Its writer drops the responses of cancelled requests.
+- The protocol layer pins rmcp 3.5.1 behind ReShiki's own transport. It serves MCP 2026-07-28, 2025-11-25 and 2025-06-18 and maps operation results to MCP content: `structuredContent`, images and inline embedded resources.
+- `HeadlessHost` owns session documents in memory. Its executor bounds concurrency, queueing and deadlines; every edit is one atomic store commit. P2 adds an `AppHost` for drawings open in the app.
+- Operations call the same `LocalEngine`, composition and export code as the app. Only `file_open` and `file_save` touch files, through `access`, which resolves each request against directory handles opened once at startup.
+- `reshiki --cli` runs each command on an in-process `HeadlessHost` through the same `ToolHost::call`, and reads and writes its command-line paths with the user's own permissions.
+
+Budgets, containment and residual risks are recorded in [runtime safety](runtime-safety.md#agent-api-p1-experimental).

@@ -241,6 +241,27 @@ fn tool_response_keeps_codex_content_bytes() {
 }
 
 #[test]
+fn dynamic_tools_keep_slice_order_and_omit_title_and_hints() {
+    let spec = |name| ToolSpec {
+        name,
+        title: Some("Title"),
+        description: "Draws.",
+        input_schema: || json!({"type":"object"}),
+        hints: Some(reshiki_agent::tool_spec::Hints {
+            read_only: true,
+            destructive: false,
+            idempotent: true,
+            open_world: false,
+        }),
+    };
+    assert_eq!(dynamic_tools(&[]).to_string(), "[]");
+    assert_eq!(
+        dynamic_tools(&[spec("b"), spec("a")]).to_string(),
+        r#"[{"description":"Draws.","inputSchema":{"type":"object"},"name":"b","type":"function"},{"description":"Draws.","inputSchema":{"type":"object"},"name":"a","type":"function"}]"#
+    );
+}
+
+#[test]
 fn progress_events_map_to_codex_variants_without_reallocation() {
     let document = Box::new(crate::document::Document::default());
     let document_ptr = &*document as *const _;

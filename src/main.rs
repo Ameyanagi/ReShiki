@@ -17,6 +17,7 @@ mod app;
 mod appearance;
 mod branding;
 mod canvas;
+mod launch;
 #[cfg(windows)]
 mod rendering;
 
@@ -80,6 +81,13 @@ fn main() -> iced::Result {
             }
             return Ok(());
         }
+    }
+    // Headless modes enter before Office registration, graphics, Apple events
+    // and the std::env::args() checks below.
+    match launch::mode(std::env::args_os().skip(1)) {
+        launch::Launch::Gui => {}
+        launch::Launch::Mcp(args) => launch::mcp(args),
+        launch::Launch::Cli(args) => launch::cli(args),
     }
     #[cfg(windows)]
     {

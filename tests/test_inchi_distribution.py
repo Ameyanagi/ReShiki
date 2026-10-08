@@ -492,6 +492,7 @@ class HelperTests(unittest.TestCase):
                     patch("installers.verify_inchi_worker", side_effect=helper),
                     patch("installers.verify_runtime") as runtime,
                     patch("installers.verify_macos_workers") as native_workers,
+                    patch("installers.verify_agent_api") as agent,
                 ):
                     installers.verify_mac_disk_image(
                         Path("fixture.dmg"), False, architecture=architecture
@@ -506,6 +507,9 @@ class HelperTests(unittest.TestCase):
                     checked[0].with_name("reshiki"), checked[0].parents[2]
                 )
                 native_workers.assert_called_once_with(checked[0])
+                agent.assert_called_once_with(
+                    checked[0].with_name("reshiki"), checked[0].parents[2]
+                )
 
     def test_windows_setup_and_upgrade_verify_the_relocated_application(self):
         import installers
@@ -571,9 +575,11 @@ class HelperTests(unittest.TestCase):
                 patch("installers.run", side_effect=run),
                 patch("installers.verify_inchi_worker", side_effect=helper),
                 patch("installers.verify_runtime") as runtime,
+                patch("installers.verify_agent_api") as agent,
             ):
                 installers.verify_windows_installer(Path("setup.exe"), source)
             self.assertEqual(runtime.call_args.args, (installed[-1] / "reshiki.exe", installed[-1]))
+            agent.assert_called_once_with(*runtime.call_args.args)
             self.assertEqual(
                 runtime.call_args.kwargs["user_data"], installed[-1].parent / "User data"
             )

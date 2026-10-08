@@ -1,0 +1,183 @@
+---
+title: Connect AI agents (experimental)
+description: Let Claude Code, Claude Desktop or Codex import, analyze, lay out and export molecules with ReShiki’s experimental MCP server, or script it from the command line.
+---
+
+:::caution[Experimental: Nightly builds only]
+The agent API is experimental. It is available in Nightly builds only and is not in ReShiki 0.11.0. Its tools, results and commands may change in any build. To try it, [install a Nightly build](/guide/install/#nightly-builds).
+:::
+
+ReShiki can run without its window as an [MCP](https://modelcontextprotocol.io/) server: a background process that AI clients such as Claude Code, Claude Desktop and Codex start and give tools to. The same operations are available from a terminal with `reshiki --cli`.
+
+## What an agent can do
+
+- Import SMILES, MOL, RXN, reaction SMILES, InChI, CDXML or CDX, or open a file from a folder you granted.
+- Report the formula, mass, logP, TPSA, InChI, InChIKey and other properties.
+- Render a preview it can look at.
+- Lay out molecules and reaction schemes from SMILES, as ReShiki’s assistant does, then insert or delete structures and undo or redo.
+- Export SVG, PDF, PNG, CDXML, MOL, SMILES or InChI, or save `.rsk` drawings and those formats into a folder you granted.
+
+Limits in this version:
+
+- The agent composes at the SMILES level: molecules, reactions and whole schemes. It does not edit individual atoms, bonds or styles, and it does not look up chemical names, so it must supply SMILES.
+- It cannot see or change drawings open in the ReShiki app. Its drawings live in the server until it saves them; open a saved `.rsk` file in ReShiki to keep editing.
+- It reads and writes files only in folders you grant.
+
+## 1. Find the ReShiki executable
+
+Clients start ReShiki by the absolute path of its executable:
+
+| System  | Executable                                                                                                       |
+| ------- | ---------------------------------------------------------------------------------------------------------------- |
+| macOS   | `/Applications/ReShiki.app/Contents/MacOS/reshiki`                                                               |
+| Windows | `%LOCALAPPDATA%\Programs\ReShiki\reshiki.exe`, such as `C:\Users\you\AppData\Local\Programs\ReShiki\reshiki.exe` |
+| Linux   | `reshiki` in the folder you extracted, such as `/home/you/Apps/ReShiki/reshiki`                                  |
+
+Check it in a terminal. It prints one line of JSON that includes `"experimental": true`:
+
+```sh
+/Applications/ReShiki.app/Contents/MacOS/reshiki --cli info
+```
+
+On Windows, pipe the output, because the release build has no console of its own:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\ReShiki\reshiki.exe" --cli info | Write-Output
+```
+
+## 2. Choose folders to grant
+
+The server cannot read or write any file until you grant a folder. Create a dedicated folder for agent work, such as `/Users/you/ReShiki-Agent`, rather than granting your home folder or Documents. ReShiki refuses to grant the home folder, its parent folders, its own data folder and the folder it is installed in.
+
+- `--allow-write <folder>` lets the agent save files into the folder.
+- `--allow-read <folder>` lets it open files from the folder. A write grant does not include reading, so add both to let it reopen what it saved.
+
+You can also grant folders for every client in `agent-access.json` in ReShiki’s data folder (`~/Library/Application Support/dev.reshiki.ReShiki/` on macOS, `%LOCALAPPDATA%\reshiki\ReShiki\data\` on Windows, `~/.local/share/reshiki/` on Linux):
+
+```json
+{ "version": 1, "read": ["/Users/you/ReShiki-Agent"], "write": ["/Users/you/ReShiki-Agent"] }
+```
+
+Folders are read when the server starts. A folder that does not exist or cannot be granted stops the server with exit code 2, and the client reports that it failed to start. Restart the client after changing grants.
+
+## 3. Connect your client
+
+Use absolute paths everywhere. `~`, `$HOME` and `%LOCALAPPDATA%` are not expanded in JSON or TOML, and a relative folder would depend on where the client starts the server. Replace the example paths with your own.
+
+### Claude Code
+
+```sh
+claude mcp add --transport stdio --scope user reshiki -- /Applications/ReShiki.app/Contents/MacOS/reshiki --mcp --allow-write /Users/you/ReShiki-Agent
+```
+
+On Windows:
+
+```powershell
+claude mcp add --transport stdio --scope user reshiki -- "C:\Users\you\AppData\Local\Programs\ReShiki\reshiki.exe" --mcp --allow-write "C:\Users\you\ReShiki-Agent"
+```
+
+- Everything after `--` is ReShiki’s command line. The `--` separator is required, so Claude Code does not read `--mcp` as its own option.
+- Prefer user scope. Project-scoped servers from a repository’s `.mcp.json` load without asking in `claude -p` and SDK sessions, so a project you open could start ReShiki with folders you did not choose.
+- `CLAUDE_PROJECT_DIR`, which Claude Code sets for the servers it starts, grants nothing. Grant folders explicitly.
+- Claude Code warns when one tool result exceeds 10,000 tokens and limits results to 25,000 tokens by default. Set `MAX_MCP_OUTPUT_TOKENS` to raise the limit, or ask the agent for a smaller render, part of a drawing, or `file_save` instead of an inline export.
+
+Run `/mcp` in a Claude Code session to see the server and its tools. See [Claude Code’s MCP documentation](https://code.claude.com/docs/en/mcp).
+
+### Claude Desktop
+
+In Claude Desktop, open **Settings → Developer → Edit Config**. It opens `claude_desktop_config.json`:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add ReShiki under `mcpServers`, with the executable as `command` and ReShiki’s options as `args`:
+
+```json
+{
+  "mcpServers": {
+    "reshiki": {
+      "command": "/Applications/ReShiki.app/Contents/MacOS/reshiki",
+      "args": ["--mcp", "--allow-write", "/Users/you/ReShiki-Agent"]
+    }
+  }
+}
+```
+
+On Windows, double every backslash:
+
+```json
+{
+  "mcpServers": {
+    "reshiki": {
+      "command": "C:\\Users\\you\\AppData\\Local\\Programs\\ReShiki\\reshiki.exe",
+      "args": ["--mcp", "--allow-write", "C:\\Users\\you\\ReShiki-Agent"]
+    }
+  }
+}
+```
+
+Both paths must be absolute. Quit and reopen Claude Desktop to start the server. Its logs are in `~/Library/Logs/Claude` on macOS and `%APPDATA%\Claude\logs` on Windows; `mcp-server-reshiki.log` holds ReShiki’s stderr. See [connecting local MCP servers](https://modelcontextprotocol.io/docs/develop/connect-local-servers).
+
+### Codex
+
+Add ReShiki to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.reshiki]
+command = "/Applications/ReShiki.app/Contents/MacOS/reshiki"
+args = ["--mcp", "--allow-write", "/Users/you/ReShiki-Agent"]
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+```
+
+On Windows, single-quoted TOML strings keep backslashes as written:
+
+```toml
+[mcp_servers.reshiki]
+command = 'C:\Users\you\AppData\Local\Programs\ReShiki\reshiki.exe'
+args = ['--mcp', '--allow-write', 'C:\Users\you\ReShiki-Agent']
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+```
+
+You can instead run `codex mcp add reshiki -- /Applications/ReShiki.app/Contents/MacOS/reshiki --mcp --allow-write /Users/you/ReShiki-Agent`, then add the two timeouts to the entry it writes. Codex waits 10 s for a server to start and 60 s for a tool call by default ([Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)). ReShiki allows each call up to 120 s, so a large layout or render can outlast Codex’s default.
+
+## 4. Try it
+
+Ask your agent, for example:
+
+> Use ReShiki to draw the esterification of acetic acid with ethanol, show me a preview, and save it as esterification.rsk and esterification.svg in my ReShiki-Agent folder.
+
+The agent imports or composes the structures, renders a preview, and saves the files into the granted folder. Open the `.rsk` file in ReShiki to continue editing.
+
+## Use the command line
+
+`reshiki --cli` runs one command and exits. It reads and writes the paths you give it with your own permissions; folder grants do not apply. An existing output file is replaced only with `--force`.
+
+```sh
+reshiki --cli convert --smiles 'CCO' -o ethanol.mol
+reshiki --cli convert scheme.rsk -o figure.pdf
+reshiki --cli render scheme.rsk -o preview.png
+reshiki --cli analyze --smiles 'c1ccccc1O'
+reshiki --cli compose proposal.json -o scheme.svg
+reshiki --cli help convert
+```
+
+Use the full executable path from step 1 in place of `reshiki`. On Windows, pipe or redirect the output, as in `| Write-Output` or `> info.json`; without that, a release build’s output and error messages do not appear. MCP clients are unaffected. The [agent API reference](/developer/agent-api/#command-line) lists every option and exit code.
+
+## Troubleshooting
+
+| Problem                                   | What to do                                                                                                                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The server does not start on macOS        | Open ReShiki once from Finder after downloading it, and keep it in `/Applications`, so macOS does not block a client from starting it.                                                                        |
+| Files in Documents or Desktop are refused | macOS checks the client app’s privacy permissions, not ReShiki’s. Allow the client in **System Settings → Privacy & Security**, or grant a folder outside Documents, Desktop and iCloud Drive.                |
+| The server fails to start                 | Run the client’s command in a terminal with `--log-level debug` and empty input (`< /dev/null` on macOS and Linux). It prints the version and granted folders, or one line naming the folder it cannot grant. |
+| `path_not_granted`                        | The file is outside the granted folders. Add the folder to the client’s configuration, then restart the client.                                                                                               |
+| Codex reports a timeout                   | Set `tool_timeout_sec = 120` and `startup_timeout_sec = 20` for ReShiki.                                                                                                                                      |
+| Claude Code cuts off a result             | Raise `MAX_MCP_OUTPUT_TOKENS`, or ask for a smaller render or part of the drawing.                                                                                                                            |
+| Updating ReShiki on Windows               | Quit MCP clients first, so no `reshiki.exe --mcp` is running while the installer replaces ReShiki.                                                                                                            |
+| The agent still sees the old version      | Restart the client after any ReShiki update, so it starts the new executable.                                                                                                                                 |
+
+## Privacy
+
+The agent API runs only when you or a client you configured start it. It opens no network connection: no update checks, downloads or telemetry. Your MCP client, and the model service it uses, receive what the tools return, including structures, rendered images and text from the drawings the agent works on, and the client’s own privacy terms apply. ReShiki cannot see drawings open in the app, and files are read and written only in the folders you grant. The command line uses your own permissions. Read the [privacy policy](/developer/privacy-policy/#optional-agent-api-and-command-line-experimental) for details, and [runtime safety](/developer/runtime-safety/#agent-api-p1-experimental) for limits and remaining risks.

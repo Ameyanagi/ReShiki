@@ -104,10 +104,8 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
         .unwrap_or_default()
         .to_ascii_lowercase();
     if reshiki::compatibility::is_native_extension(&extension) {
-        let mut doc = reshiki::document::Document::from_json(&contents)
+        let doc = reshiki::document::Document::from_native_file(&contents)
             .map_err(|e| format!("Could not open document: {e}"))?;
-        doc.version = doc.version.max(15);
-        reshiki::atom_labels::clear_computed(&mut doc);
         Ok(Prepared::Native(Box::new(doc)))
     } else {
         let format = match extension.as_str() {

@@ -266,3 +266,16 @@ pub fn straighten_all(doc: &mut Document) -> usize {
         .filter(|ids| !ids.iter().any(|id| diagram_ids.contains(id)) && straighten(doc, ids))
         .count()
 }
+
+/// Straighten generated structures onto clean drawing axes, except in a
+/// sketch, which keeps its drawn geometry. Returns the review change to record.
+pub fn finish_layout(proposal: &super::Proposal, document: &mut Document) -> Option<String> {
+    if proposal.sketch.is_some() {
+        return None;
+    }
+    let n = straighten_all(document);
+    (n > 0).then(|| format!("Aligned {n} molecular structures to clean drawing axes."))
+}
+
+#[cfg(test)]
+mod tests;

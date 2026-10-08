@@ -181,3 +181,96 @@ fn physical_scale_survives_svg_and_png_export() {
         (22.4_f32 / 72.0 * 1200.0).ceil() as u32
     );
 }
+
+fn parity_fixtures() -> [(&'static str, Document); 2] {
+    [
+        (
+            "bond-join-regression",
+            Document::from_json(include_bytes!(
+                "../../../../tests/fixtures/bond-join-regression.rsk"
+            ))
+            .unwrap(),
+        ),
+        (
+            "coordination-layout",
+            Document::from_json(include_bytes!(
+                "../../../../tests/fixtures/coordination-layout.rsk"
+            ))
+            .unwrap(),
+        ),
+    ]
+}
+
+/// Export fingerprints to compare before and after an export refactor. Bytes
+/// depend on the installed fonts, so compare runs on the same machine only.
+#[test]
+#[ignore = "prints export fingerprints for a same-machine before/after comparison"]
+fn export_parity_dump() {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    for (name, doc) in parity_fixtures() {
+        for (clipboard, format) in [
+            (false, "png"),
+            (false, "svg"),
+            (false, "pdf"),
+            (true, "png"),
+            (true, "svg"),
+        ] {
+            let kind = if clipboard {
+                "clipboard_figure"
+            } else {
+                "figure"
+            };
+            let result = if clipboard {
+                clipboard_figure(&doc, format)
+            } else {
+                figure(&doc, format)
+            };
+            match result {
+                Ok(figure) => {
+                    let mut hasher = DefaultHasher::new();
+                    figure.bytes.hash(&mut hasher);
+                    println!(
+                        "{name} {kind}({format}): byte_len={} hash={:016x} detail={:?}",
+                        figure.bytes.len(),
+                        hasher.finish(),
+                        figure.detail
+                    );
+                }
+                Err(error) => println!("{name} {kind}({format}): error={error:?}"),
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+#[test]
+fn clipboard_png_keeps_the_fixed_preferred_resolution() {
+    let [(_, doc), _] = parity_fixtures();
+    let detail = clipboard_figure(&doc, "png").unwrap().detail.unwrap();
+    assert!(
+        detail.ends_with(&format!("at {} dpi", crate::style::DEFAULT.png_dpi)),
+        "{detail}"
+    );
+}
+
+#[test]
+fn figure_budgets_step_down_the_resolution_ladder_to_72_dpi() {
+    let [(_, doc), _] = parity_fixtures();
+    let tree = parse_svg(scene::svg_with_background(&doc)).unwrap();
+    // png_dimensions scales CSS pixels by dpi / 96.
+    let side = |length: f32| u64::from((length * 0.75).ceil() as u32);
+    let at_72 = side(tree.size().width()) * side(tree.size().height());
+    let file = figure(&doc, "png").unwrap();
+    let full = figure_with_budget(&doc, "png", FILE_PIXELS).unwrap();
+    assert_eq!((full.bytes, full.detail), (file.bytes, file.detail));
+    let reduced = figure_with_budget(&doc, "png", at_72).unwrap();
+    let detail = reduced.detail.unwrap();
+    assert!(detail.ends_with("at 72 dpi"), "{detail}");
+    assert!(!detail.ends_with(&format!("at {} dpi", crate::style::DEFAULT.png_dpi)));
+    assert_eq!(
+        figure_with_budget(&doc, "png", at_72 - 1).err().as_deref(),
+        Some("Drawing is too large for a PNG even at 72 dpi; use SVG or PDF.")
+    );
+    // Vector formats have no pixel budget.
+    assert!(figure_with_budget(&doc, "svg", 1).is_ok());
+}

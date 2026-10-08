@@ -34,3 +34,98 @@ fn native_extensions_accept_previous_drawings() {
     assert!(is_native_extension("MORUNO"));
     assert!(!is_native_extension("mol"));
 }
+
+#[test]
+fn an_override_wins_and_the_missing_directory_error_is_unchanged() {
+    let project = || Some(PathBuf::from("/platform/data"));
+    let cases = [
+        (
+            Some(OsString::from("/override")),
+            project(),
+            Ok(DataLocation {
+                path: PathBuf::from("/override"),
+                origin: DataLocationOrigin::Override,
+            }),
+        ),
+        (
+            Some(OsString::from("/override")),
+            None,
+            Ok(DataLocation {
+                path: PathBuf::from("/override"),
+                origin: DataLocationOrigin::Override,
+            }),
+        ),
+        (
+            None,
+            project(),
+            Ok(DataLocation {
+                path: PathBuf::from("/platform/data"),
+                origin: DataLocationOrigin::Default,
+            }),
+        ),
+        (None, None, Err("No application data directory".to_owned())),
+    ];
+    for (override_path, project, expected) in cases {
+        let label = format!("{override_path:?} {project:?}");
+        assert_eq!(
+            resolve_data_location(override_path, project),
+            expected,
+            "{label}"
+        );
+    }
+}
+
+#[test]
+fn only_the_platform_directory_imports_earlier_data() {
+    let finish = |origin, outcome: Result<(), String>| {
+        let calls = std::cell::Cell::new(0);
+        let location = DataLocation {
+            path: PathBuf::from("/data"),
+            origin,
+        };
+        let result = finish_data_directory(location, |root| {
+            assert_eq!(root, Path::new("/data"));
+            calls.set(calls.get() + 1);
+            outcome
+        });
+        (result, calls.get())
+    };
+    assert_eq!(
+        finish(DataLocationOrigin::Override, Err("unused".into())),
+        (Ok(PathBuf::from("/data")), 0)
+    );
+    assert_eq!(
+        finish(DataLocationOrigin::Default, Ok(())),
+        (Ok(PathBuf::from("/data")), 1)
+    );
+    assert_eq!(
+        finish(DataLocationOrigin::Default, Err("copy failed".into())),
+        (Err("copy failed".to_owned()), 1)
+    );
+}
+
+#[test]
+fn every_absolute_home_counts_once_in_order() {
+    let root = PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" });
+    let profile = root.join("Users").join("me");
+    let overridden = root.join("tmp").join("home");
+    let homes = distinct_homes([
+        Some(profile.clone()),
+        None,
+        Some(PathBuf::new()),
+        Some(PathBuf::from("relative")),
+        Some(overridden.clone()),
+        Some(profile.clone()),
+    ]);
+    assert_eq!(homes, [profile, overridden]);
+    assert_eq!(distinct_homes([None, None]), Vec::<PathBuf>::new());
+}
+
+#[test]
+fn the_environment_home_is_one_of_the_homes() {
+    let homes = home_directories();
+    assert!(homes.iter().all(|home| home.is_absolute()), "{homes:?}");
+    if let Some(home) = std::env::home_dir().filter(|home| home.is_absolute()) {
+        assert!(homes.contains(&home), "{homes:?}");
+    }
+}

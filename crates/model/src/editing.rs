@@ -102,6 +102,27 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     part
 }
 
+/// The atoms a chemistry analysis of `selected` covers: any selected
+/// abbreviation member pulls in its whole abbreviation, in document order.
+pub fn analysis_atoms(doc: &Document, selected: &[u64]) -> Vec<u64> {
+    let ids: HashSet<_> = doc
+        .expand_abbreviation_selection(selected)
+        .into_iter()
+        .collect();
+    doc.atoms
+        .iter()
+        .filter(|a| ids.contains(&a.id))
+        .map(|a| a.id)
+        .collect()
+}
+
+/// The fragment analyzed for `atoms`, without cached computed labels.
+pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
+    let mut part = selection(doc, atoms);
+    crate::atom_labels::clear_computed(&mut part);
+    part
+}
+
 /// Insert `source` at `offset` under new IDs and return the inserted IDs.
 ///
 /// IDs are assigned sequentially from `doc.next_id()`: first to

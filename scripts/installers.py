@@ -4,14 +4,26 @@ import json
 import os
 import platform
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from agent_api_client import StdioClient, result
 from build_inchi_helper import INCHI_VERSION
 from build_release import ROOT, checksum, numeric_version, run, verify_binary, verify_inchi_worker
-from check_runtime_dependencies import verify_macos_workers, verify_payload, verify_runtime
+from check_runtime_dependencies import (
+    AGENT_CALL,
+    verify_agent_api,
+    verify_macos_workers,
+    verify_payload,
+    verify_runtime,
+)
+
+# An upgrade over a running MCP server that takes longer than this has hung.
+UPGRADE_LIMIT = 300
+UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\dev.reshiki.editor_is1"
 
 
 class InstallerCheckDirectory(tempfile.TemporaryDirectory):
@@ -68,6 +80,7 @@ def windows_installer(folder, output_dir):
     )
     output = output_dir / f"{name}.exe"
     verify_windows_installer(output, folder)
+    verify_windows_upgrade_with_running_agent(output, folder)
     checksum(output)
     return output
 
@@ -140,6 +153,7 @@ def verify_windows_installer(installer, source):
             verify_binary(binary, "windows", metadata["architecture"])
             verify_inchi_worker(binary, INCHI_VERSION)
             verify_runtime(destination / "reshiki.exe", destination, user_data=user_data)
+            verify_agent_api(destination / "reshiki.exe", destination)
         finally:
             uninstaller = destination / "unins000.exe"
             if uninstaller.is_file():
@@ -151,6 +165,107 @@ def verify_windows_installer(installer, source):
         if cache_sentinel.read_text(encoding="utf-8") != "User cache":
             raise ValueError("Installer or uninstaller modified the user chemistry cache")
     print("Windows installation, upgrade, chemistry, and uninstallation verified.")
+
+
+def installed_intact(destination, source):
+    """Every shipped file is installed byte for byte."""
+    return all(
+        (destination / original.relative_to(source)).is_file()
+        and (destination / original.relative_to(source)).read_bytes() == original.read_bytes()
+        for original in source.rglob("*")
+        if original.is_file()
+    )
+
+
+def _uninstall_registered():
+    """Whether Windows lists the per-user install under Apps (Inno Setup's
+    `{AppId}_is1` key; PrivilegesRequired=lowest in packaging/windows/reshiki.iss)."""
+    if sys.platform != "win32":
+        raise ValueError("Windows installer verification requires Windows")
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY):
+            return True
+    except OSError:
+        return False
+
+
+def uninstall_state(destination):
+    """Which of setup's uninstaller files exist, and whether Windows lists the app."""
+    files = tuple((destination / name).is_file() for name in ("unins000.exe", "unins000.dat"))
+    return files, _uninstall_registered()
+
+
+def verify_windows_upgrade_with_running_agent(installer, source):
+    """Upgrade over a running `reshiki.exe --mcp` and record what setup does.
+
+    Setup closes running copies without restarting them (CloseApplications=yes,
+    RestartApplications=no in packaging/windows/reshiki.iss). Either outcome
+    passes: setup succeeds with a working new install and the old server
+    ended, or setup fails nonzero and leaves the old install intact. Either
+    way the uninstaller and its Apps entry must stay as the first install left
+    them. Setup still running after UPGRADE_LIMIT seconds fails.
+    """
+    if sys.platform != "win32":
+        raise ValueError("Windows installer verification requires Windows")
+    with InstallerCheckDirectory(prefix="ReShiki agent upgrade check ") as temporary:
+        root = Path(temporary)
+        destination = root / "Installed ReShiki"
+        binary = destination / "reshiki.exe"
+        flags = [
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/SP-",
+            "/NOICONS",
+            "/TASKS=",
+            f"/DIR={destination}",
+        ]
+        environment = dict(os.environ, RESHIKI_DATA_DIR=str(root / "User data"))
+        server = None
+        try:
+            run([installer, *flags], timeout=180)
+            uninstall = uninstall_state(destination)
+            server = StdioClient([binary, "--mcp"], cwd=root, env=environment)
+            result(server.discover(AGENT_CALL))
+            try:
+                run([installer, *flags], timeout=UPGRADE_LIMIT)
+                code = 0
+            except subprocess.CalledProcessError as error:
+                code = error.returncode
+            except subprocess.TimeoutExpired:
+                raise ValueError(
+                    f"Setup hung for {UPGRADE_LIMIT} s while an MCP server was running"
+                ) from None
+            try:
+                server.process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            ended = server.process.poll() is not None
+            if uninstall_state(destination) != uninstall:
+                raise ValueError(f"Setup ({code}) over a running MCP server broke the uninstaller")
+            if code == 0:
+                if not ended:
+                    raise ValueError("Setup succeeded while the old MCP server kept running")
+                if not installed_intact(destination, source):
+                    raise ValueError(
+                        "Setup succeeded over a running MCP server but broke the install"
+                    )
+                run([binary, "--cli", "info"], capture_output=True, timeout=120)
+                outcome = "setup closed the server and upgraded"
+            else:
+                if not installed_intact(destination, source):
+                    raise ValueError(f"Setup failed ({code}) and damaged the old install")
+                outcome = f"setup failed ({code}) and kept the old install"
+        finally:
+            if server is not None:
+                server.kill()
+            uninstaller = destination / "unins000.exe"
+            if uninstaller.is_file():
+                run([uninstaller, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], timeout=180)
+    print(f"Windows upgrade with a running MCP server: {outcome}.")
+    return outcome
 
 
 def mac_disk_image(folder, output_dir, signed=False):
@@ -213,6 +328,7 @@ def verify_mac_disk_image(output, signed, *, architecture):
         verify_inchi_worker(installed / "Contents/MacOS/reshiki", INCHI_VERSION)
         verify_runtime(installed / "Contents/MacOS/reshiki", installed)
         verify_macos_workers(installed / "Contents/MacOS/reshiki")
+        verify_agent_api(installed / "Contents/MacOS/reshiki", installed)
         run(["codesign", "--verify", "--deep", "--strict", installed])
         if signed:
             from sign_macos import verify_app

@@ -1,0 +1,128 @@
+{
+  "rules": [
+    {
+      "id": "arguments.object",
+      "cite": "crates/agent/src/ops/catalog.rs:59,77-88; crates/agent/src/ops/render.rs:99-106"
+    },
+    {
+      "id": "render.document_required",
+      "cite": "crates/agent/src/ops/render.rs:42,48,70"
+    },
+    {
+      "id": "render.document_handle",
+      "cite": "crates/agent/src/ops/wire.rs:84-89,163-170,182-185"
+    },
+    {
+      "id": "render.format_enum",
+      "cite": "crates/agent/src/ops/render.rs:43,48,58-64,71"
+    },
+    {
+      "id": "render.max_width_nullable_required",
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/render.rs:44,48,72-73"
+    },
+    {
+      "id": "render.max_height_nullable_required",
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/render.rs:45,48,74-75"
+    },
+    {
+      "id": "render.side_range",
+      "cite": "crates/agent/src/ops/render.rs:53-56,110-126; crates/agent/src/ops/budget.rs:67-70,92-93"
+    },
+    {
+      "id": "render.side_integer",
+      "cite": "crates/agent/src/ops/render.rs:55,73,75"
+    },
+    {
+      "id": "render.pixel_budget",
+      "cite": "crates/agent/src/ops/render.rs:127-136; crates/agent/src/ops/budget.rs:71-72,94"
+    },
+    {
+      "id": "render.ids_nullable_required",
+      "cite": "crates/agent/src/ops/wire.rs:3-10,192-195; crates/agent/src/ops/render.rs:46,48,76-77"
+    },
+    {
+      "id": "render.ids_items",
+      "cite": "crates/agent/src/ops/wire.rs:59-70,145-152,172-175"
+    },
+    {
+      "id": "render.ids_count",
+      "cite": "crates/agent/src/ops/ids.rs:11-25; crates/agent/src/ops/render.rs:107-109; crates/agent/src/ops/wire.rs:187-190; crates/agent/src/ops/budget.rs:26-27,84"
+    },
+    {
+      "id": "render.no_unknown_fields",
+      "cite": "crates/agent/src/ops/render.rs:67-69"
+    }
+  ],
+  "bases": {
+    "default": {"tool": "render", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "png", "max_width": null, "max_height": null, "ids": null}},
+    "sized": {"tool": "render", "arguments": {"document": "doc_0123456789abcdef0123456789abcdef", "format": "svg", "max_width": 800, "max_height": 600, "ids": ["1", "12"]}}
+  },
+  "cases": [
+    {"name": "arguments_object", "rule": "arguments.object", "base": "default", "expect": "both_accept"},
+    {"name": "arguments_array", "rule": "arguments.object", "base": "default", "patch": [{"op": "replace", "path": "/arguments", "value": ["doc_1", "png", null, null, null]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "arguments_string", "rule": "arguments.object", "base": "default", "patch": [{"op": "replace", "path": "/arguments", "value": "{}"}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+
+    {"name": "document_given", "rule": "render.document_required", "base": "sized", "expect": "both_accept"},
+    {"name": "document_omitted", "rule": "render.document_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/document"}], "expect": "both_reject", "message": "missing field `document`"},
+    {"name": "document_null", "rule": "render.document_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/document", "value": null}], "expect": "both_reject"},
+
+    {"name": "handle_64_characters", "rule": "render.document_handle", "base": "default", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 64}}], "expect": "both_accept"},
+    {"name": "handle_65_characters", "rule": "render.document_handle", "base": "default", "patch": [{"op": "replace", "path": "/arguments/document", "value": {"$text": "a", "count": 65}}], "expect": "both_reject", "message": "Document handles are 1 to 64 characters of A-Z, a-z, 0-9, \"_\" and \"-\""},
+    {"name": "handle_empty", "rule": "render.document_handle", "base": "default", "patch": [{"op": "replace", "path": "/arguments/document", "value": ""}], "expect": "both_reject"},
+
+    {"name": "format_png", "rule": "render.format_enum", "base": "default", "expect": "both_accept"},
+    {"name": "format_svg", "rule": "render.format_enum", "base": "default", "patch": [{"op": "replace", "path": "/arguments/format", "value": "svg"}], "expect": "both_accept"},
+    {"name": "format_pdf", "rule": "render.format_enum", "base": "default", "patch": [{"op": "replace", "path": "/arguments/format", "value": "pdf"}], "expect": "both_reject", "message": "unknown variant `pdf`, expected `png` or `svg`"},
+    {"name": "format_upper_case", "rule": "render.format_enum", "base": "default", "patch": [{"op": "replace", "path": "/arguments/format", "value": "PNG"}], "expect": "both_reject"},
+    {"name": "format_omitted", "rule": "render.format_enum", "base": "default", "patch": [{"op": "remove", "path": "/arguments/format"}], "expect": "both_reject", "message": "missing field `format`"},
+    {"name": "format_null", "rule": "render.format_enum", "base": "default", "patch": [{"op": "replace", "path": "/arguments/format", "value": null}], "expect": "both_reject"},
+
+    {"name": "max_width_null", "rule": "render.max_width_nullable_required", "base": "default", "expect": "both_accept"},
+    {"name": "max_width_omitted", "rule": "render.max_width_nullable_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/max_width"}], "expect": "both_reject", "message": "missing field `max_width`"},
+    {"name": "max_width_string", "rule": "render.max_width_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": "800"}], "expect": "both_reject"},
+    {"name": "max_width_bool", "rule": "render.max_width_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": true}], "expect": "both_reject"},
+
+    {"name": "max_height_null", "rule": "render.max_height_nullable_required", "base": "default", "expect": "both_accept"},
+    {"name": "max_height_omitted", "rule": "render.max_height_nullable_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/max_height"}], "expect": "both_reject", "message": "missing field `max_height`"},
+    {"name": "max_height_string", "rule": "render.max_height_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_height", "value": "600"}], "expect": "both_reject"},
+
+    {"name": "max_width_1", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 1}], "expect": "both_accept"},
+    {"name": "max_width_0", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 0}], "expect": "both_reject", "message": "max_width must be from 1 to 8192 pixels"},
+    {"name": "max_width_8192", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 8192}], "expect": "both_accept"},
+    {"name": "max_width_8193", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 8193}], "expect": "both_reject", "message": "max_width must be from 1 to 8192 pixels"},
+    {"name": "max_height_1", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_height", "value": 1}], "expect": "both_accept"},
+    {"name": "max_height_0", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_height", "value": 0}], "expect": "both_reject", "message": "max_height must be from 1 to 8192 pixels"},
+    {"name": "max_height_8192", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_height", "value": 8192}], "expect": "both_accept"},
+    {"name": "max_height_8193", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_height", "value": 8193}], "expect": "both_reject", "message": "max_height must be from 1 to 8192 pixels"},
+    {"name": "both_sides_0", "rule": "render.side_range", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 0}, {"op": "replace", "path": "/arguments/max_height", "value": 0}], "expect": "both_reject", "message": "max_width must be from 1 to 8192 pixels"},
+
+    {"name": "side_integer", "rule": "render.side_integer", "base": "sized", "expect": "both_accept"},
+    {"name": "side_whole_float", "rule": "render.side_integer", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 800.0}], "expect": "decoder_rejects_only"},
+    {"name": "side_fraction", "rule": "render.side_integer", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 800.5}], "expect": "both_reject"},
+    {"name": "side_negative", "rule": "render.side_integer", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_height", "value": -1}], "expect": "both_reject"},
+    {"name": "side_above_u32", "rule": "render.side_integer", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_height", "value": 4294967296}], "expect": "both_reject"},
+
+    {"name": "pixels_at_max_pixels", "rule": "render.pixel_budget", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 8192}, {"op": "replace", "path": "/arguments/max_height", "value": 1953}], "expect": "both_accept"},
+    {"name": "pixels_over_max_pixels", "rule": "render.pixel_budget", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 8192}, {"op": "replace", "path": "/arguments/max_height", "value": 1954}], "expect": "decoder_rejects_only", "message": "8192 × 1954 is 16007168 pixels; render.max_pixels allows at most 16000000"},
+    {"name": "pixels_at_max_sides", "rule": "render.pixel_budget", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/max_width", "value": 8192}, {"op": "replace", "path": "/arguments/max_height", "value": 8192}], "expect": "decoder_rejects_only", "message": "8192 × 8192 is 67108864 pixels; render.max_pixels allows at most 16000000"},
+    {"name": "pixels_default_height", "rule": "render.pixel_budget", "base": "default", "patch": [{"op": "replace", "path": "/arguments/max_height", "value": 8192}], "expect": "both_accept"},
+
+    {"name": "ids_null", "rule": "render.ids_nullable_required", "base": "default", "expect": "both_accept"},
+    {"name": "ids_empty", "rule": "render.ids_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/ids", "value": []}], "expect": "both_accept"},
+    {"name": "ids_omitted", "rule": "render.ids_nullable_required", "base": "default", "patch": [{"op": "remove", "path": "/arguments/ids"}], "expect": "both_reject", "message": "missing field `ids`"},
+    {"name": "ids_string", "rule": "render.ids_nullable_required", "base": "default", "patch": [{"op": "replace", "path": "/arguments/ids", "value": "1"}], "expect": "both_reject"},
+
+    {"name": "id_one", "rule": "render.ids_items", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["1"]}], "expect": "both_accept"},
+    {"name": "id_above_2_pow_53", "rule": "render.ids_items", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/ids", "value": ["9007199254740993"]}], "expect": "both_accept"},
+    {"name": "id_zero", "rule": "render.ids_items", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "0"}], "expect": "both_reject", "message": "Object IDs are decimal strings such as \"12\""},
+    {"name": "id_number", "rule": "render.ids_items", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": 1}], "expect": "both_reject"},
+    {"name": "id_u64_max", "rule": "render.ids_items", "base": "sized", "patch": [{"op": "replace", "path": "/arguments/ids/0", "value": "18446744073709551615"}], "expect": "decoder_rejects_only", "message": "Object IDs are decimal strings such as \"12\""},
+
+    {"name": "ids_at_max_ids", "rule": "render.ids_count", "base": "default", "patch": [{"op": "replace", "path": "/arguments/ids", "value": {"$repeat": "7", "count": 5000}}], "expect": "both_accept"},
+    {"name": "ids_over_max_ids", "rule": "render.ids_count", "base": "default", "patch": [{"op": "replace", "path": "/arguments/ids", "value": {"$repeat": "7", "count": 5001}}], "expect": "both_reject", "message": "5001 object IDs were given; at most 5000 are allowed per request"},
+
+    {"name": "known_fields_only", "rule": "render.no_unknown_fields", "base": "sized", "expect": "both_accept"},
+    {"name": "unknown_null_field", "rule": "render.no_unknown_fields", "base": "default", "patch": [{"op": "add", "path": "/arguments/dpi", "value": null}], "expect": "both_reject", "message": "unknown field `dpi`, expected one of `document`, `format`, `max_width`, `max_height`, `ids`"},
+    {"name": "unknown_field", "rule": "render.no_unknown_fields", "base": "default", "patch": [{"op": "add", "path": "/arguments/background", "value": "white"}], "expect": "both_reject"}
+  ]
+}

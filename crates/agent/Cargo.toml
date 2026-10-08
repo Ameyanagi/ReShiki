@@ -14,11 +14,21 @@ rdkit-reference = ["reshiki-io/rdkit-reference"]
 [dependencies]
 reshiki-model = { path = "../model" }
 reshiki-io = { path = "../io" }
+# Binary CDX files become base64 import text, as the app reads them.
+base64 = "0.22"
 resvg = "0.45"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 tokio = { version = "1", features = ["sync", "rt"] }
+# Capability-based filesystem access for the agent API. fs_utf8/arf_strings stay off.
+cap-std = { version = "=4.0.3", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+# Only the O_NONBLOCK and O_NOCTTY constants; no libc functions are called.
+libc = "=0.2.189"
 
 [dev-dependencies]
 anyhow = "1"
+tempfile = "3"
 reshiki-process-heap = { path = "../process-heap", features = ["allocation-metrics"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

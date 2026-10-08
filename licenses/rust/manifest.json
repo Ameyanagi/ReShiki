@@ -1271,5 +1271,18 @@
     ],
     "fork": "https://github.com/Ameyanagi/COSMolKit",
     "fork_revision": "252a1f3d6480fc4a0abcd51d76707f51f69b4406"
+  },
+  "rmcp@3.5.1": {
+    "license": "Apache-2.0",
+    "repository": "https://github.com/modelcontextprotocol/rust-sdk",
+    "revision": "79437f291b2c44053d00dcd5db969fd0cca7c887",
+    "authors": ["4t145 <u4t145@163.com>"],
+    "files": [
+      {
+        "path": "texts/rmcp-LICENSE-0382b0057770.txt",
+        "sha256": "0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a",
+        "source": "https://raw.githubusercontent.com/modelcontextprotocol/rust-sdk/79437f291b2c44053d00dcd5db969fd0cca7c887/LICENSE"
+      }
+    ]
   }
 }

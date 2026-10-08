@@ -70,6 +70,43 @@ pub struct Figure {
     pub detail: Option<String>,
 }
 
+/// A prepared publication export: the file bytes and the status details, the
+/// raster receipt before any chemistry review notice.
+pub struct Publication {
+    pub bytes: Vec<u8>,
+    pub details: Vec<String>,
+}
+
+/// Prepare a figure snapshot and render it off the async executor, as the
+/// app's figure export does. `pages` exports every publication page as a PDF;
+/// otherwise PNG exports stay within `max_pixels` (at most [`FILE_PIXELS`]).
+pub async fn publication(
+    engine: &crate::engine::LocalEngine,
+    doc: Document,
+    format: &'static str,
+    pages: bool,
+    max_pixels: u64,
+) -> Result<Publication, String> {
+    let (doc, notice) = figure_document(engine, doc).await?;
+    let figure = tokio::task::spawn_blocking(move || {
+        if pages {
+            pages_pdf(&doc).map(|bytes| Figure {
+                bytes,
+                detail: None,
+            })
+        } else {
+            figure_with_budget(&doc, format, max_pixels)
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    let details = figure.detail.into_iter().chain(notice).collect();
+    Ok(Publication {
+        bytes: figure.bytes,
+        details,
+    })
+}
+
 /// Render at the style's physical size. Large PNG files use a bounded resolution.
 pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
     Ok(figure(doc, format)?.bytes)
@@ -77,7 +114,22 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
 
 /// Include the actual raster dimensions and resolution for the export receipt.
 pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
-    render_drawing(doc, format, false)
+    render_drawing(doc, format, false, RasterBudget::FILE)
+}
+
+/// [`figure`] with PNG resolution chosen to fit `max_pixels`, capped at
+/// [`FILE_PIXELS`].
+pub fn figure_with_budget(doc: &Document, format: &str, max_pixels: u64) -> Result<Figure, String> {
+    render_drawing(
+        doc,
+        format,
+        false,
+        RasterBudget {
+            adaptive: true,
+            pixels: max_pixels.min(FILE_PIXELS),
+            side: u32::MAX,
+        },
+    )
 }
 
 /// Clipboard figures retain visible canvas ink with a transparent background.
@@ -92,7 +144,7 @@ pub fn clipboard_drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String
 /// Preserve format details (including bounded PNG dimensions/DPI) in an
 /// explicit format-copy receipt as well as in file-export receipts.
 pub fn clipboard_figure(doc: &Document, format: &str) -> Result<Figure, String> {
-    render_drawing(doc, format, true)
+    render_drawing(doc, format, true, RasterBudget::FILE)
 }
 
 #[cfg(windows)]
@@ -103,7 +155,13 @@ pub fn office_preview(doc: &Document) -> Result<reshiki_windows::OfficePreview, 
     })
 }
 
-fn render_drawing(doc: &Document, format: &str, clipboard: bool) -> Result<Figure, String> {
+/// `file_budget` bounds file PNGs; clipboard PNGs use the clipboard budget.
+fn render_drawing(
+    doc: &Document,
+    format: &str,
+    clipboard: bool,
+    file_budget: RasterBudget,
+) -> Result<Figure, String> {
     doc.validate()?;
     let svg = if clipboard {
         scene::svg(doc)
@@ -143,7 +201,7 @@ fn render_drawing(doc: &Document, format: &str, clipboard: bool) -> Result<Figur
             let budget = if clipboard {
                 RasterBudget::clipboard(cfg!(windows))
             } else {
-                RasterBudget::FILE
+                file_budget
             };
             let (width, height, dpi) =
                 png_dimensions(tree.size().width(), tree.size().height(), budget)?;
@@ -194,6 +252,9 @@ fn render_drawing(doc: &Document, format: &str, clipboard: bool) -> Result<Figur
     }
 }
 
+/// The pixel budget of a file-export PNG.
+pub const FILE_PIXELS: u64 = 80_000_000;
+
 #[derive(Clone, Copy)]
 struct RasterBudget {
     adaptive: bool,
@@ -203,7 +264,7 @@ struct RasterBudget {
 impl RasterBudget {
     const FILE: Self = Self {
         adaptive: true,
-        pixels: 80_000_000,
+        pixels: FILE_PIXELS,
         side: u32::MAX,
     };
 

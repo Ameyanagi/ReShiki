@@ -18,7 +18,9 @@ import zipfile
 from pathlib import Path
 
 from build_inchi_helper import RELEASE_TARGETS
+from check_agent_dependencies import verify as verify_agent_dependencies
 from check_runtime_dependencies import (
+    verify_agent_api,
     verify_macos_workers,
     verify_payload,
     verify_runtime,
@@ -429,6 +431,7 @@ def notices(destination):
             text=True,
         ).stdout
     )
+    verify_agent_dependencies(ROOT, metadata)
     verify_geometry_source(ROOT, cargo_metadata=metadata)
     write_notices(ROOT, destination, metadata)
 
@@ -548,6 +551,7 @@ def verify_archive(archive_path, signed=False):
         verify_inchi_worker(binary, metadata["inchi"]["version"])
         verify_single_executable(binary, folder)
         verify_runtime(binary, folder)
+        verify_agent_api(binary, folder, quarantine=signed and platform.system() == "Darwin")
         verify_geometry_worker(binary, metadata["geometry"]["version"], signed=signed)
         if platform.system() == "Darwin":
             verify_macos_workers(binary)

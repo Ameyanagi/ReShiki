@@ -9,7 +9,11 @@
         clippy::unreachable,
         clippy::todo,
         clippy::unimplemented,
-        clippy::indexing_slicing
+        clippy::indexing_slicing,
+        // Stdout belongs to the MCP protocol.
+        clippy::print_stdout,
+        clippy::print_stderr,
+        clippy::dbg_macro
     )
 )]
 
@@ -26,14 +30,19 @@ use reshiki_io::exchange;
 use reshiki_io::{chemistry, engine, export};
 use reshiki_model::*;
 
+pub mod access;
 mod branching;
 pub mod canvas_tools;
 pub mod composition;
 pub mod envelope;
 mod layout;
+#[doc(hidden)]
+pub mod ops;
 pub mod progress;
 pub mod review;
 pub mod sketch;
+pub mod stability;
+pub mod tool_spec;
 use crate::{
     document::{Document, Point},
     engine::LocalEngine,
@@ -213,6 +222,28 @@ impl Default for DrawingSettings {
             bond_color: crate::palette::Color::Ink,
             arrow_style: Default::default(),
             labels: Default::default(),
+        }
+    }
+}
+impl DrawingSettings {
+    /// The settings the app draws with in a tab showing `doc`, as
+    /// `App::sync_drawing_defaults` (src/app/document_styles.rs) derives
+    /// them from the drawing style, with the canvas ink for bonds.
+    pub fn for_document(doc: &Document) -> Self {
+        let style = &doc.drawing_style;
+        Self {
+            drawing_style: style.clone(),
+            format: TextFormat {
+                style: style.text_style(),
+                ..Default::default()
+            },
+            bond_length: style.bond_length_world,
+            bond_color: crate::palette::Color::Ink,
+            arrow_style: crate::arrows::ArrowStyle {
+                width_pt: style.line_width_pt,
+                ..Default::default()
+            },
+            labels: doc.atom_labels.clone(),
         }
     }
 }
