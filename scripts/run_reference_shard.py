@@ -38,6 +38,10 @@ WORKSPACE_TARGET_SHARDS = {
     ("reshiki-macos", "native_print"): 0,
     ("reshiki-geometry", "c60"): 0,
     ("reshiki-geometry", "embedding"): 0,
+    ("reshiki-agent", "contract"): 0,
+    ("reshiki-agent", "headless"): 0,
+    ("reshiki-mcp", "panic_hook"): 0,
+    ("reshiki-mcp", "transcripts"): 0,
 }
 
 
