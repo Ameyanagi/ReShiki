@@ -303,19 +303,23 @@ when the label is removed.
 The label is removed only when all of these hold:
 
 1. The owner signs off on the tool and result schemas.
-2. One stable release includes the API with acceptance gates G1-G8 passing.
+2. One stable release includes the API with
+   [acceptance gates G1-G8](agent-api-p1-validation.md) passing.
 3. No breaking change has been made for a number of consecutive Nightly
    weeks that the owner sets at that sign-off.
 
 ## Client compatibility
 
-Each client is checked by hand with the snippet from
-[Connect AI agents](https://reshiki.com/guide/agents/). The P1 acceptance
-record fills in this table.
+Each client is checked by hand with its snippet from
+[Connect AI agents](https://reshiki.com/guide/agents/#3-connect-your-client).
+The [P1 acceptance record](agent-api-p1-validation.md#g1-protocol-interop)
+holds the evidence of each check: the client version, the MCP revision
+observed, the tools listed, a rendered image, a render cancelled from the
+client, and saves inside and outside the granted folder, with dates.
 
-| Client         | Version | System  | Revision used | Tools listed | Image shown | Cancel | Granted-folder save | Checked |
-| -------------- | ------- | ------- | ------------- | ------------ | ----------- | ------ | ------------------- | ------- |
-| Claude Code    | —       | —       | —             | —            | —           | —      | —                   | Not yet |
-| Claude Desktop | —       | macOS   | —             | —            | —           | —      | —                   | Not yet |
-| Claude Desktop | —       | Windows | —             | —            | —           | —      | —                   | Not yet |
-| Codex CLI      | —       | —       | —             | —            | —           | —      | —                   | Not yet |
+| Client                  | Setup                                                              | Result               |
+| ----------------------- | ------------------------------------------------------------------ | -------------------- |
+| Claude Code             | [Claude Code](https://reshiki.com/guide/agents/#claude-code)       | Pending: owner check |
+| Claude Desktop, macOS   | [Claude Desktop](https://reshiki.com/guide/agents/#claude-desktop) | Pending: owner check |
+| Claude Desktop, Windows | [Claude Desktop](https://reshiki.com/guide/agents/#claude-desktop) | Pending: owner check |
+| Codex CLI               | [Codex](https://reshiki.com/guide/agents/#codex)                   | Pending: owner check |
