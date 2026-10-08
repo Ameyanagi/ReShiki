@@ -103,3 +103,29 @@ fn only_the_platform_directory_imports_earlier_data() {
         (Err("copy failed".to_owned()), 1)
     );
 }
+
+#[test]
+fn every_absolute_home_counts_once_in_order() {
+    let root = PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" });
+    let profile = root.join("Users").join("me");
+    let overridden = root.join("tmp").join("home");
+    let homes = distinct_homes([
+        Some(profile.clone()),
+        None,
+        Some(PathBuf::new()),
+        Some(PathBuf::from("relative")),
+        Some(overridden.clone()),
+        Some(profile.clone()),
+    ]);
+    assert_eq!(homes, [profile, overridden]);
+    assert_eq!(distinct_homes([None, None]), Vec::<PathBuf>::new());
+}
+
+#[test]
+fn the_environment_home_is_one_of_the_homes() {
+    let homes = home_directories();
+    assert!(homes.iter().all(|home| home.is_absolute()), "{homes:?}");
+    if let Some(home) = std::env::home_dir().filter(|home| home.is_absolute()) {
+        assert!(homes.contains(&home), "{homes:?}");
+    }
+}

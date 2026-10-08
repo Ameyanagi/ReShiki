@@ -83,8 +83,8 @@ impl Tree {
     }
 
     /// The folder the child takes as its home: the one its HOME and
-    /// USERPROFILE point to. It follows HOME on Unix and USERPROFILE on
-    /// Windows, where the profile known folder expands %USERPROFILE%.
+    /// USERPROFILE point to. The environment's home is refused on every
+    /// platform, whatever Windows reports as the profile.
     fn child_home(&self) -> PathBuf {
         self.path("home")
     }
@@ -359,6 +359,23 @@ fn granting_the_home_folder_exits_2() {
     let stderr = tree.refused(&["--allow-write", home], "data");
     assert!(
         stderr.starts_with("reshiki --mcp: folder is too broad to grant: "),
+        "{stderr}"
+    );
+}
+
+/// The real profile is refused whether or not the child takes it as a
+/// home: as too broad if it does, otherwise as protected, because it holds
+/// the temporary folder and so the child's data folder.
+#[cfg(windows)]
+#[test]
+fn granting_the_real_profile_folder_exits_2() {
+    let tree = Tree::new();
+    let profile = directories_next::UserDirs::new().expect("a profile folder");
+    let profile = profile.home_dir().to_str().expect("a UTF-8 profile folder");
+    let stderr = tree.refused(&["--allow-write", profile], "data");
+    assert!(
+        stderr.starts_with("reshiki --mcp: folder is too broad to grant: ")
+            || stderr.starts_with("reshiki --mcp: folder is protected and cannot be granted: "),
         "{stderr}"
     );
 }

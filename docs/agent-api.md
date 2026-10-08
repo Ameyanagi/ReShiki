@@ -196,12 +196,13 @@ file grants nothing.
 | Any     | `$RESHIKI_DATA_DIR/agent-access.json` when `RESHIKI_DATA_DIR` is set             |
 
 Read and write grants are separate: a write grant does not let `file_open`
-read. Each folder must exist. File system roots, the home folder and its
-ancestors, ReShiki's data folder, earlier installations' data, the
-executable's folder, Unix `/proc`, `/sys` and `/dev`, and the Windows system
-folder cannot be granted. A folder that cannot be granted or an invalid
-`agent-access.json` prints one stderr line and exits 2 (`GRANT_EXIT_CODE`)
-before stdin is read. `info` lists the granted folders and these extensions:
+read. Each folder must exist. File system roots, the home folder (as Windows
+or the environment reports it) and its ancestors, ReShiki's data folder,
+earlier installations' data, the executable's folder, Unix `/proc`, `/sys`
+and `/dev`, and the Windows system folder cannot be granted. A folder that
+cannot be granted or an invalid `agent-access.json` prints one stderr line
+and exits 2 (`GRANT_EXIT_CODE`) before stdin is read. `info` lists the
+granted folders and these extensions:
 
 | Tool        | Extensions                                                                                            |
 | ----------- | ----------------------------------------------------------------------------------------------------- |

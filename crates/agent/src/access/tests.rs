@@ -896,7 +896,7 @@ fn a_symlinked_configuration_loads() {
 }
 
 fn unprotected() -> Protected {
-    Protected::new(Vec::new(), None, None).unwrap()
+    Protected::new(Vec::new(), Vec::new(), None).unwrap()
 }
 
 fn sources(config: AccessConfig, read: &[PathBuf], write: &[PathBuf], cwd: &Path) -> GrantSources {
@@ -1018,12 +1018,58 @@ fn home_and_its_ancestors_are_too_broad() {
     let users = folder(&base, "users");
     let home = folder(&users, "me");
     let documents = folder(&home, "documents");
-    let protected = Protected::new(Vec::new(), Some(home.clone()), None).unwrap();
+    let protected = Protected::new(Vec::new(), vec![home.clone()], None).unwrap();
     for refused in [&home, &users, &base] {
         assert_refused(&protected, refused, GrantError::TooBroad(refused.clone()));
     }
     assert_allowed(&protected, &documents);
     assert_allowed(&protected, &folder(&users, "someone"));
+}
+
+/// The real profile and an overridden USERPROFILE are both homes.
+#[test]
+fn every_home_and_its_ancestors_are_too_broad() {
+    let (_dir, base) = sandbox();
+    let users = folder(&base, "users");
+    let profile = folder(&users, "me");
+    let temporary = folder(&base, "temporary");
+    let overridden = folder(&temporary, "home");
+    let protected =
+        Protected::new(Vec::new(), vec![profile.clone(), overridden.clone()], None).unwrap();
+    for refused in [&profile, &users, &overridden, &temporary, &base] {
+        assert_refused(&protected, refused, GrantError::TooBroad(refused.clone()));
+    }
+    for allowed in [
+        folder(&profile, "documents"),
+        folder(&overridden, "documents"),
+        folder(&users, "someone"),
+        folder(&temporary, "other"),
+    ] {
+        assert_allowed(&protected, &allowed);
+    }
+}
+
+#[test]
+fn no_home_refuses_no_home() {
+    let (_dir, base) = sandbox();
+    let users = folder(&base, "users");
+    let home = folder(&users, "me");
+    let protected = Protected::new(Vec::new(), Vec::new(), None).unwrap();
+    for allowed in [&home, &users, &base] {
+        assert_allowed(&protected, allowed);
+    }
+}
+
+/// A folder inside a home is still refused when it is otherwise protected.
+#[test]
+fn a_protected_folder_inside_a_home_stays_protected() {
+    let (_dir, base) = sandbox();
+    let home = folder(&base, "home");
+    let data = folder(&home, "data");
+    let protected = Protected::new(vec![data.clone()], vec![home.clone()], None).unwrap();
+    assert_refused(&protected, &home, GrantError::TooBroad(home.clone()));
+    assert_refused(&protected, &data, GrantError::Protected(data.clone()));
+    assert_allowed(&protected, &folder(&home, "documents"));
 }
 
 #[test]
@@ -1033,7 +1079,7 @@ fn protected_folders_cannot_be_granted_inside_or_around() {
     let data = folder(&parent, "data");
     let inside = folder(&data, "inside");
     let sibling = folder(&parent, "sibling");
-    let protected = Protected::new(vec![data.clone()], None, None).unwrap();
+    let protected = Protected::new(vec![data.clone()], Vec::new(), None).unwrap();
     for refused in [&data, &inside, &parent, &base] {
         assert_refused(&protected, refused, GrantError::Protected(refused.clone()));
     }
@@ -1045,7 +1091,7 @@ fn an_absent_data_folder_stays_protected() {
     let (_dir, base) = sandbox();
     let parent = folder(&base, "parent");
     let data = parent.join("data");
-    let protected = Protected::new(vec![data.clone()], None, None).unwrap();
+    let protected = Protected::new(vec![data.clone()], Vec::new(), None).unwrap();
     assert_eq!(protected.paths, slice::from_ref(&data));
     assert_refused(&protected, &parent, GrantError::Protected(parent.clone()));
     // Once the app creates it, it is protected itself.
@@ -1076,7 +1122,7 @@ fn projection_canonicalizes_the_existing_part_and_appends_the_rest() {
         std::os::unix::fs::symlink(&real, &alias).unwrap();
         assert_eq!(project(&alias.join("absent")).unwrap(), real.join("absent"));
         // A data folder reached through a symlink protects the real folder.
-        let protected = Protected::new(vec![alias.join("absent")], None, None).unwrap();
+        let protected = Protected::new(vec![alias.join("absent")], Vec::new(), None).unwrap();
         assert_refused(&protected, &real, GrantError::Protected(real.clone()));
     }
 }
@@ -1091,7 +1137,7 @@ fn projection_follows_a_symlink_reached_through_dotdot_after_an_absent_folder() 
     // Once the app creates `missing`, `..` leads back to `inner` and
     // `alias` leads outside, so the data lands in `outside`.
     let data = inner.join("missing").join("..").join("alias").join("data");
-    let protected = Protected::new(vec![data.clone()], None, None).unwrap();
+    let protected = Protected::new(vec![data.clone()], Vec::new(), None).unwrap();
     assert_eq!(protected.paths, [outside.join("data")]);
     assert_refused(&protected, &outside, GrantError::Protected(outside.clone()));
     fs::create_dir_all(&data).unwrap();
@@ -1103,7 +1149,7 @@ fn the_system_root_and_everything_inside_it_are_protected() {
     let (_dir, base) = sandbox();
     let windows = folder(&base, "Windows");
     let system32 = folder(&windows, "System32");
-    let protected = Protected::new(Vec::new(), None, Some(windows.clone())).unwrap();
+    let protected = Protected::new(Vec::new(), Vec::new(), Some(windows.clone())).unwrap();
     for refused in [&windows, &system32] {
         assert_refused(&protected, refused, GrantError::Protected(refused.clone()));
     }
@@ -1140,7 +1186,7 @@ fn a_protected_location_that_cannot_be_resolved_is_an_error() {
     let target = folder(&base, "target");
     std::os::unix::fs::symlink(&target, locked.join("data")).unwrap();
     fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
-    let result = Protected::new(vec![locked.join("data")], None, None);
+    let result = Protected::new(vec![locked.join("data")], Vec::new(), None);
     fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
     // Without search permission the symlink's target is unknown: never guess
     // it from the spelling. (Root ignores the permission and finds it.)
@@ -1157,8 +1203,10 @@ fn this_process_protects_its_executable_folder_and_home() {
     let executable = std::env::current_exe().unwrap();
     let folder = executable.parent().unwrap().to_path_buf();
     assert_refused(&protected, &folder, GrantError::Protected(folder.clone()));
-    if let Some(home) = reshiki_io::compatibility::home_directory().filter(|home| home.is_dir()) {
-        assert_refused(&protected, &home, GrantError::TooBroad(home.clone()));
+    for home in reshiki_io::compatibility::home_directories() {
+        if home.is_dir() {
+            assert_refused(&protected, &home, GrantError::TooBroad(home.clone()));
+        }
     }
 }
 

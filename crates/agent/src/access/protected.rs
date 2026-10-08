@@ -6,7 +6,7 @@ use super::{
     root::{Root, normalize, within},
 };
 use reshiki_io::compatibility::{
-    data_directory_location, home_directory, legacy_data_directory_location,
+    data_directory_location, home_directories, legacy_data_directory_location,
 };
 use std::{
     io,
@@ -23,8 +23,9 @@ const SYSTEM_TREES: [&str; 3] = ["/proc", "/sys", "/dev"];
 pub struct Protected {
     /// ReShiki's own data, earlier installations' data and the executable.
     pub(super) paths: Vec<PathBuf>,
-    /// Refused itself and with every ancestor; folders inside it are allowed.
-    pub(super) home: Option<PathBuf>,
+    /// Every folder that may be the home folder. Each is refused itself and
+    /// with every ancestor; folders inside them are allowed.
+    pub(super) homes: Vec<PathBuf>,
     /// Windows: refused with everything inside it.
     pub(super) system_root: Option<PathBuf>,
 }
@@ -50,7 +51,7 @@ impl Protected {
         let system_root = std::env::var_os("SystemRoot").map(PathBuf::from);
         #[cfg(not(windows))]
         let system_root = None;
-        Self::new(paths, home_directory(), system_root)
+        Self::new(paths, home_directories(), system_root)
     }
 
     /// Protected locations from explicit paths, projected as
@@ -60,7 +61,7 @@ impl Protected {
     /// error: its real place is unknown, so nothing could be checked against it.
     pub fn new(
         paths: Vec<PathBuf>,
-        home: Option<PathBuf>,
+        homes: Vec<PathBuf>,
         system_root: Option<PathBuf>,
     ) -> Result<Self, GrantError> {
         Ok(Self {
@@ -68,7 +69,10 @@ impl Protected {
                 .iter()
                 .map(|path| project(path))
                 .collect::<Result<_, _>>()?,
-            home: home.as_deref().map(project).transpose()?,
+            homes: homes
+                .iter()
+                .map(|home| project(home))
+                .collect::<Result<_, _>>()?,
             system_root: system_root.as_deref().map(project).transpose()?,
         })
     }
@@ -82,11 +86,7 @@ impl Protected {
         if canonical.parent().is_none() {
             return Err(too_broad());
         }
-        if self
-            .home
-            .as_deref()
-            .is_some_and(|home| within(home, canonical))
-        {
+        if self.homes.iter().any(|home| within(home, canonical)) {
             return Err(too_broad());
         }
         if self

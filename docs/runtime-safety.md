@@ -117,11 +117,12 @@ InChI and geometry workers it starts keep their own limits.
   to a temporary file beside the target, then a no-clobber hard link
   publishes a new file or a rename replaces an existing one when `overwrite`
   is true. Folders are never created.
-- **Refused folders.** File system roots, the home folder and its ancestors,
-  folders that overlap ReShiki's data folder, earlier installations' data or
-  the executable's folder, Unix `/proc`, `/sys` and `/dev`, and the Windows
-  system folder cannot be granted, even before they exist. A refused folder
-  or an unreadable `agent-access.json` exits 2 before stdin is read.
+- **Refused folders.** File system roots, the home folder (as Windows or the
+  environment reports it) and its ancestors, folders that overlap ReShiki's
+  data folder, earlier installations' data or the executable's folder, Unix
+  `/proc`, `/sys` and `/dev`, and the Windows system folder cannot be
+  granted, even before they exist. A refused folder or an unreadable
+  `agent-access.json` exits 2 before stdin is read.
 - **Client roots.** The server never requests MCP roots, which the
   2026-07-28 revision deprecates as informational guidance rather than access
   control. A client's project folder, such as Claude Code's

@@ -70,8 +70,28 @@ pub fn legacy_data_directory_location() -> Option<PathBuf> {
         .map(|previous| previous.data_local_dir().to_path_buf())
 }
 
-pub fn home_directory() -> Option<PathBuf> {
-    directories_next::BaseDirs::new().map(|base| base.home_dir().to_path_buf())
+/// Every folder that may be the user's home: the platform's (on Windows the
+/// profile known folder, which needs no other known folder; on Unix `HOME`
+/// or the user's account entry) and the environment's ([`std::env::home_dir`]:
+/// `HOME` on Unix, `USERPROFILE` on Windows). Callers refuse every one, so an
+/// overridden `USERPROFILE` and the real profile are both covered.
+pub fn home_directories() -> Vec<PathBuf> {
+    distinct_homes([
+        directories_next::UserDirs::new().map(|user| user.home_dir().to_path_buf()),
+        std::env::home_dir(),
+    ])
+}
+
+/// The absolute candidates, each once, in order. An empty path is not
+/// absolute.
+fn distinct_homes(candidates: impl IntoIterator<Item = Option<PathBuf>>) -> Vec<PathBuf> {
+    let mut homes = Vec::new();
+    for home in candidates.into_iter().flatten() {
+        if home.is_absolute() && !homes.contains(&home) {
+            homes.push(home);
+        }
+    }
+    homes
 }
 
 /// An override is used as given; the platform directory first imports data
