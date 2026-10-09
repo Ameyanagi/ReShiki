@@ -951,6 +951,15 @@ async fn rear_opacity_canvas_matches_half_ink_and_keeps_front_and_filled_marks_c
             renderer.reset(bounds);
             let mut frame = layered::Frame::new(&renderer, bounds.size()).with_canvas(theme);
             frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
+            // Independent existing-renderer alpha reference. Wgpu blends in
+            // linear light and encodes sRGB; CPU backends may blend directly.
+            // The chemical scene must use that backend's actual convention,
+            // with alpha applied once, rather than assuming an encoded 128.
+            frame.fill_rectangle(
+                Point::new(16., 16.),
+                iced::Size::new(16., 16.),
+                Color::from_rgba(0., 0., 0., alpha),
+            );
             draw_primitives(
                 &mut frame,
                 &reshiki::scene::primitives(&doc),
@@ -982,7 +991,24 @@ async fn rear_opacity_canvas_matches_half_ink_and_keeps_front_and_filled_marks_c
                     .max()
                     .unwrap()
             };
-            let expected = (alpha * 255.) as i16;
+            let reference = pixels[(24 * 640 + 24) * 4];
+            let expected = i16::from(if theme.is_light() {
+                255 - reference
+            } else {
+                reference
+            });
+            if alpha > 0. && alpha < 1. {
+                assert!(
+                    (1..255).contains(&expected),
+                    "Partial native reference alpha"
+                );
+            }
+            eprintln!(
+                "Rear pixel measurements {theme:?} alpha {alpha}: rear={}, front={}, filled_mark={}",
+                darkness(World::new(40., 0.)),
+                darkness(World::new(160., 80.)),
+                darkness(World::new(-2.1, -18.)),
+            );
             assert!(
                 (i16::from(darkness(World::new(40., 0.))) - expected).abs() <= 2,
                 "Rear ink alpha {alpha} {theme:?}"
