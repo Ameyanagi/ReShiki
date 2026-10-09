@@ -1,0 +1,762 @@
+{
+  "rdkit_version": "2026.03.6",
+  "baseline": false,
+  "records": [
+    {
+      "fixture": "alkane-2d.mol",
+      "source_atoms": 6,
+      "drawing_atoms": 6,
+      "visible_hydrogens": 0,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "CCCCCC",
+        "formula": "C6H14",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "CCCCCC",
+        "formula": "C6H14",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "alkane-3d-v2000.mol",
+      "source_atoms": 20,
+      "drawing_atoms": 6,
+      "visible_hydrogens": 0,
+      "nonzero_z": 6,
+      "maximum_heavy_distance_error": 4.440892098500626e-16,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "CCCCCC",
+        "formula": "C6H14",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "CCCCCC",
+        "formula": "C6H14",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "alkane-3d-v3000.mol",
+      "source_atoms": 20,
+      "drawing_atoms": 6,
+      "visible_hydrogens": 0,
+      "nonzero_z": 6,
+      "maximum_heavy_distance_error": 7.114727651469366e-08,
+      "heavy_torsion_error": 9.017314894776973e-09,
+      "identity": {
+        "smiles": "CCCCCC",
+        "formula": "C6H14",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "CCCCCC",
+        "formula": "C6H14",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "alkene-2d.mol",
+      "source_atoms": 4,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "F/C=C/F",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F/C=C/F",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "alkene-3d-v2000.mol",
+      "source_atoms": 6,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 4.440892098500626e-16,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "F/C=C/F",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F/C=C/F",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "alkene-3d-v3000.mol",
+      "source_atoms": 6,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 6.83370093845781e-08,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "F/C=C/F",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F/C=C/F",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "alkene-unknown-3d-v2000.mol",
+      "source_atoms": 6,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 4.440892098500626e-16,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "FC=CF",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "FC=CF",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 1,
+      "native_unknown_doubles": 1,
+      "mol_interchange_unknown_doubles": 1,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "alkene-unknown-3d-v3000.mol",
+      "source_atoms": 6,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 6.83370093845781e-08,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "FC=CF",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "FC=CF",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 1,
+      "native_unknown_doubles": 1,
+      "mol_interchange_unknown_doubles": 1,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "alkene-z-3d-v3000.mol",
+      "source_atoms": 6,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 6.011202069444721e-08,
+      "heavy_torsion_error": 1.4895610561095394e-08,
+      "identity": {
+        "smiles": "F/C=C\\F",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F/C=C\\F",
+        "formula": "C2H2F2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "bridging-h.mol",
+      "source_atoms": 3,
+      "drawing_atoms": 3,
+      "visible_hydrogens": 1,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[Fe]<-[H]->[Fe]",
+        "formula": "HFe2",
+        "charge": 0,
+        "radicals": 1
+      },
+      "mol_interchange_identity": {
+        "smiles": "[Fe]<-[H]->[Fe]",
+        "formula": "HFe2",
+        "charge": 0,
+        "radicals": 1
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "charged-h-attached.mol",
+      "source_atoms": 2,
+      "drawing_atoms": 2,
+      "visible_hydrogens": 1,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[H-][B]",
+        "formula": "HB-",
+        "charge": -1,
+        "radicals": 2
+      },
+      "mol_interchange_identity": {
+        "smiles": "[H-][B]",
+        "formula": "HB-",
+        "charge": -1,
+        "radicals": 2
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "charged-h.mol",
+      "source_atoms": 2,
+      "drawing_atoms": 2,
+      "visible_hydrogens": 2,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[H+].[H-]",
+        "formula": "H2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "[H+].[H-]",
+        "formula": "H2",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "chiral-2d.mol",
+      "source_atoms": 4,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "chiral-3d-v2000.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "chiral-3d-v3000.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 2.6280648324217282e-08,
+      "heavy_torsion_error": 3.132175230291523e-08,
+      "identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "chiral-h-first.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 2.6280648324217282e-08,
+      "heavy_torsion_error": 1.67604874423688e-08,
+      "identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "chiral-h-middle.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 2.6280648324217282e-08,
+      "heavy_torsion_error": 3.603474008073704e-08,
+      "identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F[C@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "chiral-s-3d-v3000.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 0,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 6.618323933338388e-08,
+      "heavy_torsion_error": 1.7330969548368103e-08,
+      "identity": {
+        "smiles": "F[C@@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "F[C@@H](Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "chiral-wavy-h-3d-v2000.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 5,
+      "visible_hydrogens": 1,
+      "nonzero_z": 5,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": 0.0,
+      "identity": {
+        "smiles": "FC(Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "FC(Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 1,
+      "native_unknown_singles": 1,
+      "mol_interchange_unknown_singles": 1
+    },
+    {
+      "fixture": "chiral-wavy-h-3d-v3000.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 5,
+      "visible_hydrogens": 1,
+      "nonzero_z": 5,
+      "maximum_heavy_distance_error": 2.6280648324217282e-08,
+      "heavy_torsion_error": 3.132175230291523e-08,
+      "identity": {
+        "smiles": "FC(Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "FC(Cl)Br",
+        "formula": "CHBrClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 1,
+      "native_unknown_singles": 1,
+      "mol_interchange_unknown_singles": 1
+    },
+    {
+      "fixture": "isotope-2d.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 5,
+      "visible_hydrogens": 2,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[2H]C([3H])(F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "[2H]C([3H])(F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "isotope-3d-v2000.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 5,
+      "visible_hydrogens": 2,
+      "nonzero_z": 5,
+      "maximum_heavy_distance_error": 4.440892098500626e-16,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[2H][C@@]([3H])(F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "[2H][C@@]([3H])(F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "isotope-3d-v3000.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 5,
+      "visible_hydrogens": 2,
+      "nonzero_z": 5,
+      "maximum_heavy_distance_error": 4.654915208845978e-08,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[2H][C@@]([3H])(F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "[2H][C@@]([3H])(F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "isotope-isolated.mol",
+      "source_atoms": 2,
+      "drawing_atoms": 2,
+      "visible_hydrogens": 2,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[2H].[3H]",
+        "formula": "H2",
+        "charge": 0,
+        "radicals": 2
+      },
+      "mol_interchange_identity": {
+        "smiles": "[2H].[3H]",
+        "formula": "H2",
+        "charge": 0,
+        "radicals": 2
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "metal-h.mol",
+      "source_atoms": 2,
+      "drawing_atoms": 2,
+      "visible_hydrogens": 1,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[FeH]",
+        "formula": "HFe",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "[FeH]",
+        "formula": "HFe",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "mixed-isotope-r-v2000.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 1,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 4.440892098500626e-16,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[2H][C@H](F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "[2H][C@H](F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "mixed-isotope-r-v3000.mol",
+      "source_atoms": 5,
+      "drawing_atoms": 4,
+      "visible_hydrogens": 1,
+      "nonzero_z": 4,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[2H][C@H](F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "mol_interchange_identity": {
+        "smiles": "[2H][C@H](F)Cl",
+        "formula": "CH2ClF",
+        "charge": 0,
+        "radicals": 0
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    },
+    {
+      "fixture": "radical-h.mol",
+      "source_atoms": 1,
+      "drawing_atoms": 1,
+      "visible_hydrogens": 1,
+      "nonzero_z": 0,
+      "maximum_heavy_distance_error": 0,
+      "heavy_torsion_error": null,
+      "identity": {
+        "smiles": "[H]",
+        "formula": "H",
+        "charge": 0,
+        "radicals": 1
+      },
+      "mol_interchange_identity": {
+        "smiles": "[H]",
+        "formula": "H",
+        "charge": 0,
+        "radicals": 1
+      },
+      "source_unknown_doubles": 0,
+      "native_unknown_doubles": 0,
+      "mol_interchange_unknown_doubles": 0,
+      "source_unknown_singles": 0,
+      "native_unknown_singles": 0,
+      "mol_interchange_unknown_singles": 0
+    }
+  ]
+}
