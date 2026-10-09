@@ -1,5 +1,6 @@
 use crate::document::{Atom, Bond, Document, Point};
 use crate::style::DEFAULT as STYLE;
+mod projected_bonds;
 
 #[derive(Debug, Clone)]
 pub enum Primitive {
@@ -719,6 +720,11 @@ pub fn effective_double_position(doc: &Document, bond: &Bond) -> crate::bonds::D
     }
 }
 fn automatic_double_side(doc: &Document, bond: &Bond) -> Option<f32> {
+    if matches!(bond.order, 2 | 7)
+        && let Some(side) = projected_bonds::automatic_side(doc, bond)
+    {
+        return Some(side);
+    }
     let center = ring_center(doc, bond.a, bond.b)?;
     let a = doc.atom(bond.a)?.position;
     let b = doc.atom(bond.b)?.position;
@@ -1294,8 +1300,33 @@ fn push_bond_rails(
         } else {
             &b.display
         };
-        let first = start.offset(nx * offset + ux * trim, ny * offset + uy * trim);
-        let last = end.offset(nx * offset - ux * trim, ny * offset - uy * trim);
+        let projected =
+            if matches!(order, 2 | 7) && b.double_position == DoublePosition::Auto && *offset != 0.
+            {
+                projected_bonds::rail(
+                    doc,
+                    b,
+                    start,
+                    end,
+                    *offset,
+                    trim,
+                    style.world(if display == "bold" {
+                        style.bold_width_pt
+                    } else {
+                        style.line_width_pt
+                    }) / 2.,
+                )
+            } else {
+                None
+            };
+        let (first, last) = match projected {
+            Some(Some(rail)) => rail,
+            Some(None) => continue,
+            None => (
+                start.offset(nx * offset + ux * trim, ny * offset + uy * trim),
+                end.offset(nx * offset - ux * trim, ny * offset - uy * trim),
+            ),
+        };
         let available = (last.x - first.x) * ux + (last.y - first.y) * uy;
         if available <= 0.1 {
             continue;
