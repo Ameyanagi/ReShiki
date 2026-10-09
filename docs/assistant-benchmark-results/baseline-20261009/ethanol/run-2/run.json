@@ -1,0 +1,30 @@
+{
+  "configuration": {
+    "auto_apply": false,
+    "effort": "xhigh",
+    "generation_started": [
+      {
+        "effort": "xhigh",
+        "elapsed_seconds": 1.840485375,
+        "event": "started",
+        "model_label": "GPT-6.1-Sol"
+      }
+    ],
+    "model": "gpt-6.1-sol",
+    "provider": "Codex app-server",
+    "request_timeout_seconds": 300,
+    "requested_effort": "xhigh",
+    "requested_model": "gpt-6.1-sol",
+    "service_tier": "default"
+  },
+  "elapsed_seconds": 45.113456958,
+  "error": null,
+  "review": {
+    "changes": [],
+    "issues": [],
+    "passes": 1,
+    "summary": "The ethanol drawing matches the source: both single bonds, the zigzag orientation, and the OH label are preserved without overlap or clipping.",
+    "verified": true
+  },
+  "status": "completed"
+}

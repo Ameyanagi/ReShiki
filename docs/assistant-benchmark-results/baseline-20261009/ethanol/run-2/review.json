@@ -1,0 +1,7 @@
+{
+  "changes": [],
+  "issues": [],
+  "passes": 1,
+  "summary": "The ethanol drawing matches the source: both single bonds, the zigzag orientation, and the OH label are preserved without overlap or clipping.",
+  "verified": true
+}

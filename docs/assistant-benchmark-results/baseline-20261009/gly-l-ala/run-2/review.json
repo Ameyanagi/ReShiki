@@ -1,0 +1,9 @@
+{
+  "changes": [],
+  "issues": [
+    "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+  ],
+  "passes": 1,
+  "summary": "The reconstruction matches the source’s connectivity, bond orders, hydrogen labels and solid wedge. Labels are clear and unclipped; no title was added.",
+  "verified": true
+}

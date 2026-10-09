@@ -1,0 +1,99 @@
+{
+  "version": 19,
+  "drawing_style": {
+    "name": "JACS / ACS",
+    "font_family": "Arial",
+    "bond_length_world": 42.0,
+    "bond_length_pt": 14.4,
+    "font_size_pt": 10.0,
+    "line_width_pt": 0.6,
+    "bold_width_pt": 2.0,
+    "margin_width_pt": 1.6,
+    "hash_spacing_pt": 2.5,
+    "bond_spacing_ratio": 0.18,
+    "png_dpi": 1200
+  },
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": -36.373066958946424,
+        "y": 6.999999999999991
+      },
+      "charge": 0,
+      "isotope": 0,
+      "radical_electrons": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "map_num": 0,
+      "stereo": null,
+      "label_h": 3,
+      "cip_label": null
+    },
+    {
+      "id": 2,
+      "element": "C",
+      "position": {
+        "x": 0.0,
+        "y": -14.000000000000004
+      },
+      "charge": 0,
+      "isotope": 0,
+      "radical_electrons": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "map_num": 0,
+      "stereo": null,
+      "label_h": 2,
+      "cip_label": null
+    },
+    {
+      "id": 3,
+      "element": "O",
+      "position": {
+        "x": 36.373066958946424,
+        "y": 7.000000000000009
+      },
+      "charge": 0,
+      "isotope": 0,
+      "radical_electrons": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "map_num": 0,
+      "stereo": null,
+      "label_h": 1,
+      "cip_label": null
+    }
+  ],
+  "bonds": [
+    {
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "cip_label": null
+    },
+    {
+      "a": 2,
+      "b": 3,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "cip_label": null
+    }
+  ],
+  "abbreviations": [],
+  "atom_labels": {},
+  "annotations": [],
+  "arrows": [],
+  "graphics": [],
+  "groups": [],
+  "reactions": []
+}
