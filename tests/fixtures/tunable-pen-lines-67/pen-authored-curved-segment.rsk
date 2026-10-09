@@ -1,0 +1,95 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 20,
+  "atoms": [],
+  "bonds": [],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [
+    {
+      "id": 1,
+      "kind": "path",
+      "origin": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": 1.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 1.0
+      },
+      "style": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": null,
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": -242.0,
+            "y": -46.0
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": -192.5,
+              "y": -121.0
+            },
+            {
+              "x": -141.5,
+              "y": 29.0
+            },
+            {
+              "x": -92.0,
+              "y": -46.0
+            }
+          ]
+        },
+        {
+          "command": "line",
+          "points": {
+            "x": 58.0,
+            "y": -96.0
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 74.66667,
+              "y": -31.416664
+            },
+            {
+              "x": 116.33334,
+              "y": 1.9166718
+            },
+            {
+              "x": 183.0,
+              "y": 4.0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "groups": []
+}
