@@ -60,4 +60,6 @@ cargo run --locked --example reference_geometry_qa -- /tmp/reference-geometry
 The generator produces editable inputs, eight renderer cases and a combined gallery
 in SVG, PNG and PDF. The quarter-turn example contains separate carbocycles to
 demonstrate construction geometry; it is not a porphyrin identity reference.
-Desktop evidence must separately check the controls and drag interaction.
+The [desktop review](changes/reference-geometry.md) includes real control captures,
+actual native saves and an independent coordinate audit. It distinguishes the
+checked align/stretch interactions from renderer-only common-center examples.
