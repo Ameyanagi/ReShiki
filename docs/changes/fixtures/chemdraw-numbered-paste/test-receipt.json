@@ -1,0 +1,66 @@
+{
+  "source_commit": "500ac6cf7c55061013aaac231a6c0cadefbf80e4",
+  "required_checks": [
+    {
+      "check": "fmt",
+      "command": ["cargo", "fmt", "--all", "--check"],
+      "exit": 0
+    },
+    {
+      "check": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--all-targets",
+        "--all-features",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0
+    },
+    {
+      "check": "check",
+      "command": ["cargo", "check", "--all-targets", "--all-features", "--locked"],
+      "exit": 0
+    }
+  ],
+  "preserved_log_receipts": [
+    {
+      "original_log_basename": "cdx-io-all-tests.log",
+      "sha256": "61b890329d8f6c4d418d5dc44aaec2a5bb53dde1ec2375fe051f8073447a13ad",
+      "result": "95 passed, 0 failed, 5 pre-existing ignored"
+    },
+    {
+      "original_log_basename": "cdx-clipboard-helper-cargo.log",
+      "sha256": "66680be9562140440fd6cf9e84cf56bbf68b65ad97b4e355bed51ab23ffc67a6",
+      "result": "2 passed, 0 failed; actual app InChI helper supplied"
+    },
+    {
+      "original_log_basename": "cdx-fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "exit 0"
+    },
+    {
+      "original_log_basename": "cdx-clippy.log",
+      "sha256": "17b5ff96fca348d21ef73bef83d0039f5f91d9f7d2f5b5e8c6bfaa70f0752362",
+      "result": "exit 0"
+    },
+    {
+      "original_log_basename": "cdx-check.log",
+      "sha256": "afe065c93e546a5781fbbab53e42f82cef025e44858585e38733198f3ea7275f",
+      "result": "exit 0"
+    }
+  ],
+  "native_codec_controls": [
+    "All three original CDX inputs rejected at exact base with Unsupported binary drawing property 0x044b on macOS and Windows.",
+    "Head preserves positive signed-byte 0x044b on NodeType 12 and round trips 1, 2/1 and sparse 3/1 with ConnectionOrder/BondOrdering ID pairs.",
+    "Range, payload length, wrong/missing node type and duplicate properties are rejected independent of property order.",
+    "Unknown 0x7777 remains rejected; shared_schema_preserves_last_property_precedence remains checked.",
+    "Existing incomplete/duplicate numbering, ambiguous ordering, common-anchor, bond-order and work-budget diagnostics remain."
+  ],
+  "python_reference_checks": "Two numbered-attachment codec regressions, ruff lint/format and ty checks passed; prior receipts outside Git.",
+  "helper_setup": "Initial clipboard engine invocation had no explicit application InChI helper and failed at helper startup; rerun with the preserved app helper passed without source changes.",
+  "build_check_scope": "No new Cargo/build performed for this documentation package. Existing exclusive-lane checks are recorded above."
+}
