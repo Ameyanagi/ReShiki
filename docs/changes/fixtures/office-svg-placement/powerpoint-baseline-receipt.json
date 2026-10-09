@@ -1,0 +1,84 @@
+{
+  "captured_at_utc": "2026-10-09T15:45:58.371733+00:00",
+  "status": "BASELINE_BUG_CONFIRMED_ACTUAL_MAC_POWERPOINT",
+  "application": {
+    "version": "16.113.4",
+    "build": "16.113.26100421"
+  },
+  "route": "own blank presentation; Home Picture > Picture from File; ordinary SVG; Save locally; close and reopen from own Recent entry",
+  "manual_object_edits": false,
+  "ui_dimensions_cm": {
+    "width": 3.07,
+    "height": 1.02
+  },
+  "saved_picture_extent_EMU": {
+    "cx": "1104900",
+    "cy": "368300"
+  },
+  "saved_picture_offset_EMU": {
+    "x": "5543550",
+    "y": "3244850"
+  },
+  "saved_picture_dimensions_mm": {
+    "cx": 30.691666666666666,
+    "cy": 10.230555555555556
+  },
+  "view_zoom_percent": {
+    "first_insert": 119,
+    "inspection": 400,
+    "reopen_default": 119,
+    "reopen_inspection": 400
+  },
+  "actual_observation": "O and SiMe3 label tops clipped at frame; horizontal bond below label center. Persists after saved PPTX reopen. Zoom only changed; object never resized/cropped/styled/repositioned. Design Suggestions opened automatically and was dismissed without applying a suggestion.",
+  "stored_office_svg": {
+    "bytes": 1023,
+    "sha256": "c57ec65d4c2b5cab105d95481ad0f1ed2ed6e89705645b5e45393578fc7edc56",
+    "source_bytes_preserved": false,
+    "source_dominant_baseline_attributes": 3,
+    "office_dominant_baseline_attributes": 0
+  },
+  "diagnosis": "Saved SVG removes all three dominant-baseline attributes. This supports the inference that Office baseline handling shifts text; candidate not yet run.",
+  "reopen_undo": "disabled before changing view",
+  "baseline_executable_SHA256": "493a0cb49f79f76ae2ee0716a690c20ce3981f15f701c0a9651552addaa8bf95",
+  "baseline_compiler_to_declared_51fa_source": "UNVERIFIED; historical signed executable only",
+  "native_after_export_sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+  "native_unchanged_from_original": true,
+  "files": [
+    {
+      "path": "single-baseline-ordinary.svg",
+      "bytes": 1180,
+      "sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01"
+    },
+    {
+      "path": "single-baseline-after-export.rsk",
+      "bytes": 9811,
+      "sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660"
+    },
+    {
+      "path": "powerpoint-baseline-ordinary.pptx",
+      "bytes": 33855,
+      "sha256": "b417dc43c455e7656124032868368010b130f4741081208827b17080151869f9"
+    },
+    {
+      "path": "powerpoint-baseline-inserted-119.jpg",
+      "bytes": 343164,
+      "sha256": "c1dd4aee58873cada72586a22f3fb5d38cc74e66b376809fcef33b66c70bbb51"
+    },
+    {
+      "path": "powerpoint-baseline-inserted-400.jpg",
+      "bytes": 287646,
+      "sha256": "819693711fb83f4cb9d3b990bb73fbe779dcda4e2ae744de0fb5987efee29282"
+    },
+    {
+      "path": "powerpoint-baseline-reopened-400.jpg",
+      "bytes": 286942,
+      "sha256": "cf9c77ac2898cdd973f1dd28ffdff9810a9c73970e0c98d388efbdb90de45820"
+    },
+    {
+      "path": "powerpoint-baseline-reopened-ax.txt",
+      "bytes": 9744,
+      "sha256": "7c1b98448891e1fd992bfe1232d97c1f15a2fe7f2db74eecdbfb5ef409bf118c"
+    }
+  ],
+  "scope": "Mac PowerPoint native GUI + saved container inspection; does not establish Windows or Word behavior."
+}

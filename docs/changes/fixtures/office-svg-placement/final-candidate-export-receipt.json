@@ -1,0 +1,91 @@
+{
+  "observed_utc": "2026-10-09T16:36:59.873774+00:00",
+  "status": "PASS",
+  "source_head": "3d261b32e9baa73b6d2cb133de2163fa3699569a",
+  "pid_observed": 62457,
+  "kernel_lsof_txt_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Office SVG Labels Verified.app/Contents/MacOS/reshiki",
+  "signed_executable_sha256": "3d343a93e4cf5f3977252804f85eb419e809132eb9ac0a245f4d7c05d2fabbe7",
+  "running_app_proof": "ROOT independently observed lsof -a -p 62457 -d txt -Fn before any export; exact executable path and SHA matched",
+  "native_gui_actions": [
+    "Open unchanged baseline native drawing",
+    "Turn observed F8 keyboard mode off",
+    "Export ordinary SVG via final native Save dialog",
+    "Export SVG \u00b7 Office picture via final native Save dialog",
+    "Save unchanged native drawing under new path",
+    "Quit verification app; process absent"
+  ],
+  "byte_exact_pairs": [
+    [
+      "single-baseline-ordinary.svg",
+      "single-final-ordinary.svg"
+    ],
+    [
+      "single-candidate-office.svg",
+      "single-final-office.svg"
+    ],
+    [
+      "single-baseline-after-export.rsk",
+      "single-final-after-export.rsk"
+    ]
+  ],
+  "undo_redo_disabled": true,
+  "ordinary_svg_unchanged": true,
+  "final_office_svg_identical_to_actual_office_inserted_svg": true,
+  "office_actual_producer_signed_sha256": "a526729562d646abb83038001f9a51041329ebb6ec768e72f634b8e99ec8b5a9",
+  "office_result_bridge": "The actual Mac Word and PowerPoint insert/save/reopen captures used the earlier a526 bundle. The final 3d343 bundle corrects two visible labels and produces byte-identical Office SVG; no claim that those earlier Office captures used the final bundle.",
+  "native_drawing_byte_exact": true,
+  "screenshots_raw_unmodified": true,
+  "incidental_ui": "Recovery draft banner was visible and left untouched. Native drawing and export identity verified.",
+  "automation_reconnection": "One native pipe closed response; reset cua_repl and rebound same already-running exact app. No alternate automation or UI changes.",
+  "windows_office_runtime": "NOT VERIFIED; CUA Windows App repeated timeout; separate receipt retained",
+  "files": {
+    "single-baseline-ordinary.svg": {
+      "sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+      "bytes": 1180
+    },
+    "single-final-ordinary.svg": {
+      "sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+      "bytes": 1180
+    },
+    "single-candidate-office.svg": {
+      "sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d",
+      "bytes": 5703
+    },
+    "single-final-office.svg": {
+      "sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d",
+      "bytes": 5703
+    },
+    "single-baseline-after-export.rsk": {
+      "sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+      "bytes": 9811
+    },
+    "single-final-after-export.rsk": {
+      "sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+      "bytes": 9811
+    },
+    "final-candidate-figure-menu.jpg": {
+      "sha256": "98086076dfd4c95223ecc013ceaf1a2f6501fd58f6972783d5b09cd9411379c8",
+      "bytes": 325514
+    },
+    "final-candidate-figure-menu-ax.txt": {
+      "sha256": "c2c8b5d4a055f59713f8d4ba5c3a3033e07091ccb1052feefc2e0b7dc7bcf24d",
+      "bytes": 730
+    },
+    "final-candidate-single-exported.jpg": {
+      "sha256": "a76d2e3062159e216df4affe4182fd8cfd6e75a359acbccf739f21bf310ccf96",
+      "bytes": 342976
+    },
+    "final-candidate-single-exported-ax.txt": {
+      "sha256": "deaa28d879cd844864d70c3b910f2f02fed8186f3e03a12c516a185f75feb20c",
+      "bytes": 4534
+    },
+    "final-candidate-office-selected-ax.txt": {
+      "sha256": "deaa28d879cd844864d70c3b910f2f02fed8186f3e03a12c516a185f75feb20c",
+      "bytes": 4534
+    },
+    "final-candidate-saved-ax.txt": {
+      "sha256": "a2daea51b51c79adf615eda429e927c18f987c20e2cff6465a92607e2b1543d9",
+      "bytes": 4525
+    }
+  }
+}
