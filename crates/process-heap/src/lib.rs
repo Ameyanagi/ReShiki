@@ -7,6 +7,8 @@
 #[cfg(feature = "allocation-metrics")]
 pub mod allocation_metrics;
 
+pub mod policy;
+
 /// Dedicated worker exit status for an exhausted allocation budget.
 pub const RESOURCE_EXIT: i32 = 75;
 use std::{
@@ -18,9 +20,16 @@ use std::{
 pub struct BoundedHeap;
 static BUDGET: AtomicUsize = AtomicUsize::new(0);
 static USED: AtomicUsize = AtomicUsize::new(0);
+static PEAK: AtomicUsize = AtomicUsize::new(0);
 
 pub fn begin(bytes: usize) {
+    PEAK.store(USED.load(Ordering::SeqCst), Ordering::SeqCst);
     BUDGET.store(bytes, Ordering::SeqCst);
+}
+/// High-water mark of charged live Rust allocations in the dedicated worker.
+/// This excludes pre-budget buffers and allocations outside Rust's allocator.
+pub fn peak() -> usize {
+    PEAK.load(Ordering::SeqCst)
 }
 fn layout(original: Layout) -> Option<(Layout, usize)> {
     Layout::new::<usize>()
@@ -47,12 +56,15 @@ unsafe impl GlobalAlloc for BoundedHeap {
         };
         let budget = BUDGET.load(Ordering::SeqCst);
         let charge = if budget == 0 { 0 } else { layout.size() };
-        if charge != 0
-            && let Err(used) = USED.try_update(Ordering::SeqCst, Ordering::SeqCst, |used| {
+        if charge != 0 {
+            match USED.try_update(Ordering::SeqCst, Ordering::SeqCst, |used| {
                 used.checked_add(charge).filter(|&value| value <= budget)
-            })
-        {
-            exhausted(budget, used, charge);
+            }) {
+                Ok(used) => {
+                    PEAK.fetch_max(used + charge, Ordering::SeqCst);
+                }
+                Err(used) => exhausted(budget, used, charge),
+            }
         }
         // SAFETY: System receives the valid layout computed above.
         let base = unsafe { System.alloc(layout) };
