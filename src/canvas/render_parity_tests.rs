@@ -923,8 +923,10 @@ async fn rear_opacity_canvas_matches_half_ink_and_keeps_front_and_filled_marks_c
     };
     for theme in CanvasTheme::ALL {
         for alpha in [0., 0.5, 1.] {
-            let mut doc = Document::default();
-            doc.canvas_theme = theme;
+            let mut doc = Document {
+                canvas_theme: theme,
+                ..Document::default()
+            };
             let ids: Vec<_> = [
                 (0., 0., -20.),
                 (80., 0., -20.),
