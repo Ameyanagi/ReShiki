@@ -1,6 +1,6 @@
 {
   "change": "#93 first-use Assistant setup and guided image exercise",
-  "status": "Under review; pull request pending",
+  "status": "Under review in open PR #280",
   "creator_and_contributor": "@Ameyanagi",
   "capture_date": "2026-10-09",
   "platform": "macOS arm64",
@@ -217,5 +217,6 @@
     "Missing-installation, signed-out, broken and stalled/cancelled states use clearly labeled account-free simulated backends.",
     "A successful known ethanol exercise does not establish unseen-image accuracy."
   ],
-  "license": "Original review documentation, screenshots, fixture and native graph are contributed under MIT OR Apache-2.0. No third-party source image or code is added. Existing dependency notices remain applicable; RDKit is an external BSD-3-Clause validation observer, not a newly bundled runtime."
+  "license": "Original review documentation, screenshots, fixture and native graph are contributed under MIT OR Apache-2.0. No third-party source image or code is added. Existing dependency notices remain applicable; RDKit is an external BSD-3-Clause validation observer, not a newly bundled runtime.",
+  "pull_request": "https://github.com/Ameyanagi/ReShiki/pull/280"
 }

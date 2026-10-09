@@ -1,7 +1,8 @@
 # Assistant setup and guided image review
 
-Status: under review; pull request pending. Author: @Ameyanagi, project creator
-and maintainer. Addresses [issue #93](https://github.com/Ameyanagi/ReShiki/issues/93).
+Status: under review in [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
+Author: @Ameyanagi, project creator and maintainer. Addresses
+[issue #93](https://github.com/Ameyanagi/ReShiki/issues/93).
 
 The Assistant now explains installation, sign-in, checking, failed connection and
 ready states, with a specific next action and retry or cancellation. A failed
