@@ -199,7 +199,9 @@ fn arrows_match_original_helpers_and_document_boundaries() -> anyhow::Result<()>
             .collect::<Vec<_>>()
             .join("\n")
     );
-    assert!(accepted > 1000 && rejected > 500 && restricted == 2);
+    // Independent cubic controls now admit cases that the former quadratic
+    // approximation rejected. Invalid styles/geometry still exercise errors.
+    assert!(accepted > 3000 && rejected > 200 && restricted == 2);
     assert!(transport_traps > 0);
     Ok(())
 }
