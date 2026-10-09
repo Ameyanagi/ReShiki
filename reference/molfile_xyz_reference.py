@@ -22,6 +22,15 @@ def f32(value):
     return struct.unpack("f", struct.pack("f", value))[0]
 
 
+def unknown_single(bond):
+    # RDKit consumes the file direction during 3D assignment and retains the
+    # explicit single-bond unknown in its parser property, rather than BondDir.
+    return bond.GetBondType() == Chem.BondType.SINGLE and (
+        bond.GetBondDir() == Chem.BondDir.UNKNOWN
+        or bond.HasProp("_UnknownStereo") and bond.GetIntProp("_UnknownStereo") != 0
+    )
+
+
 def identity(molecule):
     molecule = Chem.RemoveHs(molecule)
     Chem.AssignStereochemistry(molecule, cleanIt=True, force=True)
@@ -160,7 +169,7 @@ def check(fixture, source, drawing, interchange, baseline):
         assert unknown == sum(b.GetStereo() == Chem.BondStereo.STEREOANY for b in interchange.GetBonds()), fixture.name
     if not baseline:
         assert unknown == sum(b.get("stereo") == "any" for b in drawing["bonds"]), fixture.name
-        unknown_singles = sum(b.GetBondDir() == Chem.BondDir.UNKNOWN for b in source.GetBonds())
+        unknown_singles = sum(unknown_single(b) for b in source.GetBonds())
         assert unknown_singles == sum(b["order"] == 1 and b["display"] == "wavy" and not b.get("projection", False) for b in drawing["bonds"]), fixture.name
     maximum_distance_error, torsion_error = 0, None
     if not baseline:
@@ -190,9 +199,9 @@ def check(fixture, source, drawing, interchange, baseline):
         source_unknown_doubles=unknown,
         native_unknown_doubles=sum(b.get("stereo") == "any" for b in drawing["bonds"]),
         mol_interchange_unknown_doubles=sum(b.GetStereo() == Chem.BondStereo.STEREOANY for b in interchange.GetBonds()),
-        source_unknown_singles=sum(b.GetBondDir() == Chem.BondDir.UNKNOWN for b in source.GetBonds()),
+        source_unknown_singles=sum(unknown_single(b) for b in source.GetBonds()),
         native_unknown_singles=sum(b["order"] == 1 and b["display"] == "wavy" for b in drawing["bonds"]),
-        mol_interchange_unknown_singles=sum(b.GetBondDir() == Chem.BondDir.UNKNOWN for b in interchange.GetBonds()),
+        mol_interchange_unknown_singles=sum(unknown_single(b) for b in interchange.GetBonds()),
     )
 
 
