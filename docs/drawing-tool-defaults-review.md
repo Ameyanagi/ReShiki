@@ -1,6 +1,7 @@
 # Drawing-tool defaults review
 
-Under review for [#250](https://github.com/Ameyanagi/ReShiki/issues/250),
+Under review in [PR #277](https://github.com/Ameyanagi/ReShiki/pull/277) for
+[#250](https://github.com/Ameyanagi/ReShiki/issues/250),
 [#90](https://github.com/Ameyanagi/ReShiki/issues/90) and
 [#249](https://github.com/Ameyanagi/ReShiki/issues/249). Original contributions:
 @Ameyanagi. This review compares `main` base

@@ -14,7 +14,8 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
 Drawing-tool defaults, orbital snapping and label readability: @Ameyanagi,
-under review for [#250](https://github.com/Ameyanagi/ReShiki/issues/250),
+under review in [PR #277](https://github.com/Ameyanagi/ReShiki/pull/277) for
+[#250](https://github.com/Ameyanagi/ReShiki/issues/250),
 [#90](https://github.com/Ameyanagi/ReShiki/issues/90) and
 [#249](https://github.com/Ameyanagi/ReShiki/issues/249).
 [Visual review](drawing-tool-defaults-review.md).
