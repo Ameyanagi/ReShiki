@@ -1473,6 +1473,7 @@ impl App {
         }
         match self.inspector_tab {
             InspectorTab::Assistant => 380.,
+            InspectorTab::Names => 340.,
             InspectorTab::DrawingStyle | InspectorTab::Reactions => 320.,
             InspectorTab::Properties | InspectorTab::Import | InspectorTab::Export => 300.,
             _ => 256.,
@@ -1480,6 +1481,13 @@ impl App {
     }
 
     fn inspector(&self) -> Element<'_, Message> {
+        if self.inspector_tab == InspectorTab::Names {
+            return container(scrollable(container(self.naming_panel()).padding([12, 16])))
+                .width(self.inspector_width())
+                .height(Length::Fill)
+                .style(panel)
+                .into();
+        }
         if self.inspector_tab == InspectorTab::Reactions {
             return self.reactions_inspector();
         }
@@ -1534,7 +1542,13 @@ impl App {
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
-            InspectorTab::Import => self.import_panel(),
+            InspectorTab::Import => column![
+                self.import_panel(),
+                button("Chemical names…").on_press(Message::Inspector(InspectorTab::Names)),
+            ]
+            .spacing(12)
+            .into(),
+            InspectorTab::Names => self.naming_panel(),
             InspectorTab::Export => self.export_panel(),
         };
         let mut content = column![

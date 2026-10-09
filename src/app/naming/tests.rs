@@ -1,0 +1,164 @@
+use super::*;
+use reshiki::naming::Provenance;
+
+fn record(smiles: &str) -> Record {
+    Record {
+        title: "Ethanol".into(),
+        systematic_name: Some("ethanol".into()),
+        canonical_smiles: naming::canonical_smiles(smiles).unwrap(),
+        smiles: smiles.into(),
+        synonyms: vec!["ethyl alcohol".into()],
+        warnings: vec![],
+        provenance: Provenance::PubChem(702),
+    }
+}
+
+#[tokio::test]
+async fn preview_insertion_is_native_editable_and_one_history_step() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    app.tab.naming.set_preview(preview);
+    let preview = app.tab.naming.preview.as_ref().unwrap();
+    let atom = preview.document.atoms[0].id;
+    let point = preview.document.atoms[0].position;
+    let _ = app.naming_action(Action::PreviewEdit(Edit::Move(vec![atom], 3., 0.)));
+    assert_eq!(
+        app.tab
+            .naming
+            .preview
+            .as_ref()
+            .unwrap()
+            .document
+            .atom(atom)
+            .unwrap()
+            .position,
+        point.offset(3., 0.)
+    );
+    let original = app.tab.doc.clone();
+    let _ = app.naming_action(Action::Insert);
+    assert_eq!(app.tab.doc.atoms.len(), 3);
+    assert_eq!(app.tab.doc.bonds.len(), 2);
+    assert_eq!(naming::document_identity(&app.tab.doc)?.smiles, "CCO");
+    let inserted = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, inserted);
+    let json = serde_json::to_string(&app.tab.doc).map_err(|e| e.to_string())?;
+    let restored: Document = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    assert_eq!(naming::document_identity(&restored)?.smiles, "CCO");
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_preview_and_exchange_retain_specified_and_unspecified_stereo() -> Result<(), String>
+{
+    let engine = LocalEngine::default();
+    for smiles in [
+        "C[C@@H](O)C(=O)O",
+        "C[C@H](O)C(=O)O",
+        "CC(O)C(=O)O",
+        "C/C=C/C",
+        "C/C=C\\C",
+        "[13CH3]CO",
+        "CC(=O)[O-]",
+    ] {
+        let preview = prepare_preview(engine.clone(), record(smiles), smiles.into()).await?;
+        naming::verify_identity(
+            smiles,
+            &naming::document_identity(&preview.document)?.smiles,
+        )?;
+        let mut request = Request::molecule("export", preview.document);
+        request.format = Some("mol".into());
+        let mol = engine
+            .request(request)
+            .await?
+            .output
+            .ok_or("Missing MOL export")?;
+        let restored = engine
+            .request(Request::import("mol", &mol))
+            .await?
+            .document
+            .ok_or("Missing restored drawing")?;
+        naming::verify_identity(smiles, &naming::document_identity(&restored)?.smiles)?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn warnings_and_unapplied_smiles_edits_block_insertion() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    let mut source = record("CCO");
+    source.warnings.push("Ambiguous interpretation".into());
+    let preview = prepare_preview(app.engine.clone(), source, "CCO".into()).await?;
+    app.tab.naming.set_preview(preview);
+    let _ = app.naming_action(Action::Insert);
+    assert!(app.tab.doc.atoms.is_empty());
+    let _ = app.naming_action(Action::Acknowledge(true));
+    let _ = app.naming_action(Action::Smiles("CCN".into()));
+    let _ = app.naming_action(Action::Insert);
+    assert!(app.tab.doc.atoms.is_empty());
+    let _ = app.naming_action(Action::Smiles("CCO".into()));
+    let _ = app.naming_action(Action::Insert);
+    assert_eq!(app.tab.doc.atoms.len(), 3);
+    Ok(())
+}
+
+#[tokio::test]
+async fn changed_preview_no_longer_claims_original_chemical_name() -> Result<(), String> {
+    let engine = LocalEngine::default();
+    let original = prepare_preview(engine.clone(), record("CCO"), "CCO".into()).await?;
+    assert!(!original.modified);
+    let edited = prepare_preview(engine, record("CCO"), "CCN".into()).await?;
+    assert!(edited.modified);
+    assert_eq!(edited.identity, "CCN");
+    Ok(())
+}
+
+#[test]
+fn stale_results_and_name_consent_cannot_reach_another_document_or_request() {
+    let (mut app, _) = App::new();
+    app.tab.naming.consent = true;
+    let before = app.tab.naming.serial;
+    let _ = app.naming_action(Action::Lookup);
+    assert_eq!(
+        app.tab.naming.serial, before,
+        "Name consent does not authorize sending a structure"
+    );
+    let ticket = app.naming_ticket();
+    let _ = app.naming_action(Action::Name("aspirin".into()));
+    let _ = app.naming_action(Action::Finished(
+        ticket,
+        Box::new(Ok(Outcome::Names(vec![record("CCO")], None))),
+    ));
+    assert!(app.tab.naming.candidates.is_empty());
+    let ticket = app.naming_ticket();
+    app.tab.revision += 1;
+    let _ = app.naming_action(Action::Finished(
+        ticket,
+        Box::new(Ok(Outcome::Structure(record("CCO")))),
+    ));
+    assert!(app.tab.naming.structure.is_none());
+}
+
+#[tokio::test]
+async fn caption_requires_current_graph_and_is_undoable() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    app.tab.doc = preview.document;
+    app.tab.selected = app.tab.doc.all_ids();
+    let ticket = Ticket {
+        epoch: app.tab.file_epoch,
+        revision: app.tab.revision,
+        serial: 0,
+    };
+    app.tab.naming.structure = Some((ticket, record("CCO")));
+    let _ = app.naming_action(Action::Caption);
+    assert_eq!(app.tab.doc.annotations[0].text, "ethanol");
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.annotations.is_empty());
+    app.tab.selected.clear();
+    let _ = app.naming_action(Action::Caption);
+    assert!(app.tab.doc.annotations.is_empty());
+    Ok(())
+}

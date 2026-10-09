@@ -669,6 +669,7 @@ pub(super) fn document_result(message: &Message) -> bool {
             | Message::LabelsReady(..)
             | Message::InspectorAction(super::inspector::Action::PropertiesCalculated(..))
             | Message::Imports(import::Action::Loaded(..))
+            | Message::Naming(super::naming::Action::Finished(..))
             | Message::ClipboardWritten { .. }
             | Message::CopyAsPrepared(..)
             | Message::CopyAsWritten(..)
