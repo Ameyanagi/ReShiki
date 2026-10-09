@@ -55,6 +55,15 @@ impl MoleculeCanvas<'_> {
                 }
             }
             Gesture::Graphic { start } => {
+                if self.tool == Tool::Graphic(GraphicKind::Path) {
+                    if !inside {
+                        return Some(Action::request_redraw().and_capture());
+                    }
+                    let Some(stroke) = self.pen_stroke(start, p) else {
+                        return Some(Action::request_redraw().and_capture());
+                    };
+                    return Some(Action::publish(Edit::PenSegment(stroke)).and_capture());
+                }
                 if !inside
                     || (start.distance(p) < 3.0 / self.camera.zoom
                         && !matches!(

@@ -285,6 +285,7 @@ impl App {
             graphic_constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
             graphic_arc: self.tab.arc_editor.geometry,
             graphic_style: &self.tab.graphic_style,
+            graphic_point: self.tab.path_point,
             orbital_phase: self.tab.orbital_phase,
             phase_flipped: self.tab.phase_flipped,
             attach_symbols: self.tab.attach_symbols,
@@ -568,6 +569,7 @@ impl App {
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
             (Tool::Graphic(G::Line), "Graphic line"),
             (Tool::Graphic(G::Curve), "Bézier curve"),
+            (Tool::Graphic(G::Path), "Pen path"),
             (Tool::Graphic(G::Arc), "Arc"),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
@@ -1319,6 +1321,9 @@ impl App {
                 G::Symbol(_) => "Click to place/attach · Drag to position · Escape cancels",
                 G::Orbital(_) => "Drag from node · Click for default size · Shift snaps to 15°",
                 G::Arc => "Drag an ellipse frame · Shift makes it circular · Escape cancels",
+                G::Path => {
+                    "Drag first segment · Click line / drag curve · Click first node to close"
+                }
                 _ => "Drag to draw · Shift constrains · Escape cancels",
             },
         )

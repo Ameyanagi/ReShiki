@@ -163,10 +163,12 @@ impl MoleculeCanvas<'_> {
         selected: &[u64],
         bounds: Rectangle,
     ) {
-        if self.tool == Tool::EditPoints {
+        if self.tool == Tool::EditPoints
+            || self.tool == Tool::Graphic(reshiki::graphics::GraphicKind::Path)
+        {
             for indicator in reshiki::atom_labels::indicators(preview)
                 .into_iter()
-                .filter(|i| i.owner.selected(selected))
+                .filter(|i| self.tool == Tool::EditPoints && i.owner.selected(selected))
             {
                 if let Some(anchor) = indicator.owner.anchor(preview) {
                     let center = self.camera.screen(indicator.center, bounds);
@@ -184,11 +186,11 @@ impl MoleculeCanvas<'_> {
                     );
                 }
             }
-            for a in preview
-                .atoms
-                .iter()
-                .filter(|a| selected.contains(&a.id) && preview.atom_visible(a.id))
-            {
+            for a in preview.atoms.iter().filter(|a| {
+                self.tool == Tool::EditPoints
+                    && selected.contains(&a.id)
+                    && preview.atom_visible(a.id)
+            }) {
                 for m in &a.marks {
                     let center = self
                         .camera
@@ -208,6 +210,61 @@ impl MoleculeCanvas<'_> {
                 }
             }
             for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
+                if let Some(handles) = graphic.path_handles() {
+                    if self.tool == Tool::EditPoints {
+                        let mut anchor = World::default();
+                        for command in graphic.commands() {
+                            if let PathCommand::Cubic(a, b, end) = command {
+                                for (from, to) in [(anchor, a), (end, b)] {
+                                    frame.stroke(
+                                        &Path::line(
+                                            self.camera.screen(from, bounds),
+                                            self.camera.screen(to, bounds),
+                                        ),
+                                        Stroke::default()
+                                            .with_width(1.)
+                                            .with_color(rgb([19, 135, 116])),
+                                    );
+                                }
+                                anchor = end;
+                            } else if let Some(point) = command.points().last() {
+                                anchor = *point;
+                            }
+                        }
+                    }
+                    for handle in handles
+                        .into_iter()
+                        .filter(|h| self.tool == Tool::EditPoints || h.node)
+                    {
+                        let point = self.camera.screen(handle.point, bounds);
+                        let path = if handle.node {
+                            Path::circle(point, 4.5)
+                        } else {
+                            Path::rectangle(point - Vector::new(4., 4.), iced::Size::new(8., 8.))
+                        };
+                        let chosen = self.graphic_point == Some((graphic.id, handle.index));
+                        frame.fill(
+                            &path,
+                            if chosen {
+                                rgb([19, 135, 116])
+                            } else if handle.node {
+                                Color::WHITE
+                            } else {
+                                rgb([225, 242, 237])
+                            },
+                        );
+                        frame.stroke(
+                            &path,
+                            Stroke::default()
+                                .with_width(if chosen { 2. } else { 1.5 })
+                                .with_color(rgb([19, 135, 116])),
+                        );
+                    }
+                    continue;
+                }
+                if self.tool != Tool::EditPoints {
+                    continue;
+                }
                 if graphic.kind == reshiki::graphics::GraphicKind::Arc {
                     for p in graphic.edit_points() {
                         let path = Path::circle(self.camera.screen(p, bounds), 5.0);

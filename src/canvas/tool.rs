@@ -79,6 +79,9 @@ impl Tool {
             Self::Graphic(GraphicKind::Orbital(_)) => {
                 "Click to place · Drag from the node for size/direction · Shift snaps to 15°"
             }
+            Self::Graphic(GraphicKind::Path) => {
+                "Drag first segment · Click to add a line · Drag a new node for a curve · Click first node to close · Escape cancels"
+            }
             Self::Graphic(_) => {
                 "Drag to draw · Shift constrains proportions or angle · Escape cancels"
             }

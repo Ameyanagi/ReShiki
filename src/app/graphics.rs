@@ -5,9 +5,13 @@ use iced::widget::{checkbox, column, container, row, text, tooltip};
 use iced::{Alignment, Length};
 use reshiki::graphics::GraphicKind;
 use reshiki::palette::{Color as Paint, Palette, Row};
+pub(super) mod path;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod path_tests;
 
 #[derive(Clone, Copy)]
 pub(super) enum ColorField {
@@ -27,6 +31,7 @@ pub enum Action {
     Fill(String),
     ApplyFill,
     Sides(BracketSides),
+    Path(path::Action),
     ScientificKind(GraphicKind),
     OrbitalPhase(reshiki::scientific::Phase),
     FlipPhase(bool),
@@ -59,6 +64,7 @@ impl App {
             Action::FlipPhase(value) => self.set_phase_flipped(value),
             Action::AttachSymbols(value) => self.tab.attach_symbols = value,
             Action::Sides(sides) => self.set_graphic_sides(sides),
+            Action::Path(action) => self.path_action(action),
         }
     }
     pub(super) fn graphic_panel(&self) -> Element<'_, Message> {
@@ -209,6 +215,11 @@ impl App {
         }
         if kind == GraphicKind::Arc {
             panel = panel.push(self.arc_controls());
+        }
+        if kind == GraphicKind::Path
+            || matches!(selected.as_slice(),[g] if matches!(g.kind,GraphicKind::Path|GraphicKind::Curve))
+        {
+            panel = panel.push(self.path_controls());
         }
         if kind.brackets() {
             panel = panel.push(

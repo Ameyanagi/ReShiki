@@ -202,7 +202,7 @@ async fn every_shape_survives_chemistry_and_cdxml_as_editable_geometry() {
         }
         let result = result.document.unwrap();
         result.validate().unwrap();
-        assert_eq!(result.graphics.len(), 12); // Paired brackets retain two grouped strokes.
+        assert_eq!(result.graphics.len(), GraphicKind::DRAWABLE.len() + 3); // Paired brackets retain two grouped strokes.
         assert_eq!(result.groups.len(), 3);
         let ids: Vec<_> = result.graphics.iter().map(|g| g.id).collect();
         let restored: Vec<_> = editing::groups(&result, &ids)
@@ -227,7 +227,7 @@ async fn every_shape_survives_chemistry_and_cdxml_as_editable_geometry() {
                 graphic
             })
             .collect();
-        assert_eq!(restored.len(), 9);
+        assert_eq!(restored.len(), GraphicKind::DRAWABLE.len());
         let mut original = doc.graphics.clone();
         original.sort_by_key(|g| g.layer);
         let shift = Point::new(

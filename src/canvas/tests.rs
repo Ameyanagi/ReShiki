@@ -731,6 +731,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &STYLE,
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
         bond_drawing: Default::default(),
         chain_drawing: Default::default(),
@@ -1414,6 +1415,7 @@ fn freeform_selection_tracks_events_adds_subtracts_and_cancels() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &style,
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
@@ -1531,6 +1533,7 @@ fn group_clicks_move_all_members_and_alt_selects_a_member() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &style,
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     let result = pointer_gesture(&canvas, Point::new(150., 150.), Point::new(170., 170.));
@@ -1662,6 +1665,7 @@ fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &style,
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     assert!(matches!(
@@ -1774,6 +1778,7 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &style,
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
@@ -1811,7 +1816,7 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
     );
 }
 
-fn pointer_gesture(canvas: &MoleculeCanvas<'_>, start: Point, end: Point) -> Edit {
+pub(super) fn pointer_gesture(canvas: &MoleculeCanvas<'_>, start: Point, end: Point) -> Edit {
     pointer_gesture_with(canvas, start, end, Default::default())
 }
 
@@ -1886,6 +1891,7 @@ fn template_drag_uses_the_target_bond_and_can_be_cancelled() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     let start = Point::new(200.0, 150.0);
@@ -2029,6 +2035,7 @@ fn selection_handles_resize_and_rotate_without_moving_or_merging_atoms() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     for (start, end, expected_pivot, expected_scale, expected_rotation) in [
@@ -2132,6 +2139,7 @@ fn bond_midpoints_select_and_drag_both_atoms_without_losing_atom_targets() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     assert!(
@@ -2196,6 +2204,7 @@ fn keyboard_click_preserves_world_point_and_stationary_screen_motion_does_not_ha
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     assert!(
@@ -2277,6 +2286,7 @@ fn command_drag_duplicates_and_shift_drag_locks_to_one_axis() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     let (start, end) = (Point::new(200.0, 150.0), Point::new(290.0, 170.0));
@@ -2419,6 +2429,7 @@ fn ring_drag_snaps_at_release_or_keeps_its_initial_attachment() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     assert!(
@@ -2459,6 +2470,7 @@ fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     let bounds = Rectangle::new(Point::new(100.0, 100.0), iced::Size::new(400.0, 300.0));
@@ -2521,6 +2533,7 @@ fn short_endpoint_drag_grows_instead_of_snapping_to_its_source() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400.0, 300.0));
@@ -2597,6 +2610,7 @@ fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
+        graphic_point: None,
         bracket_sides: BracketSides::Both,
     };
     let mut state = State::default();

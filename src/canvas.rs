@@ -56,6 +56,9 @@ pub(crate) mod rotation_gesture_tests;
 mod template_style_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod pen_tests;
 #[cfg(test)]
 mod transform_shortcut_tests;
 
@@ -89,6 +92,7 @@ use render::draw_primitives;
 use reshiki::chains::{self, ChainMode};
 #[cfg(test)]
 use reshiki::graphics::{Graphic, GraphicKind, PathCommand};
+pub(crate) mod pen;
 #[cfg(test)]
 use reshiki::scene::{Primitive, primitives};
 #[cfg(test)]
@@ -123,6 +127,7 @@ pub enum Edit {
         target: Option<u64>,
     },
     Graphic(World, World, bool),
+    PenSegment(pen::Stroke),
     GraphicPoint(u64, usize, World),
     AtomMark(u64, usize, World),
     AtomIndicator(reshiki::atom_labels::Owner, World),
@@ -342,6 +347,7 @@ pub struct MoleculeCanvas<'a> {
     pub graphic_constrain: bool,
     pub graphic_arc: reshiki::graphics::ArcGeometry,
     pub graphic_style: &'a GraphicStyle,
+    pub graphic_point: Option<(u64, usize)>,
     pub bracket_sides: BracketSides,
 }
 fn rgb(c: [u8; 3]) -> Color {
