@@ -73,6 +73,7 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
             "3D optimize…",
             "Keyboard drawing",
             "Move & attach…",
+            "Coordinate…",
             "Group"
         ]
     );
@@ -84,11 +85,12 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
             "3D optimize…",
             "Keyboard drawing",
             "Move & attach…",
+            "Coordinate…",
             "Group",
             "Ungroup"
         ]
     );
-    assert!(!app.context_commands()[3].enabled);
+    assert!(!app.context_commands()[4].enabled);
 }
 
 #[test]
