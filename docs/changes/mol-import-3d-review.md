@@ -5,7 +5,7 @@ and draws removable ordinary hydrogens implicitly. Isotopic, charged, radical,
 isolated, bridging, metal and annotated hydrogens remain explicit. Supported
 tetrahedral, E/Z and explicit-unknown controls are checked before publication;
 this change does not expand the parser's existing unsupported stereo-group
-contract. Implementation and review: @Ameyanagi; PR link pending publication.
+contract. Implementation and review: @Ameyanagi; [PR #282](https://github.com/Ameyanagi/ReShiki/pull/282).
 
 ## Matched desktop import
 

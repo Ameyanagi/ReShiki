@@ -13,6 +13,6 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
-MOL source3D import and ordinary-H presentation (under review, unreleased): @Ameyanagi; [review and desktop evidence](changes/mol-import-3d-review.md), PR pending publication.
+MOL source3D import and ordinary-H presentation (under review, unreleased): @Ameyanagi; [review and desktop evidence](changes/mol-import-3d-review.md), [PR #282](https://github.com/Ameyanagi/ReShiki/pull/282).
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.
