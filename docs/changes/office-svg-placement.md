@@ -23,6 +23,6 @@ The export suite passed eight active tests, snapshot routing three, and menu sel
 
 Reproduce by opening the [unchanged native input](fixtures/office-svg-placement/single-baseline-after-export.rsk), using its Imported/Custom style and Arial 10, then exporting **SVG** and **SVG · Office picture**. Insert each through Picture from File without resizing, save and reopen. Native schema stays version 19; the input retains six atoms, five single bonds and its SiMe₃ abbreviation.
 
-**Under review; draft PR planned.** Contributor: @Ameyanagi, project creator and maintainer. Addresses the Office SVG placement part of [#64](https://github.com/Ameyanagi/ReShiki/issues/64), alongside the separate [EMF draft PR #285](https://github.com/Ameyanagi/ReShiki/pull/285). Windows Office GUI acceptance is unverified; this does not close #64.
+**Under review; [draft PR #290](https://github.com/Ameyanagi/ReShiki/pull/290).** Contributor: @Ameyanagi, project creator and maintainer. Addresses the Office SVG placement part of [#64](https://github.com/Ameyanagi/ReShiki/issues/64), alongside the separate [EMF draft PR #285](https://github.com/Ameyanagi/ReShiki/pull/285). Windows Office GUI acceptance is unverified; this does not close #64.
 
 Caption: **Export an outlined SVG picture to preserve chemical label placement in Office.**

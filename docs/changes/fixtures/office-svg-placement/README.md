@@ -20,4 +20,4 @@ The formatting configuration excludes only the raw `final-candidate-export-recei
 
 The initial workspace check was interrupted after observed compiler inactivity. Its log/receipt is retained, followed by the successful incremental-disabled retry. No compiler/cache root cause is claimed. Full workspace checks precede the final label-only correction; the final label patch has its own accessible-widget test, formatting, production Clippy and build records. This bundle makes no Windows Office desktop or full #64 completion claim.
 
-Review and reusable raw images: [Office SVG placement](../../office-svg-placement.md). Under review; draft PR planned. Contributor: @Ameyanagi, project creator and maintainer.
+Review and reusable raw images: [Office SVG placement](../../office-svg-placement.md). Under review; [draft PR #290](https://github.com/Ameyanagi/ReShiki/pull/290). Contributor: @Ameyanagi, project creator and maintainer.
