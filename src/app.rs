@@ -905,8 +905,16 @@ fn export_file(contents: String, format: &'static str) -> Task<Message> {
     )
 }
 async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<PathBuf>, String> {
-    let Some(path) =
-        files::save_path("Export drawing", &format!("Molecule.{format}"), format).await
+    let extension = match format {
+        "svg-office" => "svg",
+        _ => format,
+    };
+    let Some(path) = files::save_path(
+        "Export drawing",
+        &format!("Molecule.{extension}"),
+        extension,
+    )
+    .await
     else {
         return Ok(None);
     };

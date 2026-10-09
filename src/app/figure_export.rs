@@ -16,7 +16,11 @@ impl App {
         }
         self.figure_exporting = true;
         self.error = false;
-        self.status = format!("Preparing {} export…", format.to_uppercase());
+        let label = match format {
+            "svg-office" => "SVG · Office picture".into(),
+            _ => format.to_uppercase(),
+        };
+        self.status = format!("Preparing {label} export…");
         let doc = self.tab.doc.clone();
         let engine = self.engine.clone();
         Task::perform(

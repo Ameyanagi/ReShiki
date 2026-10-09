@@ -6,13 +6,9 @@ pub fn parse_svg(svg: String) -> Result<resvg::usvg::Tree, String> {
     resvg::usvg::Tree::from_str(&svg, &options).map_err(|error| error.to_string())
 }
 
-/// Office's SVG importer does not honor the text-before-edge baseline used by
-/// the editor. Resolve fonts and outlines before putting a Windows picture on
-/// the clipboard, retaining the physical size and vector quality.
-#[cfg(any(windows, test))]
-pub fn clipboard_svg(doc: &Document) -> Result<Vec<u8>, String> {
-    doc.validate()?;
-    let tree = parse_svg(scene::svg(doc))?;
+/// Office's SVG importer does not honor the editor's text-before-edge baseline.
+/// Resolve fonts to paths and retain physical dimensions for picture placement.
+fn office_svg(tree: &resvg::usvg::Tree) -> Result<Vec<u8>, String> {
     let outlined = tree.to_string(&resvg::usvg::WriteOptions::default());
     let (_, contents) = outlined.split_once('>').ok_or("Invalid outlined SVG")?;
     // usvg serializes in CSS pixels. Explicit points plus a matching viewBox
@@ -24,6 +20,13 @@ pub fn clipboard_svg(doc: &Document) -> Result<Vec<u8>, String> {
         height * 0.75,
     )
     .into_bytes())
+}
+
+/// A transparent outlined picture for the Windows clipboard.
+#[cfg(any(windows, test))]
+pub fn clipboard_svg(doc: &Document) -> Result<Vec<u8>, String> {
+    doc.validate()?;
+    office_svg(&parse_svg(scene::svg(doc))?)
 }
 
 /// Refresh derived chemistry for an export snapshot without touching editing history.
@@ -176,6 +179,10 @@ fn render_drawing(
     }
     let tree = parse_svg(svg)?;
     match format {
+        "svg-office" => office_svg(&tree).map(|bytes| Figure {
+            bytes,
+            detail: None,
+        }),
         #[cfg(windows)]
         "emf" => if clipboard {
             crate::native_windows::metafile(&tree)
