@@ -1083,5 +1083,24 @@
     "inchikey": "PIICEJLVQHRZGT-UHFFFAOYSA-N",
     "pubchem_cid": 3301,
     "source": "https://pubchem.ncbi.nlm.nih.gov/compound/3301"
+  },
+  {
+    "group": "Macrocycles",
+    "name": "Porphine (21H,23H)",
+    "smiles": "C12=CC=C(N1)C=C1C=CC(=N1)C=C1C=CC(N1)=CC=1C=CC(N1)=C2",
+    "formula": "C20H14N4",
+    "inchikey": "RKCAIXNGYQCCAL-UHFFFAOYSA-N",
+    "depiction_inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+    "geometry": "model:porphine",
+    "keywords": [
+      "porphyrin",
+      "porphine",
+      "free base",
+      "macrocycle",
+      "21H,23H"
+    ],
+    "note": "Free-base 21H,23H-porphine: opposite N–H sites, equal bond lengths and a symmetric planar core. No metal or substituents.",
+    "source": "https://opsin.ch.cam.ac.uk/opsin/21H%2C23H-porphine.json",
+    "corroborating_source": "https://pubchem.ncbi.nlm.nih.gov/substance/135024075"
   }
 ]

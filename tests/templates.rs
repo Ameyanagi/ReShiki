@@ -50,7 +50,8 @@ async fn every_thumbnail_is_the_structure_that_gets_placed()
             assert_eq!(
                 actual.inchikey,
                 facts
-                    .get("inchikey")
+                    .get("depiction_inchikey")
+                    .or_else(|| facts.get("inchikey"))
                     .and_then(|v| v.as_str())
                     .ok_or("Missing InChIKey")?,
                 "{}",
