@@ -27,10 +27,7 @@
       "path": "docs/images/coordination/co-en3-connect-rejected.jpg",
       "SHA256": "bd32a673f14dcf64efbd8ddf07ff22863389ed6c6e876920605ba1fb7e2f38fb",
       "bytes": 334800,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "baseline",
       "unchanged_bytes": true
     },
@@ -38,10 +35,7 @@
       "path": "docs/images/coordination/co-en3-assembled-reopened.jpg",
       "SHA256": "c2cecc169841c004390a7aec9bc6cf49e0bffedd421e9f0a13e1dc99b7ba801b",
       "bytes": 383124,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -49,10 +43,7 @@
       "path": "docs/images/coordination/co-en3-assembled-saved.jpg",
       "SHA256": "c021dc6be554ae2f625c2f4b5a3c296c55c154fc69730bc4ef32a150baa31554",
       "bytes": 376747,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -60,10 +51,7 @@
       "path": "docs/images/coordination/co-en3-both-projection-tips.jpg",
       "SHA256": "a355011ae7d2659fd964a2e9b67aee95900feb5757df7aaf688a3997cd27c39b",
       "bytes": 379888,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -71,10 +59,7 @@
       "path": "docs/images/coordination/co-en3-donor10-contact-success.jpg",
       "SHA256": "8ec0f2edfd8950a6225d94776131d7040e8ce23b2e90753513ac35bb1c2bc4bc",
       "bytes": 376201,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -82,10 +67,7 @@
       "path": "docs/images/coordination/co-en3-keyboard-coordinate-success.jpg",
       "SHA256": "d875ef60bdbaad0b26b7a4e71e8307ede32e57bf77adfa32d4977f7039ef5243",
       "bytes": 376267,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -93,10 +75,7 @@
       "path": "docs/images/coordination/co-en3-keyboard-covalent-rejected.jpg",
       "SHA256": "51e088f32c140559707ee58e883908d0102d0a7ad90354eb28d88e7c47966b0f",
       "bytes": 366801,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -104,10 +83,7 @@
       "path": "docs/images/coordination/co-en3-keyboard-whole-properties.jpg",
       "SHA256": "7dc82e6397e8462432f70fec631e13751338446063fadc4713109102eddc5d65",
       "bytes": 362321,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -115,10 +91,7 @@
       "path": "docs/images/coordination/co-en3-projection-tip-reopened.jpg",
       "SHA256": "e8537c525ede6eee752edc69c7a52ff687c3f6f83dea25b562112809a09eb489",
       "bytes": 386775,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -126,10 +99,7 @@
       "path": "docs/images/coordination/co-en3-reverse-projection-tip.jpg",
       "SHA256": "1dc01d69ecaf90321a1b7ffc31f29615d2e563d5cd24af7617e14c46071a5672",
       "bytes": 384132,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -137,10 +107,7 @@
       "path": "docs/images/coordination/co-en3-six-contacts-properties.jpg",
       "SHA256": "599f49df8619bf87c3c70a8a80da4f7bfeb9eb9c0cb24c94636cdbe6e77b7dbc",
       "bytes": 378151,
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "original_stage": "after",
       "unchanged_bytes": true
     },
@@ -148,10 +115,7 @@
       "path": "docs/images/coordination/co-en3-chemdraw-reference.jpg",
       "SHA256": "5dd5e5fd5e7d5636f0b1d931bc408f7ad2b3c22b5f5b4913f7ea95b61ba45d3a",
       "bytes": 192904,
-      "pixels": [
-        1150,
-        1700
-      ],
+      "pixels": [1150, 1700],
       "original_stage": "reference",
       "unchanged_bytes": true,
       "notes": "Source has .png name but contains JPEG bytes; extension rename only, no conversion."

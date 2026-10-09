@@ -4,41 +4,16 @@
     "atoms": 13,
     "bonds": 15,
     "added_directed_edges": [
-      [
-        2,
-        1
-      ],
-      [
-        5,
-        1
-      ],
-      [
-        6,
-        1
-      ],
-      [
-        9,
-        1
-      ],
-      [
-        10,
-        1
-      ],
-      [
-        13,
-        1
-      ]
+      [2, 1],
+      [5, 1],
+      [6, 1],
+      [9, 1],
+      [10, 1],
+      [13, 1]
     ],
     "atomIDs_XYZ_chemical_metadata_unchanged": true,
     "only_derived_carbon_label_h_cache_changes": {
-      "ids": [
-        3,
-        4,
-        7,
-        8,
-        11,
-        12
-      ],
+      "ids": [3, 4, 7, 8, 11, 12],
       "before": 0,
       "after": 2
     },
@@ -47,10 +22,7 @@
   "keyboard": {
     "atoms": 13,
     "bonds": 10,
-    "added_directed_edge": [
-      5,
-      1
-    ]
+    "added_directed_edge": [5, 1]
   },
   "projection_reversal": {
     "bond_array_index": 10,

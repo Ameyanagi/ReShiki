@@ -16,11 +16,7 @@
     "stereo": null,
     "stereo_atoms": [],
     "double_position": "auto",
-    "color": [
-      0,
-      0,
-      0
-    ]
+    "color": [0, 0, 0]
   },
   "all_XYZ_finite": true,
   "Co1_charge": 3,
