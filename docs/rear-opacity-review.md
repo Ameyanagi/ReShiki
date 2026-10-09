@@ -78,6 +78,21 @@ headless (4), MCP transcripts (18), native stdio (14) and tool replay (4)
 passed. Workspace all-target/all-feature check, strict Clippy, formatting and
 whitespace checks passed. This is a focused record, not a full test-suite claim.
 
+macOS CI for [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289) at
+`6075b7be` subsequently failed in `modern_cases_share_one_process`: the stale
+malformed-input fixture expected native version 20 to be rejected, although
+the current schema is 22 and correctly accepts 20. The
+[test-only correction](https://github.com/Ameyanagi/ReShiki/commit/1b1bc6a730403f543ee0dc4fc16d9b4f2ad9460f)
+changes that case's name, input and exact error message to version 23, the first
+unsupported version, while retaining the same failure expectation. The unchanged
+signed app above accepts the original empty version 20 input through
+`--cli convert - --from reshiki --to svg` and rejects version 23 with the exact
+expected newer-document error. JSON comparison confirms only those three fixture
+strings changed; all 1,069 compiled inputs and nine bundle files are unchanged.
+The initial `analyze` check reached the empty-molecule analysis error for version
+20, so that failed check is supplemental rather than evidence of command success.
+The Cargo malformed-input test replay and subsequent CI remain pending.
+
 The first native pixel oracle assumed an encoded 128 for 50% opacity. The
 existing wgpu renderer blends in linear light and encodes sRGB: measured rear
 ink/filled marks at 50% are 67 darkness on white and 188 intensity on dark,
@@ -117,7 +132,7 @@ offscreen pixel and export tests. Native version 22 preserves the setting.
 SVG/PNG/PDF preserve appearance; chemical exports disclose appearance loss,
 editable CDXML/CDX rejects unsupported rear opacity, and explicit external
 clipboard conversion reports omitted opacity. Partial-opacity EMF is refused.
-Windows print/EMF runtime execution and repository CI remain pending. This
+Windows print/EMF runtime execution and a passing repository CI rerun remain pending. This
 record does not establish every molecule, external application or platform.
 
 [Evidence manifest](../tests/fixtures/rear-opacity/evidence-manifest.json) ·
