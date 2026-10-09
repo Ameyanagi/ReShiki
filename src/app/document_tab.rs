@@ -90,6 +90,7 @@ pub(super) struct DocumentTab {
     pub(super) labels: atom_labels::State,
     pub(super) pictures: pictures::State,
     pub(super) numeric_transforms: numeric_transforms::State,
+    pub(super) nmr: super::nmr::State,
     pub(super) styles: document_styles::State,
     pub(super) inspector_ui: inspector::State,
     // This document's recovery draft.
@@ -165,6 +166,7 @@ impl DocumentTab {
             labels: Default::default(),
             pictures: pictures::State::default(),
             numeric_transforms: numeric_transforms::State::default(),
+            nmr: super::nmr::State::default(),
             styles: Default::default(),
             inspector_ui: inspector::State::default(),
             recovery,

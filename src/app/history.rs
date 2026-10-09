@@ -14,6 +14,9 @@ impl App {
         };
         if changed {
             self.tab
+                .nmr
+                .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
+            self.tab
                 .keyboard_drawing
                 .restore(redo, &self.tab.doc, self.tab.file_epoch);
             self.tab.recent_molecules.restore(redo, self.tab.file_epoch);

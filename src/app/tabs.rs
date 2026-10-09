@@ -659,6 +659,7 @@ pub(super) fn document_result(message: &Message) -> bool {
         message,
         Message::EngineDone { .. }
             | Message::Optimization(super::optimization::Action::WorkerDone(..))
+            | Message::Nmr(super::nmr::Action::Finished(..) | super::nmr::Action::Exported(..))
             | Message::Exported(_)
             | Message::FigureExported(_)
             | Message::Printing(printing::Action::Prepared(..) | printing::Action::Finished(..))

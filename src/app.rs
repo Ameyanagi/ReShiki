@@ -50,6 +50,7 @@ mod joining;
 mod keyboard_drawing;
 mod label_refresh;
 mod molecule_shortcuts;
+mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
 #[cfg(test)]
@@ -119,6 +120,7 @@ pub enum Message {
     ObjectToolbar(object_toolbar::Action),
     InspectorAction(inspector::Action),
     NumericTransform(numeric_transforms::Action),
+    Nmr(nmr::Action),
     Updates(updates::Action),
     Reaction(reactions::Action),
     DrawingStyle(document_styles::Action),
@@ -565,6 +567,9 @@ impl App {
             self.tab.file_epoch,
             continuing,
         );
+        self.tab
+            .nmr
+            .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
         if committed.chemistry_changed {
             self.tab.labels_dirty = true;
@@ -795,6 +800,9 @@ impl App {
             self.keyboard_pointer_selection(point);
         }
         let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
+        self.tab
+            .nmr
+            .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
         self.sync_numeric_transforms();
         if refresh_dimensions {
             self.refresh_numeric_dimensions();
@@ -837,9 +845,9 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         reshiki::accessibility::focus_scope(file_shortcuts::wrap(
-            self.with_updates(self.with_assistant_image(
+            self.with_updates(self.with_assistant_image(self.with_nmr(
                 self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
-            )),
+            ))),
             self.help_open,
             self.assistant.viewed_image.is_some(),
             self.updates.open,

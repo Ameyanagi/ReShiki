@@ -787,6 +787,10 @@ impl App {
                 .style(muted_text),
             );
         }
+        body = body.push(command(
+            "Predict NMR…",
+            Message::Nmr(super::nmr::Action::Open),
+        ));
         body.push(
             command(
                 if key.is_some() {
