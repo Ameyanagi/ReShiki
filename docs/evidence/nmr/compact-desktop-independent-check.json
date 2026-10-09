@@ -12,13 +12,7 @@
   "graph_formula": "C4H8O2",
   "old_and_compact_native_TSV_byte_equal": true,
   "TSV_sha256": "23464aba142911f3fb3c635069f4bc8f2a8c0028934c6925d3065c036058b876",
-  "native_content_minimum_logical_pixels": [
-    1040,
-    680
-  ],
-  "raw_window_physical_pixels": [
-    2080,
-    1424
-  ],
+  "native_content_minimum_logical_pixels": [1040, 680],
+  "raw_window_physical_pixels": [2080, 1424],
   "titlebar_logical_pixels": 32
 }

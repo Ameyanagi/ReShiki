@@ -155,11 +155,18 @@
     "path": "evidence/nmr/ethyl-acetate-compact-desktop-final.rsk",
     "sha256": "08978db95416b8f58df2d8b12cbe949328327c8ddc0d0a75c7e32668e0f14cca",
     "independent_check": "evidence/nmr/compact-desktop-independent-check.json",
-    "independent_check_sha256": "1cedadcb535b1c0e9696438d2d23b3585cf1b11ab3c2b38d972ed8789f441f32",
+    "independent_check_sha256": "985daf6699f160d7af7747517799f1130aca2cc0fb6def1039353668614f8182",
     "original_atom_ids_fields_and_positions_preserved": true,
     "bond_endpoint_order_display_preserved": true,
     "serialization_note": "Fixture-only bond id keys are not serialized by existing native codec; atom IDs1–6 retained exactly. New optional defaults and empty figure fields serialized.",
-    "nmr_result_persistence_claimed": false
+    "nmr_result_persistence_claimed": false,
+    "independent_check_original_bytes": {
+      "url": "https://raw.githubusercontent.com/Ameyanagi/ReShiki/a092df29357b3d649a68c67e0924cb9771dc3d8b/docs/evidence/nmr/compact-desktop-independent-check.json",
+      "sha256": "1cedadcb535b1c0e9696438d2d23b3585cf1b11ab3c2b38d972ed8789f441f32",
+      "source_commit": "a092df29357b3d649a68c67e0924cb9771dc3d8b"
+    },
+    "independent_check_parsed_content_unchanged": true,
+    "independent_check_formatting": "Repository Oxfmt 0.68.0 formatting only; arrays use compact layout; original receipt bytes remain pinned above"
   },
   "native_size_limit": {
     "logical_content_pixels": [1040, 680],
