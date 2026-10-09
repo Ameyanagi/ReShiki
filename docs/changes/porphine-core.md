@@ -4,8 +4,7 @@ Search **porphyrin** in Templates and place **Porphine (21H,23H)** once. The
 editable free base has equal bond lengths, four regular five-rings, 120° meso
 corners and two opposite inward N–H labels. The
 [construction guide](../porphine-core.md) explains its chemical identity and
-own-coordinate geometry. Contribution: @Ameyanagi, under review; the PR link
-will be added at publication.
+own-coordinate geometry. Contribution: @Ameyanagi in [PR #287](https://github.com/Ameyanagi/ReShiki/pull/287), under review.
 
 ## Find and place the core
 
