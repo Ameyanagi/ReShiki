@@ -1,0 +1,281 @@
+{
+  "schema": 1,
+  "pull_request": "https://github.com/Ameyanagi/ReShiki/pull/273",
+  "status": "Draft; under review.",
+  "native_platform": "Windows 11 build 26200, interactive RDP session, 2026-10-10 JST",
+  "native_records": [
+    {
+      "build": "baseline",
+      "measurement_phase": "afterviewportcycle",
+      "probe_is_initial_state_measurement": false,
+      "original_probe_receipt": {
+        "filename": "probe-baseline-9464-baseline-afterviewportcycle-20261010-043218-783.json",
+        "bytes": 1464,
+        "sha256": "5c43f2bbb9554863e05b021d68e7b6b36589e3f21570821b57b9c875fac4315c",
+        "original_retained_privately": true
+      },
+      "original_launch_receipt": {
+        "filename": "launch-baseline-20261010-041925-1488ebea.json",
+        "bytes": 861,
+        "sha256": "61187c2d84b962c1dd891262db624079106fa5791633aad12d40419143daf4c0",
+        "timestamp": "2026-10-10T04:19:25.4892366+09:00",
+        "process_id": 9464,
+        "session_id": 2,
+        "recorded_source_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+        "executable_sha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+        "artifact_label": "artifacts/base-51fa0991/reshiki.exe",
+        "fresh_task_profile": true,
+        "IcedBackendOverride": null,
+        "WgpuBackendOverride": null,
+        "RendererPolicy": "Automatic startup preference; actual interactive renderer not inferred",
+        "absolute_executable_profile_and_receipt_paths_omitted": true,
+        "original_retained_privately": true
+      },
+      "native_probe": {
+        "Timestamp": "2026-10-10T04:32:18.6113389+09:00",
+        "SourceCommit": "51fa0991da2507bb00b27c1b420e807468de6423",
+        "WindowsVersion": "10.0.26200.0",
+        "ProcessId": 9464,
+        "SessionId": 2,
+        "Executable": "artifacts/base-51fa0991/reshiki.exe",
+        "ExecutableSha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+        "Dpi": 96,
+        "Scale": 1,
+        "OuterPhysical": {
+          "Left": -8,
+          "Top": -8,
+          "Right": 1060,
+          "Bottom": 732
+        },
+        "ClientPhysical": {
+          "Left": 0,
+          "Top": 0,
+          "Right": 1052,
+          "Bottom": 701
+        },
+        "ClientLogical": [1052, 701],
+        "MonitorPhysical": {
+          "Left": 0,
+          "Top": 0,
+          "Right": 1052,
+          "Bottom": 724
+        },
+        "WorkPhysical": {
+          "Left": 0,
+          "Top": 0,
+          "Right": 1052,
+          "Bottom": 676
+        },
+        "FitsWorkArea": false
+      },
+      "native_fields_exact_except_executable_path": true,
+      "fits_work_area_independently_recomputed": false,
+      "screenshot_sequence": "Fresh initial blank screenshot before any viewport cycle; later delayed native measurement after temporarily enlarging/restoring the RDP viewport.",
+      "initial_capture_bounds_not_equated_with_postcycle_probe": true
+    },
+    {
+      "build": "candidate",
+      "measurement_phase": "initialsmallreview",
+      "probe_is_initial_state_measurement": true,
+      "original_probe_receipt": {
+        "filename": "probe-candidate-10884-initialsmallreview-20261010-041527-194.json",
+        "bytes": 1453,
+        "sha256": "b0a16b749be4c11d1a3d24feb13635491e70faa7090ac3c936a434392bfec4ee",
+        "original_retained_privately": true
+      },
+      "original_launch_receipt": {
+        "filename": "launch-candidate-20261010-040650-6f6a833a.json",
+        "bytes": 856,
+        "sha256": "cad232a44915fd6e8dbdf909ed82ee389c522f51053861e88cb18a504b0bd3cb",
+        "timestamp": "2026-10-10T04:06:50.1805742+09:00",
+        "process_id": 10884,
+        "session_id": 2,
+        "recorded_source_commit": "7cab2287ebeedc0b217967129bc7e3f8a23cbff1",
+        "executable_sha256": "b38cac810f799fca1b2ae4e841d4d042c7f01709ef888fbe3feac9d8fbf195ed",
+        "artifact_label": "artifacts/head/reshiki.exe",
+        "fresh_task_profile": true,
+        "IcedBackendOverride": null,
+        "WgpuBackendOverride": null,
+        "RendererPolicy": "Automatic startup preference; actual interactive renderer not inferred",
+        "absolute_executable_profile_and_receipt_paths_omitted": true,
+        "original_retained_privately": true
+      },
+      "native_probe": {
+        "Timestamp": "2026-10-10T04:15:27.0103227+09:00",
+        "SourceCommit": "7cab2287ebeedc0b217967129bc7e3f8a23cbff1",
+        "WindowsVersion": "10.0.26200.0",
+        "ProcessId": 10884,
+        "SessionId": 2,
+        "Executable": "artifacts/head/reshiki.exe",
+        "ExecutableSha256": "b38cac810f799fca1b2ae4e841d4d042c7f01709ef888fbe3feac9d8fbf195ed",
+        "Dpi": 96,
+        "Scale": 1,
+        "OuterPhysical": {
+          "Left": 8,
+          "Top": 8,
+          "Right": 1044,
+          "Bottom": 668
+        },
+        "ClientPhysical": {
+          "Left": 0,
+          "Top": 0,
+          "Right": 1020,
+          "Bottom": 621
+        },
+        "ClientLogical": [1020, 621],
+        "MonitorPhysical": {
+          "Left": 0,
+          "Top": 0,
+          "Right": 1052,
+          "Bottom": 724
+        },
+        "WorkPhysical": {
+          "Left": 0,
+          "Top": 0,
+          "Right": 1052,
+          "Bottom": 676
+        },
+        "FitsWorkArea": true
+      },
+      "native_fields_exact_except_executable_path": true,
+      "fits_work_area_independently_recomputed": true,
+      "screenshot_sequence": "Fresh initial blank screenshot; root interactive native probe before the later baseline viewport cycle; drawing and two mouse Undo clicks were separate follow-up captures.",
+      "initial_capture_bounds_not_equated_with_postcycle_probe": false
+    }
+  ],
+  "timing_and_comparison_limits": [
+    "The before image is the fresh baseline launch PID 9464 before viewport cycling; baseline native bounds were recorded later with explicit afterviewportcycle label.",
+    "The candidate PID 10884 has a separate initial-state native probe; both probes agree on guest monitor 1052×724, work area 1052×676 and 96 DPI.",
+    "The baseline source requests 1280×820 logical client, but its postcycle measured client is 1052×701; unchanged initial bounds are not claimed.",
+    "No maximized/window-placement state is recorded in these probes.",
+    "The original screenshots were 2104×1504 host-side pixels; that is not the Windows guest display measurement.",
+    "Private original probe/launch SHA references identify the original bytes; this formatted redacted public JSON is a separate file and is not claimed byte-identical to those originals.",
+    "The actual active interactive renderer was not independently identified; automatic launch preference is distinct from the separate --graphics-info diagnostic."
+  ],
+  "visual_evidence": {
+    "capture_provenance": "capture-provenance.json",
+    "crop_rectangle": [0, 56, 2104, 1408],
+    "public_size": [2104, 1352],
+    "images": [
+      {
+        "image": "before.png",
+        "original_filename": "baseline-matched-small.jpg",
+        "original_sha256": "c10b0b4c5af6d77a5a90c95db143009e4640ffd2e7919d0a746c98383d9554e0",
+        "image_sha256": "ae02b42fffdcfa9cfab1e25a67ad8999fc5a585113b6ac0a6f99a67d58b857d6",
+        "public_size": [2104, 1352],
+        "decoded_crop_pixel_equality": true
+      },
+      {
+        "image": "after.png",
+        "original_filename": "candidate-initial-small.jpg",
+        "original_sha256": "58ee518a6a10fe300d9e27ce867e559dc9ebc7e35e1cbd7c55af342bd46fd2fe",
+        "image_sha256": "a5a9c561b8ba0e3f70a9b79b3afb17941341eaf0f3d3626f0cb5ce8aca1fa063",
+        "public_size": [2104, 1352],
+        "decoded_crop_pixel_equality": true
+      },
+      {
+        "image": "drawing.png",
+        "original_filename": "candidate-drawing-small.jpg",
+        "original_sha256": "5acc2108724931c0bb76f0054ce41ef7fc1bdb3ed7eeac8d6c730a876377bb12",
+        "image_sha256": "748ab3cce4e8b37e5d450a874550ce070760bd0547dd8778514b259b65b5d272",
+        "public_size": [2104, 1352],
+        "decoded_crop_pixel_equality": true
+      },
+      {
+        "image": "undo.png",
+        "original_filename": "candidate-undo-clear-small.jpg",
+        "original_sha256": "61026c72d2faee8f093bc3b76912e46baea115d6766d231f8b6015e4ea923048",
+        "image_sha256": "72b3e22a8da816561c5dc2a3b15057f7c943e926e0e2a1bfe65aecad1bac7115",
+        "public_size": [2104, 1352],
+        "decoded_crop_pixel_equality": true
+      }
+    ],
+    "root_manual_observations": [
+      "Fresh unchanged baseline shows title/tools/footer clipping at the small desktop.",
+      "Fresh candidate shows its complete title bar, tool column, panels and footer.",
+      "Mouse drawing responds; two mouse Undo clicks restore an empty unmodified canvas."
+    ],
+    "disclosed_ui_differences": [
+      "Candidate drawing has selected drawing controls/atom highlight; undo has an Undo tooltip and restored empty canvas.",
+      "A generic Explorer status area is visible behind the fitted candidate; no private filename/account/tab is present in public crops.",
+      "Pointer and active drawing tool/status differ across interaction captures."
+    ],
+    "image_bytes_unchanged_by_packaging": true
+  },
+  "probe_harness": {
+    "PowerShellVersion": "5.1.26100.9444",
+    "original_tracked_probe_sha256": "b7c0c52c444d5ba44696c57231c6970e7ad38ab4a4c82a1e46a4ee7f88001fa3",
+    "corrected_probe_sha256": "2b1a15153c79bad3e7c0f54314629d46fbe57877c285ca2c0c1c6fbfe5962d48",
+    "executed_review_probe_name": "probe_windows_window_review.ps1",
+    "tracked_corrected_probe": "scripts/probe_windows_window.ps1",
+    "tracked_corrected_probe_byte_equal_to_executed_review_copy": true,
+    "corrected_review_wrapper_sha256": "cd4f52a63333e69b23f43515d55477ac7e94cf1aa08645349d79ef58462f15f1",
+    "delay_wrapper_sha256": "e89ed3dcab6e0e6791f988c3276b1fc3f9f03e24866ed16544cbcb008c81f130",
+    "delay_wrapper_label_requirement": "afterviewportcycle",
+    "original_arithmetic_failure": "MethodNotFound: System.Object[] / op_Division",
+    "corrected_arithmetic_cases": [
+      {
+        "Width": 2560,
+        "Height": 1640,
+        "Scale": 2,
+        "ActualLogical": [1280, 820],
+        "Passed": true
+      },
+      {
+        "Width": 1303,
+        "Height": 936,
+        "Scale": 1.25,
+        "ActualLogical": [1042.4, 748.8],
+        "Passed": true
+      },
+      {
+        "Width": 800,
+        "Height": 600,
+        "Scale": 2.5,
+        "ActualLogical": [320, 240],
+        "Passed": true
+      }
+    ],
+    "corrected_probe_parser_errors": 0,
+    "pure_arithmetic_is_not_native_high_dpi_acceptance": true,
+    "application_or_binary_rebuilt_for_probe_correction": false
+  },
+  "separate_transient_startup_failure": {
+    "build": "baseline",
+    "process_id": 4504,
+    "launch_timestamp": "2026-10-10T04:04:41.7248822+09:00",
+    "executable_sha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+    "source_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "original_launch_receipt": {
+      "filename": "launch-baseline-20261010-040441-cecc0221.json",
+      "sha256": "0e8e585ade5dc99429634744da273d0f27ab3f56f33597c10b3abd6e067b5910"
+    },
+    "status": "0xc0000142",
+    "status_name": "STATUS_DLL_INIT_FAILED",
+    "focused_system_event": {
+      "id": 26,
+      "provider": "Application Popup",
+      "timestamp": "2026-10-10T04:04:44.8365439+09:00"
+    },
+    "cause_or_failing_dll": "Unidentified.",
+    "not_sizing_comparison_evidence": true,
+    "not_attributed_to_window_fit_fix": true,
+    "later_same_sha_baseline_retry_succeeded_root_gui_observed": true,
+    "official_status_reference": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
+  },
+  "remaining_native_acceptance": [
+    "200% (192 DPI) physical-DPI work-area/frame measurements and interaction.",
+    "250% (240 DPI) small logical work-area measurements and interaction.",
+    "Full resize/minimum behavior and menu interaction.",
+    "Roomy 100% preferred-size/minimum interaction.",
+    "DPI-change or another-DPI monitor containment, UI scale, accessibility and resize checks."
+  ],
+  "production_provenance": {
+    "baseline_source_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "candidate_source_commit": "7cab2287ebeedc0b217967129bc7e3f8a23cbff1",
+    "application_code_and_preserved_binary_bytes_unchanged_in_this_evidence_followup": true,
+    "tracked_probe_change": "Only parenthesize the two ClientLogical divisions.",
+    "source_witness_and_policy_tests_are_distinct_from_native_measurements": true
+  },
+  "evidence_scope": "Actual small-work-area fit at 96 DPI / 100%; higher-DPI and full interaction acceptance remain pending."
+}
