@@ -13,4 +13,6 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
+Independent mechanism-arrow curvature, under review: @Ameyanagi for [issue #91](https://github.com/Ameyanagi/ReShiki/issues/91), with [matched desktop evidence](changes/mechanism-curvature.md). The PR link will be added when opened.
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.
