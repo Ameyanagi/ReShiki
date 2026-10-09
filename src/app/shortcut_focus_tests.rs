@@ -276,11 +276,17 @@ async fn tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner() 
                 )),
                 cursor,
             );
-            // The first real redraw also measures the drawing viewport.
-            // It is unrelated to the tool's pointer command ownership.
+            // The first real redraw also measures the drawing viewport
+            // and the available NMR panel height. These layout messages
+            // are unrelated to the tool's pointer command ownership.
             let messages: Vec<_> = messages
                 .into_iter()
-                .filter(|message| !matches!(message, Message::Viewport(_)))
+                .filter(|message| {
+                    !matches!(
+                        message,
+                        Message::Viewport(_) | Message::Nmr(super::nmr::Action::Layout(_))
+                    )
+                })
                 .collect();
             assert!(
                 matches!(messages.as_slice(),
