@@ -307,3 +307,38 @@ fn an_unusable_warped_shortest_face_keeps_the_established_fallback() {
     assert!(scene::primitives(&doc).iter().any(|primitive| matches!(primitive,
         scene::Primitive::Line(a,b,_) if a.distance(expected.0) <0.001 && b.distance(expected.1)<0.001)));
 }
+
+#[test]
+fn rear_opacity_preserves_cage_xyz_and_exact_projected_rail_at_100_percent() {
+    for source in [
+        include_str!("../../../../../tests/fixtures/projected-double-bonds/c60.rsk"),
+        include_str!("../../../../../tests/fixtures/projected-double-bonds/c70.rsk"),
+    ] {
+        let mut doc = Document::from_json(source.as_bytes()).unwrap();
+        let ids = doc.all_ids();
+        let before = doc.clone();
+        let rails: Vec<_> = doc
+            .bonds
+            .iter()
+            .filter(|b| b.order == 2)
+            .map(|b| secondary(&doc, b))
+            .collect();
+        let svg = scene::svg(&doc);
+        for opacity in [0., 0.5, 1.] {
+            crate::depth_appearance::set_rear_opacity(&mut doc, &ids, opacity).unwrap();
+            assert_eq!(doc.atoms, before.atoms);
+            assert_eq!(doc.bonds, before.bonds);
+            assert_eq!(
+                doc.bonds
+                    .iter()
+                    .filter(|b| b.order == 2)
+                    .map(|b| secondary(&doc, b))
+                    .collect::<Vec<_>>(),
+                rails
+            );
+            assert!(!crate::transaction::chemistry_changed(&before, &doc));
+            assert!(!scene::primitives(&doc).is_empty());
+        }
+        assert_eq!(scene::svg(&doc), svg);
+    }
+}

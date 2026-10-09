@@ -38,6 +38,13 @@ fn thickness(bond: &crate::document::Bond, style: &DrawingStyle) -> f32 {
 }
 /// Sorted sweep avoids checking every pair of well-separated molecules.
 pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
+    gaps_with_opacity(doc, &crate::rear_opacity::Paint::new(doc))
+}
+
+pub(crate) fn gaps_with_opacity(
+    doc: &Document,
+    opacity: &crate::rear_opacity::Paint,
+) -> Vec<Vec<Gap>> {
     let mut gaps = vec![vec![]; doc.bonds.len()];
     let mut segments: Vec<_> = doc
         .bonds
@@ -95,6 +102,10 @@ pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
             } else {
                 (i, a, b, t, second)
             };
+            // Transparent ink cannot knock out the ink beneath it.
+            if opacity.bond(over, if first_over { t } else { u }) < 1. {
+                continue;
+            }
             let length = from.distance(to);
             let other_length = if first_over {
                 a.distance(b)

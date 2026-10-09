@@ -46,6 +46,7 @@ pub mod palette;
 pub mod pictures;
 pub mod projection;
 pub mod reactions;
+pub mod rear_opacity;
 pub mod ring_arcs;
 pub mod ring_fills;
 pub mod rings;

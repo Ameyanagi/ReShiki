@@ -2485,3 +2485,73 @@ fn text_click_on_an_existing_label_selects_it_without_a_history_step() {
     assert_eq!(app.tool, Tool::Text);
     assert!(!app.tab.history.can_undo());
 }
+
+#[test]
+fn rear_opacity_draft_apply_is_one_undo_and_rejects_stale_invalid_or_late_input()
+-> Result<(), String> {
+    use super::depth_appearance::{Action, Draft};
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.doc.atom_mut(a).unwrap().depth = -21.;
+    app.tab.doc.atom_mut(b).unwrap().depth = 21.;
+    app.tab.selected = vec![a];
+    app.tab.history = History::default();
+    app.tab.labels_dirty = false;
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let draft = |app: &App, value: &str| Draft {
+        ids: app.depth_ids(),
+        revision: app.tab.revision,
+        file_epoch: app.tab.file_epoch,
+        value: value.into(),
+    };
+    for value in ["nan", "101", "-1", ""] {
+        let input = draft(&app, value);
+        let _ = app.update(Message::DepthAppearance(Action::RearInput(input)));
+        let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
+        assert!(app.error);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+    }
+    let input = draft(&app, "100");
+    let _ = app.update(Message::DepthAppearance(Action::RearInput(input)));
+    let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
+    assert!(!app.error);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let stale = draft(&app, "10");
+    let input = draft(&app, "25");
+    let _ = app.update(Message::DepthAppearance(Action::RearInput(input)));
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
+    assert!(!app.error, "{}", app.status);
+    let edited = app.tab.doc.clone();
+    assert_eq!(
+        reshiki::depth_appearance::rear_opacity(&edited, &[a, b]),
+        Some(0.25)
+    );
+    assert_eq!(edited.atoms, before.atoms);
+    assert_eq!(edited.bonds, before.bonds);
+    assert!(!chemistry_changed(&before, &edited));
+    assert_eq!(app.tab.revision, revision + 1);
+    assert_eq!(app.tab.history.frames(), 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, edited);
+    let _ = app.update(Message::DepthAppearance(Action::RearInput(stale)));
+    let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
+    assert_eq!(app.tab.doc, edited);
+    assert_eq!(app.tab.history.frames(), 1);
+    let input = draft(&app, "0");
+    let _ = app.update(Message::DepthAppearance(Action::RearInput(input)));
+    app.tab.file_epoch += 1;
+    let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
+    assert_eq!(app.tab.doc, edited);
+    Ok(())
+}

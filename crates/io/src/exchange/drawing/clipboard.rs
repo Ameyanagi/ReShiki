@@ -5,7 +5,11 @@ use super::*;
 pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
     source.validate().map_err(invalid)?;
     let haworth = crate::haworth::interchange::export_bonds(source).map_err(invalid)?;
+    let opacity = crate::rear_opacity::present(source);
     let mut document = source.clone();
+    for scope in &mut document.depth_appearance {
+        scope.rear_opacity = 1.;
+    }
     let mut charges = 0;
     let mut variables = 0;
     let mut curves = 0;
@@ -43,6 +47,9 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
         }
     }
     let mut notices = Vec::new();
+    if opacity {
+        notices.push("Editable CDX copy omits rear opacity; native copy and SVG/PNG retain it. Chemical structure and XYZ are unchanged.".into());
+    }
     if charges != 0 {
         notices.push(format!("Editable CDX copy shows {charges} hidden charge label(s); chemical charges are unchanged"));
     }

@@ -129,6 +129,11 @@ fn write_impl(
     preserve_drawing: bool,
     variable_labels: bool,
 ) -> Result<String> {
+    if crate::rear_opacity::present(document) {
+        return Err(invalid(
+            "CDXML/CDX cannot preserve rear opacity. Use native ReShiki for editable appearance or SVG, PDF or PNG for the figure. Set rear opacity to 100% for editable CDXML/CDX.",
+        ));
+    }
     let original = document;
     let depth_painted = crate::depth_appearance::materialize(document);
     let document = depth_painted.as_ref();

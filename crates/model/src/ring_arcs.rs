@@ -57,6 +57,7 @@ pub fn toggle(doc: &mut Document, selected: &[u64]) -> Result<bool, String> {
 
 pub struct Arcs {
     pub primitives: Vec<Primitive>,
+    pub(crate) owners: Vec<Vec<u64>>,
     pub bonds: HashSet<(u64, u64)>,
     pub(crate) crossings: Vec<(usize, crate::crossings::Gap)>,
 }
@@ -72,6 +73,7 @@ impl Arcs {
 pub fn render(doc: &Document) -> Arcs {
     let mut result = Arcs {
         primitives: vec![],
+        owners: vec![],
         bonds: HashSet::new(),
         crossings: Vec::new(),
     };
@@ -176,6 +178,7 @@ pub fn render(doc: &Document) -> Arcs {
             };
             let (stroke, gaps) = crate::crossings::ring_stroke(doc, &ring, stroke);
             result.primitives.push(stroke);
+            result.owners.push(ring.atoms.clone());
             result.crossings.extend(gaps);
             step += count.max(1);
         }

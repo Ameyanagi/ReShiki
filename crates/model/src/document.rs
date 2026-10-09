@@ -148,7 +148,7 @@ fn forward() -> String {
 }
 
 /// The newest document format this build reads. Saved files are marked with it.
-pub const VERSION: u32 = 19;
+pub const VERSION: u32 = 22;
 
 fn newer_version(version: u64) -> String {
     format!(

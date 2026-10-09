@@ -33,6 +33,7 @@ fn cross_xy(a: Point, b: Point) -> f32 {
 }
 
 struct Face {
+    atoms: Vec<u64>,
     points: Vec<Point>,
     tangent: Point,
     inward: Point,
@@ -201,6 +202,7 @@ fn face(doc: &Document, bond: &Bond) -> Option<Face> {
             1.
         };
         return Some(Face {
+            atoms: path,
             points: atoms.iter().map(|a| a.position).collect(),
             tangent,
             inward,
@@ -228,6 +230,10 @@ fn convex(points: &[Point], tolerance: f32) -> bool {
         }
     }
     true
+}
+
+pub(crate) fn face_atoms(doc: &Document, bond: &Bond) -> Option<Vec<u64>> {
+    Some(face(doc, bond)?.atoms)
 }
 
 pub(super) fn automatic_side(doc: &Document, bond: &Bond) -> Option<f32> {

@@ -216,8 +216,60 @@ fn paths(groups: BTreeMap<Color, Vec<PathCommand>>) -> impl Iterator<Item = Prim
     })
 }
 
+fn append_parts(
+    groups: &mut BTreeMap<(Color, u32), Vec<PathCommand>>,
+    color: Color,
+    parts: Vec<Primitive>,
+) {
+    for part in parts {
+        let (alpha, part) = match part {
+            Primitive::Opacity { alpha, primitive } => (alpha, *primitive),
+            part => (1., part),
+        };
+        if let Primitive::Path { commands, .. } = part {
+            groups
+                .entry((color, alpha.to_bits()))
+                .or_default()
+                .extend(commands);
+        }
+    }
+}
+fn opacity_paths(
+    groups: BTreeMap<(Color, u32), Vec<PathCommand>>,
+) -> impl Iterator<Item = Primitive> {
+    groups.into_iter().map(|((color, alpha), commands)| {
+        let primitive = Primitive::Path {
+            commands,
+            style: GraphicStyle {
+                stroke: color,
+                fill: Some(color),
+                width_pt: 0.,
+                ..Default::default()
+            },
+            filled: true,
+        };
+        let alpha = f32::from_bits(alpha);
+        if alpha >= 1. {
+            primitive
+        } else {
+            Primitive::Opacity {
+                alpha,
+                primitive: Box::new(primitive),
+            }
+        }
+    })
+}
+
 /// Backdrop geometry shared by the native canvas, SVG, PDF, PNG and print.
+#[cfg(test)]
 pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
+    primitives_with_opacity(doc, &crate::rear_opacity::Paint::new(doc))
+}
+
+pub(crate) fn primitives_with_opacity(
+    doc: &Document,
+    opacity: &crate::rear_opacity::Paint,
+) -> Vec<Primitive> {
     if !any(doc) {
         return Vec::new();
     }
@@ -245,7 +297,7 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
         // scientific symbols have independent geometry and are not text boxes.
         let boxes: Vec<_> = [a, b]
             .into_iter()
-            .filter(|atom| atom_color(doc, atom).is_none())
+            .filter(|atom| opacity.atom(atom.id) > 0. && atom_color(doc, atom).is_none())
             .filter(|atom| {
                 crate::atom_labels::visible(atom, doc) || doc.abbreviation(atom.id).is_some()
             })
@@ -258,7 +310,22 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
         if commands.is_empty() {
             continue;
         }
-        bonds.entry(color).or_default().extend(commands);
+        if opacity.is_empty() {
+            bonds
+                .entry((color, 1_f32.to_bits()))
+                .or_default()
+                .extend(commands);
+        } else {
+            append_parts(
+                &mut bonds,
+                color,
+                opacity.bond_parts(
+                    doc,
+                    bond,
+                    paths(BTreeMap::from([(color, commands)])).collect(),
+                ),
+            );
+        }
         for atom in [a, b] {
             // A nearby label cutout can remove part of an otherwise covering
             // bond cap. Retain that endpoint's own halo in this case.
@@ -285,21 +352,39 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
         // A matching bond cap covers an unlabeled atom when no other bond
         // color can overpaint it (including unrelated crossing bonds). Avoid
         // drawing that same boundary twice and darkening its antialiased edge.
-        if a == b
+        if opacity.is_empty()
+            && a == b
             && rx == ry
             && bonds.len() == 1
             && covered.get(&(atom.id, color)).is_some_and(|r| *r >= rx)
         {
             continue;
         }
-        atoms.entry(color).or_default().extend(capsule(
-            a,
-            b,
-            Point::new(rx, 0.),
-            Point::new(0., ry),
-        ));
+        let commands = capsule(a, b, Point::new(rx, 0.), Point::new(0., ry));
+        if opacity.is_empty() {
+            atoms
+                .entry((color, 1_f32.to_bits()))
+                .or_default()
+                .extend(commands);
+        } else {
+            append_parts(
+                &mut atoms,
+                color,
+                opacity.atom_parts(
+                    atom.id,
+                    paths(BTreeMap::from([(color, commands)])).collect(),
+                ),
+            );
+        }
     }
-    paths(bonds).chain(paths(atoms)).collect()
+    if !opacity.is_empty() {
+        for (key, commands) in atoms {
+            bonds.entry(key).or_default().extend(commands);
+        }
+        opacity_paths(bonds).collect()
+    } else {
+        opacity_paths(bonds).chain(opacity_paths(atoms)).collect()
+    }
 }
 
 /// Whether a drawing carries any highlight paint, including collapsed members.

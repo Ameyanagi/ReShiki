@@ -1,0 +1,115 @@
+use reshiki::{
+    depth_appearance as depth,
+    document::{Document, Point},
+    export, scene,
+};
+
+fn drawing(alpha: f32) -> Document {
+    let mut doc = Document::default();
+    let ids: Vec<_> = [
+        (0., 0., -20.),
+        (80., 0., -20.),
+        (120., 80., 20.),
+        (200., 80., 20.),
+    ]
+    .into_iter()
+    .map(|(x, y, z)| {
+        let id = doc.add_atom("C", Point::new(x, y));
+        doc.atom_mut(id).unwrap().depth = z;
+        id
+    })
+    .collect();
+    for pair in ids.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    depth::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
+    doc
+}
+fn rgba(doc: &Document) -> image::RgbaImage {
+    image::load_from_memory(&export::clipboard_png(doc).unwrap())
+        .unwrap()
+        .into_rgba8()
+}
+fn ink_alpha(image: &image::RgbaImage, point: Point, doc: &Document) -> u8 {
+    let drawing = scene::primitives(doc);
+    let (lo, hi) = scene::bounds(&drawing);
+    let x = ((point.x - lo.x) / (hi.x - lo.x) * image.width() as f32).round() as u32;
+    let y = ((point.y - lo.y) / (hi.y - lo.y) * image.height() as f32).round() as u32;
+    (x.saturating_sub(3)..=(x + 3).min(image.width() - 1))
+        .flat_map(|x| {
+            (y.saturating_sub(3)..=(y + 3).min(image.height() - 1))
+                .map(move |y| image.get_pixel(x, y).0[3])
+        })
+        .max()
+        .unwrap()
+}
+
+#[test]
+fn transparent_raster_and_vector_exports_have_real_alpha_and_front_ink_on_each_theme() {
+    for theme in reshiki::canvas_theme::CanvasTheme::ALL {
+        let mut doc = drawing(0.5);
+        doc.canvas_theme = theme;
+        let original = doc.clone();
+        let image = rgba(&doc);
+        let rear = ink_alpha(&image, Point::new(40., 0.), &doc);
+        let front = ink_alpha(&image, Point::new(160., 80.), &doc);
+        assert!((126..=129).contains(&rear), "rear alpha {rear}");
+        assert_eq!(front, 255);
+        let expected = theme.color([0; 3]);
+        assert!(
+            image
+                .pixels()
+                .any(|p| p.0[3] >= 126 && p.0[3] <= 129 && p.0[..3] == expected)
+        );
+        assert!(scene::svg(&doc).contains("opacity=\"0.5\""));
+        let pdf = export::clipboard_drawing(&doc, "pdf").unwrap();
+        assert!(pdf.starts_with(b"%PDF"));
+        let pdf = String::from_utf8_lossy(&pdf);
+        assert!(
+            pdf.contains("/ca 0.5") || pdf.contains("/CA 0.5"),
+            "PDF lacks real opacity state"
+        );
+        for format in ["png", "svg", "pdf"] {
+            assert!(!export::figure(&doc, format).unwrap().bytes.is_empty());
+        }
+        assert_eq!(doc, original);
+    }
+}
+
+#[test]
+fn rear_hidden_foreground_continuous_and_restore_100_reproduces_original_figure() {
+    let mut doc = drawing(1.);
+    let original = doc.clone();
+    let svg = scene::svg(&doc);
+    let ids = doc.all_ids();
+    depth::set_rear_opacity(&mut doc, &ids, 0.).unwrap();
+    assert!(!scene::svg(&doc).contains("opacity="));
+    let image = rgba(&doc);
+    assert_eq!(ink_alpha(&image, Point::new(160., 80.), &doc), 255);
+    assert_eq!(doc.atoms, original.atoms);
+    assert_eq!(doc.bonds, original.bonds);
+    let ids = doc.all_ids();
+    depth::set_rear_opacity(&mut doc, &ids, 1.).unwrap();
+    assert_eq!(scene::svg(&doc), svg);
+}
+
+#[test]
+fn native_preserves_opacity_and_external_editable_copy_reports_presentation_loss() {
+    let doc = drawing(0.25);
+    let original = doc.clone();
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.depth_appearance, doc.depth_appearance);
+    assert_eq!(scene::svg(&reopened), scene::svg(&doc));
+    let error = reshiki::exchange::drawing::write(&doc, Default::default())
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("rear opacity"));
+    assert!(error.contains("SVG"));
+    let (_, warnings) = reshiki::exchange::drawing::write_clipboard(&doc).unwrap();
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning.contains("rear opacity"))
+    );
+    assert_eq!(doc, original);
+}

@@ -164,7 +164,15 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
                 analysis: None,
                 output: Some(output),
                 engine_version: chemistry::RDKIT_VERSION.into(),
-                warnings: vec![crate::attachments::ANALYSIS_NOTICE.into()],
+                warnings: {
+                    let mut warnings = vec![crate::attachments::ANALYSIS_NOTICE.into()];
+                    if request.format.as_deref() == Some("mol")
+                        && crate::rear_opacity::present(document)
+                    {
+                        warnings.push(crate::rear_opacity::EXPORT_NOTICE.into());
+                    }
+                    warnings
+                },
             })
         })
         .await?;
@@ -419,6 +427,16 @@ fn finish(
             response.warnings.push("This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme.".into());
         }
         let format = request.format.as_deref();
+        if matches!(format, Some("mol" | "smiles" | "inchi"))
+            && request
+                .document
+                .as_ref()
+                .is_some_and(crate::rear_opacity::present)
+        {
+            response
+                .warnings
+                .push(crate::rear_opacity::EXPORT_NOTICE.into());
+        }
         if document.bonds.iter().any(|bond| match format {
             Some("mol") => matches!(bond.order, 0 | 6 | 7),
             Some("smiles") => matches!(bond.order, 0 | 7),
