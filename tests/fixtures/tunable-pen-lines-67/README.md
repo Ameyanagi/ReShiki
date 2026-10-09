@@ -14,6 +14,6 @@ node (95, 30) moves that point alone, leaving its adjacent controls (95, -30) an
 After implementation, create one path with several click/drag segments, inspect
 the round nodes and square tangent controls, insert a node without reshaping its
 segment, delete a node, convert a segment between straight/curved and close/open
-the path. Capture the selected controls and a second finished drawing. Check
+the path. Closing adds a straight last-to-first segment; opening removes that closing segment. Capture the selected controls and a second finished drawing. Check
 Escape, one Undo/Redo per gesture, transforms, duplication, native reopen and
 editable CDX/CDXML. Arc presets remain available separately.
