@@ -161,7 +161,7 @@ jobs:
       UV_PYTHON: ${{ matrix.python }}
       RESHIKI_REQUIRE_INCHI_HELPER: "1"
       # Naming integration must launch this exact source's executable, not a test harness.
-      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.target, '-pc-windows-msvc') && '.exe' || '' }}
       # Windows symlink escape tests fail instead of skipping without the privilege.
       RESHIKI_REQUIRE_LINK_TESTS: "1"
     steps:
