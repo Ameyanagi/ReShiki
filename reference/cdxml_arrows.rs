@@ -77,6 +77,17 @@ fn native(arrow: &NativeArrow) -> anyhow::Result<Value> {
             );
         }
     }
+    if let Some(controls) = arrow.cubic {
+        object.insert(
+            "cubic".into(),
+            Value::Array(
+                controls
+                    .into_iter()
+                    .map(|point| serde_json::json!({"x":number(point.x),"y":number(point.y)}))
+                    .collect(),
+            ),
+        );
+    }
     Ok(value)
 }
 fn expected_document(value: &Value) -> anyhow::Result<Document> {
