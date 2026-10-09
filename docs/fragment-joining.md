@@ -50,6 +50,17 @@ Repeat for the second donor of a chelate, even when both are already in the
 same connected molecule. Each new contact is one Undo step; Escape cancels
 without editing. Repeating an existing donor→metal contact is a no-op.
 
+For a selection shortcut, select exactly the donor atom and the metal, then
+press **Ctrl+J** (**⌘J** on macOS). Either selection order creates the same
+donor→metal contact without moving or merging atoms. Repeat with the other
+donor to close a chelate; an existing contact adds no Undo step. Select the
+two endpoint atoms rather than the whole ligand. For two ordinary nonmetal
+atoms, this shortcut still shares compatible atoms; four ordinary bond
+endpoints still fuse the bonds.
+
+The [selected-pair shortcut check](changes/coordination-join-shortcut.md) records
+matched native before/after, field-focus protection and Save/reopen controls.
+
 The explicit operation supports neutral/−1 charged N, O, S and P lone-pair
 donors and transition-metal acceptors Sc–Zn, Y–Cd and Hf–Hg, with up to 12
 contacts at a metal. Unsupported donor valence, radicals, atom stereo and

@@ -1,0 +1,41 @@
+{
+  "recorded_at_utc": "2026-10-09T21:06:19.020931+00:00",
+  "capture": "unchanged native JPEG from cua.getAXStateAndScreenshot",
+  "baseline": "Existing PR283 candidate before requested CtrlJ donor-metal shortcut routing",
+  "bundle": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Coordination.app",
+  "signed_executable_sha256": "77654ac99707cf6e1fc46a4ccc1bd3e10db97d802827873864a4a6973c2f2611",
+  "process_id": 12374,
+  "compiled_source": "8fbf166cb9daad908d743cce71e6c6d73a819a47",
+  "compiled_source_content_sha256": "e34ea8c03732ca489fb1fd2eaff9966d6e294185e40224563f5e3d1748636425",
+  "fixture": "/Users/ryuichi/dev/ReShiki-worktrees/coordination/tests/fixtures/coordination/co-en3-before.rsk",
+  "fixture_sha256": "0f6f575a908de66b33e0117386c66b288f8bbcb6348b543a50cde96e548f42d4",
+  "keyboard_drawing": false,
+  "native_shortcut": "Command+J (macOS primary-modifier equivalent of Windows/Linux Ctrl+J)",
+  "selection": {
+    "atom_ids": [
+      1,
+      5
+    ],
+    "elements": [
+      "Co",
+      "N"
+    ],
+    "method": "native rectangle selection through CUA; 2atoms and owner halos visible"
+  },
+  "observed": "No compatible attachment rejection, no bond added, clean title, Undo disabled",
+  "zoom_percent": 221,
+  "image_sha256": "38a12fd4ef0eec8d83dbfbcdb536e208c19607896a9e8992225ddc0c250ab258",
+  "image_dimensions": [
+    2560,
+    1704
+  ],
+  "full_ax_path": "co-en3-cmd-j-rejected-before.full.ax.txt",
+  "full_ax_sha256": "0710df4a1cc5440b66a1953ae5d9029d1d5223cbf8107282ee8541fbd72cc7e8",
+  "original_diff_ax_sha256": "7166157009881338fc63509df276f02bc028f8d7641655b9c809502a784a3325",
+  "notes": [
+    "Existing recovery draft left untouched.",
+    "No crop, resize, retouch or annotation.",
+    "Complete AX reobserved without intervening UI changes; original diff-only AX preserved.",
+    "After implementation and Windows literal ControlJ remain unverified here."
+  ]
+}

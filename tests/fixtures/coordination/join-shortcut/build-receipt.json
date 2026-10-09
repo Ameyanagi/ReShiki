@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "build",
+    "--locked",
+    "--bin",
+    "reshiki",
+    "--message-format=json-render-diagnostics"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/coordination",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "started_unix": 1791582784.181442,
+  "elapsed_seconds": 70.2508499622345,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/build.log",
+  "log_bytes": 356678,
+  "log_sha256": "cbe0753de76886175d182f91d66b1c4bc873d45fe9b2bc2fa8d5f40b0c93825f"
+}
