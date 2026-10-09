@@ -137,6 +137,12 @@ Documentation updates do not alter production source or rerun Cargo or model
 requests. Native checks use the preserved signed executable. Actual desktop
 coverage is macOS arm64; other platforms are unverified.
 
+A later GNOME clipboard workflow failure exposed an unconfirmed foreign
+publication in the Python fixture. The [fixture follow-up review](wayland-fixture-publication-2026-10-09.md)
+records the trace, producer acceptance and independent-reader checks, source-only
+negative tests, and pending live GNOME/Sway validation. It does not change the
+Assistant application or the preserved native evidence above.
+
 ## Sources and contribution license
 
 The setup facts were checked against installed `codex-cli 0.161.0` and official
