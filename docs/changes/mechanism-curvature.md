@@ -22,17 +22,17 @@ reaction electron accounting.
 
 | Before | After |
 | --- | --- |
-| ![Legacy curve with two endpoints and one square bend handle](../images/mechanism-curvature/before-handles.png) | ![The same curve with round endpoints, two independent square tangent controls and a middle diamond](../images/mechanism-curvature/after-handles.png) |
-| ![Dragging the single bend changes both departure and arrival directions](../images/mechanism-curvature/before-single-bend.png) | ![Independent departure and arrival controls give the fixed-endpoint curve nearly vertical tangents](../images/mechanism-curvature/after-independent.png) |
+| ![Legacy curve with two endpoints and one square bend handle](../images/mechanism-curvature/before-handles.jpg) | ![The same curve with round endpoints, two independent square tangent controls and a middle diamond](../images/mechanism-curvature/after-handles.jpg) |
+| ![Dragging the single bend changes both departure and arrival directions](../images/mechanism-curvature/before-single-bend.jpg) | ![Independent departure and arrival controls give the fixed-endpoint curve nearly vertical tangents](../images/mechanism-curvature/after-independent.jpg) |
 
 The first row uses the same selection operation and unchanged geometry. The
 second row shows the available editing operations: a single bend on the base,
 then separate tangent drags on the candidate. Those drags intentionally differ
 because independent tangent controls did not exist in the base.
 
-![Finished mechanism curve after independent endpoint-direction edits, with selection controls hidden](../images/mechanism-curvature/after-output.png)
+![Finished mechanism curve after independent endpoint-direction edits, with selection controls hidden](../images/mechanism-curvature/after-output.jpg)
 
-These five PNGs are the untouched original 2560 × 1704 desktop captures.
+These five JPEGs are the untouched original 2560 × 1704 desktop captures.
 Open an image at native size to inspect the handles. No cropped, resized or
 retouched variants are published.
 
@@ -52,7 +52,7 @@ The candidate was rebuilt after refreshing all 1,065 tracked Rust/Cargo input
 mtimes; input hashes were verified unchanged after building. The bundled
 binary SHA256 is
 `a1046f40ced32e87a9ccbae3f2dc6bc21936459acc8cc75ca2bbbcb645985e6f`.
-The screenshot format is PNG, captured directly from the application.
+The screenshot format is JPEG, captured directly from the application.
 
 1. Open `before.rsk`, set 175% zoom, turn F8 off and select the upper arrow.
 2. On the base, drag the single bend from screen (886, 553) to (999, 521).
