@@ -1,0 +1,13 @@
+{
+  "observed_utc": "2026-10-09T23:05:45.5302780Z",
+  "powerpoint_processes": [],
+  "executable_files": [
+    {
+      "path": "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE",
+      "bytes": 1917184,
+      "sha256": "e58e29a44268bad4562a5c6d335641fb5522522079de71e8d2fbfccf32975ceb",
+      "file_version": "16.0.20527.20032",
+      "product_version": "16.0.20527.20032"
+    }
+  ]
+}

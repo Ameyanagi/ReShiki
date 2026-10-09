@@ -1,0 +1,45 @@
+{
+  "baseline": {
+    "preserved_remote_path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\base-51fa0991\\reshiki.exe",
+    "bytes": 102718976,
+    "sha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+    "recorded_source_head": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "recorded_source_archive": {
+      "bytes": 168701445,
+      "sha256": "786925379832c817f7543d6f6d16c764f8d7e7b1ff6c5b92b40a9766da86da3a"
+    },
+    "source_attribution_evidence": "Existing windows.md/build-stage record; this bounded follow-up reverified executable bytes, not original compiler-input reconstruction"
+  },
+  "candidate": {
+    "preserved_remote_path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\head\\reshiki.exe",
+    "bytes": 102787072,
+    "sha256": "b38cac810f799fca1b2ae4e841d4d042c7f01709ef888fbe3feac9d8fbf195ed",
+    "recorded_source_head": "7cab2287ebeedc0b217967129bc7e3f8a23cbff1",
+    "current_local_docs_head": "c1dafab22127f5c885c8ddab7976ce1a7b7fff33",
+    "local_docs_only_delta": [
+      "docs/changes-unreleased.md",
+      "docs/contributors.md"
+    ],
+    "source_attribution_evidence": "Existing windows.md/build-head/test-window-fit records; this follow-up independently reverified executable bytes and sampled source"
+  },
+  "remote_current_staging": {
+    "directory": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\base-51fa0991",
+    "not_original_compiler_input": true,
+    "main_original_local_sha256": "158ee5a2d1bdbaba4c0fe93b73a05122c89a4f5540b0465dd08a63e2242c703f",
+    "main_current_remote_sha256": "127ecf05768356458909d52af292dd8099e4514426cb0e51bf0da76d2a6ee344",
+    "remote_main_retained": "remote-staged-main.rs",
+    "exact_diff_retained": "remote-main-diff.txt",
+    "later_source_changes": "desktop module/bootstrap and launch::gui_flag parsing; Windows startup fitter samples/probe still match current local files"
+  },
+  "build_configuration_recorded": {
+    "toolchain": "Rust/Cargo1.99.0 x64 MSVC",
+    "incremental": false,
+    "dev_debug": 0,
+    "cargo_build_jobs": 4
+  },
+  "graphics_scope": {
+    "prior_both_graphics_info": "Microsoft Basic Render Driver / DX12 CPU; automatic tiny-skia startup preference; ICED_BACKEND/WGPU_BACKEND unset",
+    "interactive_rdp_renderer": "Not measured by this SSH audit; root must record interactive conditions"
+  },
+  "no_new_build_or_launch": true
+}

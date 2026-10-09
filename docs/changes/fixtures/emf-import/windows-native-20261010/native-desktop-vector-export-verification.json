@@ -1,0 +1,127 @@
+{
+  "status": "PASS: native saved vector export exists and retains the source vector/text records in a nested metafile",
+  "export_file": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/desktop-vector-reexport-20261010.emf",
+  "export_sha256": "a1c18d84970b68b064a6e7a8866cfb43e0b0922001e476a4e9f4de004c170c1a",
+  "bytes": 14704,
+  "frame_0_01mm": [
+    0,
+    0,
+    10282,
+    6282
+  ],
+  "frame_mm": [
+    102.82,
+    62.82
+  ],
+  "record_count": 422,
+  "record_boundaries_and_header_length_count_eof_valid": true,
+  "classic_record_counts": {
+    "1": 1,
+    "70": 7,
+    "33": 7,
+    "98": 4,
+    "36": 51,
+    "37": 137,
+    "86": 2,
+    "34": 6,
+    "30": 1,
+    "28": 2,
+    "115": 2,
+    "25": 1,
+    "24": 17,
+    "18": 17,
+    "19": 1,
+    "20": 1,
+    "21": 3,
+    "22": 17,
+    "13": 2,
+    "58": 47,
+    "27": 1,
+    "35": 1,
+    "82": 3,
+    "84": 16,
+    "40": 26,
+    "95": 23,
+    "87": 23,
+    "81": 1,
+    "76": 1,
+    "14": 1
+  },
+  "nested_metafiles": [
+    {
+      "metafile_type": 4,
+      "bytes": 3000,
+      "sha256": "f67537f9737986eb3585aa3e13c783b0a2f69918b90b6d3eb259d106ca26c891",
+      "records": 45,
+      "emfplus_counts": {
+        "0x4001": 1,
+        "0x4030": 1,
+        "0x401e": 1,
+        "0x4009": 1,
+        "0x4008": 5,
+        "0x401c": 16,
+        "0x400d": 23,
+        "0x401b": 1,
+        "0x4002": 1
+      },
+      "all_23_source_DrawLines_records_byte_exact": true,
+      "all_16_source_DrawString_records_byte_exact": true
+    }
+  ],
+  "vector_scope": "Nested EMF+ metafile preserves the23 source DrawLines and16 source DrawString records exactly. Outer stream additionally has23POLYLINE16 records and16EXTTEXTOUTW records. Raster inset remains; export is not solely the PNG preview. This parser inspection is not a GUI/Office replay.",
+  "prior_export_comparison": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/exports-v3/vector-reexport.emf",
+    "sha256": "f8bf4153051ab9fab56b25c4714749a3375129e431151b4c79c6bf2a648ce630",
+    "same_bytes": false,
+    "same_frame": true,
+    "same_length_and_record_type_sequence": true,
+    "different_record_indices": [
+      2,
+      12,
+      40,
+      155,
+      257,
+      308,
+      415
+    ],
+    "limitation": "Seven records differ, including transforms and fallback font/text fields; do not claim byte-identical old/new exports or attribute every difference solely to origin. Nested source vector/text equality above establishes retained instructions."
+  },
+  "runtime_commit_bridge": {
+    "built_source_commit": "783be63a2752103cd2c436a79e02a03d442e6085",
+    "review_head": "692d4c534cdbe2cb74332a22d87f226039360422",
+    "changed_paths_under_src_crates_native_or_root_build_inputs": [
+      "crates/agent/tests/headless.rs",
+      "crates/mcp/tests/transcripts/tools-fake-legacy.jsonl",
+      "crates/mcp/tests/transcripts/tools-fake-modern.jsonl"
+    ],
+    "these_three_paths_are_test_only": true,
+    "all_changed_paths": [
+      "crates/agent/tests/headless.rs",
+      "crates/mcp/tests/transcripts/tools-fake-legacy.jsonl",
+      "crates/mcp/tests/transcripts/tools-fake-modern.jsonl",
+      "docs/changes-unreleased.md",
+      "docs/changes/emf-picture-import.md",
+      "docs/changes/fixtures/emf-import/README.md",
+      "docs/changes/fixtures/emf-import/build-source-receipt.json",
+      "docs/changes/fixtures/emf-import/emf-mac-desktop-restored.rsk",
+      "docs/changes/fixtures/emf-import/emf-mac-desktop-size-redo.rsk",
+      "docs/changes/fixtures/emf-import/emf-mac-desktop-sized.rsk",
+      "docs/changes/fixtures/emf-import/mac-review-receipt.json",
+      "docs/changes/fixtures/emf-import/retained-source.rsk",
+      "docs/changes/fixtures/emf-import/test-receipt.json",
+      "docs/changes/fixtures/emf-import/vector-reexport.emf",
+      "docs/contributors.md",
+      "docs/images/emf-import/emf-portable-native-mac.jpg",
+      "docs/images/emf-import/emf-portable-native-reopened.jpg",
+      "docs/images/emf-import/emf-portable-native-size-source.jpg",
+      "tests/fixtures/mcp/stdio-legacy.jsonl",
+      "tests/fixtures/mcp/stdio-modern.jsonl",
+      "tests/fixtures/mcp/tools-legacy.jsonl",
+      "tests/fixtures/mcp/tools-modern.jsonl"
+    ],
+    "production_changes": [],
+    "qualification": "Only three files under the stated code/build-input path filter change, all test-only. The complete tree also has documentation, evidence and four top-level transcript-golden changes; the full diff is not only three files."
+  },
+  "copy_receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/desktop-export-copy-receipt.json",
+  "scope": "Read-only SSH/scp of three root-authorized controlled files; local record inspection; no guest writes/builds/cleanup/UI."
+}

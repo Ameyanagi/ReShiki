@@ -1,0 +1,78 @@
+{
+  "written_utc": "2026-10-09T22:45:46.115946+00:00",
+  "scope": "Read-only SSH executable/process/free-space checks, window metadata query, and bounded reads of existing build command/log; local receipt creation only. No application launch/control, Cargo/build, guest transfer, cleanup or settings change.",
+  "baseline": {
+    "pid": 13752,
+    "parent_pid": 7520,
+    "session_id": 2,
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\base-51fa0991\\reshiki.exe",
+    "command_line": "\"C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\base-51fa0991\\reshiki.exe\" ",
+    "created_utc": "2026-10-09T22:44:05.8777720Z",
+    "sha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+    "bytes": 102718976,
+    "window": {
+      "handle": 0,
+      "title": "",
+      "dpi": 0,
+      "dpi_awareness": -1,
+      "rect_success": false,
+      "rect": [
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "window_limit": "SSH query session 0 cannot see the app interactive session 2 window: handle0/dpi0/awareness-1/rectangle failure are unavailable measurements, not evidence of a hidden or failed GUI. Root owns the actual Untitled/Import error screenshot and any interactive DPI proof.",
+  "source_correlation": {
+    "recorded_source_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "historical_source_directory": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\base-51fa0991",
+    "source_archive": {
+      "bytes": 168701445,
+      "sha256": "786925379832c817f7543d6f6d16c764f8d7e7b1ff6c5b92b40a9766da86da3a",
+      "retained_archive_path": "Not located or rehashed in this bounded check."
+    },
+    "local_source_ledger": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/windows-evidence/review-20261010/source-ledger.json",
+    "historical_build_record": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/windows.md",
+    "remote_build_command": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\build-base.cmd",
+    "remote_build_command_sha256": "ee39b6b071dbbd8cb47eb23649a6b8cabc1ecbd22bf951817b0d0e13bcfa332f",
+    "remote_build_log": {
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\build-base.log",
+      "exists": true,
+      "sha256": "91cd837c9e043a221e26cfd4f7ab4962866d42fad911bec53d5c2580472719f2",
+      "tail": "    Finished `dev` profile [unoptimized] target(s) in 0.71s"
+    },
+    "build_configuration_recorded": "Rust/Cargo1.99.0, MSVC x64, dev profile, debuginfo0, incremental0, jobs4; cargo +1.99.0 build --locked --bin reshiki. No build rerun.",
+    "strength": "Historical build/source ledger plus freshly matching executable hash and retained build command/success log. Not a reconstructed original complete compiler-input manifest. Current source staging was subsequently changed and must not be treated as original baseline compiler input."
+  },
+  "observations": {
+    "prelaunch_utc": "2026-10-09T22:43:57.2559101Z",
+    "prelaunch_processes": [],
+    "after_launch_utc": "2026-10-09T22:45:20.0005552Z"
+  },
+  "free_space": {
+    "observed_utc": "2026-10-09T22:43:57.2559101Z",
+    "drives": [
+      {
+        "drive": "C:",
+        "free_bytes": 356663296,
+        "total_bytes": 106273173504
+      },
+      {
+        "drive": "F:",
+        "free_bytes": 244551680,
+        "total_bytes": 107374178304
+      }
+    ],
+    "future_one_exe_handoff": "Free bytes are a point-in-time capacity observation, not transfer/build authorization or guaranteed available headroom. No transfer was initiated; no new EXE size supplied or build capacity claim made."
+  },
+  "receipt_sha256": {
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/windows.md": "794f3d742e280bdd026e3a613b547c16322ce6ac5da479eee0904db054549545",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/windows-evidence/review-20261010/source-ledger.json": "31a9f8a1cdd6d726afb7aaa69200108323f981d7090fa0468f1da091c9ae8efe",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/windows-evidence/review-20261010/remote-staging-audit.json": "05036325ab791546da3ec5ca293b8832d85f4bc5991195fa37cbc3144d37178a",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/baseline-current-observation.json": "a32010de4fe41da9dfed2081247ebba645c56cfdbf759cec75f6b6fa263e016b",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/baseline-after-launch-process-window.json": "e007e8728c8d162fc56fab8dfe96c68ccd2677f2251bd91498fa32b8a6eef7d6",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/baseline-retained-build-command.json": "15ccb35545959d094a8080648cffa00a7b4acb0fb05b6c5b290bc189d7bc225e"
+  }
+}

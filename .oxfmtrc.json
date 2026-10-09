@@ -16,6 +16,20 @@
     "website/src/content/docs/developer/**",
     "bun.lock",
     "uv.lock",
-    "Cargo.lock"
+    "Cargo.lock",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/actual-app-worker-result.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/app-link-inputs.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/app-relocated-link-result.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/baseline-after-launch-process-window.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/baseline-source-and-space-verification.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/baseline-source-ledger.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/native-desktop-import-save-verification.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/native-desktop-vector-export-verification.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/native-verification.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/readiness.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/windows-app-link-launch-failed.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/powerpoint-native-container-audit.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/word-native-container-audit.json",
+    "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/root-office-native-acceptance.json"
   ]
 }
