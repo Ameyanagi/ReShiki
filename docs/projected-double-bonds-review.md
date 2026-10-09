@@ -4,7 +4,7 @@ Automatic secondary strokes previously used a constant screen-normal gap even wh
 
 | Before                                                                                                               | After                                                                                                                                   |
 | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Tilted C60 before, with misplaced secondary double-bond strokes](images/projected-double-bonds/desktop-before.png) | ![The same tilted C60 after, with projected insets and unchanged molecular properties](images/projected-double-bonds/desktop-after.png) |
+| ![Tilted C60 before, with misplaced secondary double-bond strokes](images/projected-double-bonds/desktop-before.jpg) | ![The same tilted C60 after, with projected insets and unchanged molecular properties](images/projected-double-bonds/desktop-after.jpg) |
 
 Actual desktop captures: macOS arm64 locked debug apps; baseline `51fa0991da2507bb00b27c1b420e807468de6423`, application source `427d5f4e2bc05456213c0c98b6daa01351666bf2`, 2026-10-09. Open the same [C60 fixture](../tests/fixtures/projected-double-bonds/c60.rsk), disable keyboard drawing with F8, clear selection, show Properties and use 209% zoom. The input was optimized once and rotated 28° about X then 32° about Y before either capture; do not optimize again between captures. Both views show C60, 60 atoms and 90 bonds with identical values. Window, drawing style, canvas position and scale match; the mouse pointer position and the copied input’s tab title differ. The final after capture was replayed with the exact-source rebuilt artifact at `3a8f0d9f` (documentation-only changes above production source `427d5f4e`). Its signed executable SHA-256 is `82a0047bd037f77f063233a284f9f7c7de79f36b1c1e98f6eb673ed514d389c0`. All 1,063 own-worktree tracked Rust/Cargo entrypoints were refreshed before compilation and source content hashes remained unchanged. All ten SVG, PNG and PDF exports and four complete property reports reproduce the prior candidate byte-for-byte.
 
@@ -23,3 +23,5 @@ This applies to automatic order-2/7 secondary strokes. Explicit placement keeps 
 Release caption: Tilted fullerene double bonds follow their local ring faces, with foreshortened spacing and clean inset strokes.
 
 Original screenshots and chemical test data are offered under MIT OR Apache-2.0. Fixture provenance is in [the fixture README](../tests/fixtures/projected-double-bonds/README.md).
+
+The two original native screenshots are JPEG/JFIF captures saved unchanged with `.jpg` extensions; the renderer exports remain PNG. No screenshot bytes were re-encoded.
