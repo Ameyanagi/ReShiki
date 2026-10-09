@@ -1,0 +1,81 @@
+[
+  {
+    "group": "dk.brics",
+    "artifact": "automaton",
+    "version": "1.12-4",
+    "source": "https://repo.maven.apache.org/maven2/dk/brics/automaton/1.12-4/automaton-1.12-4-sources.jar",
+    "source_sha256": "11337f78fdb061d7209d346b30e0da16c6b5e8806a5fc9a3481d13cf834cfd23",
+    "license_files": [],
+    "supplementary_notices": ["header-68396315e04d.txt", "header-81ead89903c1.txt"],
+    "notice_source_index": "header-sources.json"
+  },
+  {
+    "group": "com.fasterxml.woodstox",
+    "artifact": "woodstox-core",
+    "version": "7.1.1",
+    "source": "https://repo.maven.apache.org/maven2/com/fasterxml/woodstox/woodstox-core/7.1.1/woodstox-core-7.1.1-sources.jar",
+    "source_sha256": "b44337ff1579b6e9f042ef94b3510071c1327b2ec7d2e035a6cadf4de3af8431",
+    "license_files": ["META-INF/LICENSE"]
+  },
+  {
+    "group": "net.java.dev.msv",
+    "artifact": "xsdlib",
+    "version": "2022.7",
+    "source": "https://repo.maven.apache.org/maven2/net/java/dev/msv/xsdlib/2022.7/xsdlib-2022.7-sources.jar",
+    "source_sha256": "f08c93db0cba7a35853213925b0f477d5665a8443595005732a6f7bb1a5a4800",
+    "license_files": [],
+    "supplementary_notices": [
+      "header-1078c6d1c54b.txt",
+      "header-149183670dad.txt",
+      "header-260d34681c2b.txt",
+      "header-4c5a394111a5.txt",
+      "header-7dc58b3955c7.txt",
+      "header-e1ed14acc868.txt"
+    ],
+    "notice_source_index": "header-sources.json"
+  },
+  {
+    "group": "com.sun.xml.bind.jaxb",
+    "artifact": "isorelax",
+    "version": "20090621",
+    "source": "https://repo.maven.apache.org/maven2/com/sun/xml/bind/jaxb/isorelax/20090621/isorelax-20090621-sources.jar",
+    "source_sha256": "099b6052151acb6a230ea7989a0166a389405ba56aae075c9518b82b7ccd65cb",
+    "license_files": [],
+    "supplementary_notices": [
+      "header-079d048a1159.txt",
+      "header-137d3cbd2df8.txt",
+      "header-2360ac3a8ca3.txt",
+      "header-30ad8a2c0731.txt",
+      "header-381776e51cca.txt",
+      "header-8a58bccbaaa1.txt",
+      "header-bf1c8f6c7c9f.txt",
+      "header-c9ccd1f287bd.txt",
+      "header-ce1608281b5b.txt"
+    ],
+    "notice_source_index": "header-sources.json"
+  },
+  {
+    "group": "org.codehaus.woodstox",
+    "artifact": "stax2-api",
+    "version": "4.2.2",
+    "source": "https://repo.maven.apache.org/maven2/org/codehaus/woodstox/stax2-api/4.2.2/stax2-api-4.2.2-sources.jar",
+    "source_sha256": "d20d4c7af14adf8025f719f8e6255659495e4836256b5b1b816be30b5e76f1b7",
+    "license_files": ["META-INF/LICENSE"]
+  },
+  {
+    "group": "commons-io",
+    "artifact": "commons-io",
+    "version": "2.21.0",
+    "source": "https://repo.maven.apache.org/maven2/commons-io/commons-io/2.21.0/commons-io-2.21.0-sources.jar",
+    "source_sha256": "5fd4d4493dd1eee5c6f314159dbac7fda1988a4ab037feacbeb2ecb3033c43b4",
+    "license_files": ["META-INF/LICENSE.txt", "META-INF/NOTICE.txt"]
+  },
+  {
+    "group": "org.apache.logging.log4j",
+    "artifact": "log4j-api",
+    "version": "2.25.3",
+    "source": "https://repo.maven.apache.org/maven2/org/apache/logging/log4j/log4j-api/2.25.3/log4j-api-2.25.3-sources.jar",
+    "source_sha256": "0610fe5eacd8d3df791fb7dd9dfda9572ae8ae6672ee5c64b90ad958d5cf0bc7",
+    "license_files": ["META-INF/LICENSE", "META-INF/NOTICE"]
+  }
+]

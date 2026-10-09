@@ -1,0 +1,37 @@
+name: Select the pinned local naming runtime
+description: Install CI-only Java and expose its exact executable for offline naming tests
+runs:
+  using: composite
+  steps:
+    - name: Set up the pinned HotSpot Java distribution
+      uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+      with:
+        distribution: temurin
+        java-version: "21.0.11+10"
+        java-package: jdk
+        check-latest: false
+        overwrite-settings: false
+    - name: Require the exact Unix Java executable
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        reshiki_java_path="${JAVA_HOME}/bin/java"
+        test -x "$reshiki_java_path"
+        reshiki_java_version="$("$reshiki_java_path" --version)"
+        printf '%s\n' "$reshiki_java_version"
+        case "$reshiki_java_version" in
+          *21.0.11+10*) ;;
+          *) printf '%s\n' 'Unexpected Java runtime version/build' >&2; exit 1 ;;
+        esac
+        printf 'RESHIKI_JAVA=%s\n' "$reshiki_java_path" >> "$GITHUB_ENV"
+    - name: Require the exact Windows Java executable
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $javaPath = Join-Path $env:JAVA_HOME 'bin/java.exe'
+        if (-not (Test-Path -LiteralPath $javaPath -PathType Leaf)) { throw 'Pinned Java executable is missing' }
+        $runtimeVersion = & $javaPath --version
+        if ($LASTEXITCODE -ne 0) { throw 'Pinned Java runtime did not start' }
+        $runtimeVersion
+        if (-not (($runtimeVersion -join "`n").Contains('21.0.11+10'))) { throw 'Unexpected Java runtime version/build' }
+        "RESHIKI_JAVA=$javaPath" >> $env:GITHUB_ENV

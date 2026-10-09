@@ -1,9 +1,4 @@
 use super::*;
-use serde_json::json;
-
-fn properties(cid: u64, smiles: &str) -> serde_json::Value {
-    json!({"PropertyTable":{"Properties":[{"CID":cid,"SMILES":smiles,"IUPACName":"ethanol","Title":"Ethanol"}]}})
-}
 
 #[test]
 fn graph_identity_preserves_stereo_isotopes_charges_and_tautomers() -> Result<(), String> {
@@ -41,70 +36,26 @@ fn graph_identity_preserves_stereo_isotopes_charges_and_tautomers() -> Result<()
 }
 
 #[test]
-fn source_responses_preserve_ambiguity_and_require_full_record_identity() -> Result<(), String> {
-    assert_eq!(
-        parse_cids(json!({"IdentifierList":{"CID":[702,887]}}))?,
-        vec![702, 887]
-    );
-    for value in [
-        json!({}),
-        json!({"IdentifierList":{"CID":[]}}),
-        json!({"IdentifierList":{"CID":[702,702]}}),
-        json!({"IdentifierList":{"CID":[0]}}),
-        json!({"IdentifierList":{"CID":(1..=17).collect::<Vec<_>>()}}),
+fn oversized_smiles_are_rejected_before_graph_preparation() {
+    assert!(bound_atom_tokens(&"C".repeat(513)).is_err());
+    assert!(bound_atom_tokens(&"[13CH3]".repeat(513)).is_err());
+    assert!(bound_atom_tokens(&"Cl".repeat(512)).is_ok());
+    assert!(bound_atom_tokens(&"Cc".repeat(257)).is_err());
+    assert!(bound_atom_tokens("C[CH3").is_err());
+}
+
+#[test]
+fn unsupported_or_ignored_winding_is_rejected_before_cleanup() {
+    for text in [
+        "FC=[C@AL1]=CF",
+        "F[Pt@SP1](Cl)(Br)I",
+        "F[P@TB1](Cl)(Br)(I)N",
+        "F[Co@OH1](Cl)(Br)(I)(N)O",
+        "C[C@H](O)C",
+        "[C@H3]CO",
     ] {
-        assert!(parse_cids(value).is_err());
+        assert!(canonical_smiles(text).is_err(), "Lost winding from {text}");
     }
-    let records = parse_properties(properties(702, "OCC"), &[702])?;
-    assert_eq!(records[0].canonical_smiles, "CCO");
-    assert_eq!(records[0].provenance, Provenance::PubChem(702));
-    assert!(parse_properties(properties(702, "CCO"), &[887]).is_err());
-    assert!(parse_properties(properties(702, "CCO"), &[702, 887]).is_err());
-    assert!(parse_properties(json!({"PropertyTable":{"Properties":[{"CID":702,"ConnectivitySMILES":"CCO","IUPACName":"ethanol","Title":"Ethanol"}]}}), &[702]).is_err(), "Connectivity-only SMILES cannot establish stereo identity");
-    Ok(())
-}
-
-#[test]
-fn opsin_failure_and_warning_are_never_silent_success() -> Result<(), String> {
-    assert!(
-        parse_opsin(
-            json!({"status":"FAILURE","message":"Unsupported name"}),
-            "nonsense"
-        )
-        .is_err()
-    );
-    assert!(parse_opsin(json!({"smiles":"CCO"}), "ethanol").is_err());
-    assert!(parse_opsin(json!({"status":"SUCCESS"}), "ethanol").is_err());
-    let record = parse_opsin(
-        json!({"status":"WARNING","smiles":"CC(O)C(=O)O","message":"Optical rotation cannot specify configuration","warnings":["STEREOCHEMISTRY_IGNORED"]}),
-        "(+)-lactic acid",
-    )?;
-    assert!(
-        record
-            .warnings
-            .iter()
-            .any(|s| s.contains("Optical rotation"))
-    );
-    assert!(
-        record
-            .warnings
-            .iter()
-            .any(|s| s.contains("STEREOCHEMISTRY_IGNORED"))
-    );
-    assert_eq!(record.systematic_name, None);
-    assert!(!record.canonical_smiles.contains('@'));
-    Ok(())
-}
-
-#[test]
-fn synonyms_remain_tied_to_the_source_cid() -> Result<(), String> {
-    let value = json!({"InformationList":{"Information":[{"CID":702,"Synonym":["Ethanol","ethyl alcohol","64-17-5"]}]}});
-    assert_eq!(
-        parse_synonyms(value.clone(), 702)?,
-        vec!["Ethanol", "ethyl alcohol", "64-17-5"]
-    );
-    assert!(parse_synonyms(value, 887).is_err());
-    Ok(())
 }
 
 #[test]
@@ -129,42 +80,5 @@ fn selections_cannot_silently_truncate_a_molecule() -> Result<(), String> {
     assert!(selected_identity(&doc, &[a, b, o, water]).is_err());
     doc.bonds[0].display = "wavy".into();
     assert!(selected_identity(&doc, &[a, b, o]).is_err());
-    Ok(())
-}
-
-#[tokio::test]
-#[ignore = "explicit live-service check; sends only public chemical fixtures"]
-async fn live_official_services_resolve_names_and_exact_stereoisomers() -> Result<(), String> {
-    let service = Service::new()?;
-    let ethanol = service.resolve_name("ethanol", NameSource::Opsin).await?;
-    assert_eq!(ethanol[0].canonical_smiles, "CCO");
-    let common = service.resolve_name("aspirin", NameSource::PubChem).await?;
-    assert!(
-        common
-            .iter()
-            .any(|r| r.canonical_smiles == canonical_smiles("CC(=O)Oc1ccccc1C(=O)O").unwrap())
-    );
-    let specified = service
-        .resolve_name("(R)-lactic acid", NameSource::Opsin)
-        .await?;
-    assert!(specified[0].canonical_smiles.contains('@'));
-    let result = service
-        .lookup_structure(Identity {
-            smiles: specified[0].canonical_smiles.clone(),
-            warnings: vec![],
-        })
-        .await?;
-    assert!(
-        result
-            .systematic_name
-            .as_deref()
-            .is_some_and(|s| s.contains("(2R)"))
-    );
-    assert!(!result.synonyms.is_empty());
-    verify_identity(&specified[0].smiles, &result.smiles)?;
-    let invalid = service
-        .resolve_name("reshiki-no-such-chemical-name-50", NameSource::Opsin)
-        .await;
-    assert!(invalid.is_err());
     Ok(())
 }

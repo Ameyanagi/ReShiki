@@ -3798,6 +3798,7 @@ dependencies = [
  "reshiki-macos",
  "reshiki-mcp",
  "reshiki-model",
+ "reshiki-process",
  "reshiki-process-heap",
  "reshiki-windows",
  "resvg 0.45.1",
@@ -3954,6 +3955,14 @@ dependencies = [
  "thiserror 2.0.20",
  "tiff",
  "ttf-parser",
+]
+
+[[package]]
+name = "reshiki-process"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "windows 0.58.0",
 ]
 
 [[package]]

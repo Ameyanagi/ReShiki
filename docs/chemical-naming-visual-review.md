@@ -1,4 +1,6 @@
-# Chemical naming desktop review
+# Historical chemical naming desktop review
+
+**Superseded prototype evidence.** These captures validate the earlier HTTP implementation only. The user subsequently required both directions to be local and rule based. The current offline revision removes OPSIN HTTP and PubChem naming paths; its new native validation and screenshots are pending. These original captures are retained as chronology, not proof of the local revision.
 
 Before source: `51fa0991da2507bb00b27c1b420e807468de6423`.
 Reviewed application source: `8529b3fc17699d5b4003300e7fe4b463bf121f8a`.

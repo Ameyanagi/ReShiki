@@ -3,13 +3,13 @@ use reshiki::naming::Provenance;
 
 fn record(smiles: &str) -> Record {
     Record {
-        title: "Ethanol".into(),
-        systematic_name: Some("ethanol".into()),
+        title: "ethan-1-ol".into(),
+        systematic_name: Some("ethan-1-ol".into()),
         canonical_smiles: naming::canonical_smiles(smiles).unwrap(),
         smiles: smiles.into(),
-        synonyms: vec!["ethyl alcohol".into()],
+        synonyms: vec![],
         warnings: vec![],
-        provenance: Provenance::PubChem(702),
+        provenance: Provenance::LocalRules,
     }
 }
 
@@ -89,7 +89,7 @@ async fn native_preview_and_exchange_retain_specified_and_unspecified_stereo() -
 async fn warnings_and_unapplied_smiles_edits_block_insertion() -> Result<(), String> {
     let (mut app, _) = App::new();
     let mut source = record("CCO");
-    source.warnings.push("Ambiguous interpretation".into());
+    source.warnings.push("Review native import layout".into());
     let preview = prepare_preview(app.engine.clone(), source, "CCO".into()).await?;
     app.tab.naming.set_preview(preview);
     let _ = app.naming_action(Action::Insert);
@@ -171,14 +171,14 @@ async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completi
 }
 
 #[tokio::test]
-async fn preview_text_edits_do_not_cancel_an_independent_structure_lookup() -> Result<(), String> {
+async fn preview_text_edits_do_not_cancel_independent_local_name_generation() -> Result<(), String>
+{
     let (mut app, _) = App::new();
     let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
     app.tab.doc = preview.document.clone();
     app.tab.selected = app.tab.doc.all_ids();
     app.tab.naming.set_preview(preview);
-    app.tab.naming.structure_consent = true;
-    let _ = app.naming_action(Action::Lookup);
+    let _ = app.naming_action(Action::Generate);
     let ticket = app.tab.naming.pending.unwrap().ticket();
     let _ = app.naming_action(Action::Smiles("CCC".into()));
     assert_eq!(app.tab.naming.pending.unwrap().ticket(), ticket);
@@ -193,15 +193,8 @@ async fn preview_text_edits_do_not_cancel_an_independent_structure_lookup() -> R
 }
 
 #[test]
-fn stale_results_and_name_consent_cannot_reach_another_document_or_request() {
+fn stale_results_cannot_reach_another_local_document_or_request() {
     let (mut app, _) = App::new();
-    app.tab.naming.consent = true;
-    let before = app.tab.naming.serial;
-    let _ = app.naming_action(Action::Lookup);
-    assert_eq!(
-        app.tab.naming.serial, before,
-        "Name consent does not authorize sending a structure"
-    );
     let ticket = app.naming_ticket();
     let _ = app.naming_action(Action::Name("aspirin".into()));
     let _ = app.naming_action(Action::Finished(
@@ -231,7 +224,7 @@ async fn caption_requires_current_graph_and_is_undoable() -> Result<(), String> 
     };
     app.tab.naming.structure = Some((ticket, record("CCO")));
     let _ = app.naming_action(Action::Caption);
-    assert_eq!(app.tab.doc.annotations[0].text, "ethanol");
+    assert_eq!(app.tab.doc.annotations[0].text, "ethan-1-ol");
     let _ = app.update(Message::Undo);
     assert!(app.tab.doc.annotations.is_empty());
     app.tab.selected.clear();
@@ -244,11 +237,10 @@ async fn caption_requires_current_graph_and_is_undoable() -> Result<(), String> 
 #[ignore = "Opt-in native renderer accessibility metadata and dispatch"]
 async fn controls_publish_named_native_actions_and_editable_values() -> Result<(), String> {
     use iced::advanced::renderer::Headless;
-    use reshiki::accessibility::{Activate, Collect, Role};
+    use reshiki::accessibility::{Activate, Collect};
     let (mut app, _) = App::new();
     app.tab.busy = false;
     app.tab.naming.name = "ethanol".into();
-    app.tab.naming.consent = true;
     let mut source = record("CCO");
     source
         .warnings
@@ -287,17 +279,12 @@ async fn controls_publish_named_native_actions_and_editable_values() -> Result<(
     for id in [
         "naming.name",
         "naming.smiles",
-        "naming.source.opsin",
-        "naming.source.pubchem",
-        "naming.consent.name",
-        "naming.consent.structure",
         "naming.resolve",
-        "naming.lookup",
+        "naming.generate",
         "naming.acknowledge",
         "naming.insert",
         "naming.copy-name",
         "naming.caption",
-        "naming.source-record",
     ] {
         let node = snapshot
             .nodes
@@ -307,13 +294,6 @@ async fn controls_publish_named_native_actions_and_editable_values() -> Result<(
         assert!(!node.name.is_empty());
         assert!(node.visible_bounds.is_some(), "Invisible {id}");
     }
-    let consent = snapshot
-        .nodes
-        .iter()
-        .find(|node| node.id == "naming.consent.name")
-        .unwrap();
-    assert_eq!(consent.role, Role::ToggleButton);
-    assert_eq!(consent.checked, Some(true));
     let input = snapshot
         .nodes
         .iter()
@@ -328,15 +308,6 @@ async fn controls_publish_named_native_actions_and_editable_values() -> Result<(
     assert!(matches!(
         activate.message(),
         Some(Message::Naming(Action::Resolve))
-    ));
-    let mut activate = Activate::<Message>::new("naming.consent.structure");
-    ui.operate(
-        &renderer,
-        &mut iced::advanced::widget::operation::black_box(&mut activate),
-    );
-    assert!(matches!(
-        activate.message(),
-        Some(Message::Naming(Action::StructureConsent(true)))
     ));
     Ok(())
 }
@@ -418,4 +389,29 @@ async fn scrolled_insert_click_reaches_button_instead_of_preview() -> Result<(),
     assert_eq!(app.tab.doc.atoms.len(), 3);
     assert!(app.tab.history.can_undo());
     Ok(())
+}
+
+#[test]
+fn local_parse_cancels_obsolete_tickets() {
+    let (mut app, _) = App::new();
+    let _ = app.naming_action(Action::Name("ethanol".into()));
+    let _ = app.naming_action(Action::Resolve);
+    assert!(app.tab.naming.pending.is_some());
+    assert!(app.tab.naming.local_cancel.is_some());
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    let _ = app.naming_action(Action::Cancel);
+    assert!(app.tab.naming.pending.is_none());
+    assert!(app.tab.naming.local_cancel.is_none());
+    let _ = app.naming_action(Action::Finished(
+        ticket,
+        Box::new(Ok(Outcome::Names(vec![record("CCO")], None))),
+    ));
+    assert!(app.tab.naming.candidates.is_empty());
+    assert_eq!(app.tab.naming.name, "ethanol");
+    let _ = app.naming_action(Action::Resolve);
+    assert!(app.tab.naming.local_cancel.is_some());
+    let _ = app.naming_action(Action::Name("propane".into()));
+    assert!(app.tab.naming.pending.is_none());
+    assert!(app.tab.naming.local_cancel.is_none());
+    assert_eq!(app.tab.naming.name, "propane");
 }

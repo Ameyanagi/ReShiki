@@ -1,117 +1,218 @@
-# Chemical names
+# Local chemical naming
 
-Open **Import → Chemical names…**. These tools use online services only after
-you check the relevant consent box and press its request button. Consent is
-cleared after each request. Name parsing sends the entered name to EMBL-EBI;
-common-name and structure lookup send the name or molecular SMILES to NCBI
-PubChem. No drawing file, image, caption or other document content is sent.
-Normal drawing, preview editing, insertion and save/export remain native Rust;
-the installed application needs no Java or Python runtime.
+Open **Import → Chemical names…**. Both directions are deterministic local
+operations: names and graphs are not sent to a service, and there is no network
+fallback. The earlier HTTP prototype in draft [PR #275](https://github.com/Ameyanagi/ReShiki/pull/275)
+is superseded; its screenshots remain [historical evidence](chemical-naming-visual-review.md).
+The local macOS rule, parser and worker tests pass. New desktop validation of
+this local revision is pending.
 
-## Name to editable structure
+## Name → editable structure
 
-Choose **Systematic name · OPSIN online** for nomenclature covered by the
-[OPSIN parser](https://www.ebi.ac.uk/opsin/). Choose **Common name · PubChem
-online** for an exact name or synonym present in that database. A successful
-parse or single database hit is a source interpretation, not proof that an
-informal alias has only one meaning. Review the resulting graph and specified
-stereochemistry before inserting it.
+Enter a supported systematic or retained name and choose **Parse name locally**.
+The bundled pinned [OPSIN 2.9.0 engine](https://github.com/dan2097/opsin/tree/2.9.0)
+runs in a supervised local Java process. It uses grammar rules, rather than a
+name lookup table. A compatible Java 11+ HotSpot JRE/JDK must already be installed.
+If Java is missing, ReShiki explains the prerequisite; it downloads nothing.
+`JAVA_HOME`, an installed runtime on PATH, or an absolute `RESHIKI_JAVA` path can
+select Java. macOS runtime discovery avoids the Apple download launcher.
 
-When a source returns multiple database records, choose an interpretation;
-none is inserted automatically. OPSIN ambiguity/stereochemistry warnings
-remain visible and require acknowledgment before insertion. Unsupported
-names, incomplete service responses, unsupported chemical graphs and failed
-connections produce an explanation and leave the drawing unchanged.
+OPSIN supports broad organic systematic nomenclature, including substituted
+multifunctional esters, bicyclo/spiro systems, heterocycles, retained names,
+absolute R/S and ordinary E/Z, and supported isotope/charge names. Forward
+coverage is larger than the reverse profile. It is not an arbitrary common-name
+database: an unrecognized name such as `aspirin` returns an explanation, never a
+guessed structure or remote lookup.
 
-The preview is a native editable molecular graph. Drag atoms to adjust its
-layout. Edit its SMILES and press **Update preview** to change chemistry
-locally, or **Restore source** to return to the source interpretation. A
-changed chemical identity explicitly invalidates applicability of the
-original source name. Unapplied SMILES edits cannot be inserted. The graph is
-kept separate from entered text: typing during a rebuild retains the latest
-input and cancels that older preview result. Apply the current text again
-before insertion. The graph is
-verified again before insertion; coordinate edits cannot silently substitute
-a different stereoisomer. **Insert editable structure** creates one Undo
-step. The inserted molecule supports normal editing, native save and chemical
-export.
+Only an unambiguous complete result is accepted. Typed ambiguity/ignored-stereo
+warnings, optical-rotation-only descriptions such as `(+)-lactic acid`, relative
+or racemic stereo, polymers, radicals, query atoms, unsupported semantic CXSMILES
+layers, disconnected salts and outputs above 512 atoms are rejected. Specified
+absolute stereo, isotopes and formal charges must survive native graph import.
+Unspecified stereochemistry stays unspecified. Permissive acid shorthand and
+uninterpretable stereo are disabled.
 
-## Structure to source names
+The preview is an editable native drawing. Dragging atoms changes its layout;
+editing SMILES and choosing **Update preview** changes its chemistry. Restore
+parsed structure returns to the exact parsed graph. If the preview identity
+changes, the input name is no longer asserted to describe it. Review native
+import warnings when present, then **Insert editable structure**. Insertion is
+one Undo step. Scrolled preview hit testing, stale-input tickets, per-tab state
+and graph verification protect the insertion.
 
-Select one complete connected molecule, check consent for sending molecular
-SMILES, and press **Look up selected structure online**. The selected graph
-includes all underlying atoms in an abbreviation. A selection that cuts a
-bond is rejected rather than being treated as a new compound.
+## Structure → local systematic name
 
-The service uses [PubChem PUG REST](https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest)
-identity search with `same_stereo_isotope`. ReShiki then parses each returned
-isomeric SMILES locally and compares canonical graph identity, including
-connectivity, charge, isotope, tautomer and specified tetrahedral/double-bond
-stereo. PubChem standardization to a different graph or unresolved multiple
-matches is rejected. Map numbers and drawing atom order are ignored.
+Select a complete connected molecule, then **Generate name locally**. Abbreviations
+expand to their complete underlying graph. A selection cutting a bond, disconnected
+mixture or unknown/wavy stereo is rejected. A bounded same-executable worker runs
+original Rust compositional rules, profile **ReShiki organic rules 1**. It is neither
+a synonym database nor a claim to cover every IUPAC name or preferred IUPAC name
+(PIN). No unaudited third-party name generator is used.
 
-Results distinguish the **systematic name from PubChem lookup** from the source
-title and source-supplied synonyms. Synonyms can include registry identifiers;
-they are not all endorsed common names. The CID and **Source** link retain
-provenance. **Copy name** copies the systematic name; **Insert caption** adds
-an undoable caption only while the named graph is still current and selected.
+The declared reverse domain is neutral organic graphs of at most 64 heavy atoms:
 
-This stage retrieves a source's systematic name. It does not claim to
-generate a general IUPAC name locally. Novel structures and structures absent
-from PubChem may have no result.
+- Acyclic carbon parents and saturated alkyl branches, with parent/substituent
+  stems of 1–20 carbons and up to three nested branch levels. Parent endpoint
+  paths are exhaustive. Complete locant vectors and alphabetic ties are compared;
+  a work-limit result never silently chooses a partial candidate set.
+- Parent-chain C=C/C≡C locants and mixed F/Cl/Br/I prefixes. Carbon branches must
+  be saturated; unsupported unsaturation or functional groups in a branch reject.
+- Carboxylic acid, one simple ester, one primary amide, one nitrile, one aldehyde,
+  ketones, alcohols and primary amines. Seniority is explicit. Hydroxy/amino/oxo
+  and supported alkoxy groups are composed as subordinate prefixes. Terminal
+  suffix classes require one group at carbon-chain locant 1.
+- One saturated carbocycle of 3–12 atoms, or exact aromatic retained parents:
+  benzene/phenol/aniline, pyridine, pyridazine, pyrimidine, pyrazine, 1H-pyrrole,
+  1H-pyrazole, 1H-imidazole, furan, thiophene, 1,3-thiazole and 1,3-oxazole.
+  Topology and heteroatom hydrogen state distinguish these parents. Retained
+  aromatic suffix parents currently allow one suffix group; ring-attached
+  acyclic suffixes and carbon branches larger than the ring reject.
+- Specified tetrahedral R/S and ordinary parent-chain alkene E/Z use ReShiki's
+  full CIP assignments on the complete graph, mapped to the naming AST locants.
+  Unsupported substituent, pseudoasymmetric, axial, relative or unresolved stereo
+  contexts reject. Descriptors use native full CIP priorities, rather than a
+  guess from wedge direction or SMILES spelling.
 
-## Supported chemical domain
+Isotope and formal-charge descriptors are not implemented in the reverse profile;
+those graphs explicitly reject rather than receive unlabeled or neutral names.
+Fused, spiro, bridged, multiple rings, nonaromatic unsaturated rings, unsupported
+heteroatom/functional groups and competing parent contexts outside the profile
+also reject. Forward parsing may still support them.
 
-Both directions accept ordinary connected molecular graphs with 1–512 atoms,
-native-supported elements, ordinary single/double/triple/aromatic bonds,
-charges, isotopes and specified native-supported tetrahedral/E/Z stereo.
-Unspecified stereo remains unspecified; lookup cannot add an absolute
-configuration. Wavy/unknown or unresolved stereo, relative stereo groups,
-queries, radicals, unusual bond orders, multi-center/variable attachments,
-mixtures and disconnected salts are not supported by this workflow. Ordinary
-native drawing/import support outside this naming domain remains separate.
+A candidate name becomes visible only after strict pinned local OPSIN reconstructs
+it and the native canonical isomeric graph equals the selected graph, including
+connectivity, element, charge, isotope, tautomer and specified stereo. This exact
+roundtrip prevents structural loss, but does not prove IUPAC parent preference:
+independent expected-name tests separately exercise the rules. Names can be copied
+or inserted as a caption; a changed drawing/selection requires regeneration
+before caption insertion. Caption insertion is one Undo step.
 
-Requests have a 20-second HTTP timeout, a 1 MiB response limit, at most 16
-candidate records and no automatic retries. Starts across tabs are throttled
-to at most two per second. Only 12 bounded source synonyms are displayed.
-There are no background naming requests, bulk downloads or paid APIs.
+The rule implementation follows the declared subset of the IUPAC
+[seniority and parent principles](https://iupac.qmul.ac.uk/BlueBook/P4.html) and
+[first-difference locant principles](https://iupac.qmul.ac.uk/BlueBook/P1.html#P1435).
+Alkoxy composition uses the [ether prefix rules](https://iupac.qmul.ac.uk/BlueBook/P6.html#P6322)
+for retained methoxy/ethoxy/propoxy/butoxy and concatenated alkyl-oxy prefixes.
+These are references to nomenclature principles, not certification of PIN coverage.
 
-## Engines, licenses and deployment
+## Runtime limits and provenance
 
-The [official OPSIN repository](https://github.com/dan2097/opsin) describes an
-MIT-licensed Java parser with broad organic systematic nomenclature support.
-Its local distribution requires Java 8 or later. ReShiki uses the documented
-[EMBL-EBI JSON web service](https://www.ebi.ac.uk/opsin/#web-service) to keep
-the installed runtime a Rust executable; no OPSIN code or Java runtime is
-bundled. Parser status, message and warnings are preserved. Service availability
-and coverage can change independently of the application.
+The Rust executable embeds the unmodified pinned OPSIN core jar and original
+Java adapter. Runtime checksum verification, an empty private working directory,
+pinned options and removal of JVM injection variables prevent accidental resource
+or configuration substitution. Semantic CXSMILES includes enhanced stereo,
+polymers and atom labels, so unsupported semantic layers can be rejected before
+native import. Naming adds no Python runtime, JNA or OPSIN InChI module.
+Editable previews use the editor's native graph/import chemistry.
 
-PubChem is a source database rather than a local naming engine. Its
-[download guidance](https://pubchem.ncbi.nlm.nih.gov/docs/downloads) explains
-that contributor-specific licensing conditions can apply. ReShiki does not
-bundle or redistribute a synonym database; requested results carry their CID
-and record link. No third-party engine source code is copied into this feature.
+Each spawned worker has bounded input/output and a 15-second wall deadline.
+The deadline starts after the platform spawn call returns; the synchronous macOS
+observer registration/acknowledgment has no separate startup deadline. Its
+20-second observer timer starts after descriptor cleanup and registration.
+Cancellation,
+timeout, oversized output, resource failure and dropped futures kill the dedicated
+Unix process group or Windows job and reap the main child. All three pipes use
+nonblocking polling; no reader/writer thread or blocking completion join can
+retain a pipe after cancellation. An exited worker that leaves a pipe open is
+rejected after one second.
+The parser has a 192 MiB Java heap, 128 MiB metaspace, 48 MiB code cache and bounded
+thread stack. A 16 GiB Linux virtual-address cap permits JVM reservations; it is
+not a physical-memory allowance. The validated macOS host rejects a finite
+`RLIMIT_AS` request with EINVAL, so macOS uses no address-space cap. Unix leader RSS
+is sampled every 25 ms against 768 MiB for Java / 384 MiB for the native
+generator, so transient sampling overshoot is possible. A disappearing process
+record during exec/exit has at most four retries at a nominal 25 ms poll interval;
+scheduling and per-poll work can add delay.
+Other measurement failures and measured excess fail immediately, even when a
+worker exits successfully just afterward.
+Unix supports trusted direct HotSpot/ReShiki executables; launchers
+that fork, daemonize or delegate parsing are unsupported. Process-group cleanup
+and leader RSS accounting are not a sandbox for arbitrary hostile descendants.
+Linux registers a direct-child parent-death SIGKILL before exec and rechecks the
+expected parent. macOS creates an independent kernel-only observer before exec;
+the worker waits for editor/worker exit-notification registration and rechecks
+its parent. The observer enumerates live inherited descriptors into a fixed
+stack buffer, closes them before acknowledging registration, and terminates the group
+on either exit or its independent 20-second bound. Windows 10+ creates the
+worker atomically in a prelimited, noninherited kill-on-close job using
+`PROC_THREAD_ATTRIBUTE_JOB_LIST`; committed-memory/CPU and single-process limits
+apply from its first instruction, including JVM startup. Native rules also have a 96 MiB allocation ceiling, bounded
+64-atom input and explicit search/CIP work budgets. CPU caps are 20 seconds;
+core dumps and output-file growth are bounded on Unix. Limits are local naming
+policy and do not change global worker settings. Platform contracts are based on
+[Linux parent-death signaling](https://www.man7.org/linux/man-pages/man2/PR_SET_PDEATHSIG.2const.html),
+[Apple process-exit notifications](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/kqueue.2.html)
+and [Microsoft creation-time job membership](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute).
 
-## Validation and reproduction
+Only one Java operation and one native rule operation run at a time. A semaphore
+permit stays with the supervised blocking worker until it has killed/reaped and
+cleaned up, even when the UI future is cancelled. Missing runtime or any failure
+leaves the drawing unchanged and publishes no name. These limits are implemented
+for macOS/Linux/Windows. Runtime results currently cover macOS ARM64; Linux and
+Windows runtime execution remains pending in the required CI jobs.
 
-The retained pre-feature control `tests/chemical_naming_baseline.rs` records
-that importing `ethanol` as SMILES fails while `CCO` produces the expected
-editable ethanol graph. Graph fixtures cover ethanol, aspirin, both lactic
-acid enantiomers, E/Z but-2-ene, unspecified stereo, carbon-13 ethanol and
-acetate. Focused tests check exact identity, unsupported graphs, incomplete
-source results, synthetic multi-record ambiguity, parser warning preservation,
-native preview insertion/Undo/Redo/save, independent consent and stale async
-results. The optional live check uses public chemical fixtures only:
+Payload pins/rebuild instructions are in [tools/opsin](../tools/opsin/README.md).
+[OPSIN and bundled dependency notices](../licenses/opsin/NOTICE) retain upstream
+MIT/BSD/Apache terms. Original rules, adapters and tests are MIT OR Apache-2.0.
+
+## Reproducible validation
+
+The retained old before test `tests/chemical_naming_baseline.rs` proves that an
+unchanged pre-feature Import rejects `ethanol` as SMILES. Actual local Java
+baseline cases and structured warnings were recorded before this revision.
+The independent Rust rule suite passes all 66 reference names, including
+atom-order permutations and explicit unsupported cases. Each of those 66 names
+also passes actual native-worker → local OPSIN → exact native graph verification
+on macOS with network access denied. Fourteen forward reference graphs and
+strict semantic rejection, missing-Java, cancellation/permit recovery and
+bounded output/pipe tests pass in the same local suite. Do not attribute the old
+HTTP desktop evidence to this local implementation.
+
+The locked native workspace suite passes 2,016 tests across 125 suites, with 99
+explicit opt-in/live/reference tests ignored. Nine naming app state/history
+tests and two separately selected actual-renderer accessibility/scrolled Insert
+tests pass. These renderer tests do not replace the pending desktop review.
 
 ```sh
-cargo test -p reshiki --lib naming::tests
-cargo test -p reshiki --bin reshiki app::naming::tests
-cargo test -p reshiki --lib live_official_services_resolve_names_and_exact_stereoisomers -- --ignored
+cargo build --locked --no-default-features -p reshiki --bin reshiki
+RESHIKI_JAVA=/absolute/path/to/java RESHIKI_NAMING_HELPER=/absolute/path/to/that/reshiki cargo test --locked -p reshiki --lib naming::
+RESHIKI_INCHI_HELPER=/absolute/path/to/that/reshiki cargo test --locked --no-default-features -p reshiki --bin reshiki app::naming::tests
+cargo test --locked -p reshiki-process
 ```
 
-Desktop examples: parse `ethanol`, edit the preview layout and insert it;
-select the resulting molecule and look up its source name/synonyms. Parse
-`(R)-lactic acid` and compare its identity with `(S)-lactic acid`; use
-`(+)-lactic acid` to inspect optical-rotation warnings. Enter
-`reshiki-no-such-chemical-name-50` for unsupported input. No online request
-should begin while its corresponding consent is unchecked.
+Independent rule cases include 2,2,5-trimethylhexane (complete locant comparison),
+unsaturated alcohols, acid/hydroxy/amino/oxo seniority, esters/amides, distinct
+diazine and pyrazole/imidazole topologies, R/S and E/Z pairs and atom/H/aromatic
+spelling permutations. Separate decoder canaries deliberately lose connectivity,
+stereo, isotope, charge or tautomer and must fail exact identity comparison.
+Actual macOS startup/EOF supervisor death, leader RSS, exit-before-reap ownership
+and same-group/escaped-pipe completion tests pass. The escaped-pipe test checks
+the completion deadline; it does not assert containment of an escaped process.
+Windows pre-input job limits and Linux parent-death tests require matching-host
+execution. Local reverse integration tests must point to the
+exact built executable, not a Rust test harness or another worktree's cached app.
+
+CI requires the naming suite in the existing macOS ARM64, Windows x64 and Linux
+x64 Rust jobs. A repository composite uses the official pinned
+[setup-java v5.6.0 action](https://github.com/actions/setup-java/releases/tag/v5.6.0)
+to select [Temurin 21.0.11+10](https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.11%2B10),
+records its exact executable as `RESHIKI_JAVA`, and builds this source's app for
+`RESHIKI_NAMING_HELPER`. The required workspace tests exercise independent naming
+rules, local parser reconstruction, strict semantic rejection and worker limits.
+Windows also runs the opt-in rendered accessibility/scrolled-insertion tests.
+The existing six-target geometry matrix additionally checks and runs
+`reshiki-process` on matching macOS/Linux/Windows ARM64 and x64 hosts. The release
+matrix already builds the complete app for all six targets; its Intel macOS
+library tests also select the pinned Java and exact release helper.
+
+This CI-only runtime installation does not distribute Java with the application
+or permit runtime downloads. The exact-source local macOS validation uses installed Zulu HotSpot 21.0.8+9;
+the 14 forward reference graphs also pass with Java overrides unset and a minimal
+`/usr/bin:/bin` PATH, discovering the installed runtime through the user's Nix
+profile rather than Apple's installer launcher. Java 11 bytecode compatibility
+is checked; actual Java 11 runtime execution is not yet tested.
+Strict process-crate compilation/linting passes for macOS, Linux and Windows on
+ARM64 and x64; those cross-compiles do not establish other-platform runtime
+behavior. New CI execution of the declared Temurin runtime remains pending. Offline naming
+tests use only embedded parser resources and local fixtures. Explicit network
+denial has been exercised for the current macOS naming, process and escaped-pipe
+suites using the macOS sandbox; it is not claimed for other CI operating systems.

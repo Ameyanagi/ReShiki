@@ -1,0 +1,52 @@
+Pinned local OPSIN dependency
+
+OPSIN core 2.9.0, unmodified official jar-with-dependencies distribution.
+Source: https://github.com/dan2097/opsin/tree/2.9.0
+Tag commit: b91b610af5ab07560fedb20730d7aef46bb2bca0
+Artifact: https://github.com/dan2097/opsin/releases/download/2.9.0/opsin-core-2.9.0-jar-with-dependencies.jar
+SHA256: 627ee5da4af551f9c4d1d766f545eb7cf519a344776e0bb677247a47abac0252
+MIT license; Copyright (c) 2017 Daniel Lowe. See OPSIN-LICENSE.
+
+The separate ReShikiOpsin adapter is original ReShiki code, MIT OR Apache-2.0.
+It invokes OPSIN core locally, with strict pinned options, and adds no InChI/JNA
+dependency. No OPSIN source has been modified. The Java runtime is a separately
+installed prerequisite; ReShiki does not redistribute or download a JVM.
+
+The official core distribution includes these dependency versions:
+
+dk.brics:automaton 1.12-4 — BSD-3-Clause. Copyright Anders Moeller and
+John Gibson. Full distinct upstream source headers are preserved with an
+exact source-file index under automaton-1.12-4/.
+
+com.fasterxml.woodstox:woodstox-core 7.1.1 — Apache-2.0. Upstream packaged
+license declaration, POM and full release-tag license are retained under
+woodstox-core-7.1.1/. The packaged declaration mentions Jackson databind;
+its original bytes are retained rather than silently corrected.
+
+net.java.dev.msv:xsdlib 2022.7 — BSD-3-Clause (Oracle/Sun), with bundled
+regexp implementation notices under Apache Software License 1.1.
+All six distinct source header texts, including the older Sun proprietary-
+information attribution, and their exact file indices are preserved under
+xsdlib-2022.7/. The upstream POM declares BSD. The project license does not
+replace the per-file notices or Apache 1.1 terms.
+
+com.sun.xml.bind.jaxb:isorelax 20090621 — MIT. Copyright Kohsuke Kawaguchi
+and MURATA Makoto. All distinct source license/header notices and exact
+file indices are retained under isorelax-20090621/.
+
+org.codehaus.woodstox:stax2-api 4.2.2 — BSD-2-Clause. The packaged declaration
+names FasterXML.com, 2010-. Its exact bytes and POM are retained alongside
+the full upstream BSD-2-Clause terms (FasterXML LLC, 2008+) under stax2-api-4.2.2/.
+The supplementary full-license source is separately pinned in
+supplementary-license-sources.json; it supplements rather than replaces the
+versioned artifact's original attribution.
+
+commons-io:commons-io 2.21.0 and org.apache.logging.log4j:log4j-api 2.25.3 —
+Apache-2.0. Their full packaged LICENSE and NOTICE files are retained in the
+corresponding versioned folders.
+
+dependencies.json records the seven exact source-artifact URLs, SHA256 values
+and notice mappings. upstream.pom files retain their license declarations.
+Binary packaging includes this directory through the existing notices
+aggregator. ReShiki's project-level dual license does not relicense any of
+these dependencies.

@@ -1,0 +1,47 @@
+[
+  {
+    "source_file": "org/iso_relax/dispatcher/SchemaProvider.java",
+    "notice_file": "header-ce1608281b5b.txt",
+    "sha256": "ce1608281b5b9009b6a7f4ec775dbdbc5087202958591f8378d2783ce1fe67b3"
+  },
+  {
+    "source_file": "org/iso_relax/dispatcher/AttributesDecl.java",
+    "notice_file": "header-381776e51cca.txt",
+    "sha256": "381776e51ccab9f47c7b6c6147709ec9ae26aef6d3fc757842b3e06a7d08f670"
+  },
+  {
+    "source_file": "org/iso_relax/dispatcher/IslandVerifier.java",
+    "notice_file": "header-bf1c8f6c7c9f.txt",
+    "sha256": "bf1c8f6c7c9f6daf46cc69f3a9f38b74fd21ecde4c581650f8a651268a2ee8ae"
+  },
+  {
+    "source_file": "org/iso_relax/dispatcher/IslandSchemaReader.java",
+    "notice_file": "header-079d048a1159.txt",
+    "sha256": "079d048a1159f9a533bf5cf6abf87d164ddfad75ebe981bc7fe8360c2386a233"
+  },
+  {
+    "source_file": "org/iso_relax/dispatcher/impl/DispatcherImpl.java",
+    "notice_file": "header-c9ccd1f287bd.txt",
+    "sha256": "c9ccd1f287bd51a19d4bedf359d91196250d9fc2fc6c758cd74601026426fcb1"
+  },
+  {
+    "source_file": "org/iso_relax/dispatcher/impl/IgnoredSchema.java",
+    "notice_file": "header-30ad8a2c0731.txt",
+    "sha256": "30ad8a2c07310a0dfa42dfea2a59c230db0bed6cdba4d4e99ad9314089d5bc4b"
+  },
+  {
+    "source_file": "org/iso_relax/dispatcher/Dispatcher.java",
+    "notice_file": "header-2360ac3a8ca3.txt",
+    "sha256": "2360ac3a8ca38a00e2bff84da055d3f9a4f1986e4944cb0ca191c64056f26141"
+  },
+  {
+    "source_file": "org/iso_relax/dispatcher/IslandSchema.java",
+    "notice_file": "header-8a58bccbaaa1.txt",
+    "sha256": "8a58bccbaaa1014d7de61986aa47d1c1faefb6cc00162caf06df6fa06de3dca8"
+  },
+  {
+    "source_file": "org/iso_relax/dispatcher/ElementDecl.java",
+    "notice_file": "header-137d3cbd2df8.txt",
+    "sha256": "137d3cbd2df8f7e9c348fa3938ac51ed82fb49a7cf34fae9836a45c9c1e156db"
+  }
+]

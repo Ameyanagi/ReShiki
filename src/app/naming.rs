@@ -1,4 +1,4 @@
-//! Per-document, opt-in online naming workflow and locally editable previews.
+//! Per-document local name parsing, editable previews and rule-based name generation.
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use crate::canvas::{Camera, Edit, MoleculeCanvas, Tool};
@@ -10,7 +10,7 @@ use reshiki::{
     document::{Annotation, Document, Point},
     editing,
     engine::{LocalEngine, Request},
-    naming::{self, NameSource, Record, Service},
+    naming::{self, Record},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,12 +36,9 @@ impl Pending {
 #[derive(Debug, Clone)]
 pub enum Action {
     Name(String),
-    Source(NameSource),
-    Consent(bool),
-    StructureConsent(bool),
+    Cancel,
     Resolve,
-    Lookup,
-    Choose(usize),
+    Generate,
     Smiles(String),
     UpdatePreview,
     RestorePreview,
@@ -50,7 +47,6 @@ pub enum Action {
     Insert,
     CopyName,
     Caption,
-    OpenSource,
     Finished(Ticket, Box<Result<Outcome, String>>),
 }
 
@@ -95,9 +91,7 @@ impl Preview {
 #[derive(Default)]
 pub(super) struct State {
     name: String,
-    source: NameSource,
-    consent: bool,
-    structure_consent: bool,
+    local_cancel: Option<naming::Cancel>,
     pending: Option<Pending>,
     serial: u64,
     candidates: Vec<Record>,
@@ -107,6 +101,13 @@ pub(super) struct State {
     structure: Option<(Ticket, Record)>,
     notice: Option<String>,
 }
+impl Drop for State {
+    fn drop(&mut self) {
+        if let Some(cancel) = &self.local_cancel {
+            cancel.stop();
+        }
+    }
+}
 impl State {
     fn invalidate_name(&mut self) {
         self.serial = self.serial.wrapping_add(1);
@@ -115,7 +116,9 @@ impl State {
         self.preview = None;
         self.notice = None;
         self.acknowledged = false;
-        self.consent = false;
+        if let Some(cancel) = self.local_cancel.take() {
+            cancel.stop();
+        }
     }
     fn set_preview(&mut self, preview: Preview) {
         self.smiles = preview.identity.clone();
@@ -164,26 +167,28 @@ impl App {
                 self.tab.naming.invalidate_name();
                 self.tab.naming.name = name;
             }
-            Action::Source(source) => {
-                self.tab.naming.invalidate_name();
-                self.tab.naming.source = source;
+            Action::Cancel => {
+                if let Some(cancel) = self.tab.naming.local_cancel.take() {
+                    cancel.stop();
+                }
+                self.tab.naming.serial = self.tab.naming.serial.wrapping_add(1);
+                self.tab.naming.pending = None;
+                self.tab.naming.notice = Some("Local name parsing was cancelled".into());
             }
-            Action::Consent(value) => self.tab.naming.consent = value,
-            Action::StructureConsent(value) => self.tab.naming.structure_consent = value,
             Action::Resolve => {
-                if !self.tab.naming.consent || self.tab.naming.pending.is_some() {
+                if self.tab.naming.name.trim().is_empty() || self.tab.naming.pending.is_some() {
                     return Task::none();
                 }
                 let ticket = self.naming_ticket();
                 let name = self.tab.naming.name.clone();
-                let source = self.tab.naming.source;
-                self.tab.naming.consent = false;
+                let cancel = naming::Cancel::default();
+                self.tab.naming.local_cancel = Some(cancel.clone());
                 self.tab.naming.preview = None;
                 self.tab.naming.candidates.clear();
                 let engine = self.engine.clone();
                 return Task::perform(
                     async move {
-                        let records = Service::new()?.resolve_name(&name, source).await?;
+                        let records = vec![naming::resolve_name(&name, cancel).await?];
                         let preview = if let [record] = records.as_slice() {
                             Some(Box::new(
                                 prepare_preview(engine, record.clone(), record.smiles.clone())
@@ -197,12 +202,13 @@ impl App {
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
-            Action::Lookup => {
-                if !self.tab.naming.structure_consent || self.tab.naming.pending.is_some() {
+            Action::Generate => {
+                if self.tab.naming.pending.is_some() {
                     return Task::none();
                 }
                 let ticket = self.naming_ticket();
-                self.tab.naming.structure_consent = false;
+                let cancel = naming::Cancel::default();
+                self.tab.naming.local_cancel = Some(cancel.clone());
                 self.tab.naming.structure = None;
                 let document = self.tab.doc.clone();
                 let selected = self.tab.selected.clone();
@@ -213,28 +219,9 @@ impl App {
                         })
                         .await
                         .map_err(|e| e.to_string())??;
-                        Service::new()?
-                            .lookup_structure(identity)
+                        naming::generate_name(&identity, cancel)
                             .await
                             .map(Outcome::Structure)
-                    },
-                    move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
-                );
-            }
-            Action::Choose(index) => {
-                if self.tab.naming.pending.is_some() {
-                    return Task::none();
-                }
-                let Some(record) = self.tab.naming.candidates.get(index).cloned() else {
-                    return Task::none();
-                };
-                let ticket = self.naming_preview_ticket();
-                let engine = self.engine.clone();
-                return Task::perform(
-                    async move {
-                        prepare_preview(engine, record.clone(), record.smiles.clone())
-                            .await
-                            .map(|p| Outcome::Preview(Box::new(p)))
                     },
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
@@ -281,6 +268,7 @@ impl App {
                     return Task::none();
                 }
                 self.tab.naming.pending = None;
+                self.tab.naming.local_cancel = None;
                 if ticket.revision != self.tab.revision {
                     self.tab.naming.notice =
                         Some("The drawing changed while naming. Request the result again".into());
@@ -311,13 +299,6 @@ impl App {
                 }
             }
             Action::Caption => self.insert_name_caption(),
-            Action::OpenSource => {
-                if let Some((_, record)) = &self.tab.naming.structure
-                    && let Err(error) = open::that(record.provenance.url())
-                {
-                    self.tab.naming.notice = Some(format!("Could not open source: {error}"));
-                }
-            }
         }
         Task::none()
     }
@@ -421,7 +402,7 @@ impl App {
         };
         if ticket.revision != self.tab.revision || ticket.epoch != self.tab.file_epoch {
             self.tab.naming.notice = Some(
-                "The drawing changed. Look up its name again before inserting a caption".into(),
+                "The drawing changed. Generate its name again before inserting a caption".into(),
             );
             return;
         }
@@ -451,7 +432,8 @@ impl App {
             format,
         });
         self.changed(before);
-        self.status = "Inserted source systematic name as a caption · Undo removes it".into();
+        self.status =
+            "Inserted locally generated systematic name as a caption · Undo removes it".into();
     }
 
     pub(super) fn naming_panel(&self) -> Element<'_, Message> {
@@ -459,47 +441,27 @@ impl App {
         let idle = state.pending.is_none();
         let mut content = column![
             row![text("Chemical names").size(18), button("naming.import", "Open SMILES import", text("Import")).on_press(Message::Inspector(InspectorTab::Import))].spacing(12),
-            text("Online tools · Review the source interpretation before use.").size(12),
+            text("Local rule-based chemical naming.").size(12),
             text("Name → structure").size(15),
-            row![button("naming.source.opsin", "OPSIN systematic name parser", text("OPSIN").size(12)).checked(state.source == NameSource::Opsin).on_press(Message::Naming(Action::Source(NameSource::Opsin))), button("naming.source.pubchem", "PubChem common name lookup", text("PubChem").size(12)).checked(state.source == NameSource::PubChem).on_press(Message::Naming(Action::Source(NameSource::PubChem)))].spacing(6),
+            text("OPSIN 2.9.0 runs locally. Java 11+ (HotSpot JRE/JDK) is required; this name stays on your computer.").size(12),
             text_input("naming.name", "Chemical name", "Chemical name, e.g. ethanol", &state.name).on_input(|s| Message::Naming(Action::Name(s))).on_submit(Message::Naming(Action::Resolve)).size(13),
-            text(match state.source {
-                NameSource::Opsin => "OPSIN parses supported systematic nomenclature on EMBL-EBI's server. Common names may require PubChem.",
-                NameSource::PubChem => "PubChem finds exact names in its database. Results are source interpretations; an alias may have multiple meanings.",
-            }).size(12),
-            button("naming.consent.name", match state.source { NameSource::Opsin => "Send this name to EMBL-EBI", NameSource::PubChem => "Send this name to NCBI PubChem" }, text(match state.source { NameSource::Opsin => "Send this name to EMBL-EBI", NameSource::PubChem => "Send this name to NCBI PubChem" }).size(12)).checked(state.consent).style(super::workspace::control(state.consent)).on_press(Message::Naming(Action::Consent(!state.consent))),
-            button("naming.resolve", "Resolve name online", text("Resolve name online")).on_press_maybe((idle && state.consent && !state.name.trim().is_empty()).then_some(Message::Naming(Action::Resolve))),
+            text("Supported systematic and retained names produce an editable graph. Ambiguous names and unsupported stereo are rejected.").size(12),
+            button("naming.resolve", "Parse name locally", text("Parse name locally")).on_press_maybe((idle && !state.name.trim().is_empty()).then_some(Message::Naming(Action::Resolve))),
         ].spacing(10);
         if let Some(notice) = &state.notice {
             content = content.push(text(notice).size(12).color(self.theme().palette().danger));
         }
         if !idle {
             content = content.push(text("Working…").size(12));
-        }
-        if state.candidates.len() > 1 {
-            content =
-                content.push(text("Ambiguous source name · Choose an interpretation").size(13));
-            for (index, candidate) in state.candidates.iter().enumerate() {
+            if state.local_cancel.is_some() {
                 content = content.push(
                     button(
-                        format!("naming.candidate.{index}"),
-                        format!(
-                            "Choose {} from {}",
-                            candidate.title,
-                            candidate.provenance.label()
-                        ),
-                        text(format!(
-                            "{} · {}",
-                            candidate.title,
-                            candidate.provenance.label()
-                        ))
-                        .size(12),
+                        "naming.cancel",
+                        "Cancel local naming",
+                        text("Cancel local naming"),
                     )
-                    .on_press_maybe(idle.then_some(Message::Naming(Action::Choose(index)))),
+                    .on_press(Message::Naming(Action::Cancel)),
                 );
-                if let Some(name) = &candidate.systematic_name {
-                    content = content.push(text(name).size(11));
-                }
             }
         }
         if let Some(preview) = &state.preview {
@@ -560,15 +522,15 @@ impl App {
                     .on_press_maybe(idle.then_some(Message::Naming(Action::UpdatePreview))),
                     button(
                         "naming.restore-preview",
-                        "Restore source",
-                        text("Restore source")
+                        "Restore parsed structure",
+                        text("Restore parsed structure")
                     )
                     .on_press_maybe(idle.then_some(Message::Naming(Action::RestorePreview))),
                 ]
                 .spacing(6),
             );
             if preview.modified {
-                content = content.push(text("Edited chemical identity · The original source name may no longer describe this preview.").size(12));
+                content = content.push(text("Edited chemical identity · The input name may no longer describe this preview.").size(12));
             }
             content = content.push(text(format!("{} atoms · {} bonds · Specified stereo is retained; unspecified stereo remains unspecified.", preview.document.atoms.len(), preview.document.bonds.len())).size(12));
             let warnings = preview.record.warnings.iter().chain(&preview.warnings);
@@ -604,48 +566,26 @@ impl App {
             );
         }
         content = content.push(text("Structure → name").size(15));
-        content = content.push(text("Select a complete connected molecule. PubChem returns its source systematic name and synonyms after an exact graph/stereo/isotope check. This is database lookup; novel structures may have no result.").size(12));
+        content = content.push(text("Local organic rules: neutral C/N/O/halogen molecules, up to 64 heavy atoms; supported chains, simple rings and functional groups. Isotopes, charged graphs and unsupported stereo contexts are rejected.").size(12));
+        content = content.push(text("Select a complete connected molecule. The local rule-based generator accepts a name only after local OPSIN reconstructs the exact graph, isotope, charge and specified stereo. Unsupported structures return an explanation.").size(12));
         content = content.push(
             button(
-                "naming.consent.structure",
-                "Send selected molecular SMILES to NCBI PubChem",
-                text("Send selected molecular SMILES to NCBI PubChem").size(12),
+                "naming.generate",
+                "Generate selected structure name locally",
+                text("Generate name locally"),
             )
-            .checked(state.structure_consent)
-            .style(super::workspace::control(state.structure_consent))
-            .on_press(Message::Naming(Action::StructureConsent(
-                !state.structure_consent,
-            ))),
-        );
-        content = content.push(
-            button(
-                "naming.lookup",
-                "Look up selected structure online",
-                text("Look up selected structure online"),
-            )
-            .on_press_maybe(
-                (idle && state.structure_consent).then_some(Message::Naming(Action::Lookup)),
-            ),
+            .on_press_maybe(idle.then_some(Message::Naming(Action::Generate))),
         );
         if let Some((ticket, record)) = &state.structure {
             if ticket.revision != self.tab.revision {
-                content = content.push(text("Previous lookup · The drawing changed. Look up the selection again before using its name.").size(12));
+                content = content.push(text("Previous name · The drawing changed. Generate the selection name again before using it.").size(12));
             }
             content = content.push(text(record.provenance.label()).size(12));
-            content = content.push(text("Systematic name · PubChem lookup").size(12));
+            content = content.push(text("Systematic name · local rules").size(12));
             if let Some(name) = &record.systematic_name {
                 content = content.push(text(name).size(15));
             }
-            content = content.push(text(format!("Source title: {}", record.title)).size(12));
-            if !record.synonyms.is_empty() {
-                content = content.push(
-                    text(format!(
-                        "Source synonyms (may include registry identifiers):\n{}",
-                        record.synonyms.join("\n")
-                    ))
-                    .size(12),
-                );
-            }
+            content = content.push(text(format!("Generated name: {}", record.title)).size(12));
             for warning in &record.warnings {
                 content = content.push(text(warning).size(12));
             }
@@ -658,8 +598,6 @@ impl App {
                             (ticket.revision == self.tab.revision && self.naming_can_edit())
                                 .then_some(Message::Naming(Action::Caption))
                         ),
-                    button("naming.source-record", "Source", text("Source"))
-                        .on_press(Message::Naming(Action::OpenSource)),
                 ]
                 .spacing(6),
             );

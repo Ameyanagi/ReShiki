@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Copyright (c) 2001-2009 Sun Microsystems, Inc. All Rights Reserved.
+
+Redistribution and  use in  source and binary  forms, with  or without
+modification, are permitted provided that the following conditions are
+met:
+
+- Redistributions  of  source code  must  retain  the above  copyright
+  notice, this list of conditions and the following disclaimer.
+
+- Redistribution  in binary  form must  reproduct the  above copyright
+  notice, this list of conditions  and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+Neither  the  name   of  Sun  Microsystems,  Inc.  or   the  names  of
+contributors may be  used to endorse or promote  products derived from
+this software without specific prior written permission.
+
+This software is provided "AS IS," without a warranty of any kind. ALL
+EXPRESS  OR   IMPLIED  CONDITIONS,  REPRESENTATIONS   AND  WARRANTIES,
+INCLUDING  ANY  IMPLIED WARRANTY  OF  MERCHANTABILITY,  FITNESS FOR  A
+PARTICULAR PURPOSE  OR NON-INFRINGEMENT, ARE HEREBY  EXCLUDED. SUN AND
+ITS  LICENSORS SHALL  NOT BE  LIABLE  FOR ANY  DAMAGES OR  LIABILITIES
+SUFFERED BY LICENSEE  AS A RESULT OF OR  RELATING TO USE, MODIFICATION
+OR DISTRIBUTION OF  THE SOFTWARE OR ITS DERIVATIVES.  IN NO EVENT WILL
+SUN OR ITS  LICENSORS BE LIABLE FOR ANY LOST  REVENUE, PROFIT OR DATA,
+OR  FOR  DIRECT,   INDIRECT,  SPECIAL,  CONSEQUENTIAL,  INCIDENTAL  OR
+PUNITIVE  DAMAGES, HOWEVER  CAUSED  AND REGARDLESS  OF  THE THEORY  OF
+LIABILITY, ARISING  OUT OF  THE USE OF  OR INABILITY TO  USE SOFTWARE,
+EVEN IF SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+-->
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>net.java.dev.msv</groupId>
+    <artifactId>msv</artifactId>
+    <version>2022.7</version>
+  </parent>
+  <groupId>net.java.dev.msv</groupId>
+  <artifactId>xsdlib</artifactId>
+  <version>2022.7</version>
+  <name>MSV XML Schema Datatype Library</name>
+  <description>XML Schema datatypes library</description>
+  <licenses>
+    <license>
+      <name>BSD</name>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <properties>
+    <surefire.format>brief</surefire.format>
+    <eclipse.outputDirectory>${basedir}/target/classes</eclipse.outputDirectory>
+    <surefire.fork.mode>once</surefire.fork.mode>
+    <surefire.usefile>false</surefire.usefile>
+    <downloadSources>true</downloadSources>
+    <surefire.fork.vmargs>-ea</surefire.fork.vmargs>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>xerces</groupId>
+      <artifactId>xercesImpl</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>relaxngDatatype</groupId>
+      <artifactId>relaxngDatatype</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jdom</groupId>
+      <artifactId>jdom2</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <additionalparam>${javadoc.opts}</additionalparam>
+            </configuration>
+          </execution>
+        </executions>
+        <configuration>
+          <encoding>UTF-8</encoding>
+          <maxmemory>1g</maxmemory>
+          <additionalOptions>
+            <additionalOption>${javadoc.opts}</additionalOption>
+          </additionalOptions>
+          <links>
+            <link>https://xerces.apache.org/xerces-j/apiDocs/</link>
+          </links>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.felix</groupId>
+        <artifactId>maven-bundle-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>bundle-manifest</id>
+            <phase>process-classes</phase>
+            <goals>
+              <goal>manifest</goal>
+            </goals>
+            <configuration>
+              <instructions>
+                <Bundle-Name>${project.name}</Bundle-Name>
+                <Bundle-SymbolicName>${project.artifactId}</Bundle-SymbolicName>
+                <Bundle-Description>${project.description}</Bundle-Description>
+                <Import-Package>org.relaxng.datatype,
+                                    org.relaxng.datatype.helpers</Import-Package>
+                <DynamicImport-Package>org.apache.xerces.impl.xpath.regex</DynamicImport-Package>
+                <Private-Package>com.sun.msv.datatype.regexp,
+                                    com.sun.xml.util</Private-Package>
+                <Export-Package>com.sun.msv.datatype,
+                                    com.sun.msv.datatype.xsd*</Export-Package>
+                <Main-Class>com.sun.msv.datatype.xsd.CommandLineTester</Main-Class>
+                <Bundle-Version>${project.version}</Bundle-Version>
+                <MSV-Name>${project.url}</MSV-Name>
+                <MSV-Version>${project.version}</MSV-Version>
+                <MSV-Website>${project.url}</MSV-Website>
+                <MSV-Built-Date>${build.timestamp}</MSV-Built-Date>
+              </instructions>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <includes>
+            <include>**/*Test.java</include>
+            <include>**/*TestCase.java</include>
+            <include>**/*TestCases.java</include>
+          </includes>
+          <excludes>
+            <exclude>**/*$*</exclude>
+          </excludes>
+          <reportFormat>${surefire.format}</reportFormat>
+          <useFile>${surefire.usefile}</useFile>
+          <forkMode>${surefire.fork.mode}</forkMode>
+          <childDelegation>false</childDelegation>
+          <argLine>${surefire.fork.vmargs}</argLine>
+          <systemProperties>
+            <property>
+              <name>java.awt.headless</name>
+              <value>${java.awt.headless}</value>
+            </property>
+            <property>
+              <name>surefire.fork.vmargs</name>
+              <value>${surefire.fork.vmargs}</value>
+            </property>
+          </systemProperties>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>test-jar</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <archive>
+            <manifestFile>target/classes/META-INF/MANIFEST.MF</manifestFile>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>single</id>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <archive>
+            <index>true</index>
+            <manifestFile>target/classes/META-INF/MANIFEST.MF</manifestFile>
+          </archive>
+          <descriptorRefs>
+            <descriptorRef>jar-with-dependencies</descriptorRef>
+          </descriptorRefs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+  <profiles>
+    <profile>
+      <id>release-sign-artifacts</id>
+      <activation>
+        <property>
+          <name>performRelease</name>
+          <value>true</value>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>doclint-java8-disable</id>
+      <activation>
+        <jdk>[1.8,)</jdk>
+      </activation>
+      <properties>
+        <javadoc.opts>-Xdoclint:none</javadoc.opts>
+      </properties>
+    </profile>
+  </profiles>
+</project>
