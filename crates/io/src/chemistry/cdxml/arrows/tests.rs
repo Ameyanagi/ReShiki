@@ -7,7 +7,7 @@ fn mechanism_curvature_91_before_rejects_independent_cubic_controls() {
     );
     let reader = ArrowReader::new(xml).unwrap();
     let colors = [NativeColor([0.; 3]); 4];
-    let error = reader.read(4, 1., &colors, 1).unwrap_err();
+    let error = reader.read(5, 1., &colors, 1).unwrap_err();
     assert_eq!(
         error.to_string(),
         "This cubic arrow cannot be represented by a single quadratic bend"

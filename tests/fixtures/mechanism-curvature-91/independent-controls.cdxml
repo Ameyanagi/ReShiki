@@ -1,2 +1,2 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CDXML BondLength="14.4" LineWidth="0.6"><colortable><color r="0" g="0" b="0"/></colortable><page id="1"><curve id="2" CurvePoints="0 0 0 0 0 -24 36 24 36 0 36 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" HeadSize="600" ArrowheadWidth="150" ArrowheadCenterSize="525" color="2" Closed="no"/></page></CDXML>
+<?xml version='1.0' encoding='UTF-8'?>
+<CDXML BondLength="14.4" LineWidth="0.6" Magnification="400" color="0" bgcolor="1"><colortable><color r="1" g="1" b="1" /><color r="0" g="0" b="0" /></colortable><page id="1" BoundingBox="0 0 612 792"><curve id="2" CurvePoints="100 100 100 100 100 76 136 124 136 100 136 100" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" HeadSize="600" ArrowheadWidth="150" ArrowheadCenterSize="525" color="3" Closed="no" /></page></CDXML>
