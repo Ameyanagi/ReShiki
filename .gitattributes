@@ -1,1 +1,4 @@
 * text=auto eol=lf
+# Preserve the pinned OPSIN license and oracle fixtures byte-for-byte.
+crates/opsin/LICENSE -text
+crates/opsin/tests/fixtures/** -text

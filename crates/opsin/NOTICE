@@ -1,0 +1,16 @@
+This package contains Rust translations of algorithms, nomenclature resource
+files, and verification fixtures from OPSIN 2.9.0:
+
+https://github.com/dan2097/opsin
+Commit: b91b610af5ab07560fedb20730d7aef46bb2bca0
+
+Copyright 2017 Daniel Lowe
+
+OPSIN is distributed under the MIT license. The unmodified upstream license
+text is included in LICENSE and applies to the incorporated source, resources,
+and fixtures. Module comments, PORTING.md, and provenance/manifest.json record
+source mappings, the revision, resource hashes, and development oracle evidence.
+
+Development oracle exporter source files are retained only as reproducibility
+records. No Java runtime, Java archive, or external naming service is used by
+this Rust package's builds, tests, or runtime conversion.

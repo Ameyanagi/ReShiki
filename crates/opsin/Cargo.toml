@@ -1,0 +1,16 @@
+[package]
+name = "opsin"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A native Rust port of OPSIN chemical name interpretation"
+publish = false
+
+[dependencies]
+roxmltree = "0.20"
+regex = "1"
+
+[dev-dependencies]
+serde_json = "1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
