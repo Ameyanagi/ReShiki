@@ -507,3 +507,23 @@ fn copying_a_full_rgb_owner_that_is_only_part_of_a_molecule_freezes_original_rea
     assert_eq!(Paint::new(&partial).atom(ids[1]), 0.25);
     partial.validate().unwrap();
 }
+
+#[test]
+fn flat_alpha_target_inside_shared_rgb_owner_does_not_activate_unpainted_rear_ink() {
+    let (mut doc, first, second) = coordinated_chains();
+    for id in &first {
+        doc.atom_mut(*id).unwrap().depth = 8.;
+    }
+    let all = doc.all_ids();
+    depth::enable(&mut doc, &all, 0.6).unwrap();
+    assert_eq!(doc.depth_appearance.len(), 1);
+    let before = crate::scene::svg(&doc);
+    depth::set_rear_opacity(&mut doc, &first, 0.25).unwrap();
+    assert_eq!(depth::rear_opacity(&doc, &first), Some(0.25));
+    assert_eq!(depth::rear_opacity(&doc, &second), Some(1.));
+    assert_eq!(
+        crate::scene::svg(&doc),
+        before,
+        "unselected nonflat weights cannot activate alpha"
+    );
+}

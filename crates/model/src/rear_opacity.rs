@@ -42,6 +42,14 @@ impl Paint {
                 );
             }
         }
+        // Unpainted molecules may share the legacy RGB owner. Their rear
+        // weights cannot activate alpha on a selected flat molecule or contact.
+        if nodes
+            .values()
+            .all(|node| node.opacity >= 1. || node.weight == 0.)
+        {
+            nodes.clear();
+        }
         for atom in doc.atoms.iter().filter(|a| !a.centroid.is_empty()) {
             if atom.centroid.iter().any(|id| nodes.contains_key(id)) {
                 let weight = atom
@@ -57,11 +65,6 @@ impl Paint {
                     .fold(1., f32::min);
                 nodes.insert(atom.id, Node { weight, opacity });
             }
-        }
-        // Flat drawings have no rear side. Preserve the complete legacy scene
-        // path, including highlight batching and layer order, in that case.
-        if nodes.values().all(|node| node.weight == 0.) {
-            nodes.clear();
         }
         Self { nodes }
     }
