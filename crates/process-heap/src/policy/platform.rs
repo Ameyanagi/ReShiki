@@ -132,17 +132,38 @@ fn process_headroom() -> Option<u64> {
 
 #[cfg(windows)]
 pub(super) fn memory_headroom() -> Option<u64> {
-    command(
-        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-        &[
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory",
-        ],
-    )
-    .and_then(|s| s.trim().parse::<u64>().ok())
-    .and_then(|kib| kib.checked_mul(1024))
+    // Native observation includes physical RAM, current-process commit headroom
+    // and virtual address headroom without starting an interpreter.
+    // https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/ns-sysinfoapi-memorystatusex
+    #[repr(C)]
+    #[derive(Default)]
+    struct MemoryStatus {
+        length: u32,
+        load: u32,
+        total_physical: u64,
+        available_physical: u64,
+        total_commit: u64,
+        available_commit: u64,
+        total_virtual: u64,
+        available_virtual: u64,
+        extended_virtual: u64,
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GlobalMemoryStatusEx(status: *mut MemoryStatus) -> i32;
+    }
+    let mut status = MemoryStatus {
+        length: std::mem::size_of::<MemoryStatus>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: repr(C) exactly matches MEMORYSTATUSEX. The initialized length
+    // describes the writable stack buffer; the API retains no pointer.
+    (unsafe { GlobalMemoryStatusEx(&mut status) } != 0).then(|| {
+        status
+            .available_physical
+            .min(status.available_commit)
+            .min(status.available_virtual)
+    })
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
@@ -187,7 +208,7 @@ fn mach_available(input: &str) -> Option<u64> {
     pages.checked_mul(page)
 }
 
-#[cfg(any(target_os = "macos", windows))]
+#[cfg(target_os = "macos")]
 fn command(program: &str, args: &[&str]) -> Option<String> {
     use std::{
         io::Read,
