@@ -13,4 +13,6 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
+Under review: @Ameyanagi — bounded Windows EMF picture import, retained source and original controlled spectrum fixtures for [issue #64](https://github.com/Ameyanagi/ReShiki/issues/64), with [Mac portable native save/resize/reopen evidence](changes/emf-picture-import.md). Draft PR link will be added when opened.
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

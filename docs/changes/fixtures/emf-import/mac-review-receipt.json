@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-09",
+  "production_source_commit": "783be63a2752103cd2c436a79e02a03d442e6085",
+  "base_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "platform": "macOS 26.5.1 (25F80), arm64",
+  "capture_resolution": [2560, 1704],
+  "app_sha256": "eb950aa839637ed5d060d7ca74b36ae4d95a1319f85923f7ed83effc99b898ed",
+  "scope": "Actual Mac File Open of a Windows-saved version20 native drawing and portable-preview save/resize/Undo/Redo/reopen. No new macOS EMF input, actual Windows before/head or Word/PowerPoint GUI acceptance claim.",
+  "original_mm": [100.00000561904761, 60.00000337142857],
+  "linked_resize_mm": [120.00000674285714, 72.00000114285714],
+  "preview_pixels": [4724, 2834],
+  "original_emf_sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a",
+  "preview_png_sha256": "1dabe5ad6f5806cd121f294a19eaa697dfc9f6957518da19ecbfe858733139ca",
+  "native_files": {
+    "retained-source.rsk": {
+      "bytes": 492401,
+      "sha256": "c329e5d2f28242cbbbf4156f2e533e7497e63391aac4cbdd9046f2ea357e8098"
+    },
+    "emf-mac-desktop-sized.rsk": {
+      "bytes": 492400,
+      "sha256": "de844a4420bc9249126b3f56064bf187984df3e01a8429685fb5f406c3985265"
+    },
+    "emf-mac-desktop-restored.rsk": {
+      "bytes": 492401,
+      "sha256": "c329e5d2f28242cbbbf4156f2e533e7497e63391aac4cbdd9046f2ea357e8098"
+    },
+    "emf-mac-desktop-size-redo.rsk": {
+      "bytes": 492400,
+      "sha256": "de844a4420bc9249126b3f56064bf187984df3e01a8429685fb5f406c3985265"
+    },
+    "vector-reexport.emf": {
+      "bytes": 14704,
+      "sha256": "f8bf4153051ab9fab56b25c4714749a3375129e431151b4c79c6bf2a648ce630"
+    }
+  },
+  "only_resize_fields_changed": ["axis_x", "axis_y", "origin"],
+  "all_original_and_restored_native_bytes_equal": true,
+  "all_sized_and_redo_native_bytes_equal": true,
+  "all_four_entire_document_json_checks_equal_except_resize_fields": true,
+  "all_png_and_emf_picture_fields_exact": true,
+  "root_independent_receipt_sha256": "e4019919508c4842ef7465100b4f278f568dda21bc9a8002fcddb0cf4bb3b912",
+  "images": [
+    {
+      "file": "docs/images/emf-import/emf-portable-native-mac.jpg",
+      "bytes": 314895,
+      "sha256": "79c9026b2fb2f831a861e53899c05eb3e3acf070ee505229cf15e2d9976518f4",
+      "conditions": "Unselected portable native overview, 85%, keyboard drawing off, JACS/ACS, Arial 10. Existing-file status is visible.",
+      "modified": false
+    },
+    {
+      "file": "docs/images/emf-import/emf-portable-native-size-source.jpg",
+      "bytes": 402837,
+      "sha256": "e454cd41ab5685843dd6db81b8cc4475b4736192ab1929676333aa4de18e6468",
+      "conditions": "Selected picture with deliberate handles to demonstrate source type, preview 4724 \u00d7 2834 and width 100.00/height 60.00 mm, 85%, keyboard drawing off, JACS/ACS, Arial 10.",
+      "modified": false
+    },
+    {
+      "file": "docs/images/emf-import/emf-portable-native-reopened.jpg",
+      "bytes": 411726,
+      "sha256": "b9dd02cc40c6bc704231de18d5134dd847bdee85cefc9c8c5b55ef82e1a17c08",
+      "conditions": "Fresh process native reopen, 85%, keyboard drawing off, JACS/ACS, Arial 10, recovery banner visible. File not resaved; Undo/Redo disabled.",
+      "modified": false
+    }
+  ],
+  "license": "MIT OR Apache-2.0"
+}
