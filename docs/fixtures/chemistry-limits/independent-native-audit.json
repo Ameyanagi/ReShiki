@@ -1,0 +1,93 @@
+{
+  "source_commit": "a018733f9bfc3cc08f73dbc82aadf0c261362f29",
+  "source_hashes_verified": 1063,
+  "workspace_artifacts": 15,
+  "all_artifacts_rebuilt_fresh_false": true,
+  "packaged_executable_SHA256": "23a492c762aedec1e8f8cf0133a48919c843776c31b01b8775fd7c0de31e0884",
+  "geometry": {
+    "atoms": 513,
+    "bonds": 512,
+    "elements": {
+      "C": 171,
+      "H": 342
+    },
+    "atom_ids_and_chemical_fields_exact": true,
+    "ordered_bond_endpoints_orders_display_stereo_exact": true,
+    "bond_identity_note": "Native Bond records have no separate stored ID; compared ordered records and endpoint atom IDs.",
+    "worker_coordinates": 515,
+    "temporary_hydrogen_parents_zero_based": [
+      170,
+      170
+    ],
+    "temporary_H_not_saved_as_atoms": true,
+    "derived_label_h_changes": [
+      {
+        "id": 171,
+        "old": 0,
+        "new": 2
+      }
+    ],
+    "document_version": [
+      1,
+      19
+    ],
+    "xyz_finite": true,
+    "nonzero_depth_count": 513,
+    "scene_coordinates_changed": true,
+    "worker_to_saved_fit": {
+      "uniform_scale": 27.99999994120421,
+      "max_residual_scene_units": 0.00046238682028599686,
+      "rms_residual_scene_units": 0.00013024723065337108,
+      "screen_transform_determinant": -0.9999999999999993,
+      "proper_rotation_after_screen_Y_inversion_determinant": 0.9999999999999993,
+      "note": "Rigid orientation, translation and uniform scene scaling; screen Y inversion is a display convention. Desktop Tilt up changes the view frame."
+    },
+    "input_to_request_max_residual_angstrom": 8.702723192755002e-06,
+    "worker_energy_kcal_mol": -36.9198750543448,
+    "converged": false,
+    "depth_appearance": {
+      "scopes": 1,
+      "all_original_IDs": true,
+      "automatic": true,
+      "strength": 0.62,
+      "weights_count": 513
+    }
+  },
+  "fused": {
+    "atoms": 452,
+    "bonds": 601,
+    "elements": {
+      "C": 452
+    },
+    "SMILES_atom_order_ID_assignment_and_chemical_fields_exact": true,
+    "SMILES_endpoint_pairs_and_bond_orders_exact": true,
+    "RDKit_version": "2026.03.6",
+    "canonical_isomeric_SMILES_identical": true,
+    "formula": "C452H154",
+    "implicit_hydrogen_total": 154,
+    "independent_SSSR_ring_count": 150,
+    "cycle_rank": 150,
+    "connected_components": 1,
+    "xyz_finite": true,
+    "nonzero_depth_count": 0,
+    "XY_extents": [
+      8259.789,
+      89.895103
+    ],
+    "native_label_h_total": 154
+  },
+  "input_and_saved_SHA256": {
+    "geometry-explicit-h-513-3d.rsk": "e3641f5790dfb931b3849bc5aa59d81477d9bd03802846a3a0d1819cda981941",
+    "geometry-explicit-h-513-desktop.rsk": "05cac1d4ba14d6ded94a63a30dc06d1924535194b350fa98c222cf701a7bc0c6",
+    "packaged-app-worker-513-request.json": "50679ea5c8b421f6ffb4d8c68d9112a71fd2bc345f24465ff123acbf3ef9da01",
+    "packaged-app-worker-513-response.json": "86a0737f2d458b7a79705d8803bcf119911b7d7d26013f52c775e55a89697079",
+    "fused-repeat37.smi": "0e0e5c4f08b49f3d4636bdaaee2a3d8aea93555beb7537db1eeba269ce7523d2",
+    "fused-repeat37-desktop.rsk": "26198120c70fe6c7f2ba1f1d1d4b33164f7a4034dd1877287edb2598049df1b3"
+  },
+  "retained_reference_log": "Verified 31019 aromaticity cases, including 17307 transformed graphs; elapsed_ms=20688",
+  "notes": [
+    "Read-only audit: no Cargo/compiler, solver rerun, GUI, or source mutation.",
+    "Position/depth, derived H-label cache, serialization defaults and automatic depth appearance change; chemical graph and underlying H flags match.",
+    "Exact fused-fixture RDKit validation supplements, and does not rerun, retained 31,019-case oracle."
+  ]
+}

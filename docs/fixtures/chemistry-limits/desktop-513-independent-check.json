@@ -1,0 +1,30 @@
+{
+  "source_file": "/Users/ryuichi/dev/ReShiki-worktrees/limits/.coordination/geometry-explicit-h-513-3d.rsk",
+  "desktop_saved_file": "/Users/ryuichi/dev/ReShiki-worktrees/limits/.coordination/geometry-explicit-h-513-desktop.rsk",
+  "worker_response_file": "/Users/ryuichi/dev/ReShiki-worktrees/limits/.coordination/packaged-app-worker-513-response.json",
+  "atoms": 513,
+  "bonds": 512,
+  "drawn_h": 342,
+  "nonzero_z": 513,
+  "atom_identity_preserved": true,
+  "bond_identity_preserved": true,
+  "finite_xyz": true,
+  "canvas_unit_factor": 28.0,
+  "proper_rigid_rotation_determinant": 1.0,
+  "worker_rigid_fit_rms_angstrom": 4.653488867471535e-06,
+  "worker_rigid_fit_max_angstrom": 1.6656495804837786e-05,
+  "worker_energy_kcal_mol": -36.9198750543448,
+  "worker_converged": false,
+  "saved_sha256": "05cac1d4ba14d6ded94a63a30dc06d1924535194b350fa98c222cf701a7bc0c6",
+  "atom_identity_missing_fields_use_native_defaults": {
+    "charge": 0,
+    "radical_electrons": 0,
+    "isotope": 0,
+    "explicit_h": 0,
+    "no_implicit": false,
+    "aromatic": false,
+    "stereo": null,
+    "map_num": 0
+  },
+  "atom_changes": []
+}
