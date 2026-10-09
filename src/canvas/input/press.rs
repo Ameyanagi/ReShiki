@@ -177,10 +177,12 @@ impl MoleculeCanvas<'_> {
                         .filter(|h| h.point.distance(p) < 8. / self.camera.zoom)
                         .min_by(|a, b| a.point.distance(p).total_cmp(&b.point.distance(p)))
                     {
-                        state.gesture = Some(Gesture::GraphicPoint {
+                        state.gesture = Some(Gesture::PathPoint(crate::canvas::pen::PointDrag {
                             id: g.id,
                             index: handle.index,
-                        });
+                            pressed: p,
+                            original: handle.point,
+                        }));
                         return Some(Action::request_redraw().and_capture());
                     }
                     continue;

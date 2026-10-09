@@ -89,6 +89,7 @@ impl MoleculeCanvas<'_> {
             }
             Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
+            Gesture::PathPoint(drag) => Edit::GraphicPoint(drag.id, drag.index, drag.target(p)),
             Gesture::Transform(drag) => {
                 match self.release_transform(state, *drag, p, position, inside) {
                     ControlFlow::Continue(edit) => edit,

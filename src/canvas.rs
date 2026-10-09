@@ -58,7 +58,7 @@ mod template_style_tests;
 mod tests;
 
 #[cfg(test)]
-mod pen_tests;
+pub(crate) mod pen_tests;
 #[cfg(test)]
 mod transform_shortcut_tests;
 
@@ -268,6 +268,7 @@ enum Gesture {
         id: u64,
         index: usize,
     },
+    PathPoint(pen::PointDrag),
     ArrowHandle {
         id: u64,
         index: usize,

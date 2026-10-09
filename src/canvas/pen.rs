@@ -13,6 +13,26 @@ pub struct Stroke {
     pub close: bool,
 }
 
+/// A path handle follows pointer displacement without jumping to the grab point.
+#[derive(Debug)]
+pub(super) struct PointDrag {
+    pub id: u64,
+    pub index: usize,
+    pub pressed: World,
+    pub original: World,
+}
+
+impl PointDrag {
+    pub(super) fn target(&self, pointer: World) -> World {
+        if pointer == self.pressed {
+            self.original
+        } else {
+            self.original
+                .offset(pointer.x - self.pressed.x, pointer.y - self.pressed.y)
+        }
+    }
+}
+
 pub(crate) fn active<'a>(doc: &'a Document, selected: &[u64]) -> Option<&'a Graphic> {
     let [id] = selected else { return None };
     doc.graphics.iter().find(|g| {

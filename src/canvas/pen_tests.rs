@@ -1,6 +1,126 @@
 use super::*;
 use iced::widget::canvas::Program;
 
+pub(crate) struct PointGesture {
+    pub before_release: Vec<Edit>,
+    pub pressed_preview: Document,
+    pub preview: Document,
+    pub release: Edit,
+}
+
+/// Use real press/motion/release events, including inset bounds and a grab offset.
+pub(crate) fn point_gesture(
+    doc: &Document,
+    id: u64,
+    camera: Camera,
+    index: usize,
+    grab_offset: Vector,
+    motion: Vector,
+) -> PointGesture {
+    let graphic = doc.graphics.iter().find(|g| g.id == id).unwrap();
+    let original = graphic
+        .path_handles()
+        .unwrap()
+        .into_iter()
+        .find(|handle| handle.index == index)
+        .unwrap()
+        .point;
+    let mut canvas = tests::chain_canvas(doc, ChainMode::Straight);
+    canvas.tool = Tool::EditPoints;
+    canvas.selected = std::slice::from_ref(&id);
+    canvas.camera = camera;
+    let bounds = Rectangle::new(Point::new(37., 53.), iced::Size::new(1600., 1000.));
+    let from = camera.screen(original, bounds) + Vector::new(bounds.x, bounds.y) + grab_offset;
+    let end = from + motion;
+    // Iced can report the final cursor while delivering earlier events in a batch.
+    let cursor = mouse::Cursor::Available(end);
+    let mut state = State::default();
+    let mut before_release = Vec::new();
+    for event in [
+        mouse::Event::CursorMoved { position: from },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+    ] {
+        before_release.extend(
+            canvas
+                .update(&mut state, &Event::Mouse(event), bounds, cursor)
+                .and_then(|action| action.into_inner().0),
+        );
+    }
+    let pressed_preview = canvas.pointer_preview_document(&state, bounds);
+    if motion != Vector::ZERO {
+        before_release.extend(
+            canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::CursorMoved { position: end }),
+                    bounds,
+                    cursor,
+                )
+                .and_then(|action| action.into_inner().0),
+        );
+    }
+    let preview = canvas.pointer_preview_document(&state, bounds);
+    let release = canvas
+        .update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            bounds,
+            cursor,
+        )
+        .and_then(|action| action.into_inner().0)
+        .expect("point selection or completed drag");
+    PointGesture {
+        before_release,
+        pressed_preview,
+        preview,
+        release,
+    }
+}
+
+#[test]
+fn pen_offset_click_selects_exact_nodes_and_controls_without_changing_the_preview() {
+    let mut doc = Document::from_native_file(include_bytes!(
+        "../../tests/fixtures/tunable-pen-lines-67/before.rsk"
+    ))
+    .unwrap();
+    let single = doc.next_id();
+    doc.graphics.push(Graphic::pen_curve(
+        single,
+        World::new(-80., -10.),
+        World::new(80., 40.),
+        GraphicStyle::default(),
+    ));
+    for graphic in &doc.graphics {
+        for handle in graphic.path_handles().unwrap() {
+            for zoom in [1.48, 2.5] {
+                let events = point_gesture(
+                    &doc,
+                    graphic.id,
+                    Camera {
+                        center: World::new(111.13, 28.7),
+                        zoom,
+                    },
+                    handle.index,
+                    Vector::new(2.25, -1.75),
+                    Vector::ZERO,
+                );
+                assert_eq!(events.pressed_preview, doc);
+                assert_eq!(events.preview, doc);
+                assert!(
+                    events
+                        .before_release
+                        .iter()
+                        .all(|edit| matches!(edit, Edit::Hover(_)))
+                );
+                let Edit::GraphicPoint(id, index, point) = events.release else {
+                    panic!("handle selection")
+                };
+                assert_eq!((id, index, point), (graphic.id, handle.index, handle.point));
+            }
+        }
+    }
+}
+
 fn escape() -> Event {
     use iced::keyboard::{self, key};
     Event::Keyboard(keyboard::Event::KeyPressed {

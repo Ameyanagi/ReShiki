@@ -148,6 +148,15 @@ impl MoleculeCanvas<'_> {
             {
                 g.edit_point(*index, end);
             }
+            if let Some(Gesture::PathPoint(drag)) = &state.gesture
+                && let Some(g) = preview
+                    .to_mut()
+                    .graphics
+                    .iter_mut()
+                    .find(|g| g.id == drag.id)
+            {
+                g.edit_point(drag.index, drag.target(end));
+            }
         }
     }
 
