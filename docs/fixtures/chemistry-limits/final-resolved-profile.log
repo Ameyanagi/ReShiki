@@ -1,0 +1,2 @@
+observed=Capabilities { memory_headroom_bytes: Some(7214923776), lookup_operations_per_second: Some(3533459) } resolved=Budget { heap_bytes: 536870912, geometry_timeout: 84s, analysis_timeout: 10s, work_units: 35334590, pool_bytes: 1342177280 }
+profile_elapsed_us=10372

@@ -119,6 +119,11 @@ sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"]
 [profile.dev]
 debug = 1
 
+# Keep interactive geometry within its worker deadline in development builds,
+# using the same optimized solver core as numerical tests.
+[profile.dev.package.cosmolkit-core]
+opt-level = 3
+
 # RDKit's macOS ABI uses paired sincos. Compile only this non-inlined wrapper
 # with optimization so debug builds select the same libm call as release.
 # reference/depict_numeric.md records the native evidence and strict comparisons.
