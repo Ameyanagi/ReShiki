@@ -48,6 +48,13 @@ impl App {
                 );
             }
             Menu::Edits => {
+                if state.guided_example || state.requires_apply {
+                    options = options.push(
+                        text("The image exercise waits for your Apply. This preference applies to other requests.")
+                            .size(11)
+                            .style(super::super::workspace::muted_text),
+                    );
+                }
                 options = options
                     .push(
                         checkbox(state.replace)

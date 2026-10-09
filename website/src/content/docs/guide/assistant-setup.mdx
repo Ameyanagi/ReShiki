@@ -13,7 +13,7 @@ The integration launches the Codex CLI's local **app server** automatically. Thi
 
 ## 1. Install the Codex CLI
 
-If `codex --version` already works in your terminal, continue to sign-in. Otherwise, choose one installation method for your operating system. These commands follow the [official Codex CLI installation guide](https://learn.chatgpt.com/docs/codex/cli), checked on 24 September 2026.
+If `codex --version` already works in your terminal, continue to sign-in. Otherwise, choose one installation method for your operating system. These commands follow the [official Codex CLI installation guide](https://learn.chatgpt.com/docs/codex/cli), checked on 9 October 2026.
 
 ### macOS
 
@@ -84,7 +84,7 @@ Codex supports account sign-in through ChatGPT and API-key authentication. Avail
 1. Open or restart ReShiki after installing Codex.
 2. Click **Assistant** in the top toolbar. It attempts to connect automatically.
 3. If **Connect Codex** remains in the footer, click it after signing in.
-4. A connected footer shows a filled dot and **Codex**, and the model menu lists models available to your account. Clicking **Codex** refreshes the connection and model list.
+4. A connected footer shows a filled dot and **Codex**, and the model menu shows the catalog returned by Codex. A listed model does not guarantee account access; sending a request checks access for that model. Clicking **Codex** refreshes the connection and model list.
 5. Type a drawing request or attach an image, then click **Send**. Review the preview and choose **Apply** when satisfied. Applying is undoable.
 
 [![Connected assistant with Codex in the footer, a model selector, and Review mode](/doc-images/assistant-updates/codex-connected.png)](/doc-images/assistant-updates/codex-connected.png)
@@ -116,3 +116,38 @@ RESHIKI_CODEX=/absolute/path/to/codex /absolute/path/to/reshiki
 ```
 
 On macOS, the app executable is normally `/Applications/ReShiki.app/Contents/MacOS/reshiki`. An environment variable set in a terminal only applies to processes launched from that terminal; it does not change an already running app. To update Codex, rerun the standalone installer, or use the corresponding Homebrew/npm update command for your chosen installation method.
+
+## Guided first-use image exercise
+
+The Assistant panel identifies **Install Codex**, **Sign in to Codex**,
+**Connection needs attention**, **Checking Codex**, and **Ready to try an image**.
+The check starts the local app server and reads its saved sign-in and model
+catalog; it does not send an inference request. A listed model is not proof of
+account entitlement: access is checked when you send the request. A failed
+refresh clears the previous connected state. **Test connection** retries, and
+**Cancel check** stops the check while ordinary drawing remains available.
+Provider error payloads and account details are not displayed in setup messages.
+
+When ready, choose **Try example image · ethanol**. The original bundled image
+and known reference graph are [documented with their license](https://github.com/Ameyanagi/ReShiki/blob/main/assets/assistant/README.md).
+The button attaches the image locally and fills a request; it does not upload
+anything. Choose **Send**, compare the editable draft against the reference
+(three heavy atoms, C–C–O, two single bonds, neutral, no specified stereochemistry),
+and inspect or edit it before **Apply**. The guided exercise waits for Apply
+even when ordinary requests use Auto apply. Apply uses the existing document
+validation and Undo workflow. An ambiguous or incorrect draft remains a draft
+for your decision; generation and visual review alone do not establish identity.
+
+The composer describes external transfer before Send: the request, recent
+conversation and relevant drawing data travel through Codex, together with any
+attached image. The review also receives the source image and rendered drafts.
+Existing account access/usage limits apply; an API-key sign-in uses separate API
+billing. Codex owns credentials. ReShiki does not collect passwords or keys in
+this panel. **Back to drawing** returns to the ordinary inspector.
+
+Official installation and account guidance was checked against installed
+`codex-cli 0.161.0` and the [CLI guide](https://learn.chatgpt.com/docs/cli),
+[authentication guide](https://learn.chatgpt.com/docs/auth), and
+[app-server authentication protocol](https://learn.chatgpt.com/docs/app-server)
+on 9 October 2026. The in-app links open these official instructions or this
+ReShiki setup guide; they do not start a sign-in flow or change Codex settings.

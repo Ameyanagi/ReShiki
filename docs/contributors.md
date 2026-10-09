@@ -13,4 +13,10 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
+Assistant setup and the original guided ethanol image exercise: @Ameyanagi,
+project creator and maintainer; under review in
+[PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
+[Issue #93](https://github.com/Ameyanagi/ReShiki/issues/93) ·
+[Native review and evidence](changes/assistant-setup-review-2026-10-09.md).
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.
