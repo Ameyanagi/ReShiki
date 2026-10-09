@@ -2,6 +2,7 @@
 #![cfg(target_os = "linux")]
 #![forbid(unsafe_code)]
 
+pub mod desktop;
 mod gui;
 mod protocol;
 #[cfg(feature = "wayland-qa")]

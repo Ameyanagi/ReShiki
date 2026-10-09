@@ -283,6 +283,10 @@ impl App {
     }
 
     fn update_restart_blocker(&self) -> Option<&'static str> {
+        #[cfg(any(windows, target_os = "linux"))]
+        if self.desktop.opening {
+            return Some("Wait for the requested drawings to finish opening.");
+        }
         if self
             .strip()
             .any(|tab| self.edited(tab) || (tab.path.is_none() && !tab.doc.all_ids().is_empty()))

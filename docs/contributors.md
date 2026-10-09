@@ -15,4 +15,6 @@ Windows SignPath signing and internal test-signed nightly integration: @Ameyanag
 
 Under review: Windows window fitting by @Ameyanagi in [PR #273](https://github.com/Ameyanagi/ReShiki/pull/273). Native desktop interaction acceptance remains pending.
 
+Under review: Windows/Linux document-tab launches with per-document Office sessions by @Ameyanagi in [PR #274](https://github.com/Ameyanagi/ReShiki/pull/274). Native desktop and Office save-back acceptance remain pending.
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

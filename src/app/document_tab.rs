@@ -34,6 +34,7 @@ pub(super) struct DocumentTab {
     pub(super) file_epoch: u64,
     pub(super) recent_molecules: molecule_shortcuts::Recent,
     pub(super) path: Option<PathBuf>,
+    pub(super) office: Option<super::office::Binding>,
     pub(super) untitled_name: Option<&'static str>,
     // Selection and view.
     pub(super) selected: Vec<u64>,
@@ -113,6 +114,7 @@ impl DocumentTab {
             file_epoch: 0,
             recent_molecules: Default::default(),
             path: None,
+            office: None,
             untitled_name: None,
             selected: vec![],
             hover: None,
@@ -191,6 +193,7 @@ impl DocumentTab {
     /// Open and Restore take over instead of adding a tab.
     pub(super) fn reusable(&self) -> bool {
         self.path.is_none()
+            && self.office.is_none()
             && self.untitled_name.is_none()
             && self.doc.all_ids().is_empty()
             && !self.history.can_undo()

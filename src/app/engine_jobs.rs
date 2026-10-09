@@ -67,6 +67,10 @@ impl App {
         result: Result<Response, String>,
     ) -> Task<Message> {
         self.tab.busy = false;
+        #[cfg(any(windows, target_os = "linux"))]
+        if matches!(kind, Job::ImportFile) {
+            self.desktop_import_finished();
+        }
         if matches!(&kind, Job::Clean(job) if job.serial != self.tab.cleanup_serial || job.epoch != self.tab.file_epoch)
         {
             return Task::none();
