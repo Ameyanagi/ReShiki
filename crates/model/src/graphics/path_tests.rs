@@ -164,6 +164,88 @@ fn path_noop_edits_preserve_native_type_and_affine_frame() {
 }
 
 #[test]
+fn projected_pen_edits_keep_the_frame_that_defines_their_depth() {
+    for around_x in [false, true] {
+        let mut doc = fixture();
+        doc.graphics.truncate(1);
+        let id = doc.graphics[0].id;
+        crate::projection::tilt(&mut doc, &[id], 35., around_x);
+        let graphic = &mut doc.graphics[0];
+        let frame = (
+            graphic.origin,
+            graphic.axis_x,
+            graphic.axis_y,
+            graphic.depth,
+        );
+        assert!(graphic.depth.iter().any(|z| z.abs() > 0.01));
+        let before = graphic.edit_points();
+        graphic.edit_point(3, before[3].offset(20., -10.));
+        let moved = graphic.edit_points();
+        for index in [2, 3, 4] {
+            near(moved[index], before[index].offset(20., -10.));
+        }
+        for index in [0, 1, 5, 6, 7, 8, 9] {
+            near(moved[index], before[index]);
+        }
+        let inserted = graphic.insert_path_node(0).unwrap();
+        graphic.delete_path_node(inserted).unwrap();
+        graphic.set_path_segment_curved(0, false).unwrap();
+        graphic.set_path_segment_curved(0, true).unwrap();
+        graphic
+            .append_pen_node(Point::new(350., 30.), None)
+            .unwrap();
+        graphic.set_path_closed(true).unwrap();
+        graphic.set_path_closed(false).unwrap();
+        assert_eq!(
+            (
+                graphic.origin,
+                graphic.axis_x,
+                graphic.axis_y,
+                graphic.depth,
+            ),
+            frame,
+            "all edits retain the projected plane's affine coordinates"
+        );
+        graphic.validate().unwrap();
+        assert_eq!(
+            Document::from_native_file(&doc.file_json().unwrap()).unwrap(),
+            doc.current()
+        );
+    }
+}
+
+#[test]
+fn singular_projected_pen_edits_reject_atomically_and_flat_lines_remain_editable() {
+    let mut graphic = fixture().graphics.remove(0);
+    graphic.axis_y = Point::default();
+    graphic.depth = [10., 0., 1.];
+    let before = graphic.clone();
+    let node = graphic.edit_points()[3];
+    graphic.edit_point(3, node.offset(10., 10.));
+    assert_eq!(graphic, before);
+    assert!(graphic.insert_path_node(0).is_err());
+    assert_eq!(graphic, before);
+    assert!(
+        graphic
+            .append_pen_node(node.offset(30., 10.), None)
+            .is_err()
+    );
+    assert_eq!(graphic, before);
+
+    graphic.depth = [10., 0., 0.];
+    let before = graphic.edit_points();
+    graphic.edit_point(3, before[3].offset(10., 10.));
+    let moved = graphic.edit_points();
+    for index in [2, 3, 4] {
+        near(moved[index], before[index].offset(10., 10.));
+    }
+    assert_eq!(graphic.depth, [10., 0., 0.]);
+    assert_eq!(graphic.axis_x, Point::new(1., 0.));
+    assert_eq!(graphic.axis_y, Point::new(0., 1.));
+    graphic.validate().unwrap();
+}
+
+#[test]
 fn inserting_cubic_nodes_is_exact_and_delete_retains_outer_tangents() {
     let mut graphic = fixture().graphics[0].clone();
     let before = graphic.commands();

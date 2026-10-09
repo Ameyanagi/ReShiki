@@ -149,12 +149,50 @@ impl Path {
             .map(|n| n.index)
             .ok_or_else(|| "Invalid path node".into())
     }
-    fn store(self, graphic: &mut Graphic) {
-        graphic.path = self.commands();
+    fn store(self, graphic: &mut Graphic) -> Result<(), String> {
+        let commands = self.commands();
+        if commands
+            .iter()
+            .flat_map(PathCommand::iter_points)
+            .any(|p| !finite(p))
+        {
+            return Err("Path coordinates are out of range".into());
+        }
+        // Depth is expressed in this affine frame. Keep it when editing a
+        // projected path, rather than assigning its old depth coefficients to
+        // a new world-space frame.
+        let determinant = graphic.axis_x.x * graphic.axis_y.y - graphic.axis_x.y * graphic.axis_y.x;
+        if determinant.is_finite() && determinant.abs() >= 0.000_001 {
+            let local = |p: Point| {
+                let delta = Point::new(p.x - graphic.origin.x, p.y - graphic.origin.y);
+                Point::new(
+                    (delta.x * graphic.axis_y.y - delta.y * graphic.axis_y.x) / determinant,
+                    (graphic.axis_x.x * delta.y - graphic.axis_x.y * delta.x) / determinant,
+                )
+            };
+            let commands: Vec<_> = commands.iter().map(|c| c.map(local)).collect();
+            if commands
+                .iter()
+                .flat_map(PathCommand::iter_points)
+                .any(|p| !finite(p))
+            {
+                return Err("Path coordinates are out of range".into());
+            }
+            graphic.path = commands;
+        } else if graphic.depth.iter().skip(1).all(|z| *z == 0.) {
+            // A flat line can have a singular drawing frame; its constant
+            // depth is also valid after converting its points to world units.
+            graphic.path = commands;
+            graphic.origin = Point::default();
+            graphic.axis_x = Point::new(1., 0.);
+            graphic.axis_y = Point::new(0., 1.);
+        } else {
+            return Err(
+                "Rotate this edge-on projected path toward the page before editing it".into(),
+            );
+        }
         graphic.kind = GraphicKind::Path;
-        graphic.origin = Point::default();
-        graphic.axis_x = Point::new(1., 0.);
-        graphic.axis_y = Point::new(0., 1.);
+        Ok(())
     }
 }
 impl Graphic {
@@ -248,7 +286,7 @@ impl Graphic {
                 }
             }
         }
-        path.store(self);
+        let _ = path.store(self);
         true
     }
     pub fn insert_path_node(&mut self, index: usize) -> Result<usize, String> {
@@ -285,7 +323,7 @@ impl Graphic {
         );
         path.reindex();
         let index = path.index(node + 1)?;
-        path.store(self);
+        path.store(self)?;
         Ok(index)
     }
     pub fn delete_path_node(&mut self, index: usize) -> Result<usize, String> {
@@ -334,7 +372,7 @@ impl Graphic {
         }
         path.reindex();
         let index = path.index(node.min(path.nodes.len() - 1))?;
-        path.store(self);
+        path.store(self)?;
         Ok(index)
     }
     pub fn set_path_segment_curved(&mut self, index: usize, curved: bool) -> Result<usize, String> {
@@ -360,7 +398,7 @@ impl Graphic {
         }
         path.reindex();
         let index = path.index(node)?;
-        path.store(self);
+        path.store(self)?;
         Ok(index)
     }
     pub fn set_path_closed(&mut self, closed: bool) -> Result<(), String> {
@@ -387,8 +425,7 @@ impl Graphic {
             path.segments.pop();
         }
         path.closed = closed;
-        path.store(self);
-        Ok(())
+        path.store(self)
     }
     pub fn pen_curve(id: u64, start: Point, end: Point, style: GraphicStyle) -> Self {
         let mut graphic = Self::dragged(
@@ -445,7 +482,7 @@ impl Graphic {
         });
         path.reindex();
         let index = path.nodes.last().ok_or("Invalid path node")?.index;
-        path.store(self);
+        path.store(self)?;
         Ok(index)
     }
 }
