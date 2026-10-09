@@ -20,6 +20,14 @@ pub enum Error {
     Selection(&'static str),
     #[error("3D geometry does not support {0}")]
     Unsupported(&'static str),
+    #[error(
+        "3D geometry supports at most {limit} {kind} for this machine budget (requested {count}); larger structures remain editable"
+    )]
+    Capacity {
+        kind: &'static str,
+        count: usize,
+        limit: usize,
+    },
     #[error("Invalid 3D coordinates: {0}")]
     Coordinates(&'static str),
     #[error("3D geometry: {0}")]
@@ -134,10 +142,25 @@ impl Prepared {
     /// Select one full molecular component. An empty selection is accepted only
     /// when the drawing contains exactly one chemical component.
     pub fn new(source: &Document, selection: &[u64]) -> Result<Self, Error> {
+        Self::with_limits(source, selection, Limits::default())
+    }
+
+    /// Explicit budgets support reproducible checks and advanced callers.
+    pub fn with_limits(
+        source: &Document,
+        selection: &[u64],
+        limits: Limits,
+    ) -> Result<Self, Error> {
+        limits.validate()?;
+        let capacity = limits.capacity();
         source.validate().map_err(Error::Invalid)?;
         let selected = component(source, selection)?;
-        if selected.len() > reshiki_geometry::MAX_ATOMS {
-            return Err(Error::Unsupported("molecules larger than 512 atoms"));
+        if selected.len() > capacity.atoms {
+            return Err(Error::Capacity {
+                kind: "original atoms",
+                count: selected.len(),
+                limit: capacity.atoms,
+            });
         }
         if source
             .atoms
@@ -177,8 +200,12 @@ impl Prepared {
             ));
         }
         let molecule = molecular::prepare(&part)?;
-        if molecule.state.graph.bonds.len() > reshiki_geometry::MAX_BONDS {
-            return Err(Error::Unsupported("molecules larger than 2048 bonds"));
+        if molecule.state.graph.bonds.len() > capacity.bonds {
+            return Err(Error::Capacity {
+                kind: "bonds",
+                count: molecule.state.graph.bonds.len(),
+                limit: capacity.bonds,
+            });
         }
         for atom in &molecule.state.graph.atoms {
             if ![1, 5, 6, 7, 8, 9, 14, 15, 16, 17, 33, 34, 35, 53].contains(&atom.atomic_number) {

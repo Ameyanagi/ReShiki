@@ -21,6 +21,64 @@ fn conformer(prepared: &Prepared) -> Conformer {
     }
 }
 
+fn carbon_chain(atoms: usize) -> Document {
+    let mut doc = Document::default();
+    let ids: Vec<_> = (0..atoms)
+        .map(|n| doc.add_atom("C", Point::new(n as f32 * 42., 0.)))
+        .collect();
+    for edge in ids.windows(2) {
+        doc.add_bond(edge[0], edge[1], 1, "plain");
+    }
+    doc
+}
+
+#[test]
+fn machine_capacity_changes_admission_without_changing_the_document() {
+    use reshiki_process_heap::policy::{Capabilities, MIB};
+    let limits = |memory| {
+        let budget = Capabilities {
+            memory_headroom_bytes: memory,
+            lookup_operations_per_second: None,
+        }
+        .resolve();
+        Limits {
+            timeout: budget.geometry_timeout(),
+            heap_bytes: budget.heap_bytes(),
+        }
+    };
+    let low = limits(Some(256 * MIB as u64));
+    let fallback = limits(None);
+    let high = limits(Some(8 * 1024 * MIB as u64));
+    assert_eq!(low.capacity().atoms, 128);
+    assert_eq!(fallback.capacity().atoms, 512);
+    assert_eq!(high.capacity().atoms, 640);
+    for (limit, n, accepted) in [
+        (low, 128, true),
+        (low, 129, false),
+        (fallback, 511, true),
+        (fallback, 512, true),
+        (fallback, 513, false),
+        (high, 513, true),
+        (high, 640, true),
+        (high, 641, false),
+    ] {
+        let source = carbon_chain(n);
+        let original = source.clone();
+        let result = Prepared::with_limits(&source, &[], limit);
+        assert_eq!(result.is_ok(), accepted, "{n} atoms, {limit:?}");
+        if !accepted {
+            assert!(matches!(
+                result,
+                Err(Error::Capacity {
+                    kind: "original atoms",
+                    ..
+                })
+            ));
+        }
+        assert_eq!(source, original);
+    }
+}
+
 #[test]
 fn generation_offers_retained_depth_in_physical_units_without_mutating_the_source() {
     let mut source = ethanol();
@@ -184,6 +242,7 @@ fn energy_evaluation_applies_pin_coordinates_without_fixed_degrees_of_freedom() 
         let frame = wire::encode(
             &wire::Request {
                 heap_bytes: Limits::default().heap_bytes,
+                capacity: None,
                 operation: evaluate,
             },
             wire::MAX_REQUEST_BYTES,

@@ -17,13 +17,17 @@ pub struct Limits {
 }
 impl Default for Limits {
     fn default() -> Self {
+        let budget = reshiki_process_heap::policy::Capabilities::detect().resolve();
         Self {
-            timeout: Duration::from_secs(60),
-            heap_bytes: 256 * 1024 * 1024,
+            timeout: budget.geometry_timeout(),
+            heap_bytes: budget.heap_bytes(),
         }
     }
 }
 impl Limits {
+    pub fn capacity(self) -> reshiki_geometry::Capacity {
+        reshiki_geometry::Capacity::for_heap(self.heap_bytes)
+    }
     pub(super) fn validate(self) -> Result<(), Error> {
         if self.timeout.is_zero()
             || self.timeout > MAX_TIMEOUT
@@ -141,6 +145,10 @@ impl Client {
         previous: Option<&Conformer>,
     ) -> Result<Optimized, Error> {
         self.limits.validate()?;
+        let capacity = self.limits.capacity();
+        operation
+            .validate_capacity(capacity)
+            .map_err(Error::Invalid)?;
         let field = operation.field;
         let iterations = operation.max_iterations;
         let evaluating = matches!(operation.operation, reshiki_geometry::Operation::Evaluate);
@@ -159,6 +167,7 @@ impl Client {
         let request = wire::encode(
             &wire::Request {
                 heap_bytes: self.limits.heap_bytes,
+                capacity: Some(capacity),
                 operation,
             },
             wire::MAX_REQUEST_BYTES,
@@ -168,7 +177,35 @@ impl Client {
             Some(path) => path.clone(),
             None => std::env::current_exe()?,
         };
-        let bytes = exchange(executable, &request, self.limits.timeout).await?;
+        // Waiting for a shared memory reservation consumes this operation's
+        // deadline and remains cancellable with the async future.
+        let budget = reshiki_process_heap::policy::Capabilities::detect().resolve();
+        let reserved_bytes = self
+            .limits
+            .heap_bytes
+            .checked_add(32 * 1024 * 1024)
+            .ok_or_else(|| Error::Invalid("Geometry reservation size overflow".into()))?;
+        if reserved_bytes > budget.reservation_ceiling() {
+            return Err(Error::Invalid(
+                "Insufficient available memory for this geometry budget".into(),
+            ));
+        }
+        let deadline = tokio::time::Instant::now() + self.limits.timeout;
+        let _reservation = loop {
+            if let Some(reservation) = budget.try_reserve(reserved_bytes) {
+                break reservation;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Err(Error::Timeout);
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        };
+        let bytes = exchange(
+            executable,
+            &request,
+            deadline.saturating_duration_since(tokio::time::Instant::now()),
+        )
+        .await?;
         let response: wire::Response =
             wire::decode(&bytes, wire::MAX_RESPONSE_BYTES).map_err(Error::Protocol)?;
         if response.version != reshiki_geometry::RDKIT_VERSION {
@@ -197,6 +234,11 @@ impl Client {
             hydrogen_parents: response.hydrogen_parents,
         };
         conformer.validate(originals)?;
+        if conformer.positions.len() > capacity.coordinates {
+            return Err(Error::Coordinates(
+                "Conformer exceeds its machine-budget coordinate capacity",
+            ));
+        }
         for (index, [x, y, z]) in fixed {
             let actual = conformer
                 .positions
