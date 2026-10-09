@@ -776,26 +776,26 @@ fn watched_office_proxy_process_stays_alive_until_its_session_closes() {
         let mut dropped_commit_reply = false;
         let mut dropped_queries = 0;
         while !stopping.load(Ordering::Acquire) {
-            if let Ok((mut stream, peer)) = listener.accept(Duration::from_millis(100)) {
-                if let Ok(request) = protocol::read::<Request>(&mut stream) {
-                    let commit = matches!(request.command, Command::Commit { .. });
-                    let query = matches!(request.command, Command::Query { .. });
-                    let status = fences.dispatch(&serving_endpoint, &serving, request, peer);
-                    // A committed Open with a lost acknowledgement, followed
-                    // by transient IPC loss, is still a live editing session.
-                    if commit && !dropped_commit_reply {
-                        dropped_commit_reply = true;
-                        continue;
-                    }
-                    if query && dropped_queries < 3 {
-                        dropped_queries += 1;
-                        continue;
-                    }
-                    let _ = protocol::write(
-                        &mut stream,
-                        &Response::new(serving.generation, serving.process, status),
-                    );
+            if let Ok((mut stream, peer)) = listener.accept(Duration::from_millis(100))
+                && let Ok(request) = protocol::read::<Request>(&mut stream)
+            {
+                let commit = matches!(request.command, Command::Commit { .. });
+                let query = matches!(request.command, Command::Query { .. });
+                let status = fences.dispatch(&serving_endpoint, &serving, request, peer);
+                // A committed Open with a lost acknowledgement, followed
+                // by transient IPC loss, is still a live editing session.
+                if commit && !dropped_commit_reply {
+                    dropped_commit_reply = true;
+                    continue;
                 }
+                if query && dropped_queries < 3 {
+                    dropped_queries += 1;
+                    continue;
+                }
+                let _ = protocol::write(
+                    &mut stream,
+                    &Response::new(serving.generation, serving.process, status),
+                );
             }
         }
     });

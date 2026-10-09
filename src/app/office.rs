@@ -41,6 +41,7 @@ pub(crate) enum Phase {
 /// until this particular tab and its explicit file writes have finished.
 #[derive(Clone)]
 pub(crate) struct Lease {
+    #[cfg(any(windows, target_os = "linux", test))]
     pub(crate) token: [u8; 16],
     phase: Arc<AtomicU8>,
     alive: Arc<dyn Fn() -> bool + Send + Sync>,
@@ -55,6 +56,7 @@ impl std::fmt::Debug for Lease {
 }
 
 impl Lease {
+    #[cfg(any(windows, target_os = "linux", test))]
     pub(crate) fn new(token: [u8; 16], alive: impl Fn() -> bool + Send + Sync + 'static) -> Self {
         Self {
             token,
@@ -83,6 +85,7 @@ impl Lease {
         (self.alive)()
     }
 
+    #[cfg(any(windows, target_os = "linux"))]
     pub(crate) fn references(&self) -> usize {
         Arc::strong_count(&self.phase)
     }

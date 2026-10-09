@@ -33,7 +33,7 @@ fn two_office_tabs_keep_their_own_host_and_ordinary_duplicates_keep_binding() {
     let before = app.tab.doc.clone();
     let _ = app.update(Message::FilePrepared(Some((
         "a.rsk".into(),
-        Ok(files::Prepared::Native(Box::new(Document::default()))),
+        Ok(files::Prepared::Native(Box::default())),
     ))));
     assert_eq!(app.tab.doc, before);
     assert_eq!(
@@ -65,10 +65,7 @@ fn different_session_cannot_take_an_office_path_or_dirty_ordinary_tab() {
     };
     let _ = app.update(Message::OfficePrepared(
         binding,
-        Some((
-            "a.rsk".into(),
-            Ok(files::Prepared::Native(Box::new(Document::default()))),
-        )),
+        Some(("a.rsk".into(), Ok(files::Prepared::Native(Box::default())))),
     ));
     assert_eq!(rejected.phase(), Phase::Rejected);
     assert_eq!(original.phase(), Phase::Open);
@@ -78,7 +75,7 @@ fn different_session_cannot_take_an_office_path_or_dirty_ordinary_tab() {
     let (mut ordinary, _) = App::new();
     let _ = ordinary.update(Message::FilePrepared(Some((
         "dirty.rsk".into(),
-        Ok(files::Prepared::Native(Box::new(Document::default()))),
+        Ok(files::Prepared::Native(Box::default())),
     ))));
     ordinary.tab.doc.add_atom("N", Point::default());
     let before = ordinary.tab.doc.clone();
@@ -91,7 +88,7 @@ fn different_session_cannot_take_an_office_path_or_dirty_ordinary_tab() {
         },
         Some((
             "dirty.rsk".into(),
-            Ok(files::Prepared::Native(Box::new(Document::default()))),
+            Ok(files::Prepared::Native(Box::default())),
         )),
     ));
     assert_eq!(rejected.phase(), Phase::Rejected);
