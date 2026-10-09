@@ -1,6 +1,7 @@
 # Assistant image-to-structure benchmark
 
-Status: under review, PR pending; author @Ameyanagi, project creator and maintainer.
+Status: under review in [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281).
+Author: @Ameyanagi, project creator and maintainer.
 Addresses [issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) and is stacked
 on the guided setup change in [open PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
 The measured unassisted backend remains the unchanged `51fa0991` Nightly; merging

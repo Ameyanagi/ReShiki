@@ -21,7 +21,8 @@ project creator and maintainer; under review in
 
 Assistant image benchmark, original synthetic fixture cohort and independent
 reference-graph comparison: @Ameyanagi, project creator and maintainer; under
-review, PR pending. [Issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) ·
+review in [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281).
+[Issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) ·
 [Method and measured results](assistant-benchmark.md).
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.
