@@ -82,7 +82,7 @@ fn node_drags_transport_adjacent_controls_and_closed_seam_exactly_once() {
 }
 
 #[test]
-fn path_point_clicks_preserve_native_type_and_affine_frame() {
+fn path_noop_edits_preserve_native_type_and_affine_frame() {
     let mut graphic = Graphic::dragged(
         1,
         super::GraphicKind::Curve,
@@ -98,6 +98,8 @@ fn path_point_clicks_preserve_native_type_and_affine_frame() {
         assert_eq!(graphic, before);
     }
     graphic.edit_point(usize::MAX, Point::new(0., 0.));
+    assert_eq!(graphic, before);
+    graphic.set_path_segment_curved(0, true).unwrap();
     assert_eq!(graphic, before);
 }
 

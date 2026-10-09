@@ -346,13 +346,16 @@ impl Graphic {
             .segments
             .get_mut(node)
             .ok_or("The last open node has no following segment")?;
-        if curved && segment.controls.is_none() {
+        if curved == segment.controls.is_some() {
+            return path.index(node);
+        }
+        if curved {
             let bend = Point::new(-(b.y - a.y) * 0.25, (b.x - a.x) * 0.25);
             segment.controls = Some([
                 lerp(a, b, 1. / 3.).offset(bend.x, bend.y),
                 lerp(a, b, 2. / 3.).offset(bend.x, bend.y),
             ]);
-        } else if !curved {
+        } else {
             segment.controls = None;
         }
         path.reindex();
