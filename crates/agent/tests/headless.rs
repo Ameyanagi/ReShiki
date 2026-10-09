@@ -47,7 +47,7 @@ fn assert_envelope(tool: &str, result: &ToolResult) {
     assert!(value.is_object(), "{tool}");
     assert_eq!(
         value["versions"],
-        json!({"app": "9.8.7", "operation_api": 1, "engine_protocol": 1, "document": 19}),
+        json!({"app": "9.8.7", "operation_api": 1, "engine_protocol": 1, "document": 20}),
         "{tool}"
     );
 }
