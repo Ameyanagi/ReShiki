@@ -296,6 +296,65 @@ async fn cancelling_an_unknown_or_completed_request_is_a_no_op() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn admission_keeps_queue_capacity_while_a_permit_holder_leaves_waiting() {
+    let exec = executor(1, 1);
+    let acquired = Gate::new();
+    exec.set_hooks(Hooks {
+        acquired: Some(Arc::new({
+            let (started, release) = (acquired.started.clone(), acquired.release.clone());
+            move || {
+                started.wait();
+                release.wait();
+            }
+        })),
+        ..Hooks::default()
+    });
+    let first = spawn_op(&exec, 1, |_| async { Ok(1) });
+    wait(&acquired.started).await;
+
+    // The first call owns the sole permit but is still counted in waiting.
+    // Poll exactly once: admission must retain the second capacity slot,
+    // then wait for that permit instead of reporting Busy.
+    let mut second = std::pin::pin!(exec.run(who(), id(2), None, |_| async { Ok(2) }));
+    let second_poll = poll_fn(|cx| Poll::Ready(second.as_mut().poll(cx))).await;
+    let second_waited = second_poll.is_pending();
+    let occupied = (entries(&exec), live(&exec), exec.queued(), permits(&exec));
+    let third = bounded(exec.run(who(), id(3), None, |_| async { Ok(3) })).await;
+    let third_admitted = admitted(&exec, 3);
+
+    // Release the parked worker before any assertions, including on the old
+    // implementation where the second poll completes with Busy.
+    exec.set_hooks(Hooks::default());
+    wait(&acquired.release).await;
+    let first_result = bounded(first).await.unwrap();
+    let second_result = match second_poll {
+        Poll::Pending => bounded(second).await,
+        Poll::Ready(result) => result,
+    };
+
+    assert_idle(&exec);
+    assert!(
+        second_waited,
+        "the second call must wait, not return {second_result:?}; occupied={occupied:?}"
+    );
+    assert_eq!(occupied, (2, 2, 2, 0));
+    assert_eq!(third, Err(busy("server busy; retry later")));
+    assert!(!third_admitted);
+    assert_eq!(first_result, Ok(1));
+    assert_eq!(second_result, Ok(2));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_zero_queue_still_admits_a_call_with_an_available_permit() {
+    let exec = executor(1, 0);
+    assert_eq!(
+        exec.run(who(), id(1), None, |_| async { Ok(7) }).await,
+        Ok(7)
+    );
+    assert_idle(&exec);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_full_queue_is_busy_and_leaves_no_registry_entry() {
     let exec = executor(1, 1);
     let gate = Gate::new();
