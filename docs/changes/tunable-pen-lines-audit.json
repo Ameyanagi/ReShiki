@@ -14,9 +14,7 @@
     "codesign_stdout": "",
     "compiled_source_commit": "2b3fdb4043fb7f4315f5c116a93194652ca09d17",
     "current_branch_commit": "e10c876faf1c24bc807fbd4caa8d2117286e8ea5",
-    "current_changed_compiled_inputs": [
-      "reference/native_aromatic.rs"
-    ],
+    "current_changed_compiled_inputs": ["reference/native_aromatic.rs"],
     "current_changed_files": [
       "reference/native_aromatic.md",
       "reference/native_aromatic.rs",
@@ -5182,63 +5180,28 @@
             "after": 196.48618,
             "before": 183.0,
             "difference": 13.48617999999999,
-            "path": [
-              "graphics",
-              0,
-              "path",
-              3,
-              "points",
-              1,
-              "x"
-            ]
+            "path": ["graphics", 0, "path", 3, "points", 1, "x"]
           },
           {
             "after": -109.486176,
             "before": -96.0,
             "difference": -13.486176,
-            "path": [
-              "graphics",
-              0,
-              "path",
-              3,
-              "points",
-              1,
-              "y"
-            ]
+            "path": ["graphics", 0, "path", 3, "points", 1, "y"]
           },
           {
             "after": 196.48618,
             "before": 183.0,
             "difference": 13.48617999999999,
-            "path": [
-              "graphics",
-              0,
-              "path",
-              3,
-              "points",
-              2,
-              "x"
-            ]
+            "path": ["graphics", 0, "path", 3, "points", 2, "x"]
           },
           {
             "after": -9.486179,
             "before": 4.0,
             "difference": -13.486179,
-            "path": [
-              "graphics",
-              0,
-              "path",
-              3,
-              "points",
-              2,
-              "y"
-            ]
+            "path": ["graphics", 0, "path", 3, "points", 2, "y"]
           }
         ],
-        "world_displacement_bounds_from_rounded_zoom": [
-          13.468013468013467,
-          13.559322033898304
-        ]
+        "world_displacement_bounds_from_rounded_zoom": [13.468013468013467, 13.559322033898304]
       },
       {
         "label": "tangent",
@@ -5248,43 +5211,19 @@
             "after": 196.48618,
             "before": 183.0,
             "difference": 13.48617999999999,
-            "path": [
-              "graphics",
-              0,
-              "path",
-              3,
-              "points",
-              1,
-              "x"
-            ]
+            "path": ["graphics", 0, "path", 3, "points", 1, "x"]
           },
           {
             "after": -109.486176,
             "before": -96.0,
             "difference": -13.486176,
-            "path": [
-              "graphics",
-              0,
-              "path",
-              3,
-              "points",
-              1,
-              "y"
-            ]
+            "path": ["graphics", 0, "path", 3, "points", 1, "y"]
           }
         ],
-        "world_displacement_bounds_from_rounded_zoom": [
-          13.468013468013467,
-          13.559322033898304
-        ]
+        "world_displacement_bounds_from_rounded_zoom": [13.468013468013467, 13.559322033898304]
       }
     ],
-    "original_commands": [
-      "move",
-      "cubic",
-      "line",
-      "cubic"
-    ],
+    "original_commands": ["move", "cubic", "line", "cubic"],
     "original_nodes": 4,
     "original_sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
     "path_id": 1,
@@ -5305,31 +5244,16 @@
     "actual_zoom_interval": "[147.5%,148.5%)",
     "control_endpoint_world_separation": 100,
     "exact_float_zoom_available": false,
-    "incoming_control_rounded_screen_position_before": [
-      1640,
-      843
-    ],
-    "node_drag_screen_press": [
-      1643,
-      1137
-    ],
-    "node_drag_screen_release": [
-      1683,
-      1097
-    ],
-    "node_rounded_screen_position_before": [
-      1640,
-      1140
-    ],
+    "incoming_control_rounded_screen_position_before": [1640, 843],
+    "node_drag_screen_press": [1643, 1137],
+    "node_drag_screen_release": [1683, 1097],
+    "node_rounded_screen_position_before": [1640, 1140],
     "note": "No exact zoom or narrow zoom interval inferred from output is used as an oracle.",
     "observed_rounded_zoom_percent": 148,
     "observed_screen_separation_pixels": 297,
     "pixel_measurement_uncertainty": 1,
-    "pointer_displacement_pixels": [
-      40,
-      -40
-    ],
-    "scalar_rounding_tolerance": 5e-06
+    "pointer_displacement_pixels": [40, -40],
+    "scalar_rounding_tolerance": 5e-6
   },
   "input_files": {
     "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Pen Continue Verified.app/Contents/Info.plist": {
@@ -5923,10 +5847,7 @@
       "mime": "image/jpeg",
       "modified_or_reencoded_by_audit": false,
       "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/evidence/after/pen-continue-explicit-edit-points-final-retained.jpg",
-      "pixel_dimensions": [
-        2560,
-        1704
-      ],
+      "pixel_dimensions": [2560, 1704],
       "private_retained_tool_trial": false,
       "sha256": "6f8d167c9a4293505d8c8f87de30c048ed9eb08f6f1b64eb7e07ebe5ba7c0160",
       "signed_binary_sha256_ROOT": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",
@@ -5937,10 +5858,7 @@
       "mime": "image/jpeg",
       "modified_or_reencoded_by_audit": false,
       "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/evidence/after/pen-continue-explicit-select-final-appended.jpg",
-      "pixel_dimensions": [
-        2560,
-        1704
-      ],
+      "pixel_dimensions": [2560, 1704],
       "private_retained_tool_trial": false,
       "sha256": "34a33c2174bab84020ab08efad1d3b5fc682a4fd77d2b730a831ca221cc718e6",
       "signed_binary_sha256_ROOT": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",
@@ -5951,10 +5869,7 @@
       "mime": "image/jpeg",
       "modified_or_reencoded_by_audit": false,
       "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/evidence/after/pen-continue-explicit-select-final-retained.jpg",
-      "pixel_dimensions": [
-        2560,
-        1704
-      ],
+      "pixel_dimensions": [2560, 1704],
       "private_retained_tool_trial": false,
       "sha256": "053f1b336ff42621ef6fc9f968fe52bdd2bdab9226d2c4907cf00d5ce96198d4",
       "signed_binary_sha256_ROOT": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",
@@ -5965,10 +5880,7 @@
       "mime": "image/jpeg",
       "modified_or_reencoded_by_audit": false,
       "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/evidence/after/pen-continue-select-final-retained.jpg",
-      "pixel_dimensions": [
-        2560,
-        1704
-      ],
+      "pixel_dimensions": [2560, 1704],
       "private_retained_tool_trial": true,
       "sha256": "65494777956155023fc224195c64e48d1454fcdd6a2dac435c4f457c90b9cda9",
       "signed_binary_sha256_ROOT": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",
@@ -5979,10 +5891,7 @@
       "mime": "image/jpeg",
       "modified_or_reencoded_by_audit": false,
       "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/evidence/after/pen-final-continued-clean.jpg",
-      "pixel_dimensions": [
-        2560,
-        1704
-      ],
+      "pixel_dimensions": [2560, 1704],
       "private_retained_tool_trial": false,
       "sha256": "2218e66f2efb32e9cb56e1be70dba016dd3ea8c1f362b4612cd11e557d14b1ce",
       "signed_binary_sha256_ROOT": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",
@@ -5993,10 +5902,7 @@
       "mime": "image/jpeg",
       "modified_or_reencoded_by_audit": false,
       "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/evidence/after/pen-final-five-nodes-fresh-reopened-controls.jpg",
-      "pixel_dimensions": [
-        2560,
-        1704
-      ],
+      "pixel_dimensions": [2560, 1704],
       "private_retained_tool_trial": false,
       "sha256": "d474ea1f2a7f476151b4c033052a0331c53678e53c2d6303def1f4d40d9ad7b7",
       "signed_binary_sha256_ROOT": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",
@@ -6007,10 +5913,7 @@
       "mime": "image/jpeg",
       "modified_or_reencoded_by_audit": false,
       "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/evidence/after/pen-node-click-final-no-edit.jpg",
-      "pixel_dimensions": [
-        2560,
-        1704
-      ],
+      "pixel_dimensions": [2560, 1704],
       "private_retained_tool_trial": false,
       "sha256": "713935e506cdfde507825f16e91a1e73756e69ea1b22dec95721f8ca52cc7e57",
       "signed_binary_sha256_ROOT": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",
@@ -6021,10 +5924,7 @@
       "mime": "image/jpeg",
       "modified_or_reencoded_by_audit": false,
       "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/evidence/after/pen-node-offset-drag-final.jpg",
-      "pixel_dimensions": [
-        2560,
-        1704
-      ],
+      "pixel_dimensions": [2560, 1704],
       "private_retained_tool_trial": false,
       "sha256": "8fc2abccdd1dbae91e1160f919ec4c669f88c6aa4866f860fb2377ae93f56c43",
       "signed_binary_sha256_ROOT": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",
@@ -6035,10 +5935,7 @@
       "mime": "image/jpeg",
       "modified_or_reencoded_by_audit": false,
       "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/evidence/after/pen-tangent-offset-drag-final.jpg",
-      "pixel_dimensions": [
-        2560,
-        1704
-      ],
+      "pixel_dimensions": [2560, 1704],
       "private_retained_tool_trial": false,
       "sha256": "79478b0314b0279464644b5c2436a5522baa528a2e4490ac82bbbdada7ca1397",
       "signed_binary_sha256_ROOT": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",

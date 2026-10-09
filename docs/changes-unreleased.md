@@ -10,6 +10,6 @@ See [ReShiki 0.11.0](changes-0.11.md) for the latest release notes.
 
 ![Finished mechanism arrow after independent departure and arrival edits](images/mechanism-curvature/after-output.jpg)
 
-- **Connected pen paths (under review):** draw straight and cubic segments in one object, adjust nodes and independent tangents, and continue from Select or Edit Points without accidental changes. [Visual review](changes/tunable-pen-lines.md) · [Issue #67](https://github.com/Ameyanagi/ReShiki/issues/67) · @Ameyanagi. Continuous freehand tracing remains unsupported.
+- **Connected pen paths (under review):** draw straight and cubic segments in one object, adjust nodes and independent tangents, and continue from Select or Edit Points without accidental changes. [Visual review](changes/tunable-pen-lines.md) · [PR #288](https://github.com/Ameyanagi/ReShiki/pull/288) · [Issue #67](https://github.com/Ameyanagi/ReShiki/issues/67) · @Ameyanagi. Continuous freehand tracing remains unsupported.
 
 ![Finished connected five-node pen path with straight and cubic segments](images/tunable-pen-lines/pen-final-continued-clean.jpg)

@@ -1,10 +1,10 @@
 # Connected pen paths and direct node editing
 
-Under review for [issue #67](https://github.com/Ameyanagi/ReShiki/issues/67),
+Under review in [PR #288](https://github.com/Ameyanagi/ReShiki/pull/288) for [issue #67](https://github.com/Ameyanagi/ReShiki/issues/67),
 contributed by @Ameyanagi. Stacked on
 [mechanism-arrow curvature, PR #276](https://github.com/Ameyanagi/ReShiki/pull/276),
-branch `feat/mechanism-curve-controls`, base `5e68c9b4`. The Pen PR link will be
-added when opened. This work remains unreleased until review, merge and release.
+branch `feat/mechanism-curve-controls`, base `5e68c9b4`. This work remains
+unreleased until review, merge and release.
 
 Draw one connected path with straight and cubic segments. Drag the first
 segment, click for a line, or drag a new node to set a curve. **Finish** ends
@@ -26,11 +26,11 @@ These are untouched 2560 × 1704 JPEGs captured from native ReShiki on macOS
 cropped, resized, recompressed or retouched for publication. Selection controls
 are shown where they are the subject; the finished view above is deselected.
 
-| Problem | Before | After |
-| --- | --- | --- |
-| An interior node leaves its adjacent tangent controls behind, 127% | ![Base point editor moves only the interior node](../images/tunable-pen-lines/pen-interior-node-controls-left-behind.jpg) | ![Pen editor moves the same node together with its two adjacent square controls](../images/tunable-pen-lines/pen-interior-node-controls-follow.jpg) |
-| Continue clears the selected path, 148% | ![Earlier Pen implementation loses its selected path after Continue](../images/tunable-pen-lines/pen-continue-selection-lost-matched-148-before.jpg) | ![Final Continue retains the same four-node path and its controls](../images/tunable-pen-lines/pen-continue-explicit-select-final-retained.jpg) |
-| A stationary near-node click creates an edit, 148% | ![Earlier Pen implementation enables Undo and marks the drawing changed after a stationary click](../images/tunable-pen-lines/pen-node-click-creates-edit-before-fix.jpg) | ![Final stationary node click selects Node 4 while Undo remains disabled](../images/tunable-pen-lines/pen-node-click-final-no-edit.jpg) |
+| Problem                                                            | Before                                                                                                                                                                    | After                                                                                                                                               |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An interior node leaves its adjacent tangent controls behind, 127% | ![Base point editor moves only the interior node](../images/tunable-pen-lines/pen-interior-node-controls-left-behind.jpg)                                                 | ![Pen editor moves the same node together with its two adjacent square controls](../images/tunable-pen-lines/pen-interior-node-controls-follow.jpg) |
+| Continue clears the selected path, 148%                            | ![Earlier Pen implementation loses its selected path after Continue](../images/tunable-pen-lines/pen-continue-selection-lost-matched-148-before.jpg)                      | ![Final Continue retains the same four-node path and its controls](../images/tunable-pen-lines/pen-continue-explicit-select-final-retained.jpg)     |
+| A stationary near-node click creates an edit, 148%                 | ![Earlier Pen implementation enables Undo and marks the drawing changed after a stationary click](../images/tunable-pen-lines/pen-node-click-creates-edit-before-fix.jpg) | ![Final stationary node click selects Node 4 while Undo remains disabled](../images/tunable-pen-lines/pen-node-click-final-no-edit.jpg)             |
 
 The node-transport comparison uses the same
 [original two-path fixture](../../tests/fixtures/tunable-pen-lines-67/before.rsk)
@@ -76,14 +76,14 @@ Those historical actions are not relabeled as final-build executions.
 
 Final `b630b1ff…` desktop checks use that same original four-node input at 148%:
 
-| Action | Native result |
-| --- | --- |
-| Edit Points, click Node 4 at (1640,1140), release without moving | Selects Node 4, no new history step; saved bytes equal the original. |
-| Click its square tangent control without moving | Selects the control, no additional history; saved bytes equal the original. |
-| Node drag by screen displacement (+40,−40) | Only Node 4 and its incoming control translate by approximately (+13.48618,−13.48618) world units. |
-| Square tangent drag by screen displacement (+40,−40) | Only that control moves; all nodes and the other controls stay fixed. |
-| Explicitly choose Select, select the path, Continue, then click (1800,1140) | Adds one line to (236.90263,3.8988686), keeping the original graphic id 1 and all four earlier nodes/controls. |
-| Explicitly choose Edit Points, select Node 4 without moving it, Continue, then click (1780,1220) | Adds one line to (230.15955,30.871231), keeping the same path and its original geometry. |
+| Action                                                                                           | Native result                                                                                                  |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Edit Points, click Node 4 at (1640,1140), release without moving                                 | Selects Node 4, no new history step; saved bytes equal the original.                                           |
+| Click its square tangent control without moving                                                  | Selects the control, no additional history; saved bytes equal the original.                                    |
+| Node drag by screen displacement (+40,−40)                                                       | Only Node 4 and its incoming control translate by approximately (+13.48618,−13.48618) world units.             |
+| Square tangent drag by screen displacement (+40,−40)                                             | Only that control moves; all nodes and the other controls stay fixed.                                          |
+| Explicitly choose Select, select the path, Continue, then click (1800,1140)                      | Adds one line to (236.90263,3.8988686), keeping the original graphic id 1 and all four earlier nodes/controls. |
+| Explicitly choose Edit Points, select Node 4 without moving it, Continue, then click (1780,1220) | Adds one line to (230.15955,30.871231), keeping the same path and its original geometry.                       |
 
 Every drag or append above has actual Save As, one Undo and one Redo readbacks.
 Undo is raw-byte equal to the original four-node input; Redo is raw-byte equal
@@ -116,9 +116,13 @@ compares every serialized field, not just node counts or screenshots. Chemical
 graph preservation is additionally covered by app tests with an unrelated
 C–O graph. The compact [evidence manifest](tunable-pen-lines-evidence.json)
 records public fixture and image hashes, audit results and build provenance.
-The [exact independent receipt](tunable-pen-lines-audit.json) records 5,094 passing
-assertions; the [archival checker](tunable-pen-lines-audit.py) is retained byte for
-byte with its original scratch-environment paths. It is an audit record, not a
+The [independent receipt](tunable-pen-lines-audit.json) records 5,094 passing
+assertions. Its public JSON is formatting-only relative to the original receipt
+at `22eea450`: every parsed value and assertion remains unchanged. The formatted
+public receipt has SHA256 `694e9495bb66e4a11cd26050c295ad878d4e00f982a4bed1bc0341ba55b46fd2`; the retained original receipt has
+`1d4f4d3a20aceb882bc5fb9369be58419f83abff8b79b525ca6562958b500d1a`. The compact manifest distinguishes these hashes.
+The [archival checker](tunable-pen-lines-audit.py) remains byte for byte unchanged
+with its original scratch-environment paths. It is an audit record, not a
 portable checkout/CI command. Its excluded-trial metadata does not turn the
 private exploratory files into published evidence.
 
@@ -168,8 +172,7 @@ of that guard or native Windows/Linux validation.
 
 ## Scope and reuse
 
-Pen reuses existing native Path commands; the inherited native version remains
-20. One continuous subpath supports authoring and node operations. Imported
+Pen reuses existing native Path commands; the inherited native version remains 20. One continuous subpath supports authoring and node operations. Imported
 compound paths retain generic point editing. Continuous freehand tracing is
 not implemented. Ordinary circular/elliptical arc presets and endpoint/sweep
 controls remain available. Supported editable CDXML/CDX retains path geometry;
