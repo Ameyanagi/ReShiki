@@ -274,3 +274,44 @@ fn figure_budgets_step_down_the_resolution_ladder_to_72_dpi() {
     // Vector formats have no pixel budget.
     assert!(figure_with_budget(&doc, "svg", 1).is_ok());
 }
+
+#[test]
+fn mechanism_attachment_92_figures_retain_resolved_curve_and_report_link_loss() {
+    use crate::{
+        arrow_anchors::{self, Pick},
+        arrows::{ArrowStyle, Preset},
+        document::Point,
+    };
+    let mut d = Document::from_native_file(include_bytes!(
+        "../../../../tests/fixtures/mechanism-attachments-92/before.rsk"
+    ))
+    .unwrap();
+    let source = arrow_anchors::pick(&d, Point::new(0., -29.166668), 2.).unwrap();
+    arrow_anchors::create(
+        &mut d,
+        &source,
+        &Pick::Atom(1),
+        Preset::Curved,
+        ArrowStyle::preset(Preset::Curved),
+    )
+    .unwrap();
+    let mut free = d.clone();
+    for a in &mut free.arrows {
+        a.start_anchor = None;
+        a.end_anchor = None;
+    }
+    for format in ["svg", "png", "pdf"] {
+        let attached = figure(&d, format).unwrap();
+        let detached = figure(&free, format).unwrap();
+        assert_eq!(attached.bytes, detached.bytes, "{format} resolved geometry");
+        assert!(
+            attached
+                .detail
+                .unwrap()
+                .contains(arrow_anchors::EXPORT_NOTICE)
+        );
+        assert!(!detached.detail.unwrap_or_default().contains("attachment"));
+    }
+    let (_, notices) = crate::exchange::drawing::write_clipboard(&d).unwrap();
+    assert!(notices.iter().any(|n| n == arrow_anchors::EXPORT_NOTICE));
+}

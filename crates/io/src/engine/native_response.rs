@@ -217,7 +217,11 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
                 analysis: None,
                 output: Some(output),
                 engine_version: chemistry::RDKIT_VERSION.into(),
-                warnings: vec!["Drawing exported; chemical assignments remain unvalidated.".into()],
+                warnings: std::iter::once(
+                    "Drawing exported; chemical assignments remain unvalidated.".into(),
+                )
+                .chain(crate::arrow_anchors::export_notice(document))
+                .collect(),
             })
         })
         .await?;
@@ -417,6 +421,11 @@ fn finish(
         let document = response.document.as_ref().ok_or(Error::MissingDocument)?;
         if !draft.figure_only && !document.reactions.is_empty() {
             response.warnings.push("This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme.".into());
+        }
+        if matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
+            && let Some(notice) = crate::arrow_anchors::export_notice(document)
+        {
+            response.warnings.push(notice);
         }
         let format = request.format.as_deref();
         if document.bonds.iter().any(|bond| match format {

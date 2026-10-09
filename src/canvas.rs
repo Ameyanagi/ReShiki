@@ -128,6 +128,8 @@ pub enum Edit {
     AtomIndicator(reshiki::atom_labels::Owner, World),
     ArrowHandle(u64, usize, World),
     ArrowClick(u64),
+    ArrowTarget(World, bool),
+    CancelArrowSource,
     Select(Vec<u64>),
     /// Preserve the exact mouse position for a keyboard hotspot handoff.
     SelectAt(Vec<u64>, World),
@@ -336,6 +338,8 @@ pub struct MoleculeCanvas<'a> {
     pub template: Option<(&'a reshiki::templates::Template, reshiki::templates::Anchor)>,
     pub arrow_preset: reshiki::arrows::Preset,
     pub arrow_style: &'a reshiki::arrows::ArrowStyle,
+    pub arrow_source: Option<&'a reshiki::arrow_anchors::Pick>,
+    pub attach_arrow_targets: bool,
     pub orbital_phase: reshiki::scientific::Phase,
     pub phase_flipped: bool,
     pub attach_symbols: bool,

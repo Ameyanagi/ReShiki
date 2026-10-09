@@ -42,7 +42,9 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
             perspective += 1;
         }
     }
-    let mut notices = Vec::new();
+    let mut notices: Vec<_> = crate::arrow_anchors::export_notice(source)
+        .into_iter()
+        .collect();
     if charges != 0 {
         notices.push(format!("Editable CDX copy shows {charges} hidden charge label(s); chemical charges are unchanged"));
     }

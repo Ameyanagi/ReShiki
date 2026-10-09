@@ -247,6 +247,8 @@ fn reaction_copy(
     let arrow = doc.next_id();
     let y = (lo.y + hi.y) / 2.;
     doc.arrows.push(Arrow {
+        start_anchor: None,
+        end_anchor: None,
         id: arrow,
         start: Point::new(hi.x + gap, y),
         end: Point::new(hi.x + gap + arrow_length, y),

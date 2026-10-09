@@ -817,3 +817,53 @@ async fn changed_popovers_keep_the_keyboard_opener_focused_after_closing() {
         }
     }
 }
+
+#[tokio::test]
+#[ignore = "Opt-in real mechanism attachment native button metadata/action regression"]
+async fn mechanism_attachment_92_native_detach_buttons_preserve_curve_and_one_undo() {
+    use crate::app::arrows::Action;
+    use reshiki::{arrows::Preset, document::Document};
+    let size = Size::new(1280., 820.);
+    let mut ui = Ui::new(size).await;
+    for (id, label, start) in [
+        ("arrow.detach-start", "Detach arrow start", true),
+        ("arrow.detach-end", "Detach arrow end", false),
+    ] {
+        ui.cache = Cache::new();
+        let (mut app, _) = App::new();
+        app.viewport = size;
+        app.tab.doc = Document::from_native_file(include_bytes!(
+            "../../../tests/fixtures/mechanism-attachments-92/before.rsk"
+        ))
+        .unwrap();
+        app.tab.saved = app.tab.doc.clone();
+        let _ = app.update(Message::ArrowStyle(Preset::Curved));
+        app.edit(Edit::ArrowTarget(Point::new(0., -29.166668), false));
+        app.edit(Edit::ArrowTarget(Point::new(-36.373, -21.), false));
+        let before = app.tab.doc.clone();
+        let snapshot = ui.snapshot(&app);
+        let button = snapshot.nodes.iter().find(|n| n.id == id).expect(id);
+        assert_eq!(button.name, label);
+        assert_eq!(button.role, Role::Button);
+        assert!(button.enabled);
+        let operation::Outcome::Some(message) = ui.activate(&app, id) else {
+            panic!("native activation {id}")
+        };
+        assert!(matches!(
+            (&message, start),
+            (Message::ArrowAction(Action::DetachStart), true)
+                | (Message::ArrowAction(Action::DetachEnd), false)
+        ));
+        let _ = app.update(message);
+        let arrow = &app.tab.doc.arrows[0];
+        assert_eq!(arrow.cubic, before.arrows[0].cubic);
+        assert_eq!(
+            (arrow.start, arrow.end),
+            (before.arrows[0].start, before.arrows[0].end)
+        );
+        assert_eq!(arrow.start_anchor.is_none(), start);
+        assert_eq!(arrow.end_anchor.is_none(), !start);
+        ui.undo(&mut app);
+        assert_eq!(app.tab.doc, before);
+    }
+}

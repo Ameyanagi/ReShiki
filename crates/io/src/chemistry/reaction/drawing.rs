@@ -255,6 +255,8 @@ impl Imported {
         }
         reaction.arrow = builder.id()?;
         let arrow = Arrow {
+            start_anchor: None,
+            end_anchor: None,
             id: reaction.arrow,
             start: Point::new(x as f32, 0.),
             end: Point::new((x + width) as f32, 0.),

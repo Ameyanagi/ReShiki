@@ -1,0 +1,21 @@
+{
+  "time_utc": "2026-10-09T12:49:02.659442+00:00",
+  "tested_production_head": "466c7a1a8eb697af2b1b61fcca59668aa653787f",
+  "merged_curves_head": "cd564d1a31ecb52a2ac2b9bd143bcd645422f1d3",
+  "merged_head": "a7d32eb8176e5540a0ed60b57a01812a93c38ab0",
+  "own_rust_cargo_source_count": 1067,
+  "file_names_and_content_all_identical_to_tested_source": true,
+  "source_sha256": "e73346375c7478d5f4f77473c0b2033506d9167f16799c732240421f9c63b092",
+  "cargo_lock_unchanged": true,
+  "native21_capability_files_identical_to_tested_head": [
+    "crates/agent/tests/headless.rs",
+    "crates/mcp/tests/transcripts/tools-fake-legacy.jsonl",
+    "crates/mcp/tests/transcripts/tools-fake-modern.jsonl",
+    "tests/fixtures/mcp/stdio-legacy.jsonl",
+    "tests/fixtures/mcp/stdio-modern.jsonl",
+    "tests/fixtures/mcp/tools-legacy.jsonl",
+    "tests/fixtures/mcp/tools-modern.jsonl"
+  ],
+  "signed_exe_sha256": "31a3428de420b01655939a646932c437aa24da9a912147733b8ea8076753d352",
+  "scope": "Source-only merge; no Cargo, GUI, push or publication"
+}

@@ -80,7 +80,11 @@ impl App {
             Ok(response) => response,
         };
         if let Job::Export(format) = kind {
-            return export_file(response.output.unwrap_or_default(), format);
+            return export_file(
+                response.output.unwrap_or_default(),
+                format,
+                response.warnings,
+            );
         }
         if self.tab.revision != revision {
             self.status =

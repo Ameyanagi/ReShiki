@@ -15,4 +15,6 @@ Windows SignPath signing and internal test-signed nightly integration: @Ameyanag
 
 Independent mechanism-arrow curvature, under review: @Ameyanagi in [PR #276](https://github.com/Ameyanagi/ReShiki/pull/276) for [issue #91](https://github.com/Ameyanagi/ReShiki/issues/91), with [matched desktop evidence](changes/mechanism-curvature.md).
 
+Optional mechanism-arrow target attachments, under review: @Ameyanagi for [issue #92](https://github.com/Ameyanagi/ReShiki/issues/92), with [matched desktop evidence and native readbacks](changes/mechanism-attachments.md). The draft PR link will be added when opened.
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

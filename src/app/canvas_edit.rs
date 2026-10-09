@@ -8,7 +8,21 @@ mod placement;
 
 impl App {
     pub(super) fn edit(&mut self, edit: Edit) {
+        match edit {
+            Edit::ArrowTarget(p, bypass) => {
+                self.arrow_target_click(p, bypass);
+                return;
+            }
+            Edit::CancelArrowSource => {
+                self.error = false;
+                self.tab.arrow_source = None;
+                self.status = "Arrow source canceled".into();
+                return;
+            }
+            _ => {}
+        }
         if let Edit::ContextMenu { position, selected } = edit {
+            self.tab.arrow_source = None;
             if self.tab.cleanup.is_none() {
                 self.tab.selected = selected;
                 self.tool = Tool::Select;
@@ -70,8 +84,11 @@ impl App {
             return;
         }
         let before = self.tab.doc.clone();
+        if matches!(edit, Edit::Bond(..)) {
+            self.tab.arrow_source = None;
+        }
         match edit {
-            Edit::ContextMenu { .. } => return,
+            Edit::ContextMenu { .. } | Edit::ArrowTarget(..) | Edit::CancelArrowSource => return,
             Edit::Hover(_)
             | Edit::RelaxDragStart { .. }
             | Edit::RelaxDragTarget { .. }
@@ -209,7 +226,7 @@ impl App {
         }
         self.changed(before);
     }
-    fn place_arrow(&mut self, start: Point, end: Point) {
+    pub(super) fn place_arrow(&mut self, start: Point, end: Point) {
         let id = self.tab.doc.next_id();
         self.tab.doc.arrows.push(Arrow::new(
             id,

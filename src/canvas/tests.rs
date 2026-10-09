@@ -725,6 +725,8 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -1408,6 +1410,8 @@ fn freeform_selection_tracks_events_adds_subtracts_and_cancels() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -1525,6 +1529,8 @@ fn group_clicks_move_all_members_and_alt_selects_a_member() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -1656,6 +1662,8 @@ fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -1768,6 +1776,8 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -1880,6 +1890,8 @@ fn template_drag_uses_the_target_bond_and_can_be_cancelled() {
         )),
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -2023,6 +2035,8 @@ fn selection_handles_resize_and_rotate_without_moving_or_merging_atoms() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -2126,6 +2140,8 @@ fn bond_midpoints_select_and_drag_both_atoms_without_losing_atom_targets() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -2190,6 +2206,8 @@ fn keyboard_click_preserves_world_point_and_stationary_screen_motion_does_not_ha
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -2271,6 +2289,8 @@ fn command_drag_duplicates_and_shift_drag_locks_to_one_axis() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -2413,6 +2433,8 @@ fn ring_drag_snaps_at_release_or_keeps_its_initial_attachment() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -2453,6 +2475,8 @@ fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -2515,6 +2539,8 @@ fn short_endpoint_drag_grows_instead_of_snapping_to_its_source() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -2591,6 +2617,8 @@ fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
         template: None,
         arrow_preset: Default::default(),
         arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+        arrow_source: None,
+        attach_arrow_targets: true,
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
@@ -2855,4 +2883,86 @@ fn large_grids_bound_dot_count_without_moving_the_world_origin() {
             }
         }
     }
+}
+
+#[test]
+fn mechanism_attachment_92_pointer_click_bypass_drag_and_escape_dispatch() {
+    use reshiki::arrow_anchors::Pick;
+    let mut doc = Document::default();
+    let atom = doc.add_atom("O", World::default());
+    let source = Pick::Atom(atom);
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Arrow;
+    canvas.arrow_preset = reshiki::arrows::Preset::Curved;
+    let point = Point::new(200., 150.);
+    assert!(matches!(
+        pointer_gesture(&canvas, point, point),
+        Edit::ArrowTarget(_, false)
+    ));
+    assert!(matches!(
+        pointer_gesture_with(&canvas, point, point, iced::keyboard::Modifiers::ALT),
+        Edit::ArrowTarget(_, true)
+    ));
+    assert!(matches!(
+        pointer_gesture(&canvas, point, Point::new(260., 160.)),
+        Edit::Bond(_, _, None, None)
+    ));
+    canvas.attach_arrow_targets = false;
+    assert!(matches!(
+        pointer_gesture(&canvas, point, point),
+        Edit::Click(_)
+    ));
+    canvas.attach_arrow_targets = true;
+    canvas.arrow_source = Some(&source);
+    let mut state = State::default();
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let event = Event::Keyboard(iced::keyboard::Event::KeyPressed {
+        key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+        modified_key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+        physical_key: iced::keyboard::key::Physical::Code(iced::keyboard::key::Code::Escape),
+        location: iced::keyboard::Location::Standard,
+        modifiers: Default::default(),
+        text: None,
+        repeat: false,
+    });
+    assert!(matches!(
+        canvas
+            .update(&mut state, &event, bounds, mouse::Cursor::Available(point))
+            .unwrap()
+            .into_inner()
+            .0,
+        Some(Edit::CancelArrowSource)
+    ));
+}
+
+#[test]
+fn mechanism_attachment_92_mark_drag_preview_resolves_same_geometry_as_commit() {
+    let mut doc = Document::from_native_file(include_bytes!(
+        "../../tests/fixtures/mechanism-attachments-92/before.rsk"
+    ))
+    .unwrap();
+    let source = reshiki::arrow_anchors::pick(&doc, World::new(0., -29.166668), 2.).unwrap();
+    reshiki::arrow_anchors::create(
+        &mut doc,
+        &source,
+        &reshiki::arrow_anchors::Pick::Atom(1),
+        reshiki::arrows::Preset::Curved,
+        reshiki::arrows::ArrowStyle::preset(reshiki::arrows::Preset::Curved),
+    )
+    .unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let target = World::new(-7., -45.);
+    let canvas = chain_canvas(&doc, ChainMode::Straight);
+    let screen = canvas.camera.screen(target, bounds);
+    let state = State {
+        gesture: Some(Gesture::AtomMark { id: 2, index: 0 }),
+        cursor: Some(screen),
+        ..Default::default()
+    };
+    let preview = canvas.pointer_preview_document(&state, bounds);
+    let mut committed = doc.clone();
+    let atom = committed.atom_mut(2).unwrap();
+    atom.marks[0].offset = World::new(target.x - atom.position.x, target.y - atom.position.y);
+    let _ = reshiki::transaction::reconcile(&mut committed, doc).unwrap();
+    assert_eq!(preview, committed);
 }

@@ -651,6 +651,33 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
     bounds
 }
 
+/// Visible backbone span, with the same label ink and margin as bond rendering.
+/// Used by drawing-target picking so hidden label-covered extensions cannot
+/// create an initial mechanism-arrow attachment.
+pub(crate) fn bond_segment(doc: &Document, bond: &Bond) -> Option<(Point, Point)> {
+    if !doc.bond_visible(bond.a, bond.b) {
+        return None;
+    }
+    let (a, b) = doc.atom(bond.a).zip(doc.atom(bond.b))?;
+    let length = a.position.distance(b.position);
+    if length < 0.1 {
+        return None;
+    }
+    let ux = (b.position.x - a.position.x) / length;
+    let uy = (b.position.y - a.position.y) / length;
+    let boxes = |a: &Atom| {
+        if visible(a, doc) || doc.abbreviation(a.id).is_some() {
+            atom_label_ink_boxes(a, doc)
+        } else {
+            vec![]
+        }
+    };
+    let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
+    let start = label_end(a.position, ux, uy, &boxes(a), length, margin);
+    let end = label_end(b.position, -ux, -uy, &boxes(b), length, margin);
+    (((end.x - start.x) * ux + (end.y - start.y) * uy) > 0.1).then_some((start, end))
+}
+
 fn label_end(
     origin: Point,
     ux: f32,
