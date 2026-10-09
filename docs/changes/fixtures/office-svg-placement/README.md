@@ -6,9 +6,11 @@ Run with Python 3 and no additional packages:
 
 ```sh
 python3 docs/changes/fixtures/office-svg-placement/verify.py
-# Optional: compare this checkout's production/test source with the preserved build.
-python3 docs/changes/fixtures/office-svg-placement/verify.py --source-root .
+# Optional: compare an exact pre-correction source checkout with the captured build.
+python3 docs/changes/fixtures/office-svg-placement/verify.py --source-root /path/to/office-svg-6f-checkout
 ```
+
+The optional source checkout must be exactly `6f211ea54a6562493e218548c42684b13c311590`. The [CI renderer follow-up](../../office-svg-ci-validation.md) intentionally changes one test file after that capture. All 533 captured production inputs remain unchanged; the broader 1,061-entry map differs only at `src/app/inspector/tests.rs`. The original map and strict guard are preserved, so `--source-root .` on the corrected checkout correctly rejects that test-source difference. Default artifact verification remains valid on the current checkout.
 
 The verifier checks all 53 copied evidence-file hashes; exact final ordinary/Office/native identity pairs; native graph and SiMe₃ abbreviation; physical SVG extents; the Office picture's referenced SVG relationship, text/path content, extent, offset, crop and rotation; source correction scope; and the actual screenshot producer identities. Seven controls reject retained text, doubled SVG width, a changed chemical bond, an incorrect abbreviation anchor, a one-EMU size change, cropping and relabeling earlier screenshots as final-app captures. It verifies the preserved record rather than replaying desktop actions.
 
