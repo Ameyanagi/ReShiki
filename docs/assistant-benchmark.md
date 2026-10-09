@@ -4,8 +4,14 @@ Status: under review in [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281)
 Author: @Ameyanagi, project creator and maintainer.
 Addresses [issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) and is stacked
 on the guided setup change in [open PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
-The measured unassisted backend remains the unchanged `51fa0991` Nightly; merging
-the parent review documentation does not change that baseline or its results.
+The current stack parent is `f71479e69c0a25deae3d9a48cca7b25708f49cb8`.
+Its [Wayland fixture publication follow-up](changes/wayland-fixture-publication-2026-10-09.md)
+was merged normally, with no changes to the benchmark runner/scorer, dataset,
+recorded results, Rust application source or original image bytes. Fresh live
+GNOME/Sway validation of that QA helper remains pending. The measured unassisted
+backend remains the unchanged `51fa0991` Nightly; the actual guided app remains
+`43e3d80d`. Original executed-source and binary manifests are retained. The newer
+QA helper is not represented as code used for either recorded model experiment.
 
 This is a small, versioned QA cohort for the actual Codex Assistant backend. Its
 images are original synthetic drawings rendered by ReShiki, with deterministic

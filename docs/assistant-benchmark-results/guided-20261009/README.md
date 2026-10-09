@@ -51,3 +51,11 @@ backends. The real account, installation and configuration stayed intact; no Sen
 or inference occurred in those fixture processes. Other-platform GUI remains
 unverified. This successful known guided example does not increase the baseline's
 six completed exact graphs or establish accuracy on unseen images.
+
+The current parent `f71479e69c0a25deae3d9a48cca7b25708f49cb8` adds a
+[Wayland publication fixture correction](../../changes/wayland-fixture-publication-2026-10-09.md)
+after this recorded exercise. It changes private Python QA helpers, with live
+GNOME/Sway checks pending. It does not change the actual executed guided source
+`43e3d80d`, native drawing, independent score, receipt, original JPEGs, timings,
+inference count or baseline denominators. No exercise was repeated after this
+parent merge.
