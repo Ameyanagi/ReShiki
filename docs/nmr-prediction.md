@@ -7,14 +7,19 @@ behind collapsed abbreviations. Click a result row to select its linked drawing
 atom and any explicitly drawn hydrogens. Expand an abbreviation to inspect an
 internal site directly; its original atom ID is retained in the table.
 
-The results panel can be resized with the height slider or accessible **− / +**
-buttons, collapsed, or closed. The height readout uses logical pixels; the panel
-is bounded to leave room for drawing. Drawing remains available while predictions run. Chemical changes invalidate the result;
+Results open in a compact floating palette with atom-linked shifts. The palette
+leaves the drawing viewport and zoom unchanged; drawing outside it remains
+available while predictions run. Choose **Details…** to show the reference
+counts, sphere radius, observed dispersion, method and conditions. The expanded
+palette has a height slider and accessible **− / +** buttons. **Compact** returns
+to the smaller view; the header **− / Show** control hides or reveals the results,
+and **×** closes the palette. Longer results scroll within the palette.
+Chemical changes invalidate the result;
 position/depth moves, drawing styles and abbreviation visibility preserve it.
 Changing the selected molecule requires running prediction again. Results are
 per document and background results cannot land in another document.
 
-**Copy table** and **Export TSV…** include a prediction label, atom IDs, method,
+**Copy** and **Export…** include a prediction label, atom IDs, method,
 data version, conditions, limitations and data attribution. Predictions are not
 stored as experimental assignments or full simulated spectra. No multiplets,
 integrals, coupling constants or experimental peak assignment are claimed.

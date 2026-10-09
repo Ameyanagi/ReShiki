@@ -2,7 +2,13 @@
 
 The baseline has molecular properties but no NMR workflow. This feature predicts atom-linked ¹H parent-group medians and ¹³C shifts from a locally bundled measured-reference index. It does not generate a simulated spectrum or assigned multiplets.
 
-## Capture and reproduction
+## Compact palette revision: native review pending
+
+User review rejected the full-width results dock because it takes too much drawing space. The revised interface uses a compact nonmodal palette, with atom/shift rows by default and reference columns and method details on demand. Opening or expanding it preserves the full drawing viewport and camera. Five app tests passed, including three opt-in renderer checks at 940×620 and 1280×820 with the inspector shown and hidden. These verify viewport/camera stability, actual row selection, palette pointer ownership, outside drawing input, long-table scrolling and accessibility actions. Six chemistry and eleven IO NMR data/export tests also passed, as did scoped all-target/all-feature strict Clippy, default-feature checks and formatting. Native desktop review of the revision remains pending; the screenshots and results below document the previous dock at `c3d1676c` and remain historical functional evidence.
+
+The installed ChemDraw 26.0.0.6599 was inspected through its About and Structure menus and is the Prime edition. [Revvity's support record](https://support.revvitysignals.com/hc/en-us/articles/4408233427220-ChemDraw-ChemNMR-options-do-not-appear-in-the-Structure-menu) confirms that Prime lacks ChemNMR. The bundled official help, `Content/MyImport/ChemNMR.htm`, section **NMR Shifts**, describes selecting a structure and opening predicted shifts with annotated molecular information and a line spectrum in a separate window. That manual supports keeping prediction results separate from the drawing layout. No live ChemNMR results window was available, so the revised palette does not claim a visual match to ChemDraw. ReShiki continues to show atom-linked shifts without a simulated spectrum.
+
+## Previous dock capture and reproduction
 
 - Platform: macOS arm64, default-feature debug source builds, Rust 1.99.0; native ReShiki app reviewed through computer use.
 - Baseline source: `51fa0991da2507bb00b27c1b420e807468de6423`.
@@ -20,7 +26,7 @@ The baseline has molecular properties but no NMR workflow. This feature predicts
 
 ![Expanded method, source conditions and limitations](images/nmr/conditions.jpg)
 
-## Observed results
+## Previous dock observed results
 
 The final candidate displays ¹H values 1.280, 4.160 and 2.095 ppm, and ¹³C values 14.200, 61.050, 170.700 and 20.900 ppm, matching the native acceptance fixture. Clicking carbon site #4 selects the actual carbonyl atom. Accessible height buttons change the requested height by 20 logical pixels and all four carbon rows fit at 290. Collapse and reopen preserve results. Native Export TSV… produces [the recorded desktop export](../tests/fixtures/nmr/ethyl-acetate-carbon-desktop.tsv), with four real tab-separated rows and full source, conditions, attribution and limitations.
 

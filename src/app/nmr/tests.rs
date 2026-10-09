@@ -115,6 +115,63 @@ impl NmrUi {
             _ => None,
         }
     }
+    fn event(
+        &mut self,
+        app: &App,
+        event: iced::Event,
+        cursor: iced::mouse::Cursor,
+    ) -> (iced::event::Status, Vec<Message>) {
+        let mut ui = iced_runtime::UserInterface::build(
+            app.view(),
+            self.size,
+            std::mem::take(&mut self.cache),
+            &mut self.renderer,
+        );
+        let mut messages = Vec::new();
+        let (_, statuses) = ui.update(
+            &[event],
+            cursor,
+            &mut self.renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut messages,
+        );
+        self.cache = ui.into_cache();
+        (statuses[0], messages)
+    }
+    fn redraw(&mut self, app: &mut App) {
+        let (_, messages) = self.event(
+            app,
+            iced::Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            iced::mouse::Cursor::Unavailable,
+        );
+        for message in messages {
+            let _ = app.update(message);
+        }
+    }
+}
+
+fn finish_prediction(app: &mut App) {
+    let key = app.tab.nmr.pending.clone().unwrap();
+    let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
+    let report = Arc::new(engine::predict(&request, app.tab.nmr.nucleus).unwrap());
+    let _ = app.nmr_action(Action::Finished(key, Ok(report)));
+}
+
+fn fully_visible(node: &reshiki::accessibility::Node) {
+    let visible = node.visible_bounds.expect("Visible result row");
+    for (expected, actual) in [
+        (node.bounds.x, visible.x),
+        (node.bounds.y, visible.y),
+        (node.bounds.width, visible.width),
+        (node.bounds.height, visible.height),
+    ] {
+        assert!(
+            (expected - actual).abs() < 0.01,
+            "Whole row must fit, allowing rectangle intersection rounding: {node:?}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -163,6 +220,23 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
         let report = Arc::new(engine::predict(&request, Nucleus::H1).unwrap());
         let _ = app.nmr_action(Action::Finished(key, Ok(report)));
+        let compact = ui.snapshot(&app);
+        assert!(
+            !compact
+                .nodes
+                .iter()
+                .any(|n| n.id.starts_with("nmr.height."))
+        );
+        assert_eq!(
+            compact
+                .nodes
+                .iter()
+                .find(|n| n.id == "nmr.method")
+                .unwrap()
+                .expanded,
+            Some(false)
+        );
+        let _ = app.nmr_action(Action::Details);
         let snapshot = ui.snapshot(&app);
         let find = |id: &str| snapshot.nodes.iter().find(|n| n.id == id).unwrap();
         assert_eq!(find("nmr.predict.1H").checked, Some(true));
@@ -295,4 +369,253 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
                 .any(|n| n.name.contains("Exchangeable"))
         );
     }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer, viewport and pointer routing check"]
+async fn floating_nmr_preserves_canvas_and_owns_only_its_pointer_input() {
+    use crate::canvas::{Edit, Tool};
+    use iced::{Event, Point as ScreenPoint, Rectangle, Size, mouse};
+    for size in [Size::new(940., 620.), Size::new(1280., 820.)] {
+        for inspector in [false, true] {
+            let mut app = app();
+            app.tab.doc = Document::from_json(include_bytes!(
+                "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
+            ))
+            .unwrap();
+            app.tab.saved = app.tab.doc.clone();
+            app.tab.busy = false;
+            app.tab.selected.clear();
+            app.inspector_open = inspector;
+            app.inspector_tab = super::super::InspectorTab::Properties;
+            let mut ui = NmrUi::new(size).await;
+            ui.redraw(&mut app);
+            let _ = app.update(Message::Fit);
+            let camera = app.tab.camera;
+            let viewport = app.viewport;
+            let drawing = app.tab.doc.clone();
+            let revision = app.tab.revision;
+            let assert_view = |app: &App| {
+                assert_eq!(
+                    app.viewport, viewport,
+                    "Actual drawing viewport {size:?}/{inspector}"
+                );
+                assert_eq!(app.tab.camera.zoom, camera.zoom);
+                assert_eq!(app.tab.camera.center, camera.center);
+                assert!(
+                    app.tab.fit_to_view,
+                    "A later real window resize still refits"
+                );
+            };
+            let _ = app.nmr_action(Action::Open);
+            finish_prediction(&mut app);
+            ui.redraw(&mut app);
+            assert_view(&app);
+            let snapshot = ui.snapshot(&app);
+            let node = snapshot
+                .nodes
+                .iter()
+                .find(|n| n.id == "nmr.site.1H.2")
+                .unwrap();
+            fully_visible(node);
+            let point = node.bounds.center();
+            app.tool = Tool::Atom;
+            for event in [
+                mouse::Event::CursorMoved { position: point },
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+                mouse::Event::ButtonReleased(mouse::Button::Left),
+            ] {
+                let (status, messages) =
+                    ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(point));
+                assert_eq!(status, iced::event::Status::Captured);
+                assert!(
+                    !messages.iter().any(|m| matches!(m, Message::Canvas(_))),
+                    "Palette click reached canvas: {messages:?}"
+                );
+                for message in messages {
+                    let _ = app.update(message);
+                }
+            }
+            assert_eq!(app.tab.selected, [2]);
+            assert_eq!(app.tab.doc, drawing);
+            assert_eq!(app.tab.revision, revision);
+            assert!(!app.tab.history.can_undo());
+
+            // Empty palette padding owns wheel and the complete pressed gesture,
+            // including a release outside. No hidden drawing pan or atom appears.
+            let close = snapshot.nodes.iter().find(|n| n.id == "nmr.close").unwrap();
+            let padding = ScreenPoint::new(
+                close.bounds.x + close.bounds.width + 2.,
+                close.bounds.center_y(),
+            );
+            for event in [
+                mouse::Event::CursorMoved { position: padding },
+                mouse::Event::WheelScrolled {
+                    delta: mouse::ScrollDelta::Lines { x: 0., y: -4. },
+                },
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+            ] {
+                let (status, messages) =
+                    ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(padding));
+                assert_eq!(status, iced::event::Status::Captured);
+                assert!(messages.is_empty(), "Empty palette area: {messages:?}");
+            }
+            let outside = ScreenPoint::new(160., 200.);
+            for event in [
+                mouse::Event::CursorMoved { position: outside },
+                mouse::Event::ButtonReleased(mouse::Button::Left),
+            ] {
+                let (status, messages) =
+                    ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(outside));
+                assert_eq!(status, iced::event::Status::Captured);
+                assert!(
+                    messages.is_empty(),
+                    "Owned gesture escaped palette: {messages:?}"
+                );
+            }
+            assert_view(&app);
+            for action in [
+                Action::Details,
+                Action::Height(360.),
+                Action::Collapse,
+                Action::Collapse,
+                Action::Details,
+            ] {
+                let _ = app.nmr_action(action);
+                ui.redraw(&mut app);
+                assert_view(&app);
+                for node in ui
+                    .snapshot(&app)
+                    .nodes
+                    .iter()
+                    .filter(|n| n.id.starts_with("nmr.") && n.enabled)
+                {
+                    if let Some(visible) = node.visible_bounds {
+                        assert!(Rectangle::with_size(size).contains(visible.position()));
+                        assert!(visible.x + visible.width <= size.width);
+                        assert!(visible.y + visible.height <= size.height);
+                    }
+                }
+            }
+            let _ = app.nmr_action(Action::Predict(Nucleus::C13));
+            finish_prediction(&mut app);
+            ui.redraw(&mut app);
+            assert_view(&app);
+            let carbon = ui.snapshot(&app);
+            for id in [1, 2, 4, 5] {
+                let node = carbon
+                    .nodes
+                    .iter()
+                    .find(|n| n.id == format!("nmr.site.13C.{id}"))
+                    .unwrap();
+                fully_visible(node);
+            }
+            let _ = app.nmr_action(Action::Close);
+            ui.redraw(&mut app);
+            assert_view(&app);
+            let _ = app.nmr_action(Action::Open);
+            assert!(!app.tab.nmr.details, "Reopening starts compact");
+            finish_prediction(&mut app);
+            ui.redraw(&mut app);
+            assert_view(&app);
+
+            // Outside the palette, the same real wheel event still belongs to
+            // the drawing. This verifies the palette is nonmodal.
+            let (_, messages) = ui.event(
+                &app,
+                Event::Mouse(mouse::Event::CursorMoved { position: outside }),
+                mouse::Cursor::Available(outside),
+            );
+            for message in messages {
+                let _ = app.update(message);
+            }
+            let (_, messages) = ui.event(
+                &app,
+                Event::Mouse(mouse::Event::WheelScrolled {
+                    delta: mouse::ScrollDelta::Lines { x: 0., y: -1. },
+                }),
+                mouse::Cursor::Available(outside),
+            );
+            assert!(
+                messages
+                    .iter()
+                    .any(|m| matches!(m, Message::Canvas(Edit::Pan(..)))),
+                "Outside drawing input blocked: {messages:?}"
+            );
+            assert_eq!(app.tab.doc, drawing);
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer scrolling check"]
+async fn compact_nmr_scrolls_to_later_sites_without_scrolling_the_drawing() {
+    use iced::{Event, Size, mouse};
+    let mut app = app();
+    app.tab.doc = Document::default();
+    let mut previous = None;
+    for index in 0..10 {
+        let id = app
+            .tab
+            .doc
+            .add_atom("C", Point::new(index as f32 * 42., 0.));
+        if let Some(previous) = previous {
+            app.tab.doc.add_bond(previous, id, 1, "plain");
+        }
+        previous = Some(id);
+    }
+    app.tab.selected.clear();
+    app.tab.busy = false;
+    app.inspector_open = true;
+    let mut ui = NmrUi::new(Size::new(940., 620.)).await;
+    ui.redraw(&mut app);
+    let _ = app.nmr_action(Action::Predict(Nucleus::C13));
+    finish_prediction(&mut app);
+    ui.redraw(&mut app);
+    let camera = app.tab.camera;
+    let report = app.tab.nmr.result.as_ref().unwrap();
+    assert_eq!(report.rows.len(), 10);
+    let first = format!("nmr.site.13C.{}", report.rows[0].atom_id);
+    let last = format!("nmr.site.13C.{}", report.rows.last().unwrap().atom_id);
+    let before = ui.snapshot(&app);
+    assert!(
+        before
+            .nodes
+            .iter()
+            .find(|n| n.id == last)
+            .unwrap()
+            .visible_bounds
+            .is_none()
+    );
+    let point = before
+        .nodes
+        .iter()
+        .find(|n| n.id == first)
+        .unwrap()
+        .bounds
+        .center();
+    let (status, messages) = ui.event(
+        &app,
+        Event::Mouse(mouse::Event::WheelScrolled {
+            delta: mouse::ScrollDelta::Lines { x: 0., y: -20. },
+        }),
+        mouse::Cursor::Available(point),
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(
+        messages.is_empty(),
+        "Scrolling table reached drawing: {messages:?}"
+    );
+    let after = ui.snapshot(&app);
+    assert!(
+        after
+            .nodes
+            .iter()
+            .find(|n| n.id == last)
+            .unwrap()
+            .visible_bounds
+            .is_some()
+    );
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    assert_eq!(app.tab.camera.center, camera.center);
 }
