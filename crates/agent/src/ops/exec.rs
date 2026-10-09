@@ -163,9 +163,9 @@ impl Drop for FinishGuard {
     }
 }
 
-/// Runs operations within [`Budgets::concurrency`] permits and a queue of
-/// [`Budgets::queue`] waiting calls, each under a [`Budgets::op_deadline`]
-/// measured from admission.
+/// Runs operations within [`Budgets::concurrency`] permits and admits at most
+/// the effective semaphore permit count plus [`Budgets::queue`] calls. Each
+/// call has a [`Budgets::op_deadline`] measured from admission.
 #[derive(Clone)]
 pub struct Executor {
     shared: Arc<Shared>,
@@ -190,7 +190,8 @@ impl Executor {
     ///
     /// - [`ErrorKind::Busy`] when the executor is shutting down, `id` is
     ///   already in flight for `who` (MCP forbids reusing in-flight IDs), or
-    ///   [`Budgets::queue`] calls already wait for a permit.
+    ///   the combined admitted-call capacity (effective [`Budgets::concurrency`]
+    ///   plus [`Budgets::queue`]) is full.
     /// - [`ErrorKind::Cancelled`] when the call is cancelled at any point,
     ///   whatever `f` returned; `f` never runs if the call is cancelled while
     ///   it waits for a permit.
@@ -294,7 +295,15 @@ impl Executor {
         if registry.tokens.contains_key(&key) {
             return Err(busy("request id already in use"));
         }
-        if registry.waiting >= self.shared.budgets.queue {
+        let capacity = self
+            .shared
+            .budgets
+            .concurrency
+            .min(Semaphore::MAX_PERMITS)
+            .saturating_add(self.shared.budgets.queue);
+        // A permit holder can still be counted in waiting until it next
+        // locks the registry. Live counts each admission once throughout.
+        if registry.live >= capacity {
             return Err(busy("server busy; retry later"));
         }
         let token = CancelToken::default();

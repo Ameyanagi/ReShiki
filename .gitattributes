@@ -1,1 +1,4 @@
 * text=auto eol=lf
+
+# Preserve OPSIN upstream notice bytes and their original whitespace.
+licenses/opsin/** -text whitespace=-trailing-space,-blank-at-eof,cr-at-eol

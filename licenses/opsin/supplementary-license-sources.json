@@ -1,0 +1,12 @@
+[
+  {
+    "path": "licenses/opsin/stax2-api-4.2.2/UPSTREAM-LICENSE",
+    "source": "https://raw.githubusercontent.com/FasterXML/stax2-api/d556ac535ea3f5f987b6e2e122cda8ff1753c086/LICENSE",
+    "sha256": "23ea581cb6573ec7a0e05b1f5c6c73024149885796c24489563f377775f7fdb2"
+  },
+  {
+    "path": "licenses/opsin/woodstox-core-7.1.1/UPSTREAM-LICENSE",
+    "source": "https://raw.githubusercontent.com/FasterXML/woodstox/woodstox-core-7.1.1/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  }
+]

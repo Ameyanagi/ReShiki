@@ -1,0 +1,37 @@
+{
+  "status": "PASS",
+  "source_commit": "d9df649129c5144cf304df7295dc573825dcbe49",
+  "signed_executable_sha256": "062b03f1d966e27301272a44cdbff243f002c2f59da1531dcd5d2f01f2b9dda5",
+  "manifest_sha256": "2a282ee248ca458f1f93f53cc326f3faa5000003edf39614036639f35cc76b05",
+  "payload_hashes": 25,
+  "original_byte_copies": 24,
+  "unretouched_JPEGs": 3,
+  "native_RSK19": 4,
+  "accessibility_snapshots": 5,
+  "nonempty_native_bytes_equal": [
+    "ethanol-inserted.rsk",
+    "ethanol-redo.rsk",
+    "ethanol-fresh-reopened.rsk"
+  ],
+  "empty_one_Undo": true,
+  "independent_ethanol_reference": {
+    "atoms": 3,
+    "bonds": 2,
+    "formula": "C2H6O",
+    "charge": 0,
+    "isotope": 0,
+    "annotations": 0
+  },
+  "semantic_canaries": {
+    "bond-order": "rejected",
+    "charge": "rejected",
+    "isotope": "rejected",
+    "element": "rejected",
+    "added-stereo": "rejected"
+  },
+  "current_repository_compiler_input_hashes": 574,
+  "prior_original_evidence_unchanged": true,
+  "production_sources_payload_licenses_workflows_unchanged": true,
+  "CI_record_scope": "Exact production d9 terminal22success3skip; later evidence commit CI distinct",
+  "scope": "Portable byte/native history/expected graph/compiler-input verification only; no new GUI replay, naming execution, Cargo, signature recreation or CI query."
+}

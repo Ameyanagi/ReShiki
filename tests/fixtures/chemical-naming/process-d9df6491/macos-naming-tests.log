@@ -1,0 +1,56 @@
+   Compiling zune-jpeg v0.5.15 (/Users/ryuichi/dev/ReShiki-worktrees/naming/vendor/zune-jpeg)
+   Compiling usvg v0.45.1 (/Users/ryuichi/dev/ReShiki-worktrees/naming/vendor/usvg)
+   Compiling reshiki-depict-math v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/depict-math)
+   Compiling reshiki-process-heap v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/process-heap)
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming)
+   Compiling tiff v0.11.3
+   Compiling resvg v0.48.1
+   Compiling resvg v0.45.1
+   Compiling reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/chemistry)
+   Compiling image v0.25.10
+   Compiling cosmolkit-core v0.3.0 (https://github.com/Ameyanagi/COSMolKit.git?rev=252a1f3d6480fc4a0abcd51d76707f51f69b4406#252a1f3d)
+   Compiling reshiki-macos v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/native/macos)
+   Compiling iced_graphics v0.14.0
+   Compiling reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/model)
+   Compiling svg2pdf v0.13.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/vendor/svg2pdf)
+   Compiling iced_wgpu v0.14.0
+   Compiling iced_program v0.14.0
+   Compiling iced_winit v0.14.1
+   Compiling iced_renderer v0.14.0
+   Compiling reshiki-geometry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/native/geometry)
+   Compiling iced_widget v0.14.2
+   Compiling reshiki-io v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/io)
+   Compiling iced v0.14.0
+   Compiling reshiki-agent v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/agent)
+   Compiling reshiki-mcp v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/mcp)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 24s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-4c529b6ff6e714a5)
+
+running 22 tests
+test naming::local::tests::measured_resource_breaches_cannot_enter_the_exit_race_grace_path ... ok
+test naming::local::tests::strict_adapter_rejects_semantic_loss_and_inconsistent_provenance ... ok
+test naming::local::tests::embedded_engine_and_original_adapter_have_exact_pinned_checksums ... ok
+test naming::local::tests::oversized_actual_child_output_is_bounded_and_worker_is_stopped ... ok
+test naming::reverse::tests::rule_protocol_checks_profile_input_and_bounded_name ... ok
+test naming::rules::tests::graph_permutations_and_hydrogen_spelling_do_not_change_name ... ok
+test naming::rules::tests::independent_rules_cover_parent_seniority_locants_unsaturation_rings_and_cip ... ok
+test naming::rules::tests::unsupported_features_never_become_neutral_unlabeled_or_simplified_names ... ok
+test naming::rules::tests::work_exhaustion_is_failure_instead_of_partial_parent_selection ... ok
+test naming::tests::graph_identity_preserves_stereo_isotopes_charges_and_tautomers ... ok
+test naming::tests::oversized_smiles_are_rejected_before_graph_preparation ... ok
+test naming::tests::selections_cannot_silently_truncate_a_molecule ... ok
+test naming::tests::unsupported_or_ignored_winding_is_rejected_before_cleanup ... ok
+test naming::local::tests::cancellation_kills_and_reaps_child_and_removes_private_payload ... ok
+test naming::local::tests::missing_runtime_is_actionable_and_never_uses_a_service ... ok
+test naming::local::tests::an_escaped_pipe_holder_cannot_extend_the_completion_deadline ... ok
+test naming::local::tests::dropping_queued_and_running_futures_recovers_the_worker_permit ... ok
+test naming::local::tests::exited_main_child_cannot_leave_a_descendant_holding_response_pipes ... ok
+test naming::reverse::tests::independent_decoder_canary_catches_connectivity_stereo_isotope_charge_and_tautomer_loss ... ok
+test naming::local::tests::actual_parser_rejects_ambiguous_stereo_polymers_salts_and_unknown_names ... ok
+test naming::local::tests::pinned_local_engine_matches_independent_connected_graphs_and_stereo ... ok
+test naming::reverse::tests::native_worker_then_local_opsin_verifies_supported_names ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 126 filtered out; finished in 51.18s
+

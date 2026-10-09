@@ -1,0 +1,92 @@
+{
+  "recorded_at_utc": "2026-10-09T17:24:41.959645+00:00",
+  "source_head": "d9df649129c5144cf304df7295dc573825dcbe49",
+  "app_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Local Naming Process Verified.app",
+  "signed_executable_sha256": "062b03f1d966e27301272a44cdbff243f002c2f59da1531dcd5d2f01f2b9dda5",
+  "root_observed_native_processes": [
+    {
+      "pid": 82312,
+      "role": "forward parse, reverse generate, insert, one-step Undo/Redo",
+      "provenance": "Root observed pgrep and lsof kernel executable path before interaction; retained tool transcript, no standalone lsof file."
+    },
+    {
+      "pid": 85996,
+      "role": "fresh app persistence reopen",
+      "provenance": "Root independently observed pgrep full exact app executable path after launching."
+    }
+  ],
+  "computer_use": "Native CUA only; editable Chemical names fields, Parse name locally, Insert editable structure, Generate selected structure name locally, native Save As/Open, header Undo/Redo. Original screenshot bytes retained without cropping or editing.",
+  "observed_results": [
+    "ethanol resolved to CCO preview in the fresh signed app",
+    "Insert created3 heavy atoms/2 single bonds",
+    "selected graph generated ethan-1-ol verified by local OPSIN2.9.0",
+    "one header Undo removed all atoms and bonds; one Redo restored exact complete native bytes",
+    "full app exit followed by new process native Open retained C2H6O,CCO,3atoms,2bonds,46.069g/mol with clean Undo/Redo; fresh Save As byte-identical"
+  ],
+  "assertions": {
+    "insert_redo_reopen_byte_identical": true,
+    "undo_empty": true,
+    "graph_atoms": 3,
+    "graph_bonds": 2,
+    "annotations": 0,
+    "pgrep_after_final_native_quit_exit_code": 1,
+    "pgrep_after_final_native_quit_stdout": ""
+  },
+  "limits": [
+    "These are supplemental exact-current-source smoke checks; original broader desktop evidence was produced by historical signed1c7d app and is not relabelled.",
+    "Preview screenshot is at100%; insertion automatically fits to250%, which remains through generated and reopened screenshots. These images are not a matched before/after size comparison.",
+    "Recovery draft banner was left untouched. Existing global appearance preferences were not changed. Keyboard drawing was disabled through its native control for the checks.",
+    "This smoke does not re-run prior R-lactic/caption/unsupported/cancellation manual cases; focused compiled checks and original native evidence cover them separately.",
+    "No network-denial instrumentation wrapped this GUI process; network-denied Java/native naming tests passed separately. UI observed local controls/OPSIN provenance; no external lookup was invoked."
+  ],
+  "files": {
+    "ethanol-fresh-reopened-ax.txt": {
+      "sha256": "8e9c470c422118c6527196b7cacd6d279c3303cec98b32b647372bc8d2cb8dbd",
+      "bytes": 4223
+    },
+    "ethanol-fresh-reopened.jpg": {
+      "sha256": "a8770ff3447700c6b053e33a5517e45a488035bbe3df75a74870258c418f0fb1",
+      "bytes": 307308
+    },
+    "ethanol-fresh-reopened.rsk": {
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "bytes": 1681
+    },
+    "ethanol-inserted.rsk": {
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "bytes": 1681
+    },
+    "ethanol-local-generated-ax.txt": {
+      "sha256": "c628bf9e03a798ba1da339a69729427ea330bbdcd8a1bf15acc05d46cfd53afd",
+      "bytes": 4578
+    },
+    "ethanol-local-generated.jpg": {
+      "sha256": "d71de16934c3fc34606789c714cc6c9d41440b8a8737afce1ef141c85208104c",
+      "bytes": 458133
+    },
+    "ethanol-local-preview-ax.txt": {
+      "sha256": "6d08ac50efe62e554d04309188b74ab45153b5ee67c4ae0d812f17dc9e7cbf69",
+      "bytes": 4518
+    },
+    "ethanol-local-preview.jpg": {
+      "sha256": "2b1d17f6e70b99cf74e1b9e65c60aa1f236188164685e1c09e076f8f46f78a84",
+      "bytes": 337815
+    },
+    "ethanol-redo-ax.txt": {
+      "sha256": "17ef301194e64dc6365cdcb175fb093a36c0f6c9cc2dc5fdb515cddcd8e8d3c7",
+      "bytes": 4638
+    },
+    "ethanol-redo.rsk": {
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "bytes": 1681
+    },
+    "ethanol-undo-empty-ax.txt": {
+      "sha256": "8299b261c5bf688f8f6192a5d5284e44999a00b400e31017c28552160be46331",
+      "bytes": 4667
+    },
+    "ethanol-undo-empty.rsk": {
+      "sha256": "aede89f4a68a902161a5dba6eb93e4b3227c727c01997f89164df47a4f5c91a0",
+      "bytes": 214
+    }
+  }
+}

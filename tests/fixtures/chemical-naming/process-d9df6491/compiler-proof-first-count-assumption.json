@@ -1,0 +1,14 @@
+{
+  "verification_only": true,
+  "expected_from_earlier_broader_workspace_build": {
+    "artifacts": 19,
+    "packages": 16
+  },
+  "actual_default_app_build": {
+    "artifacts": 17,
+    "packages": 14
+  },
+  "stopped_assertion": "AssertionError:17",
+  "not_an_application_or_test_failure": true,
+  "resolution": "Report actual complete Mac dependency graph; native/linux and native/windows are not Mac app dependencies"
+}

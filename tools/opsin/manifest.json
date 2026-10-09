@@ -1,0 +1,15 @@
+{
+  "engine": "OPSIN core 2.9.0",
+  "source_tag": "2.9.0",
+  "source_commit": "b91b610af5ab07560fedb20730d7aef46bb2bca0",
+  "artifact_url": "https://github.com/dan2097/opsin/releases/download/2.9.0/opsin-core-2.9.0-jar-with-dependencies.jar",
+  "adapter_protocol": 1,
+  "options": "strict-cx13",
+  "javac_reproducibility": "Validated Zulu JDK 21.0.8+9, --release 11 -encoding UTF-8 -g:none; repeated builds match the reviewed adapter SHA256",
+  "sha256": {
+    "opsin-core-2.9.0-jar-with-dependencies.jar": "627ee5da4af551f9c4d1d766f545eb7cf519a344776e0bb677247a47abac0252",
+    "reshiki-opsin-adapter.jar": "0ea22d92917e852a2666e035de278ef7e162c6350a7a78c2a89bbd31d2b6a388",
+    "ReShikiOpsin.java": "492f3d30eed551a096a1cc4562d76c0f272ac88e71ebab7cc6397d201a6150ca"
+  },
+  "licenses": "../../licenses/opsin/NOTICE"
+}

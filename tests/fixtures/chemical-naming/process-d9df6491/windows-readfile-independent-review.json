@@ -1,0 +1,98 @@
+{
+  "recorded_at_utc": "2026-10-09T16:27:50.189990+00:00",
+  "reviewer": "/root/nmr_ci",
+  "worktree": "/Users/ryuichi/dev/ReShiki-worktrees/naming",
+  "reviewed_head": "d9df649129c5144cf304df7295dc573825dcbe49",
+  "review_scope": "Independent read-only Windows process reader signature/features/safety/EOF and regression-test audit; Linux caller bounds checked without duplicating kernel research. Agent executor repair commit is outside this scope.",
+  "result": "No blocking code-review finding after the two EOF-contract amendments.",
+  "source_sha256": {
+    "native/process/Cargo.toml": "6744bbd82b3ea8bba1b42252196b9530b92551837090a132b96ce18157662dd7",
+    "native/process/src/windows.rs": "69cd8cf84d244cd8723c4bab08010e74bdd85b4d8ab280ec7fdd875c9eb0e147",
+    "native/process/src/tests.rs": "d999fa6fc33a4ef238b62893af1db25c30b77914e414c69d57018b67b4152860",
+    "native/process/src/unix.rs": "fedc5c3eb08c8de07a63c1890d0717f0ef10fb45e2c563d31304a35d4fb871bf",
+    "src/naming/local.rs": "5ee3b33f42d49e92b105304b096e800595c7eb0f7bb8e5847c3ecab10bc2ef0b"
+  },
+  "dependency": {
+    "crate": "windows",
+    "version": "0.58.0",
+    "feature_added": "Win32_System_IO",
+    "versions_and_lockfile_changed": false,
+    "installed_ReadFile_source": "/Users/ryuichi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-0.58.0/src/Windows/Win32/Storage/FileSystem/mod.rs:2390",
+    "signature": "unsafe ReadFile<P0>(hfile: P0, lpbuffer: Option<&mut [u8]>, lpnumberofbytesread: Option<*mut u32>, lpoverlapped: Option<*mut OVERLAPPED>) -> windows_core::Result<()> where P0: Param<HANDLE>"
+  },
+  "checks": [
+    {
+      "item": "API gate and arguments",
+      "result": "Target-specific windows dependency enables required Win32_System_IO; HANDLE, Some mutable slice, Some writable count, None OVERLAPPED match installed windows 0.58 wrapper."
+    },
+    {
+      "item": "Buffer lifetime and length",
+      "result": "Owned File remains live under &mut access; CreateNamedPipeW lacks FILE_FLAG_OVERLAPPED. The synchronous call completes before slice/count go out of scope. Slice length is clamped to DWORD before wrapper try_into(). No async operation retains stack data."
+    },
+    {
+      "item": "Return contract",
+      "result": "Empty caller buffer returns Ok(0) before API. For nonempty buffers ERROR_NO_DATA and successful zero count return WouldBlock; ERROR_BROKEN_PIPE alone becomes EOF. Other errors remain hard errors."
+    },
+    {
+      "item": "Limits and cancellation",
+      "result": "Pipe creation/inheritance, creation-time Job membership, commit/CPU/process limits, termination and ownership cleanup are unchanged in this patch."
+    },
+    {
+      "item": "Linux caller bounds",
+      "result": "Only absent VmRSS maps to existing raw ESRCH transient classification. Present malformed/overflow samples still hard-fail; existing maximum four retries, measured excess check, child exit recheck and cleanup remain."
+    },
+    {
+      "item": "Windows pipe regression",
+      "result": "Real connected pipe covers empty caller buffer, actual peer zero-byte WriteFile, two chunks separated by empty connected intervals, exact combined response bytes and writer-close EOF."
+    },
+    {
+      "item": "Windows actual-child regression",
+      "result": "Real spawned fixture gates stdout and stderr chunks by stdin, requires WouldBlock while live, exact combined chunks, eventual stdout/stderr EOF and successful child status. Stage waits are bounded to three seconds."
+    }
+  ],
+  "primary_sources": [
+    {
+      "url": "https://github.com/rust-lang/rust/blob/1.99.0/library/std/src/sys/io/error/windows.rs#L26",
+      "claim": "ERROR_NO_DATA is classified as BrokenPipe."
+    },
+    {
+      "url": "https://github.com/rust-lang/rust/blob/1.99.0/library/std/src/sys/pal/windows/handle.rs#L70-L81",
+      "claim": "Handle read converts BrokenPipe to successful zero bytes."
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-type-read-and-wait-modes",
+      "claim": "Nonblocking empty connected pipe returns ERROR_NO_DATA; byte mode preserves stream bytes."
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile",
+      "claim": "Synchronous lifetime requirements; successful pipe read with zero count can result from peer zero-byte WriteFile, so zero count alone does not prove EOF."
+    }
+  ],
+  "inference_boundary": "The source-level normalization defect and complete reader classification are verified. Old CI logs report invalid structured responses but contain no raw reply bytes/lengths or exact read interleaving; their exact capture contents and causation remain unobserved.",
+  "focused_native_ci_recommendation": [
+    {
+      "host": "Windows native",
+      "command": "cargo test --locked -p reshiki-process windows::quoting_tests::nonblocking_pipe_keeps_empty_connected_reads_open_between_chunks -- --exact"
+    },
+    {
+      "host": "Windows native",
+      "command": "cargo test --locked -p reshiki-process tests::actual_child_output_survives_empty_intervals_between_gated_chunks -- --exact"
+    },
+    {
+      "host": "Linux native",
+      "command": "cargo test --locked -p reshiki-process unix::ownership_tests::linux_unreaped_exit_is_a_transient_sample_before_owned_cleanup -- --exact"
+    },
+    {
+      "host": "All three native hosts",
+      "command": "Use fresh current-head mandatory workspace CI with exact application helper build, verified Java 21.0.11+10 runtime banner and real local OPSIN graph/stereo plus native-worker reverse naming tests; retain explicit Windows ignored renderer steps and six process-limit/geometry jobs."
+    }
+  ],
+  "execution_limitations": {
+    "cargo_or_rustc_run": false,
+    "native_Windows_run": false,
+    "gui_used": false,
+    "source_edited_by_reviewer": false,
+    "gh_rerun_or_mutation": false
+  },
+  "frozen_previous_failure_receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/ci-audit-followup-20261009T154722Z.json"
+}

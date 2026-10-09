@@ -160,6 +160,8 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python }}
       RESHIKI_REQUIRE_INCHI_HELPER: "1"
+      # Naming integration must launch this exact source's executable, not a test harness.
+      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.target, '-pc-windows-msvc') && '.exe' || '' }}
       # Windows symlink escape tests fail instead of skipping without the privilege.
       RESHIKI_REQUIRE_LINK_TESTS: "1"
     steps:
@@ -174,6 +176,8 @@ jobs:
         with:
           version: "0.12.3"
           python-version: ${{ matrix.python }}
+      - name: Select the pinned local naming runtime
+        uses: ./.github/actions/setup-naming-java
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-msvc
@@ -189,6 +193,8 @@ jobs:
       - name: Check the native application without reference dependencies
         run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
       - run: cargo check --workspace --all-targets --locked --no-default-features
+      - name: Build the exact application for local naming worker tests
+        run: cargo build --locked --no-default-features --bin reshiki
       - name: Audit agent API dependencies for every release target
         # cargo tree resolves all six release triples from one host.
         if: runner.os == 'macOS'
@@ -213,6 +219,11 @@ jobs:
         # Exercise the actual application widgets, including the Tiny Skia fallback.
         # Native desktop timing and accessibility acceptance remain separate.
         run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner -- --exact --ignored
+      - name: Test rendered local naming accessibility and scrolled insertion on Windows
+        if: runner.os == 'Windows'
+        run: "cargo test --locked --no-default-features --bin reshiki app::naming::tests:: -- --ignored"
+      # Required workspace tests include independent expected-name rules, exact
+      # local OPSIN reconstruction and cancellation/resource/missing-Java cases.
       - run: cargo test --workspace --locked --no-default-features
       - name: Test the isolated font export probe
         run: cargo test --locked --manifest-path tools/font-export-probe/Cargo.toml -j 2
@@ -275,6 +286,10 @@ jobs:
           arch: ${{ matrix.msvc_arch }}
       - name: Test the Rust geometry crate with the locked COSMolKit source
         run: cargo test --locked -p reshiki-geometry --features cosmolkit-core/op-contracts-strict --target ${{ matrix.target }}
+      - name: Check local naming process limits for this release target
+        run: cargo check --locked -p reshiki-process --all-targets --target ${{ matrix.target }}
+      - name: Test local naming process limits on the matching native host
+        run: cargo test --locked -p reshiki-process --target ${{ matrix.target }}
   reference:
     needs: scope
     if: needs.scope.outputs.live == 'true'

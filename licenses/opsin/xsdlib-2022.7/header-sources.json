@@ -1,0 +1,587 @@
+[
+  {
+    "source_file": "com/sun/msv/datatype/SerializationContext.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/Token.java",
+    "notice_file": "header-149183670dad.txt",
+    "sha256": "149183670dad7c9f783ac00dc38b06aebac17d85d3d5d7373894c534af0e151d"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/Match.java",
+    "notice_file": "header-149183670dad.txt",
+    "sha256": "149183670dad7c9f783ac00dc38b06aebac17d85d3d5d7373894c534af0e151d"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/ParserForXMLSchema.java",
+    "notice_file": "header-4c5a394111a5.txt",
+    "sha256": "4c5a394111a51c59ea2183f0259737f68c1acdc03d23e84d53986425ab028ff9"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/RegularExpression.java",
+    "notice_file": "header-149183670dad.txt",
+    "sha256": "149183670dad7c9f783ac00dc38b06aebac17d85d3d5d7373894c534af0e151d"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/REUtil.java",
+    "notice_file": "header-149183670dad.txt",
+    "sha256": "149183670dad7c9f783ac00dc38b06aebac17d85d3d5d7373894c534af0e151d"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/BMPattern.java",
+    "notice_file": "header-149183670dad.txt",
+    "sha256": "149183670dad7c9f783ac00dc38b06aebac17d85d3d5d7373894c534af0e151d"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/ParseException.java",
+    "notice_file": "header-149183670dad.txt",
+    "sha256": "149183670dad7c9f783ac00dc38b06aebac17d85d3d5d7373894c534af0e151d"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/RangeToken.java",
+    "notice_file": "header-260d34681c2b.txt",
+    "sha256": "260d34681c2b042336a5894fef411afa8d5c08136ab5b76a3c7e272c8b17c4f3"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/RegexParser.java",
+    "notice_file": "header-4c5a394111a5.txt",
+    "sha256": "4c5a394111a51c59ea2183f0259737f68c1acdc03d23e84d53986425ab028ff9"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/Op.java",
+    "notice_file": "header-149183670dad.txt",
+    "sha256": "149183670dad7c9f783ac00dc38b06aebac17d85d3d5d7373894c534af0e151d"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/regexp/InternalImpl.java",
+    "notice_file": "header-e1ed14acc868.txt",
+    "sha256": "e1ed14acc868bfc3a00cae796060f7fba41ec89c4be635be4c2c86d62f398c53"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/DatabindableDatatype.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/ErrorDatatypeLibrary.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/UnsignedLongType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/Discrete.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/HexBinaryType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/IntegerValueType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/NumberType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/ByteType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/GMonthType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/DoubleType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/NmtokenType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/QnameValueType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/UnicodeUtil.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/CommandLineTester.java",
+    "notice_file": "header-1078c6d1c54b.txt",
+    "sha256": "1078c6d1c54b28ad78e5bd9cb941a81298cc75b3b9591fd1a02c34f7848bd4fa"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/IntegerType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/ngimpl/DatatypeBuilderImpl.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/ngimpl/DataTypeLibraryImpl.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/GMonthDayType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/BinaryValueType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/MaxLengthFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/MinInclusiveFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/FloatType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/WhiteSpaceProcessor.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/LongType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/NormalizedStringType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/DatatypeFactory.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/DateTimeBaseType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/LengthFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/FractionDigitsFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/MaxInclusiveFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/FloatingNumberType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/MinExclusiveFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/IntType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/IDREFType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/GYearType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/FinalComponent.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/GYearMonthType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/ConcreteType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/WhiteSpaceFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/DurationType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/Comparator.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/XSDatatype.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/BuiltinAtomicType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/EnumerationFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/ListValueType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/TokenType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/BinaryBaseType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/DateTimeType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/ErrorType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/MaxExclusiveFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/UnsignedShortType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/UnsignedByteType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/EntityType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/IDType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/ShortType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/BooleanType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/NegativeIntegerType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/IntegerDerivedType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/PatternFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/MinLengthFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/DateType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/NameType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/regex/JDKImpl.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/regex/JDK50Impl.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/regex/RegExp.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/regex/XercesImpl.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/regex/RegExpFactory.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/PositiveIntegerType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/QnameType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/TypeIncubator.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/LanguageType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/GDayType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/DataTypeWithLexicalConstraintFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/RangeFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/DataTypeWithValueConstraintFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/DataTypeWithFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/ListType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/XmlNames.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/NcnameType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/Base64BinaryType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/XSDatatypeImpl.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/TimeType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/Proxy.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/NonPositiveIntegerType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/UnsignedIntType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/SimpleURType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/AbstractCalendarFormatter.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/IDateTimeValueType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/PreciseCalendarFormatter.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/AbstractCalendarParser.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/CalendarParser.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/BigDateTimeValueType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/BigTimeDurationValueType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/PreciseCalendarParser.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/Util.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/ITimeDurationValueType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/DateTimeFactory.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/CalendarFormatter.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/datetime/TimeZone.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/NonNegativeIntegerType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/AnyURIType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/StringType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/TotalDigitsFacet.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/msv/datatype/xsd/UnionType.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  },
+  {
+    "source_file": "com/sun/xml/util/XmlChars.java",
+    "notice_file": "header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54"
+  }
+]

@@ -1,0 +1,82 @@
+[
+  {
+    "source_file": "dk/brics/automaton/Automaton.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/AutomatonMatcher.java",
+    "notice_file": "header-81ead89903c1.txt",
+    "sha256": "81ead89903c15f5f94d42db379e91b13c02a1cf911ea4074868607128ed51103"
+  },
+  {
+    "source_file": "dk/brics/automaton/AutomatonProvider.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/BasicAutomata.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/BasicOperations.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/Datatypes.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/DatatypesAutomatonProvider.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/MinimizationOperations.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/RegExp.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/RunAutomaton.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/ShuffleOperations.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/SpecialOperations.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/State.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/StatePair.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/Transition.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  },
+  {
+    "source_file": "dk/brics/automaton/TransitionComparator.java",
+    "notice_file": "header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70"
+  }
+]

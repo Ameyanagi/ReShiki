@@ -13,4 +13,6 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
+Local chemical-name parsing and rule-based structure naming (under review): @Ameyanagi in [PR #275](https://github.com/Ameyanagi/ReShiki/pull/275); [current-source validation](changes/local-chemical-naming.md), [original local desktop review](chemical-naming-local-visual-review.md), native/history fixtures and pinned upstream engine notices.
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

@@ -1,0 +1,72 @@
+Window: "Untitled • — ReShiki", App: ReShiki.
+0 standard window Untitled • — ReShiki, Secondary Actions: Raise
+	1 container
+		2 button About ReShiki; check for updates, ID: header-about
+		3 button New · ⌘N, ID: header-new
+		4 button Open · ⌘O, ID: header-open
+		5 button Save · ⌘S, ID: header-save
+		6 button Save as · ⇧⌘S, ID: header-save-as
+		7 button Undo · ⌘Z, ID: header-undo
+		8 button (disabled) Redo · ⇧⌘Z, ID: header-redo
+		9 button Assistant, ID: header-assistant
+		10 button Import, ID: header-import
+		11 button Check drawing, ID: header-check
+		12 button Clean up…, ID: header-cleanup
+		13 button Export, ID: header-export
+		14 button Show or hide inspector, ID: header-inspector
+		15 button Text and object color, ID: style-color-menu
+		16 toggle button (settable, boolean) Select / move · v, Value: on, ID: tool-Select
+		17 toggle button (settable, boolean) Lasso select · l, Value: off, ID: tool-Lasso
+		18 toggle button (settable, boolean) 3D tilt, Value: off, ID: tool-Tilt
+		19 toggle button (settable, boolean) Eraser, Value: off, ID: tool-Erase
+		20 toggle button (settable, boolean) Atom label · C · c, Value: off, ID: tool-Atom
+		21 toggle button (settable, boolean) Single bond · 1, Value: off, ID: tool-Bond(1)
+		22 toggle button (settable, boolean) Double bond · 2, Value: off, ID: tool-Bond(2)
+		23 toggle button (settable, boolean) Triple bond · 3, Value: off, ID: tool-Bond(3)
+		24 toggle button (settable, boolean) Solid wedge, Value: off, ID: tool-Wedge
+		25 toggle button (settable, boolean) 6-membered · ⇧6, Value: off, ID: tool-Ring
+		26 toggle button (settable, boolean) Straight chain · ⇧X, Value: off, ID: tool-Chain(Straight)
+		27 toggle button (settable, boolean) Snaking chain, Value: off, ID: tool-Chain(Snaking)
+		28 toggle button (settable, boolean) Forward · e, Value: off, ID: tool-Arrow
+		29 toggle button (settable, boolean) Text label · t, Value: off, ID: tool-Text
+		30 toggle button (settable, boolean) Rectangle, Value: off, ID: tool-Graphic(Rectangle)
+		31 toggle button (settable, boolean) Ellipse, Value: off, ID: tool-Graphic(Ellipse)
+		32 toggle button (settable, boolean) Brackets · ⇧T, Value: off, ID: tool-Graphic(Brackets)
+		33 toggle button (settable, boolean) Graphic line, Value: off, ID: tool-Graphic(Line)
+		34 toggle button (settable, boolean) Bézier curve, Value: off, ID: tool-Graphic(Curve)
+		35 toggle button (settable, boolean) Arc, Value: off, ID: tool-Graphic(Arc)
+		36 toggle button (settable, boolean) Circled plus · ⇧E, Value: off, ID: tool-Graphic(Symbol(CirclePlus))
+		37 toggle button (settable, boolean) p orbital · ⇧G, Value: off, ID: tool-Graphic(Orbital(P))
+		38 toggle button (settable, boolean) C · c, Value: off, ID: element-C
+		39 toggle button (settable, boolean) N · n, Value: off, ID: element-N
+		40 toggle button (settable, boolean) O · o, Value: off, ID: element-O
+		41 toggle button (settable, boolean) S · s, Value: off, ID: element-S
+		42 toggle button (settable, boolean) P · p, Value: off, ID: element-P
+		43 toggle button (settable, boolean) *, Value: off, ID: element-*
+		44 button Help and keyboard shortcuts, ID: help-open
+		45 button Join the selection to another structure at an atom or bond, ID: context-command-2
+		46 button Group, ID: context-command-3
+		47 button More: 3D optimize…, Keyboard drawing (F8), ID: context-overflow
+		48 button (disabled) Align, ID: arrange-menu-AlignObjects
+		49 button (disabled) Distribute, ID: arrange-menu-Distribute
+		50 button Order, ID: arrange-menu-Order
+		51 button Flip horizontal, ID: arrange-flip-horizontal
+		52 button Flip vertical, ID: arrange-flip-vertical
+		53 button Rotate 180°, ID: arrange-rotate
+		54 button Open SMILES import, ID: naming.import
+		55 text field (settable) Chemical name, Value: ethanol, ID: naming.name
+		56 button Parse name locally, ID: naming.resolve
+		57 text field (settable) Editable preview SMILES, Value: CCO, ID: naming.smiles
+		58 button Update preview, ID: naming.update-preview
+		59 button Restore parsed structure, ID: naming.restore-preview
+		60 button Insert editable structure, ID: naming.insert
+		61 button Generate selected structure name locally, ID: naming.generate
+		62 button Copy name, ID: naming.copy-name
+	63 close button
+	64 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	65 minimize button
+	66 text Untitled • — ReShiki
+67 menu bar
+	68 ReShiki
+
+The focused UI element is 55 text field (settable) Chemical name, Value: ethanol, ID: naming.name

@@ -1,0 +1,236 @@
+[
+  {
+    "path": "licenses/opsin/NOTICE",
+    "sha256": "ed201cdf521225e8d4a159816b182c6a4cc051e5f8c577dc3077bdc459e5072d",
+    "bytes": 2873,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/OPSIN-LICENSE",
+    "sha256": "aeeafe2053175a5b34cb2ded4410581ccd36b82c734315be1a7a81c6f9fb4834",
+    "bytes": 1056,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/automaton-1.12-4/header-68396315e04d.txt",
+    "sha256": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70",
+    "bytes": 1529,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/automaton-1.12-4/header-81ead89903c1.txt",
+    "sha256": "81ead89903c15f5f94d42db379e91b13c02a1cf911ea4074868607128ed51103",
+    "bytes": 1542,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/automaton-1.12-4/header-sources.json",
+    "sha256": "859c72f9f62e2c17b20523e47defcf2e00aa061754ee415b28bfdfa99f5ceea5",
+    "bytes": 3154,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/automaton-1.12-4/upstream.pom",
+    "sha256": "e1f0a1c7cad058f344909e8016ff2e466764515c5cc55d4d988d6c601fa1f521",
+    "bytes": 4778,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/commons-io-2.21.0/META-INF_LICENSE.txt",
+    "sha256": "c1d1a38c99c48ccad170890ade6066e2e240bb6ce59861d4eb7f672eddd2a4c6",
+    "bytes": 11360,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/commons-io-2.21.0/META-INF_NOTICE.txt",
+    "sha256": "b54b0db6c617273efff79ba193bb01b05eadcddfff55c24063b38b2acef714c3",
+    "bytes": 172,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/commons-io-2.21.0/upstream.pom",
+    "sha256": "ae47795e721803ec8ff1deed74be28a811a02713bd5a3ab0ac67c2b58cb635ab",
+    "bytes": 20847,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/dependencies.json",
+    "sha256": "ed3d3dbfe1c3bc4e4614a66bda5574dc3cad54a27dedfad42c4d9817d5b0c957",
+    "bytes": 3230,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-079d048a1159.txt",
+    "sha256": "079d048a1159f9a533bf5cf6abf87d164ddfad75ebe981bc7fe8360c2386a233",
+    "bytes": 1223,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-137d3cbd2df8.txt",
+    "sha256": "137d3cbd2df8f7e9c348fa3938ac51ed82fb49a7cf34fae9836a45c9c1e156db",
+    "bytes": 1216,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-2360ac3a8ca3.txt",
+    "sha256": "2360ac3a8ca38a00e2bff84da055d3f9a4f1986e4944cb0ca191c64056f26141",
+    "bytes": 1230,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-30ad8a2c0731.txt",
+    "sha256": "30ad8a2c07310a0dfa42dfea2a59c230db0bed6cdba4d4e99ad9314089d5bc4b",
+    "bytes": 1218,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-381776e51cca.txt",
+    "sha256": "381776e51ccab9f47c7b6c6147709ec9ae26aef6d3fc757842b3e06a7d08f670",
+    "bytes": 1219,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-8a58bccbaaa1.txt",
+    "sha256": "8a58bccbaaa1014d7de61986aa47d1c1faefb6cc00162caf06df6fa06de3dca8",
+    "bytes": 1217,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-bf1c8f6c7c9f.txt",
+    "sha256": "bf1c8f6c7c9f6daf46cc69f3a9f38b74fd21ecde4c581650f8a651268a2ee8ae",
+    "bytes": 1234,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-c9ccd1f287bd.txt",
+    "sha256": "c9ccd1f287bd51a19d4bedf359d91196250d9fc2fc6c758cd74601026426fcb1",
+    "bytes": 1219,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-ce1608281b5b.txt",
+    "sha256": "ce1608281b5b9009b6a7f4ec775dbdbc5087202958591f8378d2783ce1fe67b3",
+    "bytes": 1219,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/header-sources.json",
+    "sha256": "07e40ce2951d75437eaceca9c30ea87d7918e125d14ab2d8999e5612dc6355e7",
+    "bytes": 1834,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/isorelax-20090621/upstream.pom",
+    "sha256": "cda6451d0231a973352b592ff950e39224ba6ba1a2f35eeab66511b5c225dff1",
+    "bytes": 5951,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/log4j-api-2.25.3/META-INF_LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "bytes": 11358,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/log4j-api-2.25.3/META-INF_NOTICE",
+    "sha256": "007ef6e72e17fa83cd07e455ab1251c127ab310a89434138bc8d01aef8de5f4e",
+    "bytes": 171,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/log4j-api-2.25.3/upstream.pom",
+    "sha256": "3284be6573aeb83346cff6b746fa325d23eadd9d09c8e286ed1d75904a12dd6e",
+    "bytes": 4513,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/stax2-api-4.2.2/META-INF_LICENSE",
+    "sha256": "b3e969d18f690ab8783e4ec77729c9fea85691b8090c550bb3c626dda5e837a7",
+    "bytes": 389,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/stax2-api-4.2.2/UPSTREAM-LICENSE",
+    "sha256": "23ea581cb6573ec7a0e05b1f5c6c73024149885796c24489563f377775f7fdb2",
+    "bytes": 1320,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/stax2-api-4.2.2/upstream.pom",
+    "sha256": "4e902ec556fc6598b41c2952ec1573edc815037e7330ec4922eab619422686e2",
+    "bytes": 6297,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/supplementary-license-sources.json",
+    "sha256": "9bbf7b42c1e03951cbeb42088b9e81f28531f0f2af13f34eaaa59715d94fb431",
+    "bytes": 531,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/woodstox-core-7.1.1/META-INF_LICENSE",
+    "sha256": "d2706a35658d83c27d7d5f357f5ba63877fd8694a3f6aee48b87036a41118c8a",
+    "bytes": 321,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/woodstox-core-7.1.1/UPSTREAM-LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "bytes": 11358,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/woodstox-core-7.1.1/upstream.pom",
+    "sha256": "afb5cb45d41c1f9e3675909de4fef242bdc1cea4476a0634ae20f4d7a54433ff",
+    "bytes": 9866,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/xsdlib-2022.7/header-1078c6d1c54b.txt",
+    "sha256": "1078c6d1c54b28ad78e5bd9cb941a81298cc75b3b9591fd1a02c34f7848bd4fa",
+    "bytes": 199,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/xsdlib-2022.7/header-149183670dad.txt",
+    "sha256": "149183670dad7c9f783ac00dc38b06aebac17d85d3d5d7373894c534af0e151d",
+    "bytes": 2700,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/xsdlib-2022.7/header-260d34681c2b.txt",
+    "sha256": "260d34681c2b042336a5894fef411afa8d5c08136ab5b76a3c7e272c8b17c4f3",
+    "bytes": 2700,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/xsdlib-2022.7/header-4c5a394111a5.txt",
+    "sha256": "4c5a394111a51c59ea2183f0259737f68c1acdc03d23e84d53986425ab028ff9",
+    "bytes": 2700,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/xsdlib-2022.7/header-7dc58b3955c7.txt",
+    "sha256": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54",
+    "bytes": 1598,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/xsdlib-2022.7/header-e1ed14acc868.txt",
+    "sha256": "e1ed14acc868bfc3a00cae796060f7fba41ec89c4be635be4c2c86d62f398c53",
+    "bytes": 1772,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/xsdlib-2022.7/header-sources.json",
+    "sha256": "b4c44da14ef7d9901bc222458e6282540b577f42b50dcc979c488d3ba94be06c",
+    "bytes": 23873,
+    "original_bytes_present_in_bundle_notice": true
+  },
+  {
+    "path": "licenses/opsin/xsdlib-2022.7/upstream.pom",
+    "sha256": "8649b880ac5dbb3549022c40eff4053930ea209c4aaf998925fb3d6dd75fb6c3",
+    "bytes": 8639,
+    "original_bytes_present_in_bundle_notice": true
+  }
+]
