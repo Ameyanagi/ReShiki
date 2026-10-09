@@ -287,6 +287,62 @@ fn multiple_attachments_place_by_the_first_reordered_pair() {
 }
 
 #[test]
+fn numbered_attachments_follow_explicit_ids_instead_of_numeric_sorting() {
+    let numbered = edit(
+        ASYMMETRIC_TWO_CONNECTIONS,
+        &[
+            (
+                "id='11' p='-10 0'",
+                "id='11' p='-10 0' ExternalConnectionNum='3'",
+            ),
+            (
+                "id='12' p='10 0'",
+                "id='12' p='10 0' ExternalConnectionNum='1'",
+            ),
+        ],
+    );
+    // Sparse identifiers are retained by the codec and consumed only after
+    // explicit pairing. Sorting them would select the other placement pair.
+    assert_eq!(accepted(&numbered), accepted(ASYMMETRIC_TWO_CONNECTIONS));
+    let reversed = edit(&numbered, &REVERSED);
+    assert_eq!(
+        accepted(&reversed),
+        accepted(&edit(ASYMMETRIC_TWO_CONNECTIONS, &REVERSED))
+    );
+    for (edits, message) in [
+        (
+            vec![("ExternalConnectionNum='3'", "ExternalConnectionNum='1'")],
+            "Duplicate external connection numbers",
+        ),
+        (vec![(" ExternalConnectionNum='3'", "")], "complete numbers"),
+        (
+            vec![(" ConnectionOrder='11 12'", "")],
+            "explicit ConnectionOrder",
+        ),
+        (
+            vec![("ExternalConnectionNum='3'", "ExternalConnectionNum='0'")],
+            "positive signed byte",
+        ),
+        (
+            vec![(
+                "id='13' p='0 0'",
+                "id='13' p='0 0' ExternalConnectionNum='1'",
+            )],
+            "requires an external connection point",
+        ),
+        (
+            vec![("B='12' E='13'", "B='12' E='14'")],
+            "must share one atom",
+        ),
+    ] {
+        let error = flatten_abbreviations(&edit(&numbered, &edits))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(message), "{error}");
+    }
+}
+
+#[test]
 fn accepted_single_attachments_are_exact() {
     // Scale 2 with both `significant` spellings; OMe keeps its spelling.
     let xml = r#"<CDXML><page><fragment id="1"><n id="2" p="-30 0"></n><b id="10" B="2" E="5"></b><n id="5" p="0 0" Element="8"><t p="0 0"><s>OMe</s></t></n><n id="6" p="2e-05 2.4691358e+08"></n><b id="9" B="5" E="6"></b></fragment></page></CDXML>"#;

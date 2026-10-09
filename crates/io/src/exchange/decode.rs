@@ -250,6 +250,14 @@ fn escape(out: &mut String, text: &str, attribute: bool) -> Result<()> {
     Ok(())
 }
 fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
+    if tree.raw.iter().any(|(tag, _)| *tag == 0x044b)
+        && (tree.raw.iter().filter(|(tag, _)| *tag == 0x044b).count() != 1
+            || tree.raw.iter().filter(|(tag, _)| *tag == 0x0400).count() != 1)
+    {
+        return Err(
+            "Numbered external connection needs unique number and NodeType properties".into(),
+        );
+    }
     let mut el = Element::new(tree.name);
     if tree.id != 0 {
         el.set("id", tree.id);
@@ -395,6 +403,15 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
             "Unformatted" | "CDXDate" if matches!(tree.name, "CDXML" | "page") => {}
             _ => return Err(format!("Unsupported binary drawing property: {}", p.name)),
         }
+    }
+    let attr = |name: &str| {
+        el.attrs
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_str())
+    };
+    if let Some(number) = attr("ExternalConnectionNum") {
+        external_connection_number(&el.name, attr("NodeType"), number)?;
     }
     if let Some(data) = utf8_text.or(text) {
         el.children

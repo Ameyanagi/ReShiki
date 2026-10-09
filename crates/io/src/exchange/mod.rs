@@ -125,6 +125,15 @@ fn integer<T: std::str::FromStr>(text: &str) -> Result<T> {
         .parse()
         .map_err(|_| "Drawing integer exceeds the binary format range".into())
 }
+fn external_connection_number(name: &str, node_type: Option<&str>, number: &str) -> Result<()> {
+    if name != "n" || node_type != Some("ExternalConnectionPoint") {
+        return Err("ExternalConnectionNum requires an external connection point".into());
+    }
+    if !number.trim().parse::<i8>().is_ok_and(|number| number > 0) {
+        return Err("ExternalConnectionNum must be a positive signed byte".into());
+    }
+    Ok(())
+}
 fn finite(text: &str) -> Result<f64> {
     let n: f64 = text.trim().parse().map_err(|_| "Invalid drawing number")?;
     if !n.is_finite() {

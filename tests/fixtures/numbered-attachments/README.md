@@ -1,0 +1,7 @@
+# Original numbered connection point fixtures
+
+Original controlled drawings, MIT OR Apache-2.0. No proprietary source or third-party sample is included. ChemDraw Prime 26.0.0.6599 on macOS opened the authored `*-source.cdxml` and saved each native `.cdx` on 2026-10-09 through the real File → Save As → ChemDraw operation. The single drawing is methoxytrimethylsilane; the two-point drawing is dimethyldimethoxysilane. `sparse` uses attachment identifiers 1 and 3. These are controlled examples, not the user's original failing Windows PowerPoint payload.
+
+The native CDX files contain property `0x044b` as a one-byte signed integer on ExternalConnectionPoint nodes. Read-only installed producer metadata identifies it as `ExternalConnectionNum`; its native node writer limits emission to node type 12 and positive signed bytes. The archived public SDK predates this property. The exact framework hash, symbol names and property receipts are preserved in the change's review evidence; no producer binary or disassembly is committed.
+
+ChemDraw rewrote the two-point ConnectionOrder to `14 15` and BondOrdering to `32 31` together while retaining external numbers 2/1 (and 3/1 for sparse). The lists pair object IDs; attachment numbers are not dense ordinal indices or a sorting rule. All these supported definitions attach through one silicon anchor. Ambiguous numbering and definitions whose external points connect to different internal anchors remain unsupported.

@@ -1,6 +1,79 @@
 use reshiki::engine::{LocalEngine, Request};
 
 #[tokio::test]
+async fn native_numbered_silicon_abbreviations_keep_the_exact_chemical_graph() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let engine = LocalEngine::default();
+    for (name, atoms, oxygens, label) in [
+        ("single", 6, 1, "SiMe3"),
+        ("two", 7, 2, "SiMe2"),
+        ("sparse", 7, 2, "SiMe2"),
+    ] {
+        let path = format!(
+            "{}/tests/fixtures/numbered-attachments/{name}.cdx",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let bytes = std::fs::read(path).unwrap();
+        let response = engine
+            .request(Request::import("cdx", &STANDARD.encode(&bytes)))
+            .await
+            .unwrap_or_else(|error| panic!("{name}: {error}"));
+        let identity = &response
+            .analysis
+            .as_ref()
+            .expect("native fixture must have molecular analysis")
+            .inchikey;
+        assert!(!identity.is_empty(), "{name}: missing molecular identity");
+        let doc = response.document.unwrap();
+        assert_eq!((doc.atoms.len(), doc.bonds.len()), (atoms, atoms - 1));
+        assert!(
+            doc.atoms
+                .iter()
+                .all(|atom| atom.element != "*" && atom.charge == 0)
+        );
+        let silicon = doc.atoms.iter().find(|atom| atom.element == "Si").unwrap();
+        let adjacent = |id| {
+            doc.bonds
+                .iter()
+                .filter(|bond| bond.a == id || bond.b == id)
+                .count()
+        };
+        assert_eq!(adjacent(silicon.id), 4);
+        let oxygen: Vec<_> = doc
+            .atoms
+            .iter()
+            .filter(|atom| atom.element == "O")
+            .collect();
+        assert_eq!(oxygen.len(), oxygens);
+        assert!(oxygen.iter().all(|atom| adjacent(atom.id) == 2));
+        assert_eq!(doc.abbreviation(silicon.id).unwrap().label, label);
+        assert!(doc.bonds.iter().all(|bond| bond.order == 1));
+        // The two authored orderings and ChemDraw's rewritten orderings must
+        // describe the same molecule, including the sparse numbered case.
+        let xml = std::fs::read_to_string(format!(
+            "{}/tests/fixtures/numbered-attachments/{name}-source.cdxml",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
+        let authored = engine
+            .request(Request::import("cdxml", &xml))
+            .await
+            .unwrap();
+        assert_eq!(identity, &authored.analysis.unwrap().inchikey);
+        let mut request = Request::molecule("export", doc.clone());
+        request.format = Some("cdx".into());
+        let exported = engine.request(request).await.unwrap().output.unwrap();
+        let roundtrip = engine
+            .request(Request::import("cdx", &exported))
+            .await
+            .unwrap();
+        assert_eq!(identity, &roundtrip.analysis.unwrap().inchikey);
+        let back = roundtrip.document.unwrap();
+        assert_eq!((back.atoms.len(), back.bonds.len()), (atoms, atoms - 1));
+    }
+}
+
+#[tokio::test]
 async fn binary_exchange_keeps_supported_structure_and_figure_objects() {
     let engine = LocalEngine::default();
     for name in [

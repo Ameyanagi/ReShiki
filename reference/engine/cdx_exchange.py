@@ -40,7 +40,9 @@ for code, enum in {
     0xA2F: {"Solid": 1, "Hollow": 2, "Angle": 3},
     0xA35: {"None": 0, "Full": 2, "HalfLeft": 3, "HalfRight": 4},
     0xA36: {"None": 0, "Full": 2, "HalfLeft": 3, "HalfRight": 4},
-    0xA37: {"None": 0, "Solid": 1, "Shaded": 2},
+    # Keep the existing native Rust correction when regenerating its schema:
+    # ChemDraw-written arrows use 1 for None; zero is Unspecified.
+    0xA37: {"Unspecified": 0, "None": 1, "Solid": 2, "Shaded": 4},
     0xA3B: {"None": 0, "Cross": 1, "Hash": 2},
 }.items():
     name, kind, _ = PROPERTIES[code]
@@ -49,6 +51,10 @@ PROPERTIES[0x13] = ("SupersededBy", "CDXObjectID", {})
 # ChemDraw 26 native CDX saves use a two-byte color-table index on atoms,
 # bonds, and contracted labels for persistent highlight paint.
 PROPERTIES[0x308] = ("highlightColor", "UINT16", {})
+# ChemDraw 26 native saves: numbered external connection points. Producer
+# metadata maps 0x044b to this name; its node writer emits a signed byte only
+# on ExternalConnectionPoint nodes. Keep it as chemical data, not bookkeeping.
+PROPERTIES[0x44B] = ("ExternalConnectionNum", "INT8", {})
 # The published overview duplicates 0xA38. Native closed-curve CDX uses
 # 0xA39 with an empty payload; 0xA38 is the numeric CurveSpacing property.
 PROPERTIES[0xA38] = ("CurveSpacing", "UINT16", {})
@@ -74,6 +80,22 @@ ANGLES = {"ChainAngle", "PositioningAngle"}
 # Non-rendering bookkeeping on current native nodes. Other unknown properties
 # on drawing objects are refused instead of silently discarding features.
 NODE_BOOKKEEPING = {0x448, 0x44D}
+
+
+def validate_external_connection(element):
+    number = element.get("ExternalConnectionNum")
+    if number is None:
+        return
+    if element.tag != "n" or element.get("NodeType") != "ExternalConnectionPoint":
+        raise ValueError("ExternalConnectionNum requires an external connection point")
+    try:
+        valid = 1 <= int(number) <= 127
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError("ExternalConnectionNum must be a positive signed byte")
+
+
 ENCODINGS = {
     65001: "utf-8",
     10000: "mac_roman",
@@ -263,6 +285,7 @@ def to_cdx(xml):
 
     def write(el, depth=0):
         nonlocal count, next_id
+        validate_external_connection(el)
         count += 1
         if depth > 64 or count > MAX_OBJECTS:
             raise ValueError("Drawing object limit exceeded")
@@ -406,6 +429,12 @@ def from_cdx(data):
 
     def convert(tree):
         el, raw, children = tree
+        if any(tag == 0x44B for tag, _ in raw) and (
+            sum(tag == 0x44B for tag, _ in raw) != 1 or sum(tag == 0x400 for tag, _ in raw) != 1
+        ):
+            raise ValueError(
+                "Numbered external connection needs unique number and NodeType properties"
+            )
         texts = {}
         # Font tables precede text decoding regardless of their file ordering.
         for tag, data in raw:
@@ -504,6 +533,7 @@ def from_cdx(data):
                 continue
             else:
                 raise ValueError("Unsupported binary drawing property: " + name)
+        validate_external_connection(el)
         if texts:
             tag = 0x709 if 0x709 in texts else 0x700
             decode_text(texts[tag], el, fonts, tag == 0x709)

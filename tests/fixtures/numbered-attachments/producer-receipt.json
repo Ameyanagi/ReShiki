@@ -1,0 +1,54 @@
+{
+  "producer": "ChemDraw Prime 26.0.0.6599",
+  "framework": "CoreChemistry.framework/Versions/A/CoreChemistry",
+  "framework_sha256": "121d2f253b0b0f5eefd8bc00ca27daaa511a65f2f7dd0a37e75b946f42b200d1",
+  "metadata_lookup_symbol": "CDXMLAttributeName(unsigned short), _Z18CDXMLAttributeNamet",
+  "property": {
+    "code": "0x044b",
+    "name": "ExternalConnectionNum",
+    "kind": "INT8",
+    "node_type": "ExternalConnectionPoint (12)",
+    "writer_symbol": "CDXNode::WriteAttributesTo(CDXDataSink&) const",
+    "writer_observation": "Uses PutAttribute(unsigned short, signed char), only on type12 with value >= 1; no producer code or binary bundled."
+  },
+  "archived_sdk": "https://iupac.github.io/IUPAC-FAIRSpec/cdx_sdk/TableOfProperties.htm",
+  "sdk_limit": "Archived table does not list this modern property. Mapping/type/applicability come from read-only producer metadata and native original controlled fixtures.",
+  "fixtures": [
+    {
+      "name": "single.cdx",
+      "bytes": 1767,
+      "sha256": "95f3b9936c89de6bf09b244d85c92ea5510ca2811cfc08e7b43eaa6415bcc33c",
+      "base": "51fa0991da2507bb00b27c1b420e807468de6423",
+      "before_rust_decoder": "Unsupported binary drawing property 0x044b",
+      "numbers": [
+        1
+      ]
+    },
+    {
+      "name": "two.cdx",
+      "bytes": 2058,
+      "sha256": "c7184834fc14c742fe294290a63dc6e8c707954c1d608184409ae366e296dafa",
+      "base": "51fa0991da2507bb00b27c1b420e807468de6423",
+      "before_rust_decoder": "Unsupported binary drawing property 0x044b",
+      "numbers": [
+        2,
+        1
+      ],
+      "ConnectionOrder": "14 15",
+      "BondOrdering": "32 31"
+    },
+    {
+      "name": "sparse.cdx",
+      "bytes": 2061,
+      "sha256": "d04b569a438a448850f9ec37f96f27b78a1b43b18f592160ba9ee6d577323d79",
+      "base": "51fa0991da2507bb00b27c1b420e807468de6423",
+      "before_rust_decoder": "Unsupported binary drawing property 0x044b",
+      "numbers": [
+        3,
+        1
+      ],
+      "ConnectionOrder": "14 15",
+      "BondOrdering": "32 31"
+    }
+  ]
+}
