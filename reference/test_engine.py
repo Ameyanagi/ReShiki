@@ -197,10 +197,13 @@ class ChemistryTests(unittest.TestCase):
     def test_builtin_catalog_matches_frozen_pubchem_formula_and_stereochemistry(self):
         catalog = json.loads((ROOT / "assets/template-catalog.json").read_text(encoding="utf-8"))
         library = json.loads((ROOT / "assets/templates.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(catalog), 91)
-        self.assertEqual(len(library), len(catalog))
+        self.assertEqual(len(catalog), 92)
+        model_catalog = [item for item in catalog if item.get("geometry") == "model:porphine"]
+        generated_catalog = [item for item in catalog if item.get("geometry") != "model:porphine"]
+        self.assertEqual([item["name"] for item in model_catalog], ["Porphine (21H,23H)"])
+        self.assertEqual(len(library), len(generated_catalog))
         self.assertEqual(sum(item["group"] == "Amino acids" for item in catalog), 20)
-        for expected, item in zip(catalog, library):
+        for expected, item in zip(generated_catalog, library):
             with self.subTest(name=expected["name"]):
                 self.assertEqual(item["name"], expected["name"])
                 for operation in ("analyze", "clean"):
@@ -217,6 +220,31 @@ class ChemistryTests(unittest.TestCase):
                     )["output"]
                     result = handle(dict(protocol=1, operation="import", format="mol", text=mol))
                     self.assertEqual(result["analysis"]["inchikey"], expected["inchikey"])
+
+        # Rust owns this template's geometry; regeneration deliberately leaves
+        # it out of templates.json. Check its frozen locant graph independently.
+        expected = model_catalog[0]
+        core = json.loads((ROOT / "assets/porphine-core.json").read_text(encoding="utf-8"))
+        self.assertEqual({key: value for key, value in core.items() if key != "bonds"}, expected)
+        mol = Chem.RWMol()
+        for locant in range(1, 25):
+            atom = Chem.Atom("C" if locant <= 20 else "N")
+            if locant in (21, 23):
+                atom.SetNumExplicitHs(1)
+            mol.AddAtom(atom)
+        for a, b, order in core["bonds"]:
+            mol.AddBond(a - 1, b - 1, {1: Chem.BondType.SINGLE, 2: Chem.BondType.DOUBLE}[order])
+        Chem.SanitizeMol(mol)
+        self.assertEqual(Chem.MolToInchiKey(mol), expected["inchikey"])
+        self.assertEqual(
+            Chem.MolToInchiKey(Chem.MolFromSmiles(core["smiles"])), expected["inchikey"]
+        )
+        document = imported(Chem.MolToSmiles(mol))["document"]
+        for operation in ("analyze", "clean"):
+            with self.subTest(name=expected["name"], operation=operation):
+                result = handle(dict(protocol=1, operation=operation, document=document))
+                self.assertEqual(result["analysis"]["formula"], expected["formula"])
+                self.assertEqual(result["analysis"]["inchikey"], expected["depiction_inchikey"])
 
     def test_chemdraw_saved_ring_tools_are_molecules_and_keep_projected_positions(self):
         result = handle(
