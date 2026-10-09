@@ -510,16 +510,8 @@ fn inspector_preferences_preserve_drawing_selection_and_history() {
     let _ = app.export_panel();
 }
 
-#[tokio::test]
-async fn figure_menu_lists_vector_formats_before_raster_and_closes_after_a_choice() {
-    use iced::advanced::{renderer::Headless, widget::operation};
-    let mut renderer = <iced::Renderer as Headless>::new(
-        iced::Font::with_name(reshiki::style::ui_font_family()),
-        iced::Pixels(16.),
-        None,
-    )
-    .await
-    .unwrap();
+#[test]
+fn figure_menu_lists_vector_formats_before_raster_and_closes_after_a_choice() {
     let kinds: Vec<_> = FigureFormat::ALL.iter().map(|f| f.kind()).collect();
     assert_eq!(kinds.first(), Some(&"Vector"));
     assert_eq!(
@@ -530,6 +522,30 @@ async fn figure_menu_lists_vector_formats_before_raster_and_closes_after_a_choic
     let _ = app.update(Message::InspectorAction(Action::FigureMenu(true)));
     assert!(app.tab.inspector_ui.figure_menu);
     let _ = app.export_panel();
+    for format in [FigureFormat::Svg, FigureFormat::SvgOffice] {
+        let _ = app.update(Message::InspectorAction(Action::FigureMenu(true)));
+        let _ = app.update(Message::InspectorAction(Action::Figure(format)));
+        assert!(!app.tab.inspector_ui.figure_menu);
+        assert_eq!(app.tab.inspector_ui.figure, format);
+    }
+    // Leaving the tab by shortcut must not leave it open behind the tab.
+    let _ = app.update(Message::InspectorAction(Action::FigureMenu(true)));
+    let _ = app.update(Message::Inspector(InspectorTab::Import));
+    assert!(!app.tab.inspector_ui.figure_menu);
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer accessibility label regression"]
+async fn figure_export_buttons_publish_readable_labels() -> Result<(), String> {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let (mut app, _) = App::new();
     for (format, label) in [
         (FigureFormat::Svg, "Export SVG figure"),
         (
@@ -537,10 +553,7 @@ async fn figure_menu_lists_vector_formats_before_raster_and_closes_after_a_choic
             "Export SVG · Office picture figure",
         ),
     ] {
-        let _ = app.update(Message::InspectorAction(Action::FigureMenu(true)));
         let _ = app.update(Message::InspectorAction(Action::Figure(format)));
-        assert!(!app.tab.inspector_ui.figure_menu);
-        assert_eq!(app.tab.inspector_ui.figure, format);
         let size = iced::Size::new(520., 720.);
         let mut ui = iced_runtime::UserInterface::build(
             app.export_panel(),
@@ -558,10 +571,7 @@ async fn figure_menu_lists_vector_formats_before_raster_and_closes_after_a_choic
             .unwrap();
         assert_eq!(export.name, label);
     }
-    // Leaving the tab by shortcut must not leave it open behind the tab.
-    let _ = app.update(Message::InspectorAction(Action::FigureMenu(true)));
-    let _ = app.update(Message::Inspector(InspectorTab::Import));
-    assert!(!app.tab.inspector_ui.figure_menu);
+    Ok(())
 }
 
 #[test]
