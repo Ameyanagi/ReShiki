@@ -29,7 +29,8 @@
   "capture_conditions": {
     "before_apply": "Blank drawing, 100% view, F8 keyboard drawing on. Completed draft stayed in Assistant; canvas remained blank.",
     "after_apply": "Manual Apply selected 3 atoms / 2 bonds. F8 off; automatic fit at 250%. SaveAs wrote native version 19.",
-    "redo": "One Undo removed whole graph; Redo restored it. Published Redo capture is unselected at 250%, F8 off. App quit cleanly."
+    "redo": "One Undo removed whole graph; Redo restored it. Published Redo capture is unselected at 250%, F8 off. App quit cleanly.",
+    "reopened": "Exact saved native opened at 250%, keyboard drawing off, JACS / ACS, Arial 10 pt; unselected OH drawing and Properties formula/counts/canonical CCO, clean filename and disabled Undo. Recovery banner dismissed in memory only; no Save."
   },
   "ordinary_auto_apply_preference_visible_before_exercise": true,
   "local_attachment_without_canvas_change": true,
@@ -38,21 +39,52 @@
   "undo_whole_graph_observed": true,
   "redo_whole_graph_observed": true,
   "native_save_observed": true,
-  "native_ui_reopen": "Not included in the provided desktop observations; independent saved-graph read is verified.",
+  "native_ui_reopen": {
+    "exact_saved_native_bytes_unchanged": true,
+    "formula": "C2H6O",
+    "atoms": 3,
+    "bonds": 2,
+    "canonical_smiles": "CCO",
+    "filename_clean": true,
+    "undo_disabled": true,
+    "view_percent": 250,
+    "keyboard_drawing": "off",
+    "drawing_style": "JACS / ACS",
+    "font": "Arial 10 pt",
+    "actions": "Opened the exact bundled SaveAs graph in the preserved signed app; dismissed the recovery banner in memory, inspected Properties, then closed cleanly without Save or inference. No recovery files deleted.",
+    "capture": "../../images/assistant-setup/assistant-guided-reopened.jpg",
+    "opened_filename": "guided-ethanol.rsk",
+    "opened_native": "../../images/assistant-setup/guided-ethanol.rsk"
+  },
   "visible_review_summary": "Matches the source: two-carbon chain, two single bonds, terminal OH, and no title. No visible corrections needed.",
   "saved_native_sha256": "60aa141bea3ed38c5b38390dade64a099e5b458bf86f1e7cd4a1ed535f47e921",
   "reference": "tests/fixtures/assistant-benchmark/v1/ethanol.reference.json",
   "score": "score.json",
   "saved_graph": "drawing.rsk",
   "evidence_sha256": {
-    "assistant-draft-before-apply.jpg": "669217155cfdba507f6c45fd52f501a6bf3d55564683d1477e350a6cd79efa48",
-    "assistant-redo-desktop.jpg": "de49055e3e2ce8c8ec7b3c0d7cd6722079156e40c433bd066152ccb4eca03b3a"
+    "../../images/assistant-setup/assistant-draft-before-apply.jpg": "669217155cfdba507f6c45fd52f501a6bf3d55564683d1477e350a6cd79efa48",
+    "../../images/assistant-setup/assistant-redo-desktop.jpg": "de49055e3e2ce8c8ec7b3c0d7cd6722079156e40c433bd066152ccb4eca03b3a"
   },
   "limitations": [
     "Known guided control with locally visible reference; not pooled with unassisted baseline or general image-quality metrics.",
     "Visual review statement is model output; independent RDKit graph identity is separate evidence.",
-    "Simulated installation/sign-in/failure desktop checks remain pending parent capture."
+    "Actual native GUI coverage is macOS arm64; other-platform GUI remains unverified."
   ],
   "completion_observation_bound_utc": "2026-10-09T09:33:53.910Z",
-  "completion_observation_timestamp_basis": "Derived from the recorded Send start plus the reported observation interval; not an exact backend completion timestamp."
+  "completion_observation_timestamp_basis": "Derived from the recorded Send start plus the reported observation interval; not an exact backend completion timestamp.",
+  "parent_pull_request": "https://github.com/Ameyanagi/ReShiki/pull/280",
+  "merged_parent_documentation_commit": "a9140833594b4098932d371036e0c3ba4182ab69",
+  "parent_review": "../../changes/assistant-setup-review-2026-10-09.md",
+  "parent_review_provenance": "../../images/assistant-setup/provenance.json",
+  "native_ui_reopen_observed": true,
+  "reopened_capture": "../../images/assistant-setup/assistant-guided-reopened.jpg",
+  "reopened_capture_sha256": "d8b28247eb94f8c6a5618f058039f0ecb8bee377198e6ce64190da61546714b5",
+  "simulated_setup_followup": {
+    "native_ui_observed": true,
+    "platform": "macOS arm64",
+    "source_commit": "43e3d80dde9c9f1da1be04e2525182aea390cc75",
+    "inference_workflows": 0,
+    "scope": "Account-free simulated backend fixtures, not real account logout or removed installation; original captures and exact action/hash receipt are in parent review."
+  },
+  "evidence_reuse": "The parent review holds the same original draft/Redo JPEG bytes; this control reuses those images instead of retaining duplicate copies after merging the parent documentation."
 }

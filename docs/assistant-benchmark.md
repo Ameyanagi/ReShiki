@@ -1,5 +1,11 @@
 # Assistant image-to-structure benchmark
 
+Status: under review, PR pending; author @Ameyanagi, project creator and maintainer.
+Addresses [issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) and is stacked
+on the guided setup change in [open PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
+The measured unassisted backend remains the unchanged `51fa0991` Nightly; merging
+the parent review documentation does not change that baseline or its results.
+
 This is a small, versioned QA cohort for the actual Codex Assistant backend. Its
 images are original synthetic drawings rendered by ReShiki, with deterministic
 resolution, contrast and cropping changes. Results measure these particular
@@ -157,20 +163,25 @@ establish real-scan accuracy or a general peptide/macrocycle success rate.
 
 ## Separate native guided control
 
-The actual #93 desktop exercise is recorded separately in
+The actual [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280) desktop exercise is recorded separately in
 [the guided control receipt](assistant-benchmark-results/guided-20261009/README.md).
 One explicitly selected Sol/xhigh request produced an editable ethanol draft
 while the blank canvas remained unchanged until manual Apply. The exact native
 SaveAs independently scores as `CCO`, three heavy atoms, two single bonds and one
 neutral fragment with no localized errors. One Undo removed the graph; Redo
-restored it.
+restored it. Actual reopening of the exact saved native in the preserved app shows
+`C2H6O`, three atoms, two bonds and canonical `CCO` in Properties, with a clean
+filename and disabled Undo. No further Save or inference occurred.
 
 The app displayed an integer elapsed 62s; completion was observed within 181.712s
 from Send. These are different timing observations, not an exact latency measure.
 This control stays outside the unassisted baseline denominator. Baseline plus
-control used 14 of 16 allowed workflows, with bounded running intervals below 1800s.
-Simulated setup-failure desktop captures and a separate native UI reopen are not
-claimed by this control record.
+control used 14 of 16 allowed workflows, with bounded running intervals at most
+1681.27s of 1800s. The parent's [native review](changes/assistant-setup-review-2026-10-09.md)
+also records actual macOS arm64 UI checks with clearly labeled account-free
+simulated setup backends; those checks did not use Send or inference. Other-platform
+GUI remains unverified. Neither the guided control nor the setup fixtures change
+the baseline's six completed exact finite-reference graphs.
 
 ## Scorer and validation checks
 

@@ -4,6 +4,7 @@ This is a separate first-use control on #93 commit
 `43e3d80dde9c9f1da1be04e2525182aea390cc75`, using the fresh debug macOS arm64
 bundle. It is **excluded from the unassisted baseline denominator**. The local
 reference is visible to the user in this guided workflow.
+The parent setup change is under review in [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
 
 One Send used explicitly selected GPT-6.1-Sol / Extra high. The connection was
 ready, the example attached locally, and the canvas remained blank until manual
@@ -16,12 +17,18 @@ verification.
 The exact [native save](drawing.rsk) independently scores as `CCO`, three heavy
 atoms, two single bonds, neutral and one fragment, with no atom/hydrogen/bond/
 stereo/fragment/abbreviation errors. See [score.json](score.json). One Undo
-removed the whole graph and Redo restored it. Native SaveAs and clean quit were
-observed; a separate native UI reopen is not claimed.
+removed the whole graph and Redo restored it. Native SaveAs, clean quit and actual
+UI reopening of the exact saved graph were observed. Reopened Properties show
+`C2H6O`, three atoms, two bonds and canonical `CCO`; filename is clean and Undo is
+disabled. The native file and independent score remain unchanged. Reopening used
+250%, keyboard drawing off, JACS / ACS and Arial 10 pt; it closed without Save or
+inference. The recovery banner was dismissed in memory only, with no file deletion.
 
-| Completed draft before manual Apply                                                                     | Saved graph restored by Redo                                                               |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| ![Completed ethanol draft with Apply available while canvas is blank](assistant-draft-before-apply.jpg) | ![Saved native ethanol restored by Redo on the drawing canvas](assistant-redo-desktop.jpg) |
+![Exact saved guided ethanol reopened with formula, atom/bond counts and canonical CCO in Properties](../../images/assistant-setup/assistant-guided-reopened.jpg)
+
+| Completed draft before manual Apply                                                                                                  | Saved graph restored by Redo                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| ![Completed ethanol draft with Apply available while canvas is blank](../../images/assistant-setup/assistant-draft-before-apply.jpg) | ![Saved native ethanol restored by Redo on the drawing canvas](../../images/assistant-setup/assistant-redo-desktop.jpg) |
 
 Capture conditions differ deliberately: before Apply the blank canvas was at 100%
 with F8 keyboard drawing on; after Apply F8 was off and the app fitted the graph
@@ -37,6 +44,10 @@ most 1681.27s of 1800s, excluding idle time between the experiments. No extra re
 or model fallback was used. Service tier was not recorded in these desktop
 observations and is not inferred from the baseline.
 
-Simulated installation/sign-in/failure desktop checks remain pending parent
-capture. This successful known guided example does not increase the baseline's
+The parent's [native setup review](../../changes/assistant-setup-review-2026-10-09.md)
+also includes actual macOS arm64 UI checks with clearly labeled account-free
+simulated sign-out, installation, broken/stalled handshake and cancellation
+backends. The real account, installation and configuration stayed intact; no Send
+or inference occurred in those fixture processes. Other-platform GUI remains
+unverified. This successful known guided example does not increase the baseline's
 six completed exact graphs or establish accuracy on unseen images.
