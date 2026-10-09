@@ -14,7 +14,8 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
 Coordination attachment, in-place chelate closure and endpoint-independent dative
-projection (under review): @Ameyanagi, addressing
+projection (under review in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)):
+@Ameyanagi, addressing
 [#246](https://github.com/Ameyanagi/ReShiki/issues/246). See the
 [desktop validation record](coordination-desktop-validation.md).
 

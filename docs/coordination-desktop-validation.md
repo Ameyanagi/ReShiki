@@ -1,6 +1,7 @@
 # Coordination attachment: native desktop validation
 
-**Under review**, addressing [#246](https://github.com/Ameyanagi/ReShiki/issues/246).
+**Under review in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)**,
+addressing [#246](https://github.com/Ameyanagi/ReShiki/issues/246).
 Contribution: @Ameyanagi, project creator and maintainer. The
 [coordination guide](fragment-joining.md#coordination-contacts-in-place) describes
 the supported donor/metal endpoints, keyboard action and interchange limits.
@@ -57,8 +58,8 @@ with no Undo entry. This distinction is visible in the panel and matters when
 matching the candidate: the candidate replay starts from a fresh original and
 explicitly adds **donor 10 → Co1** using **Coordinate in place…**.
 
-| Baseline: ordinary Connect, panel anchor 10, rejected | Candidate: explicit donor 10 → Co1 succeeds |
-| --- | --- |
+| Baseline: ordinary Connect, panel anchor 10, rejected                                                                                                                       | Candidate: explicit donor 10 → Co1 succeeds                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![Ordinary Move and attach uses Atom 10 and rejects Co3+ for lack of covalent valence; the original drawing is unchanged.](images/coordination/co-en3-connect-rejected.jpg) | ![Coordinate in place adds the matching donor-10 contact without moving atoms; whole Properties reports 13 atoms and 10 bonds.](images/coordination/co-en3-donor10-contact-success.jpg) |
 
 The [one-contact native save](../tests/fixtures/coordination/co-en3-one-contact-desktop.rsk)
@@ -91,8 +92,8 @@ actual contact, changing 15 bonds to 14; this proves the duplicate did not add
 another Undo entry. **Redo** restored 15 bonds. Save As produced
 [co-en3-desktop-assembled.rsk](../tests/fixtures/coordination/co-en3-desktop-assembled.rsk).
 
-| Saved desktop assembly | Reopened in a fresh process |
-| --- | --- |
+| Saved desktop assembly                                                                                                         | Reopened in a fresh process                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![The complete six-contact complex after Save As, with 13 atoms and 15 bonds.](images/coordination/co-en3-assembled-saved.jpg) | ![Fresh-process reopening retains all six contacts and whole-drawing counts, with Undo disabled.](images/coordination/co-en3-assembled-reopened.jpg) |
 
 The retained [independent audit](fixtures/coordination/desktop-native-independent-audit.json)
@@ -114,8 +115,8 @@ The labeled **Mark [**, **Connect ]** and **Coordinate }** controls show the
 donor/metal target context. These are two controls in the candidate application,
 not a frozen-base keyboard screenshot comparison.
 
-| Candidate ordinary ] rejects covalent attachment | Candidate } adds the marked donor contact |
-| --- | --- |
+| Candidate ordinary ] rejects covalent attachment                                                                                                                                                                   | Candidate } adds the marked donor contact                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![With donor N5 marked and Co1 active, ordinary Connect rejects the covalent operation; the labeled Mark, Connect and Coordinate controls are visible.](images/coordination/co-en3-keyboard-covalent-rejected.jpg) | ![Coordinate } adds donor 5 to Co1; the inspector currently shows only selected cobalt, one atom and zero bonds.](images/coordination/co-en3-keyboard-coordinate-success.jpg) |
 
 The success inspector above is **Selection · Co+3 · 1 atom · 0 bonds**; those
@@ -142,8 +143,8 @@ control and selection handles. Save As produced
 [co-en3-projection-tip-desktop.rsk](../tests/fixtures/coordination/co-en3-projection-tip-desktop.rsk),
 then a fresh process reopened it with a clean title and Undo disabled.
 
-| Reverse projection tip on the selected bond | Saved result reopened, selection cleared |
-| --- | --- |
+| Reverse projection tip on the selected bond                                                                                                                   | Saved result reopened, selection cleared                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![The selected donor-5 contact is reversed only in projection appearance using the inspector command.](images/coordination/co-en3-reverse-projection-tip.jpg) | ![Fresh-process native reopening retains the changed projection tip and the same 13-atom, 15-bond chemical graph.](images/coordination/co-en3-projection-tip-reopened.jpg) |
 
 The native audit compares the before and saved documents: only bond array
