@@ -47,8 +47,11 @@ impl Tool {
             }
             Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag subtracts",
             Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15° · Escape cancels",
-            Self::Chain(_) => {
-                "Drag a chain · Ctrl bends · Shift flips · Click places the chosen number of carbons"
+            Self::Chain(ChainMode::Straight) => {
+                "Drag a regular zigzag toward the pointer · Ctrl bends · Shift flips · Click places the chosen number of carbons"
+            }
+            Self::Chain(ChainMode::Snaking) => {
+                "Steer while dragging · Retrace earlier vertices to shorten · Shift flips the first turn"
             }
             Self::Bond(2) => {
                 "Click a bond to make it double · Click again to shift centered / left / right"

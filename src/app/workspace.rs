@@ -502,7 +502,10 @@ impl App {
                 &super::palettes::Action::Ring(self.ring_size, false),
             )
         };
-        let chain = format!("Straight chain · {}", keys(Modifiers::SHIFT, "X"));
+        let chain = format!(
+            "Straight chain · {} · Drag a regular zigzag toward the pointer",
+            keys(Modifiers::SHIFT, "X")
+        );
         let atom = format!(
             "Atom label · {}",
             super::palettes::element_hint(&self.element)
@@ -556,7 +559,7 @@ impl App {
             (Tool::Chain(reshiki::chains::ChainMode::Straight), &chain),
             (
                 Tool::Chain(reshiki::chains::ChainMode::Snaking),
-                "Snaking chain",
+                "Snaking chain · Steer while dragging · Retrace to shorten",
             ),
             (Tool::Arrow, arrow.as_str()),
             (Tool::Text, "Text label · t"),
@@ -1276,7 +1279,11 @@ impl App {
                 .into(),
                 self.bond_constraints(),
             ],
-            "Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms",
+            if mode == reshiki::chains::ChainMode::Snaking {
+                "Steer while dragging · Retrace to shorten · Shift flips start · Alt frees"
+            } else {
+                "Drag a regular zigzag · Ctrl bends · Shift flips start · Alt frees"
+            },
         )
     }
 

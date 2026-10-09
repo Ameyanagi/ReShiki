@@ -8,21 +8,22 @@ pub(super) fn chain(f: &mut Frame<'_>, ink: Color, mode: reshiki::chains::ChainM
         line(
             f,
             ink,
-            &[(2., 15.), (7., 8.), (12., 15.), (17., 8.), (22., 15.)],
+            &[(2., 14.), (8.67, 10.15), (15.33, 14.), (22., 10.15)],
         );
     } else {
-        line(
-            f,
-            ink,
-            &[
-                (2., 19.),
-                (7., 13.),
-                (5., 6.),
-                (12., 3.),
-                (17., 9.),
-                (23., 7.),
-            ],
-        );
+        line(f, ink, &[(2., 19.), (7.2, 16.), (12.4, 19.), (17.6, 16.)]);
+        // A steering gesture above the same ordinary zigzag distinguishes the
+        // interaction without suggesting a different alkyl conformation.
+        let steering = Path::new(|b| {
+            b.move_to(Point::new(6., 10.));
+            b.bezier_curve_to(
+                Point::new(8., 3.),
+                Point::new(21., 2.),
+                Point::new(21., 10.),
+            );
+        });
+        f.stroke(&steering, Stroke::default().with_color(ink).with_width(1.5));
+        line(f, ink, &[(18., 7.), (21., 10.), (23., 7.)]);
     }
 }
 
