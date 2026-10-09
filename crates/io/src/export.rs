@@ -178,9 +178,9 @@ fn render_drawing(
     match format {
         #[cfg(windows)]
         "emf" => if clipboard {
-            crate::native_windows::metafile(&tree)
+            crate::native_windows::metafile(&tree, doc)
         } else {
-            crate::native_windows::file_metafile(&tree)
+            crate::native_windows::file_metafile(&tree, doc)
         }
         .map(|bytes| Figure {
             bytes,

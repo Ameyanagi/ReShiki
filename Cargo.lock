@@ -3936,6 +3936,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "reshiki-metafile"
+version = "0.1.0"
+
+[[package]]
 name = "reshiki-model"
 version = "0.1.0"
 dependencies = [
@@ -3945,6 +3949,7 @@ dependencies = [
  "image",
  "png 0.17.16",
  "reshiki-chemistry",
+ "reshiki-metafile",
  "reshiki-process-heap",
  "resvg 0.45.1",
  "roxmltree 0.20.0",
@@ -3971,6 +3976,7 @@ dependencies = [
  "image",
  "png 0.17.16",
  "raw-window-handle",
+ "reshiki-metafile",
  "serde",
  "serde_json",
  "tempfile",

@@ -180,3 +180,31 @@ fn picture_memory_counts_a_shared_picture_once() {
     assert_eq!(picture_memory([&Document::default()]), 0);
     assert_eq!(picture_memory(std::iter::empty::<&Document>()), 0);
 }
+
+#[test]
+fn picture_memory_includes_original_metafile_once_across_history() {
+    let mut emf = vec![0; 108];
+    for (offset, value) in [
+        (0, 1),
+        (4, 88),
+        (32, 2540),
+        (36, 1270),
+        (40, 0x464d4520),
+        (44, 0x10000),
+        (48, 108),
+        (52, 2),
+        (56, 1),
+        (88, 14),
+        (92, 20),
+        (104, 20),
+    ] {
+        emf[offset..offset + 4].copy_from_slice(&u32::to_le_bytes(value));
+    }
+    let preview = picture();
+    let original = crate::pictures::Picture::from_emf(&emf, preview.png()).unwrap();
+    let document = with_pictures(&[&original, &original.clone()]);
+    assert_eq!(
+        picture_memory([&document, &document.clone()]),
+        (original.png().len() + emf.len()) as u64
+    );
+}

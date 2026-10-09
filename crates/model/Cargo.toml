@@ -13,6 +13,7 @@ rdkit-reference = ["reshiki-chemistry/rdkit-reference"]
 
 [dependencies]
 reshiki-chemistry = { path = "../chemistry" }
+reshiki-metafile = { path = "../metafile" }
 iced_core = "0.14"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = [

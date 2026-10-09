@@ -5,6 +5,175 @@ use super::*;
 // not overlap across independent test threads.
 static METAFILE_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+fn spectrum_bounds(image: &image::RgbaImage) -> [u32; 4] {
+    image
+        .enumerate_pixels()
+        .filter(|(_, _, p)| p.0[2] > 150 && p.0[0] < 80)
+        .fold(
+            [u32::MAX, u32::MAX, 0, 0],
+            |[lo_x, lo_y, hi_x, hi_y], (x, y, _)| {
+                [lo_x.min(x), lo_y.min(y), hi_x.max(x), hi_y.max(y)]
+            },
+        )
+}
+
+#[test]
+fn imported_spectrum_preview_and_reexport_keep_frame_colors_and_vectors() {
+    let _guard = METAFILE_TEST.lock().unwrap();
+    for source in [
+        &include_bytes!("../../../../docs/changes/fixtures/emf-import/controlled-spectrum.emf")[..],
+        &include_bytes!(
+            "../../../../docs/changes/fixtures/emf-import/controlled-spectrum-shifted.emf"
+        )[..],
+    ] {
+        assert_imported_spectrum(source);
+    }
+}
+
+fn assert_imported_spectrum(source: &[u8]) {
+    let dimensions = reshiki_metafile::validate(source).unwrap();
+    assert!((dimensions.width_pt * 25.4 / 72. - 100.).abs() < 0.001);
+    assert!((dimensions.height_pt * 25.4 / 72. - 60.).abs() < 0.001);
+    let preview = import_metafile(source).unwrap();
+    let image = image::load_from_memory(&preview).unwrap().to_rgba8();
+    assert_eq!(image.dimensions(), (4724, 2834));
+    let blue_bounds = spectrum_bounds(&image);
+    // Independent Windows System.Drawing playback of these exact original
+    // sources has blue bounds (894,609)..(4114,2218) at this preview size.
+    // Drawing coordinates and physical-frame origins differ in the shifted
+    // source; fitting either must preserve this observed artwork placement.
+    for (actual, expected) in [
+        (blue_bounds[0], 894.),
+        (blue_bounds[1], 609.),
+        (blue_bounds[2], 4114.),
+        (blue_bounds[3], 2218.),
+    ] {
+        assert!(
+            (actual as f64 - expected).abs() < 12.,
+            "misplaced spectrum at {actual}/{expected}"
+        );
+    }
+    assert!(
+        image
+            .pixels()
+            .filter(|p| p.0[2] > 150 && p.0[0] < 80)
+            .count()
+            > 1_000,
+        "blue vector spectrum disappeared"
+    );
+    assert!(
+        image.pixels().filter(|p| p.0 == [255, 0, 0, 255]).count() > 1_000,
+        "red raster inset disappeared"
+    );
+    assert!(
+        image.pixels().filter(|p| p.0 == [50, 205, 50, 255]).count() > 1_000,
+        "green raster inset disappeared"
+    );
+    let snapshot = serde_json::json!({
+        "version": 1, "width_pt": dimensions.width_pt, "height_pt": dimensions.height_pt,
+        "pages": [[0., 0.]],
+        "primitives": [{"kind": "metafile", "transform": [1., 0., 0., 1., 0., 0.],
+            "width": dimensions.width_pt * 4. / 3., "height": dimensions.height_pt * 4. / 3.,
+            "data": STANDARD.encode(source)}]
+    });
+    let exported = file_metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+    let size = reshiki_metafile::validate(&exported).unwrap();
+    assert!((size.width_pt - dimensions.width_pt).abs() < 0.03);
+    assert!((size.height_pt - dimensions.height_pt).abs() < 0.03);
+    // MS-EMFPLUS 2.2.1.4 / 2.2.2.27: an Image object of type Metafile
+    // preserves vectors. Expanded GDI paths are also a valid vector result.
+    let (mut offset, mut paths, mut nested) = (0, 0, false);
+    while offset < exported.len() {
+        let int = |i| u32::from_le_bytes(exported[i..i + 4].try_into().unwrap());
+        let (kind, record_size) = (int(offset), int(offset + 4) as usize);
+        if [3, 8, 59, 86, 87, 91].contains(&kind) {
+            paths += 1;
+        }
+        if kind == 70 && record_size >= 16 && int(offset + 12) == 0x2b464d45 {
+            let end = offset + 12 + int(offset + 8) as usize;
+            let mut plus = offset + 16;
+            while plus < end {
+                let type_flags = int(plus);
+                let plus_size = int(plus + 4) as usize;
+                if type_flags & 0xffff == 0x4008
+                    && type_flags >> 24 & 0x7f == 5
+                    && plus_size >= 28
+                    && int(plus + 16) == 2
+                {
+                    nested = true;
+                }
+                plus += plus_size;
+            }
+        }
+        offset += record_size;
+    }
+    assert!(
+        nested || paths >= 24,
+        "spectrum vectors became a single raster preview"
+    );
+    let replay = import_metafile(&exported).unwrap();
+    let replay = image::load_from_memory(&replay).unwrap().to_rgba8();
+    assert!(
+        replay
+            .pixels()
+            .filter(|p| p.0[2] > 150 && p.0[0] < 80)
+            .count()
+            > 1_000
+    );
+    for (actual, expected) in spectrum_bounds(&replay).into_iter().zip(blue_bounds) {
+        assert!(
+            actual.abs_diff(expected) < 24,
+            "reexport misplaced spectrum"
+        );
+    }
+    let (css_width, css_height) = (
+        dimensions.width_pt * 4. / 3.,
+        dimensions.height_pt * 4. / 3.,
+    );
+    for (transform, rotated, expected) in [
+        (
+            [-1., 0., 0., 1., css_width, 0.],
+            false,
+            [
+                4723 - blue_bounds[2],
+                blue_bounds[1],
+                4723 - blue_bounds[0],
+                blue_bounds[3],
+            ],
+        ),
+        (
+            [0., 1., -1., 0., css_height, 0.],
+            true,
+            [
+                2833 - blue_bounds[3],
+                blue_bounds[0],
+                2833 - blue_bounds[1],
+                blue_bounds[2],
+            ],
+        ),
+    ] {
+        let mut transformed = snapshot.clone();
+        transformed["primitives"][0]["transform"] = serde_json::json!(transform);
+        if rotated {
+            transformed["width_pt"] = serde_json::json!(dimensions.height_pt);
+            transformed["height_pt"] = serde_json::json!(dimensions.width_pt);
+        }
+        let bytes = file_metafile(&serde_json::to_vec(&transformed).unwrap()).unwrap();
+        let preview = import_metafile(&bytes).unwrap();
+        let preview = image::load_from_memory(&preview).unwrap().to_rgba8();
+        assert_eq!(
+            preview.dimensions(),
+            if rotated { (2834, 4724) } else { (4724, 2834) }
+        );
+        for (actual, expected) in spectrum_bounds(&preview).into_iter().zip(expected) {
+            assert!(
+                actual.abs_diff(expected) < 24,
+                "transformed EMF misplaced spectrum"
+            );
+        }
+    }
+}
+
 #[test]
 fn office_metafile_keeps_vectors_transparency_and_physical_size() {
     let _guard = METAFILE_TEST.lock().unwrap();

@@ -33,6 +33,19 @@ static ALLOCATOR: allocation_metrics::MeasuredAllocator<reshiki_process_heap::Bo
     allocation_metrics::MeasuredAllocator::new(reshiki_process_heap::BoundedHeap);
 
 fn main() -> iced::Result {
+    #[cfg(windows)]
+    if let Some(mode @ ("--emf-worker" | "--emf-file-worker" | "--emf-office-worker")) =
+        std::env::args_os()
+            .nth(1)
+            .as_deref()
+            .and_then(|arg| arg.to_str())
+    {
+        if let Err(error) = reshiki_windows::emf_worker(mode) {
+            eprintln!("EMF playback failed: {error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--geometry-worker")) {
         reshiki::geometry::worker::run();
         return Ok(());

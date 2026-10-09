@@ -16,6 +16,7 @@
 
 pub mod accessibility;
 mod clipboard;
+mod metafile_worker;
 mod ole;
 mod printing;
 mod stdio;
@@ -72,6 +73,22 @@ pub fn metafile(snapshot: &[u8]) -> std::result::Result<Vec<u8>, String> {
 /// Record a figure file with display-independent physical and logical resolution.
 pub fn file_metafile(snapshot: &[u8]) -> std::result::Result<Vec<u8>, String> {
     printing::file_metafile(snapshot).map_err(|e| e.to_string())
+}
+
+/// Entry point before any editor/window initialization in the worker process.
+pub fn emf_worker(mode: &str) -> std::result::Result<(), String> {
+    metafile_worker::run(mode).map_err(|error| error.to_string())
+}
+
+/// Export retained original vector pictures in a bounded playback process.
+pub fn isolated_metafile(snapshot: &[u8], file: bool) -> std::result::Result<Vec<u8>, String> {
+    metafile_worker::record(snapshot, file).map_err(|error| error.to_string())
+}
+
+/// Direct playback for Windows format tests. The editor uses `emf_worker`.
+#[doc(hidden)]
+pub fn emf_preview(bytes: &[u8]) -> std::result::Result<Vec<u8>, String> {
+    printing::import_metafile(bytes).map_err(|error| error.to_string())
 }
 
 use windows::{

@@ -98,7 +98,7 @@ fn parse(data: &[u8]) -> Result<Snapshot> {
                     return Err(anyhow::anyhow!("Invalid print stroke"));
                 }
             }
-            "image" => {
+            "image" | "metafile" => {
                 if ![item.width, item.height]
                     .iter()
                     .all(|v| v.is_some_and(|v| v.is_finite() && v > 0.))
@@ -107,7 +107,11 @@ fn parse(data: &[u8]) -> Result<Snapshot> {
                 }
                 let bytes =
                     STANDARD.decode(item.data.as_deref().context("Missing print image")?)?;
-                super::clipboard::bitmap(&bytes)?;
+                if item.kind == "metafile" {
+                    reshiki_metafile::validate(&bytes).map_err(anyhow::Error::msg)?;
+                } else {
+                    super::clipboard::bitmap(&bytes)?;
+                }
             }
             _ => return Err(anyhow::anyhow!("Unknown print primitive")),
         }
@@ -288,7 +292,28 @@ fn draw(graphics: &Graphics, s: &Snapshot, page: usize) -> Result<()> {
                 matrix.0,
                 gp::MatrixOrderPrepend,
             ))?;
-            if item.kind == "image" {
+            if item.kind == "metafile" {
+                let bytes =
+                    STANDARD.decode(item.data.as_deref().context("Missing metafile picture")?)?;
+                let handle = SetEnhMetaFileBits(&bytes);
+                if handle.is_invalid() {
+                    return Err(windows::core::Error::from_win32().into());
+                }
+                let mut source = Metafile::default();
+                let status = gp::GdipCreateMetafileFromEmf(handle, true, &mut source.0);
+                if status != gp::Ok {
+                    let _ = DeleteEnhMetaFile(handle);
+                    check(status)?;
+                }
+                check(gp::GdipDrawImageRect(
+                    graphics.0,
+                    source.0.cast(),
+                    0.,
+                    0.,
+                    item.width.context("Missing metafile width")?,
+                    item.height.context("Missing metafile height")?,
+                ))?;
+            } else if item.kind == "image" {
                 let bytes =
                     STANDARD.decode(item.data.as_deref().context("Missing print image")?)?;
                 let image = super::clipboard::bitmap(&bytes)?;
@@ -422,6 +447,73 @@ pub(super) fn metafile(data: &[u8]) -> Result<Vec<u8>> {
 
 pub(super) fn file_metafile(data: &[u8]) -> Result<Vec<u8>> {
     record_metafile(data, true)
+}
+
+/// GDI+ plays both ordinary EMF and EMF+ into a bounded transparent preview.
+/// Application callers use the isolated worker; tests can exercise the recorder
+/// and playback directly without changing their test process's memory policy.
+pub(super) fn import_metafile(bytes: &[u8]) -> Result<Vec<u8>> {
+    let dimensions = reshiki_metafile::validate(bytes).map_err(anyhow::Error::msg)?;
+    let (width, height) = reshiki_metafile::preview_size(dimensions);
+    let _plus = GdiPlus::new()?;
+    let mut source = Metafile::default();
+    let mut pixels = vec![0u8; width as usize * height as usize * 4];
+    let mut bitmap = Bitmap::default();
+    let mut graphics = Graphics::default();
+    // SAFETY: validated bounded input is copied by SetEnhMetaFileBits. GDI+
+    // owns the successful handle transfer, while local RAII owns all images.
+    // The pixel buffer outlives the bitmap and graphics that write into it.
+    unsafe {
+        let handle = SetEnhMetaFileBits(bytes);
+        if handle.is_invalid() {
+            return Err(windows::core::Error::from_win32().into());
+        }
+        let status = gp::GdipCreateMetafileFromEmf(handle, true, &mut source.0);
+        if status != gp::Ok {
+            let _ = DeleteEnhMetaFile(handle);
+            check(status)?;
+        }
+        check(gp::GdipCreateBitmapFromScan0(
+            width as i32,
+            height as i32,
+            width as i32 * 4,
+            ARGB32,
+            Some(pixels.as_ptr()),
+            &mut bitmap.0,
+        ))?;
+        check(gp::GdipGetImageGraphicsContext(
+            bitmap.0.cast(),
+            &mut graphics.0,
+        ))?;
+        check(gp::GdipSetPageUnit(graphics.0, gp::UnitPixel))?;
+        check(gp::GdipSetSmoothingMode(
+            graphics.0,
+            gp::SmoothingModeAntiAlias,
+        ))?;
+        check(gp::GdipDrawImageRect(
+            graphics.0,
+            source.0.cast(),
+            0.,
+            0.,
+            width as f32,
+            height as f32,
+        ))?;
+        check(gp::GdipFlush(graphics.0, gp::FlushIntentionSync))?;
+    }
+    drop(graphics);
+    drop(bitmap);
+    for pixel in pixels.as_chunks_mut::<4>().0 {
+        pixel.swap(0, 2);
+    }
+    let image =
+        image::RgbaImage::from_raw(width, height, pixels).context("Invalid EMF preview pixels")?;
+    let mut output = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(image).write_to(&mut output, image::ImageFormat::Png)?;
+    let output = output.into_inner();
+    if output.len() > reshiki_metafile::MAX_BYTES {
+        return Err(anyhow::anyhow!("EMF preview exceeds 16 MB"));
+    }
+    Ok(output)
 }
 
 // One recording unit per 0.01 mm bounds Office's intrinsic-size rounding to
