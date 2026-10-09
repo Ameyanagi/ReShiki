@@ -1,0 +1,264 @@
+{
+  "method": "Fresh signedCLI PNG opaque white paper; world bond-midpoint mapping from SVGviewBox; solid baseline black samples checked at25. Front0 unchanged; rear191 = 255*(1-0.25), rounded by compositor. Not desktop canvas pixels and not transparentPNG alpha.",
+  "samples": [
+    {
+      "bond_index": 0,
+      "endpoints": [
+        1,
+        2
+      ],
+      "classification": "front",
+      "endpoint_Z": [
+        84.230316,
+        65.13868
+      ],
+      "component_midplane_Z": 0.21930250000000484,
+      "world_midpoint": [
+        4.5517225,
+        71.189284
+      ],
+      "pixel": [
+        690,
+        1053
+      ],
+      "PNG100": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "PNG25": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "PNG0_pixel": [
+        690,
+        1045
+      ],
+      "PNG0": [
+        0,
+        0,
+        0,
+        255
+      ]
+    },
+    {
+      "bond_index": 1,
+      "endpoints": [
+        1,
+        3
+      ],
+      "classification": "front",
+      "endpoint_Z": [
+        84.230316,
+        62.051994
+      ],
+      "component_midplane_Z": 0.21930250000000484,
+      "world_midpoint": [
+        -29.217617,
+        66.216769
+      ],
+      "pixel": [
+        497,
+        1025
+      ],
+      "PNG100": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "PNG25": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "PNG0_pixel": [
+        497,
+        1017
+      ],
+      "PNG0": [
+        0,
+        0,
+        0,
+        255
+      ]
+    },
+    {
+      "bond_index": 22,
+      "endpoints": [
+        13,
+        21
+      ],
+      "classification": "rear",
+      "endpoint_Z": [
+        -1.4648147,
+        -3.7292097
+      ],
+      "component_midplane_Z": 0.21930250000000484,
+      "world_midpoint": [
+        45.372858,
+        92.011335
+      ],
+      "pixel": [
+        923,
+        1172
+      ],
+      "PNG100": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "PNG25": [
+        191,
+        191,
+        191,
+        255
+      ],
+      "PNG0_pixel": [
+        923,
+        1164
+      ],
+      "PNG0": [
+        255,
+        255,
+        255,
+        255
+      ]
+    },
+    {
+      "bond_index": 23,
+      "endpoints": [
+        13,
+        23
+      ],
+      "classification": "rear",
+      "endpoint_Z": [
+        -1.4648147,
+        -40.313564
+      ],
+      "component_midplane_Z": 0.21930250000000484,
+      "world_midpoint": [
+        17.761097499999998,
+        97.87715800000001
+      ],
+      "pixel": [
+        765,
+        1206
+      ],
+      "PNG100": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "PNG25": [
+        191,
+        191,
+        191,
+        255
+      ],
+      "PNG0_pixel": [
+        765,
+        1198
+      ],
+      "PNG0": [
+        255,
+        255,
+        255,
+        255
+      ]
+    }
+  ],
+  "histogram": [
+    [
+      [
+        0,
+        0
+      ],
+      92378
+    ],
+    [
+      [
+        0,
+        191
+      ],
+      73021
+    ],
+    [
+      [
+        0,
+        255
+      ],
+      420
+    ],
+    [
+      [
+        0,
+        223
+      ],
+      76
+    ],
+    [
+      [
+        0,
+        143
+      ],
+      72
+    ],
+    [
+      [
+        0,
+        48
+      ],
+      71
+    ],
+    [
+      [
+        0,
+        239
+      ],
+      66
+    ],
+    [
+      [
+        0,
+        207
+      ],
+      60
+    ],
+    [
+      [
+        0,
+        179
+      ],
+      60
+    ],
+    [
+      [
+        0,
+        12
+      ],
+      56
+    ],
+    [
+      [
+        0,
+        155
+      ],
+      49
+    ],
+    [
+      [
+        0,
+        167
+      ],
+      47
+    ]
+  ],
+  "native_midplane": 0.21930250000000484
+}
