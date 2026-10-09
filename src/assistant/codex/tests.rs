@@ -286,3 +286,209 @@ fn progress_events_map_to_codex_variants_without_reallocation() {
         }
     ));
 }
+
+#[cfg(unix)]
+async fn fake_connection(account: Value, models: Value) -> anyhow::Result<Server> {
+    let script = r#"
+import json, sys
+account = json.loads(sys.argv[1])
+models = json.loads(sys.argv[2])
+for line in sys.stdin:
+    event = json.loads(line)
+    method = event.get('method')
+    if method == 'account/read': result = account
+    elif method == 'model/list':
+        if account.get('result', {}).get('account') is None: raise RuntimeError('signed-out must not request models')
+        result = models
+    else: raise RuntimeError('unexpected method')
+    print(json.dumps({'id':event['id'], **result}), flush=True)
+"#;
+    let directory = tempfile::tempdir()?;
+    let mut child = Command::new("python3")
+        .arg("-u")
+        .arg("-c")
+        .arg(script)
+        .arg(serde_json::to_string(&account)?)
+        .arg(serde_json::to_string(&models)?)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()?;
+    let input = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("missing stdin"))?;
+    let output = BufReader::new(
+        child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("missing stdout"))?,
+    );
+    Ok(Server {
+        child,
+        input,
+        output,
+        directory,
+        next_id: 1,
+        cancel: Cancel::default(),
+        timeout: Timeout::new(
+            tokio::time::Instant::now(),
+            "Fixture connection",
+            Duration::from_secs(10),
+        ),
+    })
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn connection_classifies_protocol_boundaries_without_exposing_payloads() -> anyhow::Result<()>
+{
+    let model = json!({"model":"fixture", "displayName":"Fixture model"});
+    let cases = [
+        (json!({"result":{"account":null}}), json!({}), None),
+        (
+            json!({"result":{"account":{"type":"chatgpt", "email":"private@example.test"}}}),
+            json!({"result":{"data":[model]}}),
+            None,
+        ),
+        (
+            json!({"result":{}}),
+            json!({}),
+            Some(ConnectionError::AccountFailed),
+        ),
+        (
+            json!({"result":{"account":false}}),
+            json!({}),
+            Some(ConnectionError::AccountFailed),
+        ),
+        (
+            json!({"result":{"account":{}}}),
+            json!({}),
+            Some(ConnectionError::AccountFailed),
+        ),
+        (
+            json!({"error":{"message":"sensitive-account-token"}}),
+            json!({}),
+            Some(ConnectionError::AccountFailed),
+        ),
+        (
+            json!({"result":{"account":{"type":"apiKey"}}}),
+            json!({"error":{"message":"sensitive-key"}}),
+            Some(ConnectionError::ModelsFailed),
+        ),
+        (
+            json!({"result":{"account":{"type":"chatgpt"}}}),
+            json!({"result":{"data":[]}}),
+            Some(ConnectionError::NoModels),
+        ),
+    ];
+    for (index, (account, models, failure)) in cases.into_iter().enumerate() {
+        let mut server = fake_connection(account, models).await?;
+        let result = read_connection(&mut server).await;
+        server.shutdown().await;
+        match failure {
+            Some(expected) => {
+                let error = result.unwrap_err();
+                assert_eq!(error, expected, "case {index}");
+                assert!(!error.to_string().contains("sensitive"));
+            }
+            None => {
+                let account = result?;
+                assert_eq!(account.connected, index == 1);
+                assert_eq!(account.models.len(), usize::from(index == 1));
+            }
+        }
+    }
+    let cancel = Cancel::default();
+    cancel.stop();
+    assert_eq!(
+        connect(cancel).await.unwrap_err(),
+        ConnectionError::Cancelled
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn startup_distinguishes_missing_unlaunchable_broken_and_cancelled_cli() -> anyhow::Result<()>
+{
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir()?;
+    let path = directory.path().join("fixture-codex");
+    assert!(matches!(
+        Server::start_at(path.clone(), Cancel::default()).await,
+        Err(ConnectionError::MissingInstallation)
+    ));
+    std::fs::write(
+        &path,
+        b"#!/usr/bin/env python3\nprint('sensitive-not-json', flush=True)\n",
+    )?;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    assert!(matches!(
+        Server::start_at(path.clone(), Cancel::default()).await,
+        Err(ConnectionError::StartFailed)
+    ));
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))?;
+    assert!(matches!(
+        Server::start_at(path.clone(), Cancel::default()).await,
+        Err(ConnectionError::HandshakeFailed)
+    ));
+    std::fs::write(
+        &path,
+        b"#!/usr/bin/env python3\nimport time\ntime.sleep(10)\n",
+    )?;
+    let cancel = Cancel::default();
+    let cancellation = cancel.clone();
+    let stopper = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cancellation.stop();
+    });
+    assert!(matches!(
+        Server::start_at(path, cancel).await,
+        Err(ConnectionError::Cancelled)
+    ));
+    stopper.await?;
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn request_preflight_reports_typed_setup_changes_without_inference() -> anyhow::Result<()> {
+    for (account, models, expected) in [
+        (json!({"result":{"account":null}}), json!({}), None),
+        (
+            json!({"result":{"account":{"type":"chatgpt"}}}),
+            json!({"error":{"message":"sensitive-catalog-error"}}),
+            Some(ConnectionError::ModelsFailed),
+        ),
+    ] {
+        let mut server = fake_connection(account, models).await?;
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        let error = generation_connection(&mut server, &tx).await.unwrap_err();
+        assert!(!error.contains("sensitive"));
+        match (expected, rx.try_recv()?) {
+            (None, Progress::Catalog(account)) => {
+                assert!(!account.connected);
+                assert!(account.models.is_empty());
+                assert!(error.contains("codex login"));
+            }
+            (Some(expected), Progress::ConnectionFailed(actual)) => assert_eq!(actual, expected),
+            (_, event) => panic!("Unexpected preflight progress: {event:?}"),
+        }
+        server.shutdown().await;
+    }
+    let cancel = Cancel::default();
+    cancel.stop();
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    assert!(
+        propose("never sent".into(), Default::default(), cancel, tx, None)
+            .await
+            .is_err()
+    );
+    assert!(matches!(
+        rx.try_recv()?,
+        Progress::ConnectionFailed(ConnectionError::Cancelled)
+    ));
+    Ok(())
+}
