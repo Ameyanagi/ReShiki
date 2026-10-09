@@ -155,6 +155,23 @@ budget ended; one workflow was reserved for the separate native guided exercise.
 Token usage is unavailable from this backend. These synthetic observations do not
 establish real-scan accuracy or a general peptide/macrocycle success rate.
 
+## Separate native guided control
+
+The actual #93 desktop exercise is recorded separately in
+[the guided control receipt](assistant-benchmark-results/guided-20261009/README.md).
+One explicitly selected Sol/xhigh request produced an editable ethanol draft
+while the blank canvas remained unchanged until manual Apply. The exact native
+SaveAs independently scores as `CCO`, three heavy atoms, two single bonds and one
+neutral fragment with no localized errors. One Undo removed the graph; Redo
+restored it.
+
+The app displayed an integer elapsed 62s; completion was observed within 181.712s
+from Send. These are different timing observations, not an exact latency measure.
+This control stays outside the unassisted baseline denominator. Baseline plus
+control used 14 of 16 allowed workflows, with bounded running intervals below 1800s.
+Simulated setup-failure desktop captures and a separate native UI reopen are not
+claimed by this control record.
+
 ## Scorer and validation checks
 
 The independent scorer tests exact references and injected atom substitutions,

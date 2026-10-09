@@ -1,0 +1,58 @@
+{
+  "experiment": "Native guided first-use ethanol control; separate from unassisted baseline denominators",
+  "head_commit": "43e3d80dde9c9f1da1be04e2525182aea390cc75",
+  "build_profile": "debug",
+  "platform": "macOS arm64",
+  "app_binary_sha256": "1cfb668bc9c42997863c3c83207b671cd914038bfb1059f524d5a087ef2cdd5a",
+  "provider": "Codex app-server",
+  "model": "gpt-6.1-sol",
+  "effort": "xhigh",
+  "model_selection": "Explicit native GUI selections; local-example/draft screenshots show GPT-6.1-Sol and Extra high.",
+  "service_tier": "Not recorded in the provided desktop observations; no default-tier claim.",
+  "workflows": 1,
+  "send_started_utc": "2026-10-09T09:30:52.198Z",
+  "completion_observation_interval_seconds": 181.712,
+  "ui_elapsed_seconds_rounded": 62,
+  "timing_precision": "UI integer elapsed display covers generation/review. Completion was observed within 181.712s after Send; polling includes observation delay and does not yield an exact model/runtime duration.",
+  "per_workflow_budget_seconds": 300,
+  "combined_budget": {
+    "baseline_workflows": 13,
+    "guided_workflows": 1,
+    "total_workflows": 14,
+    "authorized_cap": 16,
+    "baseline_driver_elapsed_seconds": 1499.553599334322,
+    "guided_completion_observation_bound_seconds": 181.712,
+    "combined_workflow_duration_bound_seconds": 1681.265599334322,
+    "authorized_runtime_seconds": 1800,
+    "note": "Sum of bounded workflow-running intervals; idle time between baseline and desktop control is excluded."
+  },
+  "capture_conditions": {
+    "before_apply": "Blank drawing, 100% view, F8 keyboard drawing on. Completed draft stayed in Assistant; canvas remained blank.",
+    "after_apply": "Manual Apply selected 3 atoms / 2 bonds. F8 off; automatic fit at 250%. SaveAs wrote native version 19.",
+    "redo": "One Undo removed whole graph; Redo restored it. Published Redo capture is unselected at 250%, F8 off. App quit cleanly."
+  },
+  "ordinary_auto_apply_preference_visible_before_exercise": true,
+  "local_attachment_without_canvas_change": true,
+  "completed_draft_without_canvas_change": true,
+  "manual_apply_observed": true,
+  "undo_whole_graph_observed": true,
+  "redo_whole_graph_observed": true,
+  "native_save_observed": true,
+  "native_ui_reopen": "Not included in the provided desktop observations; independent saved-graph read is verified.",
+  "visible_review_summary": "Matches the source: two-carbon chain, two single bonds, terminal OH, and no title. No visible corrections needed.",
+  "saved_native_sha256": "60aa141bea3ed38c5b38390dade64a099e5b458bf86f1e7cd4a1ed535f47e921",
+  "reference": "tests/fixtures/assistant-benchmark/v1/ethanol.reference.json",
+  "score": "score.json",
+  "saved_graph": "drawing.rsk",
+  "evidence_sha256": {
+    "assistant-draft-before-apply.jpg": "669217155cfdba507f6c45fd52f501a6bf3d55564683d1477e350a6cd79efa48",
+    "assistant-redo-desktop.jpg": "de49055e3e2ce8c8ec7b3c0d7cd6722079156e40c433bd066152ccb4eca03b3a"
+  },
+  "limitations": [
+    "Known guided control with locally visible reference; not pooled with unassisted baseline or general image-quality metrics.",
+    "Visual review statement is model output; independent RDKit graph identity is separate evidence.",
+    "Simulated installation/sign-in/failure desktop checks remain pending parent capture."
+  ],
+  "completion_observation_bound_utc": "2026-10-09T09:33:53.910Z",
+  "completion_observation_timestamp_basis": "Derived from the recorded Send start plus the reported observation interval; not an exact backend completion timestamp."
+}
