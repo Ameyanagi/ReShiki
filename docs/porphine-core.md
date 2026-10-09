@@ -41,8 +41,10 @@ lengths. The construction fixtures instead demonstrate five scaffold stages:
 
 These are construction stages, not measured mouse/key counts. The supplied
 fixtures demonstrate the algorithm through the application's geometry and
-renderer; desktop interaction and time comparisons require a separate check.
-The template is the direct placement route.
+renderer. [Actual desktop verification](changes/porphine-core.md) also covers
+successive 90° copies, closure and N/bond assignment from that supplied seed;
+from-blank step counts and timing comparisons were not measured. The template
+is the direct placement route.
 
 For a substitution example, choose Benzene's source atom and **Connect with a
 bond**, then attach at an outward meso carbon. **Stretch** can change only this
@@ -60,5 +62,6 @@ cargo run --locked --example porphine_core_qa -- /tmp/porphine-core
 The generator writes editable native files, actual SVG/PNG/PDF output, the chosen
 template and constructed-core identity reports, seven scaffold/substitution
 stages, and exact reproduction notes. Each image must be inspected before
-publication, and real desktop evidence must separately check template search,
-placement, shared pivots and bridge stretching.
+publication. The [desktop evidence](changes/porphine-core.md) records actual
+template search and placement, shared-pivot copies, bridge stretching and fresh
+reopening, with editable input/save files and independent chemistry checks.

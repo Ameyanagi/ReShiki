@@ -17,4 +17,8 @@ Exact reference alignment, shared-pivot copies and branch-only bond stretching:
 @Ameyanagi in [PR #278](https://github.com/Ameyanagi/ReShiki/pull/278), under review;
 [review evidence](changes/reference-geometry.md).
 
+Chemically defined symmetric free-base porphine template and supplied-seed
+construction: @Ameyanagi, under review;
+[review evidence](changes/porphine-core.md). PR link pending publication.
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.
