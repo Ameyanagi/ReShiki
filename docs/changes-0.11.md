@@ -35,7 +35,10 @@ retain contributor credits and links to their validation evidence.
   C60 drawings. This display issue remains unresolved. Geometry recovery does
   not guarantee a global energy minimum; timed-out sampling can fall back to
   one conformer. The documented initial paclitaxel preview is not converged,
-  and larger fullerenes such as C70 have not been validated here.
+  and larger fullerenes such as C70 have not been validated here. This
+  limitation describes 0.11.0; a Nightly rendering correction is
+  [under review in PR #271](https://github.com/Ameyanagi/ReShiki/pull/271),
+  with [matched evidence](projected-double-bonds-review.md).
 - **Receiving chemical text:** the verified ordinary-Copy reaction route is
   ReShiki Cmd+C → ChemDoodle Open text field Cmd+V → Load on macOS. The tested
   direct canvas paste did not import the selection. CAS Draw's tested molecule
