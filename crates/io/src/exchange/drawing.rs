@@ -350,7 +350,7 @@ impl<'a> Writer<'a> {
                 points.push(c.into());
             }
             if let Some([a, b]) = a.cubic {
-                points.extend([a.into(), b.into()]);
+                points.extend([P::from(a), P::from(b)]);
             }
         }
         for g in &doc.graphics {
