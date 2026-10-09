@@ -7,6 +7,9 @@ use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, tilt};
 use iced::{Point, Rectangle};
 use reshiki::graphics::{Graphic, GraphicKind};
 
+#[cfg(test)]
+mod stretch_tests;
+
 impl MoleculeCanvas<'_> {
     pub(super) fn preview_tilt(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft {
@@ -166,6 +169,19 @@ impl MoleculeCanvas<'_> {
             smart,
             ..
         } = draft;
+        if let (Some(Gesture::StretchBond { start, plan }), Some(p)) =
+            (&state.gesture, state.cursor)
+        {
+            let p = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let length = plan.dragged_length(World::new(p.x - start.x, p.y - start.y));
+            if let Ok(candidate) = plan.apply(self.doc, length) {
+                *preview.to_mut() = candidate;
+                *ring_selection = Some(plan.ids.clone());
+            }
+            return;
+        }
         if let (Some(Gesture::Move { start, ids, .. }), Some(p)) = (&state.gesture, state.cursor) {
             let p = self
                 .camera

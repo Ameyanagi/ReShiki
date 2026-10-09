@@ -45,6 +45,7 @@ fn tool_family(tool: Tool) -> &'static str {
         Tool::Select => "tool-select",
         Tool::Lasso => "tool-lasso",
         Tool::Tilt => "tool-tilt",
+        Tool::StretchBond { .. } => "tool-stretch",
         Tool::Chain(_) => "tool-chain",
         Tool::Bond(_) => "tool-bond",
         Tool::StyledBond(_) => "tool-styled-bond",
@@ -116,6 +117,10 @@ fn all_icons() -> Vec<(String, Icon)> {
         Tool::Select,
         Tool::Lasso,
         Tool::Tilt,
+        Tool::StretchBond {
+            fixed: 1,
+            moving: 2,
+        },
         Tool::Wedge,
         Tool::Hash,
         Tool::Wavy,
@@ -201,6 +206,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
         "tool-text",
         "tool-erase",
         "tool-edit-points",
+        "tool-stretch",
     ]
     .into_iter()
     .map(|family| (family, 1))

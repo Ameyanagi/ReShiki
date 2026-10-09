@@ -182,6 +182,27 @@ impl App {
                     self.tab.selected = ids;
                 }
             }
+            Edit::StretchBond {
+                fixed,
+                moving,
+                length,
+            } => {
+                if !self.reference_stretch_active(fixed, moving) {
+                    self.status = "Choose a bond in this drawing before stretching".into();
+                    self.error = true;
+                    return;
+                }
+                match editing::reference::Stretch::new(&self.tab.doc, fixed, moving)
+                    .and_then(|plan| plan.apply(&self.tab.doc, length))
+                {
+                    Ok(candidate) => self.tab.doc = candidate,
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
+            }
             Edit::Duplicate(ids, dx, dy) => {
                 let part = editing::selection(&self.tab.doc, &ids);
                 let copy = editing::append(&mut self.tab.doc, &part, Point::new(dx, dy));

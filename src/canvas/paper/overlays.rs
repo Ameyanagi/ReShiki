@@ -28,6 +28,21 @@ impl MoleculeCanvas<'_> {
                 frame.stroke(&Path::line(center - delta, center + delta), stroke);
             }
         }
+        if let Tool::StretchBond { fixed, moving } = self.tool
+            && let Some((a, b)) = preview.atom(fixed).zip(preview.atom(moving))
+        {
+            let a = self.camera.screen(a.position, bounds);
+            let b = self.camera.screen(b.position, bounds);
+            let stroke = Stroke::default()
+                .with_width(1.5)
+                .with_color(rgb([19, 135, 116]));
+            frame.stroke(&Path::line(a, b), stroke);
+            frame.stroke(
+                &Path::rectangle(a - Vector::new(4., 4.), iced::Size::new(8., 8.)),
+                stroke,
+            );
+            frame.stroke(&Path::circle(b, 5.), stroke);
+        }
     }
 
     pub(super) fn draw_arrow_handles(

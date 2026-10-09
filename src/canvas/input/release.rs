@@ -108,6 +108,16 @@ impl MoleculeCanvas<'_> {
                 ControlFlow::Continue(edit) => edit,
                 ControlFlow::Break(action) => return Some(action),
             },
+            Gesture::StretchBond { start, plan } => {
+                if !inside || start.distance(p) < 1. / self.camera.zoom {
+                    return Some(Action::request_redraw().and_capture());
+                }
+                Edit::StretchBond {
+                    fixed: plan.fixed,
+                    moving: plan.moving,
+                    length: plan.dragged_length(World::new(p.x - start.x, p.y - start.y)),
+                }
+            }
             Gesture::Select { start } => {
                 let polygon = vec![start, World::new(p.x, start.y), p, World::new(start.x, p.y)];
                 Edit::Select(region_selection(

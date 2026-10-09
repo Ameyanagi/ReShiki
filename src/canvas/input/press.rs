@@ -56,6 +56,16 @@ impl MoleculeCanvas<'_> {
         if self.tool == Tool::Tilt {
             return self.press_tilt(state, p, point);
         }
+        if let Tool::StretchBond { fixed, moving } = self.tool {
+            if let Ok(plan) = reshiki::editing::reference::Stretch::new(self.doc, fixed, moving) {
+                let hit = hit_selection(self.doc, p, 10. / self.camera.zoom);
+                if hit.iter().any(|id| plan.ids.contains(id)) {
+                    state.gesture = Some(Gesture::StretchBond { start: p, plan });
+                    return Some(Action::publish(Edit::Hover(None)).and_capture());
+                }
+            }
+            return Some(Action::request_redraw().and_capture());
+        }
         if let Some(action) = self.press_arrow_handle(state, p) {
             return Some(action);
         }

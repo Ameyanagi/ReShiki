@@ -191,6 +191,7 @@ impl App {
     /// Starts the front tab over as a new drawing. Late results for its old
     /// drawing meet a new epoch and revision.
     pub(super) fn reset_tab(&mut self) {
+        self.cancel_reference_stretch();
         self.retire_assistant(self.tab.id);
         let old = std::mem::replace(&mut self.tab, DocumentTab::new(None));
         self.tab.id = old.id;
@@ -224,6 +225,7 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
+        self.cancel_reference_stretch();
         self.pause_optimization();
         if self.style_menu.is_some() {
             self.close_style_menu();

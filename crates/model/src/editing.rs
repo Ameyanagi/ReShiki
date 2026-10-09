@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 mod arrange_tests;
 mod rotation;
 pub use rotation::center as rotation_center;
+pub mod reference;
 
 pub const CLIPBOARD_PREFIX: &str = "RESHIKI_DRAWING_V1\n";
 

@@ -199,6 +199,7 @@ impl App {
     }
     fn structure_replaced(&mut self, kind: Job, response: Response) {
         if let Some(document) = response.document {
+            self.cancel_reference_stretch();
             let before = self.tab.doc.clone();
             self.tab.doc = document.clone();
             self.changed(before);

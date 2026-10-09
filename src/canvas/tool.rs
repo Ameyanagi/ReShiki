@@ -7,6 +7,11 @@ pub enum Tool {
     Select,
     Lasso,
     Tilt,
+    /// Keep a bridge bond's original axis while moving its donor-side fragment.
+    StretchBond {
+        fixed: u64,
+        moving: u64,
+    },
     Chain(ChainMode),
     Bond(u8),
     StyledBond(reshiki::bonds::BondPreset),
@@ -47,6 +52,9 @@ impl Tool {
             }
             Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag subtracts",
             Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15° · Escape cancels",
+            Self::StretchBond { .. } => {
+                "Drag the moving end or branch along the bond · Direction stays fixed · Escape cancels"
+            }
             Self::Chain(_) => {
                 "Drag a chain · Ctrl bends · Shift flips · Click places the chosen number of carbons"
             }

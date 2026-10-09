@@ -1168,6 +1168,20 @@ impl App {
             ),
             // The tool name shows the mode; the palette switches it.
             Tool::Chain(mode) => self.chain_tool_options(mode),
+            Tool::StretchBond { .. } => (
+                vec![
+                    reshiki::accessibility::button(
+                        "stretch-done",
+                        "Finish stretching bonds",
+                        text("Done").size(12),
+                    )
+                    .padding([7, 9])
+                    .on_press(Message::Tool(Tool::Select))
+                    .style(control(false))
+                    .into(),
+                ],
+                "Drag the moving end or branch · Original direction stays fixed · Escape cancels",
+            ),
             Tool::Graphic(kind) => self.graphic_tool_options(kind),
             Tool::EditPoints => (
                 vec![
@@ -2919,6 +2933,7 @@ fn tool_name(tool: Tool) -> (&'static str, &'static str) {
         // "Max atoms" beside it still marks the snaking mode.
         Tool::Chain(_) => return ("Snaking chain", "Chain"),
         Tool::Tilt => "3D tilt",
+        Tool::StretchBond { .. } => "Stretch bond",
         Tool::Atom => "Atom label",
         // The bond pick list beside it names the preset.
         Tool::Bond(_) | Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => "Bond",

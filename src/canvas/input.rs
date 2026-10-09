@@ -153,6 +153,26 @@ impl MoleculeCanvas<'_> {
         if matches!(state.gesture, Some(Gesture::ArrowHandle { .. })) {
             return mouse::Interaction::Grabbing;
         }
+        if let Tool::StretchBond { fixed, moving } = self.tool
+            && cursor.is_over(bounds)
+        {
+            if matches!(state.gesture, Some(Gesture::StretchBond { .. })) {
+                return mouse::Interaction::Grabbing;
+            }
+            if let Some(p) = cursor.position_in(bounds)
+                && let Ok(plan) = reshiki::editing::reference::Stretch::new(self.doc, fixed, moving)
+                && crate::canvas::hit::hit_selection(
+                    self.doc,
+                    self.camera.world(p, bounds),
+                    10. / self.camera.zoom,
+                )
+                .iter()
+                .any(|id| plan.ids.contains(id))
+            {
+                return mouse::Interaction::Grab;
+            }
+            return mouse::Interaction::Crosshair;
+        }
         if self.tool == Tool::Tilt && cursor.is_over(bounds) {
             return if matches!(state.gesture, Some(Gesture::Tilt(_))) {
                 mouse::Interaction::Grabbing

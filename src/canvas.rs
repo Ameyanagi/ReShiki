@@ -154,6 +154,12 @@ pub enum Edit {
         y: f64,
     },
     Move(Vec<u64>, f32, f32),
+    /// Stretch a bridge without invoking automatic ring fusion or atom merging.
+    StretchBond {
+        fixed: u64,
+        moving: u64,
+        length: f32,
+    },
     /// Copy the objects to the offset, leaving the originals in place.
     Duplicate(Vec<u64>, f32, f32),
     Tilt {
@@ -281,6 +287,10 @@ enum Gesture {
         start: World,
         ids: Vec<u64>,
         clicked: Vec<u64>,
+    },
+    StretchBond {
+        start: World,
+        plan: reshiki::editing::reference::Stretch,
     },
     Select {
         start: World,
