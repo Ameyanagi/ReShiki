@@ -68,6 +68,8 @@ impl NativeArrow {
     pub fn into_document(self) -> Result<Arrow> {
         let s = self.style;
         Ok(Arrow {
+            start_anchor: None,
+            end_anchor: None,
             id: self.id,
             kind: self.kind.kind().into(),
             start: drawing_point(self.start)?,

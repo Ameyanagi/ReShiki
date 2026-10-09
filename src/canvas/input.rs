@@ -70,7 +70,11 @@ impl MoleculeCanvas<'_> {
                 if matches!(state.end_gesture(), Some(Gesture::Erase { .. })) {
                     return Some(Action::publish(Edit::EraseEnd));
                 }
-                Some(Action::request_redraw())
+                if self.arrow_source.is_some() {
+                    Some(Action::publish(Edit::CancelArrowSource).and_capture())
+                } else {
+                    Some(Action::request_redraw())
+                }
             }
             Event::Window(iced::window::Event::Unfocused) => {
                 let erasing = matches!(state.end_gesture(), Some(Gesture::Erase { .. }));

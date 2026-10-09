@@ -224,6 +224,7 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
+        self.tab.arrow_source = None;
         self.pause_optimization();
         if self.style_menu.is_some() {
             self.close_style_menu();
@@ -684,7 +685,11 @@ fn export_result(
     format: &'static str,
 ) -> Task<Message> {
     match result {
-        Ok(response) => super::export_file(response.output.unwrap_or_default(), format),
+        Ok(response) => super::export_file(
+            response.output.unwrap_or_default(),
+            format,
+            response.warnings,
+        ),
         Err(_) => Task::none(),
     }
 }

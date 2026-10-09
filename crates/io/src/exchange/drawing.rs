@@ -113,6 +113,8 @@ struct Writer<'a> {
 
 /// Serialize a complete drawing without mutating it. Reject unrepresentable
 /// appearances and ownership rather than detaching or flattening objects.
+/// Mechanism-arrow curves retain their resolved geometry; their optional editor
+/// links cannot be represented. Callers display `arrow_anchors::export_notice`.
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     write_impl(document, options, false, false)
 }

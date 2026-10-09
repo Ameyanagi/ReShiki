@@ -88,6 +88,9 @@ pub async fn publication(
     max_pixels: u64,
 ) -> Result<Publication, String> {
     let (doc, notice) = figure_document(engine, doc).await?;
+    let attachment_notice = pages
+        .then(|| crate::arrow_anchors::export_notice(&doc))
+        .flatten();
     let figure = tokio::task::spawn_blocking(move || {
         if pages {
             pages_pdf(&doc).map(|bytes| Figure {
@@ -100,7 +103,12 @@ pub async fn publication(
     })
     .await
     .map_err(|error| error.to_string())??;
-    let details = figure.detail.into_iter().chain(notice).collect();
+    let details = figure
+        .detail
+        .into_iter()
+        .chain(notice)
+        .chain(attachment_notice)
+        .collect();
     Ok(Publication {
         bytes: figure.bytes,
         details,
@@ -114,21 +122,24 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
 
 /// Include the actual raster dimensions and resolution for the export receipt.
 pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
-    render_drawing(doc, format, false, RasterBudget::FILE)
+    with_attachment_notice(doc, render_drawing(doc, format, false, RasterBudget::FILE))
 }
 
 /// [`figure`] with PNG resolution chosen to fit `max_pixels`, capped at
 /// [`FILE_PIXELS`].
 pub fn figure_with_budget(doc: &Document, format: &str, max_pixels: u64) -> Result<Figure, String> {
-    render_drawing(
+    with_attachment_notice(
         doc,
-        format,
-        false,
-        RasterBudget {
-            adaptive: true,
-            pixels: max_pixels.min(FILE_PIXELS),
-            side: u32::MAX,
-        },
+        render_drawing(
+            doc,
+            format,
+            false,
+            RasterBudget {
+                adaptive: true,
+                pixels: max_pixels.min(FILE_PIXELS),
+                side: u32::MAX,
+            },
+        ),
     )
 }
 
@@ -144,7 +155,7 @@ pub fn clipboard_drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String
 /// Preserve format details (including bounded PNG dimensions/DPI) in an
 /// explicit format-copy receipt as well as in file-export receipts.
 pub fn clipboard_figure(doc: &Document, format: &str) -> Result<Figure, String> {
-    render_drawing(doc, format, true, RasterBudget::FILE)
+    with_attachment_notice(doc, render_drawing(doc, format, true, RasterBudget::FILE))
 }
 
 #[cfg(windows)]
@@ -153,6 +164,21 @@ pub fn office_preview(doc: &Document) -> Result<reshiki_windows::OfficePreview, 
         png: clipboard_png(doc)?,
         metafile: crate::native_windows::office_metafile(doc)?,
     })
+}
+
+fn with_attachment_notice(
+    doc: &Document,
+    result: Result<Figure, String>,
+) -> Result<Figure, String> {
+    let mut figure = result?;
+    if let Some(notice) = crate::arrow_anchors::export_notice(doc) {
+        figure.detail = Some(
+            figure
+                .detail
+                .map_or_else(|| notice.clone(), |detail| format!("{detail} · {notice}")),
+        );
+    }
+    Ok(figure)
 }
 
 /// `file_budget` bounds file PNGs; clipboard PNGs use the clipboard budget.

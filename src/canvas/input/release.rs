@@ -275,7 +275,17 @@ impl MoleculeCanvas<'_> {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
         ControlFlow::Continue(if start.distance(p) < 3.0 / self.camera.zoom {
-            Edit::Click(p)
+            if self.tool == Tool::Arrow
+                && self.attach_arrow_targets
+                && matches!(
+                    self.arrow_preset,
+                    reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
+                )
+            {
+                Edit::ArrowTarget(p, state.modifiers.alt())
+            } else {
+                Edit::Click(p)
+            }
         } else {
             let origin = id
                 .and_then(|id| self.doc.atom(id).map(|a| a.position))

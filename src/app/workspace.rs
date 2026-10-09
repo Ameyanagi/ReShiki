@@ -290,6 +290,8 @@ impl App {
             attach_symbols: self.tab.attach_symbols,
             arrow_preset: self.tab.arrow_style,
             arrow_style: &self.tab.arrows.style,
+            arrow_source: self.tab.arrow_source.as_ref(),
+            attach_arrow_targets: self.tab.arrows.attach_targets,
             bracket_sides: self.tab.bracket_sides,
             doc: self.display_document(),
             selected: if self.tab.cleanup.is_some() || self.tab.inline_text.is_some() {

@@ -276,7 +276,7 @@ pub enum Message {
     /// A task result for the drawing in this tab, which may no longer be in front.
     Tab(document_tab::TabId, Box<Message>),
     Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
-    Exported(Result<Option<PathBuf>, String>),
+    Exported(Result<Option<figure_export::Saved>, String>),
     FigureExported(Result<Option<figure_export::Saved>, String>),
     Close(iced::window::Id),
     Discard,
@@ -539,6 +539,9 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
+        if self.tab.doc != before {
+            self.tab.arrow_source = None;
+        }
         self.tab.cleanup = None;
         let reconciled = match reshiki::transaction::reconcile(&mut self.tab.doc, before) {
             Ok(reconciled) => reconciled,
@@ -898,9 +901,13 @@ fn tagged(task: Task<Message>, id: document_tab::TabId) -> Task<Message> {
     })
 }
 
-fn export_file(contents: String, format: &'static str) -> Task<Message> {
+fn export_file(contents: String, format: &'static str, details: Vec<String>) -> Task<Message> {
     Task::perform(
-        save_export(contents.into_bytes(), format),
+        async move {
+            Ok(save_export(contents.into_bytes(), format)
+                .await?
+                .map(|path| figure_export::Saved { path, details }))
+        },
         Message::Exported,
     )
 }

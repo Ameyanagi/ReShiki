@@ -95,6 +95,7 @@ impl CdxmlScene {
                 display: Default::default(),
                 cip_label: None,
                 marks: Vec::new(),
+                mark_serial: 0,
                 stereo: None,
                 text_style: None,
             });
@@ -224,6 +225,7 @@ impl CdxmlScene {
                     .into_iter()
                     .filter(|m| m.hidden != Some(true))
                     .map(|m| crate::scientific::AtomMark {
+                        id: None,
                         kind: m.kind,
                         offset: narrow(m.offset),
                         angle: m.angle as f32,

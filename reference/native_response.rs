@@ -552,6 +552,7 @@ async fn native_drawing_precision_and_measurements_survive_the_real_transport() 
         .context("Missing atom")?
         .marks
         .push(AtomMark {
+            id: None,
             kind: MarkKind::LonePair,
             offset: Point::new(-9.1, -13.7),
             angle: 31.3,

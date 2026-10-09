@@ -39,6 +39,9 @@ impl MarkKind {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AtomMark {
+    /// Stable within the parent atom; absent on legacy unanchored marks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<u64>,
     pub kind: MarkKind,
     pub offset: Point,
     #[serde(default)]
@@ -411,13 +414,28 @@ fn attach_inner(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), 
     if mark.charge() || mark.radical() {
         atom.label_h = 0;
     }
+    let id = next_mark_id(atom)?;
+    atom.mark_serial = id;
     atom.marks.push(AtomMark {
+        id: Some(id),
         kind: mark,
         offset,
         angle: 0.,
         size_pt: None,
     });
     Ok(())
+}
+
+pub fn next_mark_id(atom: &Atom) -> Result<u64, String> {
+    atom.marks
+        .iter()
+        .filter_map(|m| m.id)
+        .max()
+        .unwrap_or(0)
+        .max(atom.mark_serial)
+        .checked_add(1)
+        .filter(|id| *id < u64::MAX)
+        .ok_or_else(|| "No free positioned-mark ID".into())
 }
 
 #[derive(Clone)]

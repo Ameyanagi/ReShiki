@@ -11,6 +11,79 @@ use reshiki::graphics::PathCommand;
 use std::ops::ControlFlow;
 
 impl MoleculeCanvas<'_> {
+    pub(super) fn draw_arrow_targets(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) {
+        if self.tool != Tool::Arrow
+            || !self.attach_arrow_targets
+            || state.modifiers.alt()
+            || !matches!(
+                self.arrow_preset,
+                reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
+            )
+        {
+            return;
+        }
+        let pointer = state
+            .cursor
+            .or(cursor.position())
+            .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
+        let hovered = pointer.and_then(|p| {
+            reshiki::arrow_anchors::pick(
+                self.doc,
+                self.camera.world(p, bounds),
+                8. / self.camera.zoom,
+            )
+        });
+        for (target, color, radius) in [
+            (self.arrow_source, rgb([38, 113, 208]), 10.),
+            (hovered.as_ref(), rgb([19, 135, 116]), 8.),
+        ] {
+            if let Some((target, center)) =
+                target.and_then(|t| t.center(self.doc).map(|center| (t, center)))
+            {
+                // Surround the actual label/dot group instead of painting a
+                // small ring through the lone-pair dots at high zoom.
+                let extent = match target {
+                    reshiki::arrow_anchors::Pick::LonePair { atom, mark } => {
+                        self.doc.atom(*atom).map(|a| {
+                            let size = mark.size_pt.unwrap_or_else(|| {
+                                a.text_style
+                                    .as_ref()
+                                    .map_or(self.doc.drawing_style.font_size_pt, |s| s.size_pt)
+                                    * 0.75
+                            });
+                            reshiki::style::DEFAULT.world(size) * 0.35
+                                + self.doc.drawing_style.line_width() * 0.5
+                        })
+                    }
+                    reshiki::arrow_anchors::Pick::Atom(id) => self
+                        .doc
+                        .atom(*id)
+                        .and_then(|a| reshiki::scene::atom_label_bounds(a, self.doc))
+                        .map(|(lo, hi)| {
+                            [lo, hi, World::new(lo.x, hi.y), World::new(hi.x, lo.y)]
+                                .into_iter()
+                                .map(|p| p.distance(center))
+                                .fold(0., f32::max)
+                        }),
+                    _ => None,
+                };
+                let radius = extent.map_or(radius, |extent| {
+                    (extent * self.camera.zoom + if radius > 8. { 6. } else { 3. }).max(radius)
+                });
+                frame.stroke(
+                    &Path::circle(self.camera.screen(center, bounds), radius),
+                    Stroke::default().with_width(1.5).with_color(color),
+                );
+            }
+        }
+    }
+
     pub(super) fn draw_editor_markers(
         &self,
         frame: &mut layered::Frame<'_>,

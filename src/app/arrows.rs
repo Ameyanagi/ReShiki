@@ -1,4 +1,5 @@
 use super::*;
+mod attachments;
 use crate::canvas::layered::canvas;
 use reshiki::arrows::{ArrowStyle, Head, HeadShape, NoGo, Preset};
 use reshiki::graphics::LinePattern;
@@ -46,6 +47,7 @@ pub struct State {
     pub style: ArrowStyle,
     pub numbers: [String; 6],
     pub color: String,
+    pub attach_targets: bool,
 }
 impl Default for State {
     fn default() -> Self {
@@ -54,6 +56,7 @@ impl Default for State {
             numbers: FIELDS.map(|f| f.get(&style).to_string()),
             style,
             color: "#000000".into(),
+            attach_targets: true,
         }
     }
 }
@@ -75,6 +78,9 @@ pub enum Action {
     ApplyNumber(Field),
     Color(String),
     ApplyColor,
+    AttachTargets(bool),
+    DetachStart,
+    DetachEnd,
     Reverse,
     Flip,
     Straighten,
@@ -82,6 +88,7 @@ pub enum Action {
 }
 impl App {
     pub(super) fn apply_arrow_tool(&mut self, id: u64) {
+        self.tab.arrow_source = None;
         let Some(arrow) = self.tab.doc.arrows.iter_mut().find(|a| a.id == id) else {
             return;
         };
@@ -120,6 +127,18 @@ impl App {
     }
     pub(super) fn arrow_action(&mut self, action: Action) {
         match action {
+            Action::AttachTargets(value) => {
+                self.tab.arrows.attach_targets = value;
+                self.tab.arrow_source = None;
+                self.error = false;
+                self.status = if value {
+                    "Click a source then a destination atom, bond, or lone pair"
+                } else {
+                    "Free arrow placement · Click or drag on the canvas"
+                }
+                .into();
+                return;
+            }
             Action::Number(field, s) => {
                 if let Some(value) = self.tab.arrows.numbers.get_mut(field as usize) {
                     *value = s;
@@ -177,6 +196,8 @@ impl App {
             .filter(|a| self.tab.selected.contains(&a.id))
         {
             match action {
+                Action::DetachStart => a.start_anchor = None,
+                Action::DetachEnd => a.end_anchor = None,
                 Action::Reverse => a.reverse(),
                 Action::Flip => a.flip_bend(),
                 Action::Straighten => a.straighten(),
@@ -366,6 +387,16 @@ impl App {
                     .size(14)
                     .text_size(12),
             );
+        if matches!(self.tab.arrow_style, Preset::Curved | Preset::Fishhook) {
+            panel = panel.push(
+                checkbox(self.tab.arrows.attach_targets)
+                    .label("Attach targets (two clicks)")
+                    .on_toggle(|value| Message::ArrowAction(Action::AttachTargets(value)))
+                    .size(14)
+                    .text_size(12),
+            );
+            panel = panel.push(text("Click a source then a destination. Alt-click or turn off Attach targets for free arrows; dragging remains free.").size(11).style(muted_text));
+        }
         if has_selection {
             panel = panel.push(
                 row![
@@ -391,6 +422,37 @@ impl App {
                 .spacing(4),
             );
         }
+        if has_selection {
+            let start = self
+                .tab
+                .doc
+                .arrows
+                .iter()
+                .any(|a| self.tab.selected.contains(&a.id) && a.start_anchor.is_some());
+            let end = self
+                .tab
+                .doc
+                .arrows
+                .iter()
+                .any(|a| self.tab.selected.contains(&a.id) && a.end_anchor.is_some());
+            panel = panel.push(
+                row![
+                    reshiki::accessibility::button(
+                        "arrow.detach-start",
+                        "Detach arrow start",
+                        text("Detach start").size(11)
+                    )
+                    .on_press_maybe(start.then_some(Message::ArrowAction(Action::DetachStart))),
+                    reshiki::accessibility::button(
+                        "arrow.detach-end",
+                        "Detach arrow end",
+                        text("Detach end").size(11)
+                    )
+                    .on_press_maybe(end.then_some(Message::ArrowAction(Action::DetachEnd)))
+                ]
+                .spacing(4),
+            );
+        }
         geometry = geometry.push(
             button(text("Reset arrow style").size(11))
                 .on_press(Message::ArrowAction(Action::Reset)),
@@ -399,6 +461,7 @@ impl App {
             .push(text("Drag circles to move endpoints, the diamond to bend, or squares on direction lines to adjust each end independently. Escape cancels a drag. Return applies fields.").size(11).style(muted_text)).into()
     }
     pub(super) fn set_arrow_style(&mut self, style: Preset) {
+        self.tab.arrow_source = None;
         self.tab.arrow_style = style;
         self.tab.arrows.style = reshiki::arrows::ArrowStyle::preset(style);
         self.tab.arrows.style.width_pt = self.tab.doc.drawing_style.line_width_pt;

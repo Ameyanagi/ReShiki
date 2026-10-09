@@ -160,6 +160,8 @@ impl Arrow {
     pub fn new(id: u64, start: Point, end: Point, preset: Preset, style: ArrowStyle) -> Self {
         Self {
             id,
+            start_anchor: None,
+            end_anchor: None,
             start,
             end,
             kind: preset.kind().into(),
@@ -320,6 +322,7 @@ impl Arrow {
         let control = self.control_point();
         match index {
             0 => {
+                self.start_anchor = None;
                 if let Some([a, _]) = self.cubic.as_mut() {
                     *a = a.offset(p.x - self.start.x, p.y - self.start.y);
                 }
@@ -327,6 +330,7 @@ impl Arrow {
                 self.control = control;
             }
             1 => {
+                self.end_anchor = None;
                 if let Some([_, b]) = self.cubic.as_mut() {
                     *b = b.offset(p.x - self.end.x, p.y - self.end.y);
                 }
@@ -368,6 +372,7 @@ impl Arrow {
         self.control = self.control_point();
         self.cubic = self.cubic.map(|[a, b]| [b, a]);
         std::mem::swap(&mut self.start, &mut self.end);
+        std::mem::swap(&mut self.start_anchor, &mut self.end_anchor);
     }
     /// Apply an arrow tool, or cycle its direction/half-head on another click.
     /// Returns whether the reaction direction was reversed.
@@ -396,6 +401,14 @@ impl Arrow {
         false
     }
     pub fn straighten(&mut self) {
+        if self.start_anchor.is_some() || self.end_anchor.is_some() {
+            self.cubic = Some([
+                lerp(self.start, self.end, 1. / 3.),
+                lerp(self.start, self.end, 2. / 3.),
+            ]);
+            self.control = None;
+            return;
+        }
         self.cubic = None;
         self.control = Some(lerp(self.start, self.end, 0.5));
     }

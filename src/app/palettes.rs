@@ -747,6 +747,7 @@ impl App {
         body
     }
     pub(super) fn select_tool(&mut self, tool: Tool) {
+        self.tab.arrow_source = None;
         self.tab.erase_stroke = false;
         self.palette = None;
         self.toolbar.remember(tool);

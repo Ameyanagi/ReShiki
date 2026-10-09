@@ -577,6 +577,7 @@ pub fn clear_computed(doc: &mut Document) {
     for b in &mut doc.bonds {
         b.cip_label = None;
     }
+    crate::arrow_anchors::reconcile(doc);
 }
 pub fn refresh_computed(doc: &mut Document, checked: &Document) {
     let atoms: std::collections::HashMap<_, _> = checked.atoms.iter().map(|a| (a.id, a)).collect();
@@ -596,6 +597,7 @@ pub fn refresh_computed(doc: &mut Document, checked: &Document) {
             .get(&(b.a.min(b.b), b.a.max(b.b)))
             .and_then(|s| s.cip_label.clone());
     }
+    crate::arrow_anchors::reconcile(doc);
 }
 
 /// Slab clipping catches a bond crossing a label between sample points.

@@ -57,6 +57,15 @@ impl App {
                     self.tool = Tool::Select;
                 }
             }
+            Tool::Arrow
+                if self.tab.arrows.attach_targets
+                    && matches!(
+                        self.tab.arrow_style,
+                        reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
+                    ) =>
+            {
+                return self.arrow_target_click(p, false);
+            }
             Tool::Arrow => {
                 if let Some(id) = hit.filter(|id| self.tab.doc.arrows.iter().any(|a| a.id == *id)) {
                     self.apply_arrow_tool(id);

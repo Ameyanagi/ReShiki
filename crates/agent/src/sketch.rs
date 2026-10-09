@@ -385,6 +385,8 @@ impl Sketch {
         }
         for a in &self.arrows {
             doc.arrows.push(crate::document::Arrow {
+                start_anchor: None,
+                end_anchor: None,
                 id: doc.next_id(),
                 start: point(a.start),
                 end: point(a.end),

@@ -41,7 +41,9 @@ impl MoleculeCanvas<'_> {
     pub(super) fn pointer_preview_document(&self, state: &State, bounds: Rectangle) -> Document {
         let mut draft = Draft::new(self.doc);
         self.preview_pointer_edits(&mut draft, state, bounds);
-        draft.preview.into_owned()
+        let mut doc = draft.preview.into_owned();
+        reshiki::arrow_anchors::reconcile(&mut doc);
+        doc
     }
 
     pub(super) fn draw_paper(
@@ -65,6 +67,9 @@ impl MoleculeCanvas<'_> {
         self.preview_delocalized_ring(&mut draft, state, bounds);
         self.preview_bonded_atom(&mut draft, state, bounds);
         self.preview_bond(&mut draft, frame, state, bounds);
+        if let Cow::Owned(doc) = &mut draft.preview {
+            reshiki::arrow_anchors::reconcile(doc);
+        }
         let Draft {
             mut preview,
             ring_selection,
@@ -97,6 +102,7 @@ impl MoleculeCanvas<'_> {
         }
         self.draw_editor_markers(frame, &preview, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);
+        self.draw_arrow_targets(frame, state, bounds, cursor);
         self.draw_notices(
             frame,
             state,
