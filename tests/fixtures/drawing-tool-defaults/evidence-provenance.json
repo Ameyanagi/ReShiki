@@ -1,0 +1,292 @@
+{
+  "baseline_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "implementation_commit": "812273150976ef18d1184e102a70b1e5ee7df21a",
+  "preserved_signed_executable_sha256": "ecb6bfb989e196edc959e23a2a95298945456023d2aacdc5d9c02683609078c8",
+  "image_policy": "Original untouched app capture or PNG export bytes; no crops, resizing, annotations, retouching or recompression. Native JPEG captures use .jpg names. Renderer inputs identical before/after.",
+  "files": [
+    {
+      "path": "docs/images/drawing-tool-defaults/lone-pair-click-before.jpg",
+      "sha256": "59b58f876d9f6bb5df9c2f82a4d3499b2f50fabd9e62d1d898c1f2f1a3dd33ab",
+      "bytes": 315630,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/lone-pair-click-after.jpg",
+      "sha256": "1445bb560103e322dfd41c27a87f5165f62f56ecdf97b6b75d21237419e7dfa1",
+      "bytes": 310220,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "tests/fixtures/drawing-tool-defaults/orbital-methanol-S-Solid-layer-1-Light.rsk",
+      "sha256": "427c7ed7ce547330218efe4e242c8a9b5a701d2c27fdf5cd247f610dc3e17b7c",
+      "bytes": 1664,
+      "type": "unchanged renderer input",
+      "original_unchanged": true
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-methanol-S-Solid-layer-1-Light-before.png",
+      "sha256": "81b11c493e5c2a3ffdfc40d7e733af33d03d87c4a96ca8dfb1cc2b4baac8a865",
+      "bytes": 22193,
+      "type": "native application PNG export; 1200 dpi",
+      "original_unchanged": true,
+      "pixel_size": [
+        624,
+        624
+      ],
+      "encoded_format": "PNG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-methanol-S-Solid-layer-1-Light-after.png",
+      "sha256": "066068771f885806844d0a9398defbd16ec0303e2787a754894bf483e6dfd7ce",
+      "bytes": 34725,
+      "type": "native application PNG export; 1200 dpi",
+      "original_unchanged": true,
+      "pixel_size": [
+        624,
+        624
+      ],
+      "encoded_format": "PNG"
+    },
+    {
+      "path": "tests/fixtures/drawing-tool-defaults/orbital-methanol-P-Solid-layer1-Light.rsk",
+      "sha256": "bc44b4dc63a52285d816f7d50b9b6848a87b88446dfb028bfeee4a6f7e4ad3dc",
+      "bytes": 1663,
+      "type": "unchanged renderer input",
+      "original_unchanged": true
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-methanol-P-Solid-layer1-Light-before.png",
+      "sha256": "244317006ceb64a367fbc891a49c85cace910c8a33dfb87c3a5d79049467252c",
+      "bytes": 36492,
+      "type": "native application PNG export; 1200 dpi",
+      "original_unchanged": true,
+      "pixel_size": [
+        527,
+        624
+      ],
+      "encoded_format": "PNG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-methanol-P-Solid-layer1-Light-after.png",
+      "sha256": "2af43e8ee12636d12d7c7c8229351b673edfec64b1ae796901904d57082820b2",
+      "bytes": 34099,
+      "type": "native application PNG export; 1200 dpi",
+      "original_unchanged": true,
+      "pixel_size": [
+        527,
+        624
+      ],
+      "encoded_format": "PNG"
+    },
+    {
+      "path": "tests/fixtures/drawing-tool-defaults/orbital-methanol-P-Shaded-layer-1-Dark.rsk",
+      "sha256": "248f1fcdec03dad36c94d0a999a463d6682f069afef8f815f1a01313780dcb34",
+      "bytes": 1691,
+      "type": "unchanged renderer input",
+      "original_unchanged": true
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-methanol-P-Shaded-layer-1-Dark-before.png",
+      "sha256": "e21fa0f681e886539580d5eb2f6441b001fa4106b86ecda7256dbf0ea492685e",
+      "bytes": 42409,
+      "type": "native application PNG export; 1200 dpi",
+      "original_unchanged": true,
+      "pixel_size": [
+        527,
+        624
+      ],
+      "encoded_format": "PNG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-methanol-P-Shaded-layer-1-Dark-after.png",
+      "sha256": "0452a2fa0619304ec6662589a065d756baf5a521215f0aafcb05cdf7b0f83c31",
+      "bytes": 37497,
+      "type": "native application PNG export; 1200 dpi",
+      "original_unchanged": true,
+      "pixel_size": [
+        527,
+        624
+      ],
+      "encoded_format": "PNG"
+    },
+    {
+      "path": "tests/fixtures/drawing-tool-defaults/orbital-methanol-P-Open-layer1-Dark.rsk",
+      "sha256": "bf28362da4218be6ebb45cd932afa5b1b20ffc0c58492152c402b29dc8353960",
+      "bytes": 1688,
+      "type": "unchanged renderer input",
+      "original_unchanged": true
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-methanol-P-Open-layer1-Dark-before.png",
+      "sha256": "2a2a191b5e35752a681030baf4988183a2c8495bbf904290f653e48a9dd84eb1",
+      "bytes": 42512,
+      "type": "native application PNG export; 1200 dpi",
+      "original_unchanged": true,
+      "pixel_size": [
+        527,
+        624
+      ],
+      "encoded_format": "PNG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-methanol-P-Open-layer1-Dark-after.png",
+      "sha256": "3a7960a4b9c6df087b5b20143a182a016a3c679b380c8610c3cb5e409f0ac5f4",
+      "bytes": 37489,
+      "type": "native application PNG export; 1200 dpi",
+      "original_unchanged": true,
+      "pixel_size": [
+        527,
+        624
+      ],
+      "encoded_format": "PNG"
+    },
+    {
+      "path": "tests/fixtures/drawing-tool-defaults/methanol-click-input.rsk",
+      "sha256": "9737ebd597fff105a7783d421a2e16a7d214ea13c72e360f04a44b72dc0a06bc",
+      "bytes": 1108,
+      "type": "native desktop input",
+      "original_unchanged": true
+    },
+    {
+      "path": "tests/fixtures/drawing-tool-defaults/methanol-click-after-desktop.rsk",
+      "sha256": "9ac007789f84a9f605e533dd74305b96c700f5501413b24bd94d1d585c21becc",
+      "bytes": 1319,
+      "type": "actual native Save As after click",
+      "original_unchanged": true
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/blank-toolbar.jpg",
+      "sha256": "71a2bf63363f5ef177e5c8d6d0ea7e1a1a05d881cd68e6f8dd055414c023391d",
+      "bytes": 250431,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/blank-toolbar-after.jpg",
+      "sha256": "ae59fe1970aa93a92b1febd149326843f4ec86b516c46fe4a879f9b5ec828a6e",
+      "bytes": 263837,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-label-solid-before.jpg",
+      "sha256": "1dfdaf0ee5da41048b697fccfa14653eb9ef13316384b0396dec70d47650e06c",
+      "bytes": 312742,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-label-solid-after.jpg",
+      "sha256": "7084b8c8b09222e3f824ab3bad9937a14bdf90ba64a80af3c12f2029eaeb4679",
+      "bytes": 319860,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-label-shaded-dark-before.jpg",
+      "sha256": "b65938cd3f91c1f582d0853a2dd2ba829c621685fa98edc7f57cbe263406ab39",
+      "bytes": 297801,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-label-shaded-dark-after.jpg",
+      "sha256": "91e96ed5ebde05499032f22aa0b540aafd2685dc57baad9a0d95d54f92fa92f0",
+      "bytes": 294687,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/orbital-snap-option-off.jpg",
+      "sha256": "8f36567a5ba5ecf75b31834cdf1b2427716b9ed1ef26b43704cac01800eac4e9",
+      "bytes": 320170,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/chain-straight-controls.jpg",
+      "sha256": "4834747b1fda48a23d65502758cca0f4c0b804c7815d32178eba2ee356b7ea45",
+      "bytes": 265519,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "docs/images/drawing-tool-defaults/chain-snaking-controls.jpg",
+      "sha256": "93267acb84b8b9d7ce2131c09e6e919b08a3f14654590f7ab9ca280b08b77c27",
+      "bytes": 264726,
+      "type": "untouched native desktop JPEG capture",
+      "original_unchanged": true,
+      "pixel_size": [
+        2560,
+        1704
+      ],
+      "encoded_format": "JPEG"
+    },
+    {
+      "path": "tests/fixtures/drawing-tool-defaults/orbital-snap-on-desktop.rsk",
+      "sha256": "bde58472b79aba5eebe8950aa139296e8c78b471cbd9791afea8fb6bdca4b2bd",
+      "bytes": 2242,
+      "type": "candidate actual native Save As, despite scratch before directory",
+      "original_unchanged": true
+    },
+    {
+      "path": "tests/fixtures/drawing-tool-defaults/orbital-snap-off-desktop.rsk",
+      "sha256": "84151a1f9c48155f018328e77ce3d25b857ca8c855a072e1e0dbe73716109012",
+      "bytes": 2252,
+      "type": "candidate actual native Save As, despite scratch before directory",
+      "original_unchanged": true
+    }
+  ]
+}
