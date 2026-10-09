@@ -1,9 +1,11 @@
 # Simulated Assistant setup desktop checks
 
-Status: procedure prepared; native missing-installation, signed-out, broken and
-cancelled-check captures are pending. These are account-free **simulated backend
-fixtures**, separate from the actual signed-in Ready/example desktop exercise.
-No screenshot or desktop acceptance result for these states is claimed here.
+Status: native macOS arm64 checks completed on the preserved signed
+`43e3d80dde9c9f1da1be04e2525182aea390cc75` application. These are account-free
+**simulated backend fixtures**, separate from the actual signed-in Ready/example
+desktop exercise. The [review gallery](assistant-setup-review-2026-10-09.md#simulated-setup-states-in-the-actual-native-app)
+shows the original captures. The real account stayed signed in, its installation
+remained present, and no Send or inference occurred.
 
 ReShiki's [documented executable override](../assistant-setup.md#if-it-does-not-connect)
 selects the absolute `RESHIKI_CODEX` path before ordinary Codex discovery. Launch
@@ -33,8 +35,22 @@ broken and stalled fixtures use the system's available Python 3 through
 `/usr/bin/env`; this is a test dependency only. The setup child receives the normal
 Codex app-server arguments, which these scripts intentionally ignore.
 [The evidence receipt](../images/assistant-setup/provenance.json) pins the exact
-review fixture hashes. This procedure has been checked against source; native
-interaction remains pending.
+review fixture hashes. Exact documented scripts and four offline subprocess
+preflights were checked separately. Native interaction now confirms the following:
+
+| Simulated fixture                | Observed native result                                                                         |
+| -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| signed-out-codex                 | Sign-in guidance and Test connection; Send disabled                                            |
+| broken-codex                     | Safe version/update/retry guidance; Back to drawing closes Assistant and preserves blank input |
+| missing-interpreter-codex        | Install Codex with native Windows codex.exe guidance                                           |
+| stalled-codex                    | Checking Codex; Cancel check was clicked                                                       |
+| stalled-codex after cancellation | Cancelled card and Test connection; Stop removed                                               |
+
+Every capture used blank Untitled input, 100%, JACS / ACS, Arial 10 pt, keyboard
+drawing on and original 2560 × 1704 JPEG bytes. Every foreground process quit with
+exit code 0; process-name checks found no corresponding fixture child afterward.
+No real account, global configuration or credentials were changed. Other-platform
+native GUI checks remain unverified.
 
 ## Sign-in required: signed-out-codex
 
@@ -109,5 +125,6 @@ invalid-executable guidance, so keep this fixture file present.
 
 Label each capture **simulated setup backend fixture**, preserve its original
 bytes, and record fixture name/hash, source commit, signed executable hash,
-platform, blank input, zoom, keyboard drawing state and exact actions. Add the
-observed results and screenshots to the review only after the native checks run.
+platform, blank input, zoom, keyboard drawing state and exact actions. The linked
+review now records the observed native results without treating these fixtures
+as an actual account logout or removed Codex installation.

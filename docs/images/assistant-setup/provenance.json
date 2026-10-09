@@ -50,6 +50,42 @@
       "format": "JPEG",
       "pixels": [2560, 1704],
       "preserved_original_bytes": true
+    },
+    "assistant-fixture-signed-out.jpg": {
+      "sha256": "25922d92730a2066dc8bef33acbb97246f17380b4a2314e60f31802e92efe78d",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-fixture-broken.jpg": {
+      "sha256": "7599c2bf5ffabb249ddf40a5ba1fe036895ec871a4094807d80a877c7d5afac4",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-fixture-missing.jpg": {
+      "sha256": "0c362ac1796435f6023969ba8505e21c8339286d807a86f5b8d5872f865ab981",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-fixture-stalled.jpg": {
+      "sha256": "427101fffc3c2f73b7e9dc3a63077d9e76130a3e2a074f9744415b284bc0b64a",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-fixture-cancelled.jpg": {
+      "sha256": "a05d1a65cf79aa6abbee560bf6521f0b2c47d8fc96ec54021db78da820d0a686",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-guided-reopened.jpg": {
+      "sha256": "d8b28247eb94f8c6a5618f058039f0ecb8bee377198e6ce64190da61546714b5",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
     }
   },
   "before_extension_correction": "The raw baseline file had a .png suffix but JPEG bytes; only its published name changed to assistant-ready-before.jpg.",
@@ -60,7 +96,9 @@
     "local_example": "Blank canvas, 100%, keyboard drawing on; image and known reference attached locally, GPT-6.1-Sol / Extra high, Review example.",
     "draft_before_apply": "Completed reviewed draft at 100%, keyboard drawing on; canvas blank, Apply available. The model review statement is not an independent chemistry check.",
     "applied": "Manual Apply; toolbar reports 3 atoms and 2 bonds, selected objects intentionally shown as proof of editability. Keyboard drawing off; automatic fit changed zoom to 250%.",
-    "redo": "Saved filename visible; Undo removed the whole graph, Redo restored it. Unselected representative drawing at 250%, keyboard drawing off."
+    "redo": "Saved filename visible; Undo removed the whole graph, Redo restored it. Unselected representative drawing at 250%, keyboard drawing off.",
+    "fixture_states": "Blank Untitled drawing, 100%, JACS / ACS, Arial 10 pt, keyboard drawing on, 2560 x 1704 JPEGs. OS active/inactive title appearance is preserved; fixture process-local profiles are separate from real account/config/credentials. Visible model label is a default placeholder; no Send or inference occurred.",
+    "reopened": "Exact saved native opened at 250%, keyboard drawing off, JACS / ACS, Arial 10 pt; unselected OH drawing and Properties formula/counts/canonical CCO, clean filename and disabled Undo. Recovery banner dismissed in memory only; no Save."
   },
   "guided_workflow": {
     "provider": "Codex app-server",
@@ -78,7 +116,7 @@
     "native_save_observed": true,
     "undo_redo_observed": true,
     "clean_quit_observed": true,
-    "native_ui_reopen_observed": false,
+    "native_ui_reopen_observed": true,
     "saved_native_version": 19,
     "saved_native_sha256": "60aa141bea3ed38c5b38390dade64a099e5b458bf86f1e7cd4a1ed535f47e921",
     "independent_score_sha256": "63cb8c75e5bf0ff1d85ffb3786a390b39aa40aea24a139e4e2e653b38c484c9e",
@@ -89,7 +127,23 @@
     "benchmark_separation": "Known guided control is excluded from every unassisted baseline denominator.",
     "external_scorer_source_commit": "23f957cf4e24d3cc548a8e84034da7f7f27f531d",
     "external_scorer_source_sha256": "ecd2f5b2876244a8e40501b97f5ffabafa47f71a607e6fca952ee019a6173d49",
-    "independent_reference_json_sha256": "4c36ce8a0e580cf97fcb653a5d256e11c9485571237d1d811d590cd6c40ef672"
+    "independent_reference_json_sha256": "4c36ce8a0e580cf97fcb653a5d256e11c9485571237d1d811d590cd6c40ef672",
+    "native_ui_reopen": {
+      "file": "guided-ethanol.rsk",
+      "exact_saved_native_bytes_unchanged": true,
+      "formula": "C2H6O",
+      "atoms": 3,
+      "bonds": 2,
+      "canonical_smiles": "CCO",
+      "filename_clean": true,
+      "undo_disabled": true,
+      "view_percent": 250,
+      "keyboard_drawing": "off",
+      "drawing_style": "JACS / ACS",
+      "font": "Arial 10 pt",
+      "actions": "Opened the exact bundled SaveAs graph in the preserved signed app; dismissed the recovery banner in memory, inspected Properties, then closed cleanly without Save or inference. No recovery files deleted.",
+      "capture": "assistant-guided-reopened.jpg"
+    }
   },
   "validation_at_head_source": {
     "app_tests_passed": 23,
@@ -104,7 +158,7 @@
     "native_codesign_verification": "passed"
   },
   "simulated_setup_desktop": {
-    "status": "Pending parent capture; source, subprocess and headless widget checks are separate evidence.",
+    "status": "Native macOS arm64 GUI checks completed on the unchanged signed 43e3d80d source; account-free simulated backends, separately labeled from actual Ready/example account use.",
     "fixture_sha256": {
       "signed-out-codex": "31199de309ab96bbc23b0870e43b7a22786b539e8fc03472f46a2dcf892a7df6",
       "broken-codex": "ff66cd3df43dcda8e1c6641f701c6620a6117f649cdf27ae6564e75ce0b8b0b0",
@@ -119,12 +173,48 @@
       "missing_interpreter": "OS NotFound verified",
       "stalled": "No response / process remains alive verified; fixture terminated without waiting for timeout",
       "scope": "Source-only disposable subprocess check; no app GUI, real account access or model request. Does not establish native desktop acceptance."
+    },
+    "observed_results": {
+      "signed_out": {
+        "fixture": "signed-out-codex",
+        "capture": "assistant-fixture-signed-out.jpg",
+        "result": "Sign in to Codex card, codex login/status guidance, Test connection offered; Send disabled. Real account remains signed in."
+      },
+      "broken": {
+        "fixture": "broken-codex",
+        "capture": "assistant-fixture-broken.jpg",
+        "result": "Connection needs attention, version/update/retry guidance and Test connection. Back to drawing was actually clicked; Assistant closed and blank Untitled drawing stayed unchanged."
+      },
+      "missing": {
+        "fixture": "missing-interpreter-codex",
+        "capture": "assistant-fixture-missing.jpg",
+        "result": "Install Codex guidance, official installation link, Test connection and native Windows codex.exe / WSL distinction. Deliberately absent fixture interpreter causes POSIX NotFound; actual Codex installation remains present."
+      },
+      "stalled": {
+        "fixture": "stalled-codex",
+        "capture": "assistant-fixture-stalled.jpg",
+        "result": "Checking Codex and Cancel check visible in the actual native UI."
+      },
+      "cancelled": {
+        "fixture": "stalled-codex",
+        "capture": "assistant-fixture-cancelled.jpg",
+        "result": "Cancel check was actually clicked: Connection check cancelled, Test connection offered and Stop removed."
+      }
+    },
+    "process_receipt": {
+      "launch": "Documented direct signed-bundle executable with process-local RESHIKI_CODEX and distinct disposable RESHIKI_DATA_DIR profiles",
+      "foreground_exit_code": 0,
+      "all_fixture_processes_quit_cleanly": true,
+      "no_fixture_child_left_after_quit": true,
+      "verification": "Parent checked own fixture process names after each foreground app quit",
+      "real_account_config_credentials_touched": false,
+      "send_or_inference": false,
+      "scope": "Actual application interaction against simulated setup-only backends; not a real account logout or removed installation."
     }
   },
   "scope_limits": [
-    "Actual desktop evidence covers Ready and the guided example on macOS arm64 only.",
-    "No native UI reopen was supplied.",
-    "Simulated missing-installation, signed-out, broken and cancelled-check desktop evidence is pending.",
+    "Actual native desktop coverage is macOS arm64; other-platform GUI is unverified.",
+    "Missing-installation, signed-out, broken and stalled/cancelled states use clearly labeled account-free simulated backends.",
     "A successful known ethanol exercise does not establish unseen-image accuracy."
   ],
   "license": "Original review documentation, screenshots, fixture and native graph are contributed under MIT OR Apache-2.0. No third-party source image or code is added. Existing dependency notices remain applicable; RDKit is an external BSD-3-Clause validation observer, not a newly bundled runtime."
