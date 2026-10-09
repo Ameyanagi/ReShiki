@@ -118,6 +118,27 @@ fn child_fixture() {
             std::thread::sleep(Duration::from_secs(30));
         }
         #[cfg(windows)]
+        Ok("chunked") => {
+            use std::io::{Read, Write};
+            // Each output is gated by input, making the empty connected pipe
+            // interval deterministic instead of relying on a startup sleep.
+            let mut signal = [0_u8; 1];
+            std::io::stderr().write_all(b"ready").unwrap();
+            std::io::stderr().flush().unwrap();
+            std::io::stdin().read_exact(&mut signal).unwrap();
+            std::io::stdout().write_all(b"first-output").unwrap();
+            std::io::stdout().flush().unwrap();
+            std::io::stderr().write_all(b"first-error").unwrap();
+            std::io::stderr().flush().unwrap();
+            std::io::stdin().read_exact(&mut signal).unwrap();
+            std::io::stdout().write_all(b"second-output").unwrap();
+            std::io::stdout().flush().unwrap();
+            std::io::stderr().write_all(b"second-error").unwrap();
+            std::io::stderr().flush().unwrap();
+            // Avoid the test harness adding a success line to this protocol.
+            std::process::exit(0);
+        }
+        #[cfg(windows)]
         Ok("memory") => {
             // BEFORE reading stdin: a post-spawn assignment could lose this race.
             let mut bytes = Vec::<u8>::new();
@@ -141,6 +162,102 @@ fn child_fixture() {
         _ => (),
     }
 }
+
+#[cfg(windows)]
+#[test]
+fn actual_child_output_survives_empty_intervals_between_gated_chunks() {
+    fn chunk(child: &mut Child, errors: bool, expected: &[u8]) -> Vec<u8> {
+        let started = Instant::now();
+        let mut captured = Vec::new();
+        let mut buffer = [0_u8; 128];
+        while captured.len() < expected.len() {
+            let result = if errors {
+                child.read_errors(&mut buffer)
+            } else {
+                child.read_output(&mut buffer)
+            };
+            match result {
+                Ok(0) => panic!("A connected child pipe was reported as EOF"),
+                Ok(count) => captured.extend_from_slice(&buffer[..count]),
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => (),
+                Err(error) => panic!("Could not read child response: {error}"),
+            }
+            assert!(started.elapsed() < Duration::from_secs(3));
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(captured, expected);
+        captured
+    }
+    let mut child = spawn(&mut fixture("chunked"), limits()).unwrap();
+    chunk(&mut child, true, b"ready");
+    // The harness's startup line precedes the fixture's ready signal. Drain
+    // it, then the child cannot produce stdout until we explicitly signal it.
+    let mut buffer = [0_u8; 128];
+    let started = Instant::now();
+    loop {
+        match child.read_output(&mut buffer) {
+            Ok(0) => panic!("The live child stdout must remain connected"),
+            Ok(_) => (),
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
+            Err(error) => panic!("Could not drain fixture startup: {error}"),
+        }
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+    assert_eq!(
+        child.read_output(&mut buffer).unwrap_err().kind(),
+        io::ErrorKind::WouldBlock
+    );
+    assert_eq!(child.write_input(b"1").unwrap(), 1);
+    let mut output = chunk(&mut child, false, b"first-output");
+    let mut errors = chunk(&mut child, true, b"first-error");
+    assert_eq!(
+        child.read_output(&mut buffer).unwrap_err().kind(),
+        io::ErrorKind::WouldBlock
+    );
+    assert_eq!(
+        child.read_errors(&mut buffer).unwrap_err().kind(),
+        io::ErrorKind::WouldBlock
+    );
+    assert_eq!(child.write_input(b"2").unwrap(), 1);
+    child.close_input();
+    let mut output_closed = false;
+    let mut errors_closed = false;
+    let started = Instant::now();
+    let status = loop {
+        for (closed, captured, is_error) in [
+            (&mut output_closed, &mut output, false),
+            (&mut errors_closed, &mut errors, true),
+        ] {
+            if *closed {
+                continue;
+            }
+            let result = if is_error {
+                child.read_errors(&mut buffer)
+            } else {
+                child.read_output(&mut buffer)
+            };
+            match result {
+                Ok(0) => *closed = true,
+                Ok(count) => captured.extend_from_slice(&buffer[..count]),
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => (),
+                Err(error) => panic!("Could not read final child response: {error}"),
+            }
+        }
+        if let Some(status) = child.try_wait().unwrap()
+            && output_closed
+            && errors_closed
+        {
+            break status;
+        }
+        assert!(started.elapsed() < Duration::from_secs(3));
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    assert!(status.success());
+    assert_eq!(output, b"first-outputsecond-output");
+    assert_eq!(errors, b"first-errorsecond-error");
+    child.terminate();
+}
+
 #[cfg(windows)]
 #[test]
 fn actual_job_commit_limit_applies_before_any_input_is_read() {

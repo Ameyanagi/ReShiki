@@ -4,7 +4,7 @@ use std::{
     collections::BTreeMap,
     ffi::{OsStr, OsString},
     fs::File,
-    io::{self, Read, Write},
+    io::{self, Write},
     mem::size_of,
     os::windows::{
         ffi::OsStrExt,
@@ -23,7 +23,7 @@ use windows::{
         Security::SECURITY_ATTRIBUTES,
         Storage::FileSystem::{
             CreateFileW, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_MODE,
-            OPEN_EXISTING, PIPE_ACCESS_DUPLEX,
+            OPEN_EXISTING, PIPE_ACCESS_DUPLEX, ReadFile,
         },
         System::{
             JobObjects::{
@@ -43,7 +43,7 @@ use windows::{
             },
         },
     },
-    core::{PCWSTR, PWSTR},
+    core::{HRESULT, PCWSTR, PWSTR},
 };
 
 pub(super) fn handle(value: &OwnedHandle) -> HANDLE {
@@ -343,12 +343,37 @@ pub struct Child {
     terminated: bool,
 }
 fn read(pipe: &mut File, bytes: &mut [u8]) -> io::Result<usize> {
-    match pipe.read(bytes) {
-        Err(e) if e.raw_os_error() == Some(ERROR_NO_DATA.0 as i32) => {
+    if bytes.is_empty() {
+        return Ok(0);
+    }
+    // std File::read normalizes ERROR_NO_DATA through BrokenPipe to Ok(0),
+    // losing the distinction between an empty connected PIPE_NOWAIT pipe and
+    // EOF. Preserve the Win32 result before that normalization occurs.
+    let length = bytes.len().min(u32::MAX as usize);
+    let bytes = bytes
+        .get_mut(..length)
+        .ok_or_else(|| io::Error::other("Invalid local worker read buffer"))?;
+    let mut count = 0;
+    // SAFETY: this owned, synchronous PIPE_NOWAIT handle cannot retain the
+    // buffer after return; its length fits DWORD and count remains writable.
+    let result = unsafe {
+        ReadFile(
+            HANDLE(pipe.as_raw_handle()),
+            Some(bytes),
+            Some(&mut count),
+            None,
+        )
+    };
+    match result {
+        // A peer zero-byte WriteFile can complete a read without supplying
+        // data. Only BROKEN_PIPE below proves EOF for a nonempty read buffer.
+        Ok(()) if count == 0 => Err(io::ErrorKind::WouldBlock.into()),
+        Ok(()) => Ok(count as usize),
+        Err(e) if e.code() == HRESULT::from_win32(ERROR_NO_DATA.0) => {
             Err(io::ErrorKind::WouldBlock.into())
         }
-        Err(e) if e.raw_os_error() == Some(ERROR_BROKEN_PIPE.0 as i32) => Ok(0),
-        result => result,
+        Err(e) if e.code() == HRESULT::from_win32(ERROR_BROKEN_PIPE.0) => Ok(0),
+        Err(e) => Err(io::Error::other(e)),
     }
 }
 impl Child {
@@ -429,6 +454,45 @@ impl Drop for Child {
 #[cfg(test)]
 mod quoting_tests {
     use super::*;
+    #[test]
+    fn nonblocking_pipe_keeps_empty_connected_reads_open_between_chunks() {
+        let (mut reader, writer) = pipe().unwrap();
+        let mut writer = File::from(writer);
+        let mut buffer = [0_u8; 128];
+        assert_eq!(read(&mut reader, &mut []).unwrap(), 0);
+        let mut written = 0;
+        // SAFETY: the live synchronous client handle receives a zero-length
+        // slice and a writable DWORD; no operation retains either pointer.
+        unsafe {
+            windows::Win32::Storage::FileSystem::WriteFile(
+                HANDLE(writer.as_raw_handle()),
+                Some(&[]),
+                Some(&mut written),
+                None,
+            )
+        }
+        .unwrap();
+        assert_eq!(written, 0);
+        assert_eq!(
+            read(&mut reader, &mut buffer).unwrap_err().kind(),
+            io::ErrorKind::WouldBlock
+        );
+        let mut captured = Vec::new();
+        for chunk in [b"{\"protocol\":1,".as_slice(), b"\"value\":\"delayed\"}"] {
+            writer.write_all(chunk).unwrap();
+            let count = read(&mut reader, &mut buffer).unwrap();
+            captured.extend_from_slice(&buffer[..count]);
+            assert_eq!(
+                read(&mut reader, &mut buffer).unwrap_err().kind(),
+                io::ErrorKind::WouldBlock,
+                "A live writer may produce another response chunk later"
+            );
+        }
+        assert_eq!(captured, b"{\"protocol\":1,\"value\":\"delayed\"}");
+        drop(writer);
+        assert_eq!(read(&mut reader, &mut buffer).unwrap(), 0);
+    }
+
     #[test]
     fn windows_argument_quoting_preserves_spaces_quotes_and_trailing_slashes() {
         for (input, expected) in [

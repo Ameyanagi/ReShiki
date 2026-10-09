@@ -298,9 +298,10 @@ pub(super) fn run_child(
                 match child.check() {
                     Ok(()) => missing_samples = 0,
                     Err(error) => {
-                        // macOS task info can disappear during exec/exit
-                        // before the PID is waitable. Permit at most four
-                        // retries; measured excess and other failures stop
+                        // Task info can disappear during exec/exit before
+                        // the PID is waitable; Linux also omits VmRSS once
+                        // the address space is gone. Permit four retries;
+                        // measured excess and other failures stop
                         // even if the worker exits successfully immediately.
                         if !transient_measurement_error(&error) {
                             return Err(format!("Local parser resource check failed: {error}"));
