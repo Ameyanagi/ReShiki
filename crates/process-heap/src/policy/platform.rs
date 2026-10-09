@@ -16,17 +16,9 @@ pub(super) fn memory_headroom() -> Option<u64> {
     let process = fs::read_to_string("/proc/self/limits")
         .ok()
         .and_then(|limits| {
-            let limit = limits
-                .lines()
-                .find_map(|line| line.strip_prefix("Max address space"))?
-                .split_whitespace()
-                .next()?
-                .parse::<u64>()
-                .ok()?;
-            let used = fs::read_to_string("/proc/self/status")
+            fs::read_to_string("/proc/self/status")
                 .ok()
-                .and_then(|s| kib_field(&s, "VmSize:"))?;
-            Some(limit.saturating_sub(used))
+                .and_then(|status| process_limits_headroom(&limits, &status))
         });
     let mut container = Vec::new();
     if let Ok(groups) = fs::read_to_string("/proc/self/cgroup") {
@@ -54,6 +46,27 @@ pub(super) fn memory_headroom() -> Option<u64> {
         }
     }
     minimum([available, process].into_iter().chain(container))
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn process_limits_headroom(limits: &str, status: &str) -> Option<u64> {
+    minimum(
+        [
+            ("Max address space", "VmSize:"),
+            ("Max data size", "VmData:"),
+        ]
+        .into_iter()
+        .map(|(name, usage)| {
+            let limit = limits
+                .lines()
+                .find_map(|line| line.strip_prefix(name))?
+                .split_whitespace()
+                .next()?
+                .parse::<u64>()
+                .ok()?;
+            Some(limit.saturating_sub(kib_field(status, usage)?))
+        }),
+    )
 }
 
 #[cfg(any(target_os = "linux", test))]
@@ -315,6 +328,17 @@ mod tests {
         assert_eq!(minimum([Some(32_000), Some(512), None]), Some(512));
         assert_eq!(available_pages(13, 20, 16384), Some(33 * 16384));
         assert_eq!(available_pages(u32::MAX, u32::MAX, u64::MAX), None);
+    }
+
+    #[test]
+    fn finite_process_data_and_address_space_limits_are_both_observed() {
+        let status = "VmSize:  8 kB\nVmData:  2 kB\n";
+        let limits = "Max address space 16384 16384 bytes\nMax data size 4096 4096 bytes\n";
+        assert_eq!(process_limits_headroom(limits, status), Some(2048));
+        let limits = "Max address space unlimited unlimited bytes\nMax data size 4096 4096 bytes\n";
+        assert_eq!(process_limits_headroom(limits, status), Some(2048));
+        assert_eq!(process_limits_headroom(limits, "VmData:  5 kB\n"), Some(0));
+        assert_eq!(process_limits_headroom(limits, ""), None);
     }
 
     #[test]
