@@ -53,6 +53,66 @@ fn retained_pen_shapes_are_connected_editable_paths_with_native_geometry() {
 }
 
 #[test]
+fn retained_non_arc_shapes_can_be_constructed_as_one_pen_path() {
+    for original in fixture().graphics {
+        let commands = original.commands();
+        let [
+            PathCommand::Move(start),
+            PathCommand::Cubic(a, b, end),
+            rest @ ..,
+        ] = commands.as_slice()
+        else {
+            panic!("retained pen outline")
+        };
+        let mut pen = Graphic::pen_curve(original.id, *start, *end, original.style.clone());
+        pen.edit_point(1, *a);
+        pen.edit_point(2, *b);
+        for command in rest {
+            match *command {
+                PathCommand::Cubic(a, b, end) if original.path_closed() && end == *start => {
+                    let last = pen
+                        .path_handles()
+                        .unwrap()
+                        .into_iter()
+                        .filter(|handle| handle.node)
+                        .next_back()
+                        .unwrap()
+                        .index;
+                    pen.set_path_closed(true).unwrap();
+                    pen.set_path_segment_curved(last, true).unwrap();
+                    pen.edit_point(last + 1, a);
+                    pen.edit_point(last + 2, b);
+                }
+                PathCommand::Cubic(a, b, end) => {
+                    let index = pen
+                        .append_pen_node(end, Some(Point::new(2. * end.x - b.x, 2. * end.y - b.y)))
+                        .unwrap();
+                    pen.edit_point(index - 2, a);
+                    pen.edit_point(index - 1, b);
+                }
+                PathCommand::Close => pen.set_path_closed(true).unwrap(),
+                _ => panic!("unexpected retained segment"),
+            }
+        }
+        assert_eq!(pen.commands(), commands);
+        assert_eq!(
+            pen.path_handles()
+                .unwrap()
+                .iter()
+                .filter(|handle| handle.node)
+                .count(),
+            original
+                .path_handles()
+                .unwrap()
+                .iter()
+                .filter(|handle| handle.node)
+                .count()
+        );
+        pen.validate().unwrap();
+    }
+}
+
+#[test]
 fn node_drags_transport_adjacent_controls_and_closed_seam_exactly_once() {
     let mut doc = fixture();
     let original = doc.graphics[0].edit_points();
