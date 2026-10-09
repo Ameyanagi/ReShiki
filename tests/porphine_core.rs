@@ -61,7 +61,7 @@ async fn chosen_free_base_has_two_opposite_nh_sites_and_persists_exact_identity(
         }
     }
     let native = Document::from_native_file(&core.document.file_json().unwrap()).unwrap();
-    assert_eq!(native, core.document);
+    assert_eq!(native, core.document.current());
     for format in ["mol", "cdxml"] {
         let mut request = Request::molecule("export", core.document.clone());
         request.format = Some(format.into());
@@ -112,7 +112,8 @@ async fn one_meso_phenyl_attaches_and_stretches_without_distorting_the_core_or_r
     assert_eq!(plan.ids.len(), 6);
     let stretched = plan.apply(&joined, plan.length * 1.5).unwrap();
     for atom in &core.atoms {
-        assert_eq!(stretched.atom(atom.id), Some(atom));
+        assert_eq!(joined.atom(atom.id).unwrap().position, atom.position);
+        assert_eq!(stretched.atom(atom.id), joined.atom(atom.id));
     }
     assert_eq!(stretched.bonds, joined.bonds);
     for bond in joined.bonds.iter().filter(|b| b.a > 24 && b.b > 24) {

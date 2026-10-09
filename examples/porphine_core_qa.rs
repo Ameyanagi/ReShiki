@@ -177,7 +177,7 @@ async fn main() -> anyhow::Result<()> {
         .find(|t| t.name == "Benzene")
         .context("Benzene template")?;
     let p = core.atom(5).context("Meso position 5")?.position;
-    let (joined, _) = benzene
+    let (mut joined, _) = benzene
         .place(
             core,
             p,
@@ -198,21 +198,40 @@ async fn main() -> anyhow::Result<()> {
         (bridge.b, bridge.a)
     };
     let plan = Stretch::new(&joined, fixed, moving).map_err(anyhow::Error::msg)?;
-    let stretched = plan
+    let mut stretched = plan
         .apply(&joined, plan.length * 1.5)
         .map_err(anyhow::Error::msg)?;
     let before = engine
         .execute(Request::molecule("analyze", joined.clone()))
         .await
-        .map_err(anyhow::Error::msg)?
-        .analysis
-        .context("Phenyl identity")?;
+        .map_err(anyhow::Error::msg)?;
     let after = engine
         .execute(Request::molecule("analyze", stretched.clone()))
         .await
-        .map_err(anyhow::Error::msg)?
-        .analysis
-        .context("Stretched phenyl identity")?;
+        .map_err(anyhow::Error::msg)?;
+    // Bond creation invalidates computed labels. Match the application's checked
+    // label refresh while retaining this fixture's coordinates and bond phase.
+    reshiki::atom_labels::refresh_computed(
+        &mut joined,
+        before.document.as_ref().context("Checked phenyl labels")?,
+    );
+    reshiki::atom_labels::refresh_computed(
+        &mut stretched,
+        after
+            .document
+            .as_ref()
+            .context("Checked stretched labels")?,
+    );
+    for doc in [&joined, &stretched] {
+        for nitrogen in core.atoms.iter().filter(|atom| atom.element == "N") {
+            ensure!(
+                doc.atom(nitrogen.id).context("Core nitrogen")?.label_h == nitrogen.label_h,
+                "Attachment must retain the two opposite displayed N–H sites"
+            );
+        }
+    }
+    let before = before.analysis.context("Phenyl identity")?;
+    let after = after.analysis.context("Stretched phenyl identity")?;
     ensure!(
         before.formula == "C26H18N4" && after.inchikey == before.inchikey,
         "Phenyl bridge stretch must keep chemical identity"

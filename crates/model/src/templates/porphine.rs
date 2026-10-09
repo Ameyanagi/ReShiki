@@ -130,6 +130,6 @@ mod tests {
             assert!((cosine + 0.5).abs() < 0.000001, "Meso {meso}: {cosine}");
         }
         let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
-        assert_eq!(reopened, *doc);
+        assert_eq!(reopened, doc.current());
     }
 }
