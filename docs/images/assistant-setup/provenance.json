@@ -1,0 +1,131 @@
+{
+  "change": "#93 first-use Assistant setup and guided image exercise",
+  "status": "Under review; pull request pending",
+  "creator_and_contributor": "@Ameyanagi",
+  "capture_date": "2026-10-09",
+  "platform": "macOS arm64",
+  "base_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "base_channel": "0.11.0-nightly.20261008.37859845267.1",
+  "head_source_commit": "43e3d80dde9c9f1da1be04e2525182aea390cc75",
+  "head_profile": "debug",
+  "head_unsigned_executable_sha256": "80ec7ef7a55e3e678118fc72972f6cf0d800d1abe20b60e491c2908458f86a2c",
+  "head_signed_executable_sha256": "1cfb668bc9c42997863c3c83207b671cd914038bfb1059f524d5a087ef2cdd5a",
+  "base_signed_executable_sha256": "493a0cb49f79f76ae2ee0716a690c20ce3981f15f701c0a9651552addaa8bf95",
+  "head_source_manifest_sha256": "fd5ba6890fccc056794856310f9a4e629f1aaf13690d13fc9c2c5ccc21e3d595",
+  "verified_source_files": 1065,
+  "source_build_provenance": "Each local tracked Rust/Cargo/build input and new setup module mtime was refreshed before exclusive-lane Cargo compilation; source content manifest and dependency paths were retained. All manifest content hashes match the reviewed source.",
+  "screenshots": {
+    "assistant-ready-before.jpg": {
+      "sha256": "aeb5a37d3f5dfd94715c6a0a49ebde02a1a27231dd77fae246718ffa1a5382b6",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-setup-ready.jpg": {
+      "sha256": "12147695af1bd0bd39479d41e904548f7c7a4ca615be9975c2f7c90f7634538f",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-local-example.jpg": {
+      "sha256": "37b759acea2085002311dcb6ad60fca24ee37816b611accb246f8ef81914619c",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-draft-before-apply.jpg": {
+      "sha256": "669217155cfdba507f6c45fd52f501a6bf3d55564683d1477e350a6cd79efa48",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-applied-desktop.jpg": {
+      "sha256": "2f6204b501191f483da3409ca3a3604ff608efdcd84a91197d3b255f6f992db5",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    },
+    "assistant-redo-desktop.jpg": {
+      "sha256": "de49055e3e2ce8c8ec7b3c0d7cd6722079156e40c433bd066152ccb4eca03b3a",
+      "format": "JPEG",
+      "pixels": [2560, 1704],
+      "preserved_original_bytes": true
+    }
+  },
+  "before_extension_correction": "The raw baseline file had a .png suffix but JPEG bytes; only its published name changed to assistant-ready-before.jpg.",
+  "image_processing": "None. No crop, re-encoding, annotation or retouching.",
+  "capture_conditions": {
+    "before_ready": "Blank active Untitled drawing, 100%, keyboard drawing on; connected footer, no guided setup card. An inactive original c60-tilted.rsk fixture tab and existing recovery/update UI remain visible.",
+    "after_ready": "Blank Untitled drawing, 100%, keyboard drawing on; ready card with account/transfer guidance. Footer effort Low before explicit Extra high selection; no request in this capture.",
+    "local_example": "Blank canvas, 100%, keyboard drawing on; image and known reference attached locally, GPT-6.1-Sol / Extra high, Review example.",
+    "draft_before_apply": "Completed reviewed draft at 100%, keyboard drawing on; canvas blank, Apply available. The model review statement is not an independent chemistry check.",
+    "applied": "Manual Apply; toolbar reports 3 atoms and 2 bonds, selected objects intentionally shown as proof of editability. Keyboard drawing off; automatic fit changed zoom to 250%.",
+    "redo": "Saved filename visible; Undo removed the whole graph, Redo restored it. Unselected representative drawing at 250%, keyboard drawing off."
+  },
+  "guided_workflow": {
+    "provider": "Codex app-server",
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh",
+    "workflows": 1,
+    "service_tier": "Not recorded in supplied desktop observations",
+    "send_started_utc": "2026-10-09T09:30:52.198Z",
+    "completion_observation_bound_seconds": 181.712,
+    "ui_elapsed_integer_seconds": 62,
+    "timing_precision": "UI integer elapsed display and Send-to-observation bound are distinct; no exact model duration is asserted.",
+    "ordinary_auto_apply_visible_before_exercise": true,
+    "local_attach_and_completed_draft_left_canvas_blank": true,
+    "manual_apply_observed": true,
+    "native_save_observed": true,
+    "undo_redo_observed": true,
+    "clean_quit_observed": true,
+    "native_ui_reopen_observed": false,
+    "saved_native_version": 19,
+    "saved_native_sha256": "60aa141bea3ed38c5b38390dade64a099e5b458bf86f1e7cd4a1ed535f47e921",
+    "independent_score_sha256": "63cb8c75e5bf0ff1d85ffb3786a390b39aa40aea24a139e4e2e653b38c484c9e",
+    "reference_native_sha256": "cffbafdd2ddc52d3fabc5ce37f537dc7b14d78473817f7720441f78d3fdee50f",
+    "source_image_sha256": "45c8fb849f184b7db5257c7657903a8b901a3817f6802ff629a961358cd22218",
+    "independent_checker": "RDKit 2026.03.6 canonical isomeric SMILES and localized graph comparison from the separate #94 scorer; exact CCO, 3 atoms, 2 single bonds, 1 neutral fragment, no localized errors.",
+    "comparison_reference": "Independently authored #94 v1 ethanol.reference.json; known CCO graph, separate from model review.",
+    "benchmark_separation": "Known guided control is excluded from every unassisted baseline denominator.",
+    "external_scorer_source_commit": "23f957cf4e24d3cc548a8e84034da7f7f27f531d",
+    "external_scorer_source_sha256": "ecd2f5b2876244a8e40501b97f5ffabafa47f71a607e6fca952ee019a6173d49",
+    "independent_reference_json_sha256": "4c36ce8a0e580cf97fcb653a5d256e11c9485571237d1d811d590cd6c40ef672"
+  },
+  "validation_at_head_source": {
+    "app_tests_passed": 23,
+    "backend_tests_passed": 13,
+    "opt_in_widget_test_passed": 1,
+    "existing_assistant_integration_passed": 17,
+    "assistant_contract_tests_passed": 5,
+    "integration_opt_in_capture_ignored": 1,
+    "strict_all_targets_all_features_clippy": "passed",
+    "all_targets_all_features_check": "passed",
+    "locked_default_build": "passed",
+    "native_codesign_verification": "passed"
+  },
+  "simulated_setup_desktop": {
+    "status": "Pending parent capture; source, subprocess and headless widget checks are separate evidence.",
+    "fixture_sha256": {
+      "signed-out-codex": "31199de309ab96bbc23b0870e43b7a22786b539e8fc03472f46a2dcf892a7df6",
+      "broken-codex": "ff66cd3df43dcda8e1c6641f701c6620a6117f649cdf27ae6564e75ce0b8b0b0",
+      "stalled-codex": "b0da8542196fd2b8c44951233e0b1da48990f303d37ef3a41a7d3210ac3513cd",
+      "missing-interpreter-codex": "1acd3194687aeceb5c831ba811fdcfefb49cee71651cb72141a76344de70f779"
+    },
+    "account_safety": "Process-local RESHIKI_CODEX selects account-free fixtures; no real account logout or credential/config modification.",
+    "offline_protocol_preflight": {
+      "date": "2026-10-09",
+      "signed_out": "Literal null account response verified from fixture subprocess",
+      "broken": "Malformed local JSON response verified",
+      "missing_interpreter": "OS NotFound verified",
+      "stalled": "No response / process remains alive verified; fixture terminated without waiting for timeout",
+      "scope": "Source-only disposable subprocess check; no app GUI, real account access or model request. Does not establish native desktop acceptance."
+    }
+  },
+  "scope_limits": [
+    "Actual desktop evidence covers Ready and the guided example on macOS arm64 only.",
+    "No native UI reopen was supplied.",
+    "Simulated missing-installation, signed-out, broken and cancelled-check desktop evidence is pending.",
+    "A successful known ethanol exercise does not establish unseen-image accuracy."
+  ],
+  "license": "Original review documentation, screenshots, fixture and native graph are contributed under MIT OR Apache-2.0. No third-party source image or code is added. Existing dependency notices remain applicable; RDKit is an external BSD-3-Clause validation observer, not a newly bundled runtime."
+}
