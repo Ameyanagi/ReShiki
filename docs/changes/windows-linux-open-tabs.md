@@ -87,21 +87,31 @@ are recorded in the PR validation. Runtime chemistry tests explicitly selected
 the retained built base executable through `RESHIKI_INCHI_HELPER`, matching the
 existing CI helper contract rather than attempting to relaunch a test harness.
 
-The Linux native module is cross-checked for x86_64 GNU with Rust 1.99.0 and
-pinned rustix 1.1.4 in an isolated metadata-only target. This is not Linux socket
-runtime or desktop acceptance. The narrow `Desktop IPC runtime` Ubuntu job
-runs `scripts/test_linux_desktop_ipc.py`: it copies the exact module/tests into
-a temporary rustix-only package, prints source hashes and its dependency lock,
-and runs strict Clippy plus real socket/flock/UID/child-generation tests.
-It requires no display or GUI/clipboard dependencies. Its native result is
-pending the branch's CI run.
+The complete [native CI run at `c03730d5`](https://github.com/Ameyanagi/ReShiki/actions/runs/37908216552)
+passed strict all-target Clippy, compilation, workspace tests and captured
+chemistry-fixture replay on Windows, Ubuntu and macOS. Application suites
+passed 625 tests on Windows (67 ignored), 619 on Ubuntu (67 ignored), and 602
+on macOS (65 ignored). Windows additionally passed 12 rendered-widget tests in
+four separate opt-in steps. Windows and Ubuntu ran the actual non-GUI watched
+proxy child tests and all three retained-worker/fallback/queue-full fence
+regressions. These checks are independent of the retained `eddd2123` Windows
+candidate executable; subsequent cfg/test lint changes preserve its transport
+semantics. They do not prove native GUI or Office adapter acceptance.
+
+The narrow [Ubuntu `Desktop IPC runtime` job](https://github.com/Ameyanagi/ReShiki/actions/runs/37908216546/job/113746750833)
+also passed strict Clippy and five active socket/flock/peer/child-generation
+tests. Its one ignored child helper is explicitly spawned by the parent test.
+`scripts/test_linux_desktop_ipc.py` copies the exact module/tests into a
+temporary rustix-only package, prints source hashes and its dependency lock,
+and requires no display or GUI/clipboard dependencies. The logged hashes match
+the production Linux module and tests.
 
 **Pending acceptance:** matched real Windows/Linux shell-open interaction and
 screenshots; simultaneous cold launch and first-Office-launch timing;
 ordinary/Office A/Office B mixed tabs with actual host-specific save-back,
 delayed host acknowledgement, cancellation, Save As, transient IPC loss and
-host/proxy termination; Linux UID/mode/symlink/stale-socket runtime checks;
-X11/Wayland activation and session-scoping checks; macOS Office regression.
+host/proxy termination; X11/Wayland activation and session-scoping checks;
+macOS Office regression.
 These are required before claiming full issue acceptance. See
 [visual-review.md](../visual-review.md).
 
