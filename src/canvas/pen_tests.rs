@@ -29,7 +29,7 @@ pub(crate) fn point_gesture(
     canvas.tool = Tool::EditPoints;
     canvas.selected = std::slice::from_ref(&id);
     canvas.camera = camera;
-    let bounds = Rectangle::new(Point::new(37., 53.), iced::Size::new(1600., 1000.));
+    let bounds = Rectangle::new(Point::new(37., 53.), iced::Size::new(1600., 1800.));
     let from = camera.screen(original, bounds) + Vector::new(bounds.x, bounds.y) + grab_offset;
     let end = from + motion;
     // Iced can report the final cursor while delivering earlier events in a batch.
