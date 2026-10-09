@@ -152,13 +152,7 @@ fn all_icons() -> Vec<(String, Icon)> {
             .iter()
             .map(|&orbital| Tool::Graphic(reshiki::graphics::GraphicKind::Orbital(orbital))),
     );
-    tools.extend(
-        [
-            reshiki::graphics::GraphicKind::Picture,
-            reshiki::graphics::GraphicKind::Path,
-        ]
-        .map(Tool::Graphic),
-    );
+    tools.push(Tool::Graphic(reshiki::graphics::GraphicKind::Picture));
     icons.extend(tools.into_iter().map(|tool| {
         let debug = format!("{tool:?}");
         let parts: Vec<&str> = debug
@@ -221,7 +215,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
             reshiki::graphics::GraphicKind::DRAWABLE.len()
                 + reshiki::scientific::SymbolKind::ALL.len()
                 + reshiki::scientific::OrbitalKind::ALL.len()
-                + 2,
+                + 1,
         ),
     ]);
     counts

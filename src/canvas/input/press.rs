@@ -171,6 +171,22 @@ impl MoleculeCanvas<'_> {
                 .iter()
                 .filter(|g| self.selected.contains(&g.id))
             {
+                if let Some(handles) = g.path_handles() {
+                    if let Some(handle) = handles
+                        .into_iter()
+                        .filter(|h| h.point.distance(p) < 8. / self.camera.zoom)
+                        .min_by(|a, b| a.point.distance(p).total_cmp(&b.point.distance(p)))
+                    {
+                        state.gesture = Some(Gesture::PathPoint(crate::canvas::pen::PointDrag {
+                            id: g.id,
+                            index: handle.index,
+                            pressed: p,
+                            original: handle.point,
+                        }));
+                        return Some(Action::request_redraw().and_capture());
+                    }
+                    continue;
+                }
                 let points = g.edit_points();
                 let hit = |q: &World| q.distance(p) < 8.0 / self.camera.zoom;
                 let index = if g.kind == GraphicKind::Arc {

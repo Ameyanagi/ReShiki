@@ -27,6 +27,26 @@ pub(super) fn chain(f: &mut Frame<'_>, ink: Color, mode: reshiki::chains::ChainM
 }
 
 pub(super) fn graphic(f: &mut Frame<'_>, ink: Color, kind: reshiki::graphics::GraphicKind) {
+    if kind == reshiki::graphics::GraphicKind::Path {
+        let path = Path::new(|builder| {
+            builder.move_to(Point::new(3., 13.));
+            builder.bezier_curve_to(
+                Point::new(3., 1.),
+                Point::new(12., 1.),
+                Point::new(12., 13.),
+            );
+            builder.bezier_curve_to(
+                Point::new(12., 25.),
+                Point::new(22., 25.),
+                Point::new(22., 13.),
+            );
+        });
+        f.stroke(&path, Stroke::default().with_color(ink).with_width(1.5));
+        for x in [3., 12., 22.] {
+            f.fill(&Path::circle(Point::new(x, 13.), 2.), ink);
+        }
+        return;
+    }
     use reshiki::{
         document::Point as World,
         graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand},

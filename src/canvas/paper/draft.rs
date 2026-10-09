@@ -50,7 +50,20 @@ impl MoleculeCanvas<'_> {
             if let (Some(Gesture::Graphic { start }), Tool::Graphic(kind)) =
                 (&state.gesture, self.tool)
             {
-                if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+                if kind == GraphicKind::Path {
+                    if bounds.contains(p)
+                        && let Some(stroke) = self.pen_stroke(*start, end)
+                        && let Ok((doc, id, _)) = crate::canvas::pen::apply(
+                            self.doc,
+                            self.selected,
+                            self.graphic_style,
+                            stroke,
+                        )
+                    {
+                        *preview = std::borrow::Cow::Owned(doc);
+                        *ring_selection = Some(vec![id]);
+                    }
+                } else if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
                     let drawing = reshiki::scientific::Drawing {
                         kind,
                         style: self.graphic_style.clone(),
@@ -134,6 +147,15 @@ impl MoleculeCanvas<'_> {
                 && let Some(g) = preview.to_mut().graphics.iter_mut().find(|g| g.id == *id)
             {
                 g.edit_point(*index, end);
+            }
+            if let Some(Gesture::PathPoint(drag)) = &state.gesture
+                && let Some(g) = preview
+                    .to_mut()
+                    .graphics
+                    .iter_mut()
+                    .find(|g| g.id == drag.id)
+            {
+                g.edit_point(drag.index, drag.target(end));
             }
         }
     }

@@ -92,6 +92,9 @@ impl App {
             Edit::Graphic(start, end, constrain) => {
                 return self.place_graphic(start, end, constrain, before);
             }
+            Edit::PenSegment(stroke) => {
+                return self.place_pen_segment(stroke, before);
+            }
             Edit::AtomIndicator(owner, p) => {
                 if let Some(anchor) = owner.anchor(&self.tab.doc) {
                     owner.set_offset(
@@ -113,8 +116,17 @@ impl App {
                 }
             }
             Edit::GraphicPoint(id, index, p) => {
+                self.tab.path_point = Some((id, index));
                 if let Some(g) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) {
-                    g.edit_point(index, p);
+                    if g.path_handles().is_some() {
+                        if let Err(error) = g.move_path_point(index, p) {
+                            self.status = error;
+                            self.error = true;
+                            return;
+                        }
+                    } else {
+                        g.edit_point(index, p);
+                    }
                 }
                 self.sync_arc();
             }

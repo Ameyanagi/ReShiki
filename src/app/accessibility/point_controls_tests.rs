@@ -379,6 +379,133 @@ async fn mechanism_geometry_buttons_publish_native_actions_and_one_keyboard_undo
 }
 
 #[tokio::test]
+#[ignore = "Opt-in real pen controls accessibility and keyboard regression"]
+async fn pen_node_buttons_publish_actions_and_keyboard_insert_is_one_undo() {
+    let size = Size::new(1280., 1000.);
+    let mut ui = Ui::new(size).await;
+    let mut app = selected_graphic(GraphicKind::Path, size);
+    let _ = app.update(Message::Graphics(crate::app::graphics::Action::Path(
+        crate::app::graphics::path::Action::Node(0),
+    )));
+    let snapshot = ui.snapshot(&app);
+    for id in [
+        "pen-new",
+        "pen-finish",
+        "pen-insert",
+        "pen-delete",
+        "pen-straight",
+        "pen-curved",
+        "pen-close",
+        "pen-continue",
+    ] {
+        let node = snapshot.nodes.iter().find(|node| node.id == id).expect(id);
+        assert_eq!(node.role, Role::Button);
+        assert!(!node.name.is_empty());
+    }
+    assert!(
+        !snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == "pen-delete")
+            .unwrap()
+            .enabled
+    );
+    assert!(
+        !snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == "pen-close")
+            .unwrap()
+            .enabled
+    );
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    ui.focus(&app, "pen-insert");
+    assert_eq!(
+        app.tab.revision, revision,
+        "focus alone never edits the path"
+    );
+    let message = ui.activate_focused(&app);
+    assert!(matches!(
+        message,
+        Message::Graphics(crate::app::graphics::Action::Path(
+            crate::app::graphics::path::Action::Insert
+        ))
+    ));
+    let _ = app.update(message);
+    assert_eq!(
+        app.tab.doc.graphics[0]
+            .path_handles()
+            .unwrap()
+            .iter()
+            .filter(|handle| handle.node)
+            .count(),
+        3
+    );
+    ui.undo(&mut app);
+    assert_eq!(app.tab.doc, before, "one keyboard insert is one Undo");
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real pen Continue activation and append regression"]
+async fn pen_continue_native_activation_preserves_select_and_edit_points_targets() {
+    use crate::app::graphics::{Action, path::Action as PathAction};
+    use crate::canvas::pen::Stroke;
+    let size = Size::new(1280., 1000.);
+    let mut ui = Ui::new(size).await;
+    for tool in [Tool::Select, Tool::EditPoints] {
+        ui.cache = Cache::new();
+        let mut app = selected_graphic(GraphicKind::Path, size);
+        let id = app.tab.selected[0];
+        let _ = app.update(Message::Tool(tool));
+        let _ = app.update(Message::Graphics(Action::Path(PathAction::Node(0))));
+        let point = app.tab.path_point;
+        let before = app.tab.doc.clone();
+        let tab = app.tab.id;
+        let tabs = app.tabs.background.len();
+        let snapshot = ui.snapshot(&app);
+        let button = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == "pen-continue")
+            .unwrap();
+        assert_eq!(button.role, Role::Button);
+        assert!(button.enabled);
+        let operation::Outcome::Some(message) = ui.activate(&app, "pen-continue") else {
+            panic!("native Continue activation publishes its action")
+        };
+        assert!(matches!(
+            message,
+            Message::Graphics(Action::Path(PathAction::Continue))
+        ));
+        let _ = app.update(message);
+        assert_eq!(app.tool, Tool::Graphic(GraphicKind::Path));
+        assert_eq!(app.tab.selected, vec![id]);
+        assert_eq!(app.tab.path_point, point);
+        assert_eq!(app.tab.doc, before, "Continue only changes the active tool");
+        let _ = app.update(Message::Canvas(Edit::PenSegment(Stroke {
+            start: Point::new(150., 50.),
+            end: Point::new(150., 50.),
+            dragged: false,
+            close: false,
+        })));
+        let after = app.tab.doc.clone();
+        assert_eq!(after.graphics.len(), 1);
+        assert_eq!(after.graphics[0].id, id);
+        assert_eq!(
+            after.graphics[0].path.len(),
+            before.graphics[0].path.len() + 1
+        );
+        assert_eq!(app.tab.id, tab);
+        assert_eq!(app.tabs.background.len(), tabs);
+        ui.undo(&mut app);
+        assert_eq!(app.tab.doc, before, "one appended node is one Undo");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+    }
+}
+
+#[tokio::test]
 #[ignore = "Opt-in real selected-graphic keyboard and accessibility regression"]
 async fn selected_arc_and_curve_point_controls_are_reachable_and_exit_without_editing() {
     for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
