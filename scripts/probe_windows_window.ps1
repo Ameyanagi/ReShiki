@@ -78,8 +78,8 @@ try {
         OuterPhysical = $outer
         ClientPhysical = $client
         ClientLogical = @(
-            ($client.Right - $client.Left) / $scale,
-            ($client.Bottom - $client.Top) / $scale
+            (($client.Right - $client.Left) / $scale),
+            (($client.Bottom - $client.Top) / $scale)
         )
         MonitorPhysical = $monitor.Monitor
         WorkPhysical = $work

@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "capture": "Native Windows App/CUA screenshots of Windows 11 ReShiki, 2026-10-10 JST",
+  "originals": "Retained privately; remote connection frame and desktop taskbar excluded from public crops.",
+  "before": "Fresh baseline launch PID9464, before any viewport cycle; native measurement was taken later after the viewport cycle and is explicitly separate.",
+  "after": "Fresh candidate launch PID10884, before drawing; actual native initial measurement confirms DPI96/work1052x676/FitsWorkArea=true.",
+  "images": [
+    {
+      "image": "before.png",
+      "original_filename": "baseline-matched-small.jpg",
+      "original_size": [2104, 1504],
+      "crop_rectangle": [0, 56, 2104, 1408],
+      "original_sha256": "c10b0b4c5af6d77a5a90c95db143009e4640ffd2e7919d0a746c98383d9554e0",
+      "image_sha256": "ae02b42fffdcfa9cfab1e25a67ad8999fc5a585113b6ac0a6f99a67d58b857d6",
+      "transformation": "Lossless PNG of decoded screenshot pixels; crop only; no resizing, annotation or retouching."
+    },
+    {
+      "image": "after.png",
+      "original_filename": "candidate-initial-small.jpg",
+      "original_size": [2104, 1504],
+      "crop_rectangle": [0, 56, 2104, 1408],
+      "original_sha256": "58ee518a6a10fe300d9e27ce867e559dc9ebc7e35e1cbd7c55af342bd46fd2fe",
+      "image_sha256": "a5a9c561b8ba0e3f70a9b79b3afb17941341eaf0f3d3626f0cb5ce8aca1fa063",
+      "transformation": "Lossless PNG of decoded screenshot pixels; crop only; no resizing, annotation or retouching."
+    },
+    {
+      "image": "drawing.png",
+      "original_filename": "candidate-drawing-small.jpg",
+      "original_size": [2104, 1504],
+      "crop_rectangle": [0, 56, 2104, 1408],
+      "original_sha256": "5acc2108724931c0bb76f0054ce41ef7fc1bdb3ed7eeac8d6c730a876377bb12",
+      "image_sha256": "748ab3cce4e8b37e5d450a874550ce070760bd0547dd8778514b259b65b5d272",
+      "transformation": "Lossless PNG of decoded screenshot pixels; crop only; no resizing, annotation or retouching."
+    },
+    {
+      "image": "undo.png",
+      "original_filename": "candidate-undo-clear-small.jpg",
+      "original_size": [2104, 1504],
+      "crop_rectangle": [0, 56, 2104, 1408],
+      "original_sha256": "61026c72d2faee8f093bc3b76912e46baea115d6766d231f8b6015e4ea923048",
+      "image_sha256": "72b3e22a8da816561c5dc2a3b15057f7c943e926e0e2a1bfe65aecad1bac7115",
+      "transformation": "Lossless PNG of decoded screenshot pixels; crop only; no resizing, annotation or retouching."
+    }
+  ],
+  "measurements": {
+    "file": "measured-results.json",
+    "sha256": "ca660e326ee8751ae2ec4801f72bb33d6bc634a5ec922a2e273ee4553b79f0d9",
+    "source": "Root-owned interactive Windows probes; worker fetched saved files over read-only SSH.",
+    "baseline_phase": "After temporarily enlarging and restoring the RDP viewport; not initial bounds.",
+    "candidate_phase": "Separate initialsmallreview probe of the candidate window before the later baseline viewport cycle.",
+    "original_receipt_hashes": {
+      "baseline_probe": "5c43f2bbb9554863e05b021d68e7b6b36589e3f21570821b57b9c875fac4315c",
+      "baseline_launch": "61187c2d84b962c1dd891262db624079106fa5791633aad12d40419143daf4c0",
+      "candidate_probe": "b0a16b749be4c11d1a3d24feb13635491e70faa7090ac3c936a434392bfec4ee",
+      "candidate_launch": "cad232a44915fd6e8dbdf909ed82ee389c522f51053861e88cb18a504b0bd3cb"
+    },
+    "originals_private": "Receipt hashes identify original unredacted private bytes; the public measured record is a separate formatted file with relative artifact labels."
+  },
+  "capture_conditions": {
+    "baseline_source": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "candidate_source": "7cab2287ebeedc0b217967129bc7e3f8a23cbff1",
+    "baseline_pid": 9464,
+    "candidate_pid": 10884,
+    "native_session_id": 2,
+    "input": "Separate fresh task profiles; initial untitled, empty editor.",
+    "public_size": [2104, 1352],
+    "initial_images_host_size": [2104, 1504],
+    "guest_probe_monitor": [1052, 724],
+    "guest_probe_work_area": [1052, 676],
+    "guest_probe_dpi": 96,
+    "capture_timing": "Initial before image precedes the baseline viewport cycle; numeric baseline measurement follows the cycle.",
+    "different_ui_state": "Pointer/tool/status and Undo tooltip differ in interaction figures; the fitted candidate exposes a generic Explorer status strip behind it.",
+    "window_placement_state": "Not recorded by the probes; no maximization or unchanged initial baseline bounds claim.",
+    "same_original_pixel_crop_for_all_images": true,
+    "independent_decoded_crop_pixel_equality_all_four": true
+  },
+  "acceptance_status": {
+    "pull_request": "https://github.com/Ameyanagi/ReShiki/pull/273",
+    "draft": true,
+    "pending": [
+      "Native 200% and 250% physical-DPI work-area/frame and interaction checks.",
+      "Full resize/minimum, menu and DPI-change interaction.",
+      "Roomy 100% preferred-size/minimum interaction."
+    ],
+    "transient_baseline_startup_failure": "One separate baseline launch had 0xc0000142; cause/DLL unidentified, not size-comparison evidence or attributed to the fix.",
+    "recorded_scope": "100% DPI small-desktop initial screenshots; candidate native fit, separately timed post-cycle baseline bounds, and mouse drawing/two-Undo history."
+  }
+}
