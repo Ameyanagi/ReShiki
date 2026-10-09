@@ -20,9 +20,9 @@ of the controls comparison. The lower fishhook and both molecular rows are
 unchanged. The examples demonstrate curve editing; they do not assert complete
 reaction electron accounting.
 
-| Before | After |
-| --- | --- |
-| ![Legacy curve with two endpoints and one square bend handle](../images/mechanism-curvature/before-handles.jpg) | ![The same curve with round endpoints, two independent square tangent controls and a middle diamond](../images/mechanism-curvature/after-handles.jpg) |
+| Before                                                                                                                          | After                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Legacy curve with two endpoints and one square bend handle](../images/mechanism-curvature/before-handles.jpg)                 | ![The same curve with round endpoints, two independent square tangent controls and a middle diamond](../images/mechanism-curvature/after-handles.jpg)     |
 | ![Dragging the single bend changes both departure and arrival directions](../images/mechanism-curvature/before-single-bend.jpg) | ![Independent departure and arrival controls give the fixed-endpoint curve nearly vertical tangents](../images/mechanism-curvature/after-independent.jpg) |
 
 The first row uses the same selection operation and unchanged geometry. The
