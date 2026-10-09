@@ -188,6 +188,9 @@ impl super::App {
         if epoch != self.tab.file_epoch {
             return iced::Task::none();
         }
+        if !matches!(&result, Ok(Some(_))) {
+            self.office.closing.retain(|id| *id != self.tab.id);
+        }
         if result.is_err() {
             self.cancel_close();
         }
@@ -195,10 +198,23 @@ impl super::App {
             Ok(Some(path)) => {
                 // Continue the save dialog's action only when nothing is left unsaved.
                 self.tab.saved = *snapshot;
+                if self
+                    .tab
+                    .office
+                    .as_ref()
+                    .is_some_and(|binding| !binding.same_path(&path))
+                {
+                    self.detach_office();
+                }
                 self.tab.path = Some(path);
                 self.tab.untitled_name = None;
                 self.status = if self.office_document() {
-                    if self.office_host == "LibreOffice" {
+                    if self
+                        .tab
+                        .office
+                        .as_ref()
+                        .is_some_and(|binding| binding.host == super::office::Host::LibreOffice)
+                    {
                         "Drawing saved for LibreOffice. Return to the document to check the update."
                     } else {
                         "Drawing updated in Office. Save the Office document to keep it."
@@ -247,10 +263,13 @@ impl super::App {
             }
             Ok(Prepared::Import { format, contents }) => {
                 self.open_target(None);
-                return self.run(
+                let task = self.run(
                     super::Request::import(format, &contents),
                     super::Job::ImportFile,
                 );
+                #[cfg(any(windows, target_os = "linux"))]
+                self.desktop_import_started();
+                return task;
             }
             Ok(Prepared::Native(doc)) => {
                 if !self.open_target(Some(&path)) {
@@ -287,7 +306,11 @@ impl super::App {
         if !save_as {
             self.front_pending();
         }
-        let office_host = (self.office_document() && !save_as).then_some(self.office_host);
+        let office = self.tab.office.clone();
+        let office_host = office
+            .as_ref()
+            .filter(|_| self.office_document() && !save_as)
+            .map(|binding| binding.host.label());
         let (path, suggested_name) = self.drawing_save_target(save_as);
         if self.file_io.saving {
             // Only this tab's own save can go on with the dialog's action.
@@ -318,9 +341,31 @@ impl super::App {
                     };
                     path
                 };
+                // A Save As spelling that names the same host file still uses
+                // its original authorized path and acknowledgement protocol.
+                let path = office
+                    .as_ref()
+                    .filter(|binding| binding.same_path(&path))
+                    .map_or(path.clone(), |binding| binding.path.clone());
                 let save_path = path.clone();
                 tokio::task::spawn_blocking(move || {
                     let bytes = save_snapshot.file_json()?;
+                    #[cfg(any(windows, target_os = "linux"))]
+                    let _target_owner = if office.as_ref().is_some_and(|binding| {
+                        binding.lease.is_some() && binding.same_path(&save_path)
+                    }) {
+                        None // The GUI owns this lease's fence, including this clone.
+                    } else {
+                        Some(crate::desktop::write_target(&save_path)?)
+                    };
+                    let office_host = if let Some(binding) = office.as_ref().filter(|binding| binding.same_path(&save_path)) {
+                        if !binding.writable() {
+                            return Err("The Office edit session has ended; save this drawing to another file".to_owned());
+                        }
+                        Some(binding.host.label())
+                    } else {
+                        None
+                    };
                     if office_host == Some("Microsoft 365") {
                         reshiki::office_addin::save(&save_path, &bytes)?;
                     } else {

@@ -15,6 +15,18 @@ impl App {
     pub(super) fn gate(&mut self, message: Message) -> Gate {
         let message = self.early_results_gate(message)?;
         let message = self.exit_gate(message)?;
+        #[cfg(any(windows, target_os = "linux"))]
+        if self.desktop.opening
+            && matches!(
+                message,
+                Message::Close(_)
+                    | Message::Tabs(tabs::Action::Close(_))
+                    | Message::Updates(updates::Action::Install)
+            )
+        {
+            self.status = "Finish opening the requested drawings before closing the editor".into();
+            return Break(Task::none());
+        }
         let message = self.labels_gate(message)?;
         if let Some(task) = self.optimization_gate(&message) {
             return Break(task);

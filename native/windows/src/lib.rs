@@ -16,6 +16,7 @@
 
 pub mod accessibility;
 mod clipboard;
+pub mod desktop;
 mod ole;
 mod printing;
 mod stdio;

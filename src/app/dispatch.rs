@@ -34,7 +34,10 @@ impl App {
             | Message::Tab(..)
             | Message::Autosaved(..)
             | Message::FilePrepared(..)
+            | Message::OfficePrepared(..)
             | Message::Saved(..) => {}
+            #[cfg(any(windows, target_os = "linux"))]
+            Message::Desktop(_) => {}
             Message::KeyboardDrawing(action) => return Some(self.keyboard_drawing_action(action)),
             Message::Optimization(action) => return Some(self.optimization_action(action)),
             Message::DepthAppearance(action) => return Some(self.depth_appearance_action(action)),
