@@ -1,0 +1,70 @@
+{
+  "baseline": "0f6f575a908de66b33e0117386c66b288f8bbcb6348b543a50cde96e548f42d4",
+  "assembled": {
+    "atoms": 13,
+    "bonds": 15,
+    "added_directed_edges": [
+      [
+        2,
+        1
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        6,
+        1
+      ],
+      [
+        9,
+        1
+      ],
+      [
+        10,
+        1
+      ],
+      [
+        13,
+        1
+      ]
+    ],
+    "atomIDs_XYZ_chemical_metadata_unchanged": true,
+    "only_derived_carbon_label_h_cache_changes": {
+      "ids": [
+        3,
+        4,
+        7,
+        8,
+        11,
+        12
+      ],
+      "before": 0,
+      "after": 2
+    },
+    "original_covalent_bond_records_exactly_unchanged": true
+  },
+  "keyboard": {
+    "atoms": 13,
+    "bonds": 10,
+    "added_directed_edge": [
+      5,
+      1
+    ]
+  },
+  "projection_reversal": {
+    "bond_array_index": 10,
+    "donor": 5,
+    "metal": 1,
+    "before": "wedge_end",
+    "after": "wedge",
+    "only_display_changed": true
+  },
+  "files": {
+    "co-en3-before.rsk": "0f6f575a908de66b33e0117386c66b288f8bbcb6348b543a50cde96e548f42d4",
+    "co-en3-desktop-assembled.rsk": "a5b68d3561d94899d8838dcf670c193c3982c34aeb62434a2d5638c18f7126b2",
+    "co-en3-keyboard-desktop.rsk": "e9b20bba7a1ad05a3b7eb93307b35f6a07598cc1012cd7b6c5b619fdabca6e05",
+    "co-en3-both-tips.rsk": "64ddfd3c2194f51177d7d43ee8a5d036586474fb5c73d6bdf794fe8138910a22",
+    "co-en3-projection-tip-desktop.rsk": "8f416f2bc934f85a7e068fe3b3b42534d0d4c8f37cadd07b1fb12e1243718902"
+  }
+}

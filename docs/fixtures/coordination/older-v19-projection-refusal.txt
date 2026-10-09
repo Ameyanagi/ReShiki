@@ -1,0 +1,13 @@
+Unchanged pre-coordination model from naming source8529b3fc; executable SHA256467aaeb6b71a18a51946b831bdc5546f389f2e53f1469665a78356f667af7ce5. Native VERSION19.
+
+Display plain: exit=0
+{"api":{"operation_api":1,"stability":"experimental"},"experimental":true,"validation":{"status":"valid"},"value":{"analysis":{"acceptors":1,"donors":1,"exact_mass":75.95809835627,"formula":"H3CoN+3","inchi":"","inchikey":"","logp":0.15949999999999998,"mass":75.964,"rings":0,"smiles":"[NH3]->[Co+3]","tpsa":26.8,"unpaired_electrons":0},"analyzed_atoms":["1","2"]},"versions":{"app":"0.11.0","document":19,"engine_protocol":1,"operation_api":1},"warnings":[]}
+
+Display wedge_end: exit=1
+reshiki: error: Could not open document: Unsupported bond appearance for this order
+
+Display hash_end: exit=1
+reshiki: error: Could not open document: Unsupported bond appearance for this order
+
+Display hollow_wedge_end: exit=1
+reshiki: error: Could not open document: Unsupported bond appearance for this order

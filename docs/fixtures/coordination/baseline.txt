@@ -1,0 +1,3 @@
+capacity(Co3+) = 0; Move & attach Connect error: This atom has no available valence, or needs its abbreviation/stereochemistry expanded first.
+Keyboard mark/connect error: This atom has no available valence; edit its hydrogens or stereochemistry first
+Donor dative contact consumes no covalent valence; order5 projection wedge is rejected by baseline validation

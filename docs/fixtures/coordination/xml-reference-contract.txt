@@ -1,0 +1,2 @@
+co-en3-external-source.cdxml: 2 Co3+, 6 intact NCCN ligands with NH2 endpoints, 12 donor-to-Co contacts (6 each); displays=['Solid', 'WedgeBegin', 'WedgeEnd', 'WedgedHashBegin', 'WedgedHashEnd']
+co-en3-chemdraw-roundtrip.cdxml: 2 Co3+, 6 intact NCCN ligands with NH2 endpoints, 12 donor-to-Co contacts (6 each); displays=['Solid']

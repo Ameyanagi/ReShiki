@@ -38,6 +38,10 @@ and chemistry analysis produced benzofuran (C8H6O).
 
 ## Coordination contacts in place
 
+The [native desktop validation](coordination-desktop-validation.md) records
+ordinary rejection, in-place contacts, labeled keyboard controls, projection-tip
+reversal and saved-file graph checks. The contribution remains under review.
+
 Select a donor atom or ligand and choose **Coordinate in place…** above the
 canvas or in its context menu. You can also choose **Coordinate in place
 (donor → metal)** in the Move & attach mode list. Choose the donor in the
