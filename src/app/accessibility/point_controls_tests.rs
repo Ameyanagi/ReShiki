@@ -318,6 +318,67 @@ fn selected_graphic(kind: GraphicKind, size: Size) -> App {
 }
 
 #[tokio::test]
+#[ignore = "Opt-in real mechanism geometry button metadata and action regression"]
+async fn mechanism_geometry_buttons_publish_native_actions_and_one_keyboard_undo() {
+    use crate::app::arrows::Action;
+    use reshiki::document::Document;
+    let size = Size::new(1280., 820.);
+    let mut ui = Ui::new(size).await;
+    for (id, label) in [
+        ("arrow.reverse", "Reverse"),
+        ("arrow.flip-bend", "Flip bend"),
+        ("arrow.straighten", "Straighten"),
+    ] {
+        ui.cache = Cache::new();
+        let (mut app, _) = App::new();
+        app.viewport = size;
+        app.tab.doc = Document::from_native_file(include_bytes!(
+            "../../../tests/fixtures/mechanism-curvature-91/after.rsk"
+        ))
+        .unwrap();
+        app.tab.saved = app.tab.doc.clone();
+        let _ = app.update(Message::Canvas(Edit::Select(vec![101])));
+        let before = app.tab.doc.clone();
+        let snapshot = ui.snapshot(&app);
+        let button = snapshot.nodes.iter().find(|node| node.id == id).expect(id);
+        assert_eq!(button.name, label);
+        assert_eq!(button.role, Role::Button);
+        assert!(button.enabled);
+        let operation::Outcome::Some(native_message) = ui.activate(&app, id) else {
+            panic!("native activation publishes {id}")
+        };
+        assert!(matches!(
+            (&native_message, id),
+            (Message::ArrowAction(Action::Reverse), "arrow.reverse")
+                | (Message::ArrowAction(Action::Flip), "arrow.flip-bend")
+                | (Message::ArrowAction(Action::Straighten), "arrow.straighten")
+        ));
+        assert_eq!(
+            app.tab.doc, before,
+            "collecting or activating metadata alone does not edit"
+        );
+        ui.focus(&app, id);
+        let message = ui.activate_focused(&app);
+        assert_eq!(
+            std::mem::discriminant(&message),
+            std::mem::discriminant(&native_message)
+        );
+        assert!(matches!(
+            (&message, id),
+            (Message::ArrowAction(Action::Reverse), "arrow.reverse")
+                | (Message::ArrowAction(Action::Flip), "arrow.flip-bend")
+                | (Message::ArrowAction(Action::Straighten), "arrow.straighten")
+        ));
+        let _ = app.update(message);
+        assert_ne!(app.tab.doc, before);
+        assert_eq!(app.tab.doc.bonds, before.bonds);
+        assert_eq!(app.tab.doc.arrows[1], before.arrows[1]);
+        ui.undo(&mut app);
+        assert_eq!(app.tab.doc, before, "one geometry action is one Undo");
+    }
+}
+
+#[tokio::test]
 #[ignore = "Opt-in real selected-graphic keyboard and accessibility regression"]
 async fn selected_arc_and_curve_point_controls_are_reachable_and_exit_without_editing() {
     for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {

@@ -369,11 +369,24 @@ impl App {
         if has_selection {
             panel = panel.push(
                 row![
-                    button(text("Reverse").size(11))
-                        .on_press(Message::ArrowAction(Action::Reverse)),
-                    button(text("Flip bend").size(11)).on_press(Message::ArrowAction(Action::Flip)),
-                    button(text("Straighten").size(11))
-                        .on_press(Message::ArrowAction(Action::Straighten))
+                    reshiki::accessibility::button(
+                        "arrow.reverse",
+                        "Reverse",
+                        text("Reverse").size(11)
+                    )
+                    .on_press(Message::ArrowAction(Action::Reverse)),
+                    reshiki::accessibility::button(
+                        "arrow.flip-bend",
+                        "Flip bend",
+                        text("Flip bend").size(11)
+                    )
+                    .on_press(Message::ArrowAction(Action::Flip)),
+                    reshiki::accessibility::button(
+                        "arrow.straighten",
+                        "Straighten",
+                        text("Straighten").size(11)
+                    )
+                    .on_press(Message::ArrowAction(Action::Straighten))
                 ]
                 .spacing(4),
             );
