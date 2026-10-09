@@ -10,15 +10,15 @@ The baseline has molecular properties but no NMR workflow. This feature predicts
 - Signed candidate executable SHA-256: `7e891f6bfbb835fb33376af71c0c2c0c2c452eaefc5ffd0dda5be88c45eae8ca`.
 - Input: [ethyl-acetate.rsk](../tests/fixtures/nmr/ethyl-acetate.rsk), original drawing; C4H8O2, six atoms, five bonds, canonical SMILES `CCOC(C)=O`.
 - Open the input, turn keyboard drawing off with F8, and expand Properties → Molecular properties. In the candidate, choose Predict NMR…; switch ¹H/¹³C, click a site, adjust panel height, and export TSV.
-- All screenshots are original desktop captures without retouching. They show the same input and JACS / ACS Publication style. The baseline uses 250% zoom and includes three other scratch tabs. Opening the new bottom panel automatically fits the canvas: the proton example uses 149% at 250 logical-pixel panel height. The carbon example uses 129% at 290 logical-pixel panel height, with the inspector hidden and carbonyl atom #4 selected. These are new-feature workflow examples, not matched-scale rendering comparisons.
+- All screenshots are original JPEG desktop captures without retouching or re-encoding. They show the same input and JACS / ACS Publication style. The baseline uses 250% zoom and includes three other scratch tabs. Opening the new bottom panel automatically fits the canvas: the proton example uses 149% at 250 logical-pixel panel height. The carbon example uses 129% at 290 logical-pixel panel height, with the inspector hidden and carbonyl atom #4 selected. These are new-feature workflow examples, not matched-scale rendering comparisons.
 
-![Baseline molecular properties with no NMR workflow](images/nmr/before.png)
+![Baseline molecular properties with no NMR workflow](images/nmr/before.jpg)
 
-![Three atom-linked proton group predictions](images/nmr/proton.png)
+![Three atom-linked proton group predictions](images/nmr/proton.jpg)
 
-![Four carbon predictions with carbonyl atom selected](images/nmr/carbon.png)
+![Four carbon predictions with carbonyl atom selected](images/nmr/carbon.jpg)
 
-![Expanded method, source conditions and limitations](images/nmr/conditions.png)
+![Expanded method, source conditions and limitations](images/nmr/conditions.jpg)
 
 ## Observed results
 
