@@ -1,7 +1,7 @@
 //! Atom-linked offline NMR results; detached work and chemical identity gates.
 use super::{
     App, Message, files,
-    workspace::{command, control, muted_text},
+    workspace::{control, muted_text},
 };
 use iced::widget::{Space, column, container, row, scrollable, sensor, slider, text};
 use iced::{Alignment, Element, Length, Task};
@@ -266,32 +266,52 @@ impl App {
         let state = &self.tab.nmr;
         let header = row![
             text("NMR prediction").size(15),
-            command("¹H", Message::Nmr(Action::Predict(Nucleus::H1)))
-                .on_press_maybe(
-                    state
-                        .pending
-                        .is_none()
-                        .then_some(Message::Nmr(Action::Predict(Nucleus::H1)))
-                )
-                .style(control(state.nucleus == Nucleus::H1)),
-            command("¹³C", Message::Nmr(Action::Predict(Nucleus::C13)))
-                .on_press_maybe(
-                    state
-                        .pending
-                        .is_none()
-                        .then_some(Message::Nmr(Action::Predict(Nucleus::C13)))
-                )
-                .style(control(state.nucleus == Nucleus::C13)),
+            named_command(
+                "nmr.predict.1H",
+                "Predict proton (¹H) NMR shifts",
+                "¹H",
+                Action::Predict(Nucleus::H1)
+            )
+            .checked(state.nucleus == Nucleus::H1)
+            .on_press_maybe(
+                state
+                    .pending
+                    .is_none()
+                    .then_some(Message::Nmr(Action::Predict(Nucleus::H1)))
+            )
+            .style(control(state.nucleus == Nucleus::H1)),
+            named_command(
+                "nmr.predict.13C",
+                "Predict carbon-13 (¹³C) NMR shifts",
+                "¹³C",
+                Action::Predict(Nucleus::C13)
+            )
+            .checked(state.nucleus == Nucleus::C13)
+            .on_press_maybe(
+                state
+                    .pending
+                    .is_none()
+                    .then_some(Message::Nmr(Action::Predict(Nucleus::C13)))
+            )
+            .style(control(state.nucleus == Nucleus::C13)),
             Space::new().width(Length::Fill),
-            command(
+            named_command(
+                "nmr.collapse",
+                "Show or collapse the NMR prediction table",
                 if state.collapsed {
                     "Show table"
                 } else {
                     "Collapse"
                 },
-                Message::Nmr(Action::Collapse)
+                Action::Collapse
+            )
+            .expanded(!state.collapsed),
+            named_command(
+                "nmr.close",
+                "Close the NMR prediction panel",
+                "Close",
+                Action::Close
             ),
-            command("Close", Message::Nmr(Action::Close)),
         ]
         .spacing(8)
         .align_y(Alignment::Center);
@@ -314,13 +334,13 @@ impl App {
             if let Some(report) = &state.result {
                 content = content.push(
                     row![
-                        text("Atom / H site").width(Length::Fill),
-                        text("δ / ppm").width(72),
-                        text("Sphere").width(52),
-                        text("Refs").width(52),
-                        text("Obs. SD").width(72)
+                        text("Atom / H site").size(12).width(Length::Fill),
+                        text("δ / ppm").size(12).width(72),
+                        text("Sphere").size(12).width(52),
+                        text("Refs").size(12).width(52),
+                        text("Obs. SD").size(12).width(72)
                     ]
-                    .spacing(8),
+                    .spacing(12),
                 );
                 for (index, item) in report.rows.iter().enumerate() {
                     let label = if report.nucleus == Nucleus::H1 {
@@ -340,13 +360,15 @@ impl App {
                     let mut line = column![
                         row![
                             reshiki::accessibility::button(
-                                format!("nmr-site-{index}"),
-                                format!("Select NMR site {label}"),
+                                format!("nmr.site.{}.{}", report.nucleus.code(), item.atom_id),
+                                site_description(report.nucleus, item),
                                 text(label).size(12)
                             )
                             .padding([5, 9])
                             .on_press(Message::Nmr(Action::Select(index)))
-                            .style(control(false))
+                            .checked(self.tab.selected.contains(&item.atom_id))
+                            .value(format!("{}. {}", report.data_version, report.conditions))
+                            .style(control(self.tab.selected.contains(&item.atom_id)))
                             .width(Length::Fill),
                             text(
                                 item.statistics
@@ -376,7 +398,7 @@ impl App {
                             )
                             .width(72)
                         ]
-                        .spacing(8)
+                        .spacing(12)
                         .align_y(Alignment::Center)
                     ]
                     .spacing(3);
@@ -394,24 +416,67 @@ impl App {
                     .push(text(engine::ATTRIBUTION).size(10));
             }
             let toolbar = row![
-                command(
+                named_command(
+                    "nmr.method",
+                    "NMR prediction method, source, conditions and limitations",
                     if state.details {
                         "Hide method / limits"
                     } else {
                         "Method / conditions / limits"
                     },
-                    Message::Nmr(Action::Details)
-                ),
-                command("Copy table", Message::Nmr(Action::Copy))
-                    .on_press_maybe(state.result.is_some().then_some(Message::Nmr(Action::Copy))),
-                command("Export TSV…", Message::Nmr(Action::Export)).on_press_maybe(
+                    Action::Details
+                )
+                .expanded(state.details)
+                .value(panel_description(state)),
+                named_command(
+                    "nmr.copy",
+                    "Copy predicted NMR shifts with attribution",
+                    "Copy table",
+                    Action::Copy
+                )
+                .on_press_maybe(state.result.is_some().then_some(Message::Nmr(Action::Copy))),
+                named_command(
+                    "nmr.export",
+                    "Export predicted NMR shifts with attribution as TSV",
+                    "Export TSV…",
+                    Action::Export
+                )
+                .on_press_maybe(
                     state
                         .result
                         .is_some()
                         .then_some(Message::Nmr(Action::Export))
                 ),
                 Space::new().width(Length::Fill),
-                text("Height").size(10),
+                named_command(
+                    "nmr.height.less",
+                    "Reduce NMR panel height",
+                    "−",
+                    Action::Height(state.height - 20.)
+                )
+                .on_press_maybe(
+                    (state.height > 140.)
+                        .then_some(Message::Nmr(Action::Height(state.height - 20.)))
+                )
+                .value(format!(
+                    "Panel height {:.0} logical pixels; requested {:.0}; range 140–360, bounded to 40% of window height",
+                    panel_height(state), state.height
+                )),
+                text(format!("{:.0} px", panel_height(state))).size(10),
+                named_command(
+                    "nmr.height.more",
+                    "Increase NMR panel height",
+                    "+",
+                    Action::Height(state.height + 20.)
+                )
+                .on_press_maybe(
+                    (state.height < 360.)
+                        .then_some(Message::Nmr(Action::Height(state.height + 20.)))
+                )
+                .value(format!(
+                    "Panel height {:.0} logical pixels; requested {:.0}; range 140–360, bounded to 40% of window height",
+                    panel_height(state), state.height
+                )),
                 slider(140.0..=360.0, state.height, |h| Message::Nmr(
                     Action::Height(h)
                 ))
@@ -423,11 +488,7 @@ impl App {
                 .push(scrollable(content).height(Length::Fill))
                 .push(toolbar);
         }
-        let height = if state.collapsed {
-            48.
-        } else {
-            state.height.min(state.available_height * 0.4).max(140.)
-        };
+        let height = panel_height(state);
         sensor(column![
             container(base).height(Length::Fill),
             container(panel)
@@ -444,3 +505,92 @@ impl App {
 
 #[cfg(test)]
 mod tests;
+
+fn named_command<'a>(
+    id: &'static str,
+    name: &'static str,
+    label: &'a str,
+    action: Action,
+) -> reshiki::accessibility::Button<'a, Message> {
+    reshiki::accessibility::button(id, name, text(label).size(12))
+        .padding([7, 9])
+        .on_press(Message::Nmr(action))
+        .style(control(false))
+}
+
+fn site_description(nucleus: Nucleus, row: &engine::Row) -> String {
+    let site = if nucleus == Nucleus::H1 {
+        format!(
+            "{} attached H{}",
+            row.hydrogen_count,
+            if row.hydrogen_count > 1 {
+                " in an unresolved group"
+            } else {
+                ""
+            }
+        )
+    } else {
+        "carbon atom".into()
+    };
+    let prediction = row
+        .statistics
+        .as_ref()
+        .map(|s| {
+            format!(
+                "Predicted {:.3} ppm; sphere {}; {} independent references; observed SD {:.3} ppm",
+                s.median,
+                row.radius.map(|r| r.to_string()).unwrap_or_default(),
+                s.support,
+                s.standard_deviation
+            )
+        })
+        .unwrap_or_else(|| {
+            format!(
+                "Unsupported: {}",
+                row.limitation
+                    .as_deref()
+                    .unwrap_or("No qualified reference data")
+            )
+        });
+    format!(
+        "Select {} NMR site atom #{}: {site}. {prediction}",
+        nucleus.label(),
+        row.atom_id
+    )
+}
+
+fn panel_height(state: &State) -> f32 {
+    if state.collapsed {
+        48.
+    } else {
+        state.height.min(state.available_height * 0.4).max(140.)
+    }
+}
+fn panel_description(state: &State) -> String {
+    let status = if state.pending.is_some() {
+        format!("Calculating {} shifts", state.nucleus.label())
+    } else if let Some(notice) = &state.notice {
+        notice.clone()
+    } else if let Some(report) = &state.result {
+        format!(
+            "{} prediction: {} of {} atom-linked sites supported",
+            report.nucleus.label(),
+            report
+                .rows
+                .iter()
+                .filter(|r| r.statistics.is_some())
+                .count(),
+            report.rows.len()
+        )
+    } else {
+        "No prediction result".into()
+    };
+    format!(
+        "Status: {status}. {}. {}. {}. {}. {}",
+        reshiki::chemistry::nmr::METHOD,
+        engine::DATA_VERSION,
+        engine::CONDITIONS,
+        engine::LIMITATIONS,
+        engine::ATTRIBUTION
+    )
+}

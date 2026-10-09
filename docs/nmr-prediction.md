@@ -7,8 +7,9 @@ behind collapsed abbreviations. Click a result row to select its linked drawing
 atom and any explicitly drawn hydrogens. Expand an abbreviation to inspect an
 internal site directly; its original atom ID is retained in the table.
 
-The results panel can be resized with **Height**, collapsed, or closed. Drawing
-remains available while predictions run. Chemical changes invalidate the result;
+The results panel can be resized with the height slider or accessible **− / +**
+buttons, collapsed, or closed. The height readout uses logical pixels; the panel
+is bounded to leave room for drawing. Drawing remains available while predictions run. Chemical changes invalidate the result;
 position/depth moves, drawing styles and abbreviation visibility preserve it.
 Changing the selected molecule requires running prediction again. Results are
 per document and background results cannot land in another document.
