@@ -261,11 +261,6 @@ fn opacity_paths(
 }
 
 /// Backdrop geometry shared by the native canvas, SVG, PDF, PNG and print.
-#[cfg(test)]
-pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
-    primitives_with_opacity(doc, &crate::rear_opacity::Paint::new(doc))
-}
-
 pub(crate) fn primitives_with_opacity(
     doc: &Document,
     opacity: &crate::rear_opacity::Paint,
