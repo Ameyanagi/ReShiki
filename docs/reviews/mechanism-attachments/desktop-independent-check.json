@@ -1,0 +1,181 @@
+{
+  "production_head": "466c7a1a8eb697af2b1b61fcca59668aa653787f",
+  "signed_application_sha256": "31a3428de420b01655939a646932c437aa24da9a912147733b8ea8076753d352",
+  "actual_desktop": "macOS26.5.1 arm64; 2560x1704;250% zoom;light;JACS/ACS;Arial10;Inspector visible;F8off",
+  "matched_control": "Original methanol LP fixture: two source/destination clicks, two free baseline arrows versus one native21 attached cubic",
+  "input_adapters": "Version19 input writes21 and hydrates only recorded derived carbon label_h; native writer omits two empty marks arrays in additional carbonyl input; successful link assigns only O mark ID1/highwater1",
+  "passed": [
+    "one arrow and one creation Undo",
+    "creation Redo entire JSON exact",
+    "only departure cubic control changed by tangent drag; both links/endpoints unchanged",
+    "target-only motion carries only end plus arrival control by actual atom displacement",
+    "target movement Undo/Redo entire JSON exact",
+    "target deletion detaches last end without changing resolved curve; Undo entire JSON exact",
+    "source-only motion carries only start plus departure control by actual atom displacement",
+    "lone-pair deletion detaches last start without changing resolved curve; Undo entire JSON exact",
+    "named Detach end changes only the reference; Undo entire JSON exact",
+    "endpoint drag detaches only start; opposite end/control/reference unchanged; Undo exact",
+    "pending-source Escape leaves entire saved native JSON unchanged",
+    "explicit free mode adds one free arrow; other document fields exact; Undo exact",
+    "fresh-process reopen and Save As byte-exact; disabled Undo/Redo and enabled start/end detach UI observed",
+    "separate carbonyl atom/bond contexts retain all molecular fields except documented label cache and mark IDs",
+    "signed application and own compiler artifact freshness verified"
+  ],
+  "target_drag_actual_world_delta": {
+    "x": -4.195886000000002,
+    "y": 10.129605
+  },
+  "source_drag_actual_world_delta": {
+    "x": -4.19582,
+    "y": 10.129605
+  },
+  "source_anchor_offset_x_f32_roundoff": -1.8997673000000006e-07,
+  "native_files": {
+    "crowded-carbonyl-atom-attached-desktop.rsk": {
+      "bytes": 3692,
+      "sha256": "6659d645c6fec8261f03f96ec941cf8cb4f77fe5caef61aea7b4b7a4047e6331"
+    },
+    "crowded-carbonyl-atom-undo.rsk": {
+      "bytes": 2222,
+      "sha256": "7a282f7a23b88bbc52664dfab904dca6357d5fd021015d2d37f792d432bcd52c"
+    },
+    "crowded-carbonyl-bond-attached-desktop.rsk": {
+      "bytes": 3722,
+      "sha256": "d958382713b37657f2c0215b8ae760ea6c05d93f535cdc897be6667666ab7b2e"
+    },
+    "crowded-methoxide-carbonyl-input.rsk": {
+      "bytes": 2259,
+      "sha256": "060c5ea09c45f0b4b541acfdbc8ae1b6ba9825babb226637d7d69688152e1915"
+    },
+    "methanol-attached-arrow-desktop.rsk": {
+      "bytes": 2808,
+      "sha256": "4255e10487b1a0eeed52f08de425207a1dbdaab44ed73c779a4170f133f507f8"
+    },
+    "methanol-attached-arrow-redo.rsk": {
+      "bytes": 2808,
+      "sha256": "4255e10487b1a0eeed52f08de425207a1dbdaab44ed73c779a4170f133f507f8"
+    },
+    "methanol-attached-arrow-reopened-desktop.rsk": {
+      "bytes": 2808,
+      "sha256": "4255e10487b1a0eeed52f08de425207a1dbdaab44ed73c779a4170f133f507f8"
+    },
+    "methanol-attached-arrow-undo.rsk": {
+      "bytes": 1332,
+      "sha256": "1ad1fbaa0ba48b8ad3b57577cb00000613d8a05e008bf4aceace61eac2f687fe"
+    },
+    "methanol-attached-end-detach-undo.rsk": {
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876"
+    },
+    "methanol-attached-end-detached.rsk": {
+      "bytes": 2512,
+      "sha256": "bafb7a0b77dc9276a056533865a1bc1c4c99eed9847586281751a48a9f8f18ed"
+    },
+    "methanol-attached-endpoint-drag-undo.rsk": {
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876"
+    },
+    "methanol-attached-endpoint-dragged.rsk": {
+      "bytes": 2485,
+      "sha256": "16bd711b039168dd701f30a9fcc0b604a8146d1d10e498d79edca9f937f84c80"
+    },
+    "methanol-attached-lone-pair-removal-undo.rsk": {
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876"
+    },
+    "methanol-attached-lone-pair-removed.rsk": {
+      "bytes": 2241,
+      "sha256": "55d7aeed98b919f38e6e060d19822fceff963cedc3bae9c9c60e0164485889b7"
+    },
+    "methanol-attached-pending-cancelled.rsk": {
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876"
+    },
+    "methanol-attached-source-moved-desktop.rsk": {
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876"
+    },
+    "methanol-attached-tangent-desktop.rsk": {
+      "bytes": 2800,
+      "sha256": "332ccf4d20d0ffc0a8f9e32631740f85d3907b3987dda8612f55f5941d9451e2"
+    },
+    "methanol-attached-target-deleted.rsk": {
+      "bytes": 1926,
+      "sha256": "facf49a841cbb72cb6bf48e072139997df80522d3d335d37d23ad1b260a6cfcc"
+    },
+    "methanol-attached-target-deletion-undo.rsk": {
+      "bytes": 2808,
+      "sha256": "d0eea16dc3ac1590b70c14475c9a1a7ce2dd6c7533537bc4a3b5bc43b8b2afa0"
+    },
+    "methanol-attached-target-moved-desktop.rsk": {
+      "bytes": 2808,
+      "sha256": "d0eea16dc3ac1590b70c14475c9a1a7ce2dd6c7533537bc4a3b5bc43b8b2afa0"
+    },
+    "methanol-attached-target-redo.rsk": {
+      "bytes": 2808,
+      "sha256": "d0eea16dc3ac1590b70c14475c9a1a7ce2dd6c7533537bc4a3b5bc43b8b2afa0"
+    },
+    "methanol-attached-target-undo.rsk": {
+      "bytes": 2800,
+      "sha256": "332ccf4d20d0ffc0a8f9e32631740f85d3907b3987dda8612f55f5941d9451e2"
+    },
+    "methanol-click-input.rsk": {
+      "bytes": 1108,
+      "sha256": "9737ebd597fff105a7783d421a2e16a7d214ea13c72e360f04a44b72dc0a06bc"
+    },
+    "methanol-explicit-free-arrow-desktop.rsk": {
+      "bytes": 3428,
+      "sha256": "fd8dcd4428eebb25746b83b039731c58552823178c892f60e8c706e5324a52f3"
+    },
+    "methanol-explicit-free-arrow-undo.rsk": {
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876"
+    },
+    "methanol-marked-input.rsk": {
+      "bytes": 1332,
+      "sha256": "366b61c7f9b8bcfee1f2d1c3cfd6b22ee397ee5149b295c442d0037086977a61"
+    },
+    "methanol-two-free-arrows-desktop.rsk": {
+      "bytes": 2560,
+      "sha256": "74d552c445b87baf120cfbcbebd4aa1f0735b5da088be8173793fa96c012dc3e"
+    }
+  },
+  "raw_captures": {
+    "evidence/baseline/mechanism-attachment-two-free-arrows-before.png": {
+      "bytes": 325165,
+      "sha256": "4b7c7a593d1e7ee4edf55b0b31dd7b4362677e2db078449c917577eb2f30baef"
+    },
+    "evidence/after/mechanism-attachment-pending-source.jpg": {
+      "bytes": 355608,
+      "sha256": "8c12d2f2072ef49e084ba41dd4a4866491478180be9723862cd357d02ae376c2"
+    },
+    "evidence/after/mechanism-attachment-controls.jpg": {
+      "bytes": 350845,
+      "sha256": "17881369448f3775f6bd56c1f0dd5f93d0862046547885d830fda7d716be4db9"
+    },
+    "evidence/after/mechanism-attachment-one-arrow-after.jpg": {
+      "bytes": 318114,
+      "sha256": "a9ef2cc95249de3c166c5ef430d34681752c2e6a6b4a9b31fffc738b17b3c8fd"
+    },
+    "evidence/after/mechanism-attachment-crowded-carbonyl-f8-off.jpg": {
+      "bytes": 323750,
+      "sha256": "885353c03f8ee08557311c9dc3d361b2769fe44a2d06f61fcdfd2b169fa9db7e"
+    },
+    "evidence/after/mechanism-attachment-native-reopened.jpg": {
+      "bytes": 309955,
+      "sha256": "0b5a79fee0c989f4dd9ffe0484acadae1e293426612216f3b7f5cb4aaaab88aa"
+    },
+    "evidence/after/mechanism-attachment-reopened-attachment-controls-verified.jpg": {
+      "bytes": 355765,
+      "sha256": "24b9e586180e4a3ba186bb879bee1867a50061e8dc99e65136a56824e2fc2c86"
+    }
+  },
+  "limits": [
+    "Native drag lengths/angles remained enabled; actual displacement is verified, not assumed equal to raw pointer delta",
+    "Fresh reopen Fit recenters the same250% camera because the saved arrow is included in bounds",
+    "Crowded context is an additional input, not the matched before fixture",
+    "Alt bypass, held-drag Escape, both-selected affine transforms and copy/remap are compiled-test evidence rather than actual desktop operations here",
+    "No automatic reaction prediction or obstacle-free routing claim",
+    "User personal visual acceptance remains pending"
+  ]
+}

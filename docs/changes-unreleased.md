@@ -9,3 +9,7 @@ See [ReShiki 0.11.0](changes-0.11.md) for the latest release notes.
 - **Independent mechanism-arrow curvature (under review):** adjust either end direction independently without moving the arrow endpoints, with one-step Undo and editable cubic save/interchange. [Visual review](changes/mechanism-curvature.md) · [PR #276](https://github.com/Ameyanagi/ReShiki/pull/276) · [Issue #91](https://github.com/Ameyanagi/ReShiki/issues/91) · @Ameyanagi. Multi-segment pen drawing and target attachments remain separate work.
 
 ![Finished mechanism arrow after independent departure and arrival edits](images/mechanism-curvature/after-output.jpg)
+
+- **Optional mechanism-arrow target attachments (under review):** click a lone pair, atom or bond and then a destination to create one editable arrow that follows its targets, with one-step Undo, explicit free mode and native persistence. [Problem, solution and actual desktop results](changes/mechanism-attachments.md) · [Issue #92](https://github.com/Ameyanagi/ReShiki/issues/92) · @Ameyanagi. Stacked on [PR #276](https://github.com/Ameyanagi/ReShiki/pull/276); the draft PR link and personal visual acceptance remain pending.
+
+![A lone-pair arrow targets a carbonyl carbon in the additional context while retaining the molecular drawing](images/mechanism-attachments/mechanism-attachment-crowded-carbonyl-f8-off.jpg)
