@@ -14,7 +14,8 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
 Adaptive calculation budgets and ordered fused-ring aromaticity enumeration
-(under review): @Ameyanagi, addressing [#245](https://github.com/Ameyanagi/ReShiki/issues/245)
+(under review in [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279)):
+@Ameyanagi, addressing [#245](https://github.com/Ameyanagi/ReShiki/issues/245)
 and [#248](https://github.com/Ameyanagi/ReShiki/issues/248). See the
 [desktop validation record](adaptive-chemistry-limits-validation.md).
 
