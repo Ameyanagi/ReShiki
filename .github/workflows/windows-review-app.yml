@@ -24,8 +24,6 @@ jobs:
         shell: pwsh
     env:
       REVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
-      REVIEW_OUTPUT: ${{ runner.temp }}/reshiki-windows-review
-      CARGO_TARGET_DIR: ${{ runner.temp }}/reshiki-windows-review-target
       CARGO_BUILD_JOBS: "4"
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_RELEASE_DEBUG: "0"
@@ -37,6 +35,10 @@ jobs:
       GIT_CONFIG_KEY_0: core.autocrlf
       GIT_CONFIG_VALUE_0: "false"
     steps:
+      - name: Set runner-local build and evidence paths
+        run: |
+          "REVIEW_OUTPUT=$(Join-Path $env:RUNNER_TEMP 'reshiki-windows-review')" >> $env:GITHUB_ENV
+          "CARGO_TARGET_DIR=$(Join-Path $env:RUNNER_TEMP 'reshiki-windows-review-target')" >> $env:GITHUB_ENV
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
