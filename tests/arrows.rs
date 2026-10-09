@@ -290,7 +290,12 @@ async fn independent_cubic_controls_survive_editable_cdxml_cdx_and_figure_export
             .unwrap();
         assert_eq!(imported.arrows.len(), doc.arrows.len());
         for (original, restored) in doc.arrows.iter().zip(&imported.arrows) {
-            assert_eq!(restored.appearance(), original.appearance());
+            let mut restored_style = restored.appearance();
+            let original_style = original.appearance();
+            // Binary CDX stores line widths in 1/65536 point units.
+            assert!((restored_style.width_pt - original_style.width_pt).abs() < 1. / 65536.);
+            restored_style.width_pt = original_style.width_pt;
+            assert_eq!(restored_style, original_style);
             assert!(restored.cubic.is_some());
             for (a, b) in original
                 .bezier_controls()
