@@ -162,3 +162,183 @@ async fn caption_requires_current_graph_and_is_undoable() -> Result<(), String> 
     assert!(app.tab.doc.annotations.is_empty());
     Ok(())
 }
+
+#[tokio::test]
+#[ignore = "Opt-in native renderer accessibility metadata and dispatch"]
+async fn controls_publish_named_native_actions_and_editable_values() -> Result<(), String> {
+    use iced::advanced::renderer::Headless;
+    use reshiki::accessibility::{Activate, Collect, Role};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.naming.name = "ethanol".into();
+    app.tab.naming.consent = true;
+    let mut source = record("CCO");
+    source
+        .warnings
+        .push("Check this source interpretation".into());
+    let preview = prepare_preview(app.engine.clone(), source.clone(), "CCO".into()).await?;
+    app.tab.naming.set_preview(preview);
+    app.tab.naming.structure = Some((
+        Ticket {
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
+            serial: 0,
+        },
+        source,
+    ));
+    let size = iced::Size::new(340., 2400.);
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let mut ui = iced_runtime::UserInterface::build(
+        app.naming_panel(),
+        size,
+        Default::default(),
+        &mut renderer,
+    );
+    let mut collect = Collect::new(iced::Rectangle::with_size(size));
+    ui.operate(
+        &renderer,
+        &mut iced::advanced::widget::operation::black_box(&mut collect),
+    );
+    let snapshot = collect.snapshot();
+    assert!(snapshot.duplicate_ids.is_empty());
+    for id in [
+        "naming.name",
+        "naming.smiles",
+        "naming.source.opsin",
+        "naming.source.pubchem",
+        "naming.consent.name",
+        "naming.consent.structure",
+        "naming.resolve",
+        "naming.lookup",
+        "naming.acknowledge",
+        "naming.insert",
+        "naming.copy-name",
+        "naming.caption",
+        "naming.source-record",
+    ] {
+        let node = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == id)
+            .unwrap_or_else(|| panic!("Missing {id}"));
+        assert!(!node.name.is_empty());
+        assert!(node.visible_bounds.is_some(), "Invisible {id}");
+    }
+    let consent = snapshot
+        .nodes
+        .iter()
+        .find(|node| node.id == "naming.consent.name")
+        .unwrap();
+    assert_eq!(consent.role, Role::ToggleButton);
+    assert_eq!(consent.checked, Some(true));
+    let input = snapshot
+        .nodes
+        .iter()
+        .find(|node| node.id == "naming.name")
+        .unwrap();
+    assert_eq!(input.value.as_deref(), Some("ethanol"));
+    let mut activate = Activate::<Message>::new("naming.resolve");
+    ui.operate(
+        &renderer,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(matches!(
+        activate.message(),
+        Some(Message::Naming(Action::Resolve))
+    ));
+    let mut activate = Activate::<Message>::new("naming.consent.structure");
+    ui.operate(
+        &renderer,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(matches!(
+        activate.message(),
+        Some(Message::Naming(Action::StructureConsent(true)))
+    ));
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer scrolled preview pointer regression"]
+async fn scrolled_insert_click_reaches_button_instead_of_preview() -> Result<(), String> {
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::widget::operation::{self, scrollable::AbsoluteOffset};
+    use iced::{Event, mouse};
+    use reshiki::accessibility::Collect;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    app.tab.naming.set_preview(preview);
+    let size = iced::Size::new(340., 620.);
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let mut ui = iced_runtime::UserInterface::build(
+        iced::widget::scrollable(app.naming_panel())
+            .id("naming-test-scroll")
+            .height(620),
+        size,
+        Default::default(),
+        &mut renderer,
+    );
+    let mut scroll = operation::scrollable::scroll_to::<()>(
+        iced::advanced::widget::Id::from("naming-test-scroll"),
+        AbsoluteOffset {
+            x: Some(0.),
+            y: Some(300.),
+        },
+    );
+    ui.operate(&renderer, &mut operation::black_box(&mut scroll));
+    let mut collect = Collect::new(iced::Rectangle::with_size(size));
+    ui.operate(&renderer, &mut operation::black_box(&mut collect));
+    let bounds = collect
+        .snapshot()
+        .nodes
+        .iter()
+        .find(|n| n.id == "naming.insert")
+        .and_then(|n| n.visible_bounds)
+        .ok_or("Insert control not visible after scroll")?;
+    let point = bounds.center();
+    let mut messages = vec![];
+    for event in [
+        Event::Mouse(mouse::Event::CursorMoved { position: point }),
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+    ] {
+        ui.update(
+            &[event],
+            mouse::Cursor::Available(point),
+            &mut renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut messages,
+        );
+    }
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::Naming(Action::Insert))),
+        "Scrolled click produced {messages:?}"
+    );
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::Naming(Action::PreviewEdit(Edit::Select(_)))))
+    );
+    drop(ui);
+    for message in messages {
+        let _ = app.update(message);
+    }
+    assert_eq!(app.tab.doc.atoms.len(), 3);
+    assert!(app.tab.history.can_undo());
+    Ok(())
+}

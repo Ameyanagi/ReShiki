@@ -1544,7 +1544,12 @@ impl App {
             InspectorTab::Templates => self.templates_panel(),
             InspectorTab::Import => column![
                 self.import_panel(),
-                button("Chemical names…").on_press(Message::Inspector(InspectorTab::Names)),
+                reshiki::accessibility::button(
+                    "import.chemical-names",
+                    "Chemical names",
+                    text("Chemical names…")
+                )
+                .on_press(Message::Inspector(InspectorTab::Names)),
             ]
             .spacing(12)
             .into(),

@@ -1,8 +1,11 @@
 //! Per-document, opt-in online naming workflow and locally editable previews.
 use super::{App, InspectorTab, Message};
+use crate::canvas::layered::canvas;
 use crate::canvas::{Camera, Edit, MoleculeCanvas, Tool};
-use iced::widget::{button, canvas, checkbox, column, container, pick_list, row, text, text_input};
+use iced::widget::{column, container, row, text};
+mod preview;
 use iced::{Element, Length, Task};
+use reshiki::accessibility::{button, text_input};
 use reshiki::{
     document::{Annotation, Document, Point},
     editing,
@@ -424,17 +427,17 @@ impl App {
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
         let mut content = column![
-            row![text("Chemical names").size(18), button("Import").on_press(Message::Inspector(InspectorTab::Import))].spacing(12),
+            row![text("Chemical names").size(18), button("naming.import", "Open SMILES import", text("Import")).on_press(Message::Inspector(InspectorTab::Import))].spacing(12),
             text("Online tools · Review the source interpretation before use.").size(12),
             text("Name → structure").size(15),
-            pick_list([NameSource::Opsin, NameSource::PubChem], Some(state.source), |s| Message::Naming(Action::Source(s))).text_size(12),
-            text_input("Chemical name, e.g. ethanol", &state.name).on_input(|s| Message::Naming(Action::Name(s))).on_submit(Message::Naming(Action::Resolve)).size(13),
+            row![button("naming.source.opsin", "OPSIN systematic name parser", text("OPSIN").size(12)).checked(state.source == NameSource::Opsin).on_press(Message::Naming(Action::Source(NameSource::Opsin))), button("naming.source.pubchem", "PubChem common name lookup", text("PubChem").size(12)).checked(state.source == NameSource::PubChem).on_press(Message::Naming(Action::Source(NameSource::PubChem)))].spacing(6),
+            text_input("naming.name", "Chemical name", "Chemical name, e.g. ethanol", &state.name).on_input(|s| Message::Naming(Action::Name(s))).on_submit(Message::Naming(Action::Resolve)).size(13),
             text(match state.source {
                 NameSource::Opsin => "OPSIN parses supported systematic nomenclature on EMBL-EBI's server. Common names may require PubChem.",
                 NameSource::PubChem => "PubChem finds exact names in its database. Results are source interpretations; an alias may have multiple meanings.",
             }).size(12),
-            checkbox(state.consent).label(match state.source { NameSource::Opsin => "Send this name to EMBL-EBI", NameSource::PubChem => "Send this name to NCBI PubChem" }).text_size(12).on_toggle(|v| Message::Naming(Action::Consent(v))),
-            button("Resolve name online").on_press_maybe((idle && state.consent && !state.name.trim().is_empty()).then_some(Message::Naming(Action::Resolve))),
+            button("naming.consent.name", match state.source { NameSource::Opsin => "Send this name to EMBL-EBI", NameSource::PubChem => "Send this name to NCBI PubChem" }, text(match state.source { NameSource::Opsin => "Send this name to EMBL-EBI", NameSource::PubChem => "Send this name to NCBI PubChem" }).size(12)).checked(state.consent).style(super::workspace::control(state.consent)).on_press(Message::Naming(Action::Consent(!state.consent))),
+            button("naming.resolve", "Resolve name online", text("Resolve name online")).on_press_maybe((idle && state.consent && !state.name.trim().is_empty()).then_some(Message::Naming(Action::Resolve))),
         ].spacing(10);
         if let Some(notice) = &state.notice {
             content = content.push(text(notice).size(12).color(self.theme().palette().danger));
@@ -448,6 +451,12 @@ impl App {
             for (index, candidate) in state.candidates.iter().enumerate() {
                 content = content.push(
                     button(
+                        format!("naming.candidate.{index}"),
+                        format!(
+                            "Choose {} from {}",
+                            candidate.title,
+                            candidate.provenance.label()
+                        ),
                         text(format!(
                             "{} · {}",
                             candidate.title,
@@ -465,7 +474,7 @@ impl App {
         if let Some(preview) = &state.preview {
             content = content.push(text(preview.record.provenance.label()).size(12));
             content = content.push(text(&preview.record.title).size(14));
-            let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
+            let drawing: Element<'_, Edit> = canvas(preview::Preview(MoleculeCanvas {
                 optimizer: None,
                 keyboard_target: None,
                 joining: None,
@@ -493,7 +502,7 @@ impl App {
                 graphic_arc: Default::default(),
                 graphic_style: &self.tab.graphic_style,
                 bracket_sides: self.tab.bracket_sides,
-            })
+            }))
             .width(Length::Fill)
             .height(180)
             .into();
@@ -501,16 +510,29 @@ impl App {
             content = content.push(container(drawing).style(container::bordered_box));
             content = content.push(text("Editable preview · Drag atoms to adjust layout. Edit SMILES to change chemistry.").size(12));
             content = content.push(
-                text_input("Preview SMILES", &state.smiles)
-                    .on_input(|s| Message::Naming(Action::Smiles(s)))
-                    .size(12),
+                text_input(
+                    "naming.smiles",
+                    "Editable preview SMILES",
+                    "Preview SMILES",
+                    &state.smiles,
+                )
+                .on_input(|s| Message::Naming(Action::Smiles(s)))
+                .size(12),
             );
             content = content.push(
                 row![
-                    button("Update preview")
-                        .on_press_maybe(idle.then_some(Message::Naming(Action::UpdatePreview))),
-                    button("Restore source")
-                        .on_press_maybe(idle.then_some(Message::Naming(Action::RestorePreview))),
+                    button(
+                        "naming.update-preview",
+                        "Update preview",
+                        text("Update preview")
+                    )
+                    .on_press_maybe(idle.then_some(Message::Naming(Action::UpdatePreview))),
+                    button(
+                        "naming.restore-preview",
+                        "Restore source",
+                        text("Restore source")
+                    )
+                    .on_press_maybe(idle.then_some(Message::Naming(Action::RestorePreview))),
                 ]
                 .spacing(6),
             );
@@ -525,14 +547,23 @@ impl App {
             let needs_ack = !preview.record.warnings.is_empty() || !preview.warnings.is_empty();
             if needs_ack {
                 content = content.push(
-                    checkbox(state.acknowledged)
-                        .label("I reviewed these warnings and the structure")
-                        .text_size(12)
-                        .on_toggle(|v| Message::Naming(Action::Acknowledge(v))),
+                    button(
+                        "naming.acknowledge",
+                        "I reviewed these warnings and the structure",
+                        text("I reviewed these warnings and the structure").size(12),
+                    )
+                    .checked(state.acknowledged)
+                    .style(super::workspace::control(state.acknowledged))
+                    .on_press(Message::Naming(Action::Acknowledge(!state.acknowledged))),
                 );
             }
             content = content.push(
-                button("Insert editable structure").on_press_maybe(
+                button(
+                    "naming.insert",
+                    "Insert editable structure",
+                    text("Insert editable structure"),
+                )
+                .on_press_maybe(
                     (idle
                         && self.naming_can_edit()
                         && (!needs_ack || state.acknowledged)
@@ -544,14 +575,27 @@ impl App {
         content = content.push(text("Structure → name").size(15));
         content = content.push(text("Select a complete connected molecule. PubChem returns its source systematic name and synonyms after an exact graph/stereo/isotope check. This is database lookup; novel structures may have no result.").size(12));
         content = content.push(
-            checkbox(state.structure_consent)
-                .label("Send selected molecular SMILES to NCBI PubChem")
-                .text_size(12)
-                .on_toggle(|v| Message::Naming(Action::StructureConsent(v))),
+            button(
+                "naming.consent.structure",
+                "Send selected molecular SMILES to NCBI PubChem",
+                text("Send selected molecular SMILES to NCBI PubChem").size(12),
+            )
+            .checked(state.structure_consent)
+            .style(super::workspace::control(state.structure_consent))
+            .on_press(Message::Naming(Action::StructureConsent(
+                !state.structure_consent,
+            ))),
         );
-        content = content.push(button("Look up selected structure online").on_press_maybe(
-            (idle && state.structure_consent).then_some(Message::Naming(Action::Lookup)),
-        ));
+        content = content.push(
+            button(
+                "naming.lookup",
+                "Look up selected structure online",
+                text("Look up selected structure online"),
+            )
+            .on_press_maybe(
+                (idle && state.structure_consent).then_some(Message::Naming(Action::Lookup)),
+            ),
+        );
         if let Some((ticket, record)) = &state.structure {
             if ticket.revision != self.tab.revision {
                 content = content.push(text("Previous lookup · The drawing changed. Look up the selection again before using its name.").size(12));
@@ -576,12 +620,15 @@ impl App {
             }
             content = content.push(
                 row![
-                    button("Copy name").on_press(Message::Naming(Action::CopyName)),
-                    button("Insert caption").on_press_maybe(
-                        (ticket.revision == self.tab.revision && self.naming_can_edit())
-                            .then_some(Message::Naming(Action::Caption))
-                    ),
-                    button("Source").on_press(Message::Naming(Action::OpenSource)),
+                    button("naming.copy-name", "Copy name", text("Copy name"))
+                        .on_press(Message::Naming(Action::CopyName)),
+                    button("naming.caption", "Insert caption", text("Insert caption"))
+                        .on_press_maybe(
+                            (ticket.revision == self.tab.revision && self.naming_can_edit())
+                                .then_some(Message::Naming(Action::Caption))
+                        ),
+                    button("naming.source-record", "Source", text("Source"))
+                        .on_press(Message::Naming(Action::OpenSource)),
                 ]
                 .spacing(6),
             );
