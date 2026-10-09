@@ -390,6 +390,7 @@ impl Sketch {
                 end: point(a.end),
                 kind: "forward".into(),
                 control: None,
+                cubic: None,
                 style: None,
             });
         }

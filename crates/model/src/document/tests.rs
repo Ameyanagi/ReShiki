@@ -18,6 +18,7 @@ fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
         end: Point::new(42., 0.),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     doc.graphics.push(crate::graphics::Graphic::dragged(

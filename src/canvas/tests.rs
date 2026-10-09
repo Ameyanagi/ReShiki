@@ -364,6 +364,145 @@ fn arrow_handle_drag_is_one_edit_and_midpoint_hit_follows_curve() {
 }
 
 #[test]
+fn mechanism_tangent_drag_preview_release_and_escape_share_fixed_endpoint_geometry() {
+    use reshiki::arrows::{ArrowStyle, Preset};
+    let mut doc = Document::default();
+    doc.arrows.push(reshiki::document::Arrow::new(
+        1,
+        World::new(-60., 0.),
+        World::new(60., 0.),
+        Preset::Curved,
+        ArrowStyle::default(),
+    ));
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    canvas.selected = &[1];
+    canvas.camera = Camera {
+        center: World::default(),
+        zoom: 1.,
+    };
+    let bounds = Rectangle::new(Point::new(30., 40.), iced::Size::new(400., 300.));
+    for index in [3, 4] {
+        let from = doc.arrows[0].handles()[index];
+        let to = from.offset(-25., -45.);
+        let screen = |p| canvas.camera.screen(p, bounds) + iced::Vector::new(bounds.x, bounds.y);
+        let cursor = mouse::Cursor::Available(screen(to));
+        for cancel in [false, true] {
+            let mut state = State::default();
+            let mut edits = Vec::new();
+            for event in [
+                mouse::Event::CursorMoved {
+                    position: screen(from),
+                },
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+                mouse::Event::CursorMoved {
+                    position: screen(to),
+                },
+            ] {
+                edits.extend(
+                    canvas
+                        .update(&mut state, &Event::Mouse(event), bounds, cursor)
+                        .and_then(|action| action.into_inner().0),
+                );
+            }
+            let preview = canvas.pointer_preview_document(&state, bounds);
+            assert_eq!(
+                (preview.arrows[0].start, preview.arrows[0].end),
+                (doc.arrows[0].start, doc.arrows[0].end)
+            );
+            assert_eq!(preview.arrows[0].handles()[index], to);
+            assert_eq!(doc.arrows[0].cubic, None);
+            if cancel {
+                let escape = iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape);
+                canvas.update(
+                    &mut state,
+                    &Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                        key: escape.clone(),
+                        modified_key: escape,
+                        physical_key: iced::keyboard::key::Physical::Code(
+                            iced::keyboard::key::Code::Escape,
+                        ),
+                        location: iced::keyboard::Location::Standard,
+                        modifiers: Default::default(),
+                        text: None,
+                        repeat: false,
+                    }),
+                    bounds,
+                    cursor,
+                );
+                assert!(state.gesture.is_none());
+                assert_eq!(canvas.pointer_preview_document(&state, bounds), doc);
+            }
+            edits.extend(
+                canvas
+                    .update(
+                        &mut state,
+                        &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                        bounds,
+                        cursor,
+                    )
+                    .and_then(|action| action.into_inner().0),
+            );
+            let handles: Vec<_> = edits
+                .into_iter()
+                .filter(|edit| matches!(edit, Edit::ArrowHandle(..)))
+                .collect();
+            if cancel {
+                assert!(handles.is_empty());
+            } else {
+                let [Edit::ArrowHandle(id, actual_index, p)] = handles.as_slice() else {
+                    panic!("Exactly one handle edit");
+                };
+                assert_eq!((*id, *actual_index, *p), (1, index, to));
+                let mut committed = doc.clone();
+                committed.arrows[0].edit_handle(*actual_index, *p);
+                assert_eq!(committed, preview);
+            }
+        }
+    }
+}
+
+#[test]
+fn mechanism_tangent_click_does_not_cycle_heads_or_convert_legacy_geometry() {
+    use reshiki::arrows::{ArrowStyle, Preset};
+    let mut doc = Document::default();
+    doc.arrows.push(reshiki::document::Arrow::new(
+        1,
+        World::new(-60., 0.),
+        World::new(60., 0.),
+        Preset::Fishhook,
+        ArrowStyle::preset(Preset::Fishhook),
+    ));
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Arrow;
+    canvas.selected = &[1];
+    canvas.camera = Camera {
+        center: World::default(),
+        zoom: 1.,
+    };
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    for index in [3, 4] {
+        let position = canvas.camera.screen(doc.arrows[0].handles()[index], bounds);
+        let cursor = mouse::Cursor::Available(position);
+        let mut state = State::default();
+        for event in [
+            mouse::Event::CursorMoved { position },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ] {
+            let edit = canvas
+                .update(&mut state, &Event::Mouse(event), bounds, cursor)
+                .and_then(|action| action.into_inner().0);
+            assert!(!matches!(
+                edit,
+                Some(Edit::ArrowClick(_) | Edit::ArrowHandle(..))
+            ));
+        }
+        assert_eq!(doc.arrows[0].cubic, None);
+    }
+}
+
+#[test]
 fn template_anchor_preview_hit_tests_atoms_bonds_and_empty_space() {
     use reshiki::templates::Anchor;
     let mut doc = Document::default();

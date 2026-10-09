@@ -116,6 +116,7 @@ fn routing_document() -> Document {
         end: World::new(365., 215.),
         kind: "forward".into(),
         control: Some(World::new(305., 160.)),
+        cubic: None,
         style: None,
     });
     for (layer, origin, axis_y) in [
@@ -154,6 +155,7 @@ fn paper_document() -> (Document, Vec<u64>, [u64; 4]) {
         end: World::new(365., 330.),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     doc.annotations.push(Annotation {

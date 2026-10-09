@@ -106,6 +106,7 @@ fn everything() -> (Document, Ids) {
         end: Point::new(160., 0.),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     let png: Picture = serde_json::from_value(json!(PNG_BASE64)).unwrap();

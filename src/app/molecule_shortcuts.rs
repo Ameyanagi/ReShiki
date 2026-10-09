@@ -252,6 +252,7 @@ fn reaction_copy(
         end: Point::new(hi.x + gap + arrow_length, y),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     let mut new_ids = copied.clone();

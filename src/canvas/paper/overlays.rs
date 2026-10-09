@@ -41,14 +41,42 @@ impl MoleculeCanvas<'_> {
             && (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
         {
             for a in preview.arrows.iter().filter(|a| selected.contains(&a.id)) {
+                if let Some([departure, arrival]) = a.bezier_controls() {
+                    for (endpoint, control) in [(a.start, departure), (a.end, arrival)] {
+                        frame.stroke(
+                            &Path::line(
+                                self.camera.screen(endpoint, bounds),
+                                self.camera.screen(control, bounds),
+                            ),
+                            Stroke::default()
+                                .with_width(1.)
+                                .with_color(rgb([19, 135, 116])),
+                        );
+                    }
+                }
                 for (i, p) in a.handles().into_iter().enumerate() {
                     let p = self.camera.screen(p, bounds);
-                    let path = if i == 2 {
+                    let path = if i >= 3 {
                         Path::rectangle(p - Vector::new(4., 4.), iced::Size::new(8., 8.))
+                    } else if i == 2 {
+                        Path::new(|builder| {
+                            builder.move_to(p - Vector::new(0., 5.));
+                            builder.line_to(p + Vector::new(5., 0.));
+                            builder.line_to(p + Vector::new(0., 5.));
+                            builder.line_to(p - Vector::new(5., 0.));
+                            builder.close();
+                        })
                     } else {
                         Path::circle(p, 4.)
                     };
-                    frame.fill(&path, Color::WHITE);
+                    frame.fill(
+                        &path,
+                        if i >= 3 {
+                            rgb([225, 242, 237])
+                        } else {
+                            Color::WHITE
+                        },
+                    );
                     frame.stroke(
                         &path,
                         Stroke::default()

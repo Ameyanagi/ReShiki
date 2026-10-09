@@ -140,6 +140,10 @@ pub struct Arrow {
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub control: Option<Point>,
+    /// Independently editable departure and arrival controls. Absent in legacy
+    /// quadratic arrows; these controls take precedence over the implicit bend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cubic: Option<[Point; 2]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style: Option<crate::arrows::ArrowStyle>,
 }
@@ -148,7 +152,7 @@ fn forward() -> String {
 }
 
 /// The newest document format this build reads. Saved files are marked with it.
-pub const VERSION: u32 = 19;
+pub const VERSION: u32 = 20;
 
 fn newer_version(version: u64) -> String {
     format!(

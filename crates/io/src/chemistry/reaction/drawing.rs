@@ -260,6 +260,7 @@ impl Imported {
             end: Point::new((x + width) as f32, 0.),
             kind: "forward".into(),
             control: None,
+            cubic: None,
             style: None,
         };
         builder.row(

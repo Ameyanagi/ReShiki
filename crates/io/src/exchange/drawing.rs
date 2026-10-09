@@ -349,6 +349,9 @@ impl<'a> Writer<'a> {
             if let Some(c) = a.control {
                 points.push(c.into());
             }
+            if let Some([a, b]) = a.cubic {
+                points.extend([a.into(), b.into()]);
+            }
         }
         for g in &doc.graphics {
             if g.kind == crate::graphics::GraphicKind::Picture {

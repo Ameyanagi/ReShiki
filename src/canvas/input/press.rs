@@ -115,11 +115,7 @@ impl MoleculeCanvas<'_> {
                 .iter()
                 .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
             {
-                if let Some(index) = a
-                    .handles()
-                    .iter()
-                    .position(|q| q.distance(p) < 8.0 / self.camera.zoom)
-                {
+                if let Some(index) = a.handle_at(p, 8.0 / self.camera.zoom) {
                     state.gesture = Some(Gesture::ArrowHandle { id: a.id, index });
                     return Some(Action::request_redraw().and_capture());
                 }

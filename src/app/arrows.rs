@@ -206,7 +206,9 @@ impl App {
         self.changed(before);
         self.sync_arrows();
         self.error = false;
-        self.status = "Arrow updated · Drag the middle handle to bend".into();
+        self.status =
+            "Arrow updated · Drag the diamond to bend or the squares to adjust each end direction"
+                .into();
     }
     pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
         use super::workspace::{muted_text, section};
@@ -381,7 +383,7 @@ impl App {
                 .on_press(Message::ArrowAction(Action::Reset)),
         );
         panel.push(self.inspector_section(super::inspector::Section::ArrowGeometry, "Arrowhead & markers", "", false, geometry))
-            .push(text("Drag endpoints to resize; drag the square handle to bend. Return applies numeric and color fields.").size(11).style(muted_text)).into()
+            .push(text("Drag circles to move endpoints, the diamond to bend, or squares on direction lines to adjust each end independently. Escape cancels a drag. Return applies fields.").size(11).style(muted_text)).into()
     }
     pub(super) fn set_arrow_style(&mut self, style: Preset) {
         self.tab.arrow_style = style;
@@ -393,8 +395,12 @@ impl App {
         let before = self.tab.doc.clone();
         for a in &mut self.tab.doc.arrows {
             if self.tab.selected.contains(&a.id) {
+                let curved = |kind: &str| matches!(kind, "curved" | "fishhook");
+                if a.kind != style.kind() && !(curved(&a.kind) && curved(style.kind())) {
+                    a.control = None;
+                    a.cubic = None;
+                }
                 a.kind = style.kind().into();
-                a.control = None;
                 a.style = Some(self.tab.arrows.style.clone());
             }
         }

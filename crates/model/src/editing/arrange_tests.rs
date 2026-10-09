@@ -42,6 +42,7 @@ fn geometry() -> Document {
         end: Point::new(260., 130.),
         kind: "forward".into(),
         control: Some(Point::new(160., 240.)),
+        cubic: None,
         style: None,
     });
     doc.graphics.push(Graphic::dragged(

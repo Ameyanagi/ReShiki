@@ -37,6 +37,13 @@ impl<'d> Draft<'d> {
 }
 
 impl MoleculeCanvas<'_> {
+    #[cfg(test)]
+    pub(super) fn pointer_preview_document(&self, state: &State, bounds: Rectangle) -> Document {
+        let mut draft = Draft::new(self.doc);
+        self.preview_pointer_edits(&mut draft, state, bounds);
+        draft.preview.into_owned()
+    }
+
     pub(super) fn draw_paper(
         &self,
         frame: &mut layered::Frame<'_>,

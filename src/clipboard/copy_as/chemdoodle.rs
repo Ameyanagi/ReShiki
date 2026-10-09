@@ -37,6 +37,7 @@ pub(super) fn reason(doc: &Document) -> Option<&'static str> {
     let style = arrow.appearance();
     if arrow.kind != "forward"
         || arrow.control.is_some()
+        || arrow.cubic.is_some()
         || style.head != crate::arrows::Head::Full
         || style.tail != crate::arrows::Head::None
         || style.no_go != crate::arrows::NoGo::None

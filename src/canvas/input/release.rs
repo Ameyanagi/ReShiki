@@ -148,7 +148,7 @@ impl MoleculeCanvas<'_> {
         if !inside {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        if self.tool == Tool::Arrow
+        if (self.tool == Tool::Arrow || index >= 3)
             && self
                 .doc
                 .arrows
@@ -157,6 +157,9 @@ impl MoleculeCanvas<'_> {
                 .and_then(|a| a.handles().get(index).copied())
                 .is_some_and(|handle| handle.distance(p) < 3. / self.camera.zoom)
         {
+            if index >= 3 {
+                return ControlFlow::Break(Action::request_redraw().and_capture());
+            }
             return ControlFlow::Break(Action::publish(Edit::ArrowClick(id)).and_capture());
         }
         let end = if index < 2 {

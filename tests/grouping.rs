@@ -23,6 +23,7 @@ fn drawing() -> Document {
         end: Point::new(180., 0.),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     d.graphics.push(Graphic::dragged(
@@ -170,6 +171,7 @@ fn concave_lasso_encloses_whole_objects_and_supports_add_subtract() {
         end: Point::new(70., 70.),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     let region = [

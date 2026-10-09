@@ -67,7 +67,7 @@ impl Tool {
                 "Preview, then click an atom or bond to attach · Drag to choose the side · Escape cancels"
             }
             Self::Arrow => {
-                "Click to place or change an arrow · Click again to switch direction or half-head side · Drag the middle handle to bend"
+                "Click to place or change an arrow · Drag the diamond to bend · Squares adjust each end direction independently"
             }
             Self::Text => "Click to type a label · Double-click a label to edit · Escape cancels",
             Self::Erase => {
