@@ -1114,6 +1114,7 @@ fn every_new_document_starts_with_jacs_drawing_and_typography_defaults() {
     app.tab.orbital_phase = reshiki::scientific::Phase::Shaded;
     app.tab.phase_flipped = true;
     app.tab.attach_symbols = false;
+    app.tab.snap_orbitals = false;
     app.tab.graphic_style.width_pt = 3.;
     app.tab.caption_format.style.family = "Times New Roman".into();
     app.tab.caption_format.style.size_pt = 18.;
@@ -1136,6 +1137,7 @@ fn every_new_document_starts_with_jacs_drawing_and_typography_defaults() {
     assert_eq!(app.tab.graphic_width_input, "0.6");
     assert_eq!(app.tab.orbital_phase, reshiki::scientific::Phase::Solid);
     assert!(!app.tab.phase_flipped && app.tab.attach_symbols);
+    assert!(app.tab.snap_orbitals);
     assert_eq!(app.tab.graphic_style.width_pt, 0.6);
     assert_eq!(app.tab.chain_drawing.angle, 120.);
     assert!(app.tab.bond_drawing.fixed_angles && app.tab.bond_drawing.fixed_length);

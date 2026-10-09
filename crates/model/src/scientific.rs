@@ -7,6 +7,26 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+mod label_clearance;
+#[cfg(test)]
+mod orbital_tests;
+pub(crate) use label_clearance::readable_orbital_parts;
+
+/// Styled orbital vectors with the same transparent atom-label clearance as
+/// the figure scene. Exchange keeps these vectors rather than orbital controls.
+pub fn orbital_parts_with_label_clearance(
+    graphic: &Graphic,
+    doc: &crate::document::Document,
+) -> Vec<Part> {
+    let labels: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|atom| doc.atom_visible(atom.id))
+        .flat_map(|atom| crate::scene::atom_label_ink_boxes(atom, doc))
+        .collect();
+    readable_orbital_parts(graphic, &labels)
+}
+
 macro_rules! choices {
     ($name:ident { $first:ident => $label:literal $(,$variant:ident => $text:literal)* $(,)? }) => {
         #[derive(Debug,Clone,Copy,Default,PartialEq,Eq,Serialize,Deserialize)]
@@ -427,8 +447,20 @@ pub struct Drawing {
     pub phase: Phase,
     pub flipped: bool,
     pub attach: bool,
+    pub snap_orbitals: bool,
 }
 impl Drawing {
+    /// Orbital snapping is independent of atom-owned chemical symbols.
+    pub fn orbital_target(
+        &self,
+        doc: &crate::document::Document,
+        start: Point,
+        radius: f32,
+    ) -> Option<u64> {
+        (self.snap_orbitals && matches!(self.kind, GraphicKind::Orbital(_)))
+            .then(|| doc.nearest(start, radius))
+            .flatten()
+    }
     pub fn place(
         &self,
         doc: &mut crate::document::Document,
@@ -465,13 +497,10 @@ impl Drawing {
             }
             return Ok(id);
         }
-        let origin = if matches!(self.kind, GraphicKind::Orbital(_)) {
-            doc.nearest(start, radius)
-                .and_then(|id| doc.atom(id))
-                .map_or(start, |a| a.position)
-        } else {
-            start
-        };
+        let origin = self
+            .orbital_target(doc, start, radius)
+            .and_then(|id| doc.atom(id))
+            .map_or(start, |a| a.position);
         let id = doc.next_id();
         let mut g = Graphic::dragged(
             id,

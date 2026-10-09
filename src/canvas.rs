@@ -123,6 +123,9 @@ pub enum Edit {
         target: Option<u64>,
     },
     Graphic(World, World, bool),
+    /// Capture orbital snap preference and temporary bypass at release, just
+    /// as the live preview uses them; a chemical symbol's attachment is separate.
+    Orbital(World, World, bool, bool),
     GraphicPoint(u64, usize, World),
     AtomMark(u64, usize, World),
     AtomIndicator(reshiki::atom_labels::Owner, World),
@@ -339,6 +342,7 @@ pub struct MoleculeCanvas<'a> {
     pub orbital_phase: reshiki::scientific::Phase,
     pub phase_flipped: bool,
     pub attach_symbols: bool,
+    pub snap_orbitals: bool,
     pub graphic_constrain: bool,
     pub graphic_arc: reshiki::graphics::ArcGeometry,
     pub graphic_style: &'a GraphicStyle,

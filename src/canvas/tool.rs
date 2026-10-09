@@ -80,7 +80,7 @@ impl Tool {
                 "Click an atom to attach · Drag from an atom to position · Click empty space for a free symbol"
             }
             Self::Graphic(GraphicKind::Orbital(_)) => {
-                "Click to place · Drag from the node for size/direction · Shift snaps to 15°"
+                "Click to place · Drag from the node for size/direction · Shift snaps to 15° · Option/Alt bypasses atom snapping"
             }
             Self::Graphic(_) => {
                 "Drag to draw · Shift constrains proportions or angle · Escape cancels"

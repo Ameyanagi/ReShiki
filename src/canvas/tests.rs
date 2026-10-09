@@ -589,6 +589,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &STYLE,
@@ -1272,6 +1273,7 @@ fn freeform_selection_tracks_events_adds_subtracts_and_cancels() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &style,
@@ -1389,6 +1391,7 @@ fn group_clicks_move_all_members_and_alt_selects_a_member() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &style,
@@ -1520,6 +1523,7 @@ fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &style,
@@ -1632,6 +1636,7 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &style,
@@ -1744,6 +1749,7 @@ fn template_drag_uses_the_target_bond_and_can_be_cancelled() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
@@ -1887,6 +1893,7 @@ fn selection_handles_resize_and_rotate_without_moving_or_merging_atoms() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
@@ -1990,6 +1997,7 @@ fn bond_midpoints_select_and_drag_both_atoms_without_losing_atom_targets() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
@@ -2054,6 +2062,7 @@ fn keyboard_click_preserves_world_point_and_stationary_screen_motion_does_not_ha
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
@@ -2135,6 +2144,7 @@ fn command_drag_duplicates_and_shift_drag_locks_to_one_axis() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
@@ -2277,6 +2287,7 @@ fn ring_drag_snaps_at_release_or_keeps_its_initial_attachment() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
@@ -2317,6 +2328,7 @@ fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
@@ -2379,6 +2391,7 @@ fn short_endpoint_drag_grows_instead_of_snapping_to_its_source() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
@@ -2455,6 +2468,7 @@ fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
         orbital_phase: Default::default(),
         phase_flipped: false,
         attach_symbols: true,
+        snap_orbitals: true,
         graphic_constrain: false,
         graphic_arc: Default::default(),
         graphic_style: &GraphicStyle::default(),
@@ -2715,5 +2729,82 @@ fn large_grids_bound_dot_count_without_moving_the_world_origin() {
                 }
             }
         }
+    }
+}
+
+#[test]
+fn readable_foreground_orbital_labels_select_the_atom_and_other_filled_graphics_keep_precedence() {
+    use reshiki::{
+        graphics::GraphicKind, palette::Color, scene::Primitive, scientific::OrbitalKind,
+    };
+    let mut doc = Document::default();
+    let atom = doc.add_atom("O", World::default());
+    doc.atom_mut(atom).unwrap().label_h = 1;
+    let probes: Vec<_> = reshiki::scene::primitives(&doc)
+        .into_iter()
+        .flat_map(|primitive| {
+            if let Primitive::Text {
+                position,
+                text,
+                size,
+                style,
+                ..
+            } = primitive
+            {
+                reshiki::style::text_ink_boxes(&text, size, &style)
+                    .into_iter()
+                    .map(|(lo, hi)| position.offset((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5))
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        })
+        .collect();
+    assert!(probes.len() >= 2, "Probe both O and its H label");
+    let orbital = doc.next_id();
+    let mut graphic = Graphic::dragged(
+        orbital,
+        GraphicKind::Orbital(OrbitalKind::S),
+        World::default(),
+        World::new(0., -42.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    graphic.layer = 1;
+    assert!(
+        probes.iter().all(|&p| graphic.hit(p, 1.)),
+        "Original filled orbital geometry covers the labels"
+    );
+    doc.graphics.push(graphic);
+    let before = doc.clone();
+    for &probe in &probes {
+        assert_eq!(hit::hit_object(&doc, probe, 1.), Some(atom));
+    }
+    assert_eq!(
+        hit::hit_object(&doc, World::new(-30., 0.), 1.),
+        Some(orbital)
+    );
+    assert_eq!(
+        doc, before,
+        "Hit testing cannot change chemistry or geometry"
+    );
+    let circle = doc.next_id();
+    let mut ordinary = Graphic::dragged(
+        circle,
+        GraphicKind::Ellipse,
+        World::new(-42., -42.),
+        World::new(42., 42.),
+        GraphicStyle {
+            fill: Some(Color::Ink),
+            ..Default::default()
+        },
+        BracketSides::Both,
+        false,
+    );
+    ordinary.layer = 2;
+    doc.graphics.push(ordinary);
+    for probe in probes {
+        assert_eq!(hit::hit_object(&doc, probe, 1.), Some(circle));
     }
 }

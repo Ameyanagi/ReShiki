@@ -288,6 +288,7 @@ impl App {
             orbital_phase: self.tab.orbital_phase,
             phase_flipped: self.tab.phase_flipped,
             attach_symbols: self.tab.attach_symbols,
+            snap_orbitals: self.tab.snap_orbitals,
             arrow_preset: self.tab.arrow_style,
             arrow_style: &self.tab.arrows.style,
             bracket_sides: self.tab.bracket_sides,
@@ -763,6 +764,13 @@ impl App {
                     + UNIT_FIELD
                     + CONTEXT_GAP
                     + Self::constraints_width()
+            }
+            Tool::Graphic(reshiki::graphics::GraphicKind::Orbital(_)) => {
+                let chooser = reshiki::scientific::OrbitalKind::ALL
+                    .iter()
+                    .map(|kind| text_width(&kind.to_string(), 12.))
+                    .fold(0., f32::max);
+                lead + chooser + 12. + 15. + CONTEXT_GAP + 22. + text_width("Snap to atoms", 11.)
             }
             _ if self.moving_bonded_selection() => lead + Self::constraints_width(),
             _ => 0.,
@@ -1320,11 +1328,27 @@ impl App {
         if kind == G::Arc {
             options.push(self.arc_presets(false));
         }
+        if matches!(kind, G::Orbital(_)) {
+            options.push(
+                hover_hint(
+                    checkbox(self.tab.snap_orbitals)
+                        .label("Snap to atoms")
+                        .on_toggle(|snap| Message::Graphics(super::graphics::Action::SnapOrbitals(snap)))
+                        .size(14)
+                        .text_size(11),
+                    "Snap the orbital node to the nearest atom · Hold Option/Alt for free placement",
+                    tooltip::Position::Bottom,
+                )
+                .into(),
+            );
+        }
         (
             options,
             match kind {
                 G::Symbol(_) => "Click to place/attach · Drag to position · Escape cancels",
-                G::Orbital(_) => "Drag from node · Click for default size · Shift snaps to 15°",
+                G::Orbital(_) => {
+                    "Drag from node · Shift snaps angle · Option/Alt bypasses atom snap"
+                }
                 G::Arc => "Drag an ellipse frame · Shift makes it circular · Escape cancels",
                 _ => "Drag to draw · Shift constrains · Escape cancels",
             },

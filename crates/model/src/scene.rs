@@ -780,18 +780,36 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let doc = resolved.as_ref();
     let style = &doc.drawing_style;
     let mut out = vec![];
+    let AtomLabels {
+        runs: labels,
+        bounds: label_bounds,
+    } = collect_atom_labels(doc);
+    let orbital_label_boxes: Vec<_> = if doc
+        .graphics
+        .iter()
+        .any(|graphic| matches!(graphic.kind, crate::graphics::GraphicKind::Orbital(_)))
+    {
+        doc.atoms
+            .iter()
+            .filter(|atom| doc.atom_visible(atom.id))
+            .flat_map(|atom| {
+                labels
+                    .get(&atom.id)
+                    .map(|runs| label_ink_boxes(runs))
+                    .unwrap_or_default()
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
-    push_underlays(&mut out, doc, &graphics);
+    push_underlays(&mut out, doc, &graphics, &orbital_label_boxes);
     let RingStrokes {
         arcs,
         circles,
         crossing_gaps,
     } = push_ring_strokes(&mut out, doc);
-    let AtomLabels {
-        runs: labels,
-        bounds: label_bounds,
-    } = collect_atom_labels(doc);
     // Fill joined bond outlines together. Separate antialiased polygons leave
     // translucent seams even when their mathematical corners agree exactly.
     let joins = crate::bond_joins::Joins::new(doc);
@@ -824,15 +842,23 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         graphics
             .iter()
             .filter(|g| g.layer >= 0)
-            .flat_map(graphic_primitive),
+            .flat_map(|graphic| graphic_primitive(graphic, &orbital_label_boxes)),
     );
     out
 }
-fn graphic_primitive(g: &&crate::graphics::Graphic) -> Vec<Primitive> {
+fn graphic_primitive(
+    g: &&crate::graphics::Graphic,
+    label_boxes: &[(Point, Point)],
+) -> Vec<Primitive> {
     if g.kind == crate::graphics::GraphicKind::Picture {
         vec![Primitive::Picture((*g).clone())]
     } else {
-        g.parts()
+        let parts = if matches!(g.kind, crate::graphics::GraphicKind::Orbital(_)) {
+            crate::scientific::readable_orbital_parts(g, label_boxes)
+        } else {
+            g.parts()
+        };
+        parts
             .into_iter()
             .map(|p| Primitive::Path {
                 commands: p.commands,
@@ -846,12 +872,13 @@ fn push_underlays(
     out: &mut Vec<Primitive>,
     doc: &Document,
     graphics: &[&crate::graphics::Graphic],
+    label_boxes: &[(Point, Point)],
 ) {
     out.extend(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(graphic_primitive),
+            .flat_map(|graphic| graphic_primitive(graphic, label_boxes)),
     );
     out.extend(doc.ring_fills.iter().filter_map(|fill| fill.primitive(doc)));
     out.extend(crate::highlights::primitives(doc));

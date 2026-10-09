@@ -374,7 +374,14 @@ impl Writer<'_> {
             };
             let mut parsed = Vec::new();
             for part in parts {
-                part.style.validate().map_err(invalid)?;
+                // Scene-created fill pieces have no stroke. Their original
+                // orbital boundary is exported separately, so clipping edges
+                // must not acquire an artificial outline.
+                let mut checked_style = part.style.clone();
+                if part.filled && checked_style.width_pt == 0. {
+                    checked_style.width_pt = 0.6;
+                }
+                checked_style.validate().map_err(invalid)?;
                 if part.style.pattern == LinePattern::Dotted {
                     return Err(invalid("Dotted graphics require native or image export"));
                 }
@@ -417,19 +424,22 @@ impl Writer<'_> {
                         parent
                     };
                     if let Some(fill) = paint.fill {
-                        self.curve(target, points, *closed, fill, true, 0., false, z)?;
+                        let n = self.curve(target, points, *closed, fill, true, 0., false, z)?;
+                        object = Some(if parent != self.page { parent } else { n });
                     }
-                    let n = self.curve(
-                        target,
-                        points,
-                        *closed,
-                        paint.stroke,
-                        false,
-                        real(paint.width_pt),
-                        paint.pattern == LinePattern::Dashed,
-                        z,
-                    )?;
-                    object = Some(if parent != self.page { parent } else { n });
+                    if paint.width_pt > 0. {
+                        let n = self.curve(
+                            target,
+                            points,
+                            *closed,
+                            paint.stroke,
+                            false,
+                            real(paint.width_pt),
+                            paint.pattern == LinePattern::Dashed,
+                            z,
+                        )?;
+                        object = Some(if parent != self.page { parent } else { n });
+                    }
                 }
             }
             if let Some(n) = object {

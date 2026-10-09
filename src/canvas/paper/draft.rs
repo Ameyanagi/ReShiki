@@ -41,6 +41,7 @@ impl MoleculeCanvas<'_> {
             preview,
             ring_selection,
             smart,
+            template_notice,
             ..
         } = draft;
         if let Some(p) = state.cursor {
@@ -57,12 +58,30 @@ impl MoleculeCanvas<'_> {
                         phase: self.orbital_phase,
                         flipped: self.phase_flipped,
                         attach: self.attach_symbols,
+                        snap_orbitals: self.snap_orbitals && !state.modifiers.alt(),
                     };
+                    if matches!(kind, GraphicKind::Orbital(_)) {
+                        let target =
+                            drawing.orbital_target(self.doc, *start, 10. / self.camera.zoom);
+                        *template_notice = Some((
+                            target.map_or_else(
+                                || "Orbital · Free node placement · Shift snaps angle".into(),
+                                |id| {
+                                    let label = self
+                                        .doc
+                                        .atom(id)
+                                        .map_or("atom", |atom| atom.element.as_str());
+                                    format!("Orbital · Node snapped to {label} · Option/Alt frees")
+                                },
+                            ),
+                            true,
+                        ));
+                    }
                     if let Ok(id) = drawing.place(
                         preview.to_mut(),
                         *start,
                         end,
-                        state.modifiers.shift(),
+                        state.modifiers.shift() || self.graphic_constrain,
                         10. / self.camera.zoom,
                     ) {
                         *ring_selection = Some(vec![id]);

@@ -90,7 +90,10 @@ impl App {
                 target,
             } => return self.place_chain(&points, source, target, before),
             Edit::Graphic(start, end, constrain) => {
-                return self.place_graphic(start, end, constrain, before);
+                return self.place_graphic(start, end, constrain, self.tab.snap_orbitals, before);
+            }
+            Edit::Orbital(start, end, constrain, snap) => {
+                return self.place_graphic(start, end, constrain, snap, before);
             }
             Edit::AtomIndicator(owner, p) => {
                 if let Some(anchor) = owner.anchor(&self.tab.doc) {

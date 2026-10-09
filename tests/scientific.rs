@@ -15,6 +15,7 @@ fn drawing(kind: GraphicKind) -> Drawing {
         phase: Phase::Solid,
         flipped: false,
         attach: true,
+        snap_orbitals: true,
     }
 }
 
@@ -248,4 +249,100 @@ async fn palette_colored_orbitals_export_as_shown_on_the_dark_canvas() {
             .iter()
             .all(|g| g.style.stroke == Color::Custom(blue))
     );
+}
+
+fn vector_fill_at(commands: &[reshiki::graphics::PathCommand], point: Point) -> bool {
+    reshiki::graphics::flattened(commands).iter().any(|path| {
+        let mut inside = false;
+        for (a, b) in path
+            .iter()
+            .zip(path.iter().cycle().skip(1))
+            .take(path.len())
+        {
+            if (a.y > point.y) != (b.y > point.y)
+                && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x
+            {
+                inside = !inside;
+            }
+        }
+        inside
+    })
+}
+
+#[tokio::test]
+async fn orbital_label_clearance_survives_editable_vector_exchange() {
+    let engine = LocalEngine::default();
+    let source = engine
+        .request(Request::import_smiles("C[15NH3+]"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let n = source
+        .atoms
+        .iter()
+        .find(|atom| atom.element == "N")
+        .unwrap()
+        .id;
+    let center = source.atom(n).unwrap().position;
+    for phase in Phase::ALL {
+        for format in ["cdxml", "cdx"] {
+            let mut doc = source.clone();
+            let mut tool = drawing(GraphicKind::Orbital(OrbitalKind::S));
+            tool.phase = *phase;
+            tool.place(&mut doc, center, center.offset(0., -42.), false, 10.)
+                .unwrap();
+            doc.graphics[0].layer = 1;
+            let before = doc.clone();
+            let mut request = Request::molecule("export", doc.clone());
+            request.format = Some(format.into());
+            let exported = engine.request(request).await.unwrap().output.unwrap();
+            let imported = engine
+                .request(Request::import(format, &exported))
+                .await
+                .unwrap()
+                .document
+                .unwrap();
+            let imported_n = imported
+                .atoms
+                .iter()
+                .find(|atom| atom.element == "N")
+                .unwrap();
+            assert_eq!(imported_n.charge, 1);
+            assert_eq!(imported_n.isotope, 15);
+            assert!(!imported.graphics.is_empty());
+            assert_eq!(
+                imported
+                    .graphics
+                    .iter()
+                    .flat_map(|graphic| graphic.parts())
+                    .any(|part| part.filled),
+                *phase != Phase::Open,
+                "Exchange must retain the outline versus filled phase",
+            );
+            for graphic in &imported.graphics {
+                for part in graphic.parts().iter().filter(|part| part.filled) {
+                    assert!(
+                        !vector_fill_at(&part.commands, imported_n.position),
+                        "{phase:?}/{format} orbital fill must retain a transparent gap at N"
+                    );
+                }
+            }
+            assert_eq!(
+                doc, before,
+                "Preparing exports must not move atoms or orbital frames"
+            );
+            assert!(reshiki::scene::svg(&imported).contains("<text"));
+            assert!(
+                reshiki::export::drawing(&doc, "pdf")
+                    .unwrap()
+                    .starts_with(b"%PDF")
+            );
+            assert!(
+                reshiki::export::clipboard_png(&doc)
+                    .unwrap()
+                    .starts_with(b"\x89PNG")
+            );
+        }
+    }
 }

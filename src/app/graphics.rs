@@ -31,6 +31,7 @@ pub enum Action {
     OrbitalPhase(reshiki::scientific::Phase),
     FlipPhase(bool),
     AttachSymbols(bool),
+    SnapOrbitals(bool),
 }
 
 pub(super) fn parse_color(s: &str) -> Option<[u8; 3]> {
@@ -58,6 +59,7 @@ impl App {
             Action::OrbitalPhase(phase) => self.set_orbital_phase(phase),
             Action::FlipPhase(value) => self.set_phase_flipped(value),
             Action::AttachSymbols(value) => self.tab.attach_symbols = value,
+            Action::SnapOrbitals(value) => self.tab.snap_orbitals = value,
             Action::Sides(sides) => self.set_graphic_sides(sides),
         }
     }
@@ -175,7 +177,8 @@ impl App {
                     .push(hover_hint(checkbox(self.tab.attach_symbols).label("Attach to atoms").on_toggle(|attach| Message::Graphics(Action::AttachSymbols(attach))).size(14).text_size(12), "Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.", tooltip::Position::Top));
             }
             GraphicKind::Orbital(kind) => {
-                panel=panel.push(hover_hint(crate::appearance::pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k| Message::Graphics(Action::ScientificKind(GraphicKind::Orbital(k)))).text_size(12).padding(6).width(Length::Fill), "Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Group with a molecule to move them together.", tooltip::Position::Top))
+                panel=panel.push(hover_hint(crate::appearance::pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k| Message::Graphics(Action::ScientificKind(GraphicKind::Orbital(k)))).text_size(12).padding(6).width(Length::Fill), "Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Option/Alt bypasses atom snapping. Group with a molecule to move them together.", tooltip::Position::Top))
+                    .push(hover_hint(checkbox(self.tab.snap_orbitals).label("Snap to atoms").on_toggle(|snap| Message::Graphics(Action::SnapOrbitals(snap))).size(14).text_size(12), "Snap the orbital node to the nearest atom. Hold Option/Alt for free placement inside the snap radius. This setting applies to new orbitals.", tooltip::Position::Top))
                     .push(crate::appearance::pick_list(reshiki::scientific::Phase::ALL,Some(self.tab.orbital_phase),|phase| Message::Graphics(Action::OrbitalPhase(phase))).text_size(12).padding(6).width(Length::Fill))
                     .push(checkbox(self.tab.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, reshiki::scientific::OrbitalKind::S | reshiki::scientific::OrbitalKind::Sigma | reshiki::scientific::OrbitalKind::Lobe)).then_some(|flipped: bool| Message::Graphics(Action::FlipPhase(flipped)))).size(14).text_size(12));
             }

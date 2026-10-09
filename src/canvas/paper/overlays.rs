@@ -11,6 +11,47 @@ use reshiki::graphics::PathCommand;
 use std::ops::ControlFlow;
 
 impl MoleculeCanvas<'_> {
+    pub(super) fn draw_orbital_target(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        let Tool::Graphic(kind @ reshiki::graphics::GraphicKind::Orbital(_)) = self.tool else {
+            return;
+        };
+        let start = match state.gesture {
+            Some(Gesture::Graphic { start }) => start,
+            None => {
+                let Some(cursor) = state.cursor.filter(|cursor| bounds.contains(*cursor)) else {
+                    return;
+                };
+                self.camera
+                    .world(Point::new(cursor.x - bounds.x, cursor.y - bounds.y), bounds)
+            }
+            _ => return,
+        };
+        let drawing = reshiki::scientific::Drawing {
+            kind,
+            style: self.graphic_style.clone(),
+            phase: self.orbital_phase,
+            flipped: self.phase_flipped,
+            attach: self.attach_symbols,
+            snap_orbitals: self.snap_orbitals && !state.modifiers.alt(),
+        };
+        if let Some(id) = drawing.orbital_target(self.doc, start, 10. / self.camera.zoom)
+            && let Some(atom) = self.doc.atom(id)
+        {
+            let center = self.camera.screen(atom.position, bounds);
+            frame.stroke(
+                &Path::circle(center, 8.),
+                Stroke::default()
+                    .with_width(1.5)
+                    .with_color(rgb([19, 135, 116])),
+            );
+        }
+    }
+
     pub(super) fn draw_editor_markers(
         &self,
         frame: &mut layered::Frame<'_>,

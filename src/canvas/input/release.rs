@@ -64,7 +64,17 @@ impl MoleculeCanvas<'_> {
                 {
                     return Some(Action::request_redraw().and_capture());
                 }
-                Edit::Graphic(start, p, state.modifiers.shift() || self.graphic_constrain)
+                let constrain = state.modifiers.shift() || self.graphic_constrain;
+                if matches!(self.tool, Tool::Graphic(GraphicKind::Orbital(_))) {
+                    Edit::Orbital(
+                        start,
+                        p,
+                        constrain,
+                        self.snap_orbitals && !state.modifiers.alt(),
+                    )
+                } else {
+                    Edit::Graphic(start, p, constrain)
+                }
             }
             Gesture::ArrowHandle { id, index } => {
                 match self.release_arrow_handle(state, id, index, p, bounds, inside) {

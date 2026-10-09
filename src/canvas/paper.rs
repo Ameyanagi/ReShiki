@@ -1,6 +1,8 @@
 //! The drawing paper, layer by layer: background, the document as the active gesture would leave it, the document, then editing overlays.
 
 mod draft;
+#[cfg(test)]
+mod orbital_tests;
 mod overlays;
 mod placement;
 
@@ -89,6 +91,7 @@ impl MoleculeCanvas<'_> {
             draw_document(frame, &preview, self.camera, bounds);
         }
         self.draw_editor_markers(frame, &preview, bounds);
+        self.draw_orbital_target(frame, state, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);
         self.draw_notices(
             frame,

@@ -71,7 +71,8 @@ impl Request {
                 }
                 color => color,
             };
-            crate::canvas_theme::canonical_document(&document)
+            let canonical = crate::canvas_theme::canonical_document(&document);
+            canonical
                 .graphics
                 .iter()
                 .filter(|g| {
@@ -82,7 +83,11 @@ impl Request {
                     )
                 })
                 .map(|g| {
-                    let mut parts = g.parts();
+                    let mut parts = if matches!(g.kind, crate::graphics::GraphicKind::Orbital(_)) {
+                        crate::scientific::orbital_parts_with_label_clearance(g, &canonical)
+                    } else {
+                        g.parts()
+                    };
                     for part in &mut parts {
                         part.style.stroke = shown(part.style.stroke);
                         part.style.fill = part.style.fill.map(shown);
