@@ -74,8 +74,7 @@ fn retained_non_arc_shapes_can_be_constructed_as_one_pen_path() {
                         .path_handles()
                         .unwrap()
                         .into_iter()
-                        .filter(|handle| handle.node)
-                        .next_back()
+                        .rfind(|handle| handle.node)
                         .unwrap()
                         .index;
                     pen.set_path_closed(true).unwrap();
@@ -222,6 +221,13 @@ fn singular_projected_pen_edits_reject_atomically_and_flat_lines_remain_editable
     let before = graphic.clone();
     let node = graphic.edit_points()[3];
     graphic.edit_point(3, node.offset(10., 10.));
+    assert_eq!(graphic, before);
+    assert!(
+        graphic
+            .move_path_point(3, node.offset(10., 10.))
+            .unwrap_err()
+            .contains("Rotate this edge-on projected path")
+    );
     assert_eq!(graphic, before);
     assert!(graphic.insert_path_node(0).is_err());
     assert_eq!(graphic, before);

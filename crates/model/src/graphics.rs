@@ -498,7 +498,8 @@ impl Graphic {
         if self.kind == GraphicKind::Picture {
             return;
         }
-        if self.edit_path_point(index, p) {
+        if self.path_handles().is_some() {
+            let _ = self.move_path_point(index, p);
             return;
         }
         let mut commands = self.commands();

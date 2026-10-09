@@ -231,12 +231,12 @@ impl Graphic {
             .iter()
             .any(|c| matches!(c, PathCommand::Close))
     }
-    pub(super) fn edit_path_point(&mut self, index: usize, point: Point) -> bool {
-        let Some(mut path) = Path::read(self) else {
-            return false;
-        };
+    /// Move a connected path handle, reporting a frame that cannot be edited.
+    /// Failed edits leave the graphic unchanged.
+    pub fn move_path_point(&mut self, index: usize, point: Point) -> Result<(), String> {
+        let mut path = Path::read(self).ok_or("Select one continuous path")?;
         if !finite(point) {
-            return true;
+            return Ok(());
         }
         if !self.path_handles().is_some_and(|handles| {
             handles.iter().any(|handle| {
@@ -244,11 +244,11 @@ impl Graphic {
                     && handle.point != point
             })
         }) {
-            return true;
+            return Ok(());
         }
         if let Some(node) = path.node(index) {
             let Ok(old) = path.point(node) else {
-                return true;
+                return Ok(());
             };
             let move_control = |p: Point| p.offset(point.x - old.x, point.y - old.y);
             if let Some(segment) = path.segments.get_mut(node)
@@ -286,8 +286,7 @@ impl Graphic {
                 }
             }
         }
-        let _ = path.store(self);
-        true
+        path.store(self)
     }
     pub fn insert_path_node(&mut self, index: usize) -> Result<usize, String> {
         let mut path = Path::read(self).ok_or("Select one continuous path")?;

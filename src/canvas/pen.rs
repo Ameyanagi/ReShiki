@@ -51,8 +51,7 @@ pub(crate) fn apply(
             .path_handles()
             .ok_or("Invalid pen path")?
             .into_iter()
-            .filter(|h| h.node)
-            .next_back()
+            .rfind(|h| h.node)
             .ok_or("Missing pen node")?
             .index;
         result.graphics.push(graphic);

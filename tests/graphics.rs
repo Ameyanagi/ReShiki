@@ -85,17 +85,19 @@ fn graphics_copy_delete_history_and_native_roundtrip_preserve_affine_frames() {
 }
 
 #[test]
-fn curve_point_edit_is_local_and_invalid_paths_are_rejected() {
+fn curve_control_edit_preserves_other_points_and_frame_and_invalid_paths_are_rejected() {
     let mut g = shape(1, GraphicKind::Curve);
     let before = g.commands();
+    let frame = (g.origin, g.axis_x, g.axis_y, g.depth);
     let replacement = Point::new(80., 10.);
     g.edit_point(1, replacement);
     let points: Vec<_> = g.commands().iter().flat_map(PathCommand::points).collect();
     let original: Vec<_> = before.iter().flat_map(PathCommand::points).collect();
-    assert_eq!(points[1], replacement);
+    assert!(points[1].distance(replacement) < 0.001);
     for i in [0, 2, 3] {
-        assert_eq!(points[i], original[i]);
+        assert!(points[i].distance(original[i]) < 0.001);
     }
+    assert_eq!((g.origin, g.axis_x, g.axis_y, g.depth), frame);
     g.validate().unwrap();
     g.path[0] = PathCommand::Line(Point::default());
     assert!(g.validate().is_err());
@@ -120,7 +122,7 @@ fn all_graphics_render_in_vector_and_raster_exports_with_colors_and_dashes() {
         doc.graphics.push(g);
     }
     let svg = reshiki::scene::svg(&doc);
-    assert_eq!(svg.matches("<path ").count(), 9);
+    assert_eq!(svg.matches("<path ").count(), GraphicKind::DRAWABLE.len());
     assert!(svg.contains("stroke-dasharray="));
     assert!(svg.contains("rgb(32,80,145)"));
     assert!(svg.contains("rgb(249,223,225)"));

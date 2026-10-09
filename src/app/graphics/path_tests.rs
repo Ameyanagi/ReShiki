@@ -115,3 +115,25 @@ fn pen_point_selection_is_ephemeral_and_kept_per_document_tab() {
     let native = String::from_utf8(app.tab.doc.file_json().unwrap()).unwrap();
     assert!(!native.contains("path_point"));
 }
+
+#[test]
+fn pen_edge_on_point_drag_explains_rejection_without_edit_or_history() {
+    let mut app = fixture_app();
+    app.tab.doc.graphics[0].axis_y = Point::default();
+    app.tab.doc.graphics[0].depth = [10., 0., 1.];
+    let before = app.tab.doc.clone();
+    let id = app.tab.selected[0];
+    let point = before.graphics[0].edit_points()[3].offset(10., 10.);
+    app.edit(Edit::GraphicPoint(id, 3, point));
+    assert!(app.error);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let explanation = app.status.clone();
+    let _ = app.update(Message::Graphics(Action::Path(PathAction::Node(3))));
+    let _ = app.update(Message::Graphics(Action::Path(PathAction::Insert)));
+    assert!(app.error);
+    assert_eq!(app.status, explanation);
+    assert!(explanation.contains("Rotate this edge-on projected path"));
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
