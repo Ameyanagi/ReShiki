@@ -4,9 +4,10 @@ Open **Import → Chemical names…**. Both directions are deterministic local
 operations: names and graphs are not sent to a service, and there is no network
 fallback. The earlier HTTP prototype in draft [PR #275](https://github.com/Ameyanagi/ReShiki/pull/275)
 is superseded; its screenshots remain [historical evidence](chemical-naming-visual-review.md).
-Local macOS rule, parser and worker tests and the actual
-[local desktop review](chemical-naming-local-visual-review.md) pass. The feature
-remains under review; required cross-platform CI is separate.
+Local rule/parser/worker checks, native CI on macOS/Linux/Windows and the actual
+[current-source desktop smoke](changes/local-chemical-naming.md) pass. The
+broader original [desktop review](chemical-naming-local-visual-review.md) retains
+its earlier exact source and app provenance. The feature remains under review.
 
 ## Name → editable structure
 
@@ -125,7 +126,8 @@ not a physical-memory allowance. The validated macOS host rejects a finite
 `RLIMIT_AS` request with EINVAL, so macOS uses no address-space cap. Unix leader RSS
 is sampled every 25 ms against 768 MiB for Java / 384 MiB for the native
 generator, so transient sampling overshoot is possible. A disappearing process
-record during exec/exit has at most four retries at a nominal 25 ms poll interval;
+record or Linux snapshot without a memory context during exec/exit has at most
+four retries at a nominal 25 ms poll interval;
 scheduling and per-poll work can add delay.
 Other measurement failures and measured excess fail immediately, even when a
 worker exits successfully just afterward.
@@ -148,12 +150,19 @@ policy and do not change global worker settings. Platform contracts are based on
 [Apple process-exit notifications](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/kqueue.2.html)
 and [Microsoft creation-time job membership](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute).
 
+On Windows, direct synchronous pipe reads distinguish an idle connected pipe
+from real EOF, including peer zero-byte writes; no-data polls preserve the
+response stream. Linux absent-`VmRSS` snapshots follow the bounded transient
+recheck, while malformed readings and measured excess remain immediate failures.
+See the [source corrections and actual platform regressions](changes/local-chemical-naming.md#corrected-process-and-admission-behavior).
+
 Only one Java operation and one native rule operation run at a time. A semaphore
 permit stays with the supervised blocking worker until it has killed/reaped and
 cleaned up, even when the UI future is cancelled. Missing runtime or any failure
 leaves the drawing unchanged and publishes no name. These limits are implemented
-for macOS/Linux/Windows. Runtime results currently cover macOS ARM64; Linux and
-Windows runtime execution remains pending in the required CI jobs.
+for macOS/Linux/Windows. Matching-host process tests pass for ARM64 and x64 on
+all three platforms; real local-Java naming passes on macOS ARM64, Linux x64
+and Windows x64. Other naming/runtime versions remain separate coverage.
 
 Payload pins/rebuild instructions are in [tools/opsin](../tools/opsin/README.md).
 [OPSIN and bundled dependency notices](../licenses/opsin/NOTICE) retain upstream
@@ -172,7 +181,7 @@ strict semantic rejection, missing-Java, cancellation/permit recovery and
 bounded output/pipe tests pass in the same local suite. Do not attribute the old
 HTTP desktop evidence to this local implementation.
 
-The locked native workspace suite passes 2,016 tests across 125 suites, with 99
+The original `aaa6f9b7` locked native workspace suite passes 2,016 tests across 125 suites, with 99
 explicit opt-in/live/reference tests ignored. Nine naming app state/history
 tests and two separately selected actual-renderer accessibility/scrolled Insert
 tests pass. The separate actual macOS desktop review verifies local ethanol and
@@ -183,7 +192,11 @@ optical-rotation rejection and fresh-process reopening. All 12 raw JPEGs and
 confirms signed-app network-denied CLI formulas/graphs and independent RDKit
 stereo reconstruction. GUI Cancel was not clicked; cancellation is tested in
 the compiled suite. RDKit and the evidence verifier are maintainer validation
-tools, not application dependencies.
+tools, not application dependencies. Those original desktop/build results
+retain their recorded source. The later `d9df6491` production source passes
+full required native CI and a separate fresh signed-app ethanol smoke; the
+[supplemental review](changes/local-chemical-naming.md) records the process
+corrections, scoped local checks, 574 compiler inputs and raw new evidence.
 
 ```sh
 cargo build --locked --no-default-features -p reshiki --bin reshiki
@@ -227,13 +240,22 @@ profile rather than Apple's installer launcher. Java 11 bytecode compatibility
 is checked; actual Java 11 runtime execution is not yet tested.
 Strict process-crate compilation/linting passes for macOS, Linux and Windows on
 ARM64 and x64; those cross-compiles do not establish other-platform runtime
-behavior. Required native CI completion remains pending. The earlier
+behavior. Required native CI on production source `d9df6491` completed with
+22 successful checks, three intentional skips and zero failures; the
+[compact frozen receipt](../tests/fixtures/chemical-naming/process-d9df6491/ci-native-summary.json)
+records real runtime banners, all three app helpers, the naming reference suites
+and all six matching-host process checks. Later documentation-only heads have
+their own CI status. The earlier
 [invalid-context run](https://github.com/Ameyanagi/ReShiki/actions/runs/37948361760)
 scheduled no native jobs; the subsequent
 [shortened Java-selector run](https://github.com/Ameyanagi/ReShiki/actions/runs/37951149210)
 stopped all three native hosts before application build/tests. These CI setup
 failures are retained separately from local application checks; both narrow
-workflow corrections preserve exact runtime/helper guards. Offline naming
+workflow corrections preserve exact runtime/helper guards. The subsequent
+[3706 runtime failures](https://github.com/Ameyanagi/ReShiki/actions/runs/37954198084)
+were actual admission/RSS/pipe failures after Java setup and app build; their
+frozen logs and controlled correction tests remain separate from the later
+passing production source. Offline naming
 tests use only embedded parser resources and local fixtures. Explicit network
 denial has been exercised for the current macOS naming, process and escaped-pipe
 suites using the macOS sandbox; it is not claimed for other CI operating systems.

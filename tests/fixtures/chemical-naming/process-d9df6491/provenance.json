@@ -1,0 +1,181 @@
+{
+  "source_commit": "d9df649129c5144cf304df7295dc573825dcbe49",
+  "signed_executable_sha256": "062b03f1d966e27301272a44cdbff243f002c2f59da1531dcd5d2f01f2b9dda5",
+  "scope": "Supplemental exact-current-source process, CI and desktop validation. Earlier aaa6/1c7d evidence remains separate and unchanged. All copied raw receipts/screenshots/native files retain original bytes. Manifest excludes itself, README and derived verification output.",
+  "files": [
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ethanol-fresh-reopened-ax.txt",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-fresh-reopened-ax.txt",
+      "bytes": 4223,
+      "sha256": "8e9c470c422118c6527196b7cacd6d279c3303cec98b32b647372bc8d2cb8dbd",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "docs/images/chemical-naming/process-d9df6491/ethanol-fresh-reopened.jpg",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-fresh-reopened.jpg",
+      "bytes": 307308,
+      "sha256": "a8770ff3447700c6b053e33a5517e45a488035bbe3df75a74870258c418f0fb1",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ethanol-fresh-reopened.rsk",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-fresh-reopened.rsk",
+      "bytes": 1681,
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ethanol-inserted.rsk",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-inserted.rsk",
+      "bytes": 1681,
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ethanol-local-generated-ax.txt",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-local-generated-ax.txt",
+      "bytes": 4578,
+      "sha256": "c628bf9e03a798ba1da339a69729427ea330bbdcd8a1bf15acc05d46cfd53afd",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "docs/images/chemical-naming/process-d9df6491/ethanol-local-generated.jpg",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-local-generated.jpg",
+      "bytes": 458133,
+      "sha256": "d71de16934c3fc34606789c714cc6c9d41440b8a8737afce1ef141c85208104c",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ethanol-local-preview-ax.txt",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-local-preview-ax.txt",
+      "bytes": 4518,
+      "sha256": "6d08ac50efe62e554d04309188b74ab45153b5ee67c4ae0d812f17dc9e7cbf69",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "docs/images/chemical-naming/process-d9df6491/ethanol-local-preview.jpg",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-local-preview.jpg",
+      "bytes": 337815,
+      "sha256": "2b1d17f6e70b99cf74e1b9e65c60aa1f236188164685e1c09e076f8f46f78a84",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ethanol-redo-ax.txt",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-redo-ax.txt",
+      "bytes": 4638,
+      "sha256": "17ef301194e64dc6365cdcb175fb093a36c0f6c9cc2dc5fdb515cddcd8e8d3c7",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ethanol-redo.rsk",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-redo.rsk",
+      "bytes": 1681,
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ethanol-undo-empty-ax.txt",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-undo-empty-ax.txt",
+      "bytes": 4667,
+      "sha256": "8299b261c5bf688f8f6192a5d5284e44999a00b400e31017c28552160be46331",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ethanol-undo-empty.rsk",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/ethanol-undo-empty.rsk",
+      "bytes": 214,
+      "sha256": "aede89f4a68a902161a5dba6eb93e4b3227c727c01997f89164df47a4f5c91a0",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/native-desktop-receipt.json",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/desktop/native-desktop-receipt.json",
+      "bytes": 4493,
+      "sha256": "84b566f96c8706e7f7104d235897cba2994b8d3a826fd678268963545bdfebbb",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/bundle-final-metadata.json",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/bundle-final-metadata.json",
+      "bytes": 5792,
+      "sha256": "49b767463c52c610c3169e7eebf58a2d205ce9ced8d6d981916a6adfac5eb069",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/own-compiler-fresh-proof.json",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/own-compiler-fresh-proof.json",
+      "bytes": 329661,
+      "sha256": "051c6fe98fb9a3c1ba487eaa7a7b4f3c920ff17199851f5f67416e40590f586f",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/opsin-license-byte-proof.json",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/opsin-license-byte-proof.json",
+      "bytes": 8856,
+      "sha256": "e99fc0951c3e025b1b8df8d7d1304284c687a42bb4245473fc2a9f23e1575553",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/signed-smoke-and-payload-proof.json",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/signed-smoke-and-payload-proof.json",
+      "bytes": 1024,
+      "sha256": "ea9c852d5283c2ce5c20f52489e4512f089c3a83992b3ea967e643e23c5df4ab",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/process-portability-clippy.json",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/process-portability-clippy.json",
+      "bytes": 2827,
+      "sha256": "79f7e4e5fa6dcc3fd48938a8326545e2fddbc135568229a57c156409fb9761a7",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/compiler-proof-first-count-assumption.json",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/compiler-proof-first-count-assumption.json",
+      "bytes": 422,
+      "sha256": "19b9747150f35e684afb1668bed6d78ee0c182e66d03ab307320b61530495d98",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/macos-process-tests.log",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/macos-process-tests.log",
+      "bytes": 1181,
+      "sha256": "96fc07fc03b5cf669e46aa762b6fa30f7d02e47a98b3633e47fccede16c8ece4",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/macos-naming-tests.log",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/macos-naming-tests.log",
+      "bytes": 4342,
+      "sha256": "d7ccd3392ccb25bf92a2fe3b4ac816050753fb343cf6ba3f4e720c02b17cbe38",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/macos-app-naming-tests.log",
+      "source_coordination_path": "local-naming-evidence/process-d9df6491/macos-app-naming-tests.log",
+      "bytes": 1729,
+      "sha256": "a4b5231b2d4198c5ca39c122aa44f4e6f8d32e50d9e699311a86328d47fcb8bc",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/admission-validation-summary.json",
+      "source_coordination_path": "local-naming-evidence/admission-d9df6491/validation-summary.json",
+      "bytes": 4773,
+      "sha256": "0ba8a99704468edf087db05ead7a80dc92c5b36c4e7e27c3a9efbd6de0e095bc",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/windows-readfile-independent-review.json",
+      "source_coordination_path": "naming-windows-readfile-independent-review.json",
+      "bytes": 6023,
+      "sha256": "41c317a4315f926b6fb5db571ef58452acb4aa8373089247bd3a1bd7ff1c3f3e",
+      "copy": "byte-identical original"
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/process-d9df6491/ci-native-summary.json",
+      "bytes": 23090,
+      "sha256": "76280652b94c69953d4feba85c5c3413100f2af66d63f14e5e375adf02a54e7c",
+      "copy": "derived compact summary; source receipt hashes retained"
+    }
+  ]
+}

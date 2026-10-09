@@ -1,0 +1,122 @@
+{
+  "recorded_utc": "2026-10-09T17:13:49.982472+00:00",
+  "source_commit": "d9df649129c5144cf304df7295dc573825dcbe49",
+  "source_worktree": "/Users/ryuichi/dev/ReShiki-worktrees/naming",
+  "source_clean": true,
+  "source_refresh_files": 1082,
+  "source_sha256": "178aac07d48d0e38d485f8a95e546448ded220b07ebeb75ef6c2d9288bd8089b",
+  "all_source_content_unchanged_after_refresh": true,
+  "app_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Local Naming Process Verified.app",
+  "raw_executable_sha256": "a7626b7d7a5ea1a9e32bcf8f671362c57b19debe3eb5bb7ee4293e1bb1836925",
+  "signed_executable_sha256": "062b03f1d966e27301272a44cdbff243f002c2f59da1531dcd5d2f01f2b9dda5",
+  "codesign_verify": "PASS deep strict",
+  "single_executable_and_no_python_payload": "PASS",
+  "license_aggregate_count": 5,
+  "all5_license_aggregate_bytes_unchanged_from_aaa_app": true,
+  "original_opsin_dependency_record_count": 39,
+  "all39_original_license_record_bytes_present_in_bundled_notices": true,
+  "old_aaa_app_unmodified_signed_sha256": "1c7d39e208a86f6cab7c4db9da9b48e2b28438f363cbe206f07a01b4ca6f61f1",
+  "no_LSEnvironment_global_runtime_or_GUI_changes": true,
+  "java_local": {
+    "executable": "/nix/store/vnycnlns50zkb0pns9rd7vhpv3m0fxc4-zulu-ca-jdk-21.0.8/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home/bin/java",
+    "actual_version": "Zulu21.0.8+9-LTS",
+    "test_override_explicit": true,
+    "worker_heap_MiB": 192,
+    "compatible_installed_runtime_required": "Java11+HotSpot; no auto-download or online fallback"
+  },
+  "compiler_scope": {
+    "command": "cargo build --locked --offline -p reshiki --bins --message-format=json (default features)",
+    "own_artifacts": 17,
+    "own_packages": 14,
+    "all_own_fresh_false": true,
+    "hashed_absolute_depfile_inputs": 574,
+    "no_other_worktree_inputs": true,
+    "scope_note": "Complete selected Mac application dependency graph. Native/Linux and native/Windows platform adapter crates are not Mac app dependencies; new reshiki-process FFI has separate strict6target checks and remote native runtime tests.",
+    "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/local-naming-evidence/process-d9df6491/own-compiler-fresh-proof.json",
+    "sha256": "051c6fe98fb9a3c1ba487eaa7a7b4f3c920ff17199851f5f67416e40590f586f"
+  },
+  "local_tests": {
+    "macos_process": {
+      "passed": 9,
+      "failed": 0,
+      "deny_network": true
+    },
+    "naming_lib": {
+      "passed": 22,
+      "failed": 0,
+      "deny_network": true,
+      "actual_forward_graph_refs": 14,
+      "actual_native_reverse_exact_roundtrip_refs": 66,
+      "scope": "Includes strict semantic rejection, independent rule expectations/permutation cases, exact identity canaries, cancellation/drop/pipe/output/resource fixtures"
+    },
+    "app_naming": {
+      "passed": 9,
+      "failed": 0,
+      "ignored": 2,
+      "ignore_scope": "Opt-in actual renderer tests unchanged; separately passed original revision and fresh Windows CI",
+      "deny_network": true
+    },
+    "strict_process_clippy": {
+      "passed_compile_targets": [
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+        "aarch64-pc-windows-msvc",
+        "x86_64-pc-windows-msvc"
+      ],
+      "all_targets": true,
+      "warnings_denied": true
+    },
+    "cargo_fmt_all_check": "PASS"
+  },
+  "signed_smoke": {
+    "deny_network": true,
+    "source_commit": "d9df649129c5144cf304df7295dc573825dcbe49",
+    "app_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Local Naming Process Verified.app",
+    "signed_executable_sha256": "062b03f1d966e27301272a44cdbff243f002c2f59da1531dcd5d2f01f2b9dda5",
+    "java_overrides_unset": true,
+    "PATH": "/usr/bin:/bin",
+    "native_reverse_CCO": "ethan-1-ol",
+    "native_chemistry_CCO_formula": "C2H6O",
+    "engine_analysis": {
+      "smiles": "CCO",
+      "formula": "C2H6O",
+      "mass": 46.069,
+      "exact_mass": 46.041864812,
+      "logp": -0.0014000000000000123,
+      "tpsa": 20.23,
+      "donors": 1,
+      "acceptors": 1,
+      "rings": 0,
+      "unpaired_electrons": 0,
+      "inchi": "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3",
+      "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
+    },
+    "license_count": 5,
+    "all_license_bytes_unchanged_from_aaa_app": true,
+    "seconds": 1.86,
+    "scope": "First-argument signed native worker and native chemistry dispatch; no GUI and no Java parsing invoked by this smoke"
+  },
+  "remote_CI": {
+    "reviewer": "/root/nmr_ci",
+    "exact_head": "d9df649129c5144cf304df7295dc573825dcbe49",
+    "terminal_checks": {
+      "success": 22,
+      "skipped": 3,
+      "failure": 0
+    },
+    "actual_java_banner_all3": "Temurin21.0.11+10-LTS",
+    "setup_selector": "21.0.11+10.0.LTS",
+    "real_forward_and_reverse_reference_suites_all3": "PASS",
+    "new_process_native_runtime_jobs_all6": "PASS",
+    "windows_explicit_renderer_tests": "PASS",
+    "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/ci-audit-followup-20261009T162819Z-pr275.json",
+    "receipt_sha256": "d1fbceb0a6cc6cc5023be22fa9d23773d747117dc0d38b3f9bbb4e707ccc24a2",
+    "distinction": "Remote runtime validation is independently inspected by nmr_ci, separate from this local Mac suite and root desktop acceptance"
+  },
+  "failed_receipts_preserved": "Original3706 Mac admission/Linux no-mm/Windows invalid structured output logs retained; source counterexamples are not claimed as instrumented CI interleavings. First provenance count-only assumption retained separately.",
+  "pending": "Root native desktop smoke on exact new signed app; public docs/evidence update afterward; root owns push/PR",
+  "cargo_lease_returned_to_root": true,
+  "no_further_compiler_work_planned": true
+}

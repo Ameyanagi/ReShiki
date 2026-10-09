@@ -1,0 +1,496 @@
+{
+  "scope": "Derived compact publication record; original private read-only CI receipts and full logs preserved, no new queries or reruns. CI does not substitute for the separately copied native desktop receipt.",
+  "source_commit": "d9df649129c5144cf304df7295dc573825dcbe49",
+  "original_current_receipt_sha256": "d1fbceb0a6cc6cc5023be22fa9d23773d747117dc0d38b3f9bbb4e707ccc24a2",
+  "original_current_receipt_bytes": 4484815,
+  "frozen_at_utc": "2026-10-09T17:09:22.117220+00:00",
+  "terminal": true,
+  "totals": {
+    "SUCCESS": 22,
+    "SKIPPED": 3
+  },
+  "check_rollup": [
+    {
+      "name": "scope",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917259478"
+    },
+    {
+      "name": "Contribution license agreement",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157416/job/113917259399"
+    },
+    {
+      "name": "Contribution license agreement",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959324689/job/113917827858"
+    },
+    {
+      "name": "build",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157352/job/113917260409"
+    },
+    {
+      "name": "Real gnome Wayland clipboard",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157281/job/113917260231"
+    },
+    {
+      "name": "Real sway Wayland clipboard",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157281/job/113917259939"
+    },
+    {
+      "name": "deploy",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157352/job/113917485817"
+    },
+    {
+      "name": "web",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917260130"
+    },
+    {
+      "name": "Office add-in JavaScript regressions",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917259729"
+    },
+    {
+      "name": "capture-aromatic",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917262454"
+    },
+    {
+      "name": "python (macos-14, 3.12)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377602"
+    },
+    {
+      "name": "python (windows-2022, cpython-3.12-windows-x86_64-none)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377629"
+    },
+    {
+      "name": "python (ubuntu-22.04, 3.12)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377671"
+    },
+    {
+      "name": "LibreOffice UNO regressions",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377701"
+    },
+    {
+      "name": "Linux X11 clipboard regressions",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377559"
+    },
+    {
+      "name": "rust (macos-14, aarch64-apple-darwin, 3.12)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377806"
+    },
+    {
+      "name": "rust (windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12-windows-x86_64-none)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377578"
+    },
+    {
+      "name": "rust (ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377592"
+    },
+    {
+      "name": "Rust geometry (aarch64-apple-darwin)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377738"
+    },
+    {
+      "name": "Rust geometry (x86_64-apple-darwin)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377759"
+    },
+    {
+      "name": "Rust geometry (x86_64-pc-windows-msvc)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377748"
+    },
+    {
+      "name": "Rust geometry (aarch64-pc-windows-msvc)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377909"
+    },
+    {
+      "name": "Rust geometry (x86_64-unknown-linux-gnu)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377833"
+    },
+    {
+      "name": "Rust geometry (aarch64-unknown-linux-gnu)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377788"
+    },
+    {
+      "name": "reference",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917380135"
+    }
+  ],
+  "required_naming_hosts": [
+    {
+      "job_id": 113917377806,
+      "name": "rust (macos-14, aarch64-apple-darwin, 3.12)",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377806",
+      "completed_at": "2026-10-09T16:49:37Z",
+      "java_banner": [
+        "OpenJDK Runtime Environment Temurin-21.0.11+10 (build 21.0.11+10-LTS)",
+        "OpenJDK 64-Bit Server VM Temurin-21.0.11+10 (build 21.0.11+10-LTS, mixed mode, sharing)"
+      ],
+      "mandatory_exact_app_build": "success",
+      "helper_paths": [
+        "/Users/runner/work/ReShiki/ReShiki/target/debug/reshiki"
+      ],
+      "unique_naming_tests_passed": 31,
+      "workspace_opt_in_renderer_ignored": 2,
+      "real_OPSIN_graph_stereo_case_count_in_test": 14,
+      "native_worker_reverse_local_OPSIN_case_count_in_test": 66,
+      "real_naming_and_capacity_tests": [
+        {
+          "name": "naming::reverse::tests::independent_decoder_canary_catches_connectivity_stereo_isotope_charge_and_tautomer_loss",
+          "outcome": "ok"
+        },
+        {
+          "name": "naming::local::tests::pinned_local_engine_matches_independent_connected_graphs_and_stereo",
+          "outcome": "ok"
+        },
+        {
+          "name": "naming::reverse::tests::native_worker_then_local_opsin_verifies_supported_names",
+          "outcome": "ok"
+        },
+        {
+          "name": "busy_answers_only_calls_beyond_the_executor_queue",
+          "outcome": "ok"
+        }
+      ],
+      "checkout_merge_commits": [
+        "86395fa5c6532e3cc98325e4b14e81d7cc3cab89"
+      ],
+      "full_log_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/ci-audit-followup-20261009T162819Z-pr275-job113917377806-full.log",
+      "full_log_sha256": "e3a77f226dcbb29a569d63fe57b77a2e9a75bb874f6af513f1a108c1d20a7cd6"
+    },
+    {
+      "job_id": 113917377592,
+      "name": "rust (ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12)",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377592",
+      "completed_at": "2026-10-09T16:51:32Z",
+      "java_banner": [
+        "OpenJDK Runtime Environment Temurin-21.0.11+10 (build 21.0.11+10-LTS)",
+        "OpenJDK 64-Bit Server VM Temurin-21.0.11+10 (build 21.0.11+10-LTS, mixed mode, sharing)"
+      ],
+      "mandatory_exact_app_build": "success",
+      "helper_paths": [
+        "/home/runner/work/ReShiki/ReShiki/target/debug/reshiki"
+      ],
+      "unique_naming_tests_passed": 31,
+      "workspace_opt_in_renderer_ignored": 2,
+      "real_OPSIN_graph_stereo_case_count_in_test": 14,
+      "native_worker_reverse_local_OPSIN_case_count_in_test": 66,
+      "real_naming_and_capacity_tests": [
+        {
+          "name": "naming::reverse::tests::independent_decoder_canary_catches_connectivity_stereo_isotope_charge_and_tautomer_loss",
+          "outcome": "ok"
+        },
+        {
+          "name": "naming::local::tests::pinned_local_engine_matches_independent_connected_graphs_and_stereo",
+          "outcome": "ok"
+        },
+        {
+          "name": "naming::reverse::tests::native_worker_then_local_opsin_verifies_supported_names",
+          "outcome": "ok"
+        },
+        {
+          "name": "busy_answers_only_calls_beyond_the_executor_queue",
+          "outcome": "ok"
+        }
+      ],
+      "checkout_merge_commits": [
+        "86395fa5c6532e3cc98325e4b14e81d7cc3cab89"
+      ],
+      "full_log_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/ci-audit-followup-20261009T162819Z-pr275-job113917377592-full.log",
+      "full_log_sha256": "8ab8d87b90fa40c21a1fcc5b75649a996bfb6b4d6fa99875dee7b8822d4e9054",
+      "Linux_process_regressions": [
+        {
+          "name": "unix::ownership_tests::linux_resident_snapshot_distinguishes_no_mm_from_invalid_values",
+          "outcome": "ok"
+        },
+        {
+          "name": "unix::ownership_tests::linux_unreaped_exit_is_a_transient_sample_before_owned_cleanup",
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "job_id": 113917377578,
+      "name": "rust (windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12-windows-x86_64-none)",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377578",
+      "completed_at": "2026-10-09T17:07:03Z",
+      "java_banner": [
+        "OpenJDK Runtime Environment Temurin-21.0.11+10 (build 21.0.11+10-LTS)",
+        "OpenJDK 64-Bit Server VM Temurin-21.0.11+10 (build 21.0.11+10-LTS, mixed mode, sharing)"
+      ],
+      "mandatory_exact_app_build": "success",
+      "helper_paths": [
+        "D:\\a\\ReShiki\\ReShiki/target/debug/reshiki.exe"
+      ],
+      "unique_naming_tests_passed": 28,
+      "workspace_opt_in_renderer_ignored": 2,
+      "real_OPSIN_graph_stereo_case_count_in_test": 14,
+      "native_worker_reverse_local_OPSIN_case_count_in_test": 66,
+      "real_naming_and_capacity_tests": [
+        {
+          "name": "naming::reverse::tests::independent_decoder_canary_catches_connectivity_stereo_isotope_charge_and_tautomer_loss",
+          "outcome": "ok"
+        },
+        {
+          "name": "naming::local::tests::pinned_local_engine_matches_independent_connected_graphs_and_stereo",
+          "outcome": "ok"
+        },
+        {
+          "name": "naming::reverse::tests::native_worker_then_local_opsin_verifies_supported_names",
+          "outcome": "ok"
+        },
+        {
+          "name": "busy_answers_only_calls_beyond_the_executor_queue",
+          "outcome": "ok"
+        }
+      ],
+      "checkout_merge_commits": [
+        "86395fa5c6532e3cc98325e4b14e81d7cc3cab89"
+      ],
+      "full_log_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/ci-audit-followup-20261009T162819Z-pr275-job113917377578-full.log",
+      "full_log_sha256": "0a2848f557dfcc465636f4d6300d2688f67670b3328066afc15be3a5d76afb1c",
+      "explicit_Windows_process_and_renderer_tests": [
+        {
+          "name": "windows::quoting_tests::nonblocking_pipe_keeps_empty_connected_reads_open_between_chunks",
+          "outcome": "ok"
+        },
+        {
+          "name": "tests::actual_child_output_survives_empty_intervals_between_gated_chunks",
+          "outcome": "ok"
+        },
+        {
+          "name": "app::naming::tests::controls_publish_named_native_actions_and_editable_values",
+          "outcome": "ok"
+        },
+        {
+          "name": "app::naming::tests::scrolled_insert_click_reaches_button_instead_of_preview",
+          "outcome": "ok"
+        }
+      ],
+      "note": "Both renderer tests actually passed in the explicit ignored-test step; their later workspace ignored entries do not mean they were unexecuted."
+    }
+  ],
+  "native_process_hosts": [
+    {
+      "name": "Rust geometry (aarch64-unknown-linux-gnu)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377788",
+      "full_log_sha256": "f2fb2bf99cdf52556607c7693737b0ec83144eaba056c47b67e507b9a2ac3b5c",
+      "test_results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 55.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "focused_process_tests": [
+        {
+          "name": "unix::ownership_tests::linux_resident_snapshot_distinguishes_no_mm_from_invalid_values",
+          "outcome": "ok"
+        },
+        {
+          "name": "unix::ownership_tests::linux_unreaped_exit_is_a_transient_sample_before_owned_cleanup",
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Rust geometry (x86_64-unknown-linux-gnu)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377833",
+      "full_log_sha256": "90010e09b53f0c6d1f0a4f008e3d2c865f17ab1366a37714875a7a860d8e7190",
+      "test_results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.62s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "focused_process_tests": [
+        {
+          "name": "unix::ownership_tests::linux_resident_snapshot_distinguishes_no_mm_from_invalid_values",
+          "outcome": "ok"
+        },
+        {
+          "name": "unix::ownership_tests::linux_unreaped_exit_is_a_transient_sample_before_owned_cleanup",
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Rust geometry (aarch64-apple-darwin)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377738",
+      "full_log_sha256": "2b89db1f45147b8a8caa0b25ee549d13c49d4b545f0640166fcf03166b66977d",
+      "test_results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.17s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 60.47s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "focused_process_tests": [
+        {
+          "name": "unix::ownership_tests::linux_resident_snapshot_distinguishes_no_mm_from_invalid_values",
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Rust geometry (aarch64-pc-windows-msvc)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377909",
+      "full_log_sha256": "c1a033c9a64f8cc06bded62aeced10bf3a3e8b336e4aba594e8b46a395bbc338",
+      "test_results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 55.36s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "focused_process_tests": [
+        {
+          "name": "windows::quoting_tests::nonblocking_pipe_keeps_empty_connected_reads_open_between_chunks",
+          "outcome": "ok"
+        },
+        {
+          "name": "tests::actual_child_output_survives_empty_intervals_between_gated_chunks",
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Rust geometry (x86_64-pc-windows-msvc)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377748",
+      "full_log_sha256": "7ec7b1d0cf9e24fc1427330a910a114539318e394e589608336da998165fd3a0",
+      "test_results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 54.64s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "focused_process_tests": [
+        {
+          "name": "windows::quoting_tests::nonblocking_pipe_keeps_empty_connected_reads_open_between_chunks",
+          "outcome": "ok"
+        },
+        {
+          "name": "tests::actual_child_output_survives_empty_intervals_between_gated_chunks",
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "name": "Rust geometry (x86_64-apple-darwin)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157305/job/113917377759",
+      "full_log_sha256": "ac7d21c5bde54e32f02d32541a1b6bfb8d9590e3774210e0afa3e3591cea319e",
+      "test_results": [
+        "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.90s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 70.87s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "focused_process_tests": [
+        {
+          "name": "unix::ownership_tests::linux_resident_snapshot_distinguishes_no_mm_from_invalid_values",
+          "outcome": "ok"
+        }
+      ]
+    }
+  ],
+  "real_compositors": [
+    {
+      "job_id": 113917259939,
+      "name": "Real sway Wayland clipboard",
+      "result": [
+        "sway: 11 real compositor checks passed"
+      ],
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157281/job/113917259939"
+    },
+    {
+      "job_id": 113917260231,
+      "name": "Real gnome Wayland clipboard",
+      "result": [
+        "gnome: 11 real compositor checks passed"
+      ],
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37959157281/job/113917260231"
+    }
+  ],
+  "previous_failure_receipt_sha256": "4f7ea3f31277d0ccde5cf6272f6346f2b8b47958723a4750f0ce0d31064a6d7f",
+  "previous_source_commit": "3706ead6ab1254a39fc86100d8dbab8d3780f03b",
+  "previous_summary": {
+    "final_check_totals": {
+      "SUCCESS": 18,
+      "SKIPPED": 3,
+      "FAILURE": 3
+    },
+    "native_overall": "macOSFAIL/WindowsFAIL/UbuntuFAIL; distinct actual-test failures, allJava setup and realapp builds passed",
+    "java_version_verified_all3": "Temurin21.0.11+10-LTS actual runtime banners",
+    "macOS": "31naming tests pass,2renderer tests ignored; later agent API admission integration test fails initial-capacity no-busy assertion",
+    "Ubuntu": "20naming tests pass,2realJava naming tests fail missingVmRSS resource measurement;140totalpassed2failed6ignored lib",
+    "Windows": "2explicit naming renderer tests pass;16totalnaming tests pass,3realnaming library tests fail structuredoutput decode;127totalpassed3failed6ignored lib",
+    "wayland": "Both GNOME/Sway realruntime stepsSUCCESS",
+    "other": "Web,Pythonall3,all6geometry/processjobs,documentation,CLApassed. Intentionalskip contexts3.",
+    "followup": "Root/chemical_naming received bounded source diagnostics; no Cargo/edit/rerun bywatcher; no readiness/fullCIpass claim."
+  },
+  "preserved_previous_native_failure_logs": [
+    {
+      "job_id": 113900766264,
+      "job_name": "rust (macos-14, aarch64-apple-darwin, 3.12)",
+      "job_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37954198084/job/113900766264",
+      "head_sha": "3706ead6ab1254a39fc86100d8dbab8d3780f03b",
+      "conclusion": "failure",
+      "full_download_sha256": "14f44fb13a58eba685f810e59c73e04f6284c9d0e72125c38b756a78b7fa8d6b",
+      "excerpt_sha256": "24a7a7980640b2aba06cb1ac3c220d9fa8c4f4ff130adb2c53e6df3eb5e9a5c9"
+    },
+    {
+      "job_id": 113900766329,
+      "job_name": "rust (ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12)",
+      "job_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37954198084/job/113900766329",
+      "head_sha": "3706ead6ab1254a39fc86100d8dbab8d3780f03b",
+      "conclusion": "failure",
+      "full_download_sha256": "301f153db087cd1a01837c33cfaab1ed2b1dc5494c51e97f47f9ac212933d4c7",
+      "excerpt_sha256": "1e1254d29d71f09cf09d6b40436dbd4e295636df3bfcf285bb3c6604c18b4064"
+    },
+    {
+      "job_id": 113900766149,
+      "job_name": "rust (windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12-windows-x86_64-none)",
+      "job_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37954198084/job/113900766149",
+      "head_sha": "3706ead6ab1254a39fc86100d8dbab8d3780f03b",
+      "conclusion": "failure",
+      "full_download_sha256": "9cff3d7251cd9b3bfa7d4b16620a60a6fefd73818dc638b95bdac4f96e84984b",
+      "excerpt_sha256": "2d26613988a71a65beb445d54f74e5fd375022f51b171146df8bec3fc05a2b0a"
+    }
+  ],
+  "inference_boundary": "The old Linux process state and Windows response bytes were not instrumented. Proven source counterexamples and controlled regressions explain legal failures; fresh CI passes do not retroactively observe the old interleaving. No tests were skipped/replaced and original real-parser/decoder/capacity assertions remain."
+}

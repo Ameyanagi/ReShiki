@@ -1,5 +1,11 @@
 # Local chemical naming desktop review
 
+This page preserves the broader original `aaa6f9b7` / signed `1c7d…` desktop
+review. The later process corrections, completed cross-platform CI and fresh
+signed `062b…` desktop smoke are documented in the
+[current-source supplemental review](changes/local-chemical-naming.md).
+Earlier captures and build receipts are not relabeled as the corrected app.
+
 Both naming directions run locally: embedded OPSIN 2.9.0 parses names, and
 original Rust rules generate names within the declared organic subset, followed
 by exact local OPSIN reconstruction. Java 11+ HotSpot is an installed prerequisite.
@@ -137,8 +143,9 @@ strict rejection, six-target process compilation and the full workspace suite
 are recorded in the [guide](chemical-naming.md#reproducible-validation).
 The macOS naming/process checks were run with networking explicitly denied.
 Actual desktop interaction verifies the local UI; it does not replace the
-network-denied tests or establish other-platform runtime behavior. Fresh remote
-Java CI remains a separate requirement, including retained failed setup receipts.
+network-denied tests or establish other-platform runtime behavior. The later
+[current-source review](changes/local-chemical-naming.md) records completed
+native Java CI, retained earlier failures and its separate fresh desktop smoke.
 
 Release caption: Parse supported chemical names into editable structures and
 generate local systematic names for supported organic graphs, with specified

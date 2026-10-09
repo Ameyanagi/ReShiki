@@ -1,0 +1,135 @@
+{
+  "status": "PASS_ADMISSION_INVARIANTS",
+  "head": "d9df649129c5144cf304df7295dc573825dcbe49",
+  "created_utc": "2026-10-09T16:48:51.600008+00:00",
+  "old_gate_expected_failure": {
+    "exit": 101,
+    "log_sha256": "56b6b85449b469e4cef1534dd8f1992c79de7e37847ef20a4cf471314ed5cc15",
+    "diagnostic": "second Err(Busy), occupied=(1,1,1,0); all parked workers released and executor idle before assertion"
+  },
+  "candidate_gate_regression_and_executor_tests": {
+    "passed": 20,
+    "failed": 0,
+    "ignored": 0,
+    "gap_snapshot": "entries=live=waiting=2, available_permits=0; third Busy; both admitted calls finish and registry idle"
+  },
+  "unchanged_runtime_integration": {
+    "passed": 6,
+    "failed": 0,
+    "ignored": 0,
+    "filtered_out": 0,
+    "initial_10_call_capacity_assertion_passed": true,
+    "source_sha256": "aacf9c4597888a893a0bcd8460a19cac8825293775253fd0d32a75bc0fd2ebf7",
+    "byte_identical_to_51fa_base": true,
+    "outer_test_threads": 1,
+    "in_server_concurrency_and_all_source_assertions_unchanged": true
+  },
+  "strict_all_target_all_feature_agent_Clippy": "PASS -D warnings",
+  "agent_format": "PASS",
+  "source_input_count": 1082,
+  "source_aggregate_sha256": "866165a5b2dc29cd920d6190d8ee9f7ba6c9e21b044ae162b0feab8d66b3f65d",
+  "source_aggregate_algorithm": "SHA256(JSON(sorted(path, SHA256(bytes)), separators=(comma,colon)))",
+  "owned_files_final_byte_exact_to_HEAD": {
+    "crates/agent/src/ops/exec.rs": "757fe47669d85f9752f79d497374fc17277bee8b568d10ffc3e22b06197b3837",
+    "crates/agent/src/ops/exec/tests.rs": "dddd9881e273ebbd5306ffcb6bd784b4a581e7217a0479eeefd80d4e4a2d625b"
+  },
+  "all_sources_and_Cargo_lock_restored_unchanged": true,
+  "git_tracked_clean": true,
+  "compiled_runtime_application": {
+    "path": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+    "bytes": 224223704,
+    "sha256": "32349346de2048ef95df4ada9a7f904ebb0669f721161addb10b5aaf3843e7f9",
+    "provenance": "18 own compiler artifacts fresh:false, including root binary, from absolute naming worktree paths; runtime test uses CARGO_BIN_EXE_reshiki"
+  },
+  "stages": {
+    "candidate-executor-tests": {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "reshiki-agent",
+        "--lib",
+        "--locked",
+        "--offline",
+        "--no-default-features",
+        "--message-format=json",
+        "ops::exec::tests"
+      ],
+      "exit": 0,
+      "seconds": 96.629,
+      "result_lines": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 18s",
+        "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.02s"
+      ],
+      "log_sha256": "a4ca62254b703d32f00a4067e1a26526a6985d63c63f891815d7fe0ffe365921",
+      "own_compiler_artifacts": 10,
+      "all_own_artifacts_fresh_false": true
+    },
+    "candidate-runtime-integration": {
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--no-default-features",
+        "--message-format=json",
+        "--test",
+        "agent_api_runtime",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "seconds": 186.892,
+      "result_lines": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 37s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.20s"
+      ],
+      "log_sha256": "08e3b174f78e626aaebfd1d8ec391e87593021ca067ef9b3ab31cf074097d24a",
+      "own_compiler_artifacts": 18,
+      "all_own_artifacts_fresh_false": true
+    },
+    "candidate-agent-clippy": {
+      "argv": [
+        "cargo",
+        "clippy",
+        "-p",
+        "reshiki-agent",
+        "--all-targets",
+        "--all-features",
+        "--locked",
+        "--offline",
+        "--message-format=json",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "seconds": 39.307,
+      "result_lines": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 39.15s"
+      ],
+      "log_sha256": "a976277ceb49c357c0ae37b8a56a122332716ccc4777237d7cab64e18df73070",
+      "own_compiler_artifacts": 13,
+      "all_own_artifacts_fresh_false": true
+    },
+    "candidate-agent-format": {
+      "argv": [
+        "cargo",
+        "fmt",
+        "-p",
+        "reshiki-agent",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.298,
+      "result_lines": [],
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "own_compiler_artifacts": 0,
+      "all_own_artifacts_fresh_false": true
+    }
+  },
+  "remaining_Cargo_rustc_Clippy_rustfmt_processes": [],
+  "exclusive_Cargo_lease": "RETURNED TO ROOT after checks",
+  "no_GUI_push_commit_or_unrelated_source_edits": true
+}

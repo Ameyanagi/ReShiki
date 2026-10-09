@@ -1,0 +1,28 @@
+{
+  "deny_network": true,
+  "source_commit": "d9df649129c5144cf304df7295dc573825dcbe49",
+  "app_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Local Naming Process Verified.app",
+  "signed_executable_sha256": "062b03f1d966e27301272a44cdbff243f002c2f59da1531dcd5d2f01f2b9dda5",
+  "java_overrides_unset": true,
+  "PATH": "/usr/bin:/bin",
+  "native_reverse_CCO": "ethan-1-ol",
+  "native_chemistry_CCO_formula": "C2H6O",
+  "engine_analysis": {
+    "smiles": "CCO",
+    "formula": "C2H6O",
+    "mass": 46.069,
+    "exact_mass": 46.041864812,
+    "logp": -0.0014000000000000123,
+    "tpsa": 20.23,
+    "donors": 1,
+    "acceptors": 1,
+    "rings": 0,
+    "unpaired_electrons": 0,
+    "inchi": "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3",
+    "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
+  },
+  "license_count": 5,
+  "all_license_bytes_unchanged_from_aaa_app": true,
+  "seconds": 1.86,
+  "scope": "First-argument signed native worker and native chemistry dispatch; no GUI and no Java parsing invoked by this smoke"
+}

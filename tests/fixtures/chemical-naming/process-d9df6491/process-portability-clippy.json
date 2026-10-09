@@ -1,0 +1,122 @@
+[
+  {
+    "target": "aarch64-apple-darwin",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--offline",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "aarch64-apple-darwin",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "seconds": 3.34,
+    "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/local-naming-evidence/process-d9df6491/clippy-aarch64-apple-darwin.log"
+  },
+  {
+    "target": "x86_64-apple-darwin",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--offline",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "x86_64-apple-darwin",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "seconds": 6.65,
+    "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/local-naming-evidence/process-d9df6491/clippy-x86_64-apple-darwin.log"
+  },
+  {
+    "target": "aarch64-unknown-linux-gnu",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--offline",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "aarch64-unknown-linux-gnu",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "seconds": 6.65,
+    "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/local-naming-evidence/process-d9df6491/clippy-aarch64-unknown-linux-gnu.log"
+  },
+  {
+    "target": "x86_64-unknown-linux-gnu",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--offline",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "seconds": 6.68,
+    "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/local-naming-evidence/process-d9df6491/clippy-x86_64-unknown-linux-gnu.log"
+  },
+  {
+    "target": "aarch64-pc-windows-msvc",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--offline",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "aarch64-pc-windows-msvc",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "seconds": 28.3,
+    "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/local-naming-evidence/process-d9df6491/clippy-aarch64-pc-windows-msvc.log"
+  },
+  {
+    "target": "x86_64-pc-windows-msvc",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--offline",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "x86_64-pc-windows-msvc",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "seconds": 16.58,
+    "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/local-naming-evidence/process-d9df6491/clippy-x86_64-pc-windows-msvc.log"
+  }
+]
