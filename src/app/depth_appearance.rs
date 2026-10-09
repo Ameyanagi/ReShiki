@@ -51,7 +51,7 @@ impl App {
                 .iter()
                 .any(|b| b.projection && ids.contains(&b.a) && ids.contains(&b.b))
             || self.tab.doc.depth_appearance.iter().any(|scope| {
-                scope.rear_opacity < 1. && scope.atoms.iter().any(|id| ids.contains(id))
+                scope.has_rear_opacity() && scope.atoms.iter().any(|id| ids.contains(id))
             })
     }
 
@@ -76,7 +76,10 @@ impl App {
         };
         let mut adjacent: HashMap<u64, Vec<u64>> = HashMap::new();
         for bond in &document.bonds {
-            if matches!(bond.order, 1..=4) && real.contains(&bond.a) && real.contains(&bond.b) {
+            if matches!(bond.order, 1..=4 | 6 | 7)
+                && real.contains(&bond.a)
+                && real.contains(&bond.b)
+            {
                 adjacent.entry(bond.a).or_default().push(bond.b);
                 adjacent.entry(bond.b).or_default().push(bond.a);
             }

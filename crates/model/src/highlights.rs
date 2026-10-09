@@ -378,10 +378,24 @@ pub(crate) fn primitives_with_opacity(
         }
     }
     if !opacity.is_empty() {
-        for (key, commands) in atoms {
-            bonds.entry(key).or_default().extend(commands);
+        // Batch translucent rear paint to avoid doubling identical endpoint
+        // halos. Keep opaque front atoms above opaque bond halos across colors,
+        // as in the legacy scene, instead of globally sorting their colors.
+        let mut rear: BTreeMap<_, Vec<_>> = BTreeMap::new();
+        for groups in [&mut bonds, &mut atoms] {
+            groups.retain(|key, commands| {
+                if key.1 == 1_f32.to_bits() {
+                    true
+                } else {
+                    rear.entry(*key).or_default().append(commands);
+                    false
+                }
+            });
         }
-        opacity_paths(bonds).collect()
+        opacity_paths(rear)
+            .chain(opacity_paths(bonds))
+            .chain(opacity_paths(atoms))
+            .collect()
     } else {
         opacity_paths(bonds).chain(opacity_paths(atoms)).collect()
     }

@@ -9,6 +9,8 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
     let mut document = source.clone();
     for scope in &mut document.depth_appearance {
         scope.rear_opacity = 1.;
+        scope.rear_overrides.clear();
+        scope.rear_weights.clear();
     }
     let mut charges = 0;
     let mut variables = 0;

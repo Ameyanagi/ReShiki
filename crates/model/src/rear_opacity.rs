@@ -1,4 +1,4 @@
-//! Rear-half transparency, using the same component-local depth as RGB paint.
+//! Rear-half transparency, using covalent-molecule depth independently of RGB.
 //! Positive Z is toward the viewer. Normalized rear distance > 0.5 is behind
 //! the component's midplane; points on that plane remain front/opaque.
 use crate::{
@@ -14,7 +14,7 @@ pub const EXPORT_NOTICE: &str = "This chemical format does not retain rear opaci
 pub fn present(doc: &Document) -> bool {
     doc.depth_appearance
         .iter()
-        .any(|scope| scope.rear_opacity < 1.)
+        .any(crate::depth_appearance::Scope::has_rear_opacity)
 }
 
 #[derive(Clone, Copy)]
@@ -30,18 +30,14 @@ pub struct Paint {
 impl Paint {
     pub fn new(doc: &Document) -> Self {
         let mut nodes = BTreeMap::new();
-        for scope in doc.depth_appearance.iter().filter(|s| s.rear_opacity < 1.) {
-            let weights = if scope.automatic {
-                crate::depth_appearance::automatic_weights(doc, &scope.atoms)
-            } else {
-                scope.weights.clone()
-            };
+        for scope in doc.depth_appearance.iter().filter(|s| s.has_rear_opacity()) {
+            let weights = crate::depth_appearance::effective_rear_weights(doc, scope);
             for (id, weight) in weights {
                 nodes.insert(
                     id,
                     Node {
                         weight: weight.clamp(0., 1.),
-                        opacity: scope.rear_opacity.clamp(0., 1.),
+                        opacity: scope.rear_opacity_for(id).clamp(0., 1.),
                     },
                 );
             }
@@ -61,6 +57,11 @@ impl Paint {
                     .fold(1., f32::min);
                 nodes.insert(atom.id, Node { weight, opacity });
             }
+        }
+        // Flat drawings have no rear side. Preserve the complete legacy scene
+        // path, including highlight batching and layer order, in that case.
+        if nodes.values().all(|node| node.weight == 0.) {
+            nodes.clear();
         }
         Self { nodes }
     }

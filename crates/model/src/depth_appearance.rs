@@ -24,6 +24,13 @@ pub struct Scope {
     /// True alpha of the rear half. One preserves the existing opaque drawing.
     #[serde(default = "opaque", skip_serializing_if = "is_opaque")]
     pub rear_opacity: f32,
+    /// Independent covalent-molecule alpha inside a legacy RGB owner. Keeping
+    /// its atom set intact preserves live RGB normalization across contacts.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub rear_overrides: BTreeMap<u64, f32>,
+    /// Frozen covalent rear classification, independent of RGB fade weights.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub rear_weights: BTreeMap<u64, f32>,
     /// Normalized rear distance: zero is the front, one is the rear.
     pub weights: BTreeMap<u64, f32>,
     /// Explicit normalized paint overrides. Zero keeps the unmodified base ink.
@@ -35,6 +42,17 @@ fn opaque() -> f32 {
 }
 fn is_opaque(value: &f32) -> bool {
     *value == 1.
+}
+impl Scope {
+    pub fn rear_opacity_for(&self, id: u64) -> f32 {
+        self.rear_overrides
+            .get(&id)
+            .copied()
+            .unwrap_or(self.rear_opacity)
+    }
+    pub fn has_rear_opacity(&self) -> bool {
+        self.atoms.iter().any(|id| self.rear_opacity_for(*id) < 1.)
+    }
 }
 
 fn components(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
@@ -50,7 +68,7 @@ fn component_groups(doc: &Document, ids: &[u64], covalent_only: bool) -> Vec<Vec
     let mut remaining: HashSet<_> = ids.iter().copied().filter(|id| real.contains(id)).collect();
     let mut adjacent: HashMap<u64, Vec<u64>> = HashMap::new();
     for bond in &doc.bonds {
-        if (!covalent_only || matches!(bond.order, 1..=4))
+        if (!covalent_only || matches!(bond.order, 1..=4 | 6 | 7))
             && remaining.contains(&bond.a)
             && remaining.contains(&bond.b)
         {
@@ -75,9 +93,46 @@ fn component_groups(doc: &Document, ids: &[u64], covalent_only: bool) -> Vec<Vec
 }
 
 pub(crate) fn automatic_weights(doc: &Document, ids: &[u64]) -> BTreeMap<u64, f32> {
+    weights_for_groups(doc, components(doc, ids))
+}
+
+/// Alpha targets whole covalent molecules even when a legacy RGB owner spans
+/// a coordinate contact or only part of a molecule has RGB paint.
+fn covalent_groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
+    let selected: HashSet<_> = ids.iter().copied().collect();
+    let real: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.centroid.is_empty())
+        .map(|a| a.id)
+        .collect();
+    component_groups(doc, &real, true)
+        .into_iter()
+        .filter(|members| members.iter().any(|id| selected.contains(id)))
+        .collect()
+}
+pub(crate) fn automatic_rear_weights(doc: &Document, ids: &[u64]) -> BTreeMap<u64, f32> {
+    let selected: HashSet<_> = ids.iter().copied().collect();
+    weights_for_groups(doc, covalent_groups(doc, ids))
+        .into_iter()
+        .filter(|(id, _)| selected.contains(id))
+        .collect()
+}
+pub(crate) fn effective_rear_weights(doc: &Document, scope: &Scope) -> BTreeMap<u64, f32> {
+    if scope.automatic {
+        automatic_rear_weights(doc, &scope.atoms)
+    } else if scope.rear_weights.is_empty() {
+        // Earlier v22 frozen records stored their classification in weights.
+        // Respect that captured presentation after their XYZ is edited.
+        scope.weights.clone()
+    } else {
+        scope.rear_weights.clone()
+    }
+}
+fn weights_for_groups(doc: &Document, groups: Vec<Vec<u64>>) -> BTreeMap<u64, f32> {
     let mut weights = BTreeMap::new();
     let depths_by_id: HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a.depth)).collect();
-    for component in components(doc, ids) {
+    for component in groups {
         let depths: Vec<_> = component
             .iter()
             .filter_map(|id| depths_by_id.get(id).map(|depth| (*id, *depth)))
@@ -121,37 +176,6 @@ pub fn enable(doc: &mut Document, ids: &[u64], strength: f32) -> Result<usize, S
         return Err("Depth appearance strength must be between zero and one".into());
     }
     let ids = doc.expand_abbreviation_selection(ids);
-    // Alpha scopes retain their saved ownership when RGB enhancement is
-    // toggled. Otherwise two independently faded coordinated molecules would
-    // merge and silently adopt the smaller alpha. Legacy opaque scopes use
-    // the unchanged grouping path below.
-    let alpha: Vec<_> = doc
-        .depth_appearance
-        .iter()
-        .enumerate()
-        .filter(|(_, scope)| scope.rear_opacity < 1. && touches(scope, &ids))
-        .map(|(i, scope)| (i, scope.atoms.clone()))
-        .collect();
-    if !alpha.is_empty() {
-        let covered: HashSet<_> = alpha
-            .iter()
-            .flat_map(|(_, atoms)| atoms.iter().copied())
-            .collect();
-        for (index, atoms) in &alpha {
-            let weights = automatic_weights(doc, atoms);
-            if let Some(scope) = doc.depth_appearance.get_mut(*index) {
-                scope.strength = strength;
-                scope.automatic = true;
-                scope.weights = weights;
-            }
-        }
-        let missing: Vec<_> = ids
-            .iter()
-            .copied()
-            .filter(|id| !covered.contains(id))
-            .collect();
-        return Ok(alpha.len() + enable(doc, &missing, strength)?);
-    }
     let groups = components(doc, &ids);
     let overrides: BTreeMap<_, _> = doc
         .depth_appearance
@@ -161,7 +185,12 @@ pub fn enable(doc: &mut Document, ids: &[u64], strength: f32) -> Result<usize, S
     let opacity: BTreeMap<_, _> = doc
         .depth_appearance
         .iter()
-        .flat_map(|scope| scope.atoms.iter().map(|id| (*id, scope.rear_opacity)))
+        .flat_map(|scope| {
+            scope
+                .atoms
+                .iter()
+                .map(|id| (*id, scope.rear_opacity_for(*id)))
+        })
         .collect();
     clear(doc, &ids);
     for atoms in &groups {
@@ -170,10 +199,18 @@ pub fn enable(doc: &mut Document, ids: &[u64], strength: f32) -> Result<usize, S
             atoms: atoms.clone(),
             automatic: true,
             strength,
-            rear_opacity: atoms
+            rear_opacity: 1.,
+            rear_overrides: atoms
                 .iter()
-                .filter_map(|id| opacity.get(id).copied())
-                .fold(1., f32::min),
+                .filter_map(|id| {
+                    opacity
+                        .get(id)
+                        .copied()
+                        .filter(|alpha| *alpha < 1.)
+                        .map(|alpha| (*id, alpha))
+                })
+                .collect(),
+            rear_weights: BTreeMap::new(),
             overrides: atoms
                 .iter()
                 .filter_map(|id| overrides.get(id).map(|weight| (*id, *weight)))
@@ -188,31 +225,80 @@ pub fn set_rear_opacity(doc: &mut Document, ids: &[u64], opacity: f32) -> Result
     if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
         return Err("Rear opacity must be between 0% and 100%".into());
     }
-    let selected: HashSet<_> = ids.iter().copied().collect();
+    let ids = doc.expand_abbreviation_selection(ids);
+    let groups = covalent_groups(doc, &ids);
+    let selected: HashSet<_> = groups.iter().flatten().copied().collect();
     let mut covered = HashSet::new();
     let mut count = 0;
-    for scope in &mut doc.depth_appearance {
-        if scope.atoms.iter().any(|id| selected.contains(id)) {
-            covered.extend(scope.atoms.iter().copied());
-            if scope.rear_opacity != opacity {
-                scope.rear_opacity = opacity;
-                count += 1;
-            }
-        }
-    }
-    if opacity < 1. {
-        let missing: Vec<_> = ids
+    let frozen: BTreeMap<_, _> = doc
+        .depth_appearance
+        .iter()
+        .enumerate()
+        .filter(|(_, scope)| !scope.automatic && scope.rear_weights.is_empty())
+        .map(|(i, scope)| {
+            (
+                i,
+                if scope.has_rear_opacity() {
+                    effective_rear_weights(doc, scope)
+                } else {
+                    automatic_rear_weights(doc, &scope.atoms)
+                },
+            )
+        })
+        .collect();
+    for (index, scope) in doc.depth_appearance.iter_mut().enumerate() {
+        let target: Vec<_> = scope
+            .atoms
             .iter()
             .copied()
-            .filter(|id| !covered.contains(id))
+            .filter(|id| selected.contains(id))
             .collect();
-        for atoms in component_groups(doc, &missing, true) {
+        covered.extend(target.iter().copied());
+        if target
+            .iter()
+            .all(|id| scope.rear_opacity_for(*id) == opacity)
+        {
+            continue;
+        }
+        // Alpha never changes RGB membership, automatic state or its weights.
+        if target.len() == scope.atoms.len() {
+            scope.rear_opacity = opacity;
+            scope.rear_overrides.clear();
+        } else {
+            for id in target {
+                if opacity == scope.rear_opacity {
+                    scope.rear_overrides.remove(&id);
+                } else {
+                    scope.rear_overrides.insert(id, opacity);
+                }
+            }
+        }
+        if scope.has_rear_opacity() {
+            if let Some(weights) = frozen.get(&index) {
+                scope.rear_weights = weights.clone();
+            }
+        } else {
+            scope.rear_weights.clear();
+        }
+        count += 1;
+    }
+    if opacity < 1. {
+        for group in groups {
+            let atoms: Vec<_> = group
+                .into_iter()
+                .filter(|id| !covered.contains(id))
+                .collect();
+            if atoms.is_empty() {
+                continue;
+            }
             doc.depth_appearance.push(Scope {
                 weights: automatic_weights(doc, &atoms),
                 atoms,
                 automatic: true,
                 strength: 0.,
                 rear_opacity: opacity,
+                rear_overrides: BTreeMap::new(),
+                rear_weights: BTreeMap::new(),
                 overrides: BTreeMap::new(),
             });
             count += 1;
@@ -230,7 +316,7 @@ pub fn rear_opacity(doc: &Document, ids: &[u64]) -> Option<f32> {
         doc.depth_appearance
             .iter()
             .find(|scope| scope.atoms.contains(id))
-            .map_or(1., |scope| scope.rear_opacity)
+            .map_or(1., |scope| scope.rear_opacity_for(*id))
     });
     let first = values.next().unwrap_or(1.);
     values.all(|v| v == first).then_some(first)
@@ -245,11 +331,22 @@ pub fn freeze(doc: &mut Document, ids: &[u64]) -> usize {
         .iter()
         .enumerate()
         .filter(|(_, scope)| scope.automatic && touches(scope, ids))
-        .map(|(index, scope)| (index, automatic_weights(doc, &scope.atoms)))
+        .map(|(index, scope)| {
+            (
+                index,
+                automatic_weights(doc, &scope.atoms),
+                scope
+                    .has_rear_opacity()
+                    .then(|| automatic_rear_weights(doc, &scope.atoms)),
+            )
+        })
         .collect();
-    for (index, weights) in frozen {
+    for (index, weights, rear_weights) in frozen {
         if let Some(scope) = doc.depth_appearance.get_mut(index) {
             scope.weights = weights;
+            if let Some(weights) = rear_weights {
+                scope.rear_weights = weights;
+            }
             scope.automatic = false;
             count += 1;
         }
@@ -270,6 +367,8 @@ pub fn clear(doc: &mut Document, ids: &[u64]) -> usize {
         });
         scope.weights.retain(|id, _| !selected.contains(id));
         scope.overrides.retain(|id, _| !selected.contains(id));
+        scope.rear_overrides.retain(|id, _| !selected.contains(id));
+        scope.rear_weights.retain(|id, _| !selected.contains(id));
     }
     doc.depth_appearance.retain(|scope| !scope.atoms.is_empty());
     count
@@ -307,6 +406,8 @@ pub fn prune(doc: &mut Document) {
         let members: HashSet<_> = scope.atoms.iter().copied().collect();
         scope.weights.retain(|id, _| members.contains(id));
         scope.overrides.retain(|id, _| members.contains(id));
+        scope.rear_overrides.retain(|id, _| members.contains(id));
+        scope.rear_weights.retain(|id, _| members.contains(id));
     }
     doc.depth_appearance.retain(|scope| !scope.atoms.is_empty());
 }
@@ -335,10 +436,13 @@ pub fn validate(doc: &Document) -> Result<(), String> {
                 .any(|id| !atoms.contains(id) || !owned.insert(*id))
             || scope.weights.len() != scope.atoms.len()
             || scope.atoms.iter().any(|id| !scope.weights.contains_key(id))
+            || (!scope.rear_weights.is_empty() && scope.rear_weights.len() != scope.atoms.len())
             || scope
                 .weights
                 .iter()
                 .chain(&scope.overrides)
+                .chain(&scope.rear_overrides)
+                .chain(&scope.rear_weights)
                 .any(|(id, v)| !members.contains(id) || !v.is_finite() || !(0.0..=1.0).contains(v))
         {
             return Err("Invalid depth appearance scope".into());
@@ -481,9 +585,7 @@ impl Paint {
             group.highlight = group.highlight.map(|c| self.color(c, amount));
         }
         // Materialization is terminal for this snapshot, making it idempotent.
-        result
-            .depth_appearance
-            .retain(|scope| scope.rear_opacity < 1.);
+        result.depth_appearance.retain(Scope::has_rear_opacity);
         for scope in &mut result.depth_appearance {
             scope.strength = 0.;
             scope.overrides.clear();
@@ -512,18 +614,28 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Vec<Scope> {
                 return None;
             }
             let mut result = scope.clone();
-            if atoms.len() != scope.atoms.len() {
+            let partial_rear_component = scope.has_rear_opacity()
+                && covalent_groups(doc, &scope.atoms)
+                    .iter()
+                    .flatten()
+                    .any(|id| !selected.contains(id));
+            if atoms.len() != scope.atoms.len() || partial_rear_component {
                 result.weights = if scope.automatic {
                     automatic_weights(doc, &scope.atoms)
                 } else {
                     scope.weights.clone()
                 };
+                if scope.has_rear_opacity() {
+                    result.rear_weights = effective_rear_weights(doc, scope);
+                }
                 result.automatic = false;
             }
             let members: HashSet<_> = atoms.iter().copied().collect();
             result.atoms = atoms;
             result.weights.retain(|id, _| members.contains(id));
             result.overrides.retain(|id, _| members.contains(id));
+            result.rear_overrides.retain(|id, _| members.contains(id));
+            result.rear_weights.retain(|id, _| members.contains(id));
             Some(result)
         })
         .collect()
@@ -546,6 +658,16 @@ pub fn remap(scopes: &[Scope], mapping: &HashMap<u64, u64>) -> Vec<Scope> {
                 automatic: scope.automatic,
                 strength: scope.strength,
                 rear_opacity: scope.rear_opacity,
+                rear_overrides: scope
+                    .rear_overrides
+                    .iter()
+                    .filter_map(|(id, value)| mapping.get(id).map(|id| (*id, *value)))
+                    .collect(),
+                rear_weights: scope
+                    .rear_weights
+                    .iter()
+                    .filter_map(|(id, value)| mapping.get(id).map(|id| (*id, *value)))
+                    .collect(),
                 weights: scope
                     .weights
                     .iter()

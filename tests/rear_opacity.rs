@@ -113,3 +113,60 @@ fn native_preserves_opacity_and_external_editable_copy_reports_presentation_loss
     );
     assert_eq!(doc, original);
 }
+
+fn crossing_highlights(flat: bool) -> Document {
+    use reshiki::palette::Color;
+    let mut doc = Document::default();
+    let center = doc.add_atom("C", Point::default());
+    let a = doc.add_atom("C", Point::new(0., -42.));
+    let b = doc.add_atom("C", Point::new(30., -21.));
+    doc.add_bond(center, a, 1, "plain");
+    doc.add_bond(center, b, 1, "plain");
+    doc.atom_mut(center).unwrap().display.highlight = Some(Color::Custom([0, 0, 255]));
+    let left = doc.add_atom("C", Point::new(-45., 0.));
+    let right = doc.add_atom("C", Point::new(45., 0.));
+    doc.add_bond(left, right, 1, "plain");
+    doc.bonds.last_mut().unwrap().highlight = Some(Color::Custom([255, 0, 0]));
+    for atom in &mut doc.atoms {
+        atom.depth = if flat { 8. } else { -30. };
+    }
+    if !flat {
+        doc.atom_mut(center).unwrap().depth = 30.;
+    }
+    doc
+}
+
+fn pixel_at(image: &image::RgbaImage, point: Point, doc: &Document) -> [u8; 4] {
+    let (lo, hi) = scene::bounds(&scene::primitives(doc));
+    let x = ((point.x - lo.x) / (hi.x - lo.x) * image.width() as f32).round() as u32;
+    let y = ((point.y - lo.y) / (hi.y - lo.y) * image.height() as f32).round() as u32;
+    image.get_pixel(x, y).0
+}
+
+#[test]
+fn flat_retained_rear_setting_keeps_distinct_color_highlight_overlap_and_exact_output() {
+    let mut doc = crossing_highlights(true);
+    let svg = scene::svg(&doc);
+    let image = rgba(&doc);
+    assert_eq!(pixel_at(&image, Point::new(0., 4.), &doc), [0, 0, 255, 255]);
+    let ids = doc.all_ids();
+    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    assert_eq!(scene::svg(&doc), svg);
+    assert_eq!(
+        rgba(&doc),
+        image,
+        "flat RGB overlap must remain byte-identical"
+    );
+}
+
+#[test]
+fn opaque_front_atom_highlight_stays_above_different_color_bond_with_rear_alpha_elsewhere() {
+    let mut doc = crossing_highlights(false);
+    let before = rgba(&doc);
+    let sample = Point::new(0., 4.);
+    assert_eq!(pixel_at(&before, sample, &doc), [0, 0, 255, 255]);
+    let ids = doc.all_ids();
+    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    assert!(scene::svg(&doc).contains("opacity=\"0.25\""));
+    assert_eq!(pixel_at(&rgba(&doc), sample, &doc), [0, 0, 255, 255]);
+}

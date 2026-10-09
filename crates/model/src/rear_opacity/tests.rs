@@ -267,43 +267,243 @@ fn tilted_aromatic_curve_fill_and_arcs_share_one_depth_plane_and_default_geometr
     assert_eq!(crate::scene::svg(&doc), svg);
 }
 
-#[test]
-fn new_coordinated_molecules_have_independent_alpha_and_rgb_toggle_keeps_ownership() {
+fn coordinated_chains() -> (Document, Vec<u64>, Vec<u64>) {
     let mut doc = chain();
     let first = doc.all_ids();
-    let other = chain();
+    let mut other = chain();
+    for atom in &mut other.atoms {
+        atom.depth += 130.;
+    }
     let second = editing::append(&mut doc, &other, Point::new(400., 0.));
     doc.add_bond(first[3], second[0], 5, "plain");
+    (doc, first, second)
+}
+
+#[test]
+fn rgb_first_partial_alpha_keeps_other_molecule_and_live_rgb_basis_native_and_history() {
+    let (mut doc, first, second) = coordinated_chains();
     let all = doc.all_ids();
-    depth::set_rear_opacity(&mut doc, &all, 0.5).unwrap();
-    assert_eq!(doc.depth_appearance.len(), 2);
-    depth::set_rear_opacity(&mut doc, &first, 0.25).unwrap();
-    assert_eq!(Paint::new(&doc).atom(first[0]), 0.25);
-    assert_eq!(Paint::new(&doc).atom(second[0]), 0.5);
-    let scopes: Vec<_> = doc
-        .depth_appearance
-        .iter()
-        .map(|s| (s.atoms.clone(), s.rear_opacity))
-        .collect();
     depth::enable(&mut doc, &all, 0.6).unwrap();
-    assert_eq!(
-        doc.depth_appearance
-            .iter()
-            .map(|s| (s.atoms.clone(), s.rear_opacity))
-            .collect::<Vec<_>>(),
-        scopes
-    );
+    assert_eq!(doc.depth_appearance.len(), 1, "legacy coordinate RGB group");
+    let original = doc.clone();
+    let original_svg = crate::scene::svg(&doc);
+    let rgb = depth::Paint::new(&doc);
+    // A single selected atom still targets its complete covalent molecule.
+    depth::set_rear_opacity(&mut doc, &[first[0]], 0.25).unwrap();
+    assert_eq!(depth::rear_opacity(&doc, &first), Some(0.25));
+    assert_eq!(depth::rear_opacity(&doc, &second), Some(1.));
     assert_eq!(Paint::new(&doc).atom(first[0]), 0.25);
-    assert_eq!(Paint::new(&doc).atom(second[0]), 0.5);
-    let mut legacy = chain();
-    let other = chain();
-    let second = editing::append(&mut legacy, &other, Point::new(400., 0.));
-    legacy.add_bond(4, second[0], 5, "plain");
-    let all = legacy.all_ids();
-    depth::enable(&mut legacy, &all, 0.6).unwrap();
+    assert_eq!(Paint::new(&doc).atom(first[3]), 1.);
+    assert!(second.iter().all(|id| Paint::new(&doc).atom(*id) == 1.));
     assert_eq!(
-        legacy.depth_appearance.len(),
-        1,
-        "Legacy RGB grouping migrated"
+        doc.depth_appearance[0].atoms,
+        original.depth_appearance[0].atoms
     );
+    assert_eq!(
+        doc.depth_appearance[0].weights,
+        original.depth_appearance[0].weights
+    );
+    assert!(doc.depth_appearance[0].automatic);
+    for id in &all {
+        assert_eq!(depth::Paint::new(&doc).amount(*id), rgb.amount(*id));
+    }
+    let mut nonpaint = doc.clone();
+    nonpaint.version = original.version;
+    nonpaint.depth_appearance = original.depth_appearance.clone();
+    assert_eq!(nonpaint, original, "all graph, XYZ and other native fields");
+    assert!(!transaction::chemistry_changed(&original, &doc));
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.depth_appearance, doc.depth_appearance);
+    assert_eq!(depth::rear_opacity(&reopened, &second), Some(1.));
+    let mut history = crate::document::History::default();
+    let edited = doc.clone();
+    assert!(history.commit(original.clone(), &doc));
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc, original);
+    assert!(history.redo(&mut doc));
+    assert_eq!(doc, edited);
+    depth::set_rear_opacity(&mut doc, &first, 1.).unwrap();
+    assert_eq!(
+        crate::scene::svg(&doc),
+        original_svg,
+        "RGB basis unchanged after restoring opaque alpha"
+    );
+}
+
+#[test]
+fn alpha_first_and_rgb_first_toggles_keep_mixed_settings_and_legacy_rgb_normalization() {
+    for rgb_first in [false, true] {
+        let (mut doc, first, second) = coordinated_chains();
+        let all = doc.all_ids();
+        if rgb_first {
+            depth::enable(&mut doc, &all, 0.6).unwrap();
+        }
+        depth::set_rear_opacity(&mut doc, &first, 0.25).unwrap();
+        depth::set_rear_opacity(&mut doc, &second, 0.5).unwrap();
+        for _ in 0..2 {
+            depth::enable(&mut doc, &all, 0.6).unwrap();
+            assert_eq!(
+                doc.depth_appearance.len(),
+                1,
+                "keep legacy RGB connected grouping"
+            );
+            assert_eq!(depth::rear_opacity(&doc, &first), Some(0.25));
+            assert_eq!(depth::rear_opacity(&doc, &second), Some(0.5));
+            let mut rgb_only = doc.clone();
+            rgb_only.depth_appearance.clear();
+            depth::enable(&mut rgb_only, &all, 0.6).unwrap();
+            for id in &all {
+                assert_eq!(
+                    depth::Paint::new(&doc).amount(*id),
+                    depth::Paint::new(&rgb_only).amount(*id)
+                );
+            }
+            let rear = Paint::new(&doc);
+            depth::freeze(&mut doc, &all);
+            crate::projection::tilt(&mut doc, &all, 20., true);
+            for id in &all {
+                assert_eq!(
+                    Paint::new(&doc).atom(*id),
+                    rear.atom(*id),
+                    "frozen rear classification"
+                );
+            }
+        }
+        // The next RGB enable is live after tilt, without alpha merging.
+        depth::enable(&mut doc, &all, 0.6).unwrap();
+        assert_eq!(depth::rear_opacity(&doc, &first), Some(0.25));
+        assert_eq!(depth::rear_opacity(&doc, &second), Some(0.5));
+        for members in [&first, &second] {
+            let isolated = editing::selection(&doc, members);
+            for id in members {
+                assert_eq!(Paint::new(&doc).atom(*id), Paint::new(&isolated).atom(*id));
+            }
+        }
+        doc.validate().unwrap();
+    }
+}
+
+#[test]
+fn mixed_rear_settings_freeze_copy_remap_prune_and_validate_independently_of_rgb() {
+    let (mut doc, first, second) = coordinated_chains();
+    let all = doc.all_ids();
+    depth::enable(&mut doc, &all, 0.6).unwrap();
+    depth::freeze(&mut doc, &all);
+    let frozen_rgb = doc.depth_appearance[0].weights.clone();
+    depth::set_rear_opacity(&mut doc, &first, 0.25).unwrap();
+    assert_eq!(doc.depth_appearance[0].weights, frozen_rgb);
+    assert!(!doc.depth_appearance[0].automatic);
+    let partial = editing::selection(&doc, &first[..2]);
+    assert_eq!(depth::rear_opacity(&partial, &first[..2]), Some(0.25));
+    assert!(
+        first[..2]
+            .iter()
+            .all(|id| Paint::new(&partial).atom(*id) == 0.25)
+    );
+    for id in &first[..2] {
+        assert_eq!(
+            depth::Paint::new(&partial).amount(*id),
+            depth::Paint::new(&doc).amount(*id)
+        );
+    }
+    let mut target = chain();
+    let pasted = editing::append(&mut target, &partial, Point::new(500., 0.));
+    assert_eq!(depth::rear_opacity(&target, &pasted), Some(0.25));
+    assert!(
+        pasted
+            .iter()
+            .all(|id| Paint::new(&target).atom(*id) == 0.25)
+    );
+    target.delete(&pasted[..1]);
+    target.validate().unwrap();
+    assert_eq!(Paint::new(&target).atom(pasted[1]), 0.25);
+    depth::clear(&mut doc, &first);
+    assert_eq!(depth::rear_opacity(&doc, &first), Some(1.));
+    assert_eq!(depth::rear_opacity(&doc, &second), Some(1.));
+    doc.validate().unwrap();
+    for map in ["rear_overrides", "rear_weights"] {
+        let mut invalid = serde_json::to_value(&partial).unwrap();
+        invalid["depth_appearance"][0][map]["999999"] = serde_json::json!(0.5);
+        let invalid: Document = serde_json::from_value(invalid).unwrap();
+        assert!(invalid.validate().is_err(), "foreign {map} owner");
+    }
+    let mut invalid = partial.clone();
+    invalid.depth_appearance[0]
+        .rear_overrides
+        .insert(first[0], f32::NAN);
+    assert!(invalid.validate().is_err());
+}
+
+#[test]
+fn earlier_frozen_native_rear_weights_are_not_reinterpreted_from_changed_xyz() {
+    let (mut doc, first, second) = coordinated_chains();
+    let all = doc.all_ids();
+    depth::enable(&mut doc, &all, 0.6).unwrap();
+    depth::freeze(&mut doc, &all);
+    doc.depth_appearance[0].rear_opacity = 0.4;
+    doc.version = 22;
+    let expected: Vec<_> = all
+        .iter()
+        .map(|id| {
+            if doc.depth_appearance[0].weights[id] > 0.5 {
+                0.4
+            } else {
+                1.
+            }
+        })
+        .collect();
+    assert!(doc.depth_appearance[0].rear_weights.is_empty());
+    for atom in &mut doc.atoms {
+        atom.depth = -atom.depth;
+    }
+    let mut reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    for (id, alpha) in all.iter().zip(&expected) {
+        assert_eq!(Paint::new(&reopened).atom(*id), *alpha);
+    }
+    depth::set_rear_opacity(&mut reopened, &first, 0.25).unwrap();
+    for id in &first {
+        let expected = if doc.depth_appearance[0].weights[id] > 0.5 {
+            0.25
+        } else {
+            1.
+        };
+        assert_eq!(Paint::new(&reopened).atom(*id), expected);
+    }
+    for id in &second {
+        assert_eq!(Paint::new(&reopened).atom(*id), Paint::new(&doc).atom(*id));
+    }
+}
+
+#[test]
+fn quadruple_and_partial_covalent_bonds_are_one_alpha_molecule() {
+    for order in [6, 7] {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        doc.atom_mut(a).unwrap().depth = -20.;
+        doc.atom_mut(b).unwrap().depth = 20.;
+        doc.add_bond(a, b, order, "plain");
+        depth::set_rear_opacity(&mut doc, &[a], 0.25).unwrap();
+        assert_eq!(depth::rear_opacity(&doc, &[a, b]), Some(0.25));
+        assert_eq!(Paint::new(&doc).atom(a), 0.25);
+        assert_eq!(Paint::new(&doc).atom(b), 1.);
+        assert_eq!(doc.depth_appearance.len(), 1);
+    }
+}
+
+#[test]
+fn copying_a_full_rgb_owner_that_is_only_part_of_a_molecule_freezes_original_rear_depth() {
+    let mut doc = chain();
+    let ids = doc.all_ids();
+    depth::enable(&mut doc, &ids, 0.6).unwrap();
+    depth::clear(&mut doc, &ids[..2]);
+    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    // The new alpha owner contains both selected atoms, but their covalent
+    // molecule also includes the other RGB owner. Copy must not renormalize.
+    let partial = editing::selection(&doc, &ids[..2]);
+    assert_eq!(partial.depth_appearance.len(), 1);
+    assert!(!partial.depth_appearance[0].automatic);
+    assert_eq!(Paint::new(&partial).atom(ids[0]), 0.25);
+    assert_eq!(Paint::new(&partial).atom(ids[1]), 0.25);
+    partial.validate().unwrap();
 }
