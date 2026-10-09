@@ -33,6 +33,10 @@ static ALLOCATOR: allocation_metrics::MeasuredAllocator<reshiki_process_heap::Bo
     allocation_metrics::MeasuredAllocator::new(reshiki_process_heap::BoundedHeap);
 
 fn main() -> iced::Result {
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--naming-worker")) {
+        reshiki::naming::worker::run();
+        return Ok(());
+    }
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--geometry-worker")) {
         reshiki::geometry::worker::run();
         return Ok(());

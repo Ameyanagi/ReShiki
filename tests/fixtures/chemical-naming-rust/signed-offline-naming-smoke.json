@@ -1,0 +1,125 @@
+{
+  "signed_executable_sha256": "ef5948ea8c060ce2b7f77a927f45c4f28990052e0d33bb8da1feea98f0e8efd4",
+  "sandbox_policy": "(version 1)(allow default)(deny network*)",
+  "empty_PATH": true,
+  "java_python_helper_environment_removed": true,
+  "launch_directory": "private directory outside checkout",
+  "scope": "direct signed native worker parses/generates public authored examples; strict adapter identity/rejection covered by separate22-test suite; not GUI network sandbox claim",
+  "cases": [
+    {
+      "request": {
+        "operation": "parse",
+        "protocol": 2,
+        "name": "ethanol"
+      },
+      "response": {
+        "operation": "parse",
+        "protocol": 2,
+        "backend": "opsin-rust",
+        "port_version": "0.1.0",
+        "upstream_version": "2.9.0",
+        "upstream_commit": "b91b610af5ab07560fedb20730d7aef46bb2bca0",
+        "resource_fingerprint": "4269b61bf110f01d9fab808a13bac1aa4e29ec34800a7ff7cac5925d3774b9a4",
+        "options": "strict-semantic-cx1",
+        "name": "ethanol",
+        "status": "SUCCESS",
+        "message": "",
+        "warnings": [],
+        "cxsmiles": "C(C)O"
+      },
+      "elapsed_seconds": 0.14971287548542023,
+      "maximum_resident_bytes": 67403776,
+      "time_stderr": "        0.14 real         0.13 user         0.01 sys\n            67403776  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                4883  page reclaims\n                   3  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                  13  involuntary context switches\n          1738235884  instructions retired\n           518671227  cycles elapsed\n            47268368  peak memory footprint\n"
+    },
+    {
+      "request": {
+        "operation": "generate",
+        "protocol": 2,
+        "profile": "ReShiki organic rules 1",
+        "smiles": "CCO"
+      },
+      "response": {
+        "operation": "generate",
+        "protocol": 2,
+        "profile": "ReShiki organic rules 1",
+        "input": "CCO",
+        "result": {
+          "Ok": "ethan-1-ol"
+        }
+      },
+      "elapsed_seconds": 0.017756790854036808,
+      "maximum_resident_bytes": 22282240,
+      "time_stderr": "        0.01 real         0.00 user         0.00 sys\n            22282240  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                2131  page reclaims\n                   1  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                  11  involuntary context switches\n           131282943  instructions retired\n            42181497  cycles elapsed\n             5980616  peak memory footprint\n"
+    },
+    {
+      "request": {
+        "operation": "parse",
+        "protocol": 2,
+        "name": "(R)-lactic acid"
+      },
+      "response": {
+        "operation": "parse",
+        "protocol": 2,
+        "backend": "opsin-rust",
+        "port_version": "0.1.0",
+        "upstream_version": "2.9.0",
+        "upstream_commit": "b91b610af5ab07560fedb20730d7aef46bb2bca0",
+        "resource_fingerprint": "4269b61bf110f01d9fab808a13bac1aa4e29ec34800a7ff7cac5925d3774b9a4",
+        "options": "strict-semantic-cx1",
+        "name": "(R)-lactic acid",
+        "status": "SUCCESS",
+        "message": "",
+        "warnings": [],
+        "cxsmiles": "C([C@H](O)C)(=O)O"
+      },
+      "elapsed_seconds": 0.14740220922976732,
+      "maximum_resident_bytes": 67518464,
+      "time_stderr": "        0.14 real         0.13 user         0.00 sys\n            67518464  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                4892  page reclaims\n                   1  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                  11  involuntary context switches\n          1731610188  instructions retired\n           505512597  cycles elapsed\n            47333904  peak memory footprint\n"
+    },
+    {
+      "request": {
+        "operation": "generate",
+        "protocol": 2,
+        "profile": "ReShiki organic rules 1",
+        "smiles": "C[C@@H](O)C(=O)O"
+      },
+      "response": {
+        "operation": "generate",
+        "protocol": 2,
+        "profile": "ReShiki organic rules 1",
+        "input": "C[C@@H](O)C(=O)O",
+        "result": {
+          "Ok": "(2R)-2-hydroxypropanoic acid"
+        }
+      },
+      "elapsed_seconds": 0.01803541649132967,
+      "maximum_resident_bytes": 22675456,
+      "time_stderr": "        0.01 real         0.00 user         0.00 sys\n            22675456  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                2155  page reclaims\n                   1  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                  11  involuntary context switches\n           132985942  instructions retired\n            41852683  cycles elapsed\n             6095304  peak memory footprint\n"
+    },
+    {
+      "request": {
+        "operation": "parse",
+        "protocol": 2,
+        "name": "ethyl 3-(4-hydroxyphenyl)-2-methylpropanoate"
+      },
+      "response": {
+        "operation": "parse",
+        "protocol": 2,
+        "backend": "opsin-rust",
+        "port_version": "0.1.0",
+        "upstream_version": "2.9.0",
+        "upstream_commit": "b91b610af5ab07560fedb20730d7aef46bb2bca0",
+        "resource_fingerprint": "4269b61bf110f01d9fab808a13bac1aa4e29ec34800a7ff7cac5925d3774b9a4",
+        "options": "strict-semantic-cx1",
+        "name": "ethyl 3-(4-hydroxyphenyl)-2-methylpropanoate",
+        "status": "SUCCESS",
+        "message": "",
+        "warnings": [],
+        "cxsmiles": "OC1=CC=C(C=C1)CC(C(=O)OCC)C"
+      },
+      "elapsed_seconds": 0.15278679225593805,
+      "maximum_resident_bytes": 67420160,
+      "time_stderr": "        0.15 real         0.14 user         0.00 sys\n            67420160  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                4886  page reclaims\n                   1  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                  11  involuntary context switches\n          1729380020  instructions retired\n           503445795  cycles elapsed\n            47202808  peak memory footprint\n"
+    }
+  ]
+}
