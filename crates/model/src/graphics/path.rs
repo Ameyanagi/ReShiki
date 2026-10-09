@@ -50,7 +50,7 @@ impl Path {
             closing_alias: None,
         };
         let mut index = 1;
-        for command in &commands[1..] {
+        for command in commands.iter().skip(1) {
             if path.closed {
                 return None;
             }
@@ -97,7 +97,10 @@ impl Path {
             .or_else(|| (self.closing_alias == Some(index)).then_some(0))
     }
     fn reindex(&mut self) {
-        self.nodes[0].index = 0;
+        let Some(first) = self.nodes.first_mut() else {
+            return;
+        };
+        first.index = 0;
         self.closing_alias = None;
         let mut index = 1;
         for (i, segment) in self.segments.iter_mut().enumerate() {
@@ -110,16 +113,20 @@ impl Path {
             let next = (i + 1) % self.nodes.len();
             if next == 0 {
                 self.closing_alias = Some(index);
-            } else {
-                self.nodes[next].index = index;
+            } else if let Some(node) = self.nodes.get_mut(next) {
+                node.index = index;
             }
             index += 1;
         }
     }
     fn commands(&self) -> Vec<PathCommand> {
-        let mut result = vec![PathCommand::Move(self.nodes[0].point)];
-        for (i, segment) in self.segments.iter().enumerate() {
-            let end = self.nodes[(i + 1) % self.nodes.len()].point;
+        let Some(first) = self.nodes.first() else {
+            return vec![];
+        };
+        let mut result = vec![PathCommand::Move(first.point)];
+        let endpoints = self.nodes.iter().skip(1).chain(self.nodes.first());
+        for (segment, node) in self.segments.iter().zip(endpoints) {
+            let end = node.point;
             result.push(match segment.controls {
                 Some([a, b]) => PathCommand::Cubic(a, b, end),
                 None => PathCommand::Line(end),
@@ -129,6 +136,18 @@ impl Path {
             result.push(PathCommand::Close);
         }
         result
+    }
+    fn point(&self, node: usize) -> Result<Point, String> {
+        self.nodes
+            .get(node)
+            .map(|n| n.point)
+            .ok_or_else(|| "Invalid path node".into())
+    }
+    fn index(&self, node: usize) -> Result<usize, String> {
+        self.nodes
+            .get(node)
+            .map(|n| n.index)
+            .ok_or_else(|| "Invalid path node".into())
     }
     fn store(self, graphic: &mut Graphic) {
         graphic.path = self.commands();
@@ -190,7 +209,9 @@ impl Graphic {
             return true;
         }
         if let Some(node) = path.node(index) {
-            let old = path.nodes[node].point;
+            let Ok(old) = path.point(node) else {
+                return true;
+            };
             let move_control = |p: Point| p.offset(point.x - old.x, point.y - old.y);
             if let Some(segment) = path.segments.get_mut(node)
                 && let Some([a, _]) = segment.controls.as_mut()
@@ -199,24 +220,30 @@ impl Graphic {
             }
             let previous = if node > 0 {
                 Some(node - 1)
+            } else if path.closed {
+                path.segments.len().checked_sub(1)
             } else {
-                path.closed.then_some(path.segments.len() - 1)
+                None
             };
             if let Some(previous) = previous
-                && let Some([_, b]) = path.segments[previous].controls.as_mut()
+                && let Some(segment) = path.segments.get_mut(previous)
+                && let Some([_, b]) = segment.controls.as_mut()
             {
                 *b = move_control(*b);
             }
-            path.nodes[node].point = point;
+            if let Some(node) = path.nodes.get_mut(node) {
+                node.point = point;
+            }
         } else {
             for segment in &mut path.segments {
-                if let (Some(indices), Some(controls)) =
+                if let (Some([first, second]), Some([a, b])) =
                     (segment.indices, segment.controls.as_mut())
                 {
-                    for i in 0..2 {
-                        if indices[i] == index {
-                            controls[i] = point;
-                        }
+                    if first == index {
+                        *a = point;
+                    }
+                    if second == index {
+                        *b = point;
                     }
                 }
             }
@@ -232,8 +259,8 @@ impl Graphic {
             .get(node)
             .ok_or("The last open node has no following segment")?
             .clone();
-        let a = path.nodes[node].point;
-        let b = path.nodes[(node + 1) % path.nodes.len()].point;
+        let a = path.point(node)?;
+        let b = path.point((node + 1) % path.nodes.len())?;
         let (point, left, right) = if let Some([c, d]) = segment.controls {
             let ac = lerp(a, c, 0.5);
             let cd = lerp(c, d, 0.5);
@@ -245,7 +272,10 @@ impl Graphic {
             (lerp(a, b, 0.5), None, None)
         };
         path.nodes.insert(node + 1, Node { point, index: 0 });
-        path.segments[node].controls = left;
+        path.segments
+            .get_mut(node)
+            .ok_or("Invalid path segment")?
+            .controls = left;
         path.segments.insert(
             node + 1,
             Segment {
@@ -254,7 +284,7 @@ impl Graphic {
             },
         );
         path.reindex();
-        let index = path.nodes[node + 1].index;
+        let index = path.index(node + 1)?;
         path.store(self);
         Ok(index)
     }
@@ -273,34 +303,45 @@ impl Graphic {
         } else {
             let previous = (node + path.nodes.len() - 1) % path.nodes.len();
             let next = (node + 1) % path.nodes.len();
-            let a = path.nodes[previous].point;
-            let b = path.nodes[next].point;
-            let removed = path.nodes[node].point;
-            let left = path.segments[previous].controls;
-            let right = path.segments[node].controls;
+            let a = path.point(previous)?;
+            let b = path.point(next)?;
+            let removed = path.point(node)?;
+            let left = path
+                .segments
+                .get(previous)
+                .ok_or("Invalid path segment")?
+                .controls;
+            let right = path
+                .segments
+                .get(node)
+                .ok_or("Invalid path segment")?
+                .controls;
             let controls = (left.is_some() || right.is_some()).then(|| {
                 [
-                    left.map(|c| c[0])
+                    left.map(|[a, _]| a)
                         .unwrap_or_else(|| lerp(a, removed, 1. / 3.)),
                     right
-                        .map(|c| c[1])
+                        .map(|[_, b]| b)
                         .unwrap_or_else(|| lerp(b, removed, 1. / 3.)),
                 ]
             });
-            path.segments[previous].controls = controls;
+            path.segments
+                .get_mut(previous)
+                .ok_or("Invalid path segment")?
+                .controls = controls;
             path.segments.remove(node);
             path.nodes.remove(node);
         }
         path.reindex();
-        let index = path.nodes[node.min(path.nodes.len() - 1)].index;
+        let index = path.index(node.min(path.nodes.len() - 1))?;
         path.store(self);
         Ok(index)
     }
     pub fn set_path_segment_curved(&mut self, index: usize, curved: bool) -> Result<usize, String> {
         let mut path = Path::read(self).ok_or("Select one continuous path")?;
         let node = path.node(index).ok_or("Select a round node")?;
-        let a = path.nodes[node].point;
-        let b = path.nodes[(node + 1) % path.nodes.len()].point;
+        let a = path.point(node)?;
+        let b = path.point((node + 1) % path.nodes.len())?;
         let segment = path
             .segments
             .get_mut(node)
@@ -315,7 +356,7 @@ impl Graphic {
             segment.controls = None;
         }
         path.reindex();
-        let index = path.nodes[node].index;
+        let index = path.index(node)?;
         path.store(self);
         Ok(index)
     }
@@ -328,7 +369,7 @@ impl Graphic {
             if path.nodes.len() < 3 {
                 return Err("A closed path needs at least three nodes".into());
             }
-            if path.nodes.last().unwrap().point == path.nodes[0].point {
+            if path.nodes.last().map(|n| n.point) == path.nodes.first().map(|n| n.point) {
                 path.nodes.pop();
                 if path.nodes.len() < 3 {
                     return Err("A closed path needs at least three distinct nodes".into());
@@ -356,8 +397,11 @@ impl Graphic {
             BracketSides::Both,
             false,
         );
-        let path = Path::read(&graphic).expect("A dragged curve has one segment");
-        path.store(&mut graphic);
+        graphic.path = graphic.commands();
+        graphic.kind = GraphicKind::Path;
+        graphic.origin = Point::default();
+        graphic.axis_x = Point::new(1., 0.);
+        graphic.axis_y = Point::new(0., 1.);
         graphic
     }
     /// A click appends a line. Dragging a new node establishes its outgoing
@@ -374,9 +418,10 @@ impl Graphic {
         if !finite(point) || direction.is_some_and(|p| !finite(p)) {
             return Err("Non-finite path point".into());
         }
-        let last = path.nodes.last().unwrap().point;
+        let last_node = path.nodes.last().ok_or("Invalid path node")?;
+        let last = last_node.point;
         if point.distance(last) < 0.0001 {
-            return Ok(path.nodes.last().unwrap().index);
+            return Ok(last_node.index);
         }
         let controls = direction.map(|direction| {
             [
@@ -396,7 +441,7 @@ impl Graphic {
             indices: None,
         });
         path.reindex();
-        let index = path.nodes.last().unwrap().index;
+        let index = path.nodes.last().ok_or("Invalid path node")?.index;
         path.store(self);
         Ok(index)
     }

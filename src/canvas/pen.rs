@@ -32,7 +32,11 @@ pub(crate) fn apply(
     let mut result = doc.clone();
     if let Some(graphic) = active(doc, selected) {
         let id = graphic.id;
-        let graphic = result.graphics.iter_mut().find(|g| g.id == id).unwrap();
+        let graphic = result
+            .graphics
+            .iter_mut()
+            .find(|g| g.id == id)
+            .ok_or("Missing pen path")?;
         let index = if stroke.close {
             graphic.set_path_closed(true)?;
             0
@@ -45,11 +49,11 @@ pub(crate) fn apply(
         let graphic = Graphic::pen_curve(id, stroke.start, stroke.end, style.clone());
         let index = graphic
             .path_handles()
-            .unwrap()
+            .ok_or("Invalid pen path")?
             .into_iter()
             .filter(|h| h.node)
-            .last()
-            .unwrap()
+            .next_back()
+            .ok_or("Missing pen node")?
             .index;
         result.graphics.push(graphic);
         Ok((result, id, index))
@@ -67,7 +71,10 @@ impl MoleculeCanvas<'_> {
         }
         let close = path.and_then(Graphic::path_handles).is_some_and(|handles| {
             let nodes: Vec<_> = handles.into_iter().filter(|h| h.node).collect();
-            nodes.len() >= 3 && start.distance(nodes[0].point) < 8. / self.camera.zoom
+            nodes.len() >= 3
+                && nodes
+                    .first()
+                    .is_some_and(|node| start.distance(node.point) < 8. / self.camera.zoom)
         });
         Some(Stroke {
             start,

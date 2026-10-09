@@ -64,8 +64,9 @@ impl App {
             .spacing(5)
         ]
         .spacing(8);
-        if let Some(graphic) = self.selected_path() {
-            let handles = graphic.path_handles().unwrap();
+        if let Some(graphic) = self.selected_path()
+            && let Some(handles) = graphic.path_handles()
+        {
             let choices: Vec<_> = handles
                 .iter()
                 .filter(|h| h.node)
@@ -82,7 +83,7 @@ impl App {
             let closed = graphic.path_closed();
             let following = node.is_some_and(|i| closed || i + 1 < choices.len());
             panel=panel.push(text(format!("{} nodes · {}",choices.len(),if closed {"Closed"} else {"Open"})).size(12))
-                .push(crate::appearance::pick_list(choices.clone(),node.map(|i|choices[i]),move |choice|send(Action::Node(choice.index))).text_size(12).padding(5).width(Length::Fill))
+                .push(crate::appearance::pick_list(choices.clone(),node.and_then(|i|choices.get(i).copied()),move |choice|send(Action::Node(choice.index))).text_size(12).padding(5).width(Length::Fill))
                 .push(row![path_button("pen-insert", "Insert after").on_press_maybe(following.then(||send(Action::Insert))),path_button("pen-delete", "Delete node").on_press_maybe((node.is_some() && choices.len()>if closed {3} else {2}).then(||send(Action::Delete)))].spacing(5))
                 .push(row![path_button("pen-straight", "Straight segment").on_press_maybe(following.then(||send(Action::Straight))),path_button("pen-curved", "Curved segment").on_press_maybe(following.then(||send(Action::Curved)))].spacing(5))
                 .push(row![path_button("pen-close",if closed {"Open path"} else {"Close path"}).on_press_maybe((closed || choices.len()>=3).then(||send(if closed {Action::Open} else {Action::Close}))),path_button("pen-continue", "Continue drawing").on_press_maybe((!closed).then(||send(Action::Continue)))].spacing(5))
@@ -115,20 +116,16 @@ impl App {
         };
         let id = graphic.id;
         let index = self
-            .path_point(graphic, &graphic.path_handles().unwrap())
+            .path_point(graphic, &graphic.path_handles().unwrap_or_default())
             .unwrap_or(0);
         if let Action::Node(index) = action {
             self.tab.path_point = Some((id, index));
             return;
         }
         let before = self.tab.doc.clone();
-        let graphic = self
-            .tab
-            .doc
-            .graphics
-            .iter_mut()
-            .find(|g| g.id == id)
-            .unwrap();
+        let Some(graphic) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) else {
+            return;
+        };
         let result = match action {
             Action::Insert => graphic.insert_path_node(index),
             Action::Delete => graphic.delete_path_node(index),
@@ -150,7 +147,7 @@ impl App {
             }
         }
     }
-    pub(super) fn place_pen_segment(
+    pub(in crate::app) fn place_pen_segment(
         &mut self,
         stroke: crate::canvas::pen::Stroke,
         before: Document,
