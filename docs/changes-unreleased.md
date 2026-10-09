@@ -14,3 +14,12 @@ See [ReShiki 0.11.0](changes-0.11.md) for the latest release notes.
 The known ethanol exercise is a first-use example. Model generation and visual
 review do not establish chemical correctness for other images; inspect the draft
 before Apply. This entry remains unreleased while the contribution is under review.
+
+- **Assistant image benchmark — under review:** records independent graph identity, unfinished drafts and failures for eight original synthetic images. Six exact completed graphs out of eleven attempted finite-reference runs remain separate from provisional previews and the known guided exercise. [Method and measured results](assistant-benchmark.md) · [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281) · @Ameyanagi.
+
+![Provisional macrocycle preview retained after a structured-output failure; excluded from completed successes](assistant-benchmark-results/baseline-20261009/cyclic-gly4/run-2/provisional.png)
+
+The small synthetic cohort does not establish accuracy on real scans or general
+peptide/macrocycle reliability. The retained preview is unfinished even though
+its graph matches the reference. See the report for failures, missing display
+labels, uncertainty and not-run repeats.

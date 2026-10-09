@@ -1,0 +1,32 @@
+{
+  "configuration": {
+    "auto_apply": false,
+    "effort": "xhigh",
+    "generation_started": [
+      {
+        "effort": "xhigh",
+        "elapsed_seconds": 1.8783176670000001,
+        "event": "started",
+        "model_label": "GPT-6.1-Sol"
+      }
+    ],
+    "model": "gpt-6.1-sol",
+    "provider": "Codex app-server",
+    "request_timeout_seconds": 300,
+    "requested_effort": "xhigh",
+    "requested_model": "gpt-6.1-sol",
+    "service_tier": "default"
+  },
+  "elapsed_seconds": 148.805422625,
+  "error": null,
+  "review": {
+    "changes": [],
+    "issues": [
+      "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+    ],
+    "passes": 1,
+    "summary": "The Boc and NH labels, connectivity, bond orders, solid wedge, carboxylate O⁻, and separate Na⁺ match the source. Labels are clear and unclipped; no corrections are needed.",
+    "verified": true
+  },
+  "status": "completed"
+}

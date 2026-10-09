@@ -1,0 +1,28 @@
+{
+  "explanation": "",
+  "replace_ids": [],
+  "molecules": [
+    {
+      "smiles": "CC(C)(C)OC(=O)N[C@@H](C)C(=O)[O-]",
+      "label": "",
+      "coefficient": 1,
+      "rotation": 0.0,
+      "compact": true
+    },
+    {
+      "smiles": "[Na+]",
+      "label": "",
+      "coefficient": 1,
+      "rotation": 0.0,
+      "compact": false
+    }
+  ],
+  "reactions": [],
+  "composition": {
+    "arrangement": "rows",
+    "columns": 1,
+    "width_pt": 540.0,
+    "preserve_details": false
+  },
+  "sketch": null
+}

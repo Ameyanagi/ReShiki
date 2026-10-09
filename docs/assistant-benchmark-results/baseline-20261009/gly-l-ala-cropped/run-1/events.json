@@ -1,0 +1,59 @@
+[
+  {
+    "effort": "xhigh",
+    "elapsed_seconds": 1.4767235,
+    "event": "started",
+    "model_label": "GPT-6.1-Sol"
+  },
+  {
+    "elapsed_seconds": 92.162406708,
+    "event": "proposal"
+  },
+  {
+    "atoms": 5,
+    "bonds": 4,
+    "elapsed_seconds": 92.162834166,
+    "event": "preview"
+  },
+  {
+    "elapsed_seconds": 106.679770458,
+    "event": "proposal"
+  },
+  {
+    "atoms": 5,
+    "bonds": 4,
+    "elapsed_seconds": 106.68027375,
+    "event": "preview"
+  },
+  {
+    "elapsed_seconds": 154.018925541,
+    "event": "proposal"
+  },
+  {
+    "atoms": 6,
+    "bonds": 5,
+    "elapsed_seconds": 154.019668458,
+    "event": "preview"
+  },
+  {
+    "elapsed_seconds": 207.838562791,
+    "event": "proposal"
+  },
+  {
+    "atoms": 6,
+    "bonds": 5,
+    "elapsed_seconds": 207.839340375,
+    "event": "preview"
+  },
+  {
+    "atoms": 6,
+    "bonds": 5,
+    "elapsed_seconds": 207.84098675,
+    "event": "preview"
+  },
+  {
+    "elapsed_seconds": 207.84241575,
+    "event": "review",
+    "pass": 1
+  }
+]

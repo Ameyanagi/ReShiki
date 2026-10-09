@@ -1,0 +1,30 @@
+{
+  "configuration": {
+    "auto_apply": false,
+    "effort": "xhigh",
+    "generation_started": [
+      {
+        "effort": "xhigh",
+        "elapsed_seconds": 1.5836160000000001,
+        "event": "started",
+        "model_label": "GPT-6.1-Sol"
+      }
+    ],
+    "model": "gpt-6.1-sol",
+    "provider": "Codex app-server",
+    "request_timeout_seconds": 300,
+    "requested_effort": "xhigh",
+    "requested_model": "gpt-6.1-sol",
+    "service_tier": "default"
+  },
+  "elapsed_seconds": 44.595378834,
+  "error": null,
+  "review": {
+    "changes": [],
+    "issues": [],
+    "passes": 0,
+    "summary": "",
+    "verified": false
+  },
+  "status": "clarification"
+}

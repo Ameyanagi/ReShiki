@@ -1,0 +1,32 @@
+{
+  "configuration": {
+    "auto_apply": false,
+    "effort": "xhigh",
+    "generation_started": [
+      {
+        "effort": "xhigh",
+        "elapsed_seconds": 1.7937865830000002,
+        "event": "started",
+        "model_label": "GPT-6.1-Sol"
+      }
+    ],
+    "model": "gpt-6.1-sol",
+    "provider": "Codex app-server",
+    "request_timeout_seconds": 300,
+    "requested_effort": "xhigh",
+    "requested_model": "gpt-6.1-sol",
+    "service_tier": "default"
+  },
+  "elapsed_seconds": 169.53073175,
+  "error": null,
+  "review": {
+    "changes": [],
+    "issues": [
+      "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+    ],
+    "passes": 1,
+    "summary": "The reconstruction matches the source’s connectivity, bond orders, hydrogen labels and solid wedge. Labels are clear and unclipped; no title was added.",
+    "verified": true
+  },
+  "status": "completed"
+}
