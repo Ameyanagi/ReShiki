@@ -1,5 +1,7 @@
 //! Editable vector graphics in drawing coordinates. Shared by preview and export.
 mod arc;
+#[cfg(test)]
+mod path_tests;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
 use serde::{Deserialize, Serialize};
