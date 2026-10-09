@@ -321,3 +321,39 @@ fn orbital_snap_preference_and_free_node_history_preserve_the_drawing() {
         app.tab.doc.current()
     );
 }
+
+#[test]
+fn click_lone_pairs_and_manual_marks_have_separate_exact_history_steps() {
+    let mut app = ready(vec![], vec![]);
+    let id = app.tab.doc.add_atom("O", Point::default());
+    app.tab.doc.atom_mut(id).unwrap().label_h = 1;
+    let pair = GraphicKind::Symbol(SymbolKind::LonePair);
+    app.tool = Tool::Graphic(pair);
+    let original = app.tab.doc.clone();
+    app.edit(crate::canvas::Edit::Graphic(
+        Point::default(),
+        Point::default(),
+        false,
+    ));
+    let auto = app.tab.doc.atom(id).unwrap().marks[0].clone();
+    assert!(auto.offset.distance(Point::default()) < app.tab.doc.drawing_style.font_size());
+    assert_undo_redo(&mut app, &original);
+    let before_drag = app.tab.doc.clone();
+    app.tool = Tool::Graphic(pair);
+    app.edit(crate::canvas::Edit::Graphic(
+        Point::default(),
+        Point::new(8., -15.),
+        false,
+    ));
+    assert_eq!(app.tab.doc.atom(id).unwrap().marks[0], auto);
+    assert_eq!(
+        app.tab.doc.atom(id).unwrap().marks[1].offset,
+        Point::new(8., -15.)
+    );
+    assert_eq!(app.tab.doc.atom(id).unwrap().label_h, 1);
+    assert_undo_redo(&mut app, &before_drag);
+    assert_eq!(
+        Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap(),
+        app.tab.doc.current()
+    );
+}

@@ -8,6 +8,9 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 mod label_clearance;
+mod mark_placement;
+#[cfg(test)]
+mod mark_placement_tests;
 #[cfg(test)]
 mod orbital_tests;
 pub(crate) use label_clearance::readable_orbital_parts;
@@ -474,10 +477,30 @@ impl Drawing {
             && let Some(id) = doc.nearest(start, radius)
         {
             let default_label_size = doc.drawing_style.font_size_pt;
+            let automatic_pair = if start.distance(end) < 3.
+                && matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar)
+            {
+                let atom = doc
+                    .atom(id)
+                    .ok_or("The symbol's attachment atom is unavailable")?;
+                Some(mark_placement::lone_pair(
+                    doc,
+                    atom,
+                    if kind == SymbolKind::LonePair {
+                        MarkKind::LonePair
+                    } else {
+                        MarkKind::LonePairBar
+                    },
+                ))
+            } else {
+                None
+            };
             let atom = doc
                 .atom_mut(id)
                 .ok_or("The symbol's attachment atom is unavailable")?;
-            let offset = if start.distance(end) < 3. {
+            let offset = if let Some((offset, _)) = automatic_pair {
+                offset
+            } else if start.distance(end) < 3. {
                 {
                     let angle = (-90. - 90. * (atom.marks.len() % 4) as f32).to_radians();
                     let label_size = atom
@@ -492,6 +515,11 @@ impl Drawing {
                 Point::new(end.x - atom.position.x, end.y - atom.position.y)
             };
             attach(atom, kind, offset)?;
+            if let Some((_, angle)) = automatic_pair
+                && let Some(mark) = atom.marks.last_mut()
+            {
+                mark.angle = angle;
+            }
             if !matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar) {
                 doc.invalidate_chemistry(&[id]);
             }
