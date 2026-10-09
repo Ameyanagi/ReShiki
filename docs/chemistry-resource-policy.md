@@ -32,13 +32,13 @@ known but its current usage cannot be read, headroom is conservatively zero.
 The platform snapshot cannot guarantee that
 another process will not consume memory after admission.
 
-| Resolved resource | Formula and independent bounds | Unknown observations |
-| --- | --- | --- |
-| Geometry allocator budget | headroom / 4, clamped to 64–512 MiB | 256 MiB |
-| Geometry deadline | 300 million / lookup rate seconds, clamped to 60–120 s | 60 s |
-| Aromaticity work | lookup rate × 10, clamped to 5–200 million units | 50 million |
-| Aromaticity deadline | 10 s | 10 s |
-| Aggregate calculation reservations | minimum of headroom / 2 and 1,280 MiB | 512 MiB |
+| Resolved resource                  | Formula and independent bounds                         | Unknown observations |
+| ---------------------------------- | ------------------------------------------------------ | -------------------- |
+| Geometry allocator budget          | headroom / 4, clamped to 64–512 MiB                    | 256 MiB              |
+| Geometry deadline                  | 300 million / lookup rate seconds, clamped to 60–120 s | 60 s                 |
+| Aromaticity work                   | lookup rate × 10, clamped to 5–200 million units       | 50 million           |
+| Aromaticity deadline               | 10 s                                                   | 10 s                 |
+| Aggregate calculation reservations | minimum of headroom / 2 and 1,280 MiB                  | 512 MiB              |
 
 A faster throughput observation never reduces the historical 60-second geometry
 deadline. The independent wall-clock bound remains effective for cases whose

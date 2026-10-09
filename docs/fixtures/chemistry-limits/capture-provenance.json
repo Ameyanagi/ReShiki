@@ -26,60 +26,42 @@
       "path": "docs/images/chemistry-limits/limits-513-applied-redo.jpg",
       "bytes": 310899,
       "SHA256": "fc859b309b0c8490cd813f592b61eac7847a692835abc69820e826304caafaaa",
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "copy_unchanged": true
     },
     {
       "path": "docs/images/chemistry-limits/limits-513-cap.jpg",
       "bytes": 507208,
       "SHA256": "e837f05a7d70c61991dbc083cabe4bf0649c9ea5cacfe285efaee8ad7de5f209",
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "copy_unchanged": true
     },
     {
       "path": "docs/images/chemistry-limits/limits-513-preview.jpg",
       "bytes": 348944,
       "SHA256": "5fe02d01f1d63e2bf9fcce7a9dbf013ac8d1d08ce99e85917aa5346d2cbd4874",
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "copy_unchanged": true
     },
     {
       "path": "docs/images/chemistry-limits/limits-fused-import-budget.jpg",
       "bytes": 254601,
       "SHA256": "8547621daf538247cef55c455bfa9747fc62510586dd45a81dc1b1a3043f5df2",
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "copy_unchanged": true
     },
     {
       "path": "docs/images/chemistry-limits/limits-fused-import-saved.jpg",
       "bytes": 464614,
       "SHA256": "3c0972a20048c71eeddf521da1a8b07a25f4cb7ae5090bf275f215eab024a295",
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "copy_unchanged": true
     },
     {
       "path": "docs/images/chemistry-limits/limits-fused-import-success.jpg",
       "bytes": 477892,
       "SHA256": "10801168f6d2ab8492c3fd9161f4cdd3f367a4809a55560b3d6eb33d68167734",
-      "pixels": [
-        2560,
-        1704
-      ],
+      "pixels": [2560, 1704],
       "copy_unchanged": true
     }
   ]

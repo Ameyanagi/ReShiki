@@ -44,6 +44,36 @@ fn resolved_capacity(
     Ok(capacity)
 }
 
+/// Enter before initializing the GUI or async runtime. The executable must
+/// install the same bounded Rust allocator as the existing InChI worker.
+pub fn run() {
+    let result = std::thread::Builder::new()
+        .name("geometry-operation".into())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(operation)
+        .map_err(|e| format!("Could not start geometry operation: {e}"))
+        .and_then(|thread| {
+            thread
+                .join()
+                .map_err(|_| "Geometry operation panicked".to_owned())?
+        });
+    let response = wire::Response {
+        version: reshiki_geometry::RDKIT_VERSION.into(),
+        result,
+    };
+    match wire::encode(&response, wire::MAX_RESPONSE_BYTES) {
+        Ok(bytes) => {
+            if io::stdout().write_all(&bytes).is_err() {
+                std::process::exit(1);
+            }
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,34 +104,5 @@ mod tests {
             )
             .is_err()
         );
-    }
-}
-/// Enter before initializing the GUI or async runtime. The executable must
-/// install the same bounded Rust allocator as the existing InChI worker.
-pub fn run() {
-    let result = std::thread::Builder::new()
-        .name("geometry-operation".into())
-        .stack_size(8 * 1024 * 1024)
-        .spawn(operation)
-        .map_err(|e| format!("Could not start geometry operation: {e}"))
-        .and_then(|thread| {
-            thread
-                .join()
-                .map_err(|_| "Geometry operation panicked".to_owned())?
-        });
-    let response = wire::Response {
-        version: reshiki_geometry::RDKIT_VERSION.into(),
-        result,
-    };
-    match wire::encode(&response, wire::MAX_RESPONSE_BYTES) {
-        Ok(bytes) => {
-            if io::stdout().write_all(&bytes).is_err() {
-                std::process::exit(1);
-            }
-        }
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(1);
-        }
     }
 }

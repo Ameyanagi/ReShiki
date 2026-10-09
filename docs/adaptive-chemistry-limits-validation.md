@@ -38,6 +38,20 @@ included alongside the audit.
 The [capture receipt](fixtures/chemistry-limits/capture-provenance.json) records
 the raw JPEG dimensions, hashes and capture-condition differences.
 
+A later CI follow-up moves only the worker's unchanged `cfg(test)` module below
+the production items and formats documentation. Production item text and all
+test assertions remain unchanged; the reviewed executable remains source
+`a018733f`, rather than a newly built CI-follow-up executable. The six formatted
+JSON copies retain identical parsed values. Their capture hashes in the audit
+refer to the original bytes at evidence commit
+`2f0e1e46bc4256269fc3de0bf9b9b0ac674bb478`; use the immutable
+[raw worker request](https://raw.githubusercontent.com/Ameyanagi/ReShiki/2f0e1e46bc4256269fc3de0bf9b9b0ac674bb478/docs/fixtures/chemistry-limits/packaged-app-worker-513-request.json)
+and [raw worker response](https://raw.githubusercontent.com/Ameyanagi/ReShiki/2f0e1e46bc4256269fc3de0bf9b9b0ac674bb478/docs/fixtures/chemistry-limits/packaged-app-worker-513-response.json)
+for that byte-level proof. Formatting changes the current request/response
+SHA-256 values to `b261cd65336e02164c51ce7d296dceef085d7e3ff46c6b505b710d7d3817526b`
+and `3552def87d36b1307b7b97f5bd544b5a0255655c5aa2fd483a6919ee42246b2b`, respectively;
+the JPEG and native-file bytes are unchanged.
+
 ## 513 original atoms: former size rejection to 3D preview
 
 Open the same [native input](fixtures/chemistry-limits/geometry-explicit-h-513-3d.rsk)
@@ -53,8 +67,8 @@ nonplanar seed from the actual geometry backend. It differs from #245's original
 a practical desktop comparison. It tests reuse of existing 3D geometry, rather
 than new embedding of an unseeded large molecule.
 
-| Baseline: 512-original-atom rejection | Candidate: admitted 3D preview |
-| --- | --- |
+| Baseline: 512-original-atom rejection                                                                                   | Candidate: admitted 3D preview                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![The same 513-atom input is rejected by the baseline's 512-atom 3D limit.](images/chemistry-limits/limits-513-cap.jpg) | ![The candidate opens a paused MMFF94s preview using existing 3D geometry at the same 13 percent zoom.](images/chemistry-limits/limits-513-preview.jpg) |
 
 The candidate's actual Properties panel shows **Paused · Existing 3D geometry**,
@@ -114,7 +128,7 @@ The issue originally used the Import panel; this desktop comparison checks the
 file-open import path with the same generated input:
 
 ```js
-'C12=CC=CC1' + '=CC=1C2=CC=2C1C=C1C2C=C2C1'.repeat(37) + '=CC=C2'
+"C12=CC=CC1" + "=CC=1C2=CC=2C1C=C1C2C=C2C1".repeat(37) + "=CC=C2";
 ```
 
 The baseline stays blank with **Aromaticity: Aromaticity work limit exceeded**.
@@ -125,8 +139,8 @@ This is a failure/success import comparison, not a comparison at equal drawing
 scale. The successful interaction capture retains the visible orange keyboard
 focus marker because F8 was on in both initial runs.
 
-| Baseline: import fails, blank canvas at 100% | Candidate: import succeeds, automatically fitted to 10% |
-| --- | --- |
+| Baseline: import fails, blank canvas at 100%                                                                                                             | Candidate: import succeeds, automatically fitted to 10%                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![The baseline leaves an empty canvas and reports that the aromaticity work limit was exceeded.](images/chemistry-limits/limits-fused-import-budget.jpg) | ![The same fused-ring input imports successfully; Properties shows C452H154, 452 atoms, 601 bonds and 150 rings.](images/chemistry-limits/limits-fused-import-success.jpg) |
 
 One **Undo** returned to a completely blank drawing with a clean title. **Redo**

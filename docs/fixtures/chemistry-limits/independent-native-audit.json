@@ -15,10 +15,7 @@
     "ordered_bond_endpoints_orders_display_stereo_exact": true,
     "bond_identity_note": "Native Bond records have no separate stored ID; compared ordered records and endpoint atom IDs.",
     "worker_coordinates": 515,
-    "temporary_hydrogen_parents_zero_based": [
-      170,
-      170
-    ],
+    "temporary_hydrogen_parents_zero_based": [170, 170],
     "temporary_H_not_saved_as_atoms": true,
     "derived_label_h_changes": [
       {
@@ -27,10 +24,7 @@
         "new": 2
       }
     ],
-    "document_version": [
-      1,
-      19
-    ],
+    "document_version": [1, 19],
     "xyz_finite": true,
     "nonzero_depth_count": 513,
     "scene_coordinates_changed": true,
@@ -42,7 +36,7 @@
       "proper_rotation_after_screen_Y_inversion_determinant": 0.9999999999999993,
       "note": "Rigid orientation, translation and uniform scene scaling; screen Y inversion is a display convention. Desktop Tilt up changes the view frame."
     },
-    "input_to_request_max_residual_angstrom": 8.702723192755002e-06,
+    "input_to_request_max_residual_angstrom": 8.702723192755002e-6,
     "worker_energy_kcal_mol": -36.9198750543448,
     "converged": false,
     "depth_appearance": {
@@ -70,10 +64,7 @@
     "connected_components": 1,
     "xyz_finite": true,
     "nonzero_depth_count": 0,
-    "XY_extents": [
-      8259.789,
-      89.895103
-    ],
+    "XY_extents": [8259.789, 89.895103],
     "native_label_h_total": 154
   },
   "input_and_saved_SHA256": {
