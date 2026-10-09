@@ -19,6 +19,7 @@ mod clipboard;
 mod ole;
 mod printing;
 mod stdio;
+pub mod window;
 
 pub use stdio::{
     Protected, StdHandle, StdioError, disinherit_standard_handles, standard_handle_inheritable,

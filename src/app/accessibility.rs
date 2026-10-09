@@ -28,6 +28,13 @@ pub(crate) const SUPPORTED: bool = cfg!(any(target_os = "macos", windows));
 static NEXT: AtomicU64 = AtomicU64::new(1);
 static EVENTS: Mutex<Option<mpsc::Receiver<Action>>> = Mutex::new(None);
 
+fn window_geometry(id: window::Id) -> Task<Message> {
+    window::size(id).then(move |size| {
+        window::scale_factor(id)
+            .map(move |scale| Message::Accessibility(Action::Geometry(id, size, scale)))
+    })
+}
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Window(window::Id, window::Event),
@@ -74,6 +81,8 @@ pub(super) struct State {
     window: Option<window::Id>,
     handle: Option<native::Handle>,
     installing: bool,
+    #[cfg(windows)]
+    fitting: bool,
     install_failed: bool,
     closed: bool,
     terminal: Option<Terminal>,
@@ -103,6 +112,8 @@ impl Default for State {
             window: None,
             handle: None,
             installing: false,
+            #[cfg(windows)]
+            fitting: false,
             install_failed: false,
             closed: false,
             terminal: None,
@@ -247,6 +258,10 @@ impl App {
         if !SUPPORTED || state.closed || state.window.is_none() {
             return Task::none();
         }
+        #[cfg(windows)]
+        if state.fitting {
+            return Task::none();
+        }
         state.sequence = state.sequence.wrapping_add(1);
         let (generation, sequence) = (state.generation, state.sequence);
         iced::advanced::widget::operate(Collect::new(iced::Rectangle::with_size(state.viewport)))
@@ -259,12 +274,19 @@ impl App {
         match action {
             Action::Window(id, window::Event::Opened { .. }) if !self.accessibility.closed => {
                 self.accessibility.window = Some(id);
-                window::size(id).then(move |size| {
-                    window::scale_factor(id)
-                        .map(move |scale| Message::Accessibility(Action::Geometry(id, size, scale)))
-                })
+                #[cfg(windows)]
+                {
+                    self.accessibility.fitting = true;
+                    crate::window_fit::fit(id, true).chain(window_geometry(id))
+                }
+                #[cfg(not(windows))]
+                window_geometry(id)
             }
             Action::Geometry(id, size, scale) if self.accessibility.window == Some(id) => {
+                #[cfg(windows)]
+                {
+                    self.accessibility.fitting = false;
+                }
                 self.accessibility.viewport = size;
                 self.accessibility.scale = scale;
                 self.accessibility_refresh()
@@ -272,7 +294,14 @@ impl App {
             Action::Window(id, event) if self.accessibility.window == Some(id) => {
                 match event {
                     window::Event::Resized(size) => self.accessibility.viewport = size,
-                    window::Event::Rescaled(scale) => self.accessibility.scale = scale,
+                    window::Event::Rescaled(scale) => {
+                        self.accessibility.scale = scale;
+                        #[cfg(windows)]
+                        if !self.accessibility.fitting {
+                            self.accessibility.fitting = true;
+                            return crate::window_fit::fit(id, false).chain(window_geometry(id));
+                        }
+                    }
                     window::Event::Focused => self.accessibility.focused = true,
                     window::Event::Unfocused => self.accessibility.focused = false,
                     window::Event::Closed => {
@@ -280,6 +309,12 @@ impl App {
                         return Task::none();
                     }
                     _ => return Task::none(),
+                }
+                #[cfg(windows)]
+                if self.accessibility.fitting {
+                    // A native resize may arrive before the startup fit's task
+                    // finishes. Publish/install only after size and position fit.
+                    return Task::none();
                 }
                 self.accessibility.last = None;
                 self.accessibility_refresh()
@@ -290,6 +325,10 @@ impl App {
                     && sequence == self.accessibility.sequence
                     && !self.accessibility.closed =>
             {
+                #[cfg(windows)]
+                if self.accessibility.fitting {
+                    return Task::none();
+                }
                 let title = self.title();
                 let state = &mut self.accessibility;
                 let tree = match state.tree.update(
