@@ -104,7 +104,20 @@ impl App {
                 return;
             }
             Action::Continue => {
+                let Some(id) = self
+                    .selected_path()
+                    .filter(|graphic| !graphic.path_closed())
+                    .map(|graphic| graphic.id)
+                else {
+                    self.status = "Select one open continuous path".into();
+                    self.error = true;
+                    return;
+                };
+                let point = self.tab.path_point;
                 self.select_tool(Tool::Graphic(GraphicKind::Path));
+                self.tab.selected = vec![id];
+                self.tab.path_point = point;
+                self.sync_graphics();
                 return;
             }
             _ => {}

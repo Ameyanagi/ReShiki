@@ -117,6 +117,51 @@ fn pen_point_selection_is_ephemeral_and_kept_per_document_tab() {
 }
 
 #[test]
+fn pen_continue_from_select_and_edit_points_appends_to_the_same_path_with_one_undo() {
+    for tool in [Tool::Select, Tool::EditPoints] {
+        let mut app = fixture_app();
+        app.tab.doc.add_atom("O", Point::new(500., 20.));
+        let id = app.tab.selected[0];
+        let _ = app.update(Message::Tool(tool));
+        send(&mut app, PathAction::Node(3));
+        let point = app.tab.path_point;
+        let before = app.tab.doc.clone();
+        let tab = app.tab.id;
+        let tabs = app.tabs.background.len();
+        send(&mut app, PathAction::Continue);
+        assert_eq!(app.tool, Tool::Graphic(GraphicKind::Path));
+        assert_eq!(app.tab.selected, vec![id]);
+        assert_eq!(app.tab.path_point, point);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Canvas(Edit::PenSegment(Stroke {
+            start: Point::new(360., 50.),
+            end: Point::new(360., 50.),
+            dragged: false,
+            close: false,
+        })));
+        assert!(!app.error, "{}", app.status);
+        let after = app.tab.doc.clone();
+        assert_eq!(after.graphics.len(), before.graphics.len());
+        assert_eq!(after.graphics[0].id, id);
+        assert_eq!(
+            after.graphics[0].path.len(),
+            before.graphics[0].path.len() + 1
+        );
+        assert_eq!(after.graphics[1], before.graphics[1]);
+        assert_eq!(after.atoms, before.atoms);
+        assert_eq!(after.bonds, before.bonds);
+        assert_eq!(app.tab.id, tab);
+        assert_eq!(app.tabs.background.len(), tabs);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+    }
+}
+
+#[test]
 fn pen_edge_on_point_drag_explains_rejection_without_edit_or_history() {
     let mut app = fixture_app();
     app.tab.doc.graphics[0].axis_y = Point::default();
