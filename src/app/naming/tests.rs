@@ -115,6 +115,83 @@ async fn changed_preview_no_longer_claims_original_chemical_name() -> Result<(),
     Ok(())
 }
 
+#[tokio::test]
+async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completion()
+-> Result<(), String> {
+    for action in [Action::UpdatePreview, Action::RestorePreview] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let initial = if matches!(action, Action::RestorePreview) {
+            "CCN"
+        } else {
+            "CCO"
+        };
+        let preview = prepare_preview(app.engine.clone(), record("CCO"), initial.into()).await?;
+        app.tab.naming.set_preview(preview);
+        let _ = app.naming_action(Action::Smiles("CCN".into()));
+        let result_identity = if matches!(action, Action::RestorePreview) {
+            "CCO"
+        } else {
+            "CCN"
+        };
+        let _ = app.naming_action(action);
+        let stale = app.tab.naming.pending.unwrap().ticket();
+        let _ = app.naming_action(Action::Smiles("CCC".into()));
+        assert!(app.tab.naming.pending.is_none());
+        let old =
+            prepare_preview(app.engine.clone(), record("CCO"), result_identity.into()).await?;
+        let _ = app.naming_action(Action::Finished(
+            stale,
+            Box::new(Ok(Outcome::Preview(Box::new(old.clone())))),
+        ));
+        assert_eq!(app.tab.naming.smiles, "CCC");
+        assert_eq!(app.tab.naming.preview.as_ref().unwrap().identity, initial);
+        let _ = app.naming_action(Action::Insert);
+        assert!(app.tab.doc.atoms.is_empty());
+        assert!(!app.tab.history.can_undo());
+
+        let _ = app.naming_action(Action::UpdatePreview);
+        let latest = app.tab.naming.pending.unwrap().ticket();
+        let _ = app.naming_action(Action::Finished(
+            stale,
+            Box::new(Ok(Outcome::Preview(Box::new(old)))),
+        ));
+        assert_eq!(app.tab.naming.pending.unwrap().ticket(), latest);
+        assert_eq!(app.tab.naming.smiles, "CCC");
+        let current = prepare_preview(app.engine.clone(), record("CCO"), "CCC".into()).await?;
+        let _ = app.naming_action(Action::Finished(
+            latest,
+            Box::new(Ok(Outcome::Preview(Box::new(current)))),
+        ));
+        assert_eq!(app.tab.naming.preview.as_ref().unwrap().identity, "CCC");
+        let _ = app.naming_action(Action::Insert);
+        assert_eq!(naming::document_identity(&app.tab.doc)?.smiles, "CCC");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn preview_text_edits_do_not_cancel_an_independent_structure_lookup() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    app.tab.doc = preview.document.clone();
+    app.tab.selected = app.tab.doc.all_ids();
+    app.tab.naming.set_preview(preview);
+    app.tab.naming.structure_consent = true;
+    let _ = app.naming_action(Action::Lookup);
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    let _ = app.naming_action(Action::Smiles("CCC".into()));
+    assert_eq!(app.tab.naming.pending.unwrap().ticket(), ticket);
+    let _ = app.naming_action(Action::Finished(
+        ticket,
+        Box::new(Ok(Outcome::Structure(record("CCO")))),
+    ));
+    assert!(app.tab.naming.structure.is_some());
+    assert_eq!(app.tab.naming.smiles, "CCC");
+    assert_eq!(app.tab.naming.preview.as_ref().unwrap().identity, "CCO");
+    Ok(())
+}
+
 #[test]
 fn stale_results_and_name_consent_cannot_reach_another_document_or_request() {
     let (mut app, _) = App::new();

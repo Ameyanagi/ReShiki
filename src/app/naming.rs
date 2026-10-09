@@ -20,6 +20,19 @@ pub struct Ticket {
     serial: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pending {
+    Request(Ticket),
+    Preview(Ticket),
+}
+impl Pending {
+    fn ticket(self) -> Ticket {
+        match self {
+            Self::Request(ticket) | Self::Preview(ticket) => ticket,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Name(String),
@@ -85,7 +98,7 @@ pub(super) struct State {
     source: NameSource,
     consent: bool,
     structure_consent: bool,
-    pending: Option<Ticket>,
+    pending: Option<Pending>,
     serial: u64,
     candidates: Vec<Record>,
     preview: Option<Preview>,
@@ -134,8 +147,14 @@ impl App {
             revision: self.tab.revision,
             serial: self.tab.naming.serial,
         };
-        self.tab.naming.pending = Some(ticket);
+        self.tab.naming.pending = Some(Pending::Request(ticket));
         self.tab.naming.notice = None;
+        ticket
+    }
+
+    fn naming_preview_ticket(&mut self) -> Ticket {
+        let ticket = self.naming_ticket();
+        self.tab.naming.pending = Some(Pending::Preview(ticket));
         ticket
     }
 
@@ -209,7 +228,7 @@ impl App {
                 let Some(record) = self.tab.naming.candidates.get(index).cloned() else {
                     return Task::none();
                 };
-                let ticket = self.naming_ticket();
+                let ticket = self.naming_preview_ticket();
                 let engine = self.engine.clone();
                 return Task::perform(
                     async move {
@@ -220,7 +239,17 @@ impl App {
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
-            Action::Smiles(smiles) => self.tab.naming.smiles = smiles,
+            Action::Smiles(smiles) => {
+                let state = &mut self.tab.naming;
+                if state.smiles != smiles && matches!(state.pending, Some(Pending::Preview(_))) {
+                    // A local rebuild must never overwrite newer text or make
+                    // its older chemical identity insertable after this edit.
+                    state.serial = state.serial.wrapping_add(1);
+                    state.pending = None;
+                    state.notice = None;
+                }
+                state.smiles = smiles;
+            }
             Action::UpdatePreview | Action::RestorePreview => {
                 if self.tab.naming.pending.is_some() {
                     return Task::none();
@@ -234,7 +263,7 @@ impl App {
                 } else {
                     self.tab.naming.smiles.clone()
                 };
-                let ticket = self.naming_ticket();
+                let ticket = self.naming_preview_ticket();
                 let engine = self.engine.clone();
                 return Task::perform(
                     async move {
@@ -246,7 +275,9 @@ impl App {
                 );
             }
             Action::Finished(ticket, result) => {
-                if self.tab.naming.pending != Some(ticket) || ticket.epoch != self.tab.file_epoch {
+                if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
+                    || ticket.epoch != self.tab.file_epoch
+                {
                     return Task::none();
                 }
                 self.tab.naming.pending = None;

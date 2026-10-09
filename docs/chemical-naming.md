@@ -28,6 +28,9 @@ layout. Edit its SMILES and press **Update preview** to change chemistry
 locally, or **Restore source** to return to the source interpretation. A
 changed chemical identity explicitly invalidates applicability of the
 original source name. Unapplied SMILES edits cannot be inserted. The graph is
+kept separate from entered text: typing during a rebuild retains the latest
+input and cancels that older preview result. Apply the current text again
+before insertion. The graph is
 verified again before insertion; coordinate edits cannot silently substitute
 a different stereoisomer. **Insert editable structure** creates one Undo
 step. The inserted molecule supports normal editing, native save and chemical
