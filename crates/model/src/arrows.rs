@@ -688,3 +688,5 @@ impl Arrow {
 
 #[cfg(test)]
 mod paths_parity_tests;
+#[cfg(test)]
+mod curve_tests;

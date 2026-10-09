@@ -13,6 +13,9 @@ use crate::{
 };
 use serde::Serialize;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ArrowError {
     #[error(transparent)]
