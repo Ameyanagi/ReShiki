@@ -16,9 +16,8 @@ pub(super) fn memory_headroom() -> Option<u64> {
     let process = fs::read_to_string("/proc/self/limits")
         .ok()
         .and_then(|limits| {
-            fs::read_to_string("/proc/self/status")
-                .ok()
-                .and_then(|status| process_limits_headroom(&limits, &status))
+            let status = fs::read_to_string("/proc/self/status").unwrap_or_default();
+            process_limits_headroom(&limits, &status)
         });
     let mut container = Vec::new();
     if let Ok(groups) = fs::read_to_string("/proc/self/cgroup") {
@@ -64,9 +63,16 @@ fn process_limits_headroom(limits: &str, status: &str) -> Option<u64> {
                 .next()?
                 .parse::<u64>()
                 .ok()?;
-            Some(limit.saturating_sub(kib_field(status, usage)?))
+            Some(observed_limit_headroom(limit, kib_field(status, usage)))
         }),
     )
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+fn observed_limit_headroom(limit: u64, used: Option<u64>) -> u64 {
+    // A known finite constraint must not turn into an unconstrained fallback
+    // when its usage probe fails. Unknown usage conservatively denies work.
+    limit.saturating_sub(used.unwrap_or(limit))
 }
 
 #[cfg(any(target_os = "linux", test))]
@@ -89,9 +95,7 @@ fn cgroup_headroom(
                 .ok()
                 .and_then(|s| s.trim().parse::<u64>().ok())
         };
-        let current = read(limit_name)
-            .zip(read(used_name))
-            .map(|(limit, used)| limit.saturating_sub(used));
+        let current = read(limit_name).map(|limit| observed_limit_headroom(limit, read(used_name)));
         headroom = minimum([headroom, current]);
         if directory == base || !directory.pop() {
             break;
@@ -200,12 +204,13 @@ fn process_headroom() -> Option<u64> {
         })
         .min()?;
     let pid = std::process::id().to_string();
-    let resident = command("/bin/ps", &["-o", "rss=", "-p", &pid])?
-        .trim()
-        .parse::<u64>()
-        .ok()?
-        .checked_mul(1024)?;
-    Some(limit.saturating_sub(resident))
+    if limit == 0 {
+        return Some(0);
+    }
+    let resident = command("/bin/ps", &["-o", "rss=", "-p", &pid])
+        .and_then(|output| output.trim().parse::<u64>().ok())
+        .and_then(|kib| kib.checked_mul(1024));
+    Some(observed_limit_headroom(limit, resident))
 }
 
 #[cfg(windows)]
@@ -338,7 +343,10 @@ mod tests {
         let limits = "Max address space unlimited unlimited bytes\nMax data size 4096 4096 bytes\n";
         assert_eq!(process_limits_headroom(limits, status), Some(2048));
         assert_eq!(process_limits_headroom(limits, "VmData:  5 kB\n"), Some(0));
-        assert_eq!(process_limits_headroom(limits, ""), None);
+        assert_eq!(process_limits_headroom(limits, ""), Some(0));
+        assert_eq!(observed_limit_headroom(0, None), 0);
+        assert_eq!(observed_limit_headroom(4096, None), 0);
+        assert_eq!(observed_limit_headroom(4096, Some(1024)), 3072);
     }
 
     #[test]
@@ -365,6 +373,11 @@ mod tests {
             Some(450)
         );
         std::fs::write(leaf.join("memory.current"), "10001").unwrap();
+        assert_eq!(
+            cgroup_headroom(&root, "/parent/leaf", "memory.max", "memory.current"),
+            Some(0)
+        );
+        std::fs::remove_file(leaf.join("memory.current")).unwrap();
         assert_eq!(
             cgroup_headroom(&root, "/parent/leaf", "memory.max", "memory.current"),
             Some(0)
