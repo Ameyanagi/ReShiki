@@ -1,0 +1,192 @@
+[
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/crates/depict-math#reshiki-depict-math@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/depict-math/Cargo.toml",
+    "target": "reshiki_depict_math",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/crates/process-heap#reshiki-process-heap@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/process-heap/Cargo.toml",
+    "target": "reshiki_process_heap",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/vendor/zune-jpeg#0.5.15",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/vendor/zune-jpeg/Cargo.toml",
+    "target": "zune_jpeg",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/vendor/usvg#0.45.1",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/vendor/usvg/Cargo.toml",
+    "target": "usvg",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/crates/chemistry#reshiki-chemistry@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/chemistry/Cargo.toml",
+    "target": "reshiki_chemistry",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming#reshiki@0.11.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/Cargo.toml",
+    "target": "build-script-build",
+    "kind": [
+      "custom-build"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/native/macos#reshiki-macos@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/native/macos/Cargo.toml",
+    "target": "reshiki_macos",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/native/windows#reshiki-windows@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/native/windows/Cargo.toml",
+    "target": "reshiki_windows",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/native/process#reshiki-process@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/native/process/Cargo.toml",
+    "target": "reshiki_process",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/vendor/svg2pdf#0.13.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/vendor/svg2pdf/Cargo.toml",
+    "target": "svg2pdf",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/crates/model#reshiki-model@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/model/Cargo.toml",
+    "target": "reshiki_model",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/native/linux#reshiki-linux@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/native/linux/Cargo.toml",
+    "target": "reshiki_linux",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/native/geometry#reshiki-geometry@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/native/geometry/Cargo.toml",
+    "target": "reshiki_geometry",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/crates/io#reshiki-io@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/io/Cargo.toml",
+    "target": "reshiki_io",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/crates/agent#reshiki-agent@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/agent/Cargo.toml",
+    "target": "reshiki_agent",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming/crates/mcp#reshiki-mcp@0.1.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/crates/mcp/Cargo.toml",
+    "target": "reshiki_mcp",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming#reshiki@0.11.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/Cargo.toml",
+    "target": "reshiki",
+    "kind": [
+      "lib"
+    ],
+    "fresh": false,
+    "executable": null
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming#reshiki@0.11.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/Cargo.toml",
+    "target": "reshiki-inchi-helper",
+    "kind": [
+      "bin"
+    ],
+    "fresh": false,
+    "executable": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki-inchi-helper"
+  },
+  {
+    "package": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/naming#reshiki@0.11.0",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/naming/Cargo.toml",
+    "target": "reshiki",
+    "kind": [
+      "bin"
+    ],
+    "fresh": false,
+    "executable": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki"
+  }
+]

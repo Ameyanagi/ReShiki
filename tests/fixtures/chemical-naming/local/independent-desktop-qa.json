@@ -1,0 +1,564 @@
+{
+  "status": "PASS_BOUNDED_NATIVE_QA",
+  "created_utc": "2026-10-09T15:30:04.483937+00:00",
+  "scope": "Independent saved-native byte equality, exact signed native CLI analysis and RDKit graph/CIP checks; no GUI operations or naming/API service calls",
+  "captured_source_commit": "aaa6f9b791d0c256603e83ee96f0c232dfdf2c00",
+  "current_head_checked": "74fbcac3a91ce57861221b65a3817ef5b9940eb7",
+  "current_delta": {
+    "paths": [
+      ".github/workflows/checks.yml"
+    ],
+    "one_CI_environment_line_only": true,
+    "production_inputs_unchanged": true
+  },
+  "candidate": {
+    "sha256": "1c7d39e208a86f6cab7c4db9da9b48e2b28438f363cbe206f07a01b4ca6f61f1",
+    "bytes": 228855920,
+    "codesign_deep_strict": "PASS",
+    "compiled_source_map_files_verified": 1082,
+    "compiler_own_fresh_false_artifacts": 19,
+    "source_map_sha256": "96956636d802d21c941878cadc809d8a3ca801f525628bfad8112916fa677890",
+    "GUI_process_receipt": {
+      "status": "PASS",
+      "actual_running_app": {
+        "pid": 23570,
+        "executable": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Local Naming Verified.app/Contents/MacOS/reshiki"
+      },
+      "signed_sha256": "1c7d39e208a86f6cab7c4db9da9b48e2b28438f363cbe206f07a01b4ca6f61f1",
+      "launch": "CUA explicit absolute app path; other ReShiki apps quit",
+      "shared_bundle_id": "dev.reshiki.editor",
+      "no_UI_inspection_or_input_by_this_process_check": true
+    }
+  },
+  "baseline": {
+    "sha256": "493a0cb49f79f76ae2ee0716a690c20ce3981f15f701c0a9651552addaa8bf95",
+    "bytes": 221811328,
+    "codesign_deep_strict": "PASS",
+    "historically_protected_bundle_files_unchanged": 9,
+    "GUI_process_receipt": {
+      "time_utc": "2026-10-09T15:21:55.503425+00:00",
+      "pid": 29845,
+      "kernel_executable_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Baseline.app/Contents/MacOS/reshiki",
+      "sha256": "493a0cb49f79f76ae2ee0716a690c20ce3981f15f701c0a9651552addaa8bf95",
+      "only_reshiki_process": true
+    },
+    "declared_source_base": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "source_base_has_no_naming_modules_or_action": true,
+    "compiler_digest_link_to_declared_base": "UNVERIFIED; historical bundle context and signed process receipt do not prove original compilation from declared base"
+  },
+  "raw_files": {
+    "ambiguous-optical-name-rejected.jpg": {
+      "bytes": 501769,
+      "sha256": "472ab52a2411cf9f608dcf5ffbe17b4c3f9d46dcce3ccac370c5a8e8f0e9a445"
+    },
+    "baseline-name-workflow-missing.jpg": {
+      "bytes": 255879,
+      "sha256": "bc539834cc23c0c75b2a9904f49298e8e3ef4ccefea58f940f2feb3281b37dd6"
+    },
+    "ethanol-caption-fresh-reopen.jpg": {
+      "bytes": 324574,
+      "sha256": "7ed76d81827d28abb05805e9d35c94517eaad68abfab4f52de46ccc80f5aaf7d"
+    },
+    "ethanol-caption-fresh-reopen.rsk": {
+      "bytes": 2246,
+      "sha256": "d8a51047d9e1dc8866815246bebf2b3306a893dfbb0597731070f71e1098c004"
+    },
+    "ethanol-caption-redo.rsk": {
+      "bytes": 2246,
+      "sha256": "d8a51047d9e1dc8866815246bebf2b3306a893dfbb0597731070f71e1098c004"
+    },
+    "ethanol-caption-undo.rsk": {
+      "bytes": 1681,
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c"
+    },
+    "ethanol-caption.jpg": {
+      "bytes": 487079,
+      "sha256": "659eb6497f100fd70a8d9249f29c1b4d39f0b2afb383af4229c383bd6d38ef7d"
+    },
+    "ethanol-caption.rsk": {
+      "bytes": 2246,
+      "sha256": "d8a51047d9e1dc8866815246bebf2b3306a893dfbb0597731070f71e1098c004"
+    },
+    "ethanol-empty-before-insert.rsk": {
+      "bytes": 214,
+      "sha256": "aede89f4a68a902161a5dba6eb93e4b3227c727c01997f89164df47a4f5c91a0"
+    },
+    "ethanol-insert-redo.rsk": {
+      "bytes": 1681,
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c"
+    },
+    "ethanol-insert-undo.jpg": {
+      "bytes": 375715,
+      "sha256": "956f39077bd6311fa5d87b31a7073da13f385d7ba993d18ca87cfde5fcbc2add"
+    },
+    "ethanol-insert-undo.rsk": {
+      "bytes": 214,
+      "sha256": "aede89f4a68a902161a5dba6eb93e4b3227c727c01997f89164df47a4f5c91a0"
+    },
+    "ethanol-inserted.jpg": {
+      "bytes": 407272,
+      "sha256": "4962042291e25ec4599cba5653a85510c75a4c970598b94c4dac1f3e5d618006"
+    },
+    "ethanol-inserted.rsk": {
+      "bytes": 1681,
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c"
+    },
+    "ethanol-local-mode.jpg": {
+      "bytes": 329814,
+      "sha256": "cbf1c09c29eb03d2579f518f38d39b5ad9795d4905852b3ff0c7939ebe38d425"
+    },
+    "ethanol-local-preview.jpg": {
+      "bytes": 369072,
+      "sha256": "608122a2cede5bfe063ddf533ea94df4614287a8df4ecff191f4d1f7f54afa86"
+    },
+    "ethanol-local-reverse.jpg": {
+      "bytes": 464832,
+      "sha256": "0d05975757338715cacf4b511bb64f723d19122ca24a7b42701a38d8fabd172c"
+    },
+    "r-lactic-after-rejected-name.rsk": {
+      "bytes": 3533,
+      "sha256": "27d7e0604d353410c216fa63be1e32424257422d7ceada204d7c28bba1753599"
+    },
+    "r-lactic-fresh-reopen.jpg": {
+      "bytes": 321985,
+      "sha256": "0d88708d08987ece00c30d583829d6d9ff9fe06c6262089dd16548c679bd5c4b"
+    },
+    "r-lactic-fresh-reopen.rsk": {
+      "bytes": 3533,
+      "sha256": "27d7e0604d353410c216fa63be1e32424257422d7ceada204d7c28bba1753599"
+    },
+    "r-lactic-inserted.rsk": {
+      "bytes": 3533,
+      "sha256": "27d7e0604d353410c216fa63be1e32424257422d7ceada204d7c28bba1753599"
+    },
+    "r-lactic-local-preview.jpg": {
+      "bytes": 378601,
+      "sha256": "10f8ee33820625c78e74da292af882ed9b5ebecd5875d23e2bfcbeb1aaf5bbfa"
+    },
+    "r-lactic-local-reverse.jpg": {
+      "bytes": 499334,
+      "sha256": "9e313f77f16204715a327e7bb9b8ff6d5649d0e3fff1d8e08a0828bb9b7f6334"
+    }
+  },
+  "raw_file_counts": {
+    "native_RSK": 11,
+    "JPEG": 12
+  },
+  "raw_inputs_unchanged": true,
+  "byte_equalities": [
+    {
+      "files": [
+        "ethanol-empty-before-insert.rsk",
+        "ethanol-insert-undo.rsk"
+      ],
+      "raw_bytes_equal": true,
+      "sha256": "aede89f4a68a902161a5dba6eb93e4b3227c727c01997f89164df47a4f5c91a0"
+    },
+    {
+      "files": [
+        "ethanol-inserted.rsk",
+        "ethanol-insert-redo.rsk",
+        "ethanol-caption-undo.rsk"
+      ],
+      "raw_bytes_equal": true,
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c"
+    },
+    {
+      "files": [
+        "ethanol-caption.rsk",
+        "ethanol-caption-redo.rsk",
+        "ethanol-caption-fresh-reopen.rsk"
+      ],
+      "raw_bytes_equal": true,
+      "sha256": "d8a51047d9e1dc8866815246bebf2b3306a893dfbb0597731070f71e1098c004"
+    },
+    {
+      "files": [
+        "r-lactic-inserted.rsk",
+        "r-lactic-after-rejected-name.rsk",
+        "r-lactic-fresh-reopen.rsk"
+      ],
+      "raw_bytes_equal": true,
+      "sha256": "27d7e0604d353410c216fa63be1e32424257422d7ceada204d7c28bba1753599"
+    }
+  ],
+  "caption_delta": {
+    "only_one_annotation_added": true,
+    "text": "ethan-1-ol",
+    "annotation_id": 4,
+    "all_other_native_fields_exact": true
+  },
+  "native_version": 19,
+  "CLI": {
+    "headless_dispatch_source": [
+      "src/main.rs:91",
+      "src/launch.rs:52",
+      "src/cli.rs:83",
+      "src/cli/analyze.rs:11"
+    ],
+    "same_executable_InChI_helper_discovery": "crates/chemistry/src/inchi/helper.rs:37",
+    "network_policy": "(version 1) (allow default) (deny network*)",
+    "helper_override_unset": true,
+    "bounded_heap_MiB": 512,
+    "per_call_timeout_seconds": 25,
+    "results": [
+      {
+        "file": "ethanol-caption.rsk",
+        "argv": [
+          "/usr/bin/sandbox-exec",
+          "-p",
+          "(version 1) (allow default) (deny network*)",
+          "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Local Naming Verified.app/Contents/MacOS/reshiki",
+          "--cli",
+          "analyze",
+          "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/local-naming-evidence/desktop/ethanol-caption.rsk"
+        ],
+        "exit": 0,
+        "seconds": 0.085197,
+        "stderr": "",
+        "stdout_sha256": "e212abfa7210bfb8bf98396fb848365eae4a2ba1e0637fe7411793da8d8f5523",
+        "result": {
+          "api": {
+            "operation_api": 1,
+            "stability": "experimental"
+          },
+          "experimental": true,
+          "validation": {
+            "status": "valid"
+          },
+          "value": {
+            "analysis": {
+              "acceptors": 1,
+              "donors": 1,
+              "exact_mass": 46.041864812,
+              "formula": "C2H6O",
+              "inchi": "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3",
+              "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
+              "logp": -0.0014000000000000123,
+              "mass": 46.069,
+              "rings": 0,
+              "smiles": "CCO",
+              "tpsa": 20.23,
+              "unpaired_electrons": 0
+            },
+            "analyzed_atoms": [
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "versions": {
+            "app": "0.11.0",
+            "document": 19,
+            "engine_protocol": 1,
+            "operation_api": 1
+          },
+          "warnings": []
+        }
+      },
+      {
+        "file": "r-lactic-after-rejected-name.rsk",
+        "argv": [
+          "/usr/bin/sandbox-exec",
+          "-p",
+          "(version 1) (allow default) (deny network*)",
+          "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Local Naming Verified.app/Contents/MacOS/reshiki",
+          "--cli",
+          "analyze",
+          "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/local-naming-evidence/desktop/r-lactic-after-rejected-name.rsk"
+        ],
+        "exit": 0,
+        "seconds": 0.062338,
+        "stderr": "",
+        "stdout_sha256": "d3ba264227feb00b652616ace5fd3df37bf3f4605f86f66ad33d03cf35672d5a",
+        "result": {
+          "api": {
+            "operation_api": 1,
+            "stability": "experimental"
+          },
+          "experimental": true,
+          "validation": {
+            "status": "valid"
+          },
+          "value": {
+            "analysis": {
+              "acceptors": 2,
+              "donors": 2,
+              "exact_mass": 90.031694052,
+              "formula": "C3H6O3",
+              "inchi": "InChI=1S/C3H6O3/c1-2(4)3(5)6/h2,4H,1H3,(H,5,6)/t2-/m1/s1",
+              "inchikey": "JVTAAEKCZFNVCJ-UWTATZPHSA-N",
+              "logp": -0.5482,
+              "mass": 90.07799999999999,
+              "rings": 0,
+              "smiles": "C[C@@H](O)C(=O)O",
+              "tpsa": 57.53,
+              "unpaired_electrons": 0
+            },
+            "analyzed_atoms": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ]
+          },
+          "versions": {
+            "app": "0.11.0",
+            "document": 19,
+            "engine_protocol": 1,
+            "operation_api": 1
+          },
+          "warnings": []
+        }
+      }
+    ]
+  },
+  "RDKit": {
+    "version": "2026.03.6",
+    "native_graph_reconstruction": true,
+    "native_stereo_convention_source": "crates/model/src/chemistry/document.rs:75,207",
+    "independent_inversion_parity_and_wedge_coordinates": true,
+    "results": [
+      {
+        "file": "ethanol-caption.rsk",
+        "cached_CIP_and_H_labels_used": false,
+        "independent_expected_graph_match": true,
+        "modes": {
+          "native_stereo": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          },
+          "drawing_wedge_coordinates": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          }
+        }
+      },
+      {
+        "file": "ethanol-caption-fresh-reopen.rsk",
+        "cached_CIP_and_H_labels_used": false,
+        "independent_expected_graph_match": true,
+        "modes": {
+          "native_stereo": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          },
+          "drawing_wedge_coordinates": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          }
+        }
+      },
+      {
+        "file": "ethanol-caption-redo.rsk",
+        "cached_CIP_and_H_labels_used": false,
+        "independent_expected_graph_match": true,
+        "modes": {
+          "native_stereo": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          },
+          "drawing_wedge_coordinates": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          }
+        }
+      },
+      {
+        "file": "ethanol-caption-undo.rsk",
+        "cached_CIP_and_H_labels_used": false,
+        "independent_expected_graph_match": true,
+        "modes": {
+          "native_stereo": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          },
+          "drawing_wedge_coordinates": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          }
+        }
+      },
+      {
+        "file": "ethanol-insert-redo.rsk",
+        "cached_CIP_and_H_labels_used": false,
+        "independent_expected_graph_match": true,
+        "modes": {
+          "native_stereo": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          },
+          "drawing_wedge_coordinates": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          }
+        }
+      },
+      {
+        "file": "ethanol-inserted.rsk",
+        "cached_CIP_and_H_labels_used": false,
+        "independent_expected_graph_match": true,
+        "modes": {
+          "native_stereo": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          },
+          "drawing_wedge_coordinates": {
+            "canonical_isomeric_smiles": "CCO",
+            "formula": "C2H6O",
+            "atoms": 3,
+            "bonds": 2,
+            "cip_centers_zero_based": []
+          }
+        }
+      },
+      {
+        "file": "r-lactic-after-rejected-name.rsk",
+        "cached_CIP_and_H_labels_used": false,
+        "independent_expected_graph_match": true,
+        "modes": {
+          "native_stereo": {
+            "canonical_isomeric_smiles": "C[C@@H](O)C(=O)O",
+            "formula": "C3H6O3",
+            "atoms": 6,
+            "bonds": 5,
+            "cip_centers_zero_based": [
+              [
+                1,
+                "R"
+              ]
+            ]
+          },
+          "drawing_wedge_coordinates": {
+            "canonical_isomeric_smiles": "C[C@@H](O)C(=O)O",
+            "formula": "C3H6O3",
+            "atoms": 6,
+            "bonds": 5,
+            "cip_centers_zero_based": [
+              [
+                1,
+                "R"
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "file": "r-lactic-fresh-reopen.rsk",
+        "cached_CIP_and_H_labels_used": false,
+        "independent_expected_graph_match": true,
+        "modes": {
+          "native_stereo": {
+            "canonical_isomeric_smiles": "C[C@@H](O)C(=O)O",
+            "formula": "C3H6O3",
+            "atoms": 6,
+            "bonds": 5,
+            "cip_centers_zero_based": [
+              [
+                1,
+                "R"
+              ]
+            ]
+          },
+          "drawing_wedge_coordinates": {
+            "canonical_isomeric_smiles": "C[C@@H](O)C(=O)O",
+            "formula": "C3H6O3",
+            "atoms": 6,
+            "bonds": 5,
+            "cip_centers_zero_based": [
+              [
+                1,
+                "R"
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "file": "r-lactic-inserted.rsk",
+        "cached_CIP_and_H_labels_used": false,
+        "independent_expected_graph_match": true,
+        "modes": {
+          "native_stereo": {
+            "canonical_isomeric_smiles": "C[C@@H](O)C(=O)O",
+            "formula": "C3H6O3",
+            "atoms": 6,
+            "bonds": 5,
+            "cip_centers_zero_based": [
+              [
+                1,
+                "R"
+              ]
+            ]
+          },
+          "drawing_wedge_coordinates": {
+            "canonical_isomeric_smiles": "C[C@@H](O)C(=O)O",
+            "formula": "C3H6O3",
+            "atoms": 6,
+            "bonds": 5,
+            "cip_centers_zero_based": [
+              [
+                1,
+                "R"
+              ]
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "visual_spot_check": [
+    "baseline-name-workflow-missing.jpg",
+    "ethanol-caption-fresh-reopen.jpg",
+    "r-lactic-fresh-reopen.jpg",
+    "ambiguous-optical-name-rejected.jpg"
+  ],
+  "limits": [
+    "The root supplied actual CUA captures and process receipts; this audit did not reproduce GUI actions or independently witness a fresh launch.",
+    "Raw images cannot prove process identity or history by themselves; saved equality and supplied process receipts are separate evidence.",
+    "No GUI Cancel action was exercised or claimed by this audit.",
+    "This bounded ethanol/R-lactic validation does not establish universal IUPAC/PIN correctness or broader naming coverage.",
+    "Historical baseline compiler-source correlation remains unverified; do not identify it as a proven 51fa build."
+  ],
+  "no_Cargo_or_shared_target_or_GUI_or_network_API": true,
+  "new_receipts_only": [
+    "independent-desktop-qa.py",
+    "independent-desktop-qa.json",
+    "independent-desktop-qa.md"
+  ]
+}

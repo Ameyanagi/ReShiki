@@ -4,8 +4,9 @@ Open **Import → Chemical names…**. Both directions are deterministic local
 operations: names and graphs are not sent to a service, and there is no network
 fallback. The earlier HTTP prototype in draft [PR #275](https://github.com/Ameyanagi/ReShiki/pull/275)
 is superseded; its screenshots remain [historical evidence](chemical-naming-visual-review.md).
-The local macOS rule, parser and worker tests pass. New desktop validation of
-this local revision is pending.
+Local macOS rule, parser and worker tests and the actual
+[local desktop review](chemical-naming-local-visual-review.md) pass. The feature
+remains under review; required cross-platform CI is separate.
 
 ## Name → editable structure
 
@@ -39,6 +40,10 @@ changes, the input name is no longer asserted to describe it. Review native
 import warnings when present, then **Insert editable structure**. Insertion is
 one Undo step. Scrolled preview hit testing, stale-input tickets, per-tab state
 and graph verification protect the insertion.
+
+Wheel input inside the preview pans its camera; Command/Control-wheel zooms.
+To scroll the surrounding panel, use its header or margin. **Restore parsed
+structure** rebuilds and recenters a preview moved out of view.
 
 ## Structure → local systematic name
 
@@ -170,13 +175,22 @@ HTTP desktop evidence to this local implementation.
 The locked native workspace suite passes 2,016 tests across 125 suites, with 99
 explicit opt-in/live/reference tests ignored. Nine naming app state/history
 tests and two separately selected actual-renderer accessibility/scrolled Insert
-tests pass. These renderer tests do not replace the pending desktop review.
+tests pass. The separate actual macOS desktop review verifies local ethanol and
+R-lactic parsing/generation, scrolled insertion, caption history, explicit
+optical-rotation rejection and fresh-process reopening. All 12 raw JPEGs and
+11 native files are preserved with a byte/hash/history verifier. An
+[independent native QA receipt](../tests/fixtures/chemical-naming/local/independent-desktop-qa.md)
+confirms signed-app network-denied CLI formulas/graphs and independent RDKit
+stereo reconstruction. GUI Cancel was not clicked; cancellation is tested in
+the compiled suite. RDKit and the evidence verifier are maintainer validation
+tools, not application dependencies.
 
 ```sh
 cargo build --locked --no-default-features -p reshiki --bin reshiki
 RESHIKI_JAVA=/absolute/path/to/java RESHIKI_NAMING_HELPER=/absolute/path/to/that/reshiki cargo test --locked -p reshiki --lib naming::
 RESHIKI_INCHI_HELPER=/absolute/path/to/that/reshiki cargo test --locked --no-default-features -p reshiki --bin reshiki app::naming::tests
 cargo test --locked -p reshiki-process
+python3 scripts/verify_chemical_naming_desktop.py
 ```
 
 Independent rule cases include 2,2,5-trimethylhexane (complete locant comparison),
@@ -194,7 +208,8 @@ exact built executable, not a Rust test harness or another worktree's cached app
 CI requires the naming suite in the existing macOS ARM64, Windows x64 and Linux
 x64 Rust jobs. A repository composite uses the official pinned
 [setup-java v5.6.0 action](https://github.com/actions/setup-java/releases/tag/v5.6.0)
-to select [Temurin 21.0.11+10](https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.11%2B10),
+to select [Temurin 21.0.11+10](https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.11%2B10)
+using its exact provider selector `21.0.11+10.0.LTS`,
 records its exact executable as `RESHIKI_JAVA`, and builds this source's app for
 `RESHIKI_NAMING_HELPER`. The required workspace tests exercise independent naming
 rules, local parser reconstruction, strict semantic rejection and worker limits.
@@ -212,7 +227,13 @@ profile rather than Apple's installer launcher. Java 11 bytecode compatibility
 is checked; actual Java 11 runtime execution is not yet tested.
 Strict process-crate compilation/linting passes for macOS, Linux and Windows on
 ARM64 and x64; those cross-compiles do not establish other-platform runtime
-behavior. New CI execution of the declared Temurin runtime remains pending. Offline naming
+behavior. Required native CI completion remains pending. The earlier
+[invalid-context run](https://github.com/Ameyanagi/ReShiki/actions/runs/37948361760)
+scheduled no native jobs; the subsequent
+[shortened Java-selector run](https://github.com/Ameyanagi/ReShiki/actions/runs/37951149210)
+stopped all three native hosts before application build/tests. These CI setup
+failures are retained separately from local application checks; both narrow
+workflow corrections preserve exact runtime/helper guards. Offline naming
 tests use only embedded parser resources and local fixtures. Explicit network
 denial has been exercised for the current macOS naming, process and escaped-pipe
 suites using the macOS sandbox; it is not claimed for other CI operating systems.

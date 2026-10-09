@@ -1,0 +1,323 @@
+{
+  "capture_date_local": "2026-10-10 Asia/Tokyo",
+  "capture_date_utc": "2026-10-09",
+  "platform": "macOS arm64",
+  "app_source": "aaa6f9b791d0c256603e83ee96f0c232dfdf2c00",
+  "baseline_kernel_proof": {
+    "time_utc": "2026-10-09T15:21:55.503425+00:00",
+    "pid": 29845,
+    "kernel_executable_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Baseline.app/Contents/MacOS/reshiki",
+    "sha256": "493a0cb49f79f76ae2ee0716a690c20ce3981f15f701c0a9651552addaa8bf95",
+    "only_reshiki_process": true
+  },
+  "local_app_kernel_proof": {
+    "status": "PASS",
+    "actual_running_app": {
+      "pid": 23570,
+      "executable": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Local Naming Verified.app/Contents/MacOS/reshiki"
+    },
+    "signed_sha256": "1c7d39e208a86f6cab7c4db9da9b48e2b28438f363cbe206f07a01b4ca6f61f1",
+    "launch": "CUA explicit absolute app path; other ReShiki apps quit",
+    "shared_bundle_id": "dev.reshiki.editor",
+    "no_UI_inspection_or_input_by_this_process_check": true
+  },
+  "build_and_runtime": {
+    "source_commit": "aaa6f9b791d0c256603e83ee96f0c232dfdf2c00",
+    "source_worktree": "/Users/ryuichi/dev/ReShiki-worktrees/naming",
+    "source_clean": true,
+    "source_refresh_files": 1082,
+    "source_sha256": "96956636d802d21c941878cadc809d8a3ca801f525628bfad8112916fa677890",
+    "all_source_contents_still_match_refresh": true,
+    "compiler_artifacts": 19,
+    "compiler_packages": 16,
+    "all_own_compiler_artifacts_fresh_false": true,
+    "app_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Local Naming Verified.app",
+    "signed_executable_sha256": "1c7d39e208a86f6cab7c4db9da9b48e2b28438f363cbe206f07a01b4ca6f61f1",
+    "raw_executable_sha256": "b691f38f836881ecfea53ecd979a3ecb2824cb2db71ba821d601e8d5169b59eb",
+    "codesign_verify": "PASS deep strict",
+    "old_online_app_unmodified_sha256": "467aaeb6b71a18a51946b831bdc5546f389f2e53f1469665a78356f667af7ce5",
+    "no_LSEnvironment_or_global_runtime_change": true,
+    "java_discovery": {
+      "discovery": "/Users/ryuichi/.nix-profile/bin/java",
+      "is_file": true,
+      "resolved_executable": "/nix/store/vnycnlns50zkb0pns9rd7vhpv3m0fxc4-zulu-ca-jdk-21.0.8/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home/bin/java",
+      "version": "openjdk 21.0.8 2025-07-15 LTS\nOpenJDK Runtime Environment Zulu21.44+17-CA (build 21.0.8+9-LTS)\nOpenJDK 64-Bit Server VM Zulu21.44+17-CA (build 21.0.8+9-LTS, mixed mode, sharing)\n",
+      "apple_stub_excluded": true,
+      "worker_java_heap_MiB": 192,
+      "GUI_global_settings_modified": false
+    },
+    "name_to_structure": "Local embedded unmodified pinned OPSIN core 2.9.0; installed compatible Java 11+ HotSpot prerequisite",
+    "structure_to_name": "Original native ReShiki organic rules 1 declared subset; exact local OPSIN graph/stereo gate; not all IUPAC/PIN or synonyms",
+    "signed_headless_smoke": {
+      "deny_network": true,
+      "RESHIKI_JAVA_and_JAVA_HOME_unset": true,
+      "PATH": "/usr/bin:/bin",
+      "native_reverse_CCO": "ethan-1-ol",
+      "native_engine_CCO_formula": "C2H6O",
+      "native_engine_graph": [
+        3,
+        2
+      ],
+      "seconds": 3.16
+    },
+    "workspace_suite": {
+      "suites": 125,
+      "passed": 2016,
+      "failed": 0,
+      "ignored": 99,
+      "cargo_exit": 0,
+      "required_command": "cargo test --workspace --locked --offline --no-default-features",
+      "helper": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki"
+    },
+    "pending": "Root actual desktop QA; remote pinned Java CI and non-Mac runtime tests"
+  },
+  "preservation": "All12 screenshot and11 native Save As files copied byte for byte. No crop, annotation, recompression or rewriting. Screenshots show actual native app, not library-only renders.",
+  "capture_conditions": "JACS / ACS; Arial10pt; keyboard drawing off. Baseline/import and local name previews100%. Insertion/Redo fit and generation/caption/reopen250%. Naming inspector340logical pixels versus baseline300; intentionally different panel scroll positions. Selection handles show complete input for generation; fresh-reopen release views have no selection.",
+  "manual_checks": [
+    "ethanol local parse\u2192CCO3atoms2bonds",
+    "scrolled Insert then one Undo and Redo raw snapshots",
+    "complete CCO local Generate\u2192ethan-1-ol",
+    "caption insertion then one Undo and Redo raw snapshots",
+    "(R)-lactic acid local parse\u2192C[C@@H](O)C(=O)O6atoms5bonds and local Generate\u2192(2R)-2-hydroxypropanoic acid",
+    "(+)-lactic acid rejects ignored optical-rotation semantics; raw drawing unchanged",
+    "fresh process reopen of lactic and ethanol caption; raw snapshots unchanged; Undo/Redo disabled; properties formulas and canonical SMILES visible"
+  ],
+  "manual_not_exercised": [
+    "GUI Cancel; covered by compiled state/process cancellation tests, not desktop click",
+    "Java11 runtime; actual host Java21.0.8+9 tested",
+    "All supported chemical classes via desktop; wider66/14 fixture tests separately recorded"
+  ],
+  "review_notes": [
+    "Wheel inside preview pans camera, Command/Control-wheel zooms; initial pan trial moved molecule outside view. Restore parsed structure recentered it; use header/margin wheel to scroll outer panel. Graph unchanged.",
+    "Shared dev.reshiki.editor bundle ID surfaced recovery UI; reviewer dismissed recovery at observed footer. No source fixture was modified.",
+    "Fresh reopening followed pgrep -x reshiki empty and CUA absolute unique app path; no old HTTP app was run."
+  ],
+  "files": [
+    {
+      "path": "docs/images/chemical-naming/local/ambiguous-optical-name-rejected.jpg",
+      "sha256": "472ab52a2411cf9f608dcf5ffbe17b4c3f9d46dcce3ccac370c5a8e8f0e9a445",
+      "bytes": 501769,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 250
+    },
+    {
+      "path": "docs/images/chemical-naming/local/baseline-name-workflow-missing.jpg",
+      "sha256": "bc539834cc23c0c75b2a9904f49298e8e3ef4ccefea58f940f2feb3281b37dd6",
+      "bytes": 255879,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 100
+    },
+    {
+      "path": "docs/images/chemical-naming/local/ethanol-caption-fresh-reopen.jpg",
+      "sha256": "7ed76d81827d28abb05805e9d35c94517eaad68abfab4f52de46ccc80f5aaf7d",
+      "bytes": 324574,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 250
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/ethanol-caption-fresh-reopen.rsk",
+      "sha256": "d8a51047d9e1dc8866815246bebf2b3306a893dfbb0597731070f71e1098c004",
+      "bytes": 2246,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/ethanol-caption-redo.rsk",
+      "sha256": "d8a51047d9e1dc8866815246bebf2b3306a893dfbb0597731070f71e1098c004",
+      "bytes": 2246,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/ethanol-caption-undo.rsk",
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "bytes": 1681,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "docs/images/chemical-naming/local/ethanol-caption.jpg",
+      "sha256": "659eb6497f100fd70a8d9249f29c1b4d39f0b2afb383af4229c383bd6d38ef7d",
+      "bytes": 487079,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 250
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/ethanol-caption.rsk",
+      "sha256": "d8a51047d9e1dc8866815246bebf2b3306a893dfbb0597731070f71e1098c004",
+      "bytes": 2246,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/ethanol-empty-before-insert.rsk",
+      "sha256": "aede89f4a68a902161a5dba6eb93e4b3227c727c01997f89164df47a4f5c91a0",
+      "bytes": 214,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/ethanol-insert-redo.rsk",
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "bytes": 1681,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "docs/images/chemical-naming/local/ethanol-insert-undo.jpg",
+      "sha256": "956f39077bd6311fa5d87b31a7073da13f385d7ba993d18ca87cfde5fcbc2add",
+      "bytes": 375715,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 250
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/ethanol-insert-undo.rsk",
+      "sha256": "aede89f4a68a902161a5dba6eb93e4b3227c727c01997f89164df47a4f5c91a0",
+      "bytes": 214,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "docs/images/chemical-naming/local/ethanol-inserted.jpg",
+      "sha256": "4962042291e25ec4599cba5653a85510c75a4c970598b94c4dac1f3e5d618006",
+      "bytes": 407272,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 250
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/ethanol-inserted.rsk",
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "bytes": 1681,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "docs/images/chemical-naming/local/ethanol-local-mode.jpg",
+      "sha256": "cbf1c09c29eb03d2579f518f38d39b5ad9795d4905852b3ff0c7939ebe38d425",
+      "bytes": 329814,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 100
+    },
+    {
+      "path": "docs/images/chemical-naming/local/ethanol-local-preview.jpg",
+      "sha256": "608122a2cede5bfe063ddf533ea94df4614287a8df4ecff191f4d1f7f54afa86",
+      "bytes": 369072,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 100
+    },
+    {
+      "path": "docs/images/chemical-naming/local/ethanol-local-reverse.jpg",
+      "sha256": "0d05975757338715cacf4b511bb64f723d19122ca24a7b42701a38d8fabd172c",
+      "bytes": 464832,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 250
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/r-lactic-after-rejected-name.rsk",
+      "sha256": "27d7e0604d353410c216fa63be1e32424257422d7ceada204d7c28bba1753599",
+      "bytes": 3533,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "docs/images/chemical-naming/local/r-lactic-fresh-reopen.jpg",
+      "sha256": "0d88708d08987ece00c30d583829d6d9ff9fe06c6262089dd16548c679bd5c4b",
+      "bytes": 321985,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 250
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/r-lactic-fresh-reopen.rsk",
+      "sha256": "27d7e0604d353410c216fa63be1e32424257422d7ceada204d7c28bba1753599",
+      "bytes": 3533,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "tests/fixtures/chemical-naming/local/r-lactic-inserted.rsk",
+      "sha256": "27d7e0604d353410c216fa63be1e32424257422d7ceada204d7c28bba1753599",
+      "bytes": 3533,
+      "format": "native JSON RSK19",
+      "zoom_percent": null
+    },
+    {
+      "path": "docs/images/chemical-naming/local/r-lactic-local-preview.jpg",
+      "sha256": "10f8ee33820625c78e74da292af882ed9b5ebecd5875d23e2bfcbeb1aaf5bbfa",
+      "bytes": 378601,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 100
+    },
+    {
+      "path": "docs/images/chemical-naming/local/r-lactic-local-reverse.jpg",
+      "sha256": "9e313f77f16204715a327e7bb9b8ff6d5649d0e3fff1d8e08a0828bb9b7f6334",
+      "bytes": 499334,
+      "format": "native JPEG screenshot",
+      "zoom_percent": 250
+    }
+  ],
+  "declared_PR_base": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "baseline_build_source_linkage": "Historical preserved signed baseline with kernel executable path/SHA proof; no fresh compiler receipt links it to the declared PR base. Do not assert exact-source rebuild for this baseline.",
+  "workflow_only_followups": [
+    "74fbcac3a91ce57861221b65a3817ef5b9940eb7",
+    "e7bc9156ace67d3b518363f5014ac3151c1c5975"
+  ],
+  "independent_saved_native_QA": {
+    "checked_head": "74fbcac3a91ce57861221b65a3817ef5b9940eb7",
+    "receipts": {
+      "independent-desktop-qa.json": "ef76c7700e0f66e3c17f4705b3f7ea76e7226788ee30d46a8468583629efd416",
+      "independent-desktop-qa.md": "93caaba7dbfd344fb8b7f1302003464446e10e10487abfbb031711c47c1741eb"
+    },
+    "scope": "Exact signed-app deny-network native CLI; independent RDKit2026.03.6 native winding and separate wedge/coordinate reconstruction; no independent GUI replay or Java naming-worker invocation."
+  },
+  "unchanged_upstream_notices": {
+    "files": 39,
+    "all_bytes_match_validated_aaa6_commit": true,
+    "original_notice_sha256": {
+      "licenses/opsin/NOTICE": "ed201cdf521225e8d4a159816b182c6a4cc051e5f8c577dc3077bdc459e5072d",
+      "licenses/opsin/OPSIN-LICENSE": "aeeafe2053175a5b34cb2ded4410581ccd36b82c734315be1a7a81c6f9fb4834",
+      "licenses/opsin/automaton-1.12-4/header-68396315e04d.txt": "68396315e04dceea70c0e238b9d10c11d3cf65219444e46f2eda67b08f23fb70",
+      "licenses/opsin/automaton-1.12-4/header-81ead89903c1.txt": "81ead89903c15f5f94d42db379e91b13c02a1cf911ea4074868607128ed51103",
+      "licenses/opsin/automaton-1.12-4/header-sources.json": "859c72f9f62e2c17b20523e47defcf2e00aa061754ee415b28bfdfa99f5ceea5",
+      "licenses/opsin/automaton-1.12-4/upstream.pom": "e1f0a1c7cad058f344909e8016ff2e466764515c5cc55d4d988d6c601fa1f521",
+      "licenses/opsin/commons-io-2.21.0/META-INF_LICENSE.txt": "c1d1a38c99c48ccad170890ade6066e2e240bb6ce59861d4eb7f672eddd2a4c6",
+      "licenses/opsin/commons-io-2.21.0/META-INF_NOTICE.txt": "b54b0db6c617273efff79ba193bb01b05eadcddfff55c24063b38b2acef714c3",
+      "licenses/opsin/commons-io-2.21.0/upstream.pom": "ae47795e721803ec8ff1deed74be28a811a02713bd5a3ab0ac67c2b58cb635ab",
+      "licenses/opsin/dependencies.json": "ed3d3dbfe1c3bc4e4614a66bda5574dc3cad54a27dedfad42c4d9817d5b0c957",
+      "licenses/opsin/isorelax-20090621/header-079d048a1159.txt": "079d048a1159f9a533bf5cf6abf87d164ddfad75ebe981bc7fe8360c2386a233",
+      "licenses/opsin/isorelax-20090621/header-137d3cbd2df8.txt": "137d3cbd2df8f7e9c348fa3938ac51ed82fb49a7cf34fae9836a45c9c1e156db",
+      "licenses/opsin/isorelax-20090621/header-2360ac3a8ca3.txt": "2360ac3a8ca38a00e2bff84da055d3f9a4f1986e4944cb0ca191c64056f26141",
+      "licenses/opsin/isorelax-20090621/header-30ad8a2c0731.txt": "30ad8a2c07310a0dfa42dfea2a59c230db0bed6cdba4d4e99ad9314089d5bc4b",
+      "licenses/opsin/isorelax-20090621/header-381776e51cca.txt": "381776e51ccab9f47c7b6c6147709ec9ae26aef6d3fc757842b3e06a7d08f670",
+      "licenses/opsin/isorelax-20090621/header-8a58bccbaaa1.txt": "8a58bccbaaa1014d7de61986aa47d1c1faefb6cc00162caf06df6fa06de3dca8",
+      "licenses/opsin/isorelax-20090621/header-bf1c8f6c7c9f.txt": "bf1c8f6c7c9f6daf46cc69f3a9f38b74fd21ecde4c581650f8a651268a2ee8ae",
+      "licenses/opsin/isorelax-20090621/header-c9ccd1f287bd.txt": "c9ccd1f287bd51a19d4bedf359d91196250d9fc2fc6c758cd74601026426fcb1",
+      "licenses/opsin/isorelax-20090621/header-ce1608281b5b.txt": "ce1608281b5b9009b6a7f4ec775dbdbc5087202958591f8378d2783ce1fe67b3",
+      "licenses/opsin/isorelax-20090621/header-sources.json": "07e40ce2951d75437eaceca9c30ea87d7918e125d14ab2d8999e5612dc6355e7",
+      "licenses/opsin/isorelax-20090621/upstream.pom": "cda6451d0231a973352b592ff950e39224ba6ba1a2f35eeab66511b5c225dff1",
+      "licenses/opsin/log4j-api-2.25.3/META-INF_LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "licenses/opsin/log4j-api-2.25.3/META-INF_NOTICE": "007ef6e72e17fa83cd07e455ab1251c127ab310a89434138bc8d01aef8de5f4e",
+      "licenses/opsin/log4j-api-2.25.3/upstream.pom": "3284be6573aeb83346cff6b746fa325d23eadd9d09c8e286ed1d75904a12dd6e",
+      "licenses/opsin/stax2-api-4.2.2/META-INF_LICENSE": "b3e969d18f690ab8783e4ec77729c9fea85691b8090c550bb3c626dda5e837a7",
+      "licenses/opsin/stax2-api-4.2.2/UPSTREAM-LICENSE": "23ea581cb6573ec7a0e05b1f5c6c73024149885796c24489563f377775f7fdb2",
+      "licenses/opsin/stax2-api-4.2.2/upstream.pom": "4e902ec556fc6598b41c2952ec1573edc815037e7330ec4922eab619422686e2",
+      "licenses/opsin/supplementary-license-sources.json": "9bbf7b42c1e03951cbeb42088b9e81f28531f0f2af13f34eaaa59715d94fb431",
+      "licenses/opsin/woodstox-core-7.1.1/META-INF_LICENSE": "d2706a35658d83c27d7d5f357f5ba63877fd8694a3f6aee48b87036a41118c8a",
+      "licenses/opsin/woodstox-core-7.1.1/UPSTREAM-LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "licenses/opsin/woodstox-core-7.1.1/upstream.pom": "afb5cb45d41c1f9e3675909de4fef242bdc1cea4476a0634ae20f4d7a54433ff",
+      "licenses/opsin/xsdlib-2022.7/header-1078c6d1c54b.txt": "1078c6d1c54b28ad78e5bd9cb941a81298cc75b3b9591fd1a02c34f7848bd4fa",
+      "licenses/opsin/xsdlib-2022.7/header-149183670dad.txt": "149183670dad7c9f783ac00dc38b06aebac17d85d3d5d7373894c534af0e151d",
+      "licenses/opsin/xsdlib-2022.7/header-260d34681c2b.txt": "260d34681c2b042336a5894fef411afa8d5c08136ab5b76a3c7e272c8b17c4f3",
+      "licenses/opsin/xsdlib-2022.7/header-4c5a394111a5.txt": "4c5a394111a51c59ea2183f0259737f68c1acdc03d23e84d53986425ab028ff9",
+      "licenses/opsin/xsdlib-2022.7/header-7dc58b3955c7.txt": "7dc58b3955c72582e5149731e9ab3bdc20034b6690f0fa7ebcfc1f058f275a54",
+      "licenses/opsin/xsdlib-2022.7/header-e1ed14acc868.txt": "e1ed14acc868bfc3a00cae796060f7fba41ec89c4be635be4c2c86d62f398c53",
+      "licenses/opsin/xsdlib-2022.7/header-sources.json": "b4c44da14ef7d9901bc222458e6282540b577f42b50dcc979c488d3ba94be06c",
+      "licenses/opsin/xsdlib-2022.7/upstream.pom": "8649b880ac5dbb3549022c40eff4053930ea209c4aaf998925fb3d6dd75fb6c3"
+    }
+  },
+  "payload_pins": {
+    "unmodified_OPSIN_core_2.9.0_sha256": "627ee5da4af551f9c4d1d766f545eb7cf519a344776e0bb677247a47abac0252",
+    "original_adapter_jar_sha256": "0ea22d92917e852a2666e035de278ef7e162c6350a7a78c2a89bbd31d2b6a388",
+    "upstream_dependency_count": 7,
+    "notices": "licenses/opsin/NOTICE"
+  }
+}

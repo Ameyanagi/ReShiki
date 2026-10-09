@@ -1,4 +1,8 @@
-# Chemical naming desktop saves
+# Historical chemical naming desktop saves
+
+**Superseded HTTP prototype only.** The current local rule-based implementation
+has a separate [original desktop package](local/README.md) and
+[local review](../../../docs/chemical-naming-local-visual-review.md).
 
 These original native files were saved through ReShiki's desktop **Save As**
 command on macOS arm64 on 2026-10-09. Both contain ethanol: three atoms, two
