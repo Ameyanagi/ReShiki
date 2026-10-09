@@ -9,13 +9,13 @@ All local workspace crates were rebuilt from this worktree before preserving the
 
 | Before                                                                                       | New name-to-structure workflow                                                                                                |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| ![The old Import panel rejects ethanol as invalid SMILES](images/chemical-naming/before.png) | ![OPSIN ethanol result in an editable native CCO preview, with three atoms and two bonds](images/chemical-naming/preview.png) |
+| ![The old Import panel rejects ethanol as invalid SMILES](images/chemical-naming/before.jpg) | ![OPSIN ethanol result in an editable native CCO preview, with three atoms and two bonds](images/chemical-naming/preview.jpg) |
 
 Both captures start with a blank JACS / ACS drawing at 100% document zoom and default 10 pt labels. Before: keyboard drawing is enabled; type `ethanol` into Import and press Insert; the app reports invalid SMILES at byte zero. After: keyboard drawing is disabled with F8; choose Chemical names, select OPSIN, enter `ethanol`, explicitly permit sending the name, and Resolve. The Names inspector is wider (340 rather than 300 logical pixels), and its preview capture is scrolled to show the source, editable SMILES and insertion action. The document remains blank until insertion. This is a new workflow comparison; panel width, scroll position and keyboard state differ.
 
 The final actual desktop replay inserted the scrolled preview, removed the complete structure with one Undo, restored it with Redo, then selected all three atoms and two bonds. Separate consent sent `CCO` to PubChem. The first request in this final replay returned CID 702, systematic name ethanol, source title and synonyms. Each request cleared its send consent.
 
-![Selected ethanol graph with PubChem CID 702, systematic name, synonyms and source actions](images/chemical-naming/source-lookup.png)
+![Selected ethanol graph with PubChem CID 702, systematic name, synonyms and source actions](images/chemical-naming/source-lookup.jpg)
 
 The reverse capture is at 250% after insertion/Redo fit the document, with keyboard drawing disabled. Selection handles intentionally demonstrate the complete graph required by this lookup. The native result was saved through the desktop Save As command as [ethanol-desktop-final.rsk](../tests/fixtures/chemical-naming/ethanol-desktop-final.rsk). It contains exactly three atoms, two single bonds and no annotations, arrows, graphics or groups. Analysis through the exact signed candidate reports valid `CCO`, formula `C2H6O` and InChIKey `LFQSCWFLJHTTHZ-UHFFFAOYSA-N`, without warnings. The lookup is a source database lookup and may have no result for a novel graph; it is not an offline general IUPAC generator.
 
@@ -25,4 +25,4 @@ Desktop review found and fixed a preview mouse-coordinate leak after inspector s
 
 Release caption: Resolve chemical names into editable native structures, or look up a selected molecule's source systematic name and synonyms with explicit online consent and exact chemical-identity checks.
 
-All three screenshots are original, unretouched native captures. Structures are controlled chemical test data; service attribution and scope are described in [chemical-naming.md](chemical-naming.md).
+All three screenshots are original, unretouched native JPEG captures; their original image bytes are preserved. Structures are controlled chemical test data; service attribution and scope are described in [chemical-naming.md](chemical-naming.md).

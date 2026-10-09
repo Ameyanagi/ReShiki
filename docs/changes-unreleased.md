@@ -15,9 +15,9 @@ and exact chemical-identity checks. Contribution: @Ameyanagi in [PR #275](https:
 
 | Before                                                                                       | New editable structure preview                                                                                                |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| ![The old Import panel rejects ethanol as invalid SMILES](images/chemical-naming/before.png) | ![OPSIN ethanol result in an editable native CCO preview, with three atoms and two bonds](images/chemical-naming/preview.png) |
+| ![The old Import panel rejects ethanol as invalid SMILES](images/chemical-naming/before.jpg) | ![OPSIN ethanol result in an editable native CCO preview, with three atoms and two bonds](images/chemical-naming/preview.jpg) |
 
-![Complete selected ethanol graph with PubChem CID 702, systematic name, synonyms and source actions](images/chemical-naming/source-lookup.png)
+![Complete selected ethanol graph with PubChem CID 702, systematic name, synonyms and source actions](images/chemical-naming/source-lookup.jpg)
 
 These original desktop examples use the online OPSIN and PubChem services;
 structure-to-name retrieves a database record, so novel graphs may have no
