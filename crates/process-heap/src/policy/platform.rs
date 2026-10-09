@@ -89,12 +89,78 @@ fn cgroup_headroom(
 
 #[cfg(target_os = "macos")]
 pub(super) fn memory_headroom() -> Option<u64> {
-    let total = command("/usr/sbin/sysctl", &["-n", "hw.memsize"])
-        .and_then(|s| s.trim().parse::<u64>().ok());
-    let available = command("/usr/bin/vm_stat", &[]).and_then(|s| mach_available(&s));
+    let (total, available) = mach_memory();
     let host = available.map(|bytes| bytes.min(total.map_or(bytes, |total| total / 2)));
     // A failed host probe must not discard an observed process ceiling.
     minimum([host, process_headroom()])
+}
+
+#[cfg(target_os = "macos")]
+fn mach_memory() -> (Option<u64>, Option<u64>) {
+    use std::ffi::{c_char, c_void};
+    unsafe extern "C" {
+        fn sysctlbyname(
+            name: *const c_char,
+            old: *mut c_void,
+            length: *mut usize,
+            new: *mut c_void,
+            new_length: usize,
+        ) -> i32;
+        fn mach_host_self() -> u32;
+        static mach_task_self_: u32;
+        fn mach_port_deallocate(task: u32, port: u32) -> i32;
+        fn host_page_size(host: u32, page: *mut usize) -> i32;
+        fn host_statistics(host: u32, flavor: i32, values: *mut i32, count: *mut u32) -> i32;
+    }
+    struct Host(u32);
+    impl Drop for Host {
+        fn drop(&mut self) {
+            // SAFETY: mach_host_self returns a send right owned by this scope.
+            // mach_task_self_ is libSystem's initialized current-task port.
+            unsafe {
+                mach_port_deallocate(mach_task_self_, self.0);
+            }
+        }
+    }
+    let mut total = 0u64;
+    let mut bytes = std::mem::size_of_val(&total);
+    // SAFETY: the static C string and writable u64 buffer remain valid for this
+    // call. Null new-data arguments make this a read-only sysctl observation.
+    let total = (unsafe {
+        sysctlbyname(
+            c"hw.memsize".as_ptr(),
+            (&mut total as *mut u64).cast(),
+            &mut bytes,
+            std::ptr::null_mut(),
+            0,
+        )
+    } == 0
+        && bytes == std::mem::size_of::<u64>())
+    .then_some(total);
+    // SAFETY: mach_host_self has no pointer arguments and returns a send right.
+    let host = Host(unsafe { mach_host_self() });
+    if host.0 == 0 {
+        return (total, None);
+    }
+    let mut page = 0usize;
+    // HOST_VM_INFO's legacy layout is fixed at 15 natural_t words. Only the
+    // free/inactive page fields are read; free already includes speculative
+    // pages. Layout, flavor and ownership checked against the Darwin SDK's
+    // mach/{vm_statistics.h,host_info.h,mach_host.h,mach_init.h}.
+    let mut values = [0u32; 15];
+    let mut count = values.len() as u32;
+    // SAFETY: page and the complete aligned 15-word buffer are writable for
+    // these synchronous calls. The APIs neither retain nor free their pointers.
+    let ok = unsafe {
+        host_page_size(host.0, &mut page) == 0
+            && host_statistics(host.0, 2, values.as_mut_ptr().cast(), &mut count) == 0
+    };
+    let available = if ok && count == 15 && page > 0 {
+        available_pages(values[0], values[2], page as u64)
+    } else {
+        None
+    };
+    (total, available)
 }
 
 #[cfg(target_os = "macos")]
@@ -183,28 +249,8 @@ fn kib_field(input: &str, name: &str) -> Option<u64> {
 }
 
 #[cfg(any(target_os = "macos", test))]
-fn mach_available(input: &str) -> Option<u64> {
-    let page = input
-        .lines()
-        .next()?
-        .split("page size of ")
-        .nth(1)?
-        .split_whitespace()
-        .next()?
-        .parse::<u64>()
-        .ok()?;
-    let mut pages = 0u64;
-    for field in ["Pages free:", "Pages inactive:", "Pages speculative:"] {
-        let number = input
-            .lines()
-            .find_map(|line| line.strip_prefix(field))?
-            .trim()
-            .trim_end_matches('.')
-            .parse::<u64>()
-            .ok()?;
-        pages = pages.checked_add(number)?;
-    }
-    pages.checked_mul(page)
+fn available_pages(free: u32, inactive: u32, page: u64) -> Option<u64> {
+    (u64::from(free) + u64::from(inactive)).checked_mul(page)
 }
 
 #[cfg(target_os = "macos")]
@@ -267,9 +313,8 @@ mod tests {
             None
         );
         assert_eq!(minimum([Some(32_000), Some(512), None]), Some(512));
-        let mach = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free: 10.\nPages inactive: 20.\nPages speculative: 3.\n";
-        assert_eq!(mach_available(mach), Some(33 * 16384));
-        assert_eq!(mach_available("missing"), None);
+        assert_eq!(available_pages(13, 20, 16384), Some(33 * 16384));
+        assert_eq!(available_pages(u32::MAX, u32::MAX, u64::MAX), None);
     }
 
     #[test]
