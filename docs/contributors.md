@@ -13,4 +13,6 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
+Local Rust chemical naming and editor integration (under review): @Ameyanagi. The separate parser is introduced in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291); the [guide and native review](chemical-naming-rust.md) describe the bounded app workflow.
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

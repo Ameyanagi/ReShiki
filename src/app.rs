@@ -50,6 +50,7 @@ mod joining;
 mod keyboard_drawing;
 mod label_refresh;
 mod molecule_shortcuts;
+mod naming;
 mod numeric_transforms;
 mod object_toolbar;
 #[cfg(test)]
@@ -106,6 +107,7 @@ pub enum InspectorTab {
     Labels,
     Templates,
     Import,
+    Names,
     Export,
 }
 
@@ -164,6 +166,7 @@ pub enum Message {
     ToggleInspector,
     Inspector(InspectorTab),
     Imports(import::Action),
+    Naming(naming::Action),
     InsertInput,
     ToggleHelp,
     OpenShortcutExamples,

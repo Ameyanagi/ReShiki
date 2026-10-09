@@ -43,6 +43,7 @@ pub mod clipboard;
 pub mod hotkeys;
 pub mod keyboard_drawing;
 pub mod libreoffice;
+pub mod naming;
 #[cfg(not(windows))]
 pub(crate) mod native_process;
 pub mod office_addin;
