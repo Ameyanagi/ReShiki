@@ -175,7 +175,7 @@ fn calibrate() -> Option<u64> {
         }
     }
     let nanos = start.elapsed().as_nanos();
-    if nanos < 1_000_000 || nanos > 100_000_000 {
+    if !(1_000_000..=100_000_000).contains(&nanos) {
         return None;
     }
     u64::try_from(u128::from(operations) * 1_000_000_000 / nanos).ok()
