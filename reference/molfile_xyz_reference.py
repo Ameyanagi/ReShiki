@@ -27,7 +27,8 @@ def unknown_single(bond):
     # explicit single-bond unknown in its parser property, rather than BondDir.
     return bond.GetBondType() == Chem.BondType.SINGLE and (
         bond.GetBondDir() == Chem.BondDir.UNKNOWN
-        or bond.HasProp("_UnknownStereo") and bond.GetIntProp("_UnknownStereo") != 0
+        or bond.HasProp("_UnknownStereo")
+        and bond.GetIntProp("_UnknownStereo") != 0
     )
 
 
@@ -56,18 +57,31 @@ class Session:
         self.stderr = (outputs / "mcp-stderr.log").open("w")
         self.process = subprocess.Popen(
             [
-                str(executable), "--mcp", "--allow-read", str(fixtures),
-                "--allow-read", str(outputs), "--allow-write", str(outputs),
+                str(executable),
+                "--mcp",
+                "--allow-read",
+                str(fixtures),
+                "--allow-read",
+                str(outputs),
+                "--allow-write",
+                str(outputs),
             ],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
-            text=True, bufsize=1,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=self.stderr,
+            text=True,
+            bufsize=1,
         )
         self.serial = 0
         self.receipts = []
-        result = self.call("initialize", dict(
-            protocolVersion="2025-06-18", capabilities={},
-            clientInfo=dict(name="mol-xyz-reference", version="1"),
-        ))
+        result = self.call(
+            "initialize",
+            dict(
+                protocolVersion="2025-06-18",
+                capabilities={},
+                clientInfo=dict(name="mol-xyz-reference", version="1"),
+            ),
+        )
         assert "result" in result, result
         self.send(dict(jsonrpc="2.0", method="notifications/initialized"))
 
@@ -107,9 +121,16 @@ class Session:
         return self.tool("file_open", dict(path=str(path), format=format))["document"]
 
     def save(self, document, path, format):
-        return self.tool("file_save", dict(
-            document=document, path=str(path), format=format, overwrite=False, pages=None,
-        ))
+        return self.tool(
+            "file_save",
+            dict(
+                document=document,
+                path=str(path),
+                format=format,
+                overwrite=False,
+                pages=None,
+            ),
+        )
 
     def close(self, document):
         self.tool("document_close", dict(document=document))
@@ -130,7 +151,17 @@ def check(fixture, source, drawing, interchange, baseline):
     if not baseline:
         if fixture.stem.startswith("alkane-3d"):
             expected_count = 6
-        elif fixture.stem.startswith(("chiral-3d", "chiral-s-3d", "chiral-h-", "alkene-3d", "alkene-z-3d", "alkene-unknown-3d", "mixed-isotope-r")):
+        elif fixture.stem.startswith(
+            (
+                "chiral-3d",
+                "chiral-s-3d",
+                "chiral-h-",
+                "alkene-3d",
+                "alkene-z-3d",
+                "alkene-unknown-3d",
+                "mixed-isotope-r",
+            )
+        ):
             expected_count = 4
     assert len(drawing["atoms"]) == expected_count, (fixture.name, expected_count)
     kept = {atom["id"] - 1 for atom in drawing["atoms"]}
@@ -150,34 +181,54 @@ def check(fixture, source, drawing, interchange, baseline):
         actual = [atom["position"]["x"], atom["position"]["y"], atom.get("depth", 0)]
         if baseline:
             expected[2] = 0
-        assert all(abs(a - b) <= 1e-5 for a, b in zip(actual, expected)), (fixture.name, index, actual, expected)
+        assert all(abs(a - b) <= 1e-5 for a, b in zip(actual, expected)), (
+            fixture.name,
+            index,
+            actual,
+            expected,
+        )
         if original.GetAtomicNum() != 1:
             reference_xyz.append([point.x, point.y, point.z])
             native_xyz.append([actual[0] / 28, -actual[1] / 28, actual[2] / 28])
     bond_orders = {"SINGLE": 1, "DOUBLE": 2, "TRIPLE": 3, "AROMATIC": 4, "DATIVE": 5}
+
     def edge(a, b, order):
         return (a, b, order) if order == 5 else (min(a, b), max(a, b), order)
+
     expected_bonds = {
         edge(b.GetBeginAtomIdx() + 1, b.GetEndAtomIdx() + 1, bond_orders[str(b.GetBondType())])
-        for b in source.GetBonds() if b.GetBeginAtomIdx() in kept and b.GetEndAtomIdx() in kept
+        for b in source.GetBonds()
+        if b.GetBeginAtomIdx() in kept and b.GetEndAtomIdx() in kept
     }
     actual_bonds = {edge(b["a"], b["b"], b["order"]) for b in drawing["bonds"]}
     assert expected_bonds == actual_bonds, fixture.name
     unknown = sum(b.GetStereo() == Chem.BondStereo.STEREOANY for b in source.GetBonds())
     if not (baseline and unknown):
-        assert identity(source) == identity(interchange), (fixture.name, identity(source), identity(interchange))
-        assert unknown == sum(b.GetStereo() == Chem.BondStereo.STEREOANY for b in interchange.GetBonds()), fixture.name
+        assert identity(source) == identity(interchange), (
+            fixture.name,
+            identity(source),
+            identity(interchange),
+        )
+        assert unknown == sum(
+            b.GetStereo() == Chem.BondStereo.STEREOANY for b in interchange.GetBonds()
+        ), fixture.name
     if not baseline:
         assert unknown == sum(b.get("stereo") == "any" for b in drawing["bonds"]), fixture.name
         unknown_singles = sum(unknown_single(b) for b in source.GetBonds())
-        assert unknown_singles == sum(b["order"] == 1 and b["display"] == "wavy" and not b.get("projection", False) for b in drawing["bonds"]), fixture.name
+        assert unknown_singles == sum(
+            b["order"] == 1 and b["display"] == "wavy" and not b.get("projection", False)
+            for b in drawing["bonds"]
+        ), fixture.name
     maximum_distance_error, torsion_error = 0, None
     if not baseline:
         for i, point in enumerate(reference_xyz):
             for j in range(i):
-                maximum_distance_error = max(maximum_distance_error, abs(
-                    math.dist(point, reference_xyz[j]) - math.dist(native_xyz[i], native_xyz[j])
-                ))
+                maximum_distance_error = max(
+                    maximum_distance_error,
+                    abs(
+                        math.dist(point, reference_xyz[j]) - math.dist(native_xyz[i], native_xyz[j])
+                    ),
+                )
         assert maximum_distance_error <= 2e-6, (fixture.name, maximum_distance_error)
         if len(reference_xyz) >= 4:
             conformers = []
@@ -191,16 +242,24 @@ def check(fixture, source, drawing, interchange, baseline):
                 torsion_error = abs(math.remainder(angles[0] - angles[1], 2 * math.pi))
                 assert torsion_error <= 2e-6, (fixture.name, torsion_error)
     return dict(
-        fixture=fixture.name, source_atoms=source.GetNumAtoms(), drawing_atoms=len(drawing["atoms"]),
+        fixture=fixture.name,
+        source_atoms=source.GetNumAtoms(),
+        drawing_atoms=len(drawing["atoms"]),
         visible_hydrogens=sum(a["element"] == "H" for a in drawing["atoms"]),
         nonzero_z=sum(a.get("depth", 0) != 0 for a in drawing["atoms"]),
-        maximum_heavy_distance_error=maximum_distance_error, heavy_torsion_error=torsion_error,
-        identity=identity(source), mol_interchange_identity=identity(interchange),
+        maximum_heavy_distance_error=maximum_distance_error,
+        heavy_torsion_error=torsion_error,
+        identity=identity(source),
+        mol_interchange_identity=identity(interchange),
         source_unknown_doubles=unknown,
         native_unknown_doubles=sum(b.get("stereo") == "any" for b in drawing["bonds"]),
-        mol_interchange_unknown_doubles=sum(b.GetStereo() == Chem.BondStereo.STEREOANY for b in interchange.GetBonds()),
+        mol_interchange_unknown_doubles=sum(
+            b.GetStereo() == Chem.BondStereo.STEREOANY for b in interchange.GetBonds()
+        ),
         source_unknown_singles=sum(unknown_single(b) for b in source.GetBonds()),
-        native_unknown_singles=sum(b["order"] == 1 and b["display"] == "wavy" for b in drawing["bonds"]),
+        native_unknown_singles=sum(
+            b["order"] == 1 and b["display"] == "wavy" for b in drawing["bonds"]
+        ),
         mol_interchange_unknown_singles=sum(unknown_single(b) for b in interchange.GetBonds()),
     )
 
@@ -209,8 +268,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--fixtures", type=Path, default=Path(__file__).resolve().parents[1] / "tests/fixtures/mol-import-3d")
-    parser.add_argument("--baseline", action="store_true", help="Assert the frozen baseline's flattened, explicit-H behavior")
+    parser.add_argument(
+        "--fixtures",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "tests/fixtures/mol-import-3d",
+    )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Assert the frozen baseline's flattened, explicit-H behavior",
+    )
     args = parser.parse_args()
     fixtures, outputs = args.fixtures.resolve(), args.output_dir.resolve()
     outputs.mkdir(parents=True, exist_ok=False)
@@ -220,7 +287,10 @@ def main():
         for fixture in sorted(fixtures.glob("*.mol")):
             source = Chem.MolFromMolFile(str(fixture), removeHs=False, strictParsing=True)
             assert source is not None, fixture.name
-            native_path, mol_path = outputs / (fixture.stem + ".rsk"), outputs / (fixture.stem + ".mol")
+            native_path, mol_path = (
+                outputs / (fixture.stem + ".rsk"),
+                outputs / (fixture.stem + ".mol"),
+            )
             handle = session.open(fixture, "mol")
             session.save(handle, native_path, "reshiki")
             session.save(handle, mol_path, "mol")
@@ -230,7 +300,9 @@ def main():
             roundtrip = outputs / (fixture.stem + "-roundtrip.rsk")
             session.save(handle, roundtrip, "reshiki")
             session.close(handle)
-            assert native_content(json.loads(roundtrip.read_text())) == native_content(drawing), fixture.name
+            assert native_content(json.loads(roundtrip.read_text())) == native_content(drawing), (
+                fixture.name
+            )
             interchange = Chem.MolFromMolFile(str(mol_path), removeHs=False, strictParsing=True)
             assert interchange is not None, fixture.name
             record = check(fixture, source, drawing, interchange, args.baseline)
@@ -239,11 +311,28 @@ def main():
     finally:
         session.finish()
         (outputs / "receipts.json").write_text(json.dumps(session.receipts, indent=2) + "\n")
-        (outputs / "results.json").write_text(json.dumps(dict(
-            rdkit_version=rdBase.rdkitVersion, baseline=args.baseline, records=records,
-        ), indent=2) + "\n")
-    print(json.dumps(dict(passed_contract_controls=len(records), rdkit_version=rdBase.rdkitVersion,
-        recorded_baseline_identity_regressions=sum(r["identity"] != r["mol_interchange_identity"] for r in records))))
+        (outputs / "results.json").write_text(
+            json.dumps(
+                dict(
+                    rdkit_version=rdBase.rdkitVersion,
+                    baseline=args.baseline,
+                    records=records,
+                ),
+                indent=2,
+            )
+            + "\n"
+        )
+    print(
+        json.dumps(
+            dict(
+                passed_contract_controls=len(records),
+                rdkit_version=rdBase.rdkitVersion,
+                recorded_baseline_identity_regressions=sum(
+                    r["identity"] != r["mol_interchange_identity"] for r in records
+                ),
+            )
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -20,11 +20,11 @@ The current source restricts authority to `bond.order == 2` while retaining proj
 
 Reproduction path: read a 3D V2000/V3000 alkene carrying explicit unknown double-bond stereo (`metadata.stereo == 1`), then `for_display()` → drawing / labels → `restore_xyz()` → `document::prepare()` (also after native save/reopen or rotation).
 
-* `crates/model/src/chemistry/document/output.rs:594–601` depicts code 1 as `display = "wavy"`.
-* The same file's `labeled()` at 186–192 and `stereo_name()` at 203–210 do not persist code 1 as native `stereo = "any"`; they leave `None`.
-* `import.rs:222–229` adds projection and authoritative-double flags.
-* `crates/model/src/chemistry/document.rs:214–223` suppresses directions for projected bonds, so the wavy appearance cannot restore `Direction::Unknown`.
-* The wavy-double fallback at `document.rs:335–337` is explicitly disabled for authoritative doubles. The resulting metadata is stereo 0, and the preservation mask prevents subsequent geometry inference.
+- `crates/model/src/chemistry/document/output.rs:594–601` depicts code 1 as `display = "wavy"`.
+- The same file's `labeled()` at 186–192 and `stereo_name()` at 203–210 do not persist code 1 as native `stereo = "any"`; they leave `None`.
+- `import.rs:222–229` adds projection and authoritative-double flags.
+- `crates/model/src/chemistry/document.rs:214–223` suppresses directions for projected bonds, so the wavy appearance cannot restore `Direction::Unknown`.
+- The wavy-double fallback at `document.rs:335–337` is explicitly disabled for authoritative doubles. The resulting metadata is stereo 0, and the preservation mask prevents subsequent geometry inference.
 
 This loses the distinction between explicitly unknown and unspecified. It is not an R/S or E/Z inversion, but it is a stereochemical information loss. Existing `crates/io/src/chemistry/molfile/tests.rs:123–143` checks unknown-stereo MOL output directly from a molecule and bypasses drawing conversion, so it cannot detect this regression.
 
@@ -61,8 +61,8 @@ Initial `import.rs` SHA-256: `a7c07ea30655db9ca3549490be5de674b2d9fa00aaf3093a11
 
 Latest source snapshot read after the authority correction:
 
-* `import.rs`: `9730625891cd80d725c15eb079c66796c0d31c43d22870dcede73994a53b7593`.
-* `import/tests.rs`: `027d434fe5eaacddc65a5e498d08a9af80e5135a0929d8208cec52557a36f5a9`.
-* `engine/native_import.rs`: `0fd8e7d70ad3b47701d3bc70497f3331c17c2f9ae649d84b2ef91ec423c66d1e`.
+- `import.rs`: `9730625891cd80d725c15eb079c66796c0d31c43d22870dcede73994a53b7593`.
+- `import/tests.rs`: `027d434fe5eaacddc65a5e498d08a9af80e5135a0929d8208cec52557a36f5a9`.
+- `engine/native_import.rs`: `0fd8e7d70ad3b47701d3bc70497f3331c17c2f9ae649d84b2ef91ec423c66d1e`.
 
 The worktree is concurrently edited. Line references describe these reviewed files and may shift. The parent reported a 20-fixture source baseline; the owner reported 19 focused compiled tests after the first fix. This review did not rerun or independently certify those tests, a candidate GUI session, or the independent reference executable. Source inspection establishes the two paths above; runtime acceptance belongs to the Sol owner/root.

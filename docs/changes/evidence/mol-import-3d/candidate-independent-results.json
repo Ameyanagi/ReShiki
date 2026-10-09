@@ -62,8 +62,8 @@
       "drawing_atoms": 6,
       "visible_hydrogens": 0,
       "nonzero_z": 6,
-      "maximum_heavy_distance_error": 7.114727651469366e-08,
-      "heavy_torsion_error": 9.017314894776973e-09,
+      "maximum_heavy_distance_error": 7.114727651469366e-8,
+      "heavy_torsion_error": 9.017314894776973e-9,
       "identity": {
         "smiles": "CCCCCC",
         "formula": "C6H14",
@@ -143,7 +143,7 @@
       "drawing_atoms": 4,
       "visible_hydrogens": 0,
       "nonzero_z": 4,
-      "maximum_heavy_distance_error": 6.83370093845781e-08,
+      "maximum_heavy_distance_error": 6.83370093845781e-8,
       "heavy_torsion_error": 0.0,
       "identity": {
         "smiles": "F/C=C/F",
@@ -197,7 +197,7 @@
       "drawing_atoms": 4,
       "visible_hydrogens": 0,
       "nonzero_z": 4,
-      "maximum_heavy_distance_error": 6.83370093845781e-08,
+      "maximum_heavy_distance_error": 6.83370093845781e-8,
       "heavy_torsion_error": 0.0,
       "identity": {
         "smiles": "FC=CF",
@@ -224,8 +224,8 @@
       "drawing_atoms": 4,
       "visible_hydrogens": 0,
       "nonzero_z": 4,
-      "maximum_heavy_distance_error": 6.011202069444721e-08,
-      "heavy_torsion_error": 1.4895610561095394e-08,
+      "maximum_heavy_distance_error": 6.011202069444721e-8,
+      "heavy_torsion_error": 1.4895610561095394e-8,
       "identity": {
         "smiles": "F/C=C\\F",
         "formula": "C2H2F2",
@@ -386,8 +386,8 @@
       "drawing_atoms": 4,
       "visible_hydrogens": 0,
       "nonzero_z": 4,
-      "maximum_heavy_distance_error": 2.6280648324217282e-08,
-      "heavy_torsion_error": 3.132175230291523e-08,
+      "maximum_heavy_distance_error": 2.6280648324217282e-8,
+      "heavy_torsion_error": 3.132175230291523e-8,
       "identity": {
         "smiles": "F[C@H](Cl)Br",
         "formula": "CHBrClF",
@@ -413,8 +413,8 @@
       "drawing_atoms": 4,
       "visible_hydrogens": 0,
       "nonzero_z": 4,
-      "maximum_heavy_distance_error": 2.6280648324217282e-08,
-      "heavy_torsion_error": 1.67604874423688e-08,
+      "maximum_heavy_distance_error": 2.6280648324217282e-8,
+      "heavy_torsion_error": 1.67604874423688e-8,
       "identity": {
         "smiles": "F[C@H](Cl)Br",
         "formula": "CHBrClF",
@@ -440,8 +440,8 @@
       "drawing_atoms": 4,
       "visible_hydrogens": 0,
       "nonzero_z": 4,
-      "maximum_heavy_distance_error": 2.6280648324217282e-08,
-      "heavy_torsion_error": 3.603474008073704e-08,
+      "maximum_heavy_distance_error": 2.6280648324217282e-8,
+      "heavy_torsion_error": 3.603474008073704e-8,
       "identity": {
         "smiles": "F[C@H](Cl)Br",
         "formula": "CHBrClF",
@@ -467,8 +467,8 @@
       "drawing_atoms": 4,
       "visible_hydrogens": 0,
       "nonzero_z": 4,
-      "maximum_heavy_distance_error": 6.618323933338388e-08,
-      "heavy_torsion_error": 1.7330969548368103e-08,
+      "maximum_heavy_distance_error": 6.618323933338388e-8,
+      "heavy_torsion_error": 1.7330969548368103e-8,
       "identity": {
         "smiles": "F[C@@H](Cl)Br",
         "formula": "CHBrClF",
@@ -521,8 +521,8 @@
       "drawing_atoms": 5,
       "visible_hydrogens": 1,
       "nonzero_z": 5,
-      "maximum_heavy_distance_error": 2.6280648324217282e-08,
-      "heavy_torsion_error": 3.132175230291523e-08,
+      "maximum_heavy_distance_error": 2.6280648324217282e-8,
+      "heavy_torsion_error": 3.132175230291523e-8,
       "identity": {
         "smiles": "FC(Cl)Br",
         "formula": "CHBrClF",
@@ -602,7 +602,7 @@
       "drawing_atoms": 5,
       "visible_hydrogens": 2,
       "nonzero_z": 5,
-      "maximum_heavy_distance_error": 4.654915208845978e-08,
+      "maximum_heavy_distance_error": 4.654915208845978e-8,
       "heavy_torsion_error": null,
       "identity": {
         "smiles": "[2H][C@@]([3H])(F)Cl",

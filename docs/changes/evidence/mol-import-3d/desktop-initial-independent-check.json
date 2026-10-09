@@ -5,15 +5,8 @@
   "atoms": 6,
   "bonds": 5,
   "visible_h": 0,
-  "source_ids": [
-    1,
-    2,
-    3,
-    4,
-    5,
-    6
-  ],
-  "maximum_canvas_xyz_error": 2.673339849934564e-06,
+  "source_ids": [1, 2, 3, 4, 5, 6],
+  "maximum_canvas_xyz_error": 2.673339849934564e-6,
   "all_retained_source_xyz_exact_f32": true,
   "nonzero_z": 6,
   "independent_formula": "C6H14",

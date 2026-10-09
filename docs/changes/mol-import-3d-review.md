@@ -14,8 +14,8 @@ use the same [original explicit-H 3D hexane MOL](../../tests/fixtures/mol-import
 JACS/ACS style, Arial10,250%, keyboard drawing off and the inspector hidden.
 No automatic layout, optimization or new conformer was requested.
 
-| Before: all ordinary H explicit, Z flattened | After: ordinary H implicit, source XYZ retained |
-| --- | --- |
+| Before: all ordinary H explicit, Z flattened                                                                       | After: ordinary H implicit, source XYZ retained                                                                          |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | ![Original hexane import with fourteen crowded H labels at250%](../images/pr-reviews/mol-import-3d/before-250.jpg) | ![The same hexane import as an uncluttered six-carbon skeleton at250%](../images/pr-reviews/mol-import-3d/after-250.jpg) |
 
 The frozen baseline reports C6H14,20 atoms and19 bonds; the candidate reports
@@ -54,12 +54,12 @@ banner. Recovery dismissal did not delete a file.
 
 ## Retained controls and verification
 
-| Control | Retained file |
-| --- | --- |
-| Imported source XYZ | [Initial native save](evidence/mol-import-3d/candidate-alkane-3d-desktop.rsk) |
-| Both rotations | [Rotated save](evidence/mol-import-3d/candidate-alkane-3d-rotated.rsk) |
-| Undo twice | [Undo save](evidence/mol-import-3d/candidate-alkane-3d-undo.rsk) |
-| Redo twice, then reopened | [Redo save](evidence/mol-import-3d/candidate-alkane-3d-redo.rsk) |
+| Control                   | Retained file                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| Imported source XYZ       | [Initial native save](evidence/mol-import-3d/candidate-alkane-3d-desktop.rsk) |
+| Both rotations            | [Rotated save](evidence/mol-import-3d/candidate-alkane-3d-rotated.rsk)        |
+| Undo twice                | [Undo save](evidence/mol-import-3d/candidate-alkane-3d-undo.rsk)              |
+| Redo twice, then reopened | [Redo save](evidence/mol-import-3d/candidate-alkane-3d-redo.rsk)              |
 
 The [28 original typed fixtures](../../tests/fixtures/mol-import-3d/README.md)
 cover V2000/V3000, reordered explicit-H neighbors, both R/S and E/Z, mixed
@@ -84,6 +84,13 @@ Base source: `51fa0991`; production app: `3a6be135`; reference harness:
 worktree's source. Candidate SHA256:
 `86fd1d62e175267a11ae0e6c211e335ee2af7ad146401fd6e59439ba329e77ec`.
 The reference-only follow-up does not change Rust or manifest contents.
+
+The later CI formatting follow-up preserves the reference Python AST and all
+JSON values. The [original JSON receipt bytes](https://github.com/Ameyanagi/ReShiki/tree/d5107e798dd5bf5a131dcc9af2ade354e1248b76/docs/changes/evidence/mol-import-3d)
+remain available at the captured evidence commit; three current JSON copies
+have different byte hashes after Oxfmt formatting. Native saves and raw JPEG
+bytes, production source and the reviewed executable are unchanged. Full CI
+must validate the new head after publication.
 
 Native saves retain XYZ. MOL export continues the existing detached,
 stereo-safe2D depiction policy. A low-level projected-writer call can omit a

@@ -11,9 +11,9 @@
   "finite_xyz": true,
   "nonzero_z": 6,
   "proper_rotation_determinant": 0.9999999999999999,
-  "rigid_fit_rms_source_units": 7.38336532982201e-08,
-  "rigid_fit_max_source_units": 1.232311233690618e-07,
-  "max_heavy_distance_error_source_units": 2.1390600046800046e-07,
-  "signed_torsion_error_radians": 1.2650284375581577e-08,
+  "rigid_fit_rms_source_units": 7.38336532982201e-8,
+  "rigid_fit_max_source_units": 1.232311233690618e-7,
+  "max_heavy_distance_error_source_units": 2.1390600046800046e-7,
+  "signed_torsion_error_radians": 1.2650284375581577e-8,
   "projection_changed": true
 }
