@@ -13,6 +13,6 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
-Offline atom-linked HOSE NMR prediction, measured-data provenance and desktop validation (under review): @Ameyanagi in [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272).
+Offline atom-linked HOSE NMR prediction, compact palette that preserves drawing space, measured-data provenance and native desktop validation (under review): @Ameyanagi in [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272).
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.
