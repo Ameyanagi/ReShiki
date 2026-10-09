@@ -46,6 +46,16 @@ checks each complete request against the current schema instead of regenerating
 expected outputs after Rust implementation changes. Python reference-source
 hashes and the complete record stream checksum are checked on replay.
 
+Replay hashes the retained historical template input and CDX codec source rather
+than their evolving live files. `aromatic-cdx-exchange-source.py.gz` contains the
+exact `reference/engine/cdx_exchange.py` bytes from ReShiki commit
+`51fa0991da2507bb00b27c1b420e807468de6423`, under the repository's
+`MIT OR Apache-2.0` license. Its decompressed SHA256 is
+`adae04ccfb5a2a98cca1f11617f608ebc1d4b5af7061523026efd3dc79c5ebd4`,
+as recorded in all three original fixture headers. The headers, expected
+responses, record checksums and source hash comparisons remain unchanged; a
+changed snapshot still fails the provenance check.
+
 There are separate macOS ARM64, Linux x64 and Windows x64 captures. Native corpus
 layout makes 2,952 macOS/Linux requests and 2,909 macOS/Windows requests differ.
 For identical requests, six macOS/Linux and four macOS/Windows worker outputs
