@@ -13,7 +13,7 @@ pub(crate) fn construction_count() -> usize {
 
 fn eligible(doc: &Document, b: &Bond) -> bool {
     (b.order == 1
-        || b.order == 4 && b.projection
+        || matches!(b.order, 4 | 5) && b.projection
         || matches!(b.order, 2 | 7)
             && match crate::scene::effective_double_position(doc, b) {
                 crate::bonds::DoublePosition::Auto => false,

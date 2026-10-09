@@ -822,6 +822,13 @@ impl App {
                     message: Message::KeyboardDrawing(Action::Connect),
                     enabled: atom.zip(marked).is_some_and(|(a, b)| a != b),
                 },
+                RowCommand {
+                    label: "Coordinate }",
+                    menu: "Coordinate marked donor to active metal }",
+                    hint: "Mark a donor N/O/S/P with [, choose a metal, then } for a directed dative contact in place",
+                    message: Message::KeyboardDrawing(Action::Coordinate),
+                    enabled: atom.zip(marked).is_some_and(|(a, b)| a != b),
+                },
             ]);
         }
         commands
@@ -908,6 +915,13 @@ impl App {
                     .selected
                     .iter()
                     .any(|id| self.tab.doc.atom(*id).is_some()),
+            },
+            RowCommand {
+                label: "Coordinate…",
+                menu: "Coordinate in place…",
+                hint: "Choose an existing N/O/S/P donor, then a metal; retain positions and hydrogens",
+                message: Message::Join(super::joining::Action::BeginCoordination),
+                enabled: self.tab.selected.iter().any(|id| self.tab.doc.atom(*id).is_some()),
             },
             RowCommand {
                 label: "Group",
@@ -2414,6 +2428,8 @@ pub(super) fn keyboard_control_id(message: &Message) -> Option<&'static str> {
     match message {
         Message::KeyboardDrawing(Action::Mark) => Some("keyboard-mark"),
         Message::KeyboardDrawing(Action::Connect) => Some("keyboard-connect"),
+        Message::KeyboardDrawing(Action::Coordinate) => Some("keyboard-coordinate"),
+        Message::Join(super::joining::Action::BeginCoordination) => Some("coordination.begin"),
         Message::KeyboardDrawing(Action::Leave) => Some("keyboard-done"),
         _ => None,
     }

@@ -16,6 +16,7 @@ pub enum Action {
     Navigate(Direction, bool),
     Mark,
     Connect,
+    Coordinate,
 }
 
 /// Entering a drawing mode explicitly hands Enter/Space ownership back from
@@ -193,7 +194,8 @@ impl App {
                     self.error = false;
                 }
             }
-            Action::Connect if self.keyboard_drawing_active() => {
+            connect @ (Action::Connect | Action::Coordinate) if self.keyboard_drawing_active() => {
+                let coordinate = matches!(connect, Action::Coordinate);
                 let target = self.tab.keyboard_drawing.target();
                 let result = self
                     .tab
@@ -206,10 +208,23 @@ impl App {
                     .ok_or_else(|| {
                         "Mark an atom with [, then navigate to another atom and press ]".to_string()
                     })
-                    .and_then(|(a, b)| connect_atoms(&self.tab.doc, a, b));
+                    .and_then(|(a, b)| {
+                        if coordinate {
+                            reshiki::templates::coordinate_atoms(&self.tab.doc, a, b)
+                        } else {
+                            connect_atoms(&self.tab.doc, a, b)
+                        }
+                    });
+                let unchanged = result.as_ref().is_ok_and(|doc| *doc == self.tab.doc);
                 if self.commit_hotkey(
                     result.map(|doc| (doc, target.atoms())),
-                    "Connected marked atom · Undo restores the open chain",
+                    if coordinate && unchanged {
+                        "This marked donor is already coordinated to that metal"
+                    } else if coordinate {
+                        "Marked donor → metal contact added in place · Undo removes it"
+                    } else {
+                        "Connected marked atom · Undo restores the open chain"
+                    },
                 ) {
                     self.tab.keyboard_drawing.clear_mark();
                     self.tab.keyboard_drawing.set_target(target, &self.tab.doc);
@@ -234,6 +249,7 @@ impl App {
         match key {
             "[" => return self.keyboard_drawing_action(Action::Mark),
             "]" => return self.keyboard_drawing_action(Action::Connect),
+            "}" => return self.keyboard_drawing_action(Action::Coordinate),
             _ => {}
         }
         let target = self.tab.keyboard_drawing.target();

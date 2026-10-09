@@ -2,6 +2,8 @@
 
 This page retains earlier desktop verification records, including their capability table, worker-based runtime and test counts. They describe the builds tested at each milestone. For current implementation and setup, see [architecture](architecture.md), [feature status](feature-status.md), [installation](getting-started.md) and [release signing](releasing.md).
 
+[Coordination in place](fragment-joining.md#coordination-contacts-in-place) adds explicit donor→metal contacts without moving atoms, including chelate closure. It preserves donor hydrogens, charge and dative projection paint; it does not infer complex geometry or Δ/Λ stereochemistry.
+
 [Document drawing styles](drawing-styles.md) now provide previewed font and bond settings, reusable style files and Undo. JACS / ACS remains the default for every new document.
 
 The [picture workflow](pictures.md) adds asynchronous file import, macOS raster paste, embedded storage, numeric dimensions, replacement and layering with chemistry. Desktop checks cover canvas transforms, grouping, native persistence and private-pasteboard copy/paste; **225 Rust tests**, **71 Python tests**, formatting and strict Clippy pass. CDXML and binary clipboard exchange now preserve separate pictures alongside editable chemistry, including rotation, reflection, transparency and mixed groups. Desktop checks and an independently re-saved fixture cover external picture exchange. The standalone macOS bundle imports the fixture outside the checkout. Vector/OLE-only pictures remain unsupported.

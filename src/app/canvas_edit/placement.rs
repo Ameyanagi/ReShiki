@@ -107,13 +107,24 @@ impl App {
                 state.mode,
             ) {
                 Ok((document, selected)) => {
+                    let coordination = state.mode == reshiki::templates::Connection::Coordinate;
+                    let unchanged = document == before;
                     self.tab.doc = document;
                     self.tab.selected = selected;
                     self.tab.joining = None;
                     self.tool = Tool::Select;
                     self.changed(before);
-                    self.status =
-                        "Fragments joined · Undo restores their original positions".into();
+                    self.error = false;
+                    self.status = if coordination {
+                        if unchanged {
+                            "This donor is already coordinated to that metal"
+                        } else {
+                            "Donor → metal contact added in place · Undo removes it"
+                        }
+                    } else {
+                        "Fragments joined · Undo restores their original positions"
+                    }
+                    .into();
                     self.sync_typography();
                 }
                 Err(error) => {

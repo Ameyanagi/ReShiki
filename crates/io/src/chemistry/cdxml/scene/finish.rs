@@ -178,7 +178,9 @@ impl CdxmlScene {
                 bond.order = old.order;
             }
             bond.display = old.display;
-            if bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge") {
+            if bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge")
+                || bond.order == 5 && !matches!(bond.display.as_str(), "plain" | "dashed")
+            {
                 bond.projection = true;
             }
             bond.secondary_display = old.secondary_display;

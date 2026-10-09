@@ -147,7 +147,19 @@ impl App {
                 .bond_preset()
                 .filter(|p| p.preserves_chemistry(&b))
             {
-                preset.place(&mut self.tab.doc, b.a, b.b);
+                if b.order == 5 {
+                    if let Some(bond) = self
+                        .tab
+                        .doc
+                        .bonds
+                        .iter_mut()
+                        .find(|bond| bond.a == b.a && bond.b == b.b)
+                    {
+                        preset.apply(bond);
+                    }
+                } else {
+                    preset.place(&mut self.tab.doc, b.a, b.b);
+                }
             } else {
                 self.tab.doc.add_bond(b.a, b.b, order, display);
                 self.apply_current_bond_preset(b.a, b.b);
@@ -160,7 +172,11 @@ impl App {
                     .iter_mut()
                     .find(|bond| bond.a == b.a && bond.b == b.b)
             {
-                bond.reverse();
+                if bond.order == 5 {
+                    bond.reverse_projection();
+                } else {
+                    bond.reverse();
+                }
             }
             self.tab.selected = vec![b.a, b.b];
         } else {

@@ -85,7 +85,7 @@ impl NativeBond {
     pub fn into_document(self) -> Result<Bond> {
         Ok(Bond {
             ring_arc: false,
-            projection: false,
+            projection: self.order == 5 && !matches!(self.display.as_str(), "plain" | "dashed"),
             stereo_authoritative: false,
             a: self.a,
             b: self.b,
@@ -356,7 +356,7 @@ pub fn read_native(
                     .ok_or_else(|| Error::Endpoint(id.map(quoted).unwrap_or_else(|| "None".into())))
             };
             let (mut a, mut b) = (endpoint("B")?, endpoint("E")?);
-            if primary.ends_with("End") {
+            if primary.ends_with("End") && order != 5 {
                 std::mem::swap(&mut a, &mut b);
                 double_position = double_position.reversed();
             }
@@ -370,7 +370,16 @@ pub fn read_native(
                     .map(display)
                     .transpose()?
             };
-            let display = display(primary)?;
+            let display = if order == 5 {
+                match primary {
+                    "WedgeEnd" => "wedge_end".into(),
+                    "WedgedHashEnd" => "hash_end".into(),
+                    "HollowWedgeEnd" => "hollow_wedge_end".into(),
+                    _ => display(primary)?,
+                }
+            } else {
+                display(primary)?
+            };
             let layer = inherited(node, "Z").unwrap_or("0");
             budget = budget.checked_sub(layer.len()).ok_or(Error::Limit)?;
             let z_order = NativeLayer::parse(layer).map_err(|error| match error {

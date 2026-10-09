@@ -792,6 +792,27 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         runs: labels,
         bounds: label_bounds,
     } = collect_atom_labels(doc);
+    // Projection tip orientation is independent of dative donor→acceptor
+    // direction. Normalize only a detached render copy, after collecting the
+    // chemical labels from the original graph (reversing a dative graph would
+    // otherwise change donor hydrogen counts).
+    let projection_paint = if doc
+        .bonds
+        .iter()
+        .any(|b| b.order == 5 && b.display.ends_with("_end"))
+    {
+        let mut painted = doc.clone();
+        for bond in &mut painted.bonds {
+            if bond.order == 5 && bond.display.ends_with("_end") {
+                bond.display = bond.display.trim_end_matches("_end").into();
+                bond.reverse();
+            }
+        }
+        std::borrow::Cow::Owned(painted)
+    } else {
+        std::borrow::Cow::Borrowed(doc)
+    };
+    let doc = projection_paint.as_ref();
     // Fill joined bond outlines together. Separate antialiased polygons leave
     // translucent seams even when their mathematical corners agree exactly.
     let joins = crate::bond_joins::Joins::new(doc);
