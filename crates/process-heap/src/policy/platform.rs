@@ -10,8 +10,9 @@ fn minimum(values: impl IntoIterator<Item = Option<u64>>) -> Option<u64> {
 
 #[cfg(target_os = "linux")]
 pub(super) fn memory_headroom() -> Option<u64> {
-    let info = fs::read_to_string("/proc/meminfo").ok()?;
-    let available = kib_field(&info, "MemAvailable:").or_else(|| kib_field(&info, "MemFree:"));
+    let available = fs::read_to_string("/proc/meminfo").ok().and_then(|info| {
+        kib_field(&info, "MemAvailable:").or_else(|| kib_field(&info, "MemFree:"))
+    });
     let process = fs::read_to_string("/proc/self/limits")
         .ok()
         .and_then(|limits| {
@@ -91,11 +92,9 @@ pub(super) fn memory_headroom() -> Option<u64> {
     let total = command("/usr/sbin/sysctl", &["-n", "hw.memsize"])
         .and_then(|s| s.trim().parse::<u64>().ok());
     let available = command("/usr/bin/vm_stat", &[]).and_then(|s| mach_available(&s));
-    minimum([
-        Some(available?),
-        total.map(|bytes| bytes / 2),
-        process_headroom(),
-    ])
+    let host = available.map(|bytes| bytes.min(total.map_or(bytes, |total| total / 2)));
+    // A failed host probe must not discard an observed process ceiling.
+    minimum([host, process_headroom()])
 }
 
 #[cfg(target_os = "macos")]
