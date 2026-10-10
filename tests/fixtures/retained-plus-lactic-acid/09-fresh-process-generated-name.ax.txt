@@ -1,0 +1,64 @@
+The following is a diff from the previous accessibility tree for Window: "plus-lactic-generated-name.rsk — ReShiki" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 66-107, 110-404
+~63 standard window plus-lactic-generated-name.rsk — ReShiki, Secondary Actions: Raise
+~	64 container
+~		65 button About ReShiki; check for updates, ID: header-about
++		66 button New · ⌘N, ID: header-new
++		67 button Open · ⌘O, ID: header-open
++		68 button Save · ⌘S, ID: header-save
++		69 button Save as · ⇧⌘S, ID: header-save-as
++		70 button (disabled) Undo · ⌘Z, ID: header-undo
++		71 button (disabled) Redo · ⇧⌘Z, ID: header-redo
++		72 button Assistant, ID: header-assistant
++		73 button Import, ID: header-import
++		74 button Check drawing, ID: header-check
++		75 button Clean up…, ID: header-cleanup
++		76 button Export, ID: header-export
++		77 button Show or hide inspector, ID: header-inspector
++		78 button Text and object color, ID: style-color-menu
++		79 toggle button (settable, boolean) Select / move · Escape or toolbar, Value: on, ID: tool-Select
++		80 toggle button (settable, boolean) Lasso select · Toolbar, Value: off, ID: tool-Lasso
++		81 toggle button (settable, boolean) 3D tilt, Value: off, ID: tool-Tilt
++		82 toggle button (settable, boolean) Eraser, Value: off, ID: tool-Erase
++		83 toggle button (settable, boolean) Atom label · C · c, Value: off, ID: tool-Atom
++		84 toggle button (settable, boolean) Single bond · 1, Value: off, ID: tool-Bond(1)
++		85 toggle button (settable, boolean) Double bond · 2, Value: off, ID: tool-Bond(2)
++		86 toggle button (settable, boolean) Triple bond · 3, Value: off, ID: tool-Bond(3)
++		87 toggle button (settable, boolean) Solid wedge, Value: off, ID: tool-Wedge
++		88 toggle button (settable, boolean) 6-membered · ⇧6, Value: off, ID: tool-Ring
++		89 toggle button (settable, boolean) Straight chain · ⇧X · Drag a regular zigzag toward the pointer, Value: off, ID: tool-Chain(Straight)
++		90 toggle button (settable, boolean) Snaking chain · Steer while dragging · Retrace to shorten, Value: off, ID: tool-Chain(Snaking)
++		91 toggle button (settable, boolean) Forward · e, Value: off, ID: tool-Arrow
++		92 toggle button (settable, boolean) Text label · t, Value: off, ID: tool-Text
++		93 toggle button (settable, boolean) Rectangle, Value: off, ID: tool-Graphic(Rectangle)
++		94 toggle button (settable, boolean) Ellipse, Value: off, ID: tool-Graphic(Ellipse)
++		95 toggle button (settable, boolean) Brackets · ⇧T, Value: off, ID: tool-Graphic(Brackets)
++		96 toggle button (settable, boolean) Graphic line, Value: off, ID: tool-Graphic(Line)
++		97 toggle button (settable, boolean) Bézier curve, Value: off, ID: tool-Graphic(Curve)
++		98 toggle button (settable, boolean) Pen path, Value: off, ID: tool-Graphic(Path)
++		99 toggle button (settable, boolean) Arc, Value: off, ID: tool-Graphic(Arc)
++		100 toggle button (settable, boolean) Circled plus · ⇧E, Value: off, ID: tool-Graphic(Symbol(CirclePlus))
++		101 toggle button (settable, boolean) p orbital · ⇧G, Value: off, ID: tool-Graphic(Orbital(P))
++		102 toggle button (settable, boolean) C · c, Value: off, ID: element-C
++		103 toggle button (settable, boolean) N · n, Value: off, ID: element-N
++		104 toggle button (settable, boolean) O · o, Value: off, ID: element-O
++		105 toggle button (settable, boolean) *, Value: off, ID: element-*
++		106 button Help and keyboard shortcuts, ID: help-open
++		107 toggle button (settable, boolean) Leave keyboard drawing · F8 · Active O atom 1, Value: on, ID: keyboard-done
+~		108 button Generate an optimized conformer using MMFF or UFF; preview before applying, ID: context-command-0
+~		109 button Mark the active atom for a connection · [, ID: keyboard-mark
++		110 button (disabled) Mark an atom with [ before connecting · ], ID: keyboard-connect
++		111 button (disabled) Align, ID: arrange-menu-AlignObjects
++		112 button (disabled) Distribute, ID: arrange-menu-Distribute
++		113 button (disabled) Order, ID: arrange-menu-Order
++		114 button (disabled) Flip horizontal, ID: arrange-flip-horizontal
++		115 button (disabled) Flip vertical, ID: arrange-flip-vertical
++		116 button (disabled) Rotate 180°, ID: arrange-rotate
++		117 button Molecular properties: expanded, ID: inspector-section-Molecule
++		118 button Predict NMR shifts for the selected molecule, ID: nmr.open
++		119 button Labels & chemistry: collapsed, ID: inspector-section-Chemistry
++		120 button Drawing style: collapsed, ID: inspector-section-DrawingStyle
++	121 close button
++	122 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
++	123 minimize button
++	124 text plus-lactic-generated-name.rsk — ReShiki

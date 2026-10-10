@@ -2,8 +2,8 @@
 //! else on `App` is app-wide (tool, settings, libraries, chrome, dialogs).
 use super::{
     CleanupPreview, arcs, arrows, atom_labels, atom_text, autosave, document_styles, inline_text,
-    inspector, joining, label_refresh, molecule_shortcuts, numeric_transforms, pages, pictures,
-    reactions, typography,
+    inspector, joining, label_refresh, molecule_shortcuts, naming, numeric_transforms, pages,
+    pictures, reaction_mapping, reactions, typography,
 };
 use crate::canvas::Camera;
 use reshiki::{
@@ -60,6 +60,8 @@ pub(super) struct DocumentTab {
     pub(super) label_refresh: label_refresh::State,
     pub(super) chemistry_notice: Option<String>,
     pub(super) reactions: reactions::State,
+    pub(super) naming: naming::State,
+    pub(super) mapping: reaction_mapping::State,
     // Current styles and inputs: follow the selection and the document's drawing style.
     pub(super) bond_drawing: reshiki::chains::BondDrawing,
     pub(super) chain_drawing: reshiki::chains::ChainDrawing,
@@ -141,6 +143,8 @@ impl DocumentTab {
             label_refresh: Default::default(),
             chemistry_notice: None,
             reactions: Default::default(),
+            naming: Default::default(),
+            mapping: Default::default(),
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             drawing_length_input: reshiki::style::DEFAULT.bond_length_pt.to_string(),

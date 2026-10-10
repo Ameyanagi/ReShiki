@@ -1,0 +1,40 @@
+{
+  "status": "PASS_FRESH_PROCESS_NATIVE_ROUND_TRIP",
+  "utc": "2026-10-10T19:29:32.987622+00:00",
+  "old_pid": 1883,
+  "old_process_exited": true,
+  "current_process": "5041 /Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/plus-lactic-native-root-review-v1/ReShiki Lactic Acid Review.app/Contents/MacOS/reshiki\n",
+  "documents": [
+    {
+      "path": "plus-lactic-acid.rsk",
+      "sha256_before": "93de1c1af124f6e2a881b65050e97876beb4bcdfa7bd0cfb666f3ad672013a87",
+      "sha256_after": "93de1c1af124f6e2a881b65050e97876beb4bcdfa7bd0cfb666f3ad672013a87",
+      "second_save_byte_exact": true,
+      "version": 25,
+      "caption": "(+)-lactic acid",
+      "smiles": "C[C@H](O)C(=O)O",
+      "atoms": 6,
+      "bonds": 5,
+      "S_centers": 1
+    },
+    {
+      "path": "plus-lactic-generated-name.rsk",
+      "sha256_before": "9ee17d469528cb8ae238f7243e8ac0c0e34aaa8ec4597854941969585b0a67b1",
+      "sha256_after": "9ee17d469528cb8ae238f7243e8ac0c0e34aaa8ec4597854941969585b0a67b1",
+      "second_save_byte_exact": true,
+      "version": 25,
+      "caption": "(2S)-2-hydroxypropanoic acid",
+      "smiles": "C[C@H](O)C(=O)O",
+      "atoms": 6,
+      "bonds": 5,
+      "S_centers": 1
+    }
+  ],
+  "screenshots": {
+    "07": "PASS retained caption + S graph fresh reopened history empty",
+    "08": "UNQUALIFIED failed dynamic file-list selection opened hooks.log as SMILES; empty untitled; Save cancelled, no fixture changed",
+    "09": "PASS generated systematic caption + S graph fresh reopened history empty"
+  },
+  "source_index_tree": "22a60b33376bfbcb9e2af32880b128f27877ec65",
+  "undo_redo": "03/04 show one complete import history item; GUI and named actual runtime tests agree"
+}

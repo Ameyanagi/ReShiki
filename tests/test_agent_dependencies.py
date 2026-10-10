@@ -10,12 +10,14 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from build_inchi_helper import RELEASE_TARGETS
 from check_agent_dependencies import (
+    AHO_CORASICK_MIT_CHOICE,
     BASELINE,
     ROOT,
     SERDE_JSON_FORBIDDEN,
     allowlist_problems,
     layout,
     license_allowed,
+    selected_mit_license,
     verify,
 )
 
@@ -61,11 +63,17 @@ def package(name, version, license):
 
 
 class AgentDependencyTests(unittest.TestCase):
-    def audit(self, run, packages=()):
+    def audit(self, run, packages=(), locked_packages=()):
         with tempfile.TemporaryDirectory() as temporary, patch("check_agent_dependencies.run", run):
             root = Path(temporary)
             (root / BASELINE).parent.mkdir(parents=True)
             (root / BASELINE).write_text(json.dumps(FIXTURE_BASELINE), encoding="utf-8")
+            lock = "version = 4\n" + "".join(
+                "\n[[package]]\n"
+                + "".join(f"{key} = {json.dumps(value)}\n" for key, value in package.items())
+                for package in locked_packages
+            )
+            (root / "Cargo.lock").write_text(lock, encoding="utf-8")
             verify(root, {"packages": list(packages)})
 
     def test_production_graph_within_the_baseline_passes(self):
@@ -98,6 +106,40 @@ class AgentDependencyTests(unittest.TestCase):
 
     def test_new_mit_package_passes(self):
         self.audit(cargo(tree(SERVER)), [package("permissive", "1.0.0", "MIT")])
+
+    def test_exact_aho_corasick_mit_choice_matches_locked_provenance(self):
+        choice = dict(AHO_CORASICK_MIT_CHOICE)
+        self.assertFalse(license_allowed(choice["license"]))
+        self.assertTrue(selected_mit_license(choice, [choice]))
+        self.assertFalse(selected_mit_license(choice, []))
+        self.audit(cargo(tree(SERVER)), [choice], [choice])
+        with self.assertRaisesRegex(ValueError, "aho-corasick@1.1.5 has a license"):
+            self.audit(cargo(tree(SERVER)), [choice], [{**choice, "checksum": "0" * 64}])
+        for field, changed in (
+            ("name", "different"),
+            ("version", "1.1.6"),
+            ("license", "Unlicense OR MIT OR GPL-3.0-only"),
+            ("source", "git+https://example.test/aho-corasick"),
+        ):
+            with self.subTest(metadata_field=field):
+                self.assertFalse(selected_mit_license({**choice, field: changed}, [choice]))
+        for field, changed in (
+            ("name", "different"),
+            ("version", "1.1.6"),
+            ("source", "registry+https://example.test/index"),
+            ("checksum", "0" * 64),
+        ):
+            with self.subTest(lock_field=field):
+                self.assertFalse(selected_mit_license(choice, [{**choice, field: changed}]))
+
+    def test_selected_mit_choice_record_matches_the_audit(self):
+        record = json.loads(
+            (ROOT / "licenses/rust/aho-corasick-1.1.5-mit-choice.json").read_text(encoding="utf-8")
+        )
+        for field, value in AHO_CORASICK_MIT_CHOICE.items():
+            self.assertEqual(record[field], value)
+        self.assertEqual(record["selected_license"], "MIT")
+        self.assertEqual(set(record["upstream_texts"]), {"LICENSE-MIT", "UNLICENSE", "COPYING"})
 
     def test_hyper_under_rmcp_fails(self):
         with self.assertRaisesRegex(ValueError, "rmcp depends on hyper for .* network-free"):

@@ -82,10 +82,12 @@ impl Document {
                 break;
             }
         }
-        self.all_ids()
+        let ids: Vec<_> = self
+            .all_ids()
             .into_iter()
             .filter(|id| selected.contains(id))
-            .collect()
+            .collect();
+        crate::molecule_names::include_annotations(self, &ids)
     }
 
     /// Expand abbreviations, then each integral group with a selected member.
@@ -100,10 +102,12 @@ impl Document {
                 selected.extend(&group.members);
             }
         }
-        self.all_ids()
+        let ids: Vec<_> = self
+            .all_ids()
             .into_iter()
             .filter(|id| selected.contains(id))
-            .collect()
+            .collect();
+        crate::molecule_names::include_annotations(self, &ids)
     }
 
     /// Include complete molecules so the grouping boundary never cuts a bond.

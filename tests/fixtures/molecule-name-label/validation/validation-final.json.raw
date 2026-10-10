@@ -1,0 +1,183 @@
+{
+  "created_at_utc": "2026-10-10T08:14:24.216424+00:00",
+  "worktree": "/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label",
+  "base_head": "5164379192bc94844dfc887a125ae75f40fa921c",
+  "source_manifest": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/frozen-source-v2.json",
+  "source_manifest_sha256": "af7693db982d627174c747ed6ce596a1c89eea8fe9e84fa4528a3ec2df68b7fd",
+  "verified_unchanged_file_count": 2831,
+  "bundle_provenance": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/bundle-provenance.json",
+  "bundle_provenance_sha256": "709963cd369f05539c5c0e30d7c00fa4a6d13d14413d35a568d9f055a8873ff5",
+  "bundle": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Compact Name Import Verified.app",
+  "raw_executable_sha256": "c2c7ea9272c90e9020e93b00927878a776a6c653571193ee68b59e29d3921bb2",
+  "signed_executable_sha256": "ed4e1cfe393e9e192f300928a22556fe215cb25e86dbefcca9f42f06e1af9a0f",
+  "checks": {
+    "model2": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/model2-receipt.json",
+      "sha256": "530dda4de10f500a1ad91c4d7d46ad2f481c744c9cb8c2a6f854cc6606b52a80",
+      "exit_code": 0,
+      "elapsed_seconds": 40.12000012397766,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/model2.log",
+      "log_sha256": "54d8524b7cbf85cf5626388c0f0096eb2d3e9d4623f7e99143d0146f5cb65486"
+    },
+    "build2": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/build2-receipt.json",
+      "sha256": "eae4c78c6bcbeeae9607a120cd370351c75593d53c04bdbcb988119877885320",
+      "exit_code": 0,
+      "elapsed_seconds": 88.9128782749176,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/build2.log",
+      "log_sha256": "5d64898bd3163f0a9fb72b60a9b9b92679577b9aa595027fad2e0af839f17bd7"
+    },
+    "package2": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package2-receipt.json",
+      "sha256": "de9422fb39f32cd3bfb50113a3c7a54bbb6fb2abc25c38e9fbbf12a3e3646c18",
+      "exit_code": 0,
+      "elapsed_seconds": 9.544914245605469,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package2.log",
+      "log_sha256": "3588f3ed57d9cbc170dfe09e6943573a3374097db526325cdd4a36c59832fe74"
+    },
+    "app-naming2": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-naming2-receipt.json",
+      "sha256": "294540347b5208e635f2f41208ab27f502e2eed4de4f676974dd2474c909439d",
+      "exit_code": 0,
+      "elapsed_seconds": 14.402145147323608,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-naming2.log",
+      "log_sha256": "efb9a203a740f9084bbb8837c06ee963ad4c3e875b32b6b7cc258f09381efc7a"
+    },
+    "app-context1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-context1-receipt.json",
+      "sha256": "61ceddf358ad5574967eb7fd64fcd4d5f8759670ef39fd2b1bb8f32d2ba742e0",
+      "exit_code": 0,
+      "elapsed_seconds": 9.106283903121948,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-context1.log",
+      "log_sha256": "86a9f1560a91946bd07683c72ba2a88cc5aed2dbde4076a25dda5cd5561e1903"
+    },
+    "app-import1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-import1-receipt.json",
+      "sha256": "06cd930fcb82a8075a1a1bf097815c5819afb599ea62ae98e4b23f1ac06135d0",
+      "exit_code": 0,
+      "elapsed_seconds": 8.184046030044556,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-import1.log",
+      "log_sha256": "e12b6f7a063503eceb5c9b97a582e33a61d88f7e4357f99cbfd208959301489e"
+    },
+    "renderer1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/renderer1-receipt.json",
+      "sha256": "e2d5e1b9f50517bcae1513e9564f3f6c75eb6ee0766b3e398bc1241fcd4e0fe2",
+      "exit_code": 0,
+      "elapsed_seconds": 18.753404140472412,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/renderer1.log",
+      "log_sha256": "b1af9ea0bd968bdc1b81a368804feea4a7a6a46e3ade474118a12a1c64b62c99"
+    },
+    "canvas1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/canvas1-receipt.json",
+      "sha256": "b7c387f02ffda149cb198ef379910bbd005ef553b552f4cdd4971b41ca4301cd",
+      "exit_code": 0,
+      "elapsed_seconds": 0.39810895919799805,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/canvas1.log",
+      "log_sha256": "f59c36e1243278e4307e1b7df20524a9f286ae1e60f3f4d00e4ff1336345f284"
+    },
+    "clippy1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/clippy1-receipt.json",
+      "sha256": "02aeaf0b8e62d39a892a09a0e38d7cb8f85bac1007e88f479c1b2d56a5eb7258",
+      "exit_code": 0,
+      "elapsed_seconds": 522.0941700935364,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/clippy1.log",
+      "log_sha256": "1c3af8d3db4142c0fe04c71a6b9de75ebeb164b19c5d3e67d901f5596b0ba097"
+    },
+    "fmt1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/fmt1-receipt.json",
+      "sha256": "79872fc964c383f33cafc877147bb28eefe132c0fd6a823b13446203ed5f0f7e",
+      "exit_code": 0,
+      "elapsed_seconds": 5.353390693664551,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/fmt1.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "build1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/build1-receipt.json",
+      "sha256": "a2b32313d2acabeea99d65be49f2be2378bbdee31a485c276950fe1987d827b7",
+      "exit_code": 101,
+      "elapsed_seconds": 111.57050514221191,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/build1.log",
+      "log_sha256": "bef0d02a631d7033475cca670925645fa285a0035c2335f5ea40d334aed15ca2"
+    },
+    "model1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/model1-receipt.json",
+      "sha256": "c74a3bd5c6afa545a14f0ba3d3df65892eba5fe950747e056bb56913fb882d6c",
+      "exit_code": 101,
+      "elapsed_seconds": 33.86914300918579,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/model1.log",
+      "log_sha256": "c7fe51b2ea96d18b2d38b670c8399571644edf91e4f7995aeab962637c4b9487"
+    },
+    "package1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package1-receipt.json",
+      "sha256": "2bc14103ba2a884f7b01762c9631a83e1baf2dd59148488735660fc4d9ecf4b0",
+      "exit_code": 1,
+      "elapsed_seconds": 1.329395055770874,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package1.log",
+      "log_sha256": "60add959412645a2040d0dafcf38a8232c5a199ea241469f9a19359c433342c6"
+    },
+    "app-naming1": {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-naming1-receipt.json",
+      "sha256": "18f69608adc248cb6ae93d21dd6445b8ae2b6ae63e1033f80e8e5352d86fe0b6",
+      "exit_code": 101,
+      "elapsed_seconds": 183.11026406288147,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-naming1.log",
+      "log_sha256": "4a6a6439227c66989ef7580ce7d3c85715d249021e00edd46a7501cb3dc375af"
+    }
+  },
+  "actual_test_counts": {
+    "model_molecule_names": {
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 138
+    },
+    "app_naming": {
+      "passed": 21,
+      "failed": 0,
+      "ignored": 3,
+      "filtered": 655
+    },
+    "app_context_menu": {
+      "passed": 11,
+      "failed": 0,
+      "ignored": 9,
+      "filtered": 659
+    },
+    "app_structure_import": {
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 668
+    },
+    "compact_import_renderer_opt_in": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 678
+    },
+    "raw_right_click_canvas_exact": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 678
+    },
+    "distinct_passed_total": 57
+  },
+  "failure_explanations": {
+    "build1": "Ambiguous column! macro in new compact dock; explicit iced::widget::column import fixed before v2 source freeze.",
+    "model1": "Inherited uncompiled test referred to nonexistent AtomStereo.clockwise; winding cw/ccw test corrected before v2 source freeze.",
+    "package1": "System Python 3.9 has no tomllib; same source/package script reran successfully with installed Python 3.14.",
+    "app-naming1": "InChI helper override omitted from initial harness; 14 tests launched current test executable with --inchi-worker. Rerun with RESHIKI_INCHI_HELPER and RESHIKI_NAMING_HELPER pointing to immutable v2 default executable passed all 21 ordinary naming tests."
+  },
+  "strict_clippy": "cargo clippy --locked -p reshiki -p reshiki-model --all-targets -j 4 -- -D warnings passed",
+  "formatting": "cargo fmt --all -- --check passed; git diff --check passed",
+  "native_gui_acceptance": {
+    "operator": "ROOT",
+    "passed_checks": 7,
+    "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/native-acceptance-v1.json",
+    "receipt_sha256": "1333368130459d3ff76cef6ae09fe91f92a57fdb7158ef46cc0e947b3de926a4",
+    "no_gui_launched_by_this_worker": true
+  },
+  "unrun_opt_ins": "Two legacy naming renderer tests and nine context cascade/parity tests remain intentionally opt-in; compact import renderer was executed separately.",
+  "source_lease_state": "Frozen v2; no Cargo commands after this receipt without ROOT grant; no staging, commit, push or PR performed"
+}

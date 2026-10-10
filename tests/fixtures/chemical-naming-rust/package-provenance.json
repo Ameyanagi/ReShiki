@@ -1,0 +1,28 @@
+{
+  "source_parent": "0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9",
+  "production_patch_sha256": "f237bcec9a3f63bf9ff40e3f4cc2404ef49d7d1d25a456a4860a69043f89e238",
+  "final_source_manifest_sha256": "c72259c27b6e361d8846469406c8d571e767ac1cbd745ff0ef521a7779bfb0a5",
+  "compiler_receipt_sha256": "8a69e3e8c377109aa4b2ebbac7dd2685d403afb681706c02cec9a59aad7af841",
+  "app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rust Naming Backend Verified.app",
+  "bundle_identifier": "dev.reshiki.rust-naming-backend-verified",
+  "unsigned_sha256": "f0b7108f0b0992b0d3363b0bff983fa0ba17375660a4f0910128b81569142c5c",
+  "signed_sha256": "ef5948ea8c060ce2b7f77a927f45c4f28990052e0d33bb8da1feea98f0e8efd4",
+  "bundle_files_manifest_sha256": "7fe67661a365ec49c597abf16d3fe102301c63acc0037026eaefc801501db577",
+  "single_executable": true,
+  "no_jar_class_jvm_payload": true,
+  "no_java_env_pin": true,
+  "ad_hoc_signature_verified": true,
+  "package_audits": [
+    "dependency licenses/network/serde all6",
+    "geometry source",
+    "native binary arm64",
+    "single executable/payload",
+    "packaged InChI methane",
+    "relocated sanitized runtime twice",
+    "invalid native print/clipboard entrypoints",
+    "packaged MCP/CLI including cancellation/EOF",
+    "relocated geometry MMFF94/UFF"
+  ],
+  "native_gui": "pending root-only acceptance",
+  "timestamp_unix": 1791584163.334759
+}

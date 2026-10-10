@@ -1,0 +1,29 @@
+{
+  "status": "PASS: uniquely bound source-verified preimplementation Import UI comparison",
+  "observed_at_utc": "2026-10-09T22:52:34.772990+00:00",
+  "operator": "root via cua_repl",
+  "pid": 83821,
+  "bundle_id": "dev.reshiki.naming-baseline-verified",
+  "app_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Naming Baseline Verified.app",
+  "signed_executable_sha256": "17479a4b236b6df36ddab82087031315b78bd6fbf6e58de394558e0437d48c24",
+  "original_signed_executable_sha256": "82a0047bd037f77f063233a284f9f7c7de79f36b1c1e98f6eb673ed514d389c0",
+  "source_commit": "427d5f4e2bc05456213c0c98b6daa01351666bf2",
+  "declared_naming_parent": "0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9",
+  "package_bridge_sha256": "40b84d4be764010c4da5ea1ad9b3e4301415a5a9d3bb99dcb2a479981324fac6",
+  "source_parity_receipt_sha256": "379529979ad99fba672e31ea3dec2c337e8ba2bf4cc63003ef7ce17032eaff42",
+  "appearance": "Untitled empty drawing; keyboard drawing off; light Arial10/JACS/ACS; camera100%; no Chemical names entry",
+  "raw_size": [
+    2560,
+    1704
+  ],
+  "files": {
+    "preimplementation-import-ui-unique.jpg": "e07e4930a0a2ea4852796fda292e12694755d20331d48dc4fa1a597ee47e32b6",
+    "preimplementation-import-ui-unique.ax.txt": "37fa9d7e55079b0beb0300d277f916b9a30b71af4921cd2964a5740cd5827110"
+  },
+  "limits": [
+    "Separately source-verified projected-double-bond build, not an exact0e6 binary; five complete Import/app UI paths match the declared parent.",
+    "Only bundle identity/signature changed to eliminate shared-app-ID ambiguity. No source or compilation changed.",
+    "Older build has unstructured fresh-compilation log, not compiler JSON fresh:false records.",
+    "Earlier shared-ID screenshot/receipt are preserved as supplemental and excluded from selected before acceptance."
+  ]
+}

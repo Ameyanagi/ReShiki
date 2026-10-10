@@ -24,7 +24,7 @@ pub enum Action {
     Export(&'static str),
 }
 impl App {
-    fn reaction_arrow(&self) -> Option<u64> {
+    pub(super) fn reaction_arrow(&self) -> Option<u64> {
         let selected: Vec<_> = self
             .tab
             .doc
@@ -147,9 +147,12 @@ impl App {
                 .spacing(8)
             )
             .padding([12, 16]),
-            scrollable(container(self.reactions_panel()).padding([0, 16]))
-                .id("inspector-content")
-                .height(Length::Fill),
+            scrollable(
+                container(column![self.mapping_panel(), self.reactions_panel()].spacing(16))
+                    .padding([0, 16])
+            )
+            .id("inspector-content")
+            .height(Length::Fill),
             container(
                 column![
                     text(if ready {

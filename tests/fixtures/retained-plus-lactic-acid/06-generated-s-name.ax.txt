@@ -1,0 +1,17 @@
+The following is a diff from the previous accessibility tree for Window: "plus-lactic-acid.rsk • — ReShiki" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 183
+~		168 button Generate an optimized conformer using MMFF or UFF; preview before applying, ID: context-command-0
+~		169 button Draw with digits and letters; navigate atoms and bonds with arrows (F8), ID: context-command-1
+~		170 button (disabled) Align, ID: arrange-menu-AlignObjects
+~		171 button (disabled) Distribute, ID: arrange-menu-Distribute
+~		172 button (disabled) Order, ID: arrange-menu-Order
+~		173 button (disabled) Flip horizontal, ID: arrange-flip-horizontal
+~		174 button (disabled) Flip vertical, ID: arrange-flip-vertical
+~		175 button (disabled) Rotate 180°, ID: arrange-rotate
+~		176 toggle button (settable, boolean) Import structure, Value: off, ID: import-kind-structure
+~		177 toggle button (settable, boolean) Import chemical name, Value: on, ID: import-kind-name
+~		178 text field (settable) Chemical name, Value: (+)-lactic acid, ID: import-name
+~		179 toggle button (settable, boolean) Add name below, Value: on, ID: import-name-caption
+~		180 button Optional editable preview, ID: import-name-preview
+~		181 button Insert chemical name as structure, ID: import-name-insert
+~		182 button Name import details, ID: import-name-details

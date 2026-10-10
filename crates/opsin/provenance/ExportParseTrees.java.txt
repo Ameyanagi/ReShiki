@@ -1,0 +1,46 @@
+// Pinned development oracle of complete Parser + candidate-ranking behavior.
+package uk.ac.cam.ch.wwmm.opsin;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.util.*;
+
+public final class ExportParseTrees {
+    static String quote(String text) { return ExportFrontend.quote(text); }
+    static String trees(List<Element> trees) {
+        StringBuilder out = new StringBuilder("[");
+        for (int i = 0; i < trees.size(); i++) {
+            if (i > 0) out.append(','); out.append(quote(trees.get(i).toXML()));
+        }
+        return out.append(']').toString();
+    }
+    public static void main(String[] args) throws Exception {
+        Parser parser = new Parser();
+        try (PrintWriter out = new PrintWriter(args[1], "UTF-8")) {
+            for (String row : Files.readAllLines(Paths.get(args[0]), StandardCharsets.UTF_8)) {
+                String[] fields = row.split("\t", 2);
+                for (boolean radicals : new boolean[] {false, true}) {
+                    for (boolean detailed : new boolean[] {false, true}) {
+                        NameToStructureConfig config = new NameToStructureConfig();
+                        config.setAllowRadicals(radicals);
+                        config.setDetailedFailureAnalysis(detailed);
+                        out.print("{\"family\":" + quote(fields[0]) + ",\"input\":" + quote(fields[1]));
+                        out.print(",\"allow_radicals\":" + radicals + ",\"detailed_failure_analysis\":" + detailed);
+                        try {
+                            String name = PreProcessor.preProcess(fields[1]);
+                            out.print(",\"normalized\":" + quote(name));
+                            List<Element> parsed = parser.parse(config, name);
+                            out.print(",\"raw_trees\":" + trees(parsed));
+                            Collections.sort(parsed, new SortParses());
+                            out.print(",\"ranked_trees\":" + trees(parsed));
+                            out.print(",\"error\":null");
+                        } catch (Exception error) {
+                            out.print(",\"error\":" + quote(error.getMessage()));
+                        }
+                        out.println('}');
+                    }
+                }
+            }
+        }
+    }
+}

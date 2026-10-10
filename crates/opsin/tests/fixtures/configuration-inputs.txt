@@ -1,0 +1,20 @@
+methyl
+methylene
+propane
+acetic
+sulfuric
+phosphonic
+(R)-2,2'-Bis(diphenylphosphino)-1,1'-binaphthyl
+(P)-hexahelicene
+(R)-butan-2-ol
+(E)-but-2-ene
+(4R)-butan-2-ol
+D-(+)-glucose
+poly(oxyethylene)
+methyl acid
+foo-butyric acid
+(±)-butan-2-ol
+formaldehyde
+water
+2,2'-bipyridine
+sodium peroxide

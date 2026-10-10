@@ -1,0 +1,17 @@
+<!ELEMENT wordRules (wordRule+)>
+
+<!ELEMENT wordRule (word)+>
+<!ATTLIST wordRule name   CDATA #REQUIRED
+                   type   (full|substituent|functionalTerm|polymer) #REQUIRED
+>
+
+<!ELEMENT word EMPTY>
+<!ATTLIST word type (full|substituent|functionalTerm) #REQUIRED
+               value CDATA #IMPLIED
+               functionalGroupType CDATA #IMPLIED
+               functionalGroupSubType CDATA #IMPLIED
+               endsWith (acid|ateGroup) #IMPLIED
+               endsWithRegex CDATA #IMPLIED
+               endsWithGroupType CDATA #IMPLIED
+               endsWithGroupSubType CDATA #IMPLIED
+>

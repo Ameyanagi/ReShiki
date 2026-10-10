@@ -1,0 +1,62 @@
+// Development-only pinned ComponentGenerator intermediate oracle; never part of Cargo.
+package uk.ac.cam.ch.wwmm.opsin;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.util.*;
+
+public final class ExportComponents {
+    static String quote(String value) { return ExportFrontend.quote(value); }
+    static String warnings(BuildState state) {
+        StringBuilder out = new StringBuilder("[");
+        for (OpsinWarning warning : state.getWarnings()) {
+            if (out.length() > 1) out.append(',');
+            out.append("{\"kind\":").append(quote(warning.getType().name()));
+            out.append(",\"message\":").append(quote(warning.getMessage())).append('}');
+        }
+        return out.append(']').toString();
+    }
+    public static void main(String[] args) throws Exception {
+        Parser parser = new Parser();
+        try (PrintWriter out = new PrintWriter(args[1], "UTF-8")) {
+            for (String row : Files.readAllLines(Paths.get(args[0]), StandardCharsets.UTF_8)) {
+                String[] fields = row.split("\\t", 2);
+                for (boolean radicals : new boolean[] {false, true}) {
+                    for (boolean detailed : new boolean[] {false, true}) {
+                        NameToStructureConfig config = new NameToStructureConfig();
+                        config.setAllowRadicals(radicals);
+                        config.setDetailedFailureAnalysis(detailed);
+                        out.print("{\"family\":" + quote(fields[0]) + ",\"input\":" + quote(fields[1]));
+                        out.print(",\"allow_radicals\":" + radicals + ",\"detailed_failure_analysis\":" + detailed);
+                        try {
+                            String name = PreProcessor.preProcess(fields[1]);
+                            out.print(",\"normalized\":" + quote(name));
+                            List<Element> parsed = parser.parse(config, name);
+                            Collections.sort(parsed, new SortParses());
+                            out.print(",\"parses\":[");
+                            for (int i = 0; i < parsed.size(); i++) {
+                                if (i > 0) out.print(',');
+                                Element tree = parsed.get(i);
+                                String before = tree.toXML();
+                                BuildState state = new BuildState(config);
+                                out.print("{\"before\":" + quote(before));
+                                try {
+                                    new ComponentGenerator(state).processParse(tree);
+                                    out.print(",\"after\":" + quote(tree.toXML()) + ",\"error\":null");
+                                } catch (Exception error) {
+                                    out.print(",\"after\":null,\"error\":" + quote(error.getMessage()));
+                                }
+                                out.print(",\"warnings\":" + warnings(state) + "}");
+                            }
+                            out.print("],\"error\":null");
+                        } catch (Exception error) {
+                            out.print(",\"error\":" + quote(error.getMessage()));
+                        }
+                        out.println('}');
+                    }
+                }
+            }
+        }
+    }
+}
+

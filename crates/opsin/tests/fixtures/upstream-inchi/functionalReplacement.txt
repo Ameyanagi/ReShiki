@@ -1,0 +1,24 @@
+peroxyacetic acid	InChI=1S/C2H4O3/c1-2(3)5-4/h4H,1H3
+peroxyacetate	InChI=1S/C2H4O3/c1-2(3)5-4/h4H,1H3/p-1
+acetperoxoic acid	InChI=1S/C2H4O3/c1-2(3)5-4/h4H,1H3
+acetperoxoate	InChI=1S/C2H4O3/c1-2(3)5-4/h4H,1H3/p-1
+phosphoronitridic acid	InChI=1S/H2NO2P/c1-4(2)3/h2-3H
+nitridophosphoric acid	InChI=1S/H2NO2P/c1-4(2)3/h2-3H
+ethandithioate	InChI=1S/C2H4S2/c1-2(3)4/h1H3,(H,3,4)/p-1
+dithioethanoate	InChI=1S/C2H4S2/c1-2(3)4/h1H3,(H,3,4)/p-1
+1,1-dithiooxalic acid	InChI=1S/C2H2O2S2/c3-1(4)2(5)6/h(H,3,4)(H,5,6)
+tetrathiooxalic acid	InChI=1S/C2H2S4/c3-1(4)2(5)6/h(H,3,4)(H,5,6)
+imidooxalic acid	InChI=1S/C2H3NO3/c3-1(4)2(5)6/h(H2,3,4)(H,5,6)
+diimidooxalic acid	InChI=1S/C2H4N2O2/c3-1(5)2(4)6/h(H2,3,5)(H2,4,6)
+hydrazonooxalic acid	InChI=1S/C2H4N2O3/c3-4-1(5)2(6)7/h3H2,(H,4,5)(H,6,7)
+dihydrazonooxalic acid	InChI=1S/C2H6N4O2/c3-5-1(7)2(8)6-4/h3-4H2,(H,5,7)(H,6,8)
+1-hydrazono-2-imidooxalic acid	InChI=1S/C2H5N3O2/c3-1(6)2(7)5-4/h4H2,(H2,3,6)(H,5,7)
+bromooxalic acid	InChI=1S/C2HBrO3/c3-1(4)2(5)6/h(H,5,6)
+2-chloro-2-thiooxalic acid	InChI=1S/C2HClO2S/c3-1(6)2(4)5/h(H,4,5)
+cyanooxalic acid	InChI=1S/C3HNO3/c4-1-2(5)3(6)7/h(H,6,7)
+5-carbonoperoxoylpentanoic acid	InChI=1S/C6H10O5/c7-5(8)3-1-2-4-6(9)11-10/h10H,1-4H2,(H,7,8)
+phosphoroperoxoyldibenzene	InChI=1S/C12H11O3P/c13-15-16(14,11-7-3-1-4-8-11)12-9-5-2-6-10-12/h1-10,13H
+phosphoric methyl amide ethyl amide propyl amide	InChI=1S/C6H18N3OP/c1-4-6-9-11(10,7-3)8-5-2/h4-6H2,1-3H3,(H3,7,8,9,10)
+diethyl-thionophosphoric acid	InChI=1S/C4H11O3PS/c1-3-6-8(5,9)7-4-2/h3-4H2,1-2H3,(H,5,9)
+#Counter example
+benzothiazol-2-ylthio-succinic anhydride	InChI=1S/C11H7NO3S2/c13-9-5-8(10(14)15-9)17-11-12-6-3-1-2-4-7(6)16-11/h1-4,8H,5H2

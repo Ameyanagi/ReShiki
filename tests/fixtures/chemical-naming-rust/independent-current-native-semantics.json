@@ -1,0 +1,43 @@
+{
+  "status": "PASS for the currently saved3 native originals; root GUI follow-up still running",
+  "rdkit_version": "2026.03.6",
+  "method": "independent RDKit graph reconstruction from native elements/charge/isotope/H/bonds; separate native winding and 2D wedge/coordinate routes; caches ignored",
+  "native_graphs": [
+    {
+      "file": "ethanol-rust-caption-native.rsk",
+      "sha256": "d8a51047d9e1dc8866815246bebf2b3306a893dfbb0597731070f71e1098c004",
+      "canonical_isomeric_smiles": "CCO",
+      "independent_reference": "CCO",
+      "native_winding_cip": {},
+      "separate_wedge_coordinate_cip": {},
+      "cache_policy": "cip_label and label_h ignored",
+      "stereo_inversion_canaries": "not chiral"
+    },
+    {
+      "file": "ethanol-rust-native.rsk",
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "canonical_isomeric_smiles": "CCO",
+      "independent_reference": "CCO",
+      "native_winding_cip": {},
+      "separate_wedge_coordinate_cip": {},
+      "cache_policy": "cip_label and label_h ignored",
+      "stereo_inversion_canaries": "not chiral"
+    },
+    {
+      "file": "r-lactic-rust-native.rsk",
+      "sha256": "27d7e0604d353410c216fa63be1e32424257422d7ceada204d7c28bba1753599",
+      "canonical_isomeric_smiles": "C[C@@H](O)C(=O)O",
+      "independent_reference": "C[C@@H](O)C(=O)O",
+      "native_winding_cip": {
+        "2": "R"
+      },
+      "separate_wedge_coordinate_cip": {
+        "2": "R"
+      },
+      "cache_policy": "cip_label and label_h ignored",
+      "stereo_inversion_canaries": true
+    }
+  ],
+  "caption_only_delta": true,
+  "rdkit_requirement": "development-only independent review; not shipped or required by portable byte/topology checker"
+}

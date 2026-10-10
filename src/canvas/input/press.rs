@@ -21,6 +21,7 @@ impl MoleculeCanvas<'_> {
         if hit.is_empty() {
             hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
         }
+        let target = hit.clone();
         hit = self.doc.expand_groups(&hit);
         let inside_selection = hit.is_empty()
             && reshiki::scene::selection_bounds(self.doc, self.selected)
@@ -36,7 +37,14 @@ impl MoleculeCanvas<'_> {
         state.last_click = None;
         let position =
             point? + iced::Vector::new(bounds.x - canvas_bounds.x, bounds.y - canvas_bounds.y);
-        Some(Action::publish(Edit::ContextMenu { position, selected }).and_capture())
+        Some(
+            Action::publish(Edit::ContextMenu {
+                position,
+                selected,
+                hit: target,
+            })
+            .and_capture(),
+        )
     }
 
     pub(super) fn left_press(

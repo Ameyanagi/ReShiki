@@ -50,6 +50,7 @@ mod joining;
 mod keyboard_drawing;
 mod label_refresh;
 mod molecule_shortcuts;
+mod naming;
 mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
@@ -63,6 +64,7 @@ mod performance;
 mod pictures;
 mod popover;
 mod printing;
+mod reaction_mapping;
 mod reactions;
 mod ring_edits;
 #[cfg(test)]
@@ -108,6 +110,7 @@ pub enum InspectorTab {
     Labels,
     Templates,
     Import,
+    Names,
     Export,
 }
 
@@ -124,6 +127,7 @@ pub enum Message {
     Nmr(nmr::Action),
     Updates(updates::Action),
     Reaction(reactions::Action),
+    Mapping(reaction_mapping::Action),
     DrawingStyle(document_styles::Action),
     DepthAppearance(depth_appearance::Action),
     InlineText(inline_text::Action),
@@ -167,6 +171,7 @@ pub enum Message {
     ToggleInspector,
     Inspector(InspectorTab),
     Imports(import::Action),
+    Naming(naming::Action),
     InsertInput,
     ToggleHelp,
     OpenShortcutExamples,
@@ -883,6 +888,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
             a == b
         })
         && a.annotations == b.annotations
+        && a.molecule_names == b.molecule_names
         && a.arrows == b.arrows
         && a.graphics == b.graphics
         && a.groups == b.groups

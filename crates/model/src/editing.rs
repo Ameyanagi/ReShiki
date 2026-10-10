@@ -89,7 +89,14 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         .expand_abbreviation_selection(&ids)
         .into_iter()
         .collect();
+    let ids: HashSet<_> =
+        crate::molecule_names::include_annotations(doc, &ids.iter().copied().collect::<Vec<_>>())
+            .into_iter()
+            .collect();
     let mut part = doc.clone();
+    part.molecule_names.retain(|name| {
+        ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
+    });
     part.reactions
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.groups
@@ -156,6 +163,18 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
         return vec![];
     };
     let mut part = source.clone();
+    for name in &mut part.molecule_names {
+        let Some(mapped) = mapping.get(&name.annotation).copied() else {
+            return vec![];
+        };
+        name.annotation = mapped;
+        for atom in &mut name.atoms {
+            let Some(mapped) = mapping.get(atom).copied() else {
+                return vec![];
+            };
+            *atom = mapped;
+        }
+    }
     part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
@@ -164,6 +183,10 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
             a.display
                 .hydrogens
                 .get_or_insert(source.atom_labels.hydrogens);
+            a.display
+                .mapping
+                .show
+                .get_or_insert(source.atom_labels.maps);
             a.display
                 .stereo
                 .show
@@ -271,6 +294,7 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     doc.atoms.extend(part.atoms);
     doc.bonds.extend(part.bonds);
     doc.annotations.extend(part.annotations);
+    doc.molecule_names.extend(part.molecule_names);
     doc.arrows.extend(part.arrows);
     doc.graphics.extend(part.graphics);
     doc.groups.extend(part.groups);
@@ -481,6 +505,7 @@ fn map_positions(
             for offset in [
                 a.display.number.as_mut().and_then(|n| n.offset.as_mut()),
                 a.display.stereo.offset.as_mut(),
+                a.display.mapping.offset.as_mut(),
             ]
             .into_iter()
             .flatten()
@@ -537,8 +562,20 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
                 .collect()
         })
         .collect();
+    let captions: Vec<Vec<_>> = doc
+        .molecule_names
+        .iter()
+        .map(|name| {
+            name.atoms
+                .iter()
+                .copied()
+                .chain([name.annotation])
+                .collect()
+        })
+        .collect();
     let memberships: Vec<&[u64]> = attachments
         .iter()
+        .chain(&captions)
         .map(Vec::as_slice)
         .chain(doc.groups.iter().map(|g| g.members.as_slice()))
         .collect();

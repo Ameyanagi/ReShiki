@@ -44,12 +44,16 @@ impl App {
         self.run(request, Job::AromaticDisplay)
     }
     pub(super) fn insert_input(&mut self) -> Task<Message> {
+        if self.imports.kind == super::import::InputKind::Name {
+            return self.naming_action(super::naming::Action::InsertName);
+        }
         self.run(input_request(&self.imports.input.text()), Job::Insert)
     }
     pub(super) fn import_input(&mut self) -> Task<Message> {
         self.run(input_request(&self.imports.input.text()), Job::Import)
     }
     pub(super) fn insert_example(&mut self, smiles: &'static str) -> Task<Message> {
+        self.imports.kind = super::import::InputKind::Structure;
         self.imports.set_text(smiles);
         self.run(Request::import_smiles(smiles), Job::Insert)
     }

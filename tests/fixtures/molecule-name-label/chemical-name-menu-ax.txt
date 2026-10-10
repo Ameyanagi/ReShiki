@@ -1,0 +1,20 @@
+Window: "ethanol-direct-import.rsk — ReShiki", App: ReShiki.
+0 standard window ethanol-direct-import.rsk — ReShiki, Secondary Actions: Raise
+	1 container
+		2 button Edit atom label…, ID: menu-Main-0
+		3 button Hide chemical name, ID: menu-Main-1
+		4 button Select molecule, ID: menu-Main-2
+		5 button Arrange & transform, ID: menu-Main-3
+		6 button Cut, ID: menu-Main-5
+		7 button Copy, ID: menu-Main-6
+		8 button Copy as, ID: menu-Main-7
+		9 button Paste, ID: menu-Main-8
+		10 button Duplicate, ID: menu-Main-9
+		11 button Properties…, ID: menu-Main-11
+		12 button Delete, ID: menu-Main-12
+	13 close button
+	14 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	15 minimize button
+	16 text ethanol-direct-import.rsk — ReShiki
+17 menu bar
+	18 ReShiki

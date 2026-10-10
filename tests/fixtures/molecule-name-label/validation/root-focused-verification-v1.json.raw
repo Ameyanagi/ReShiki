@@ -1,0 +1,96 @@
+{
+  "created_utc": "2026-10-10T08:18:02.403665+00:00",
+  "input_receipt_sha256": "48ee57890b04d9d728e53d12ebedd5af095c8b39b45d1f9a3cc3c0c68ff972a1",
+  "verified_log_hashes": true,
+  "actual_distinct_named_passes": 57,
+  "suites": [
+    {
+      "suite": "model2",
+      "summaries": [
+        [
+          "12",
+          "0",
+          "0"
+        ]
+      ],
+      "named_passes": 12,
+      "first_names": [
+        "molecule_names::tests::atom_deletion_preserves_caption_edited_in_the_same_transaction",
+        "molecule_names::tests::caption_is_centered_below_visual_ink_and_keeps_names_as_plain_text"
+      ]
+    },
+    {
+      "suite": "app-naming2",
+      "summaries": [
+        [
+          "21",
+          "0",
+          "3"
+        ]
+      ],
+      "named_passes": 21,
+      "first_names": [
+        "app::naming::import_dock::tests::actual_local_parser_result_inserts_directly_with_verified_source_title",
+        "app::naming::import_dock::tests::busy_requests_and_unsupported_names_leave_drawing_and_history_untouched"
+      ]
+    },
+    {
+      "suite": "app-context1",
+      "summaries": [
+        [
+          "11",
+          "0",
+          "9"
+        ]
+      ],
+      "named_passes": 11,
+      "first_names": [
+        "app::context_menu::cascade::tests::application_shortcuts_use_the_platform_command_modifier",
+        "app::context_menu::cascade::tests::typing_and_unbound_shortcuts_do_not_dispatch_drawing_commands"
+      ]
+    },
+    {
+      "suite": "app-import1",
+      "summaries": [
+        [
+          "11",
+          "0",
+          "0"
+        ]
+      ],
+      "named_passes": 11,
+      "first_names": [
+        "app::import::tests::background_file_insertion_keeps_its_status_guards_and_undo",
+        "app::import::tests::dropped_drawings_open_in_tabs_without_a_save_dialog"
+      ]
+    },
+    {
+      "suite": "renderer1",
+      "summaries": [
+        [
+          "1",
+          "0",
+          "0"
+        ]
+      ],
+      "named_passes": 1,
+      "first_names": [
+        "app::naming::import_dock::tests::default_dock_exposes_one_insert_and_collapses_preview_and_details"
+      ]
+    },
+    {
+      "suite": "canvas1",
+      "summaries": [
+        [
+          "1",
+          "0",
+          "0"
+        ]
+      ],
+      "named_passes": 1,
+      "first_names": [
+        "canvas::tests::secondary_click_selects_its_target_and_preserves_an_existing_multi_selection"
+      ]
+    }
+  ]
+}

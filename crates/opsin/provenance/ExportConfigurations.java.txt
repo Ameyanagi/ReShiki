@@ -1,0 +1,39 @@
+// Development-only complete-result oracle across all five configuration flags.
+package uk.ac.cam.ch.wwmm.opsin;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.io.*;
+public final class ExportConfigurations {
+    static String q(String text) {return ExportFrontend.quote(text);}
+    public static void main(String[] args)throws Exception {
+        NameToStructure engine=NameToStructure.getInstance();
+        try(PrintWriter out=new PrintWriter(args[1],"UTF-8")) {
+            for(String name:Files.readAllLines(Paths.get(args[0]),StandardCharsets.UTF_8)) {
+                for(int mask=0;mask<32;mask++) {
+                    NameToStructureConfig options=new NameToStructureConfig();
+                    options.setAllowRadicals((mask&1)!=0);
+                    options.setOutputRadicalsAsWildCardAtoms((mask&2)!=0);
+                    options.setDetailedFailureAnalysis((mask&4)!=0);
+                    options.setInterpretAcidsWithoutTheWordAcid((mask&8)!=0);
+                    options.setWarnRatherThanFailOnUninterpretableStereochemistry((mask&16)!=0);
+                    OpsinResult result=engine.parseChemicalName(name,options);
+                    out.print("{\"input\":"+q(name)+",\"mask\":"+mask+",\"options\":{");
+                    out.print("\"allow_radicals\":"+((mask&1)!=0));
+                    out.print(",\"output_radicals_as_wildcard_atoms\":"+((mask&2)!=0));
+                    out.print(",\"detailed_failure_analysis\":"+((mask&4)!=0));
+                    out.print(",\"interpret_acids_without_the_word_acid\":"+((mask&8)!=0));
+                    out.print(",\"warn_rather_than_fail_on_uninterpretable_stereochemistry\":"+((mask&16)!=0)+"}");
+                    out.print(",\"status\":"+q(result.getStatus().toString())+",\"message\":"+q(result.getMessage())+",\"warnings\":[");
+                    boolean first=true;
+                    for(OpsinWarning warning:result.getWarnings()){
+                        if(!first)out.print(',');first=false;
+                        out.print("{\"kind\":"+q(warning.getType().name())+",\"message\":"+q(warning.getMessage())+"}");
+                    }
+                    out.print("],\"cxsmiles\":"+q(result.getSmiles(13))+",\"graph\":"+ExportStructures.graph(result.getStructure()));
+                    out.println('}');
+                }
+            }
+        }
+    }
+}
+

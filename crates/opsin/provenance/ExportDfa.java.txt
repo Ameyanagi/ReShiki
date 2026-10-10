@@ -1,0 +1,81 @@
+// Development-only migration record. This file is never compiled by Cargo.
+// Run with the pinned, unmodified OPSIN 2.9.0 development oracle.
+package uk.ac.cam.ch.wwmm.opsin;
+
+import dk.brics.automaton.RunAutomaton;
+import java.io.DataOutputStream;
+import java.io.FileOutputStream;
+import java.util.ArrayList;
+import java.util.List;
+
+public final class ExportDfa {
+    private static final class Entry {
+        final String name;
+        final RunAutomaton automaton;
+        Entry(String name, RunAutomaton automaton) {
+            this.name = name;
+            this.automaton = automaton;
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        ResourceManager resources = new ResourceManager(
+            new ResourceGetter("uk/ac/cam/ch/wwmm/opsin/resources/"));
+        resources.populatedReverseTokenMappings();
+        List<Entry> entries = new ArrayList<>();
+        entries.add(new Entry("chemical", resources.getChemicalAutomaton()));
+        entries.add(new Entry("chemical-reversed", resources.getReverseChemicalAutomaton()));
+        char[] symbols = resources.getChemicalAutomaton().getCharIntervals();
+        RunAutomaton[] forward = resources.getSymbolRegexAutomataDict();
+        for (int i = 0; i < symbols.length; i++) {
+            if (forward[i] != null) {
+                entries.add(new Entry("token-" + (int) symbols[i], forward[i]));
+            }
+        }
+        char[] reverseSymbols = resources.getReverseChemicalAutomaton().getCharIntervals();
+        RunAutomaton[] reverse = resources.getSymbolRegexAutomataDictReversed();
+        for (int i = 0; i < reverseSymbols.length; i++) {
+            if (reverse[i] != null) {
+                entries.add(new Entry("token-reversed-" + (int) reverseSymbols[i], reverse[i]));
+            }
+        }
+        try (DataOutputStream out = new DataOutputStream(new FileOutputStream(args[0]))) {
+            out.writeBytes("OPSINDFA");
+            out.writeInt(2);
+            out.writeInt(entries.size());
+            for (Entry entry : entries) {
+                byte[] name = entry.name.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+                out.writeInt(name.length);
+                out.write(name);
+                RunAutomaton automaton = entry.automaton;
+                char[] intervals = automaton.getCharIntervals();
+                out.writeInt(automaton.getInitialState());
+                out.writeInt(automaton.getSize());
+                out.writeInt(intervals.length);
+                for (char interval : intervals) out.writeInt(interval);
+                for (int state = 0; state < automaton.getSize(); state++) {
+                    out.writeBoolean(automaton.isAccept(state));
+                    List<int[]> transitions = new ArrayList<>();
+                    for (int i = 0; i < intervals.length; i++) {
+                        int target = automaton.step(state, intervals[i]);
+                        int end = i + 1 < intervals.length ? intervals[i + 1] - 1 : 65535;
+                        if (target >= 0) {
+                            if (!transitions.isEmpty()) {
+                                int[] previous = transitions.get(transitions.size() - 1);
+                                if (previous[2] == target && previous[1] + 1 == intervals[i]) {
+                                    previous[1] = end;
+                                    continue;
+                                }
+                            }
+                            transitions.add(new int[] { intervals[i], end, target });
+                        }
+                    }
+                    out.writeInt(transitions.size());
+                    for (int[] transition : transitions) {
+                        for (int value : transition) out.writeInt(value);
+                    }
+                }
+            }
+        }
+    }
+}

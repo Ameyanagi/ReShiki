@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/tmp/reshiki-opsin-core-target/debug/deps/reshiki-5180b610091c22a5)
+
+running 2 tests
+test app::naming::tests::controls_publish_named_native_actions_and_editable_values ... ok
+test app::naming::tests::scrolled_insert_click_reaches_button_instead_of_preview ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 663 filtered out; finished in 0.45s
+

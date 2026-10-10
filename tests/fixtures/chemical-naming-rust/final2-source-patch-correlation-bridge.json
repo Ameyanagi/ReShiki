@@ -1,0 +1,227 @@
+{
+  "purpose": "Correct and bind the omitted whole-source-patch field without rewriting the original compiler/source receipt",
+  "original_manifest": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/naming-backend-validation/runtime-inputs-final2-before.json",
+  "original_manifest_sha256": "c72259c27b6e361d8846469406c8d571e767ac1cbd745ff0ef521a7779bfb0a5",
+  "original_source_patch_sha256": null,
+  "field_semantics": "SHA-256 of the complete parent-relative34-path app integration patch, not the test-only delta",
+  "omission_cause": "The refresh writer explicitly set source_patch_sha256=None while reusing the original manifest template; it recorded file hashes and test_patch_sha256 instead. This was an omitted correlation field, not a differing captured patch.",
+  "corrected_source_patch_sha256": "f237bcec9a3f63bf9ff40e3f4cc2404ef49d7d1d25a456a4860a69043f89e238",
+  "patch_file": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/naming-backend-validation/app-parent-relative-final2.patch",
+  "exact_patch_parent": "0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9",
+  "captured_allowlist_manifest_sha256": "9ae7b8f85dc74747973fb05abfcb6a6d0ad22faec6d971b5ed9407c69cea69d0",
+  "original_manifest_byte_preserved": true,
+  "temporary_index_application": "git read-tree exact parent; git apply --cached --check --binary; git apply --cached --binary; inspect each resulting staged blob",
+  "all34_applied_blobs_equal_captured_and_current": true,
+  "matching_original_source_manifest_entries": 32,
+  "paths": {
+    "src/app.rs": {
+      "applied_patch_blob_sha256": "a4213d56adaffed1a301e047d04cfd14d25cd17602543b12e1c5af6318010737",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/app/atom_text.rs": {
+      "applied_patch_blob_sha256": "c51adcf4a4f4562fbf36e1f952f15b8adc9e021d01baa058a11d9cdb58cfc002",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/app/dispatch.rs": {
+      "applied_patch_blob_sha256": "8681ae836674102ae93e5ea982a317a480f369b1903e60312f7174c9ccedb53d",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/app/document_tab.rs": {
+      "applied_patch_blob_sha256": "1f93758fab0fc2eb8cdf3388fc656b0fdeea939d85947660dbb707b8dc370bb3",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/app/gates.rs": {
+      "applied_patch_blob_sha256": "eac8280d8c1186e552f53f256ac28eb33889c661ad5dfbcf94b7d5c566daf350",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/app/tabs.rs": {
+      "applied_patch_blob_sha256": "a450b77d6a082cb019aea434a395f33d08b0723b5445f380964200898ab8a734",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/app/workspace.rs": {
+      "applied_patch_blob_sha256": "0bd924d627941b658290e320427f2b2775c737cf9b7e93d9b7817c4c7b941423",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/lib.rs": {
+      "applied_patch_blob_sha256": "0ec0f262925eab424ced43934579fd0439ded00fb0511c70c6eacd90757dae98",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/main.rs": {
+      "applied_patch_blob_sha256": "3242384264f37d1675c16f3296d66494e420246059e7fa7649aa49cf63a7d57f",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/app/naming.rs": {
+      "applied_patch_blob_sha256": "ce4c7685b6064c283444fb8c44d9ed65fedd58e8ac26a5dd832eb39326f64542",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/app/naming/preview.rs": {
+      "applied_patch_blob_sha256": "77ccea791e6ce7095fe11b15af7be7b029e6b2f83cbeafb17e27078d6c96435f",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/app/naming/tests.rs": {
+      "applied_patch_blob_sha256": "4a50d2e4c409ad8f96f5adcdf7be7cb37cf23744f0d1c9c9c2c2a1e28c5a6e98",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming.rs": {
+      "applied_patch_blob_sha256": "b0e61b980bf468b6c20591326babfd098c63cbe55344b6bf40bc1fe6b0cf0158",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/local.rs": {
+      "applied_patch_blob_sha256": "61052ee9ac2788511e3d0a2213954437586916e6d20a2e41044a210f15926b12",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/local/tests.rs": {
+      "applied_patch_blob_sha256": "53cd1a07e17235e0362b3944e6e4d88c6b80ebefadfff6248d4dd1d91ce26684",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/reverse.rs": {
+      "applied_patch_blob_sha256": "68527395f3adff764a4f21c4ca97ac5ec2105f2c991857ee330b332f01e6aebc",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/reverse/tests.rs": {
+      "applied_patch_blob_sha256": "a5f663122ef19b0966661f7e273a9bc0d52957d532d91ab41298a1f9281815e2",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/worker.rs": {
+      "applied_patch_blob_sha256": "9a517814e7386c0a496e8e73d21b042be2bb58a217b09e3050b6bb2625fc027e",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/rules.rs": {
+      "applied_patch_blob_sha256": "777ae9078458e886d2962fa42a2415e0bd73ad494b8e91a9ef212cc131cb16dd",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/rules/groups.rs": {
+      "applied_patch_blob_sha256": "893f4aa0514a203d6b6ad563e57778f953e9a936c4880046bc59e80d4d35f02e",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/rules/parent.rs": {
+      "applied_patch_blob_sha256": "fe3fa1d27b2de58ec9c2ffa044e9ae3e58f17b5da72fd9f05cd54922fb90f5ca",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/rules/render.rs": {
+      "applied_patch_blob_sha256": "fc1ab8637e1f8123158c9ccb8fd6f166eeff8153ffb32ccd141ac0892a3079a8",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/rules/tests.rs": {
+      "applied_patch_blob_sha256": "3c1d3acc0f8c78c80a0b2d318be9d3219d68e6f0510bc1ea5a2d22213369cc45",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "src/naming/tests.rs": {
+      "applied_patch_blob_sha256": "d42eaa0b7492339b0d0b616b0e2d060f6c18db4b07df1820386e3bca96846650",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "native/process/Cargo.toml": {
+      "applied_patch_blob_sha256": "6744bbd82b3ea8bba1b42252196b9530b92551837090a132b96ce18157662dd7",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "native/process/src/lib.rs": {
+      "applied_patch_blob_sha256": "a838a92af087ccf7e2333751611fbea1638c50e07dcbe8095a07ab5342001daa",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "native/process/src/tests.rs": {
+      "applied_patch_blob_sha256": "d999fa6fc33a4ef238b62893af1db25c30b77914e414c69d57018b67b4152860",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "native/process/src/unix.rs": {
+      "applied_patch_blob_sha256": "fedc5c3eb08c8de07a63c1890d0717f0ef10fb45e2c563d31304a35d4fb871bf",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "native/process/src/windows.rs": {
+      "applied_patch_blob_sha256": "69cd8cf84d244cd8723c4bab08010e74bdd85b4d8ab280ec7fdd875c9eb0e147",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "tests/chemical_naming_baseline.rs": {
+      "applied_patch_blob_sha256": "ddf48cd5f5031578117fbbdaf3487c3dbccb8e89143a2e2d733c2dd216bc7548",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "Cargo.toml": {
+      "applied_patch_blob_sha256": "b050fa79cff5d8999081dccf92f3c294b7d9e509b9feeafab02310d346d4bf8c",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    "Cargo.lock": {
+      "applied_patch_blob_sha256": "8ee1d2ad7485623ecce70893b87ed7dbb9085d19bad66bcdf9a423948f7f63a2",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": true
+    },
+    ".github/workflows/checks.yml": {
+      "applied_patch_blob_sha256": "964fd566a262a4c96822918643554dc06b019d25cbc07abb04a9d650682b1d70",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": "not an owned Rust/resource compiler input"
+    },
+    ".github/workflows/release.yml": {
+      "applied_patch_blob_sha256": "8e933db8ad9360368206d31e0b0202a313c19ee9f583dd63f4f4e9f5485906ae",
+      "matches_captured_allowlist": true,
+      "matches_current_bytes": true,
+      "matches_original1226_manifest": "not an owned Rust/resource compiler input"
+    }
+  },
+  "compiler_receipt_sha256": "8a69e3e8c377109aa4b2ebbac7dd2685d403afb681706c02cec9a59aad7af841",
+  "package_provenance_sha256": "e66d44d2bb35cb697dcb09272ffe68f09a2ed27a689b6e53115938a595ed9aa7",
+  "signed_executable_sha256": "ef5948ea8c060ce2b7f77a927f45c4f28990052e0d33bb8da1feea98f0e8efd4",
+  "source_or_build_changes": "none",
+  "timestamp_unix": 1791584416.556685
+}

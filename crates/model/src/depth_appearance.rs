@@ -554,6 +554,8 @@ impl Paint {
             atom.display.highlight = original.display.highlight.map(|c| self.color(c, amount));
             atom.display.stereo.style.color =
                 self.color(original.display.stereo.style.color, amount);
+            atom.display.mapping.style.color =
+                self.color(original.display.mapping.style.color, amount);
             if let Some(number) = &mut atom.display.number {
                 number.style.color = self.color(number.style.color, amount);
             }

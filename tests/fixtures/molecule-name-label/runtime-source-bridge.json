@@ -1,0 +1,33 @@
+{
+  "created_at_utc": "2026-10-10T08:19:22.243744+00:00",
+  "purpose": "Bridge from tested default-feature native executable to documentation and evidence additions prepared for commit.",
+  "frozen_source_manifest_sha256": "af7693db982d627174c747ed6ce596a1c89eea8fe9e84fa4528a3ec2df68b7fd",
+  "bundle_provenance_sha256": "709963cd369f05539c5c0e30d7c00fa4a6d13d14413d35a568d9f055a8873ff5",
+  "changed_preexisting_files_since_frozen_source": {
+    "docs/changes/molecule-name-label.md": {
+      "before_sha256": "df2cf0f2b57836bfc90078a94d429f4098512385d2541848012d6483c21d851b",
+      "after_sha256": "e069cd0acf1b92402c7e1269488079bbbdecc8ac7170aca0bcd5974e54a6470f"
+    }
+  },
+  "verified_original_file_count": 2831,
+  "verified_unchanged_original_file_count": 2830,
+  "verified_unchanged_executable_input_count": 631,
+  "raw_executable_sha256": "c2c7ea9272c90e9020e93b00927878a776a6c653571193ee68b59e29d3921bb2",
+  "signed_executable_sha256": "ed4e1cfe393e9e192f300928a22556fe215cb25e86dbefcca9f42f06e1af9a0f",
+  "new_asset_paths": [
+    "docs/images/molecule-name-label/",
+    "tests/fixtures/molecule-name-label/"
+  ],
+  "native_fixture_assertions": "All three saved fixtures verified independently; version 19, 3 atoms, 2 bonds; direct/generated graph bytes identical; exactly expected caption/link counts and full atom IDs.",
+  "root_independent_focused_verification_sha256": "b96644b5da4d913c07f47f546f866fab5c6f0c14c38477bfb13c4672dc56bad3",
+  "no_runtime_source_or_license_change_after_build": true,
+  "normal_commit_hooks": {
+    "all_features_cargo_check": true,
+    "all_features_strict_clippy": true,
+    "cargo_fmt": true,
+    "oxfmt": true,
+    "oxlint": true,
+    "log": "validation/full-commit-hooks.log",
+    "log_sha256": "0149687802855137e8a8b56a3bdf75516c83a567d97525bbb057d79799e739fb"
+  }
+}

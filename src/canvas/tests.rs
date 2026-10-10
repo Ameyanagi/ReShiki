@@ -1142,9 +1142,9 @@ fn secondary_click_selects_its_target_and_preserves_an_existing_multi_selection(
     canvas.selected = &selected;
     let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
     let mut state = State::default();
-    for (point, expected) in [
-        (Point::new(200., 150.), vec![a, b]),
-        (Point::new(350., 250.), vec![]),
+    for (point, expected, expected_hit) in [
+        (Point::new(200., 150.), vec![a, b], vec![a]),
+        (Point::new(350., 250.), vec![], vec![]),
     ] {
         let cursor = mouse::Cursor::Available(point);
         canvas.update(
@@ -1162,7 +1162,7 @@ fn secondary_click_selects_its_target_and_preserves_an_existing_multi_selection(
             )
             .unwrap();
         assert!(
-            matches!(action.into_inner().0, Some(Edit::ContextMenu { selected, position }) if selected == expected && position == point)
+            matches!(action.into_inner().0, Some(Edit::ContextMenu { selected, position, hit }) if selected == expected && position == point && hit == expected_hit)
         );
         assert!(state.gesture.is_none());
     }

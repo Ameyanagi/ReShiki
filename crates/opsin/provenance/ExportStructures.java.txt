@@ -1,0 +1,103 @@
+// Development-only complete-result oracle. Never a Rust build/runtime input.
+package uk.ac.cam.ch.wwmm.opsin;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.util.*;
+
+public final class ExportStructures {
+    static String quote(String text) { return ExportFrontend.quote(text); }
+    static String ref(Atom atom, Map<Atom, Integer> ids) {
+        if (atom == AtomParity.hydrogen) return quote("hydrogen");
+        if (atom == AtomParity.deoxyHydrogen) return quote("deoxyHydrogen");
+        if (atom == null) return "null";
+        Integer id = ids.get(atom);
+        if (id == null) throw new IllegalStateException("Stereo reference outside final graph");
+        return id.toString();
+    }
+    static String refs(Atom[] atoms, Map<Atom, Integer> ids) {
+        StringBuilder out = new StringBuilder("[");
+        for (int i = 0; i < atoms.length; i++) {
+            if (i > 0) out.append(','); out.append(ref(atoms[i], ids));
+        }
+        return out.append(']').toString();
+    }
+    static String graph(Fragment fragment) {
+        if (fragment == null) return "null";
+        List<Atom> atoms = fragment.getAtomList();
+        Map<Atom, Integer> ids = new IdentityHashMap<>();
+        for (int i = 0; i < atoms.size(); i++) ids.put(atoms.get(i), i);
+        StringBuilder out = new StringBuilder("{\"atoms\":[");
+        for (int i = 0; i < atoms.size(); i++) {
+            if (i > 0) out.append(',');
+            Atom atom = atoms.get(i);
+            out.append("{\"element\":").append(quote(atom.getElement().toString()));
+            out.append(",\"isotope\":").append(atom.getIsotope());
+            out.append(",\"charge\":").append(atom.getCharge());
+            out.append(",\"protons_added_or_removed\":").append(atom.getProtonsExplicitlyAddedOrRemoved());
+            out.append(",\"implicit_hydrogen_allowed\":").append(atom.getImplicitHydrogenAllowed());
+            out.append(",\"lambda_valency\":").append(atom.getLambdaConventionValency());
+            out.append(",\"minimum_valency\":").append(atom.getMinimumValency());
+            out.append(",\"spare_valency\":").append(atom.hasSpareValency());
+            out.append(",\"out_valency\":").append(atom.getOutValency());
+            out.append(",\"parity\":");
+            AtomParity parity = atom.getAtomParity();
+            if (parity == null) out.append("null");
+            else {
+                StereoGroup group = parity.getStereoGroup();
+                out.append("{\"references\":").append(refs(parity.getAtomRefs4(), ids));
+                out.append(",\"parity\":").append(parity.getParity());
+                out.append(",\"group_type\":").append(quote(group.getType().toString()));
+                out.append(",\"group_number\":").append(group.getNumber()).append('}');
+            }
+            out.append('}');
+        }
+        out.append("],\"bonds\":[");
+        boolean first = true;
+        for (Bond bond : fragment.getBondSet()) {
+            if (!first) out.append(','); first = false;
+            out.append("{\"from\":").append(ids.get(bond.getFromAtom()));
+            out.append(",\"to\":").append(ids.get(bond.getToAtom()));
+            out.append(",\"order\":").append(bond.getOrder());
+            out.append(",\"stereo\":");
+            BondStereo stereo = bond.getBondStereo();
+            if (stereo == null) out.append("null");
+            else {
+                out.append("{\"references\":").append(refs(stereo.getAtomRefs4(), ids));
+                out.append(",\"value\":").append(quote(stereo.getBondStereoValue().toString())).append('}');
+            }
+            out.append('}');
+        }
+        out.append("],\"polymer_attachment_points\":[");
+        List<Atom> attachments = fragment.getPolymerAttachmentPoints();
+        for (int i = 0; attachments != null && i < attachments.size(); i++) {
+            if (i > 0) out.append(','); out.append(ref(attachments.get(i), ids));
+        }
+        return out.append("]}").toString();
+    }
+    public static void main(String[] args) throws Exception {
+        NameToStructure engine = NameToStructure.getInstance();
+        try (PrintWriter out = new PrintWriter(args[1], "UTF-8")) {
+            for (String row : Files.readAllLines(Paths.get(args[0]), StandardCharsets.UTF_8)) {
+                String[] fields = row.split("\t", 2);
+                for (boolean radicals : new boolean[] {false, true}) {
+                    NameToStructureConfig config = new NameToStructureConfig();
+                    config.setAllowRadicals(radicals);
+                    OpsinResult result = engine.parseChemicalName(fields[1], config);
+                    out.print("{\"family\":" + quote(fields[0]) + ",\"input\":" + quote(fields[1]));
+                    out.print(",\"allow_radicals\":" + radicals + ",\"status\":" + quote(result.getStatus().toString()));
+                    out.print(",\"message\":" + quote(result.getMessage()) + ",\"warnings\":[");
+                    boolean first = true;
+                    for (OpsinWarning warning : result.getWarnings()) {
+                        if (!first) out.print(','); first = false;
+                        out.print("{\"kind\":" + quote(warning.getType().toString()) + ",\"message\":" + quote(warning.getMessage()) + "}");
+                    }
+                    out.print("],\"cxsmiles\":" + quote(result.getSmiles(13)));
+                    out.print(",\"smiles\":" + quote(result.getSmiles()));
+                    out.print(",\"graph\":" + graph(result.getStructure()));
+                    out.println('}');
+                }
+            }
+        }
+    }
+}

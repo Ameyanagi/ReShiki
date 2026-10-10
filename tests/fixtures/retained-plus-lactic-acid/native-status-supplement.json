@@ -1,0 +1,33 @@
+{
+  "kind": "Authored status supplement; does not overwrite initial pre-fresh summary",
+  "basis": "native-fresh-reopen-readback.json",
+  "basis_sha256": "24ec0f6d270f169eb1bd8f46230c816b53357559f4b980f2712a1aff53336f5f",
+  "source_tree": "22a60b33376bfbcb9e2af32880b128f27877ec65",
+  "fresh_process": "PASS ROOT: old1883gone, new5041; both native second saves byte-identical",
+  "native_version": 25,
+  "document_default_version": 15,
+  "inherited_source_paths": 3560,
+  "broader_basis": "native-observations-before-lactic-fix-v1.json",
+  "qualified_broader_steps": [
+    "16 apply3paired map numbers",
+    "18 map2to27",
+    "19 oneUndo restores2",
+    "20 move map2 label without atom movement",
+    "22 fresh native reaction reopen",
+    "23 fresh ethanol caption reopen"
+  ],
+  "broader_limits": [
+    "17 Align is a no-op on already aligned oxidation, not changed layout proof.",
+    "Original05redo was interleaved by user screen control and is unqualified; clean07-09trial is used by ROOT acceptance.",
+    "Old13 rejection remains supplemental with existing ethanol, not the new matched empty-tab baseline."
+  ],
+  "excluded_current_capture": [
+    "08 failed dynamic file selection, opened hooks.log as invalid SMILES; Save cancelled; not a reopen proof.",
+    "10 completed capture includes tooltip/per-tabF8 overlay;11is the clean completed capture."
+  ],
+  "full_generated_text": "Native JSON/tests prove exact systematic text;06/09 at 220% wrap midword into two fully visible lines; no clipping is established.",
+  "current_remaining": [
+    "Matched old11b empty-tab rejection capture pending ROOT.",
+    "Current integration source/publication exact-headCI pending."
+  ]
+}

@@ -1,0 +1,4 @@
+# Preserve original receipt bytes, including the command outputs' blank EOF lines.
+*.json.raw -text
+validation/*.log -text -diff
+validation/*.d -text

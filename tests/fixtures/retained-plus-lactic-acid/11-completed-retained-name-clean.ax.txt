@@ -1,0 +1,16 @@
+The following is a diff from the previous accessibility tree for Window: "plus-lactic-acid.rsk — ReShiki" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 179-180
+~		139 toggle button (settable, boolean) Select / move · v, Value: on, ID: tool-Select
+~		140 toggle button (settable, boolean) Lasso select · l, Value: off, ID: tool-Lasso
+~		167 button Generate an optimized conformer using MMFF or UFF; preview before applying, ID: context-command-0
+~		168 button Draw with digits and letters; navigate atoms and bonds with arrows (F8), ID: context-command-1
+~		169 button (disabled) Align, ID: arrange-menu-AlignObjects
+~		170 button (disabled) Distribute, ID: arrange-menu-Distribute
+~		171 button (disabled) Order, ID: arrange-menu-Order
+~		172 button (disabled) Flip horizontal, ID: arrange-flip-horizontal
+~		173 button (disabled) Flip vertical, ID: arrange-flip-vertical
+~		174 button (disabled) Rotate 180°, ID: arrange-rotate
+~		175 button Molecular properties: expanded, ID: inspector-section-Molecule
+~		176 button Predict NMR shifts for the selected molecule, ID: nmr.open
+~		177 button Labels & chemistry: collapsed, ID: inspector-section-Chemistry
+~		178 button Drawing style: collapsed, ID: inspector-section-DrawingStyle

@@ -1,5 +1,5 @@
 //! Atom-label appearance and owned number/stereochemistry indicators.
-//! These settings never change the molecular graph or reaction atom mapping.
+//! Indicator appearance never changes the molecular graph or map numbers.
 use crate::{
     document::{Atom, Document, Point},
     typography::TextStyle,
@@ -143,12 +143,18 @@ pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPositio
 fn yes() -> bool {
     true
 }
+fn is_true(value: &bool) -> bool {
+    *value
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub carbons: Carbons,
     pub hydrogens: bool,
     pub stereo: bool,
+    /// Chemical atom-map labels are visible on imported mapped reactions.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub maps: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -156,6 +162,7 @@ impl Default for Settings {
             carbons: Carbons::Skeletal,
             hydrogens: yes(),
             stereo: false,
+            maps: true,
         }
     }
 }
@@ -201,8 +208,37 @@ pub struct AtomDisplay {
     pub hydrogens: Option<bool>,
     pub hydrogen_position: HydrogenPosition,
     pub number: Option<Number>,
+    #[serde(skip_serializing_if = "MappingDisplay::is_default")]
+    pub mapping: MappingDisplay,
     pub stereo: StereoDisplay,
 }
+/// Presentation only: text is always derived from the owner's `map_num`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MappingDisplay {
+    pub show: Option<bool>,
+    pub offset: Option<Point>,
+    pub style: TextStyle,
+}
+impl Default for MappingDisplay {
+    fn default() -> Self {
+        Self {
+            show: None,
+            offset: None,
+            style: number_style(),
+        }
+    }
+}
+impl MappingDisplay {
+    pub fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+    pub fn validate(&self) -> Result<(), String> {
+        self.style.validate()?;
+        validate_offset(self.offset)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StereoDisplay {
@@ -230,6 +266,7 @@ impl AtomDisplay {
             return Err("Atom text labels must contain 1–32 printable characters".into());
         }
         self.stereo.validate()?;
+        self.mapping.validate()?;
         if let Some(n) = &self.number {
             if n.text.is_empty()
                 || n.text.chars().count() > 32
@@ -355,19 +392,22 @@ pub fn sequence(seed: &str, count: usize) -> Result<Vec<String>, String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Owner {
     Number(u64),
+    Mapping(u64),
     AtomStereo(u64),
     BondStereo(u64, u64),
 }
 impl Owner {
     pub fn selected(self, ids: &[u64]) -> bool {
         match self {
-            Self::Number(id) | Self::AtomStereo(id) => ids.contains(&id),
+            Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) => ids.contains(&id),
             Self::BondStereo(a, b) => ids.contains(&a) && ids.contains(&b),
         }
     }
     pub fn anchor(self, doc: &Document) -> Option<Point> {
         match self {
-            Self::Number(id) | Self::AtomStereo(id) => doc.atom(id).map(|a| a.position),
+            Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) => {
+                doc.atom(id).map(|a| a.position)
+            }
             Self::BondStereo(a, b) => {
                 let a = doc.atom(a)?.position;
                 let b = doc.atom(b)?.position;
@@ -380,6 +420,11 @@ impl Owner {
             Self::Number(id) => {
                 if let Some(n) = doc.atom_mut(id).and_then(|a| a.display.number.as_mut()) {
                     n.offset = offset;
+                }
+            }
+            Self::Mapping(id) => {
+                if let Some(a) = doc.atom_mut(id) {
+                    a.display.mapping.offset = offset;
                 }
             }
             Self::AtomStereo(id) => {
@@ -432,6 +477,14 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
                 n.text.clone(),
                 n.offset,
                 n.style.clone(),
+            ));
+        }
+        if a.map_num != 0 && a.display.mapping.show.unwrap_or(doc.atom_labels.maps) {
+            labels.push((
+                Owner::Mapping(a.id),
+                a.map_num.to_string(),
+                a.display.mapping.offset,
+                a.display.mapping.style.clone(),
             ));
         }
         if a.display.stereo.show.unwrap_or(doc.atom_labels.stereo)
@@ -506,7 +559,7 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
             anchor.offset(p.x, p.y)
         } else {
             let neighbors: Vec<_> = match owner {
-                Owner::Number(id) | Owner::AtomStereo(id) => doc
+                Owner::Number(id) | Owner::Mapping(id) | Owner::AtomStereo(id) => doc
                     .bonds
                     .iter()
                     .filter_map(|b| {

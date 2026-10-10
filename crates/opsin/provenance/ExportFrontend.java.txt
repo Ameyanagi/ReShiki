@@ -1,0 +1,79 @@
+// Development-only pinned OPSIN oracle; never compiled or executed by Cargo.
+package uk.ac.cam.ch.wwmm.opsin;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.util.*;
+
+public final class ExportFrontend {
+    static String quote(String text) {
+        if (text == null) return "null";
+        StringBuilder out = new StringBuilder("\"");
+        for (char ch : text.toCharArray()) {
+            if (ch == '"' || ch == '\\') out.append('\\').append(ch);
+            else if (ch < 32) out.append(String.format("\\u%04x", (int) ch));
+            else out.append(ch);
+        }
+        return out.append('"').toString();
+    }
+    static String tokens(List<ParseTokens> alternatives) {
+        StringBuilder out = new StringBuilder("[");
+        for (ParseTokens alternative : alternatives) {
+            if (out.length() > 1) out.append(',');
+            out.append("{\"tokens\":[");
+            for (int i = 0; i < alternative.getTokens().size(); i++) {
+                if (i > 0) out.append(',');
+                out.append(quote(alternative.getTokens().get(i)));
+            }
+            out.append("],\"annotations\":[");
+            for (int i = 0; i < alternative.getAnnotations().size(); i++) {
+                if (i > 0) out.append(',');
+                out.append((int) alternative.getAnnotations().get(i));
+            }
+            out.append("]}");
+        }
+        return out.append(']').toString();
+    }
+    public static void main(String[] args) throws Exception {
+        ResourceManager resources = new ResourceManager(new ResourceGetter("uk/ac/cam/ch/wwmm/opsin/resources/"));
+        ParseRules forward = new ParseRules(resources);
+        ReverseParseRules reverse = new ReverseParseRules(resources);
+        Tokeniser tokenizer = new Tokeniser(forward);
+        try (PrintWriter out = new PrintWriter(args[1], "UTF-8")) {
+            for (String input : Files.readAllLines(Paths.get(args[0]), StandardCharsets.UTF_8)) {
+                for (String mode : new String[] {"parse", "parseReverse", "tokenize", "tokenizeReverse", "tokenizeNoSpace", "tokenizeReverseNoSpace"}) {
+                    out.print("{\"input\":" + quote(input) + ",\"mode\":" + quote(mode));
+                    try {
+                        String name = PreProcessor.preProcess(input);
+                        out.print(",\"normalized\":" + quote(name));
+                        if (mode.startsWith("parse")) {
+                            ParseRulesResults result = mode.equals("parse") ? forward.getParses(name) : reverse.getParses(name);
+                            out.print(",\"alternatives\":" + tokens(result.getParseTokensList()));
+                            out.print(",\"uninterpretable\":" + quote(result.getUninterpretableName()));
+                            out.print(",\"unparseable\":" + quote(result.getUnparseableName()));
+                        } else {
+                            boolean removeSpaces = !mode.endsWith("NoSpace");
+                            TokenizationResult result = mode.startsWith("tokenizeReverse")
+                                ? tokenizer.tokenizeRightToLeft(reverse, name, removeSpaces)
+                                : tokenizer.tokenize(name, removeSpaces);
+                            out.print(",\"unparsed\":" + quote(result.getUnparsedName()));
+                            out.print(",\"uninterpretable\":" + quote(result.getUninterpretableName()));
+                            out.print(",\"unparseable\":" + quote(result.getUnparsableName()));
+                            out.print(",\"words\":[");
+                            boolean first = true;
+                            for (ParseWord word : result.getParse().getWords()) {
+                                if (!first) out.print(','); first = false;
+                                out.print("{\"word\":" + quote(word.getWord()) + ",\"alternatives\":" + tokens(word.getParseTokens()) + "}");
+                            }
+                            out.print(']');
+                        }
+                        out.print(",\"error\":null");
+                    } catch (Exception error) {
+                        out.print(",\"error\":" + quote(error.getMessage()));
+                    }
+                    out.println('}');
+                }
+            }
+        }
+    }
+}

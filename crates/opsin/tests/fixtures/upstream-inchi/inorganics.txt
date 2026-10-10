@@ -1,0 +1,32 @@
+#mostly ionic
+sodium chloride	InChI=1S/ClH.Na/h1H;/q;+1/p-1
+sodium oxide	InChI=1S/2Na.O/q2*+1;-2
+sodium dioxide	InChI=1S/2Na.O2/c;;1-2/q2*+1;-2
+barium sulfide	InChI=1S/Ba.S/q+2;-2
+barium disulfide	InChI=1S/Ba.S2/c;1-2/q+2;-2
+iron(III) oxide	InChI=1S/2Fe.3O/q2*+3;3*-2
+ferric oxide	InChI=1S/2Fe.3O/q2*+3;3*-2
+FERRIC CHLORIDE	InChI=1S/3ClH.Fe/h3*1H;/q;;;+3/p-3
+silver oxide	InChI=1S/2Ag.O/q2*+1;-2
+silver monoxide	InChI=1S/2Ag.O/q2*+1;-2
+silver(I) oxide	InChI=1S/2Ag.O/q2*+1;-2
+silver(1+) oxide	InChI=1S/2Ag.O/q2*+1;-2
+argentous oxide	InChI=1S/2Ag.O/q2*+1;-2
+#mostly covalent
+boron trifluoride	InChI=1S/BF3/c2-1(3)4
+silicon dioxide	InChI=1S/O2Si/c1-3-2
+carbon tetrachloride	InChI=1S/CCl4/c2-1(3,4)5
+silver(I) acetylide	InChI=1S/C2.2Ag/c1-2;;/q-2;2*+1
+disilver acetylide	InChI=1S/C2.2Ag/c1-2;;/q-2;2*+1
+monosodium acetylide	InChI=1S/C2H.Na/c1-2;/h1H;/q-1;+1
+Sodium deuteroxide	InChI=1S/Na.H2O/h;1H2/q+1;/p-1/i/hD
+dihydrogen	InChI=1S/H2/h1H
+molecular hydrogen	InChI=1S/H2/h1H
+dinitrogen	InChI=1S/N2/c1-2
+dioxygen	InChI=1S/O2/c1-2
+difluorine	InChI=1S/F2/c1-2
+dichlorine	InChI=1S/Cl2/c1-2
+dibromine	InChI=1S/Br2/c1-2
+diiodine	InChI=1S/I2/c1-2
+molecular iodine	InChI=1S/I2/c1-2
+oganesson	InChI=1S/Og

@@ -1,0 +1,22 @@
+{
+  "utc": "2026-10-10T21:04:20.053510+00:00",
+  "commit": "699fa7449b0c65e16b2f1a8435dd91da2c3ba423",
+  "tree": "6262c40dbcdc71980f71d7f354fea64a0b97a9d1",
+  "all_3565_physical_and_index_paths_match_private_expected_source": true,
+  "normal_eight_hook_commands": "PASS",
+  "gates": [
+    "cargo-check",
+    "cargo-clippy",
+    "cargo-fmt",
+    "oxfmt",
+    "oxlint",
+    "ruff",
+    "ruff-format",
+    "ty"
+  ],
+  "log_sha256": "86213159efbbc5b3f80a0eef42f93acdc751b4bfd28a7d19ddaecd24e34a8f5e",
+  "original_retry_seven_pass_one_oxfmt_failure_retained": true,
+  "first_source_commit_failure_retained": true,
+  "hooks_bypassed": false,
+  "scope_since_bfb_native": "Only docs/feature-status.md table whitespace changed; application compiled inputs remain exact."
+}

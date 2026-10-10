@@ -46,6 +46,10 @@ fn main() -> iced::Result {
         }
         return Ok(());
     }
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--naming-worker")) {
+        reshiki::naming::worker::run();
+        return Ok(());
+    }
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--geometry-worker")) {
         reshiki::geometry::worker::run();
         return Ok(());

@@ -43,3 +43,11 @@ tests/fixtures/drawing-tools-integration/native-combined-v1/ax/05-nmr-carbon-lab
 tests/fixtures/drawing-tools-integration/native-combined-v1/ax/06-nmr-palette-moved-resized-161.ax.txt -text whitespace=-blank-at-eol
 tests/fixtures/drawing-tools-integration/native-combined-v1/ax/07-nmr-carbon-both-252.ax.txt -text whitespace=-blank-at-eol
 tests/fixtures/drawing-tools-integration/native-combined-v1/origins/ethyl-acetate-carbon-desktop.tsv -text whitespace=-blank-at-eol
+
+# Preserve the pinned OPSIN license and oracle fixtures byte-for-byte.
+crates/opsin/LICENSE -text
+crates/opsin/tests/fixtures/** -text
+
+# Preserve the two original local/parser test stdout records.
+tests/fixtures/retained-plus-lactic-acid/local-tests.log -text whitespace=-blank-at-eof
+tests/fixtures/retained-plus-lactic-acid/import-dock-tests.log -text whitespace=-blank-at-eof

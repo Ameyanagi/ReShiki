@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package.py", line 39, in <module>
+    from build_release import mac_bundle
+  File "/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/scripts/build_release.py", line 16, in <module>
+    import tomllib
+ModuleNotFoundError: No module named 'tomllib'
