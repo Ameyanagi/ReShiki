@@ -269,6 +269,7 @@ impl App {
 
     fn drawing_canvas(&self) -> Element<'_, Edit> {
         canvas(MoleculeCanvas {
+            nmr: self.nmr_canvas(),
             optimizer: self.optimization_canvas(),
             keyboard_target: if self.keyboard_drawing_active() {
                 self.tab
@@ -1474,7 +1475,10 @@ impl App {
         match self.inspector_tab {
             InspectorTab::Assistant => 380.,
             InspectorTab::DrawingStyle | InspectorTab::Reactions => 320.,
-            InspectorTab::Properties | InspectorTab::Import | InspectorTab::Export => 300.,
+            InspectorTab::Properties
+            | InspectorTab::Nmr
+            | InspectorTab::Import
+            | InspectorTab::Export => 300.,
             _ => 256.,
         }
     }
@@ -1500,14 +1504,15 @@ impl App {
         let mut tabs = row![].spacing(2);
         for (label, tab) in [
             ("Properties", InspectorTab::Properties),
+            ("NMR", InspectorTab::Nmr),
             ("Templates", InspectorTab::Templates),
             ("Import", InspectorTab::Import),
             ("Export", InspectorTab::Export),
         ] {
             tabs = tabs.push(
-                // Four tabs fit the narrowest (256 px) inspector.
-                button(text(label).size(11))
-                    .padding([7, 6])
+                // Compact labels leave all five tabs reachable at 256 px.
+                button(text(label).size(10))
+                    .padding([7, 4])
                     .style(control(
                         self.inspector_tab == tab
                             || (tab == InspectorTab::Properties
@@ -1523,6 +1528,15 @@ impl App {
                     .on_press(Message::Inspector(tab)),
             );
         }
+        if self.inspector_tab == InspectorTab::Nmr {
+            return container(
+                column![container(tabs).padding([8, 8]), self.nmr_inspector(),].spacing(4),
+            )
+            .width(self.inspector_width())
+            .height(Length::Fill)
+            .style(panel)
+            .into();
+        }
         let body = match self.inspector_tab {
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),
@@ -1531,6 +1545,7 @@ impl App {
             InspectorTab::ThemeGenerator => self.theme_generator_panel(),
             InspectorTab::Properties if self.tab.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
+            InspectorTab::Nmr => self.nmr_inspector(),
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),

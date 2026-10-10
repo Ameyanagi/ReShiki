@@ -9,6 +9,7 @@ pub(super) struct Markers {
     multiple: bool,
     bonds: Vec<(World, World)>,
     atoms: Vec<World>,
+    atom_ids: Vec<u64>,
     captions: Vec<(World, Size)>,
 }
 
@@ -50,6 +51,11 @@ impl Markers {
                 .filter(|id| !hidden.contains(id))
                 .filter_map(|id| atoms.get(id).map(|atom| atom.position))
                 .collect(),
+            atom_ids: ids
+                .iter()
+                .filter(|id| !hidden.contains(id) && atoms.contains_key(id))
+                .copied()
+                .collect(),
             captions: doc
                 .annotations
                 .iter()
@@ -68,6 +74,19 @@ impl Markers {
         camera: Camera,
         bounds: Rectangle,
         selected: bool,
+    ) {
+        self.draw_with_nmr(frame, camera, bounds, selected, &[]);
+    }
+
+    /// Only selected, supported NMR owners use the filled assignment halo.
+    /// Ordinary selection and hover retain their existing outlined markers.
+    pub fn draw_with_nmr(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        camera: Camera,
+        bounds: Rectangle,
+        selected: bool,
+        nmr_ids: &[u64],
     ) {
         let visible = |a: Point, b: Point, margin: f32| {
             Rectangle {
@@ -93,21 +112,31 @@ impl Markers {
                     );
                 }
             }
-            for &atom in &self.atoms {
+            for (&atom, id) in self.atoms.iter().zip(&self.atom_ids) {
                 let center = camera.screen(atom, bounds);
                 if !visible(center, center, 8. * scale + 3.) {
                     continue;
                 }
                 let circle = Path::circle(center, 8. * scale);
                 if selected {
-                    frame.fill(&circle, Color::from_rgba8(19, 135, 116, 0.12));
+                    let fill = if nmr_ids.contains(id) {
+                        // A display tint keeps this soft halo visibly teal;
+                        // low-alpha ink becomes nearly gray under linear-light
+                        // compositing. The frame adapts it to the page once.
+                        Color::from_rgb8(208, 241, 235)
+                    } else {
+                        Color::from_rgba8(19, 135, 116, 0.12)
+                    };
+                    frame.fill(&circle, fill);
                 }
-                frame.stroke(
-                    &circle,
-                    Stroke::default()
-                        .with_width((if selected { 1.8 } else { 1.4 }) * scale.sqrt())
-                        .with_color(rgb([19, 135, 116])),
-                );
+                if !selected || !nmr_ids.contains(id) {
+                    frame.stroke(
+                        &circle,
+                        Stroke::default()
+                            .with_width((if selected { 1.8 } else { 1.4 }) * scale.sqrt())
+                            .with_color(rgb([19, 135, 116])),
+                    );
+                }
             }
         }
         if selected {

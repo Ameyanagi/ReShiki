@@ -32,6 +32,7 @@ mod input;
 pub mod layered;
 mod markers;
 mod movement;
+pub(crate) mod nmr;
 pub(crate) mod optimization;
 mod pages;
 mod paper;
@@ -315,6 +316,7 @@ fn delocalized_ring_size(tool: Tool, size: u8, modifiers: iced::keyboard::Modifi
 }
 
 pub struct MoleculeCanvas<'a> {
+    pub(crate) nmr: Option<nmr::Context<'a>>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
     pub(crate) keyboard_target: Option<World>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,

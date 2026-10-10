@@ -1,0 +1,22 @@
+{
+  "utc": "2026-10-10T02:02:32.886305+00:00",
+  "exit_code": 0,
+  "prefix": "canvas::markers::tests::",
+  "listed_names": [
+    "canvas::markers::tests::indexed_markers_preserve_document_and_selection_order_and_abbreviation_visibility"
+  ],
+  "named_results": [
+    [
+      "canvas::markers::tests::indexed_markers_preserve_document_and_selection_order_and_abbreviation_visibility",
+      "ok"
+    ]
+  ],
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "source_manifest_sha256": "30dba3b57746dc1cec7a16ff4aa95c34a6a1d0c6139282b0f11a2c9ee9bbad14",
+  "logs": {
+    "list.log": "4473627c01d52751123ec5a56289bff6a1b42aa3f37c3ac05f7c8886a16ccaeb",
+    "tests.log": "bd928e2ec5c46d06f02bb216e113364683ad838ea9c6013101cd45bba556f12f"
+  }
+}

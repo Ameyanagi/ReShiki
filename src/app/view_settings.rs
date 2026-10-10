@@ -27,12 +27,18 @@ impl App {
         }
     }
     pub(super) fn set_viewport(&mut self, size: iced::Size) {
+        // Docking NMR changes the available width, but is not a request to fit
+        // the drawing. Only suppress this expected layout transition; later
+        // genuine window resizes keep their ordinary fit behavior.
+        let preserve_camera = self.tab.nmr.take_layout_transition(size);
         if self.viewport != size {
             self.viewport = size;
-            if let Some(index) = self.tab.pages.fit {
-                self.fit_pages(index);
-            } else if self.tab.fit_to_view {
-                self.fit();
+            if !preserve_camera {
+                if let Some(index) = self.tab.pages.fit {
+                    self.fit_pages(index);
+                } else if self.tab.fit_to_view {
+                    self.fit();
+                }
             }
         }
     }

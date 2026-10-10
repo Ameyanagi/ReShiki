@@ -7,22 +7,46 @@ behind collapsed abbreviations. Click a result row to select its linked drawing
 atom and any explicitly drawn hydrogens. Expand an abbreviation to inspect an
 internal site directly; its original atom ID is retained in the table.
 
-Results open in a compact floating palette with atom-linked shifts. The palette
-leaves the drawing viewport and zoom unchanged; drawing outside it remains
-available while predictions run. Choose **Details…** to show the reference
-counts, sphere radius, observed dispersion, method and conditions. The expanded
-palette has a height slider and accessible **− / +** buttons. **Compact** returns
-to the smaller view; the header **− / Show** control hides or reveals the results,
-and **×** closes the palette. Longer results scroll within the palette.
-Chemical changes invalidate the result;
-position/depth moves, drawing styles and abbreviation visibility preserve it.
-Changing the selected molecule requires running prediction again. Results are
-per document and background results cannot land in another document.
+Results first open in a compact floating palette at the full window’s right
+edge, including when the inspector is shown. **Reset position** returns it there
+without changing the camera. Drag its title to move it and
+drag the visible bottom-right corner glyph to resize it. Drawing outside the
+palette remains available, and opening or moving it leaves the drawing viewport
+and zoom unchanged. **Dock** moves the same report into the inspector’s **NMR**
+tab; **Undock** returns it to the floating palette. Docking preserves the camera
+and restores the previous inspector state when undocked. Display mode, palette
+position and label format are kept for the document’s current session.
+
+The **Predicted shifts** plot places equal-height sticks at the supported shifts
+on a descending ppm axis. Click a stick label or result row to select its linked
+drawing atom. Nearby stick labels can be grouped; repeated clicks cycle their
+atoms while distinct numerical positions remain visible. In **Details…**,
+**Hide plot** makes the palette smaller; **Show plot** restores it. The **− / +**
+size buttons and **Reset position** are also inside Details.
+
+Use the **Show labels** checkbox to add temporary atom numbers to the drawing.
+Its dropdown offers **Atom numbers**, **ppm** or **Both**: labels use bare
+`#ID`, `shift ppm` or `#ID · shift ppm` text. The table and footer identify the
+chosen nucleus and unresolved attached-H groups; labels do not individually
+assign those protons. Labels follow geometry moves, appear only for visible
+owners, and do not change the drawing, Undo history or exported figures. A narrow
+soft-teal halo marks a selected supported NMR owner; its radius is unchanged.
+
+Choose **Details…** to show reference counts, sphere radius, observed dispersion,
+method and conditions. Longer results and details scroll inside the panel. The
+header **−** control collapses the results; **+** expands them again. **×** closes
+the panel and clears drawing labels. Chemical changes invalidate results and
+labels; position/depth moves, drawing styles and abbreviation visibility preserve
+the prediction. Running prediction again clears the previous labels. Changing
+the selected molecule requires running prediction again. Results are per document
+and background results cannot land in another document. See the
+[floating-panel design and native review](changes/nmr-floating-mock-20261010.md).
 
 **Copy** and **Export…** include a prediction label, atom IDs, method,
 data version, conditions, limitations and data attribution. Predictions are not
-stored as experimental assignments or full simulated spectra. No multiplets,
-integrals, coupling constants or experimental peak assignment are claimed.
+stored as experimental assignments or full simulated spectra. Plot heights are
+not intensity or integration. No multiplets, integrals, coupling constants,
+second-order simulation or experimental peak assignment are claimed.
 
 The offline method follows the nuclear-rooted spherical matching and
 longest-sphere median fallback described in

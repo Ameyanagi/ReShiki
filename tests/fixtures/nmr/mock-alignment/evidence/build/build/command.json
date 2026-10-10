@@ -1,0 +1,15 @@
+{
+  "utc": "2026-10-10T02:11:14.604828+00:00",
+  "command": [
+    "cargo",
+    "build",
+    "--locked",
+    "--bin",
+    "reshiki",
+    "--message-format=json"
+  ],
+  "default_features_enabled": true,
+  "target": "/Users/ryuichi/dev/ReShiki/target",
+  "jobs": 4,
+  "started_ns": 1791598274604824000
+}

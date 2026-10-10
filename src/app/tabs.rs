@@ -191,6 +191,7 @@ impl App {
     /// Starts the front tab over as a new drawing. Late results for its old
     /// drawing meet a new epoch and revision.
     pub(super) fn reset_tab(&mut self) {
+        self.nmr_leave_tab();
         self.retire_assistant(self.tab.id);
         let old = std::mem::replace(&mut self.tab, DocumentTab::new(None));
         self.tab.id = old.id;
@@ -224,6 +225,7 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
+        self.nmr_leave_tab();
         self.pause_optimization();
         if self.style_menu.is_some() {
             self.close_style_menu();
@@ -239,6 +241,9 @@ impl App {
 
     fn enter_tab(&mut self) {
         self.sync_drawing_style_unit();
+        if self.nmr_enter_tab() {
+            return;
+        }
         if let Some(index) = self.tab.pages.fit {
             self.fit_pages(index);
         } else if self.tab.fit_to_view {

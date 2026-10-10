@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-ba50b1304e6a1bdf)
+canvas::cache::tests::document_edits_loads_and_history_cannot_reuse_stale_geometry: test
+canvas::cache::tests::guide_layouts_outlive_other_selection_reads_but_not_edits: test
+canvas::cache::tests::selection_changes_do_not_invalidate_scene_or_claim_partial_moves_are_rigid: test

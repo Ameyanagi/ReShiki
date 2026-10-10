@@ -104,6 +104,7 @@ fn scroll_pans_both_axes_and_command_or_control_zooms_at_pointer() -> Result<(),
 fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
     let doc = Document::default();
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -186,6 +187,7 @@ fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
 fn free_ring_preset_drag_keeps_its_start_as_rotation_anchor() {
     let doc = Document::default();
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -318,6 +320,7 @@ fn arrow_handle_drag_is_one_edit_and_midpoint_hit_follows_curve() {
         ArrowStyle::default(),
     ));
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -340,6 +343,7 @@ fn arrow_handle_drag_is_one_edit_and_midpoint_hit_follows_curve() {
     assert_eq!(hit_object(&doc, World::new(0., -55.), 4.), Some(1));
     assert_eq!(hit_object(&doc, World::new(0., 0.), 4.), None);
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -565,6 +569,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
     static STYLE: std::sync::LazyLock<GraphicStyle> =
         std::sync::LazyLock::new(GraphicStyle::default);
     MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -1246,6 +1251,7 @@ fn freeform_selection_tracks_events_adds_subtracts_and_cancels() {
     doc.add_atom("O", World::new(50., 0.));
     let style = GraphicStyle::default();
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -1363,6 +1369,7 @@ fn group_clicks_move_all_members_and_alt_selects_a_member() {
     doc.group_selection(&[1, 2]).unwrap();
     let style = GraphicStyle::default();
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -1431,6 +1438,7 @@ fn group_clicks_move_all_members_and_alt_selects_a_member() {
     // Alt-drag edits a member immediately, even when its group is selected.
     let selected = [1, 2];
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -1494,6 +1502,7 @@ fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
     let doc = Document::default();
     let style = GraphicStyle::default();
     let mut canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -1606,6 +1615,7 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
     doc.group_selection(&[atom, label]).unwrap();
     let style = GraphicStyle::default();
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -1715,6 +1725,7 @@ fn template_drag_uses_the_target_bond_and_can_be_cancelled() {
     let b = doc.add_atom("C", World::new(30.0, 0.0));
     doc.add_bond(a, b, 1, "plain");
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -1861,6 +1872,7 @@ fn selection_handles_resize_and_rotate_without_moving_or_merging_atoms() {
     doc.add_bond(a, b, 1, "plain");
     let original = doc.clone();
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -1964,6 +1976,7 @@ fn bond_midpoints_select_and_drag_both_atoms_without_losing_atom_targets() {
     assert_eq!(hit_selection(&doc, World::default(), 10.0), vec![a, b]);
     assert_eq!(hit_selection(&doc, World::new(-20.0, 0.0), 10.0), vec![a]);
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -2003,6 +2016,7 @@ fn bond_midpoints_select_and_drag_both_atoms_without_losing_atom_targets() {
     );
     let selected = [a, b];
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -2028,6 +2042,7 @@ fn keyboard_click_preserves_world_point_and_stationary_screen_motion_does_not_ha
     let b = doc.add_atom("C", World::new(21., 0.));
     doc.add_bond(a, b, 1, "plain");
     let mut canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: Some(World::default()),
         element: "C",
@@ -2112,6 +2127,7 @@ fn command_drag_duplicates_and_shift_drag_locks_to_one_axis() {
     doc.add_bond(b, c, 1, "plain");
     let selected = [a, b, c];
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -2154,6 +2170,7 @@ fn command_drag_duplicates_and_shift_drag_locks_to_one_axis() {
     // Duplicating a bonded part of a molecule copies it free of the rest.
     let partial = [b, c];
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         selected: &partial,
@@ -2251,6 +2268,7 @@ fn ring_drag_snaps_at_release_or_keeps_its_initial_attachment() {
     let b = doc.add_atom("C", World::new(21.0, 0.0));
     doc.add_bond(a, b, 1, "plain");
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -2294,6 +2312,7 @@ fn ring_drag_snaps_at_release_or_keeps_its_initial_attachment() {
 fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
     let doc = Document::default();
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -2353,6 +2372,7 @@ fn short_endpoint_drag_grows_instead_of_snapping_to_its_source() {
     let mut doc = Document::default();
     let source = doc.add_atom("C", World::default());
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",
@@ -2429,6 +2449,7 @@ fn drag_reuses_atoms_at_the_cursor_or_the_snapped_endpoint() {
 fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
     let doc = Document::default();
     let canvas = MoleculeCanvas {
+        nmr: None,
         optimizer: None,
         keyboard_target: None,
         element: "C",

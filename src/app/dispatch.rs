@@ -75,6 +75,9 @@ impl App {
             Message::AtomRadical(value) => self.set_radical(value),
             Message::ToggleInspector => return Some(self.toggle_inspector()),
             Message::Inspector(tab) => {
+                if tab == InspectorTab::Nmr {
+                    return Some(self.nmr_action(super::nmr::Action::Dock));
+                }
                 if let Some(task) = self.show_inspector_tab(tab) {
                     return Some(task);
                 }

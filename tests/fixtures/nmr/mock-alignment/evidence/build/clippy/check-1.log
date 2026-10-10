@@ -1,0 +1,28 @@
+    Checking zune-jpeg v0.5.15 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/zune-jpeg)
+    Checking usvg v0.45.1 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/usvg)
+    Checking reshiki-process-heap v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/process-heap)
+    Checking reshiki-depict-math v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/depict-math)
+    Checking tiff v0.11.3
+    Checking resvg v0.48.1
+    Checking reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/chemistry)
+    Checking resvg v0.45.1
+    Checking cosmolkit-core v0.3.0 (https://github.com/Ameyanagi/COSMolKit.git?rev=252a1f3d6480fc4a0abcd51d76707f51f69b4406#252a1f3d)
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr)
+    Checking image v0.25.10
+    Checking reshiki-macos v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/macos)
+    Checking iced_graphics v0.14.0
+    Checking svg2pdf v0.13.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/svg2pdf)
+    Checking reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/model)
+    Checking iced_wgpu v0.14.0
+    Checking iced_program v0.14.0
+    Checking reshiki-geometry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/geometry)
+    Checking iced_winit v0.14.1
+    Checking iced_renderer v0.14.0
+    Checking reshiki-io v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/io)
+    Checking iced_widget v0.14.2
+    Checking reshiki-agent v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/agent)
+    Checking iced v0.14.0
+    Checking reshiki-mcp v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/mcp)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5m 15s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`

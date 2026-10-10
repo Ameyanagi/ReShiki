@@ -104,6 +104,7 @@ pub enum InspectorTab {
     Pages,
     Abbreviations,
     Properties,
+    Nmr,
     Labels,
     Templates,
     Import,

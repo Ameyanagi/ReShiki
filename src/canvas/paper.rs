@@ -71,6 +71,10 @@ impl MoleculeCanvas<'_> {
             preview.to_mut().annotations.retain(|a| a.id != id);
         }
         let selected = ring_selection.as_deref().unwrap_or(self.selected);
+        let nmr_ids = self
+            .nmr
+            .map(|context| context.supported_ids())
+            .unwrap_or_default();
         let cached_camera = (self.hidden_annotation.is_none()
             && (translation.is_some() || *preview == *self.doc))
             .then(|| {
@@ -82,12 +86,19 @@ impl MoleculeCanvas<'_> {
             });
         if let Some(camera) = cached_camera {
             let (markers, scene) = state.scene.borrow_mut().render(self.doc, selected);
-            markers.draw(frame, camera, bounds, true);
+            markers.draw_with_nmr(frame, camera, bounds, true, &nmr_ids);
             draw_primitives(frame, &scene, camera, bounds, 0.);
         } else {
-            markers::Markers::new(&preview, selected).draw(frame, self.camera, bounds, true);
+            markers::Markers::new(&preview, selected).draw_with_nmr(
+                frame,
+                self.camera,
+                bounds,
+                true,
+                &nmr_ids,
+            );
             draw_document(frame, &preview, self.camera, bounds);
         }
+        self.draw_nmr_assignments(frame, &preview, selected, bounds);
         self.draw_editor_markers(frame, &preview, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);
         self.draw_notices(

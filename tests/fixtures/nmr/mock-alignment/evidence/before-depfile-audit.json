@@ -1,0 +1,578 @@
+{
+  "audit_utc": "2026-10-10T00:02:37.005491+00:00",
+  "audit_kind": "Independent root-directed retained-depfile and source/bundle provenance audit; no Cargo or GUI performed",
+  "retention_disclosure": "Original validation runner archived only aggregate reshiki.d. Root authorized this later retention of all 15 still-live final compiler depfiles before further shared-target Cargo; their mtimes fall within the final default build and every source/copy pre/post hash is identical. This is later capture, not a claim that the original runner archived all per-crate depfiles.",
+  "worktree": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+  "source_manifest": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/source-manifest.json",
+  "source_manifest_sha256": "7a73a617d92c8b691c68799763fa44ab3f415d596636654355165006dac77779",
+  "source_files_checked_before_and_after": 2590,
+  "source_mismatches": [],
+  "v2_changed_paths": [
+    "src/app/nmr/palette.rs",
+    "src/app/nmr/tests.rs"
+  ],
+  "v3_production_delta": "Bottom-right resize strip remains width18; height18 ->30. Pointer-cache and ownership code unchanged. Test additions derive the glyph from real production layout.",
+  "final_build_command": {
+    "utc": "2026-10-09T23:18:25.237502+00:00",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--no-default-features",
+      "--bin",
+      "reshiki",
+      "--message-format=json"
+    ],
+    "jobs": 4,
+    "target": "/Users/ryuichi/dev/ReShiki/target"
+  },
+  "final_build_result": {
+    "utc": "2026-10-09T23:19:35.103653+00:00",
+    "exit_code": 0,
+    "source_content_unchanged": true,
+    "own_artifact_count": 15,
+    "all_own_fresh_false": true,
+    "foreign_workspace_sources": [],
+    "depfile_only_own_worktree_or_generated_target": true,
+    "raw_executable_sha256": "ca6c36c5ee4f14b4c68a1183c7ad4a748d46e4bc049cf8c4fd629fc794c239fd",
+    "source_manifest_sha256": "7a73a617d92c8b691c68799763fa44ab3f415d596636654355165006dac77779",
+    "package_stage": "NOT RUN: preserve unique V3 app with source/payload/signature provenance separately"
+  },
+  "compiler_artifact_jsonl_sha256": "8d72753c8473ebbb63413252f4c51b6b7f3418e0990f46ea147589d454bd55b2",
+  "compiler_artifact_total": 422,
+  "own_compiler_artifacts": 15,
+  "all_own_fresh_false": true,
+  "foreign_artifact_entrypoints": [],
+  "depfile_inventory": [
+    {
+      "target": "reshiki_depict_math",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/depict-math/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_depict_math-a50134aeb7663b15.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_depict_math-a50134aeb7663b15.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_depict_math-a50134aeb7663b15.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki_depict_math-a50134aeb7663b15.d",
+      "sha256_before": "ca991af9391952fc6c073493970a8b0271e9b50bd288680861799ad86d0c6d64",
+      "sha256_copy": "ca991af9391952fc6c073493970a8b0271e9b50bd288680861799ad86d0c6d64",
+      "sha256_original_after": "ca991af9391952fc6c073493970a8b0271e9b50bd288680861799ad86d0c6d64",
+      "original_mtime_ns": 1791587910533277591,
+      "original_mtime_utc": "2026-10-09T23:18:30.533278+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_depict_math-a50134aeb7663b15.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_depict_math-a50134aeb7663b15.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_depict_math-a50134aeb7663b15.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 1,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "zune_jpeg",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/zune-jpeg/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libzune_jpeg-990a75736ba62e85.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libzune_jpeg-990a75736ba62e85.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/zune_jpeg-990a75736ba62e85.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/zune_jpeg-990a75736ba62e85.d",
+      "sha256_before": "298084544fa418493f267c012636e77845b11f129086ca315e6991b4a617f0c7",
+      "sha256_copy": "298084544fa418493f267c012636e77845b11f129086ca315e6991b4a617f0c7",
+      "sha256_original_after": "298084544fa418493f267c012636e77845b11f129086ca315e6991b4a617f0c7",
+      "original_mtime_ns": 1791587910497465054,
+      "original_mtime_utc": "2026-10-09T23:18:30.497465+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/zune_jpeg-990a75736ba62e85.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libzune_jpeg-990a75736ba62e85.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libzune_jpeg-990a75736ba62e85.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 27,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki_process_heap",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/process-heap/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_process_heap-0cf957d83ff4a565.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_process_heap-0cf957d83ff4a565.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_process_heap-0cf957d83ff4a565.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki_process_heap-0cf957d83ff4a565.d",
+      "sha256_before": "b011ac0dec42ba1c838c9cb862e157c48cf40b61d52f51bd77b75704c984b5c5",
+      "sha256_copy": "b011ac0dec42ba1c838c9cb862e157c48cf40b61d52f51bd77b75704c984b5c5",
+      "sha256_original_after": "b011ac0dec42ba1c838c9cb862e157c48cf40b61d52f51bd77b75704c984b5c5",
+      "original_mtime_ns": 1791587910565910595,
+      "original_mtime_utc": "2026-10-09T23:18:30.565911+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_process_heap-0cf957d83ff4a565.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_process_heap-0cf957d83ff4a565.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_process_heap-0cf957d83ff4a565.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 1,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "usvg",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/usvg/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libusvg-2696cd57b2c44d82.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libusvg-2696cd57b2c44d82.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/usvg-2696cd57b2c44d82.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/usvg-2696cd57b2c44d82.d",
+      "sha256_before": "d7074b7c363524af7359013011fc25611b89a96c130552c5d67b6d22aba4f77d",
+      "sha256_copy": "d7074b7c363524af7359013011fc25611b89a96c130552c5d67b6d22aba4f77d",
+      "sha256_original_after": "d7074b7c363524af7359013011fc25611b89a96c130552c5d67b6d22aba4f77d",
+      "original_mtime_ns": 1791587910927838840,
+      "original_mtime_utc": "2026-10-09T23:18:30.927839+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/usvg-2696cd57b2c44d82.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libusvg-2696cd57b2c44d82.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libusvg-2696cd57b2c44d82.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 29,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "build-script-build",
+      "kind": [
+        "custom-build"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/build.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/build/reshiki-c92694be62b9146b/build-script-build"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/build/reshiki-c92694be62b9146b/build_script_build-c92694be62b9146b.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/build_script_build-c92694be62b9146b.d",
+      "sha256_before": "9c27eaf8b4205dfa482c6e8ef8edcdc62fa92a248293468125ddcef75cfaf683",
+      "sha256_copy": "9c27eaf8b4205dfa482c6e8ef8edcdc62fa92a248293468125ddcef75cfaf683",
+      "sha256_original_after": "9c27eaf8b4205dfa482c6e8ef8edcdc62fa92a248293468125ddcef75cfaf683",
+      "original_mtime_ns": 1791587921708875287,
+      "original_mtime_utc": "2026-10-09T23:18:41.708875+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Custom-build hash equals artifact parent hash; hashed depfile executable and artifact build-script-build have identical bytes",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/build/reshiki-c92694be62b9146b/build_script_build-c92694be62b9146b.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/build/reshiki-c92694be62b9146b/build_script_build-c92694be62b9146b"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 1,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki_macos",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/macos/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_macos-2e31a0b8bb6ff6ca.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_macos-2e31a0b8bb6ff6ca.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_macos-2e31a0b8bb6ff6ca.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki_macos-2e31a0b8bb6ff6ca.d",
+      "sha256_before": "446ffeac09c4f832c07eb86d6952b23258e8a685e579736addf00b2c6919e307",
+      "sha256_copy": "446ffeac09c4f832c07eb86d6952b23258e8a685e579736addf00b2c6919e307",
+      "sha256_original_after": "446ffeac09c4f832c07eb86d6952b23258e8a685e579736addf00b2c6919e307",
+      "original_mtime_ns": 1791587926024945521,
+      "original_mtime_utc": "2026-10-09T23:18:46.024945+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_macos-2e31a0b8bb6ff6ca.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_macos-2e31a0b8bb6ff6ca.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_macos-2e31a0b8bb6ff6ca.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 5,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki_chemistry",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/chemistry/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_chemistry-ea36e16a342f379e.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_chemistry-ea36e16a342f379e.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_chemistry-ea36e16a342f379e.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki_chemistry-ea36e16a342f379e.d",
+      "sha256_before": "1be415bd262755f44ad91ff81aef37331ba3ea4e344cce1615cdabd6db6ccd67",
+      "sha256_copy": "1be415bd262755f44ad91ff81aef37331ba3ea4e344cce1615cdabd6db6ccd67",
+      "sha256_original_after": "1be415bd262755f44ad91ff81aef37331ba3ea4e344cce1615cdabd6db6ccd67",
+      "original_mtime_ns": 1791587916490155674,
+      "original_mtime_utc": "2026-10-09T23:18:36.490156+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_chemistry-ea36e16a342f379e.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_chemistry-ea36e16a342f379e.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_chemistry-ea36e16a342f379e.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 104,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "svg2pdf",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/svg2pdf/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libsvg2pdf-63e414b6c99ed3e9.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libsvg2pdf-63e414b6c99ed3e9.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/svg2pdf-63e414b6c99ed3e9.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/svg2pdf-63e414b6c99ed3e9.d",
+      "sha256_before": "4d04ee1f118921043e1a2bac1fbc37b632503c78fafef294d5954370b4bf1aa2",
+      "sha256_copy": "4d04ee1f118921043e1a2bac1fbc37b632503c78fafef294d5954370b4bf1aa2",
+      "sha256_original_after": "4d04ee1f118921043e1a2bac1fbc37b632503c78fafef294d5954370b4bf1aa2",
+      "original_mtime_ns": 1791587931274482870,
+      "original_mtime_utc": "2026-10-09T23:18:51.274483+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/svg2pdf-63e414b6c99ed3e9.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libsvg2pdf-63e414b6c99ed3e9.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libsvg2pdf-63e414b6c99ed3e9.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 17,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki_geometry",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/geometry/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_geometry-956aa89dfe114f51.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_geometry-956aa89dfe114f51.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_geometry-956aa89dfe114f51.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki_geometry-956aa89dfe114f51.d",
+      "sha256_before": "76067af0d5ab0f12bfb7630143633162ce74a9cfc15e6a5c2ebfef122510b44c",
+      "sha256_copy": "76067af0d5ab0f12bfb7630143633162ce74a9cfc15e6a5c2ebfef122510b44c",
+      "sha256_original_after": "76067af0d5ab0f12bfb7630143633162ce74a9cfc15e6a5c2ebfef122510b44c",
+      "original_mtime_ns": 1791587941810360781,
+      "original_mtime_utc": "2026-10-09T23:19:01.810361+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_geometry-956aa89dfe114f51.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_geometry-956aa89dfe114f51.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_geometry-956aa89dfe114f51.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 3,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki_model",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/model/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_model-ffe9e995b39d2b4c.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_model-ffe9e995b39d2b4c.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_model-ffe9e995b39d2b4c.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki_model-ffe9e995b39d2b4c.d",
+      "sha256_before": "fdfa2135acbda99bec6397204561ac402b66194806111da288040db049201390",
+      "sha256_copy": "fdfa2135acbda99bec6397204561ac402b66194806111da288040db049201390",
+      "sha256_original_after": "fdfa2135acbda99bec6397204561ac402b66194806111da288040db049201390",
+      "original_mtime_ns": 1791587931809193775,
+      "original_mtime_utc": "2026-10-09T23:18:51.809194+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_model-ffe9e995b39d2b4c.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_model-ffe9e995b39d2b4c.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_model-ffe9e995b39d2b4c.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 73,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki_io",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/io/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_io-b49b8effa68c45b8.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_io-b49b8effa68c45b8.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_io-b49b8effa68c45b8.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki_io-b49b8effa68c45b8.d",
+      "sha256_before": "6f6512497545f9f1e6c68b55b64c466ad2f89d818252834d88c492f7bfb642ad",
+      "sha256_copy": "6f6512497545f9f1e6c68b55b64c466ad2f89d818252834d88c492f7bfb642ad",
+      "sha256_original_after": "6f6512497545f9f1e6c68b55b64c466ad2f89d818252834d88c492f7bfb642ad",
+      "original_mtime_ns": 1791587948135033876,
+      "original_mtime_utc": "2026-10-09T23:19:08.135034+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_io-b49b8effa68c45b8.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_io-b49b8effa68c45b8.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_io-b49b8effa68c45b8.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 94,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki_agent",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/agent/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_agent-3ae3372280e5514c.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_agent-3ae3372280e5514c.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_agent-3ae3372280e5514c.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki_agent-3ae3372280e5514c.d",
+      "sha256_before": "3ac382f481316f76b232abe2f4407dacb720b8de9e3cca81d96513a4e9098955",
+      "sha256_copy": "3ac382f481316f76b232abe2f4407dacb720b8de9e3cca81d96513a4e9098955",
+      "sha256_original_after": "3ac382f481316f76b232abe2f4407dacb720b8de9e3cca81d96513a4e9098955",
+      "original_mtime_ns": 1791587957293581163,
+      "original_mtime_utc": "2026-10-09T23:19:17.293581+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_agent-3ae3372280e5514c.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_agent-3ae3372280e5514c.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_agent-3ae3372280e5514c.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 45,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki_mcp",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/mcp/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_mcp-661ab565df499b58.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_mcp-661ab565df499b58.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_mcp-661ab565df499b58.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki_mcp-661ab565df499b58.d",
+      "sha256_before": "7837efe37eb037a35f5ef513407e88cb952e24e075a650e8e6993b494ab98cb5",
+      "sha256_copy": "7837efe37eb037a35f5ef513407e88cb952e24e075a650e8e6993b494ab98cb5",
+      "sha256_original_after": "7837efe37eb037a35f5ef513407e88cb952e24e075a650e8e6993b494ab98cb5",
+      "original_mtime_ns": 1791587962308934006,
+      "original_mtime_utc": "2026-10-09T23:19:22.308934+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_mcp-661ab565df499b58.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_mcp-661ab565df499b58.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_mcp-661ab565df499b58.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 10,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki",
+      "kind": [
+        "lib"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/src/lib.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki-392a75182d753241.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki-392a75182d753241.rmeta"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-392a75182d753241.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki-392a75182d753241.d",
+      "sha256_before": "21e9b1bcd23ee992cb4006765986d2241dd9a19c1864b9958bcefc7578103400",
+      "sha256_copy": "21e9b1bcd23ee992cb4006765986d2241dd9a19c1864b9958bcefc7578103400",
+      "sha256_original_after": "21e9b1bcd23ee992cb4006765986d2241dd9a19c1864b9958bcefc7578103400",
+      "original_mtime_ns": 1791587966479866279,
+      "original_mtime_utc": "2026-10-09T23:19:26.479866+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Artifact library stem exactly matches depfile stem after removing lib prefix",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-392a75182d753241.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki-392a75182d753241.rlib",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki-392a75182d753241.rmeta"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 35,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    },
+    {
+      "target": "reshiki",
+      "kind": [
+        "bin"
+      ],
+      "source_entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/src/main.rs",
+      "compiler_artifact_files": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/reshiki"
+      ],
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-38c19ea08f56d6e3.d",
+      "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/reshiki-38c19ea08f56d6e3.d",
+      "sha256_before": "af39c79cbf131c7282e79a573bf3bcaae17568a59cf744b9055e4ffa397ae1c1",
+      "sha256_copy": "af39c79cbf131c7282e79a573bf3bcaae17568a59cf744b9055e4ffa397ae1c1",
+      "sha256_original_after": "af39c79cbf131c7282e79a573bf3bcaae17568a59cf744b9055e4ffa397ae1c1",
+      "original_mtime_ns": 1791587971035937871,
+      "original_mtime_utc": "2026-10-09T23:19:31.035938+00:00",
+      "mtime_within_final_default_build": true,
+      "artifact_correspondence": "Hashed bin executable named by depfile is byte-identical to final compiler-artifact executable and preserved unsigned payload",
+      "depfile_rule_targets": [
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-38c19ea08f56d6e3.d",
+        "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-38c19ea08f56d6e3"
+      ],
+      "canonical_dependency_counts": {
+        "own_manifest": 120,
+        "generated_target": 0,
+        "cargo_registry": 0
+      },
+      "foreign_dependencies": []
+    }
+  ],
+  "aggregate_depfile": {
+    "original_captured_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/reshiki.d",
+    "live_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki.d",
+    "copied_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/aggregate-reshiki.d",
+    "sha256_before": "34aaea1db0841305b321562b095753b87f6b741f856edadfb68bbfe21d92e6fe",
+    "sha256_copy": "34aaea1db0841305b321562b095753b87f6b741f856edadfb68bbfe21d92e6fe",
+    "sha256_original_after": "34aaea1db0841305b321562b095753b87f6b741f856edadfb68bbfe21d92e6fe",
+    "live_equal_original_and_copy": true,
+    "original_capture_mtime_ns": 1791587975098509399,
+    "canonical_own_manifest_dependencies": 541,
+    "foreign_dependencies": []
+  },
+  "raw_current_preserved_sha256": "ca6c36c5ee4f14b4c68a1183c7ad4a748d46e4bc049cf8c4fd629fc794c239fd",
+  "signed_app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Resize Verified.app",
+  "signed_executable_sha256": "37e9409b75661f9acaa346603d55b47e2f4a522d112637632d795832f69f33e0",
+  "bundle_manifest_sha256": "442996e2690c552b9f52d381fd6bbc6d88a27aec2170776b05866f29eea43e61",
+  "bundle_files_checked": 9,
+  "bundle_mismatches": [],
+  "prior_independent_codesign_check": "codesign --verify --deep --strict --verbose=2 succeeded; current arm64, adhoc signature, Identifier=dev.reshiki.nmr-resize-verified; not Developer ID/notarization",
+  "retained_test_check_hash_matches": {
+    "nmr-resize-affordance-amendment/controlled-before/test.log": true,
+    "nmr-resize-affordance-amendment/focused-after/test.log": true,
+    "nmr-resize-affordance-amendment/clippy/check.log": true,
+    "nmr-resize-affordance-amendment/default-check/check.log": true
+  },
+  "checks_observed_in_retained_logs": {
+    "focused_after": "19 passed, 0 failed, 0 ignored; source manifest equals final",
+    "strict_clippy": "Exit0; -p reshiki --all-targets --all-features -- -D warnings; source manifest equals final",
+    "default_alltarget_check": "Exit0; -p reshiki --all-targets --no-default-features; source manifest equals final",
+    "controlled_before": "Expected visible glyph test failure (0 passed,1 failed), excluded from acceptance; source manifest differs only by pre-fix palette.rs"
+  },
+  "scope_limits": [
+    "Native V3 visible-glyph behavior remains pending ROOT GUI.",
+    "Historical build execution is evidenced by retained JSONL/logs/runner and matching current final artifacts; audit does not rerun compiler or native app.",
+    "Per-crate depfile retention occurred after original build at root request, while final live bytes were still present."
+  ],
+  "raw_to_signed_payload_comparison": {
+    "unsigned_size": 225057080,
+    "signed_size": 223766736,
+    "unsigned_signature_command": {
+      "command_offset": 3568,
+      "dataoff": 223312304,
+      "datasize": 1744776
+    },
+    "signed_signature_command": {
+      "command_offset": 3568,
+      "dataoff": 223312304,
+      "datasize": 454432
+    },
+    "linkedit_command_offset": 1760,
+    "same_load_command_layout": true,
+    "all_presignature_differences": [
+      [
+        1793,
+        1795
+      ],
+      [
+        1808,
+        1811
+      ],
+      [
+        3580,
+        3583
+      ]
+    ],
+    "unexpected_presignature_differences": [],
+    "payload_equal_except_signature_size_fields": true,
+    "signature_blob_occupies_exact_file_tail": true
+  }
+}
