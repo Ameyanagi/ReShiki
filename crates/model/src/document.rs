@@ -19,6 +19,10 @@ impl Point {
     }
 }
 
+fn is_zero_u64(value: &u64) -> bool {
+    *value == 0
+}
+
 /// Winding is relative to the explicit neighbor order, not a toolkit index.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AtomStereo {
@@ -52,6 +56,9 @@ pub struct Atom {
     pub radical_electrons: u8,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub marks: Vec<crate::scientific::AtomMark>,
+    /// High-water mark: deleting an annotation never reuses its attachment ID.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub mark_serial: u64,
     #[serde(default)]
     pub isotope: u32,
     #[serde(default)]
@@ -136,10 +143,18 @@ pub struct Arrow {
     pub id: u64,
     pub start: Point,
     pub end: Point,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_anchor: Option<crate::arrow_anchors::Anchor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_anchor: Option<crate::arrow_anchors::Anchor>,
     #[serde(default = "forward")]
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub control: Option<Point>,
+    /// Independently editable departure and arrival controls. Absent in legacy
+    /// quadratic arrows; these controls take precedence over the implicit bend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cubic: Option<[Point; 2]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style: Option<crate::arrows::ArrowStyle>,
 }
@@ -148,7 +163,7 @@ fn forward() -> String {
 }
 
 /// The newest document format this build reads. Saved files are marked with it.
-pub const VERSION: u32 = 20;
+pub const VERSION: u32 = 24;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -246,6 +261,8 @@ impl Document {
         let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         doc.validate()?;
         doc.migrate();
+        crate::arrow_anchors::reconcile(&mut doc);
+        doc.validate()?;
         Ok(doc)
     }
     /// Bring a drawing read from an earlier document version to the current
@@ -309,6 +326,7 @@ impl Document {
             charge: 0,
             radical_electrons: 0,
             marks: vec![],
+            mark_serial: 0,
             isotope: 0,
             explicit_h: 0,
             no_implicit: element == "*",
@@ -432,6 +450,7 @@ impl Document {
         crate::depth_appearance::prune(self);
         self.prune_groups();
         crate::reactions::prune(self);
+        crate::arrow_anchors::reconcile(self);
     }
     pub fn translate(&mut self, ids: &[u64], dx: f32, dy: f32) {
         let ids = self.expand_abbreviation_selection(ids);
@@ -457,6 +476,7 @@ impl Document {
             }
         }
         crate::projection::sync_centroids(self);
+        crate::arrow_anchors::transformed(self, ids, |v| v);
     }
     /// Every object ID, in [`Document::object_ids`] order.
     pub fn all_ids(&self) -> Vec<u64> {
@@ -609,6 +629,7 @@ impl Document {
         for arrow in &self.arrows {
             arrow.validate()?;
         }
+        crate::arrow_anchors::validate(self)?;
         Ok(())
     }
     pub fn bounds(&self) -> (Point, Point) {

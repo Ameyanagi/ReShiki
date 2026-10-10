@@ -7,6 +7,11 @@ pub enum Tool {
     Select,
     Lasso,
     Tilt,
+    /// Keep a bridge bond's original axis while moving its donor-side fragment.
+    StretchBond {
+        fixed: u64,
+        moving: u64,
+    },
     Chain(ChainMode),
     Bond(u8),
     StyledBond(reshiki::bonds::BondPreset),
@@ -47,8 +52,14 @@ impl Tool {
             }
             Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag subtracts",
             Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15° · Escape cancels",
-            Self::Chain(_) => {
-                "Drag a chain · Ctrl bends · Shift flips · Click places the chosen number of carbons"
+            Self::StretchBond { .. } => {
+                "Drag the moving end or branch along the bond · Direction stays fixed · Escape cancels"
+            }
+            Self::Chain(ChainMode::Straight) => {
+                "Drag a regular zigzag toward the pointer · Ctrl bends · Shift flips · Click places the chosen number of carbons"
+            }
+            Self::Chain(ChainMode::Snaking) => {
+                "Steer while dragging · Retrace earlier vertices to shorten · Shift flips the first turn"
             }
             Self::Bond(2) => {
                 "Click a bond to make it double · Click again to shift centered / left / right"
@@ -67,7 +78,7 @@ impl Tool {
                 "Preview, then click an atom or bond to attach · Drag to choose the side · Escape cancels"
             }
             Self::Arrow => {
-                "Click to place or change an arrow · Click again to switch direction or half-head side · Drag the middle handle to bend"
+                "Click to place or change an arrow · Drag the diamond to bend · Squares adjust each end direction independently"
             }
             Self::Text => "Click to type a label · Double-click a label to edit · Escape cancels",
             Self::Erase => {
@@ -77,7 +88,10 @@ impl Tool {
                 "Click an atom to attach · Drag from an atom to position · Click empty space for a free symbol"
             }
             Self::Graphic(GraphicKind::Orbital(_)) => {
-                "Click to place · Drag from the node for size/direction · Shift snaps to 15°"
+                "Click to place · Drag from the node for size/direction · Shift snaps to 15° · Option/Alt bypasses atom snapping"
+            }
+            Self::Graphic(GraphicKind::Path) => {
+                "Drag first segment · Click to add a line · Drag a new node for a curve · Click first node to close · Escape cancels"
             }
             Self::Graphic(_) => {
                 "Drag to draw · Shift constrains proportions or angle · Escape cancels"

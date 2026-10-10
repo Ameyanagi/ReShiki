@@ -35,6 +35,7 @@ pub fn documents() -> anyhow::Result<Vec<(String, Document)>> {
                             0
                         };
                     a.marks.push(AtomMark {
+                        id: None,
                         kind,
                         offset,
                         angle: 37.,

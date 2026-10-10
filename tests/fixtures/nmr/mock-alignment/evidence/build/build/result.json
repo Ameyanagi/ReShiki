@@ -1,0 +1,14 @@
+{
+  "utc": "2026-10-10T02:12:32.591378+00:00",
+  "exit_code": 0,
+  "own_artifact_count": 15,
+  "all_own_fresh_false": true,
+  "foreign_worktree_artifacts": [],
+  "default_features_enabled": true,
+  "raw_executable_sha256": "59c1d3a8db32f74530e7acb1d82e027152ed33844b6a236bcbc4fb31579dbb2d",
+  "source_manifest_sha256": "30dba3b57746dc1cec7a16ff4aa95c34a6a1d0c6139282b0f11a2c9ee9bbad14",
+  "depfile_receipt_sha256": "aaa68eb7a9da4a7b46523e6fbd333f0e1604e092cd4fe45d30b6ee40d94be67d",
+  "own_artifacts_sha256": "c718af61580540a4d464ed9d6465ffc9a3d70bfd5bddea723f9d91225630fa56",
+  "cargo_jsonl_sha256": "7d805d3d816d89399cb1d67aede517d0b09d4e3f34ec388cfbefd2f34b7e4795",
+  "cargo_stderr_sha256": "f961c1b8757bca96d17eecd7a3b7e7b0a76139cef6c6cfb9cce40f73e8945de1"
+}

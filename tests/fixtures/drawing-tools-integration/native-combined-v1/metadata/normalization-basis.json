@@ -1,0 +1,58 @@
+{
+  "record_kind": "AUTHORED_SUMMARY_OF_FROZEN_ACTUAL_RECORDS",
+  "original_record_sha256": "6d384db22b0bd227d1e1bf8cb2d15ad3e4ecabb44f26ba47ac37265d344ef999",
+  "original_record_status": "ROOT_REVIEWED_EXACT_PINNED_NATIVE_LOAD_NORMALIZATION",
+  "qualification": "Authored compact derivation; not an original log or signed attestation.",
+  "approved_patch_sha256": "24b70e181effb28a08ac6caa253153410254bcb228181e9684620acfd9350e9d",
+  "original_checker_failure_path": "records/original-native-check.stderr.txt",
+  "original_checker_failure_sha256": "8b7fef24a896e7c54d6b26870b794faafc8ba1619b6d2ce08360e7009620172b",
+  "whole_native_independent_proof_sha256": "c899fbcac84337ffa2dec4ca2815b048f8056a00b462efc0eb6ee612f4694e68",
+  "pinned_endpoint_control_offset_proof": [
+    {
+      "endpoint": "start",
+      "source_derived_f32": {
+        "x": 250.0,
+        "y": 564.2706909179688
+      },
+      "adjacent_control": {
+        "x": 250.0,
+        "y": 548.7088012695312
+      },
+      "offset": {
+        "x": 0.0,
+        "y": -6.5626220703125
+      },
+      "movement": {
+        "x": 0.0,
+        "y": -6.103515625e-5
+      }
+    },
+    {
+      "endpoint": "end",
+      "source_derived_f32": {
+        "x": 217.16400146484375,
+        "y": 575.1201782226562
+      },
+      "adjacent_control": {
+        "x": 227.64808654785156,
+        "y": 563.619873046875
+      },
+      "offset": {
+        "x": 3.5370025634765625,
+        "y": -3.87982177734375
+      },
+      "movement": {
+        "x": 0.0,
+        "y": 0.0
+      }
+    }
+  ],
+  "no_tolerance_widening": true,
+  "whole_native_proof_scope": "Restored/Stretch whole JSON at binary32; fresh reopened bytes equal restored.",
+  "stretch_command_delta_f32": {
+    "x": 9.093315124511719,
+    "y": 5.250037670135498
+  },
+  "measured_stretch_length_pt": 18.000006466749927,
+  "limit": "Finite pinned fixture normalization, not a general arrow reconciliation or clearance implementation."
+}

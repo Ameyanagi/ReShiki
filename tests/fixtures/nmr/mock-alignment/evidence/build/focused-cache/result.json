@@ -1,0 +1,32 @@
+{
+  "utc": "2026-10-10T02:02:39.560272+00:00",
+  "exit_code": 0,
+  "prefix": "canvas::cache::tests::",
+  "listed_names": [
+    "canvas::cache::tests::document_edits_loads_and_history_cannot_reuse_stale_geometry",
+    "canvas::cache::tests::guide_layouts_outlive_other_selection_reads_but_not_edits",
+    "canvas::cache::tests::selection_changes_do_not_invalidate_scene_or_claim_partial_moves_are_rigid"
+  ],
+  "named_results": [
+    [
+      "canvas::cache::tests::document_edits_loads_and_history_cannot_reuse_stale_geometry",
+      "ok"
+    ],
+    [
+      "canvas::cache::tests::guide_layouts_outlive_other_selection_reads_but_not_edits",
+      "ok"
+    ],
+    [
+      "canvas::cache::tests::selection_changes_do_not_invalidate_scene_or_claim_partial_moves_are_rigid",
+      "ok"
+    ]
+  ],
+  "passed": 3,
+  "failed": 0,
+  "ignored": 0,
+  "source_manifest_sha256": "30dba3b57746dc1cec7a16ff4aa95c34a6a1d0c6139282b0f11a2c9ee9bbad14",
+  "logs": {
+    "list.log": "9761a5e0fe863da668b64f9206384a0911abf4793c638871455ed8f47fab707b",
+    "tests.log": "b1dcfc28b64b4f38d799b2fd8bd1348d6b1cfbf01d28600b13857663664e238a"
+  }
+}

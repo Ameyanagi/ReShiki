@@ -31,6 +31,11 @@ for entry in catalog:
     assert mol is not None, entry["name"]
     assert rdMolDescriptors.CalcMolFormula(mol) == entry["formula"], entry["name"]
     assert Chem.MolToInchiKey(mol) == entry["inchikey"], entry["name"]
+    if entry.get("geometry") == "model:porphine":
+        # The catalog's graph identity is deliberately separate from the
+        # planar depiction identity. Own regular-pentagon geometry lives in
+        # the model, so an RDKit layout must not replace or duplicate it.
+        continue
     template = {k: entry[k] for k in ("name", "group")}
     template["smiles"] = Chem.MolToSmiles(mol)
     template["keywords"] = entry.get("keywords", [])

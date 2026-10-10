@@ -1,0 +1,66 @@
+{
+  "time": "2026-10-09T23:02:01.646394+00:00",
+  "app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Visibility Verified.app",
+  "identifier": "dev.reshiki.rear-visibility-verified",
+  "base_head": "52fd95d6c537c9ae5c7c35a3da98cd63b48bfd74",
+  "uncommitted_source_receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/source-ready-20261010-external-cap-ring.json",
+  "source_receipt_sha256": "f3c41047b14793f01eb376bcadefa9f99d2021e52d6955dc968df64c20749037",
+  "source_count": 1071,
+  "source_aggregate": "173a0dd53b1af5c66095f774f737cdde36657e865c991a8af5d5ed7a14fbb59e",
+  "source_hashes_unchanged": true,
+  "protected164_unchanged": true,
+  "raw_binary_sha256": "df9cb1b00cf30134a2367f291f50457967504ba4b37491a1062a8323b53f9243",
+  "signed_binary_sha256": "bc9b3d61b3acb8c65e0b2ff1b6be2e0c3835ef9ebd097c1785f8210b28fb31f7",
+  "bundle_files": {
+    "Contents/Info.plist": "bb67e39be0d50f3945021b09113e00d3c9592d8861082b39ad5a5b2d21349cbb",
+    "Contents/MacOS/reshiki": "bc9b3d61b3acb8c65e0b2ff1b6be2e0c3835ef9ebd097c1785f8210b28fb31f7",
+    "Contents/Resources/Licenses/LICENSE": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab",
+    "Contents/Resources/Licenses/LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "Contents/Resources/Licenses/LICENSE-MIT": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891",
+    "Contents/Resources/Licenses/NOTICE": "b64e8c1d4e9017a01067cf6ad362d01f1f415ea68f5a36d5be217a6d53c89b21",
+    "Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": "74938cb827f841a71f0431cc1a18a1d4cdecdcd094b8fd57fd9000d3be1a5b49",
+    "Contents/Resources/ReShiki.icns": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766",
+    "Contents/_CodeSignature/CodeResources": "ffe71d6b9d14dc01071214269d16a38160c4ccbd312eba4c4a25637447177b53"
+  },
+  "bundle_file_count": 9,
+  "bundle_aggregate": "96159547674028fa0086d7f2cb882bd7466aab9fb2845d16da422680f65cf20d",
+  "signing": [
+    {
+      "argv": [
+        "codesign",
+        "--force",
+        "--deep",
+        "--sign",
+        "-",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Visibility Verified.app"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Visibility Verified.app: replacing existing signature\n"
+    },
+    {
+      "argv": [
+        "codesign",
+        "--verify",
+        "--deep",
+        "--strict",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Visibility Verified.app"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "signed_cli_info": {
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Visibility Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "info"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"api\":{\"operation_api\":1,\"stability\":\"experimental\"},\"budgets\":{\"concurrency\":2,\"export_png_pixels\":16000000,\"history_depth\":20,\"idempotency_receipts\":32,\"idle_ttl_seconds\":3600,\"max_cdx_base64\":22369624,\"max_documents\":16,\"max_idempotency_key_bytes\":128,\"max_ids\":5000,\"max_inspect_objects\":5000,\"max_objects\":100000,\"max_output_bytes\":16777216,\"max_request_bytes\":25165824,\"max_session_picture_bytes\":134217728,\"max_session_weight\":2000000,\"max_text_bytes\":16777216,\"op_deadline_seconds\":120,\"queue\":8,\"render\":{\"default_height\":1000,\"default_width\":1600,\"max_pixels\":16000000,\"max_side\":8192,\"min_side\":1}},\"cli\":{\"input_formats\":[\"auto\",\"smiles\",\"mol\",\"rxn\",\"rsmi\",\"inchi\",\"cdxml\",\"cdx\",\"reshiki\"],\"output_formats\":[\"svg\",\"pdf\",\"png\",\"cdxml\",\"mol\",\"smiles\",\"inchi\"]},\"experimental\":true,\"files\":{\"read\":[\"rsk\",\"reshiki\",\"moruno\",\"mol\",\"rxn\",\"rsmi\",\"cdxml\",\"cdx\",\"smi\",\"smiles\",\"inchi\"],\"write\":[\"rsk\",\"mol\",\"cdxml\",\"smi\",\"smiles\",\"inchi\",\"svg\",\"pdf\",\"png\"]},\"formats\":{\"export\":[\"svg\",\"pdf\",\"png\",\"cdxml\",\"mol\",\"smiles\",\"inchi\"],\"import\":[\"auto\",\"smiles\",\"mol\",\"rxn\",\"rsmi\",\"inchi\",\"cdxml\",\"cdx\",\"reshiki\"]},\"grants\":{\"read\":[],\"write\":[]},\"operation_api\":1,\"stability\":\"experimental\",\"versions\":{\"app\":\"0.11.0\",\"document\":22,\"engine_protocol\":1,\"operation_api\":1}}\n",
+    "stderr": ""
+  },
+  "own_artifacts_fresh_false": true,
+  "depfile_receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/app-validation-20261010-fn0utjm0/artifact-origin.json"
+}

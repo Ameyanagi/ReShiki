@@ -80,7 +80,11 @@ impl App {
             Ok(response) => response,
         };
         if let Job::Export(format) = kind {
-            return export_file(response.output.unwrap_or_default(), format);
+            return export_file(
+                response.output.unwrap_or_default(),
+                format,
+                response.warnings,
+            );
         }
         if self.tab.revision != revision {
             self.status =
@@ -199,6 +203,7 @@ impl App {
     }
     fn structure_replaced(&mut self, kind: Job, response: Response) {
         if let Some(document) = response.document {
+            self.cancel_reference_stretch();
             let before = self.tab.doc.clone();
             self.tab.doc = document.clone();
             self.changed(before);

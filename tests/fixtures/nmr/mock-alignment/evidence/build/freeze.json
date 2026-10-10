@@ -1,0 +1,24 @@
+{
+  "utc": "2026-10-10T01:59:51.357377+00:00",
+  "worktree": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+  "source_file_count": 2592,
+  "source_head": "d92b0fa1305749a10b4e2aa14b5a0ce421afe6b6",
+  "source_status": " M .github/workflows/checks.yml\n M docs/nmr-prediction.md\n M src/app.rs\n M src/app/dispatch.rs\n M src/app/nmr.rs\n M src/app/nmr/palette.rs\n M src/app/nmr/tests.rs\n M src/app/tabs.rs\n M src/app/view_settings.rs\n M src/app/workspace.rs\n M src/canvas.rs\n M src/canvas/markers.rs\n M src/canvas/paper.rs\n M src/canvas/tests.rs\n?? src/app/nmr/panel.rs\n?? src/app/nmr/plot.rs\n?? src/app/nmr/plot/\n?? src/canvas/nmr.rs\n?? src/canvas/nmr/\n",
+  "source_policy": "git ls-files --cached --others --exclude-standard; all bytes, not just Rust",
+  "manifest_sha256": "30dba3b57746dc1cec7a16ff4aa95c34a6a1d0c6139282b0f11a2c9ee9bbad14",
+  "source_aggregate": "c0e2df84a8e307044a16231aac6ae578297b1c14764213fbe3654fecec597089",
+  "owners_finished_attested": true,
+  "runner_hashes": {
+    "validate.py": "56d21a7e0ae278943cc9a83c95ab8140a49dd969c5aeaae34cca55034aa02226",
+    "package.py": "403dc7d0479dafe3b539103a5c20c9cd19de569b74d400bb59de1a8485568120"
+  },
+  "preserved_originals_sha256": "0445800d164211653393d1d9d3898bbd0a6cd633a755a20996421494a68c68e4",
+  "interpreter": {
+    "executable": "/Users/ryuichi/.local/share/uv/python/cpython-3.12-macos-aarch64-none/bin/python3.12",
+    "version": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+    "platform": "darwin",
+    "machine": "arm64",
+    "sha256": "cf450e6bc0b00adecd12b7b13024de7000c7350801addc802bd3b45782104e79"
+  },
+  "before_evidence": "V3 and historical Mock native mismatches retained; no controlled source restoration"
+}

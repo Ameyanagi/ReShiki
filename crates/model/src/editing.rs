@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 mod arrange_tests;
 mod rotation;
 pub use rotation::center as rotation_center;
+pub mod reference;
 
 pub const CLIPBOARD_PREFIX: &str = "RESHIKI_DRAWING_V1\n";
 
@@ -219,6 +220,7 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
             return vec![];
         };
         a.id = mapped;
+        crate::arrow_anchors::remap(a, &mapping);
         a.map_points(|p| p.offset(offset.x, offset.y));
     }
     for g in &mut part.graphics {
@@ -276,12 +278,16 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     doc.reactions.extend(part.reactions);
     doc.ring_fills.extend(part.ring_fills);
     doc.depth_appearance.extend(part.depth_appearance);
+    if crate::rear_opacity::present(doc) {
+        doc.version = doc.version.max(22);
+    }
     if !doc.reactions.is_empty() {
         doc.version = doc.version.max(15);
     }
     if !doc.abbreviations.is_empty() {
         doc.version = doc.version.max(11);
     }
+    crate::arrow_anchors::reconcile(doc);
     ids
 }
 
@@ -359,7 +365,6 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         center.offset(p.x, p.y)
     };
     map_positions(doc, ids, convert, vector);
-    crate::projection::sync_centroids(doc);
     if matches!(
         transform,
         Transform::FlipHorizontal | Transform::FlipVertical
@@ -417,9 +422,6 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         },
         vector,
     );
-    // Derived markers follow their source atoms in both the drag preview and
-    // the committed document; they cannot retain independent transformed sites.
-    crate::projection::sync_centroids(doc);
 }
 
 /// Stretch the drawing in its plane without reflecting atoms or resizing text.
@@ -445,7 +447,6 @@ pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y
         },
         vector,
     );
-    crate::projection::sync_centroids(doc);
 }
 
 fn map_positions(
@@ -514,6 +515,10 @@ fn map_positions(
             a.map_points(&convert);
         }
     }
+    // Derived markers must reach their final sites before attachment offsets
+    // are rebased, in both the preview and the committed document.
+    crate::projection::sync_centroids(doc);
+    crate::arrow_anchors::transformed(doc, &ids.into_iter().collect::<Vec<_>>(), vector);
 }
 
 /// Connected selected atoms move as one object during alignment/distribution.

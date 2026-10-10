@@ -1,0 +1,18 @@
+{
+  "source_sha256": "7ae28f1b54eedd453f6945589a2157a735cbf542a420ce28c7f09fdba814533b",
+  "native_final_sha256": "08978db95416b8f58df2d8b12cbe949328327c8ddc0d0a75c7e32668e0f14cca",
+  "atoms": 6,
+  "bonds": 5,
+  "source_atom_fields_and_XYZ_exact": true,
+  "source_endpoint_order_display_exact": true,
+  "neutral_defaults_and_derived_H_verified": true,
+  "native_version": 19,
+  "serialization_note": "Fixture-only bond id keys are not serialized by existing native codec; atom IDs1\u20136 retained exactly. New optional defaults and empty figure fields serialized.",
+  "ordinary_H": 8,
+  "graph_formula": "C4H8O2",
+  "old_and_compact_native_TSV_byte_equal": true,
+  "TSV_sha256": "23464aba142911f3fb3c635069f4bc8f2a8c0028934c6925d3065c036058b876",
+  "native_content_minimum_logical_pixels": [1040, 680],
+  "raw_window_physical_pixels": [2080, 1424],
+  "titlebar_logical_pixels": 32
+}

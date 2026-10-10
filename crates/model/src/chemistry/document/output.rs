@@ -523,6 +523,7 @@ fn reconstruct_atoms(
                 cip_label: None,
                 display: old.map(|a| a.display.clone()).unwrap_or_default(),
                 marks: old.map(|a| a.marks.clone()).unwrap_or_default(),
+                mark_serial: old.map_or(0, |a| a.mark_serial),
                 text_style: old.and_then(|a| a.text_style.clone()),
             };
             atom.explicit_h = u32::from(if circular.contains(&id) {

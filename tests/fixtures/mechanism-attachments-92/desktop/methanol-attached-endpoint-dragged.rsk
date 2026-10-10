@@ -1,0 +1,135 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 21,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": -40.568886,
+        "y": -10.870395
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 2,
+      "element": "O",
+      "position": {
+        "x": -4.19582,
+        "y": 10.129605
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "marks": [
+        {
+          "id": 1,
+          "kind": "lone_pair",
+          "offset": {
+            "x": -0.0000012749156,
+            "y": -29.166668
+          },
+          "angle": 0.0,
+          "size_pt": null
+        }
+      ],
+      "mark_serial": 1,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [],
+  "arrows": [
+    {
+      "id": 3,
+      "start": {
+        "x": 21.870216,
+        "y": -48.757374
+      },
+      "end": {
+        "x": -37.03188,
+        "y": -14.750234
+      },
+      "end_anchor": {
+        "target": {
+          "kind": "atom",
+          "atom": 1
+        },
+        "offset": {
+          "x": 3.5370064,
+          "y": -3.879839
+        },
+        "direction": {
+          "x": 0.67370254,
+          "y": -0.73900265
+        },
+        "gap": 3.5000002
+      },
+      "kind": "curved",
+      "cubic": [
+        {
+          "x": 29.687025,
+          "y": -69.300674
+        },
+        {
+          "x": -26.547798,
+          "y": -26.250507
+        }
+      ],
+      "style": {
+        "head": "full",
+        "tail": "none",
+        "shape": "solid",
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "width_pt": 0.6,
+        "pattern": "solid",
+        "head_length_pt": 6.0,
+        "head_width_pt": 1.5,
+        "equilibrium_ratio": 1.0,
+        "head_notch": 0.125,
+        "gap_pt": 2.0,
+        "no_go": "none",
+        "dipole": false
+      }
+    }
+  ],
+  "graphics": [],
+  "groups": []
+}

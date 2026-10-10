@@ -11,6 +11,120 @@ use reshiki::graphics::PathCommand;
 use std::ops::ControlFlow;
 
 impl MoleculeCanvas<'_> {
+    pub(super) fn draw_arrow_targets(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) {
+        if self.tool != Tool::Arrow
+            || !self.attach_arrow_targets
+            || state.modifiers.alt()
+            || !matches!(
+                self.arrow_preset,
+                reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
+            )
+        {
+            return;
+        }
+        let pointer = state
+            .cursor
+            .or(cursor.position())
+            .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
+        let hovered = pointer.and_then(|p| {
+            reshiki::arrow_anchors::pick(
+                self.doc,
+                self.camera.world(p, bounds),
+                8. / self.camera.zoom,
+            )
+        });
+        for (target, color, radius) in [
+            (self.arrow_source, rgb([38, 113, 208]), 10.),
+            (hovered.as_ref(), rgb([19, 135, 116]), 8.),
+        ] {
+            if let Some((target, center)) =
+                target.and_then(|t| t.center(self.doc).map(|center| (t, center)))
+            {
+                // Surround the actual label/dot group instead of painting a
+                // small ring through the lone-pair dots at high zoom.
+                let extent = match target {
+                    reshiki::arrow_anchors::Pick::LonePair { atom, mark } => {
+                        self.doc.atom(*atom).map(|a| {
+                            let size = mark.size_pt.unwrap_or_else(|| {
+                                a.text_style
+                                    .as_ref()
+                                    .map_or(self.doc.drawing_style.font_size_pt, |s| s.size_pt)
+                                    * 0.75
+                            });
+                            reshiki::style::DEFAULT.world(size) * 0.35
+                                + self.doc.drawing_style.line_width() * 0.5
+                        })
+                    }
+                    reshiki::arrow_anchors::Pick::Atom(id) => self
+                        .doc
+                        .atom(*id)
+                        .and_then(|a| reshiki::scene::atom_label_bounds(a, self.doc))
+                        .map(|(lo, hi)| {
+                            [lo, hi, World::new(lo.x, hi.y), World::new(hi.x, lo.y)]
+                                .into_iter()
+                                .map(|p| p.distance(center))
+                                .fold(0., f32::max)
+                        }),
+                    _ => None,
+                };
+                let radius = extent.map_or(radius, |extent| {
+                    (extent * self.camera.zoom + if radius > 8. { 6. } else { 3. }).max(radius)
+                });
+                frame.stroke(
+                    &Path::circle(self.camera.screen(center, bounds), radius),
+                    Stroke::default().with_width(1.5).with_color(color),
+                );
+            }
+        }
+    }
+
+    pub(super) fn draw_orbital_target(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        let Tool::Graphic(kind @ reshiki::graphics::GraphicKind::Orbital(_)) = self.tool else {
+            return;
+        };
+        let start = match state.gesture {
+            Some(Gesture::Graphic { start }) => start,
+            None => {
+                let Some(cursor) = state.cursor.filter(|cursor| bounds.contains(*cursor)) else {
+                    return;
+                };
+                self.camera
+                    .world(Point::new(cursor.x - bounds.x, cursor.y - bounds.y), bounds)
+            }
+            _ => return,
+        };
+        let drawing = reshiki::scientific::Drawing {
+            kind,
+            style: self.graphic_style.clone(),
+            phase: self.orbital_phase,
+            flipped: self.phase_flipped,
+            attach: self.attach_symbols,
+            snap_orbitals: self.snap_orbitals && !state.modifiers.alt(),
+        };
+        if let Some(id) = drawing.orbital_target(self.doc, start, 10. / self.camera.zoom)
+            && let Some(atom) = self.doc.atom(id)
+        {
+            let center = self.camera.screen(atom.position, bounds);
+            frame.stroke(
+                &Path::circle(center, 8.),
+                Stroke::default()
+                    .with_width(1.5)
+                    .with_color(rgb([19, 135, 116])),
+            );
+        }
+    }
+
     pub(super) fn draw_editor_markers(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -28,6 +142,21 @@ impl MoleculeCanvas<'_> {
                 frame.stroke(&Path::line(center - delta, center + delta), stroke);
             }
         }
+        if let Tool::StretchBond { fixed, moving } = self.tool
+            && let Some((a, b)) = preview.atom(fixed).zip(preview.atom(moving))
+        {
+            let a = self.camera.screen(a.position, bounds);
+            let b = self.camera.screen(b.position, bounds);
+            let stroke = Stroke::default()
+                .with_width(1.5)
+                .with_color(rgb([19, 135, 116]));
+            frame.stroke(&Path::line(a, b), stroke);
+            frame.stroke(
+                &Path::rectangle(a - Vector::new(4., 4.), iced::Size::new(8., 8.)),
+                stroke,
+            );
+            frame.stroke(&Path::circle(b, 5.), stroke);
+        }
     }
 
     pub(super) fn draw_arrow_handles(
@@ -41,14 +170,42 @@ impl MoleculeCanvas<'_> {
             && (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
         {
             for a in preview.arrows.iter().filter(|a| selected.contains(&a.id)) {
+                if let Some([departure, arrival]) = a.bezier_controls() {
+                    for (endpoint, control) in [(a.start, departure), (a.end, arrival)] {
+                        frame.stroke(
+                            &Path::line(
+                                self.camera.screen(endpoint, bounds),
+                                self.camera.screen(control, bounds),
+                            ),
+                            Stroke::default()
+                                .with_width(1.)
+                                .with_color(rgb([19, 135, 116])),
+                        );
+                    }
+                }
                 for (i, p) in a.handles().into_iter().enumerate() {
                     let p = self.camera.screen(p, bounds);
-                    let path = if i == 2 {
+                    let path = if i >= 3 {
                         Path::rectangle(p - Vector::new(4., 4.), iced::Size::new(8., 8.))
+                    } else if i == 2 {
+                        Path::new(|builder| {
+                            builder.move_to(p - Vector::new(0., 5.));
+                            builder.line_to(p + Vector::new(5., 0.));
+                            builder.line_to(p + Vector::new(0., 5.));
+                            builder.line_to(p - Vector::new(5., 0.));
+                            builder.close();
+                        })
                     } else {
                         Path::circle(p, 4.)
                     };
-                    frame.fill(&path, Color::WHITE);
+                    frame.fill(
+                        &path,
+                        if i >= 3 {
+                            rgb([225, 242, 237])
+                        } else {
+                            Color::WHITE
+                        },
+                    );
                     frame.stroke(
                         &path,
                         Stroke::default()
@@ -135,10 +292,12 @@ impl MoleculeCanvas<'_> {
         selected: &[u64],
         bounds: Rectangle,
     ) {
-        if self.tool == Tool::EditPoints {
+        if self.tool == Tool::EditPoints
+            || self.tool == Tool::Graphic(reshiki::graphics::GraphicKind::Path)
+        {
             for indicator in reshiki::atom_labels::indicators(preview)
                 .into_iter()
-                .filter(|i| i.owner.selected(selected))
+                .filter(|i| self.tool == Tool::EditPoints && i.owner.selected(selected))
             {
                 if let Some(anchor) = indicator.owner.anchor(preview) {
                     let center = self.camera.screen(indicator.center, bounds);
@@ -156,11 +315,11 @@ impl MoleculeCanvas<'_> {
                     );
                 }
             }
-            for a in preview
-                .atoms
-                .iter()
-                .filter(|a| selected.contains(&a.id) && preview.atom_visible(a.id))
-            {
+            for a in preview.atoms.iter().filter(|a| {
+                self.tool == Tool::EditPoints
+                    && selected.contains(&a.id)
+                    && preview.atom_visible(a.id)
+            }) {
                 for m in &a.marks {
                     let center = self
                         .camera
@@ -180,6 +339,61 @@ impl MoleculeCanvas<'_> {
                 }
             }
             for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
+                if let Some(handles) = graphic.path_handles() {
+                    if self.tool == Tool::EditPoints {
+                        let mut anchor = World::default();
+                        for command in graphic.commands() {
+                            if let PathCommand::Cubic(a, b, end) = command {
+                                for (from, to) in [(anchor, a), (end, b)] {
+                                    frame.stroke(
+                                        &Path::line(
+                                            self.camera.screen(from, bounds),
+                                            self.camera.screen(to, bounds),
+                                        ),
+                                        Stroke::default()
+                                            .with_width(1.)
+                                            .with_color(rgb([19, 135, 116])),
+                                    );
+                                }
+                                anchor = end;
+                            } else if let Some(point) = command.points().last() {
+                                anchor = *point;
+                            }
+                        }
+                    }
+                    for handle in handles
+                        .into_iter()
+                        .filter(|h| self.tool == Tool::EditPoints || h.node)
+                    {
+                        let point = self.camera.screen(handle.point, bounds);
+                        let path = if handle.node {
+                            Path::circle(point, 4.5)
+                        } else {
+                            Path::rectangle(point - Vector::new(4., 4.), iced::Size::new(8., 8.))
+                        };
+                        let chosen = self.graphic_point == Some((graphic.id, handle.index));
+                        frame.fill(
+                            &path,
+                            if chosen {
+                                rgb([19, 135, 116])
+                            } else if handle.node {
+                                Color::WHITE
+                            } else {
+                                rgb([225, 242, 237])
+                            },
+                        );
+                        frame.stroke(
+                            &path,
+                            Stroke::default()
+                                .with_width(if chosen { 2. } else { 1.5 })
+                                .with_color(rgb([19, 135, 116])),
+                        );
+                    }
+                    continue;
+                }
+                if self.tool != Tool::EditPoints {
+                    continue;
+                }
                 if graphic.kind == reshiki::graphics::GraphicKind::Arc {
                     for p in graphic.edit_points() {
                         let path = Path::circle(self.camera.screen(p, bounds), 5.0);

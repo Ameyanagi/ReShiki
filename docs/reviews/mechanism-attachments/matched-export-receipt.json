@@ -1,0 +1,310 @@
+{
+  "app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+  "app_sha256": "31a3428de420b01655939a646932c437aa24da9a912147733b8ea8076753d352",
+  "records": [
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/methanol-marked-input.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "svg",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/control-methanol-marked-input.svg",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "control-methanol-marked-input-svg.stdout",
+      "stderr_file": "control-methanol-marked-input-svg.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/methanol-marked-input.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "png",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/control-methanol-marked-input.png",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "control-methanol-marked-input-png.stdout",
+      "stderr_file": "control-methanol-marked-input-png.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/methanol-marked-input.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "pdf",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/control-methanol-marked-input.pdf",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "control-methanol-marked-input-pdf.stdout",
+      "stderr_file": "control-methanol-marked-input-pdf.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/app-two-click.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "svg",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/app-two-click.svg",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "app-two-click-svg.stdout",
+      "stderr_file": "app-two-click-svg.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/app-two-click.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "png",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/app-two-click.png",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "app-two-click-png.stdout",
+      "stderr_file": "app-two-click-png.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/app-two-click.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "pdf",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/app-two-click.pdf",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "app-two-click-pdf.stdout",
+      "stderr_file": "app-two-click-pdf.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/methanol-two-free-arrows-desktop.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "svg",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/actual-two-free-arrows-before.svg",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "actual-two-free-arrows-before-svg.stdout",
+      "stderr_file": "actual-two-free-arrows-before-svg.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/methanol-two-free-arrows-desktop.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "png",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/actual-two-free-arrows-before.png",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "actual-two-free-arrows-before-png.stdout",
+      "stderr_file": "actual-two-free-arrows-before-png.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/methanol-two-free-arrows-desktop.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "pdf",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/actual-two-free-arrows-before.pdf",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "actual-two-free-arrows-before-pdf.stdout",
+      "stderr_file": "actual-two-free-arrows-before-pdf.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "convert",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/app-two-click.rsk",
+        "--from",
+        "reshiki",
+        "--to",
+        "cdxml",
+        "-o",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/app-two-click.cdxml",
+        "--receipt",
+        "--force"
+      ],
+      "returncode": 0,
+      "stdout_file": "app-two-click-cdxml.stdout",
+      "stderr_file": "app-two-click-cdxml.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "analyze",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/methanol-marked-input.rsk",
+        "--from",
+        "reshiki"
+      ],
+      "returncode": 0,
+      "stdout_file": "control-methanol-marked-input-properties.stdout",
+      "stderr_file": "control-methanol-marked-input-properties.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "analyze",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/after/app-two-click.rsk",
+        "--from",
+        "reshiki"
+      ],
+      "returncode": 0,
+      "stdout_file": "app-two-click-properties.stdout",
+      "stderr_file": "app-two-click-properties.stderr"
+    },
+    {
+      "argv": [
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+        "--cli",
+        "analyze",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/arrow-attachment-evidence/crowded-methoxide-carbonyl-input.rsk",
+        "--from",
+        "reshiki"
+      ],
+      "returncode": 0,
+      "stdout_file": "crowded-methoxide-carbonyl-input-properties.stdout",
+      "stderr_file": "crowded-methoxide-carbonyl-input-properties.stderr"
+    }
+  ],
+  "frozen_before_control_exports_byte_identical": {
+    "svg": true,
+    "png": true,
+    "pdf": true
+  },
+  "before_and_after_complete_chemical_properties_equal": true,
+  "native_molecular_coordinates_and_fields_unchanged": true,
+  "original_lone_pair_geometry_unchanged": true,
+  "native_version": 21,
+  "arrow_count": 1,
+  "external_link_loss_notices": {
+    "svg": true,
+    "png": true,
+    "pdf": true,
+    "cdxml": true
+  },
+  "properties": {
+    "control-methanol-marked-input": {
+      "acceptors": 1,
+      "donors": 1,
+      "exact_mass": 32.026214748,
+      "formula": "CH4O",
+      "inchi": "InChI=1S/CH4O/c1-2/h2H,1H3",
+      "inchikey": "OKKJLVBELUTLKV-UHFFFAOYSA-N",
+      "logp": -0.3915,
+      "mass": 32.042,
+      "rings": 0,
+      "smiles": "CO",
+      "tpsa": 20.23,
+      "unpaired_electrons": 0
+    },
+    "app-two-click": {
+      "acceptors": 1,
+      "donors": 1,
+      "exact_mass": 32.026214748,
+      "formula": "CH4O",
+      "inchi": "InChI=1S/CH4O/c1-2/h2H,1H3",
+      "inchikey": "OKKJLVBELUTLKV-UHFFFAOYSA-N",
+      "logp": -0.3915,
+      "mass": 32.042,
+      "rings": 0,
+      "smiles": "CO",
+      "tpsa": 20.23,
+      "unpaired_electrons": 0
+    },
+    "crowded-methoxide-carbonyl-input": {
+      "acceptors": 2,
+      "donors": 0,
+      "exact_mass": 61.02950297990999,
+      "formula": "C2H5O2-",
+      "inchi": "InChI=1S/CH3O.CH2O/c2*1-2/h1H3;1H2/q-1;",
+      "inchikey": "RPVAAQFWEQGWEI-UHFFFAOYSA-N",
+      "logp": -1.2084000000000001,
+      "mass": 61.06,
+      "rings": 0,
+      "smiles": "C=O.C[O-]",
+      "tpsa": 40.129999999999995,
+      "unpaired_electrons": 0
+    }
+  },
+  "outputs": {
+    "actual-two-free-arrows-before.pdf": "a46b38b6e6daedf2726fd2e195a953115b3d2afc6a35749f3f0d6d92562228b8",
+    "actual-two-free-arrows-before.png": "9418001a72bc799bae041f50c2f6bee02736341c201f2e41555b20b4d035e373",
+    "actual-two-free-arrows-before.svg": "21cb56a96823f4afa403efc225618e7ba19f60f76489ae56cdd9269cbdb10ec8",
+    "app-two-click.cdxml": "2e83287e90d083dcb36e6b1234c6640a6118609f5b21e3f6ae44c7388489e68f",
+    "app-two-click.pdf": "3a2158b7f8029ae292af500344c9d70e8660670b81c289ee9007c282cc482752",
+    "app-two-click.png": "b03730f7543c880700ea91042f0606f02805f5539177de115fc89b4ebfae230d",
+    "app-two-click.rsk": "ca6b1971a01f2234dfb6ac429d18b6cfeba56f482323bf5758de18cb23d871b0",
+    "app-two-click.svg": "fdb51ee0078a9c5e9e6eb4f3c337545c9f0902717444581a941d33b232690845",
+    "control-methanol-marked-input.pdf": "ca0a0862679fdb549a455b4d8d6d9cf31b63682b3c2bbcd72c99ea84babad669",
+    "control-methanol-marked-input.png": "35f37fe58883b5129eab1879fc05cda25f7b0b51379cf7e47a2d003fb164f0c6",
+    "control-methanol-marked-input.svg": "6f8955a8b6be363a5bfc1edd37474fcfcae117fb6f1662311314307f7c941347",
+    "native-source-highlight.png": "8949d1a638393d6d81a70ebbec119f4df70a931f830229c7e6cfa757de539ad5",
+    "native-target-moved.png": "59a947867bec7a3fdf92080a47bfbb37e60e8de5a1dd72c436602dde8a5414b6"
+  }
+}

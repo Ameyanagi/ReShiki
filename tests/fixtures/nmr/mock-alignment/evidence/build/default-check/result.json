@@ -1,0 +1,18 @@
+{
+  "utc": "2026-10-10T02:11:02.448724+00:00",
+  "exit_code": 0,
+  "commands": [
+    [
+      "cargo",
+      "check",
+      "--locked",
+      "-p",
+      "reshiki",
+      "--all-targets"
+    ]
+  ],
+  "source_manifest_sha256": "30dba3b57746dc1cec7a16ff4aa95c34a6a1d0c6139282b0f11a2c9ee9bbad14",
+  "logs": {
+    "check-1.log": "287cef22021a1d69b9a8acad694fa26160fcbb043be870de6762d7ca07192f78"
+  }
+}

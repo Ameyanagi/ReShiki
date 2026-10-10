@@ -160,10 +160,13 @@ impl Arrow {
     pub fn new(id: u64, start: Point, end: Point, preset: Preset, style: ArrowStyle) -> Self {
         Self {
             id,
+            start_anchor: None,
+            end_anchor: None,
             start,
             end,
             kind: preset.kind().into(),
             control: None,
+            cubic: None,
             style: Some(style),
         }
     }
@@ -173,6 +176,9 @@ impl Arrow {
             .unwrap_or_else(|| ArrowStyle::preset(Preset::from_kind(&self.kind)))
     }
     pub fn control_point(&self) -> Option<Point> {
+        if self.cubic.is_some() {
+            return None;
+        }
         self.control.or_else(|| {
             matches!(self.kind.as_str(), "curved" | "fishhook" | "bent").then(|| {
                 lerp(self.start, self.end, 0.5).offset(
@@ -182,7 +188,25 @@ impl Arrow {
             })
         })
     }
+    /// Exact cubic controls, including the degree-elevated legacy quadratic.
+    /// Inspecting a legacy arrow never converts its saved geometry.
+    pub fn bezier_controls(&self) -> Option<[Point; 2]> {
+        if self.kind == "bent" {
+            return None;
+        }
+        self.cubic.or_else(|| {
+            self.control_point()
+                .map(|c| [lerp(self.start, c, 2. / 3.), lerp(self.end, c, 2. / 3.)])
+        })
+    }
     pub fn point(&self, t: f32) -> Point {
+        if let Some([a, b]) = self.cubic {
+            return lerp(
+                lerp(lerp(self.start, a, t), lerp(a, b, t), t),
+                lerp(lerp(a, b, t), lerp(b, self.end, t), t),
+                t,
+            );
+        }
         match self.control_point() {
             Some(c) if self.kind == "bent" => {
                 if t <= 0.5 {
@@ -196,6 +220,17 @@ impl Arrow {
         }
     }
     fn velocity(&self, t: f32) -> Point {
+        if let Some([a, b]) = self.cubic {
+            let u = 1. - t;
+            return Point::new(
+                3. * (u * u * (a.x - self.start.x)
+                    + 2. * u * t * (b.x - a.x)
+                    + t * t * (self.end.x - b.x)),
+                3. * (u * u * (a.y - self.start.y)
+                    + 2. * u * t * (b.y - a.y)
+                    + t * t * (self.end.y - b.y)),
+            );
+        }
         if let Some(c) = self.control_point() {
             if self.kind == "bent" {
                 let (a, b) = if t < 0.5 {
@@ -218,6 +253,8 @@ impl Arrow {
         let speed = v.distance(Point::default());
         let direction = if speed > 0.0001 {
             Point::new(v.x / speed, v.y / speed)
+        } else if self.cubic.is_some() {
+            self.shaft_tangent(t, false)
         } else {
             unit(self.start, self.end)
         };
@@ -226,22 +263,57 @@ impl Arrow {
     }
     fn offset_velocity(&self, t: f32, offset: f32) -> Point {
         let v = self.velocity(t);
+        if self.cubic.is_some() && v.distance(Point::default()) < 0.0001 {
+            if offset == 0. {
+                return v;
+            }
+            // Use the limiting offset tangent at a collapsed cubic control.
+            // Dividing the normal derivative by a vanishing speed produces
+            // enormous control points despite the visible curve being smooth.
+            let from = (t - 0.0005).max(0.);
+            let to = (t + 0.0005).min(1.);
+            let a = self.offset_point(from, offset);
+            let b = self.offset_point(to, offset);
+            return Point::new((b.x - a.x) / (to - from), (b.y - a.y) / (to - from));
+        }
         let speed = v.distance(Point::default()).max(0.0001);
-        let Some(c) = self.control_point() else {
+        let a = if let Some([a, b]) = self.cubic {
+            Point::new(
+                6. * ((1. - t) * (b.x - 2. * a.x + self.start.x)
+                    + t * (self.end.x - 2. * b.x + a.x)),
+                6. * ((1. - t) * (b.y - 2. * a.y + self.start.y)
+                    + t * (self.end.y - 2. * b.y + a.y)),
+            )
+        } else if let Some(c) = self.control_point() {
+            Point::new(
+                2. * (self.end.x - 2. * c.x + self.start.x),
+                2. * (self.end.y - 2. * c.y + self.start.y),
+            )
+        } else {
             return v;
         };
-        let a = Point::new(
-            2. * (self.end.x - 2. * c.x + self.start.x),
-            2. * (self.end.y - 2. * c.y + self.start.y),
-        );
         let projection = (v.x * a.x + v.y * a.y) / (speed * speed);
         v.offset(
             offset * (-a.y + v.y * projection) / speed,
             offset * (a.x - v.x * projection) / speed,
         )
     }
-    pub fn handles(&self) -> [Point; 3] {
-        [self.start, self.end, self.point(0.5)]
+    pub fn handles(&self) -> Vec<Point> {
+        let mut handles = vec![self.start, self.end, self.point(0.5)];
+        if let Some(controls) = self.bezier_controls() {
+            handles.extend(controls);
+        }
+        handles
+    }
+    /// Select the nearest visible handle when short tangent stems overlap.
+    pub fn handle_at(&self, p: Point, radius: f32) -> Option<usize> {
+        self.handles()
+            .into_iter()
+            .enumerate()
+            .map(|(index, handle)| (index, handle.distance(p)))
+            .filter(|(_, distance)| *distance < radius)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(index, _)| index)
     }
     pub fn edit_handle(&mut self, index: usize, p: Point) {
         if !p.x.is_finite() || !p.y.is_finite() {
@@ -250,14 +322,29 @@ impl Arrow {
         let control = self.control_point();
         match index {
             0 => {
+                self.start_anchor = None;
+                if let Some([a, _]) = self.cubic.as_mut() {
+                    *a = a.offset(p.x - self.start.x, p.y - self.start.y);
+                }
                 self.start = p;
                 self.control = control;
             }
             1 => {
+                self.end_anchor = None;
+                if let Some([_, b]) = self.cubic.as_mut() {
+                    *b = b.offset(p.x - self.end.x, p.y - self.end.y);
+                }
                 self.end = p;
                 self.control = control;
             }
             2 => {
+                if let Some([a, b]) = self.cubic {
+                    let middle = self.point(0.5);
+                    let dx = (p.x - middle.x) * 4. / 3.;
+                    let dy = (p.y - middle.y) * 4. / 3.;
+                    self.cubic = Some([a.offset(dx, dy), b.offset(dx, dy)]);
+                    return;
+                }
                 let mid = lerp(self.start, self.end, 0.5);
                 self.control = Some(if self.kind == "bent" {
                     p
@@ -265,18 +352,27 @@ impl Arrow {
                     Point::new(2. * p.x - mid.x, 2. * p.y - mid.y)
                 });
             }
+            3 | 4 => {
+                if let Some([a, b]) = self.bezier_controls() {
+                    self.cubic = Some(if index == 3 { [p, b] } else { [a, p] });
+                    self.control = None;
+                }
+            }
             _ => {}
         }
     }
     pub fn map_points(&mut self, mut f: impl FnMut(Point) -> Point) {
         // Materialize the legacy default bend before reflecting or transforming it.
         self.control = self.control_point().map(&mut f);
+        self.cubic = self.cubic.map(|[a, b]| [f(a), f(b)]);
         self.start = f(self.start);
         self.end = f(self.end);
     }
     pub fn reverse(&mut self) {
         self.control = self.control_point();
+        self.cubic = self.cubic.map(|[a, b]| [b, a]);
         std::mem::swap(&mut self.start, &mut self.end);
+        std::mem::swap(&mut self.start_anchor, &mut self.end_anchor);
     }
     /// Apply an arrow tool, or cycle its direction/half-head on another click.
     /// Returns whether the reaction direction was reversed.
@@ -298,15 +394,35 @@ impl Arrow {
         let curved = |kind: &str| matches!(kind, "curved" | "fishhook");
         if self.kind != preset.kind() && !(curved(&self.kind) && curved(preset.kind())) {
             self.control = None;
+            self.cubic = None;
         }
         self.kind = preset.kind().into();
         self.style = Some(style.clone());
         false
     }
     pub fn straighten(&mut self) {
+        if self.start_anchor.is_some() || self.end_anchor.is_some() {
+            self.cubic = Some([
+                lerp(self.start, self.end, 1. / 3.),
+                lerp(self.start, self.end, 2. / 3.),
+            ]);
+            self.control = None;
+            return;
+        }
+        self.cubic = None;
         self.control = Some(lerp(self.start, self.end, 0.5));
     }
     pub fn flip_bend(&mut self) {
+        if let Some([a, b]) = self.cubic {
+            let u = unit(self.start, self.end);
+            let reflect = |c: Point| {
+                let d = (c.x - self.start.x) * u.x + (c.y - self.start.y) * u.y;
+                let projection = self.start.offset(u.x * d, u.y * d);
+                Point::new(2. * projection.x - c.x, 2. * projection.y - c.y)
+            };
+            self.cubic = Some([reflect(a), reflect(b)]);
+            return;
+        }
         if let Some(c) = self.control_point() {
             let u = unit(self.start, self.end);
             let d = (c.x - self.start.x) * u.x + (c.y - self.start.y) * u.y;
@@ -318,9 +434,15 @@ impl Arrow {
         if !Preset::ALL.iter().any(|p| p.kind() == self.kind) {
             return Err("Unsupported arrow style".into());
         }
+        if self.cubic.is_some() && (self.control.is_some() || self.kind == "bent") {
+            return Err(
+                "Cubic arrow controls cannot be combined with a quadratic or elbow bend".into(),
+            );
+        }
         if [Some(self.start), Some(self.end), self.control]
             .into_iter()
             .flatten()
+            .chain(self.cubic.into_iter().flatten())
             .any(|p| !p.x.is_finite() || !p.y.is_finite())
         {
             return Err("Non-finite arrow position".into());
@@ -410,14 +532,14 @@ impl Arrow {
         }
         path(pts, s.shape == HeadShape::Solid, true);
     }
-    // Cubic representation exactly reproduces the editable quadratic curve.
+    // A trimmed cubic exactly reproduces either the cubic or legacy quadratic.
     fn shaft_body(&self, n: Point, from: f32, to: f32, offset: f32) -> Vec<PathCommand> {
         use PathCommand::{Cubic, Line, Move};
         let shift = |p: Point| p.offset(n.x * offset, n.y * offset);
         let start = self.point(from);
         let end = self.point(to);
-        if let Some(c) = self.control_point() {
-            if self.kind == "bent" {
+        if self.control_point().is_some() || self.cubic.is_some() {
+            if let Some(c) = self.control_point().filter(|_| self.kind == "bent") {
                 let mut commands = vec![Move(shift(start))];
                 if from.min(to) < 0.5 && from.max(to) > 0.5 {
                     commands.push(Line(shift(c)));
@@ -446,14 +568,8 @@ impl Arrow {
                 }
                 return commands;
             }
-            let tangent = |t: f32| {
-                Point::new(
-                    2. * ((1. - t) * (c.x - self.start.x) + t * (self.end.x - c.x)),
-                    2. * ((1. - t) * (c.y - self.start.y) + t * (self.end.y - c.y)),
-                )
-            };
-            let a = tangent(from);
-            let b = tangent(to);
+            let a = self.velocity(from);
+            let b = self.velocity(to);
             let dt = (to - from) / 3.;
             vec![
                 Move(shift(start)),
@@ -468,6 +584,27 @@ impl Arrow {
         }
     }
     fn shaft_tangent(&self, t: f32, reverse: bool) -> Point {
+        if let Some([a, b]) = self.cubic {
+            let velocity = self.velocity(t);
+            let mut direction = unit(Point::default(), velocity);
+            if velocity.distance(Point::default()) < 0.0001 {
+                direction = if t == 0. {
+                    unit(self.start, if b == self.start { self.end } else { b })
+                } else if t == 1. {
+                    unit(if a == self.end { self.start } else { a }, self.end)
+                } else {
+                    unit(
+                        self.point((t - 0.001).max(0.)),
+                        self.point((t + 0.001).min(1.)),
+                    )
+                };
+            }
+            return if reverse {
+                Point::new(-direction.x, -direction.y)
+            } else {
+                direction
+            };
+        }
         let c = self
             .control_point()
             .unwrap_or_else(|| lerp(self.start, self.end, 0.5));
@@ -481,6 +618,26 @@ impl Arrow {
             unit(lerp(self.start, c, t), lerp(c, self.end, t))
         };
         if reverse { Point::new(-d.x, -d.y) } else { d }
+    }
+    /// Walk from a cubic tip by a drawing-space distance. Endpoint derivatives
+    /// can vanish when a tangent handle is placed directly on its endpoint.
+    fn cubic_inset(&self, at: f32, toward: f32, length: f32, limit: f32, offset: f32) -> f32 {
+        let end = at + (toward - at) * limit;
+        let steps = 32;
+        let mut previous = self.offset_point(at, offset);
+        let mut distance = 0.;
+        for i in 1..=steps {
+            let t = at + (end - at) * i as f32 / steps as f32;
+            let point = self.offset_point(t, offset);
+            let step = previous.distance(point);
+            if distance + step >= length && step > 0. {
+                let fraction = (length - distance) / step;
+                return t - (end - at) / steps as f32 * (1. - fraction);
+            }
+            distance += step;
+            previous = point;
+        }
+        end
     }
     fn half_head(
         &self,
@@ -507,7 +664,11 @@ impl Arrow {
             .offset_velocity(to, offset)
             .distance(Point::default())
             .max(0.0001);
-        let neck = to - sign * (length * (1. - s.head_notch) / speed).min(span * 0.4);
+        let neck = if self.cubic.is_some() {
+            self.cubic_inset(to, from, length * (1. - s.head_notch), 0.4, offset)
+        } else {
+            to - sign * (length * (1. - s.head_notch) / speed).min(span * 0.4)
+        };
         let side = if kind == Head::Left { 1. } else { -1. };
         let inner = offset + side * sign * radius;
         let outer = offset - side * sign * radius;
@@ -524,17 +685,22 @@ impl Arrow {
             Line(self.offset_point(neck, outer)),
             Line(self.offset_point(neck, inner)),
         ];
-        if self.kind == "bent" || self.control_point().is_none() {
+        if self.kind == "bent" || self.control_point().is_none() && self.cubic.is_none() {
             commands.push(Line(tip));
         } else {
             commands.extend(self.shaft_body(n, neck, to, inner).into_iter().skip(1));
         }
         commands.push(Close);
         // Overlap the shortened shaft's cap inside the filled neck.
-        let overlap = (radius * 1.25 / speed).min((to - neck).abs() * 0.25);
-        Some((commands, neck + sign * overlap))
+        let shaft_end = if self.cubic.is_some() {
+            self.cubic_inset(neck, to, radius * 1.25, 0.25, offset)
+        } else {
+            let overlap = (radius * 1.25 / speed).min((to - neck).abs() * 0.25);
+            neck + sign * overlap
+        };
+        Some((commands, shaft_end))
     }
-    fn head_trim(&self, s: &ArrowStyle, kind: Head, at: f32, span: f32) -> f32 {
+    fn head_trim(&self, s: &ArrowStyle, kind: Head, at: f32, toward: f32) -> f32 {
         if kind == Head::None || s.shape == HeadShape::Open {
             return 0.;
         }
@@ -547,7 +713,12 @@ impl Arrow {
             (DEFAULT.world(s.width_pt) * 0.5 * (s.head_length_pt / s.head_width_pt + 1.))
                 .min(length * 0.7)
         };
-        (inset / self.velocity(at).distance(Point::default()).max(0.0001)).min(span * 0.35)
+        if self.cubic.is_some() {
+            (self.cubic_inset(at, toward, inset, 0.35, 0.) - at).abs()
+        } else {
+            (inset / self.velocity(at).distance(Point::default()).max(0.0001))
+                .min((toward - at).abs() * 0.35)
+        }
     }
     fn shafts(
         &self,
@@ -558,17 +729,16 @@ impl Arrow {
     ) {
         let mut shaft = |from: f32, to: f32, offset: f32, head_kind: Head, tail_kind: Head| {
             let sign = (to - from).signum();
-            let span = (to - from).abs();
             let end_head = self.half_head(s, n, from, to, offset, head_kind);
             let start_head = self.half_head(s, n, to, from, offset, tail_kind);
             let start = start_head
                 .as_ref()
                 .map(|(_, at)| *at)
-                .unwrap_or_else(|| from + sign * self.head_trim(s, tail_kind, from, span));
+                .unwrap_or_else(|| from + sign * self.head_trim(s, tail_kind, from, to));
             let end = end_head
                 .as_ref()
                 .map(|(_, at)| *at)
-                .unwrap_or_else(|| to - sign * self.head_trim(s, head_kind, to, span));
+                .unwrap_or_else(|| to - sign * self.head_trim(s, head_kind, to, from));
             path(self.shaft_body(n, start, end, offset), false, false);
             if let Some((commands, _)) = end_head {
                 path(commands, true, true);
@@ -686,5 +856,7 @@ impl Arrow {
     }
 }
 
+#[cfg(test)]
+mod curve_tests;
 #[cfg(test)]
 mod paths_parity_tests;

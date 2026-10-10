@@ -191,6 +191,8 @@ impl App {
     /// Starts the front tab over as a new drawing. Late results for its old
     /// drawing meet a new epoch and revision.
     pub(super) fn reset_tab(&mut self) {
+        self.cancel_reference_stretch();
+        self.nmr_leave_tab();
         self.retire_assistant(self.tab.id);
         let old = std::mem::replace(&mut self.tab, DocumentTab::new(None));
         self.tab.id = old.id;
@@ -224,6 +226,9 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
+        self.tab.arrow_source = None;
+        self.cancel_reference_stretch();
+        self.nmr_leave_tab();
         self.pause_optimization();
         if self.style_menu.is_some() {
             self.close_style_menu();
@@ -239,6 +244,9 @@ impl App {
 
     fn enter_tab(&mut self) {
         self.sync_drawing_style_unit();
+        if self.nmr_enter_tab() {
+            return;
+        }
         if let Some(index) = self.tab.pages.fit {
             self.fit_pages(index);
         } else if self.tab.fit_to_view {
@@ -659,6 +667,7 @@ pub(super) fn document_result(message: &Message) -> bool {
         message,
         Message::EngineDone { .. }
             | Message::Optimization(super::optimization::Action::WorkerDone(..))
+            | Message::Nmr(super::nmr::Action::Finished(..) | super::nmr::Action::Exported(..))
             | Message::Exported(_)
             | Message::FigureExported(_)
             | Message::Printing(printing::Action::Prepared(..) | printing::Action::Finished(..))
@@ -684,7 +693,11 @@ fn export_result(
     format: &'static str,
 ) -> Task<Message> {
     match result {
-        Ok(response) => super::export_file(response.output.unwrap_or_default(), format),
+        Ok(response) => super::export_file(
+            response.output.unwrap_or_default(),
+            format,
+            response.warnings,
+        ),
         Err(_) => Task::none(),
     }
 }

@@ -6,6 +6,7 @@
     "output/**",
     "assets/**",
     "tests/fixtures/**",
+    "docs/reviews/mechanism-attachments/**",
     "vendor/usvg/**",
     "vendor/svg2pdf/**",
     "vendor/smithay-clipboard/**",

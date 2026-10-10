@@ -133,6 +133,7 @@ pub(crate) fn ring_stroke(
     else {
         return (stroke, Vec::new());
     };
+    let opacity = crate::rear_opacity::Paint::new(doc);
     let paths = flattened(commands);
     let bounds = commands.iter().flat_map(PathCommand::iter_points).fold(
         None::<(Point, Point)>,
@@ -218,6 +219,16 @@ pub(crate) fn ring_stroke(
             }
             (layer, index) > rank
         };
+        hits.retain(|(t, _)| {
+            if front(*t) {
+                opacity.bond(bond, *t) >= 1.
+            } else {
+                opacity.owned_at(doc, &ring.atoms, a.offset(ab.x * *t, ab.y * *t)) >= 1.
+            }
+        });
+        if hits.is_empty() {
+            continue;
+        }
         if hits.iter().all(|(t, _)| front(*t)) {
             *commands = cut_curve(
                 commands,

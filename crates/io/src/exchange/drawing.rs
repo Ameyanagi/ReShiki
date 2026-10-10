@@ -113,6 +113,8 @@ struct Writer<'a> {
 
 /// Serialize a complete drawing without mutating it. Reject unrepresentable
 /// appearances and ownership rather than detaching or flattening objects.
+/// Mechanism-arrow curves retain their resolved geometry; their optional editor
+/// links cannot be represented. Callers display `arrow_anchors::export_notice`.
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     write_impl(document, options, false, false)
 }
@@ -129,6 +131,11 @@ fn write_impl(
     preserve_drawing: bool,
     variable_labels: bool,
 ) -> Result<String> {
+    if crate::rear_opacity::present(document) {
+        return Err(invalid(
+            "CDXML/CDX cannot preserve rear opacity. Use native ReShiki for editable appearance or SVG, PDF or PNG for the figure. Set rear opacity to 100% for editable CDXML/CDX.",
+        ));
+    }
     let original = document;
     let depth_painted = crate::depth_appearance::materialize(document);
     let document = depth_painted.as_ref();
@@ -348,6 +355,9 @@ impl<'a> Writer<'a> {
             points.extend([P::from(a.start), P::from(a.end)]);
             if let Some(c) = a.control {
                 points.push(c.into());
+            }
+            if let Some([a, b]) = a.cubic {
+                points.extend([P::from(a), P::from(b)]);
             }
         }
         for g in &doc.graphics {

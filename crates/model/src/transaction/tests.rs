@@ -299,6 +299,7 @@ fn chemistry_changed_ignores_display_only_fields() {
                 .unwrap()
                 .marks
                 .push(crate::scientific::AtomMark {
+                    id: None,
                     kind: crate::scientific::MarkKind::Radical,
                     offset: Point::new(5., 5.),
                     angle: 0.,

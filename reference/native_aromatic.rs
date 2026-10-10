@@ -475,11 +475,13 @@ async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
         "Unserialized golden inputs"
     );
     for (name, expected) in &header.source_sha256 {
-        // Hash the original capture sources as the live template library and CDX
-        // codec evolve. Expected source hashes and worker responses stay pinned.
+        // Hash the original capture sources as the live template library and
+        // CDX/arrow exchange evolve. Expected hashes and worker responses stay pinned.
         let snapshot = match name.as_str() {
             "assets/templates.json" => Some("aromatic-template-inputs.json.gz"),
             "reference/engine/cdx_exchange.py" => Some("aromatic-cdx-exchange-source.py.gz"),
+            "reference/engine/arrows_exchange.py" => Some("aromatic-arrows-exchange-source.py.gz"),
+            "reference/engine/worker.py" => Some("aromatic-worker-source.py.gz"),
             _ => None,
         };
         let bytes = if let Some(snapshot) = snapshot {

@@ -1,0 +1,278 @@
+{
+  "schema": 1,
+  "feature": "Rear-side opacity, under review, follow-up to PR271",
+  "declared_base_branch": "fix/projected-double-bonds",
+  "declared_base_commit": "5dbe5d74e6e3c2c04f3a28cdf9ebc6a911eb3f88",
+  "compiled_source_commit": "7ec621227bc6fd777d5918efb9b8b6443c207d8e",
+  "compiled_source_tree": "65fbcf440e594c370a011f6ba8ca065d334cbd3f",
+  "compiled_source_input_count": 1069,
+  "compiled_source_sha256": "170c9870763cf80d23e0d70eee27f05bf49aa176eba413ca9bfacceda7ceb505",
+  "signed_executable_sha256": "4d35fe616bc9cb1388e4a6ec45312c65cc21aa6b67e42e17b077dd848fcc4043",
+  "own_fresh_false_artifact_count": 15,
+  "main_dependency_worktrees": [
+    "back-opacity"
+  ],
+  "public_JPEG_count": 6,
+  "public_native_save_count": 11,
+  "input_native_version": 19,
+  "output_native_version": 22,
+  "typed_before_sha256": "121280660ab89d7a53a7f0a336d5c23edc4c7a46e8dafe143443c9ff884a7d6e",
+  "capture_conditions": "macOS arm64;actual native CUA;2560x1704 JPEG;209% Fit;Light;Arial10/JACSACS;F8off;unselected wholeC60/60atoms90bonds;Properties expanded",
+  "capture_differences": [
+    "Initial before/100/25/0 drawing pose and zoom match; Properties contents/scroll, pointer, status and filename/save state differ.",
+    "Fresh reopens have different titles/tabcounts and are persistence examples, not matched screenshot geometry claims.",
+    "Two earlier incidental-UI fresh captures are retained privately outside this package."
+  ],
+  "data_scope": "All existing typed-native fields including every atom/bond field and180XYZ exact;100 onlyversion19to22;25/0 add automatic strength0 rear appearance;Undo/Redo/fresh/noop exact native bytes.",
+  "runtime_scope": "ROOT native GUI plus independent17 signedCLI/signature commands; focused compiled tests and strict workspace checks. No CI or Windows print/EMF runtime result claimed.",
+  "portable_checker": "scripts/verify_rear_opacity_evidence.py",
+  "files": {
+    "docs/images/rear-opacity/c60-before.jpg": {
+      "sha256": "4d3e9c01437239a1da2a239183a2b9313b7c86500ee3aacc39767b97b47af20e",
+      "bytes": 485244,
+      "original_source": "evidence/baseline/c60-rear-opacity-before.jpg",
+      "copied_byte_for_byte": true,
+      "encoding": "image/jpeg",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "visually_reviewed_at_displayed_size": true,
+      "no_crop_or_reencoding": true
+    },
+    "docs/images/rear-opacity/c60-rear-opacity-0-fresh-reopen-clean.jpg": {
+      "sha256": "941fa49ed008de90f4ffa6c33a4e1b49893a260f1f5b53d53909d962b77f3254",
+      "bytes": 425081,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-0-fresh-reopen-clean.jpg",
+      "copied_byte_for_byte": true,
+      "encoding": "image/jpeg",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "visually_reviewed_at_displayed_size": true,
+      "no_crop_or_reencoding": true
+    },
+    "docs/images/rear-opacity/c60-rear-opacity-0.jpg": {
+      "sha256": "5c524d1b49d41b6187408a8f43f5f409605eb23ef06b1f84d905f5a811d2f64b",
+      "bytes": 430942,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-0.jpg",
+      "copied_byte_for_byte": true,
+      "encoding": "image/jpeg",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "visually_reviewed_at_displayed_size": true,
+      "no_crop_or_reencoding": true
+    },
+    "docs/images/rear-opacity/c60-rear-opacity-100.jpg": {
+      "sha256": "45a0266aaa73965285b93695e67b63ffc19370f17b822ad51c9897d4b46c3573",
+      "bytes": 489992,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-100.jpg",
+      "copied_byte_for_byte": true,
+      "encoding": "image/jpeg",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "visually_reviewed_at_displayed_size": true,
+      "no_crop_or_reencoding": true
+    },
+    "docs/images/rear-opacity/c60-rear-opacity-25-fresh-reopen-clean.jpg": {
+      "sha256": "a0babb29a1ae5922373ae29ee0c55e8c66e609b1d00ad4a003a57d402d28b0ea",
+      "bytes": 454923,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-25-fresh-reopen-clean.jpg",
+      "copied_byte_for_byte": true,
+      "encoding": "image/jpeg",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "visually_reviewed_at_displayed_size": true,
+      "no_crop_or_reencoding": true
+    },
+    "docs/images/rear-opacity/c60-rear-opacity-25.jpg": {
+      "sha256": "0e9271896b43baed8d2cb737caa8d5b4c79c3df1636685122cdf0e55abcf658c",
+      "bytes": 454357,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-25.jpg",
+      "copied_byte_for_byte": true,
+      "encoding": "image/jpeg",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "visually_reviewed_at_displayed_size": true,
+      "no_crop_or_reencoding": true
+    },
+    "scripts/verify_rear_opacity_evidence.py": {
+      "sha256": "64819ed9a6cee5e78e8eb494d98b45b758d61f4774bb3758083d3ac191286e01",
+      "bytes": 8959,
+      "original_source": "rear-opacity-independent-desktop-w6jp2diy/verify_rear_opacity_evidence.py",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-0-fresh-reopen.rsk": {
+      "sha256": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "bytes": 46102,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-0-fresh-reopen.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-0-redo.rsk": {
+      "sha256": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "bytes": 46102,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-0-redo.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-0-undo.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-0-undo.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-0.rsk": {
+      "sha256": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "bytes": 46102,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-0.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-100.rsk": {
+      "sha256": "a2ea34712470ce645f4efa7386089d662001ce2a13ecd07c6d51982ebb5dc2ef",
+      "bytes": 43708,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-100.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-25-fresh-reopen.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-25-fresh-reopen.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-25-noop.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-25-noop.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-25-redo.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-25-redo.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-25-undo.rsk": {
+      "sha256": "a2ea34712470ce645f4efa7386089d662001ce2a13ecd07c6d51982ebb5dc2ef",
+      "bytes": 43708,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-25-undo.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103,
+      "original_source": "rear-opacity-evidence/desktop/c60-rear-opacity-25.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/c60-rear-opacity-before-desktop.rsk": {
+      "sha256": "121280660ab89d7a53a7f0a336d5c23edc4c7a46e8dafe143443c9ff884a7d6e",
+      "bytes": 43708,
+      "original_source": "rear-opacity-evidence/c60-rear-opacity-before-desktop.rsk",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/manual-desktop-capture.json": {
+      "sha256": "0441414cf15e5e56d925d6311555dee2aa412933c65166d70fc674be250a6efc",
+      "bytes": 5697,
+      "original_source": "rear-opacity-evidence/manual-desktop-capture.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/app-provenance.json": {
+      "sha256": "ed8c69008e7363f56322aad4e155fcfdbced982beb6e3a68ab71beb640a9a82d",
+      "bytes": 16172,
+      "original_source": "rear-opacity-evidence/final-app-provenance.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/before-desktop-capture.json": {
+      "sha256": "8deadf0e4cf08ae9ea94b98b6a69ee60baef01852212260ffc0b954197f7b4ae",
+      "bytes": 1842,
+      "original_source": "rear-opacity-evidence/before-desktop-capture.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/checker-negative-controls.json": {
+      "sha256": "f59a558451d7cea376dcb39897df5810a79ca4e23e45c620c2b5234212bbfe53",
+      "bytes": 519,
+      "original_source": "rear-opacity-independent-desktop-w6jp2diy/checker-negative-controls.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/commands.json": {
+      "sha256": "d174f1f02ca3e98cc4205b7c61c0255616291490071972f97fed7a1f469d6566",
+      "bytes": 11189,
+      "original_source": "rear-opacity-independent-desktop-w6jp2diy/commands.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/compiled-source.json": {
+      "sha256": "233af6a2edc32ca09d4954e57da51c3690de7292bf5157a9245360a57fa17538",
+      "bytes": 115414,
+      "original_source": "rear-opacity-evidence/final-build-source.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/export-pixel-samples.json": {
+      "sha256": "c3eebf6093b2323d385f4ca7efe85194b3cccd21331c952da814c3f3846c8952",
+      "bytes": 3673,
+      "original_source": "rear-opacity-independent-desktop-w6jp2diy/export-pixel-samples.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/final-native-state-ax.txt": {
+      "sha256": "6419d32eb08736e2775774f84e61d03b63948fba26c7d2fc1b7246a4c6adf19d",
+      "bytes": 4743,
+      "original_source": "rear-opacity-evidence/desktop/final-native-state-ax.txt",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/independent-desktop-verification.json": {
+      "sha256": "c4ebb0c2a2c0647e1f4804a59d2cab88bf2ca2687fea6e3669b25be8d836ec2a",
+      "bytes": 11241,
+      "original_source": "rear-opacity-independent-desktop-w6jp2diy/independent-desktop-verification.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/independent-desktop-verification.md": {
+      "sha256": "3961e7dadecaac9b62dcbc2172381f6eef4a0c03ce3075335ae5a71ad3900832",
+      "bytes": 3855,
+      "original_source": "rear-opacity-independent-desktop-w6jp2diy/independent-desktop-verification.md",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/native-export-audit.json": {
+      "sha256": "5785feeb9105fec8533c65001c46528541f18398ef9df0bdb1a4407a84cd8518",
+      "bytes": 2972,
+      "original_source": "rear-opacity-independent-desktop-w6jp2diy/native-export-audit.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/provenance.json": {
+      "sha256": "5b18194679381be75c896ab20b6e7134399010d26e63d34ee0f046e8433a84dc",
+      "bytes": 11322,
+      "original_source": "rear-opacity-independent-desktop-w6jp2diy/provenance.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/running-app-proof.json": {
+      "sha256": "c42f44809924f2c2b5b496a9727c8b30c5e52086d0a64417266c09d36cbf8fc4",
+      "bytes": 479,
+      "original_source": "rear-opacity-evidence/desktop/running-app-proof.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/signed-helper-depth.json": {
+      "sha256": "981a0e1b5081e4e05933cc60f7d22159a0663cce0b9466b2ee41d0b7f8fd45b8",
+      "bytes": 868,
+      "original_source": "rear-opacity-evidence/validation-final-signed-helper-depth.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/source-preservation.json": {
+      "sha256": "c474ae5077de28762a42629f73040a182d5042260e5d70a972e8af1c0c3bb20d",
+      "bytes": 929,
+      "original_source": "rear-opacity-evidence/final-protected-source-verification.json",
+      "copied_byte_for_byte": true
+    },
+    "tests/fixtures/rear-opacity/validation/validation-summary.json": {
+      "sha256": "c28474cece76cb60795e4c061e5504e7bbd46f8e79dbfcc8f85e7d47b79e16c9",
+      "bytes": 9014,
+      "original_source": "rear-opacity-evidence/validation-summary.json",
+      "copied_byte_for_byte": true
+    }
+  },
+  "license": "Original project screenshots, native fixtures and metadata/code/docs contributed under MIT OR Apache-2.0; no new third-party material."
+}

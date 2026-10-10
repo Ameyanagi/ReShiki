@@ -1,0 +1,43 @@
+
+running 17 tests
+test rear_opacity::visibility_tests::view_visibility_degenerate_cap_masks_never_restore_an_entire_hidden_bond ... ok
+test rear_opacity::visibility_tests::view_visibility_centered_double_rails_do_not_erase_managed_rear_ink ... ok
+test rear_opacity::visibility_tests::view_visibility_hidden_middle_is_split_without_fading_exposed_endpoints ... ok
+test rear_opacity::visibility_tests::view_visibility_open_chains_and_single_tilted_rings_do_not_invent_surfaces ... ok
+External cap foreground layer-1/alpha0: restored underlying alpha=255, expected=255
+External cap foreground layer-1/alpha0.25: restored underlying alpha=255, expected=255
+External cap foreground layer0/alpha0: restored underlying alpha=0, expected=0
+External cap foreground layer0/alpha0.25: restored underlying alpha=64, expected=64
+External cap foreground layer1/alpha0: restored underlying alpha=0, expected=0
+External cap foreground layer1/alpha0.25: restored underlying alpha=64, expected=64
+test rear_opacity::visibility_tests::view_visibility_external_foreground_clips_cap_without_hitting_rim_anchor ... ok
+Raw 17-degree atom41: triangle faces=[], ink owners=[[17, 27]], rim=true, finalalpha=1
+Compound ink alpha0, rim13-5 body probePoint { x: 24.840195, y: 100.95131 }: (positive contours,negative contours,winding)=[(0, 75, -1)]
+Compound ink alpha1, rim13-5 body probePoint { x: 24.840195, y: 100.95131 }: (positive contours,negative contours,winding)=[(0, 106, -1)]
+test rear_opacity::visibility_tests::view_visibility_exposed_miter_sectors_retain_opaque_compound_ink ... ok
+test rear_opacity::visibility_tests::view_visibility_freezing_rgb_keeps_settings_but_visibility_tracks_rotation ... ok
+test rear_opacity::visibility_tests::view_visibility_rim_exemption_does_not_leak_to_unrelated_foreground_ink ... ok
+C60: 7 exposed backbones with hidden inward rails; 48 visible inward rails
+C60: 7 exposed rails protected from their mildly warped support face
+test rear_opacity::visibility_tests::view_visibility_rotated_rim_first_failure_diagnostic ... ok
+test rear_opacity::visibility_tests::view_visibility_cages_keep_entire_rim_and_fade_hidden_interior ... ok
+C70: 5 exposed backbones with hidden inward rails; 47 visible inward rails
+C70: 6 exposed rails protected from their mildly warped support face
+test rear_opacity::visibility_tests::view_visibility_rim_backbone_and_inward_rail_have_independent_depth ... ok
+Rim endpoint Light/0: original=255, actual=255, targetbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }, originalbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }
+test rear_opacity::visibility_tests::view_visibility_query_budget_tracks_nonopaque_owners_and_independent_cages ... ok
+test rear_opacity::visibility_tests::view_visibility_budget_fallback_is_wholly_opaque_and_order_independent ... ok
+Rim endpoint Light/0.25: original=255, actual=255, targetbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }, originalbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }
+test rear_opacity::visibility_tests::view_visibility_validates_complete_mesh_and_rejects_partial_folded_or_duplicate_cages ... ok
+test rear_opacity::visibility_tests::view_visibility_shell_respects_external_and_own_explicit_bond_layers ... ok
+Rim endpoint Light/0.5: original=255, actual=255, targetbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }, originalbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }
+Rim endpoint Light/1: original=255, actual=255, targetbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }, originalbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }
+Rim endpoint Dark/0: original=255, actual=255, targetbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }, originalbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }
+Rim endpoint Dark/0.25: original=255, actual=255, targetbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }, originalbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }
+Rim endpoint Dark/0.5: original=255, actual=255, targetbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }, originalbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }
+Rim endpoint Dark/1: original=255, actual=255, targetbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }, originalbounds=Point { x: -116.143654, y: -113.03334 }/Point { x: 114.79475, y: 113.96788 }
+test rear_opacity::visibility_tests::view_visibility_rotations_are_live_and_opaque_output_is_exact ... ok
+test rear_opacity::visibility_tests::view_visibility_svg_raster_keeps_full_rim_stroke_and_real_hidden_alpha_on_both_themes ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 165 filtered out; finished in 6.99s
+

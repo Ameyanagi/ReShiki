@@ -56,6 +56,16 @@ impl MoleculeCanvas<'_> {
         if self.tool == Tool::Tilt {
             return self.press_tilt(state, p, point);
         }
+        if let Tool::StretchBond { fixed, moving } = self.tool {
+            if let Ok(plan) = reshiki::editing::reference::Stretch::new(self.doc, fixed, moving) {
+                let hit = hit_selection(self.doc, p, 10. / self.camera.zoom);
+                if hit.iter().any(|id| plan.ids.contains(id)) {
+                    state.gesture = Some(Gesture::StretchBond { start: p, plan });
+                    return Some(Action::publish(Edit::Hover(None)).and_capture());
+                }
+            }
+            return Some(Action::request_redraw().and_capture());
+        }
         if let Some(action) = self.press_arrow_handle(state, p) {
             return Some(action);
         }
@@ -115,11 +125,7 @@ impl MoleculeCanvas<'_> {
                 .iter()
                 .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
             {
-                if let Some(index) = a
-                    .handles()
-                    .iter()
-                    .position(|q| q.distance(p) < 8.0 / self.camera.zoom)
-                {
+                if let Some(index) = a.handle_at(p, 8.0 / self.camera.zoom) {
                     state.gesture = Some(Gesture::ArrowHandle { id: a.id, index });
                     return Some(Action::request_redraw().and_capture());
                 }
@@ -175,6 +181,22 @@ impl MoleculeCanvas<'_> {
                 .iter()
                 .filter(|g| self.selected.contains(&g.id))
             {
+                if let Some(handles) = g.path_handles() {
+                    if let Some(handle) = handles
+                        .into_iter()
+                        .filter(|h| h.point.distance(p) < 8. / self.camera.zoom)
+                        .min_by(|a, b| a.point.distance(p).total_cmp(&b.point.distance(p)))
+                    {
+                        state.gesture = Some(Gesture::PathPoint(crate::canvas::pen::PointDrag {
+                            id: g.id,
+                            index: handle.index,
+                            pressed: p,
+                            original: handle.point,
+                        }));
+                        return Some(Action::request_redraw().and_capture());
+                    }
+                    continue;
+                }
                 let points = g.edit_points();
                 let hit = |q: &World| q.distance(p) < 8.0 / self.camera.zoom;
                 let index = if g.kind == GraphicKind::Arc {

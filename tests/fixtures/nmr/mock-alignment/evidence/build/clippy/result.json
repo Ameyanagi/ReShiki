@@ -1,0 +1,22 @@
+{
+  "utc": "2026-10-10T02:07:59.510945+00:00",
+  "exit_code": 0,
+  "commands": [
+    [
+      "cargo",
+      "clippy",
+      "--locked",
+      "-p",
+      "reshiki",
+      "--all-targets",
+      "--all-features",
+      "--",
+      "-D",
+      "warnings"
+    ]
+  ],
+  "source_manifest_sha256": "30dba3b57746dc1cec7a16ff4aa95c34a6a1d0c6139282b0f11a2c9ee9bbad14",
+  "logs": {
+    "check-1.log": "29577f37e4aac482e747b0bcbcd8059d098ac308d4eb65f7717ca218cfc6ad38"
+  }
+}

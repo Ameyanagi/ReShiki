@@ -15,6 +15,7 @@ fn drawing(kind: GraphicKind) -> Drawing {
         phase: Phase::Solid,
         flipped: false,
         attach: true,
+        snap_orbitals: true,
     }
 }
 
@@ -248,4 +249,248 @@ async fn palette_colored_orbitals_export_as_shown_on_the_dark_canvas() {
             .iter()
             .all(|g| g.style.stroke == Color::Custom(blue))
     );
+}
+
+fn vector_fill_at(commands: &[reshiki::graphics::PathCommand], point: Point) -> bool {
+    reshiki::graphics::flattened(commands).iter().any(|path| {
+        let mut inside = false;
+        for (a, b) in path
+            .iter()
+            .zip(path.iter().cycle().skip(1))
+            .take(path.len())
+        {
+            if (a.y > point.y) != (b.y > point.y)
+                && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x
+            {
+                inside = !inside;
+            }
+        }
+        inside
+    })
+}
+
+#[tokio::test]
+async fn orbital_label_clearance_survives_editable_vector_exchange() {
+    let engine = LocalEngine::default();
+    let source = engine
+        .request(Request::import_smiles("C[15NH3+]"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let n = source
+        .atoms
+        .iter()
+        .find(|atom| atom.element == "N")
+        .unwrap()
+        .id;
+    let center = source.atom(n).unwrap().position;
+    for phase in Phase::ALL {
+        for format in ["cdxml", "cdx"] {
+            let mut doc = source.clone();
+            let mut tool = drawing(GraphicKind::Orbital(OrbitalKind::S));
+            tool.phase = *phase;
+            tool.place(&mut doc, center, center.offset(0., -42.), false, 10.)
+                .unwrap();
+            doc.graphics[0].layer = 1;
+            let before = doc.clone();
+            let mut request = Request::molecule("export", doc.clone());
+            request.format = Some(format.into());
+            let exported = engine.request(request).await.unwrap().output.unwrap();
+            let imported = engine
+                .request(Request::import(format, &exported))
+                .await
+                .unwrap()
+                .document
+                .unwrap();
+            let imported_n = imported
+                .atoms
+                .iter()
+                .find(|atom| atom.element == "N")
+                .unwrap();
+            assert_eq!(imported_n.charge, 1);
+            assert_eq!(imported_n.isotope, 15);
+            assert!(!imported.graphics.is_empty());
+            assert_eq!(
+                imported
+                    .graphics
+                    .iter()
+                    .flat_map(|graphic| graphic.parts())
+                    .any(|part| part.filled),
+                *phase != Phase::Open,
+                "Exchange must retain the outline versus filled phase",
+            );
+            for graphic in &imported.graphics {
+                for part in graphic.parts().iter().filter(|part| part.filled) {
+                    assert!(
+                        !vector_fill_at(&part.commands, imported_n.position),
+                        "{phase:?}/{format} orbital fill must retain a transparent gap at N"
+                    );
+                }
+            }
+            assert_eq!(
+                doc, before,
+                "Preparing exports must not move atoms or orbital frames"
+            );
+            assert!(reshiki::scene::svg(&imported).contains("<text"));
+            assert!(
+                reshiki::export::drawing(&doc, "pdf")
+                    .unwrap()
+                    .starts_with(b"%PDF")
+            );
+            assert!(
+                reshiki::export::clipboard_png(&doc)
+                    .unwrap()
+                    .starts_with(b"\x89PNG")
+            );
+        }
+    }
+}
+
+const REAR_ORBITAL_COLOR: reshiki::palette::Color = reshiki::palette::Color::Custom([27, 103, 191]);
+
+fn rear_orbital_fixture() -> (Document, u64) {
+    let mut doc = Document::from_native_file(include_bytes!(
+        "fixtures/rear-opacity/c60-rear-opacity-25.rsk"
+    ))
+    .unwrap();
+    assert_eq!((doc.atoms.len(), doc.bonds.len()), (60, 90));
+    let original = doc.clone();
+    let ids = doc.all_ids();
+    reshiki::depth_appearance::set_rear_opacity(&mut doc, &ids, 0.).unwrap();
+    let paint = reshiki::rear_opacity::Paint::new(&doc);
+    let hidden = doc
+        .atoms
+        .iter()
+        .find(|atom| paint.atom(atom.id) == 0.)
+        .expect("The authentic cage must have an occluded rear atom")
+        .id;
+    doc.atom_mut(hidden).unwrap().display.carbons = Some(reshiki::atom_labels::Carbons::All);
+    let center = doc.atom(hidden).unwrap().position;
+    let mut tool = drawing(GraphicKind::Orbital(OrbitalKind::S));
+    tool.snap_orbitals = false;
+    tool.style.stroke = REAR_ORBITAL_COLOR;
+    tool.place(&mut doc, center, center.offset(0., -42.), false, 10.)
+        .unwrap();
+    assert_eq!(reshiki::rear_opacity::Paint::new(&doc).atom(hidden), 0.);
+    assert_eq!(doc.bonds, original.bonds);
+    assert!(!reshiki::transaction::chemistry_changed(&original, &doc));
+    doc.validate().unwrap();
+    (doc, hidden)
+}
+
+fn rear_orbital_scene_paths(doc: &Document) -> Vec<(Vec<reshiki::graphics::PathCommand>, bool)> {
+    reshiki::scene::primitives(doc)
+        .into_iter()
+        .filter_map(|primitive| match primitive {
+            reshiki::scene::Primitive::Path {
+                commands,
+                style,
+                filled,
+            } if style.stroke == REAR_ORBITAL_COLOR => Some((commands, filled)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn composed_rear_atom_label_clears_orbital_ink_only_when_it_is_painted() {
+    let (source, hidden) = rear_orbital_fixture();
+    let center = source.atom(hidden).unwrap().position;
+    let raw: Vec<_> = source
+        .graphics
+        .first()
+        .unwrap()
+        .parts()
+        .into_iter()
+        .map(|part| (part.commands, part.filled))
+        .collect();
+    assert!(
+        raw.iter()
+            .any(|(path, fill)| *fill && vector_fill_at(path, center))
+    );
+    for alpha in [0., 0.25, 1.] {
+        let mut doc = source.clone();
+        let ids: Vec<_> = doc.atoms.iter().map(|atom| atom.id).collect();
+        reshiki::depth_appearance::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
+        assert_eq!(reshiki::rear_opacity::Paint::new(&doc).atom(hidden), alpha);
+        let before = doc.clone();
+        let paths = rear_orbital_scene_paths(&doc);
+        assert!(!paths.is_empty(), "Must observe actual orbital scene ink");
+        let fill_at = |point| {
+            paths
+                .iter()
+                .any(|(path, fill)| *fill && vector_fill_at(path, point))
+        };
+        assert_eq!(fill_at(center), alpha == 0., "Rear label alpha {alpha}");
+        assert!(
+            fill_at(center.offset(20., 0.)),
+            "Clearance must not erase the orbital"
+        );
+        if alpha == 0. {
+            assert_eq!(
+                paths, raw,
+                "An invisible label must leave the original vectors exact"
+            );
+        }
+        let svg = reshiki::scene::svg(&doc);
+        assert_eq!(svg.contains(">C</text>"), alpha > 0.);
+        assert_eq!(
+            reshiki::export::clipboard_drawing(&doc, "svg").unwrap(),
+            svg.as_bytes(),
+            "The public figure route must retain these exact scene vectors"
+        );
+        assert_eq!(
+            doc, before,
+            "Rendering must not mutate chemistry or orbital frames"
+        );
+        assert_eq!(doc.atoms, source.atoms);
+        assert_eq!(doc.bonds, source.bonds);
+        assert_eq!(doc.graphics, source.graphics);
+        let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+        assert_eq!(reopened, doc.current());
+    }
+}
+
+#[test]
+fn composed_rear_orbital_editable_copy_restores_labels_and_matches_opaque_export() {
+    let (source, hidden) = rear_orbital_fixture();
+    for alpha in [0., 0.25] {
+        let mut doc = source.clone();
+        let ids: Vec<_> = doc.atoms.iter().map(|atom| atom.id).collect();
+        reshiki::depth_appearance::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
+        let before = doc.clone();
+        let request = Request::molecule("export", doc.clone());
+        let error = reshiki::exchange::drawing::write(&doc, (&request).into())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("rear opacity") && error.contains("100%"));
+        let (copied, notices) = reshiki::exchange::drawing::write_clipboard(&doc).unwrap();
+        assert!(
+            notices
+                .iter()
+                .any(|notice| notice.contains("omits rear opacity"))
+        );
+        let mut opaque = doc.clone();
+        reshiki::depth_appearance::set_rear_opacity(&mut opaque, &ids, 1.).unwrap();
+        let request = Request::molecule("export", opaque.clone());
+        let reference = reshiki::exchange::drawing::write(&opaque, (&request).into()).unwrap();
+        assert_eq!(
+            copied, reference,
+            "Editable copy must use the restored-label geometry"
+        );
+        assert!(copied.contains(">C</s>") && copied.contains("<curve"));
+        let center = opaque.atom(hidden).unwrap().position;
+        let paths = rear_orbital_scene_paths(&opaque);
+        assert!(paths.iter().any(|(_, fill)| *fill));
+        assert!(
+            !paths
+                .iter()
+                .any(|(path, fill)| *fill && vector_fill_at(path, center))
+        );
+        assert_eq!(
+            doc, before,
+            "The lossy external copy must leave the native source exact"
+        );
+    }
 }

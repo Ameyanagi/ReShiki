@@ -37,11 +37,14 @@ fn geometry() -> Document {
     });
     doc.annotations[0].format.style.underline = true;
     doc.arrows.push(Arrow {
+        start_anchor: None,
+        end_anchor: None,
         id: doc.next_id(),
         start: Point::new(130., 130.),
         end: Point::new(260., 130.),
         kind: "forward".into(),
         control: Some(Point::new(160., 240.)),
+        cubic: None,
         style: None,
     });
     doc.graphics.push(Graphic::dragged(

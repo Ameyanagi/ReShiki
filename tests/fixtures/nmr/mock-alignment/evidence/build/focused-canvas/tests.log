@@ -1,0 +1,18 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-ba50b1304e6a1bdf)
+
+running 9 tests
+test canvas::nmr::tests::actual_nmr_selection_is_a_filled_halo_and_ordinary_selection_is_unchanged ... ok
+test canvas::nmr::tests::assignment_ink_is_legible_on_light_and_dark_pages_and_independent_of_chrome ... ok
+test canvas::nmr::tests::assignment_numbers_use_original_atoms_and_avoid_fixture_symbols_and_each_other ... ok
+test canvas::nmr::tests::collapsed_assignments_retain_original_owners_at_the_visible_group_anchor ... ok
+test canvas::nmr::tests::crowded_label_uses_a_leader_only_when_displaced_from_its_real_owner ... ok
+test canvas::nmr::tests::missing_or_nonfinite_predictions_do_not_gain_labels_or_selected_halos ... ok
+test canvas::nmr::tests::offscreen_owners_do_not_leave_clamped_labels_on_empty_canvas ... ok
+test canvas::nmr::tests::proton_assignments_name_the_parent_and_unresolved_group_not_individual_protons ... ok
+test canvas::nmr::tests::shift_and_combined_modes_follow_moved_atom_without_changing_predictions_or_export ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 683 filtered out; finished in 15.81s
+

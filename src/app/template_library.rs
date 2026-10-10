@@ -774,7 +774,10 @@ impl App {
                         tokio::task::spawn_blocking(move || library.save(&target))
                             .await
                             .map_err(|e| e.to_string())??;
-                        Ok(Some(path))
+                        Ok(Some(super::figure_export::Saved {
+                            path,
+                            details: vec![],
+                        }))
                     },
                     Message::Exported,
                 ))

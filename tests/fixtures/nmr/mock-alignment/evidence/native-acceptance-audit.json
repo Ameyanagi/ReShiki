@@ -1,0 +1,439 @@
+{
+  "status": "PASS",
+  "started_utc": "2026-10-10T02:34:34.620597+00:00",
+  "finished_utc": "2026-10-10T02:34:35.318741+00:00",
+  "scope": "Independent read-only audit of ROOT native receipt/captures/files; no new GUI interactions, Cargo, target reads, Git, source mutation or delegation",
+  "root_native_receipt": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-native-review/final-native-acceptance.json",
+    "sha256": "e52a806cbc012e31648d511af66c500fa81b37d612b83208084fa6a09d5dc964"
+  },
+  "verified_referenced_file_count": 41,
+  "raw_captures": [
+    {
+      "name": "after-carbon13-both-labels-160-percent.jpg",
+      "bytes": 341156,
+      "sha256": "1327d599a8d800931d9b20d2cc8dade9d7041bd9ae17b3f8fde0cc7cf944574f",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "3bf0fba261e44dce10fb21713b5c88e9251ca1e7312c35af8f32628dcd74196e",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-corner-resize-160-percent.jpg",
+      "bytes": 341433,
+      "sha256": "4be6016b644a53d30ea1792feeaaa05e75b75e2d2b1c0fd258341df62df628b7",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "3f4b309b99089222ca8a2261e47511c63947c5c1c99c1d93f0e7d63795c76d02",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-default-160-percent-atom-labels-keyboard-off.jpg",
+      "bytes": 333009,
+      "sha256": "29f1009404a4a9e0be5ba5cba8e6bba6193e5b090df1ea9f2484f21811b70a9e",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "3f4b309b99089222ca8a2261e47511c63947c5c1c99c1d93f0e7d63795c76d02",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-default-250-percent-atom-labels-keyboard-off.jpg",
+      "bytes": 341248,
+      "sha256": "b9035cefb1f1f6e193194a7a55bc7a0796b9213c49dffe44d699f493cf880a96",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "3f4b309b99089222ca8a2261e47511c63947c5c1c99c1d93f0e7d63795c76d02",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-details-160-percent.jpg",
+      "bytes": 352953,
+      "sha256": "ed56af26622725d313484b890522134d602aff0ccb48d220b9728e0a5c52cc01",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "5200c6348cd5e712587cd2904a263d95967ffe8117d0cc73342a53812176aced",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-details-controls-160-percent.jpg",
+      "bytes": 402330,
+      "sha256": "b170863195dbe1a6c5d20f31db92c1dbd01dc2b620cda6b5966c9496df3f5cef",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "f9d1cc18a3c05487d214dedaf9a6eccca08f8553a71f55e9805913995c7387ed",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-details-method-scrolled-160-percent.jpg",
+      "bytes": 470498,
+      "sha256": "48730b803f728dead62a6e2ec81a3f9e4697f8f5ea7162fd117973439580023b",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "bea086b9dd72538165c332c91070e03573bad2ac312323f26d14ed7f7e0acbb0",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-docked-160-percent.jpg",
+      "bytes": 314587,
+      "sha256": "a311a19d2479ac5fedf2794e066da4ee6a3b20f2f7ac787f5ce3f2b272daef02",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "723473877fa662aa1866418c72f6b09365fd3d0943ad23c8172b4dee3613fd8e",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-final-saved-160-percent.jpg",
+      "bytes": 327663,
+      "sha256": "bd1862fae2fd881364ab2136800ccfbfbe7345a7a743edc95e9732611d417061",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "ec32909b4f9588fe94c9bfb0ad385bea4e7f3453fc3c61a7ad757692b8b30c65",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-labels-off-160-percent.jpg",
+      "bytes": 327677,
+      "sha256": "1ec769cb1e495b479dda3b135c33e6e5e8f86da665b6802dc08932e882025d6a",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "5164799549b613256fc457f09720ce28545b0c66c364f681c2dab44cb3fc3d1e",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-plot-linked-selection-160-percent.jpg",
+      "bytes": 332468,
+      "sha256": "d0f601ac6f6693f7833b922df49b50ab43a66033517c47afcfc15b14d1de8f97",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "9593d6a5160dbb149e74b2b0ec5ce3160a197df85c907b87da4d0b630a8949cf",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-ppm-labels-160-percent.jpg",
+      "bytes": 338337,
+      "sha256": "e36f182f6c4e8e6c93c90b9857e185a8c3ad3846a60d647264891982b03afdde",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "c9ea50189b4b3e52c7eb84e28668d4e7c6dd805b96fac317fcb974837aaa74ea",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-reset-position-160-percent.jpg",
+      "bytes": 329060,
+      "sha256": "f7c6e6a0bf5ed7ad40649c7492f20a4900c9f17ec4f8ab189464fa8ec6c812eb",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "3f4b309b99089222ca8a2261e47511c63947c5c1c99c1d93f0e7d63795c76d02",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-carbon13-title-drag-160-percent.jpg",
+      "bytes": 345803,
+      "sha256": "5bfb97e56539735d180f94054586e9129a4b51db00c3a82ba529134c3eaf69e8",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "3f4b309b99089222ca8a2261e47511c63947c5c1c99c1d93f0e7d63795c76d02",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    },
+    {
+      "name": "after-proton-floating-atom-labels-160-percent.jpg",
+      "bytes": 330427,
+      "sha256": "361412f16d0a608ead257f4d3ad899ffb7071a31c384fac934d81a5073a0fb76",
+      "dimensions": [
+        2560,
+        1704
+      ],
+      "ax_sha256": "9accc28473c49ada2aa804f4e1eeec264faf0bfb85ab8ac5b1e792ec3343bb1e",
+      "undo_redo_disabled_in_capture": true,
+      "visually_inspected": true
+    }
+  ],
+  "approved_mock": {
+    "path": "/Users/ryuichi/dev/ReShiki/.coordination/nmr-ui-concepts-20261010/final/NMR-final-labels.png",
+    "sha256": "d7d9b6bd55339eefd2dcb0c8a8bc9e1e72161db598d22a7d9fdb07a1eef4a2a3",
+    "bytes": 1592068
+  },
+  "mock_visual_findings": [
+    "Native title/Dock/nucleus tabs/real checkbox/format selector/shift plot/ruled table/footer follow approved hierarchy.",
+    "All four plain teal atom labels and pale teal selected halo are visible. Default160 and250 leave the complete controlled molecule clear.",
+    "Default, resized and docked captures show all four complete13C rows and four actual-position/equal-height teal sticks; close #5/#1 labels use separate lanes.",
+    "Mock is a visual concept; actual frame sizes, molecule scale, inspector-overlap placement and numeric-axis tick spacing are not claimed pixel-identical."
+  ],
+  "accessibility_checks": {
+    "all15_undo_redo_disabled": true,
+    "carbon_values_ppm": {
+      "1": "14.200",
+      "2": "61.050",
+      "4": "170.700",
+      "5": "20.900"
+    },
+    "selected2_default_and_after_gestures": true,
+    "plot_link_selected4_marker_and_row": true,
+    "label_modes": [
+      "Atom numbers",
+      "ppm",
+      "Both",
+      "Off with disabled selector"
+    ],
+    "dock_and_later_floating_controls_verified": true,
+    "details_reset_control_present": true,
+    "proton_values_and_unresolved_H_group_counts": {
+      "1": [
+        "1.280",
+        3
+      ],
+      "2": [
+        "4.160",
+        2
+      ],
+      "5": [
+        "2.095",
+        3
+      ]
+    }
+  },
+  "camera_evidence": {
+    "method": "Fixed raw region [700,820,1310,1170], pixel max(R,G,B)<65; excludes teal labels/halos and panel; no image edits",
+    "before_ink_pixels": 5952,
+    "after_ink_pixels": 5964,
+    "before_ink_bbox": [
+      772,
+      861,
+      1235,
+      1133
+    ],
+    "after_ink_bbox": [
+      771,
+      861,
+      1237,
+      1133
+    ],
+    "intersection_over_union": 0.997652975691534,
+    "primary_visual_conclusion": "Same molecule position and scale at visible160%; not a pixel-identical image claim",
+    "gesture_frame_agreement": {
+      "after-carbon13-title-drag-160-percent.jpg": {
+        "identical_black_ink_mask_to_final_default": true,
+        "bbox": [
+          771,
+          861,
+          1237,
+          1133
+        ]
+      },
+      "after-carbon13-corner-resize-160-percent.jpg": {
+        "identical_black_ink_mask_to_final_default": true,
+        "bbox": [
+          771,
+          861,
+          1237,
+          1133
+        ]
+      },
+      "after-carbon13-reset-position-160-percent.jpg": {
+        "identical_black_ink_mask_to_final_default": true,
+        "bbox": [
+          771,
+          861,
+          1237,
+          1133
+        ]
+      },
+      "after-carbon13-docked-160-percent.jpg": {
+        "identical_black_ink_mask_to_final_default": true,
+        "bbox": [
+          771,
+          861,
+          1237,
+          1133
+        ]
+      }
+    }
+  },
+  "halo_native_JPEG_samples": {
+    "samples": [
+      {
+        "xy": [
+          884,
+          1019
+        ],
+        "rgb": [
+          214,
+          241,
+          236
+        ]
+      },
+      {
+        "xy": [
+          887,
+          1018
+        ],
+        "rgb": [
+          212,
+          241,
+          236
+        ]
+      },
+      {
+        "xy": [
+          890,
+          1019
+        ],
+        "rgb": [
+          214,
+          241,
+          236
+        ]
+      },
+      {
+        "xy": [
+          887,
+          1021
+        ],
+        "rgb": [
+          215,
+          240,
+          236
+        ]
+      }
+    ],
+    "interpretation": "Pale teal visible above selected atom2; JPEG samples are not asserted equal to uncompressed renderer color."
+  },
+  "save_export": {
+    "native_bytes": 3377,
+    "native_sha256": "08978db95416b8f58df2d8b12cbe949328327c8ddc0d0a75c7e32668e0f14cca",
+    "whole_input_bytes_equal": true,
+    "native_version": 19,
+    "atoms": 6,
+    "bonds": 5,
+    "TSV_bytes": 1322,
+    "TSV_sha256": "23464aba142911f3fb3c635069f4bc8f2a8c0028934c6925d3065c036058b876",
+    "TSV_entire_fixture_bytes_equal": true,
+    "TSV_rows": [
+      {
+        "Atom ID": "1",
+        "H count": "",
+        "Predicted ppm": "14.200",
+        "Sphere radius": "3",
+        "Reference molecules": "58",
+        "Observed SD ppm": "0.504",
+        "Observed min ppm": "12.400",
+        "Observed max ppm": "16.927",
+        "Limitations": ""
+      },
+      {
+        "Atom ID": "2",
+        "H count": "",
+        "Predicted ppm": "61.050",
+        "Sphere radius": "2",
+        "Reference molecules": "58",
+        "Observed SD ppm": "1.444",
+        "Observed min ppm": "57.100",
+        "Observed max ppm": "65.900",
+        "Limitations": ""
+      },
+      {
+        "Atom ID": "4",
+        "H count": "",
+        "Predicted ppm": "170.700",
+        "Sphere radius": "2",
+        "Reference molecules": "28",
+        "Observed SD ppm": "1.254",
+        "Observed min ppm": "167.070",
+        "Observed max ppm": "175.100",
+        "Limitations": ""
+      },
+      {
+        "Atom ID": "5",
+        "H count": "",
+        "Predicted ppm": "20.900",
+        "Sphere radius": "3",
+        "Reference molecules": "28",
+        "Observed SD ppm": "1.005",
+        "Observed min ppm": "19.550",
+        "Observed max ppm": "25.800",
+        "Limitations": ""
+      }
+    ]
+  },
+  "artifact_process_bridge": {
+    "app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app",
+    "signed_sha256": "f35b6519387059084e658fbf1b0ee9e205b14f01f6ee5f0eb644b20a85aa8851",
+    "raw_hash_linked_to_prior_independent_artifact_receipt": "59c1d3a8db32f74530e7acb1d82e027152ed33844b6a236bcbc4fb31579dbb2d",
+    "all9_bundle_bytes_match_prior_provenance": true,
+    "live_ps_command": [
+      "ps",
+      "-p",
+      "91389",
+      "-o",
+      "pid=,ppid=,lstart=,command="
+    ],
+    "live_ps_stdout": "91389     1 Sat Oct 10 11:14:05 2026     /Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app/Contents/MacOS/reshiki\n",
+    "live_ps_stderr": "",
+    "observation_utc": "2026-10-10T02:34:35.428407+00:00",
+    "timing_scope": "Live process observation after captures supports retained ROOT process binding; no independent replay of GUI actions."
+  },
+  "current_shipping_check": {
+    "frozen_manifest_sha256": "30dba3b57746dc1cec7a16ff4aa95c34a6a1d0c6139282b0f11a2c9ee9bbad14",
+    "frozen_paths_checked": 2592,
+    "observed_existing_path_deltas": [],
+    "all_frozen_shipping_paths_match": true,
+    "new_document_additions_not_enumerated": true
+  },
+  "limitations": [
+    "No J prediction, multiplet/intensity/integration or second-order simulated spectrum",
+    "Generated mock is visual design reference, not chemical/native evidence",
+    "No claim that right-edge default clears every arbitrary drawing or molecule",
+    "No clipboard readback and no ordinary SVG/PDF figure export in this final native session; corresponding source tests are separate",
+    "No final native minimum-window, dense512-site, stale-response or cross-tab geometry scenario claim; meaningful42 actual automated cases cover their stated scopes",
+    "Native app is a development ad-hoc signed debug build, not notarized",
+    "Public documentation/evidence/CI edits and normal hooks/publication are pending and must preserve all shipping inputs",
+    "Independent audit inspects endpoints of ROOT actions, raw AX, saved bytes and live process; it does not independently perform or reconstruct every pointer event.",
+    "Undo/Redo disabled is observed in every AX snapshot; combined whole-file equality supports no serialized document change, not a claim about every transient internal state.",
+    "Expanded/scrolled Details captures intentionally show viewport-clipped rows; four complete rows are confirmed for default/resized/docked states, not every scroll position.",
+    "Recovery-draft footer and pointer highlights remain in original raw captures; no cleanup, crop, resize or fabricated comparison was performed.",
+    "No separate final native dark-theme acceptance is claimed by these light-theme captures; automated renderer tests are separate evidence."
+  ],
+  "remaining_blockers": []
+}

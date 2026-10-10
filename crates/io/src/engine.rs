@@ -71,7 +71,8 @@ impl Request {
                 }
                 color => color,
             };
-            crate::canvas_theme::canonical_document(&document)
+            let canonical = crate::canvas_theme::canonical_document(&document);
+            canonical
                 .graphics
                 .iter()
                 .filter(|g| {
@@ -82,7 +83,11 @@ impl Request {
                     )
                 })
                 .map(|g| {
-                    let mut parts = g.parts();
+                    let mut parts = if matches!(g.kind, crate::graphics::GraphicKind::Orbital(_)) {
+                        crate::scientific::orbital_parts_with_label_clearance(g, &canonical)
+                    } else {
+                        g.parts()
+                    };
                     for part in &mut parts {
                         part.style.stroke = shown(part.style.stroke);
                         part.style.fill = part.style.fill.map(shown);
@@ -311,6 +316,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             let reaction_smiles = format == "rsmi";
             use crate::chemistry::reaction;
             let document = request.document.take().ok_or("Missing reaction drawing")?;
+            let opacity = crate::rear_opacity::present(&document);
             let selected = request.selected_ids.take();
             let output = tokio::task::spawn_blocking(move || {
                 if reaction_smiles {
@@ -328,7 +334,13 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
                         analysis: None,
                         output: Some(output),
                         engine_version: crate::chemistry::RDKIT_VERSION.into(),
-                        warnings: vec![reaction::EXPORT_WARNING.into()],
+                        warnings: {
+                            let mut warnings = vec![reaction::EXPORT_WARNING.into()];
+                            if opacity {
+                                warnings.push(crate::rear_opacity::EXPORT_NOTICE.into());
+                            }
+                            warnings
+                        },
                     });
                 }
                 Err(error) => return Err(error.to_string()),

@@ -1,0 +1,49 @@
+{
+  "audit": {
+    "independent_connectivity_groups": 1943,
+    "observations": 28754,
+    "records": 58187,
+    "rejected_assignments": 2,
+    "rejected_calculated": 8417,
+    "rejected_chemistry": 171,
+    "rejected_conditions": 50403,
+    "selected_spectra": 2444
+  },
+  "conditions": "CDCl3; recorded temperature 273–323 K, pooled without temperature/concentration correction",
+  "encoder": "reshiki-hose-v1",
+  "interpretation": "Held-out experimental parent-site group medians from the same source release; not an independent acquisition cohort. Spread is not calibrated uncertainty. The released index uses all accepted molecules after held-out evaluation.",
+  "source_sha256": "0e86688360e23c88ccf0eb82a1251315fa57ec6f5b376dc8886f3311793a0afe",
+  "split": "SHA256(InChI connectivity block) first hex character byte modulo 5 = 0 held out; duplicates/stereoisomers grouped",
+  "validation": [
+    {
+      "coverage": 0.9252971137521222,
+      "mae": 0.3065213302752293,
+      "median_absolute_error": 0.1625000000000001,
+      "molecules": 126,
+      "nucleus": "H1",
+      "predicted_groups": 545,
+      "radius_counts": {
+        "2": 244,
+        "3": 171,
+        "4": 130
+      },
+      "rmse": 0.5156228251081627,
+      "target_groups": 589
+    },
+    {
+      "coverage": 0.6021828103683492,
+      "mae": 2.046579882193019,
+      "median_absolute_error": 1.0,
+      "molecules": 309,
+      "nucleus": "C13",
+      "predicted_groups": 2207,
+      "radius_counts": {
+        "2": 1179,
+        "3": 523,
+        "4": 505
+      },
+      "rmse": 3.521431358798393,
+      "target_groups": 3665
+    }
+  ]
+}

@@ -10,6 +10,7 @@ use reshiki::{
 };
 
 mod focus;
+mod reference;
 
 #[cfg(test)]
 mod memory_tests;
@@ -89,6 +90,7 @@ impl Field {
 
 #[derive(Debug, Clone)]
 pub enum Action {
+    Reference(reference::Action),
     Input(Field, String),
     /// Enter in one field applies only that field.
     Apply(Field),
@@ -106,6 +108,7 @@ struct Key {
 }
 
 pub(super) struct State {
+    reference: reference::State,
     key: Option<Key>,
     rotation: String,
     tilt_x: String,
@@ -124,6 +127,7 @@ pub(super) struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
+            reference: Default::default(),
             key: None,
             rotation: "0".into(),
             tilt_x: "0".into(),
@@ -403,6 +407,14 @@ impl App {
     }
 
     pub(super) fn sync_numeric_transforms(&mut self) {
+        if self
+            .tab
+            .numeric_transforms
+            .reference
+            .stale_stretch(self.tab.file_epoch)
+        {
+            self.cancel_reference_stretch();
+        }
         let key = Key {
             revision: self.tab.revision,
             epoch: self.tab.file_epoch,
@@ -415,13 +427,18 @@ impl App {
             proportional,
             last_size,
             more,
+            ref mut reference,
             ..
         } = self.tab.numeric_transforms;
+        // A pinned point is tab-local and survives selection changes and edits.
+        // Opening another file must not inherit an unrelated construction center.
+        let reference = reference.take_for_epoch(self.tab.file_epoch);
         self.tab.numeric_transforms = State {
             key: Some(key),
             proportional,
             last_size,
             more,
+            reference,
             ..State::default()
         };
         self.refresh_numeric_dimensions();
@@ -487,6 +504,7 @@ impl App {
 
     pub(super) fn numeric_transform_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::Reference(action) => self.reference_transform_action(action),
             Action::Input(field, input) => {
                 *self.tab.numeric_transforms.value_mut(field) = input;
                 self.tab.numeric_transforms.error = None;
@@ -685,6 +703,7 @@ impl App {
         if let Some(error) = &state.error {
             body = body.push(text(error).size(12).style(text::danger));
         }
+        body = body.push(self.reference_transform_panel());
         body.into()
     }
 }

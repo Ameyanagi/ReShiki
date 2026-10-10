@@ -2,6 +2,7 @@
 mod aromatic;
 #[cfg(test)]
 mod placement_parity_tests;
+mod porphine;
 use crate::document::{Atom, Document, Point};
 use crate::editing;
 pub(crate) use aromatic::show_circles;
@@ -426,6 +427,7 @@ static BUNDLED: LazyLock<Result<Vec<Template>, String>> = LazyLock::new(|| {
         serde_json::from_str(include_str!("../../../assets/templates.json"))
             .map_err(|e| format!("Bundled templates could not be read: {e}"))?;
     templates.extend(crate::haworth::templates()?);
+    templates.push(porphine::template()?);
     Ok(templates)
 });
 pub fn builtin_error() -> Option<&'static str> {

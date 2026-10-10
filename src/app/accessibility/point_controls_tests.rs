@@ -318,6 +318,194 @@ fn selected_graphic(kind: GraphicKind, size: Size) -> App {
 }
 
 #[tokio::test]
+#[ignore = "Opt-in real mechanism geometry button metadata and action regression"]
+async fn mechanism_geometry_buttons_publish_native_actions_and_one_keyboard_undo() {
+    use crate::app::arrows::Action;
+    use reshiki::document::Document;
+    let size = Size::new(1280., 820.);
+    let mut ui = Ui::new(size).await;
+    for (id, label) in [
+        ("arrow.reverse", "Reverse"),
+        ("arrow.flip-bend", "Flip bend"),
+        ("arrow.straighten", "Straighten"),
+    ] {
+        ui.cache = Cache::new();
+        let (mut app, _) = App::new();
+        app.viewport = size;
+        app.tab.doc = Document::from_native_file(include_bytes!(
+            "../../../tests/fixtures/mechanism-curvature-91/after.rsk"
+        ))
+        .unwrap();
+        app.tab.saved = app.tab.doc.clone();
+        let _ = app.update(Message::Canvas(Edit::Select(vec![101])));
+        let before = app.tab.doc.clone();
+        let snapshot = ui.snapshot(&app);
+        let button = snapshot.nodes.iter().find(|node| node.id == id).expect(id);
+        assert_eq!(button.name, label);
+        assert_eq!(button.role, Role::Button);
+        assert!(button.enabled);
+        let operation::Outcome::Some(native_message) = ui.activate(&app, id) else {
+            panic!("native activation publishes {id}")
+        };
+        assert!(matches!(
+            (&native_message, id),
+            (Message::ArrowAction(Action::Reverse), "arrow.reverse")
+                | (Message::ArrowAction(Action::Flip), "arrow.flip-bend")
+                | (Message::ArrowAction(Action::Straighten), "arrow.straighten")
+        ));
+        assert_eq!(
+            app.tab.doc, before,
+            "collecting or activating metadata alone does not edit"
+        );
+        ui.focus(&app, id);
+        let message = ui.activate_focused(&app);
+        assert_eq!(
+            std::mem::discriminant(&message),
+            std::mem::discriminant(&native_message)
+        );
+        assert!(matches!(
+            (&message, id),
+            (Message::ArrowAction(Action::Reverse), "arrow.reverse")
+                | (Message::ArrowAction(Action::Flip), "arrow.flip-bend")
+                | (Message::ArrowAction(Action::Straighten), "arrow.straighten")
+        ));
+        let _ = app.update(message);
+        assert_ne!(app.tab.doc, before);
+        assert_eq!(app.tab.doc.bonds, before.bonds);
+        assert_eq!(app.tab.doc.arrows[1], before.arrows[1]);
+        ui.undo(&mut app);
+        assert_eq!(app.tab.doc, before, "one geometry action is one Undo");
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real pen controls accessibility and keyboard regression"]
+async fn pen_node_buttons_publish_actions_and_keyboard_insert_is_one_undo() {
+    let size = Size::new(1280., 1000.);
+    let mut ui = Ui::new(size).await;
+    let mut app = selected_graphic(GraphicKind::Path, size);
+    let _ = app.update(Message::Graphics(crate::app::graphics::Action::Path(
+        crate::app::graphics::path::Action::Node(0),
+    )));
+    let snapshot = ui.snapshot(&app);
+    for id in [
+        "pen-new",
+        "pen-finish",
+        "pen-insert",
+        "pen-delete",
+        "pen-straight",
+        "pen-curved",
+        "pen-close",
+        "pen-continue",
+    ] {
+        let node = snapshot.nodes.iter().find(|node| node.id == id).expect(id);
+        assert_eq!(node.role, Role::Button);
+        assert!(!node.name.is_empty());
+    }
+    assert!(
+        !snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == "pen-delete")
+            .unwrap()
+            .enabled
+    );
+    assert!(
+        !snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == "pen-close")
+            .unwrap()
+            .enabled
+    );
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    ui.focus(&app, "pen-insert");
+    assert_eq!(
+        app.tab.revision, revision,
+        "focus alone never edits the path"
+    );
+    let message = ui.activate_focused(&app);
+    assert!(matches!(
+        message,
+        Message::Graphics(crate::app::graphics::Action::Path(
+            crate::app::graphics::path::Action::Insert
+        ))
+    ));
+    let _ = app.update(message);
+    assert_eq!(
+        app.tab.doc.graphics[0]
+            .path_handles()
+            .unwrap()
+            .iter()
+            .filter(|handle| handle.node)
+            .count(),
+        3
+    );
+    ui.undo(&mut app);
+    assert_eq!(app.tab.doc, before, "one keyboard insert is one Undo");
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real pen Continue activation and append regression"]
+async fn pen_continue_native_activation_preserves_select_and_edit_points_targets() {
+    use crate::app::graphics::{Action, path::Action as PathAction};
+    use crate::canvas::pen::Stroke;
+    let size = Size::new(1280., 1000.);
+    let mut ui = Ui::new(size).await;
+    for tool in [Tool::Select, Tool::EditPoints] {
+        ui.cache = Cache::new();
+        let mut app = selected_graphic(GraphicKind::Path, size);
+        let id = app.tab.selected[0];
+        let _ = app.update(Message::Tool(tool));
+        let _ = app.update(Message::Graphics(Action::Path(PathAction::Node(0))));
+        let point = app.tab.path_point;
+        let before = app.tab.doc.clone();
+        let tab = app.tab.id;
+        let tabs = app.tabs.background.len();
+        let snapshot = ui.snapshot(&app);
+        let button = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == "pen-continue")
+            .unwrap();
+        assert_eq!(button.role, Role::Button);
+        assert!(button.enabled);
+        let operation::Outcome::Some(message) = ui.activate(&app, "pen-continue") else {
+            panic!("native Continue activation publishes its action")
+        };
+        assert!(matches!(
+            message,
+            Message::Graphics(Action::Path(PathAction::Continue))
+        ));
+        let _ = app.update(message);
+        assert_eq!(app.tool, Tool::Graphic(GraphicKind::Path));
+        assert_eq!(app.tab.selected, vec![id]);
+        assert_eq!(app.tab.path_point, point);
+        assert_eq!(app.tab.doc, before, "Continue only changes the active tool");
+        let _ = app.update(Message::Canvas(Edit::PenSegment(Stroke {
+            start: Point::new(150., 50.),
+            end: Point::new(150., 50.),
+            dragged: false,
+            close: false,
+        })));
+        let after = app.tab.doc.clone();
+        assert_eq!(after.graphics.len(), 1);
+        assert_eq!(after.graphics[0].id, id);
+        assert_eq!(
+            after.graphics[0].path.len(),
+            before.graphics[0].path.len() + 1
+        );
+        assert_eq!(app.tab.id, tab);
+        assert_eq!(app.tabs.background.len(), tabs);
+        ui.undo(&mut app);
+        assert_eq!(app.tab.doc, before, "one appended node is one Undo");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+    }
+}
+
+#[tokio::test]
 #[ignore = "Opt-in real selected-graphic keyboard and accessibility regression"]
 async fn selected_arc_and_curve_point_controls_are_reachable_and_exit_without_editing() {
     for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
@@ -754,5 +942,55 @@ async fn changed_popovers_keep_the_keyboard_opener_focused_after_closing() {
             assert_eq!(app.tab.selected, selected);
             assert_eq!(app.tab.revision, revision);
         }
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real mechanism attachment native button metadata/action regression"]
+async fn mechanism_attachment_92_native_detach_buttons_preserve_curve_and_one_undo() {
+    use crate::app::arrows::Action;
+    use reshiki::{arrows::Preset, document::Document};
+    let size = Size::new(1280., 820.);
+    let mut ui = Ui::new(size).await;
+    for (id, label, start) in [
+        ("arrow.detach-start", "Detach arrow start", true),
+        ("arrow.detach-end", "Detach arrow end", false),
+    ] {
+        ui.cache = Cache::new();
+        let (mut app, _) = App::new();
+        app.viewport = size;
+        app.tab.doc = Document::from_native_file(include_bytes!(
+            "../../../tests/fixtures/mechanism-attachments-92/before.rsk"
+        ))
+        .unwrap();
+        app.tab.saved = app.tab.doc.clone();
+        let _ = app.update(Message::ArrowStyle(Preset::Curved));
+        app.edit(Edit::ArrowTarget(Point::new(0., -29.166668), false));
+        app.edit(Edit::ArrowTarget(Point::new(-36.373, -21.), false));
+        let before = app.tab.doc.clone();
+        let snapshot = ui.snapshot(&app);
+        let button = snapshot.nodes.iter().find(|n| n.id == id).expect(id);
+        assert_eq!(button.name, label);
+        assert_eq!(button.role, Role::Button);
+        assert!(button.enabled);
+        let operation::Outcome::Some(message) = ui.activate(&app, id) else {
+            panic!("native activation {id}")
+        };
+        assert!(matches!(
+            (&message, start),
+            (Message::ArrowAction(Action::DetachStart), true)
+                | (Message::ArrowAction(Action::DetachEnd), false)
+        ));
+        let _ = app.update(message);
+        let arrow = &app.tab.doc.arrows[0];
+        assert_eq!(arrow.cubic, before.arrows[0].cubic);
+        assert_eq!(
+            (arrow.start, arrow.end),
+            (before.arrows[0].start, before.arrows[0].end)
+        );
+        assert_eq!(arrow.start_anchor.is_none(), start);
+        assert_eq!(arrow.end_anchor.is_none(), !start);
+        ui.undo(&mut app);
+        assert_eq!(app.tab.doc, before);
     }
 }

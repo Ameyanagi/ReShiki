@@ -13,11 +13,14 @@ fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
         format: Default::default(),
     });
     doc.arrows.push(Arrow {
+        start_anchor: None,
+        end_anchor: None,
         id: 6,
         start: Point::default(),
         end: Point::new(42., 0.),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     doc.graphics.push(crate::graphics::Graphic::dragged(

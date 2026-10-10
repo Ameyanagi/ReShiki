@@ -1,0 +1,17 @@
+{
+  "source_head": "7ec621227bc6fd777d5918efb9b8b6443c207d8e",
+  "source_sha256": "170c9870763cf80d23e0d70eee27f05bf49aa176eba413ca9bfacceda7ceb505",
+  "source_input_count": 1069,
+  "source_inputs_unchanged_after_build_and_package": true,
+  "protected_historical_input_count": 217,
+  "protected_historical_inputs_unchanged": true,
+  "app_files_checked": 9,
+  "app_files_unchanged": true,
+  "signed_binary_sha256": "4d35fe616bc9cb1388e4a6ec45312c65cc21aa6b67e42e17b077dd848fcc4043",
+  "package_interpreter": "/Users/ryuichi/.local/share/uv/python/cpython-3.13-macos-aarch64-none/bin/python3.13",
+  "package_interpreter_version": "Python 3.13.12",
+  "package_interpreter_requirement": ">=3.11,<3.14",
+  "package_first_failure": "Python3.9 tomllib unavailable; before bundle creation; log retained final-package-first-python39-failure.log",
+  "git_clean": true,
+  "gui": "ROOT owns native desktop review; not performed by worker"
+}

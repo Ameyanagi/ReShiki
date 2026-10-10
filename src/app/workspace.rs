@@ -269,6 +269,7 @@ impl App {
 
     fn drawing_canvas(&self) -> Element<'_, Edit> {
         canvas(MoleculeCanvas {
+            nmr: self.nmr_canvas(),
             optimizer: self.optimization_canvas(),
             keyboard_target: if self.keyboard_drawing_active() {
                 self.tab
@@ -285,11 +286,15 @@ impl App {
             graphic_constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
             graphic_arc: self.tab.arc_editor.geometry,
             graphic_style: &self.tab.graphic_style,
+            graphic_point: self.tab.path_point,
             orbital_phase: self.tab.orbital_phase,
             phase_flipped: self.tab.phase_flipped,
             attach_symbols: self.tab.attach_symbols,
+            snap_orbitals: self.tab.snap_orbitals,
             arrow_preset: self.tab.arrow_style,
             arrow_style: &self.tab.arrows.style,
+            arrow_source: self.tab.arrow_source.as_ref(),
+            attach_arrow_targets: self.tab.arrows.attach_targets,
             bracket_sides: self.tab.bracket_sides,
             doc: self.display_document(),
             selected: if self.tab.cleanup.is_some() || self.tab.inline_text.is_some() {
@@ -502,7 +507,10 @@ impl App {
                 &super::palettes::Action::Ring(self.ring_size, false),
             )
         };
-        let chain = format!("Straight chain · {}", keys(Modifiers::SHIFT, "X"));
+        let chain = format!(
+            "Straight chain · {} · Drag a regular zigzag toward the pointer",
+            keys(Modifiers::SHIFT, "X")
+        );
         let atom = format!(
             "Atom label · {}",
             super::palettes::element_hint(&self.element)
@@ -556,7 +564,7 @@ impl App {
             (Tool::Chain(reshiki::chains::ChainMode::Straight), &chain),
             (
                 Tool::Chain(reshiki::chains::ChainMode::Snaking),
-                "Snaking chain",
+                "Snaking chain · Steer while dragging · Retrace to shorten",
             ),
             (Tool::Arrow, arrow.as_str()),
             (Tool::Text, "Text label · t"),
@@ -568,6 +576,7 @@ impl App {
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
             (Tool::Graphic(G::Line), "Graphic line"),
             (Tool::Graphic(G::Curve), "Bézier curve"),
+            (Tool::Graphic(G::Path), "Pen path"),
             (Tool::Graphic(G::Arc), "Arc"),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
@@ -761,6 +770,13 @@ impl App {
                     + CONTEXT_GAP
                     + Self::constraints_width()
             }
+            Tool::Graphic(reshiki::graphics::GraphicKind::Orbital(_)) => {
+                let chooser = reshiki::scientific::OrbitalKind::ALL
+                    .iter()
+                    .map(|kind| text_width(&kind.to_string(), 12.))
+                    .fold(0., f32::max);
+                lead + chooser + 12. + 15. + CONTEXT_GAP + 22. + text_width("Snap to atoms", 11.)
+            }
             _ if self.moving_bonded_selection() => lead + Self::constraints_width(),
             _ => 0.,
         }
@@ -868,7 +884,7 @@ impl App {
                 commands.push(RowCommand {
                     label: if automatic { "Freeze depth" } else { "Enhance depth" },
                     menu: if automatic { "Freeze depth appearance" } else { "Enhance depth appearance" },
-                    hint: "Rear ink fades with depth; freezing keeps positions and editable appearance",
+                    hint: "Fade hidden rear cage ink while keeping exposed outlines solid; freezing preserves depth colors",
                     message: Message::DepthAppearance(super::depth_appearance::Action::Enhance(!automatic)),
                     enabled: true,
                 });
@@ -1168,6 +1184,20 @@ impl App {
             ),
             // The tool name shows the mode; the palette switches it.
             Tool::Chain(mode) => self.chain_tool_options(mode),
+            Tool::StretchBond { .. } => (
+                vec![
+                    reshiki::accessibility::button(
+                        "stretch-done",
+                        "Finish stretching bonds",
+                        text("Done").size(12),
+                    )
+                    .padding([7, 9])
+                    .on_press(Message::Tool(Tool::Select))
+                    .style(control(false))
+                    .into(),
+                ],
+                "Drag the moving end or branch · Original direction stays fixed · Escape cancels",
+            ),
             Tool::Graphic(kind) => self.graphic_tool_options(kind),
             Tool::EditPoints => (
                 vec![
@@ -1276,7 +1306,11 @@ impl App {
                 .into(),
                 self.bond_constraints(),
             ],
-            "Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms",
+            if mode == reshiki::chains::ChainMode::Snaking {
+                "Steer while dragging · Retrace to shorten · Shift flips start · Alt frees"
+            } else {
+                "Drag a regular zigzag · Ctrl bends · Shift flips start · Alt frees"
+            },
         )
     }
 
@@ -1313,12 +1347,31 @@ impl App {
         if kind == G::Arc {
             options.push(self.arc_presets(false));
         }
+        if matches!(kind, G::Orbital(_)) {
+            options.push(
+                hover_hint(
+                    checkbox(self.tab.snap_orbitals)
+                        .label("Snap to atoms")
+                        .on_toggle(|snap| Message::Graphics(super::graphics::Action::SnapOrbitals(snap)))
+                        .size(14)
+                        .text_size(11),
+                    "Snap the orbital node to the nearest atom · Hold Option/Alt for free placement",
+                    tooltip::Position::Bottom,
+                )
+                .into(),
+            );
+        }
         (
             options,
             match kind {
                 G::Symbol(_) => "Click to place/attach · Drag to position · Escape cancels",
-                G::Orbital(_) => "Drag from node · Click for default size · Shift snaps to 15°",
+                G::Orbital(_) => {
+                    "Drag from node · Shift snaps angle · Option/Alt bypasses atom snap"
+                }
                 G::Arc => "Drag an ellipse frame · Shift makes it circular · Escape cancels",
+                G::Path => {
+                    "Drag first segment · Click line / drag curve · Click first node to close"
+                }
                 _ => "Drag to draw · Shift constrains · Escape cancels",
             },
         )
@@ -1474,7 +1527,10 @@ impl App {
         match self.inspector_tab {
             InspectorTab::Assistant => 380.,
             InspectorTab::DrawingStyle | InspectorTab::Reactions => 320.,
-            InspectorTab::Properties | InspectorTab::Import | InspectorTab::Export => 300.,
+            InspectorTab::Properties
+            | InspectorTab::Nmr
+            | InspectorTab::Import
+            | InspectorTab::Export => 300.,
             _ => 256.,
         }
     }
@@ -1500,14 +1556,15 @@ impl App {
         let mut tabs = row![].spacing(2);
         for (label, tab) in [
             ("Properties", InspectorTab::Properties),
+            ("NMR", InspectorTab::Nmr),
             ("Templates", InspectorTab::Templates),
             ("Import", InspectorTab::Import),
             ("Export", InspectorTab::Export),
         ] {
             tabs = tabs.push(
-                // Four tabs fit the narrowest (256 px) inspector.
-                button(text(label).size(11))
-                    .padding([7, 6])
+                // Compact labels leave all five tabs reachable at 256 px.
+                button(text(label).size(10))
+                    .padding([7, 4])
                     .style(control(
                         self.inspector_tab == tab
                             || (tab == InspectorTab::Properties
@@ -1523,6 +1580,15 @@ impl App {
                     .on_press(Message::Inspector(tab)),
             );
         }
+        if self.inspector_tab == InspectorTab::Nmr {
+            return container(
+                column![container(tabs).padding([8, 8]), self.nmr_inspector(),].spacing(4),
+            )
+            .width(self.inspector_width())
+            .height(Length::Fill)
+            .style(panel)
+            .into();
+        }
         let body = match self.inspector_tab {
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),
@@ -1531,6 +1597,7 @@ impl App {
             InspectorTab::ThemeGenerator => self.theme_generator_panel(),
             InspectorTab::Properties if self.tab.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
+            InspectorTab::Nmr => self.nmr_inspector(),
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
@@ -2919,6 +2986,7 @@ fn tool_name(tool: Tool) -> (&'static str, &'static str) {
         // "Max atoms" beside it still marks the snaking mode.
         Tool::Chain(_) => return ("Snaking chain", "Chain"),
         Tool::Tilt => "3D tilt",
+        Tool::StretchBond { .. } => "Stretch bond",
         Tool::Atom => "Atom label",
         // The bond pick list beside it names the preset.
         Tool::Bond(_) | Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => "Bond",

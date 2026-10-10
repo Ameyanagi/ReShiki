@@ -1,0 +1,84 @@
+Window: "NATIVE-drawing-stretch-18.rsk • — ReShiki", App: ReShiki Drawing Review.
+0 standard window NATIVE-drawing-stretch-18.rsk • — ReShiki, Secondary Actions: Raise
+	1 container
+		2 button About ReShiki; check for updates, ID: header-about
+		3 button New · ⌘N, ID: header-new
+		4 button Open · ⌘O, ID: header-open
+		5 button Save · ⌘S, ID: header-save
+		6 button Save as · ⇧⌘S, ID: header-save-as
+		7 button (disabled) Undo · ⌘Z, ID: header-undo
+		8 button Redo · ⇧⌘Z, ID: header-redo
+		9 button Assistant, ID: header-assistant
+		10 button Import, ID: header-import
+		11 button Check drawing, ID: header-check
+		12 button Clean up…, ID: header-cleanup
+		13 button Export, ID: header-export
+		14 button Show or hide inspector, ID: header-inspector
+		15 button Text and object color, ID: style-color-menu
+		16 toggle button (settable, boolean) Select / move · v, Value: on, ID: tool-Select
+		17 toggle button (settable, boolean) Lasso select · l, Value: off, ID: tool-Lasso
+		18 toggle button (settable, boolean) 3D tilt, Value: off, ID: tool-Tilt
+		19 toggle button (settable, boolean) Eraser, Value: off, ID: tool-Erase
+		20 toggle button (settable, boolean) Atom label · C · c, Value: off, ID: tool-Atom
+		21 toggle button (settable, boolean) Single bond · 1, Value: off, ID: tool-Bond(1)
+		22 toggle button (settable, boolean) Double bond · 2, Value: off, ID: tool-Bond(2)
+		23 toggle button (settable, boolean) Triple bond · 3, Value: off, ID: tool-Bond(3)
+		24 toggle button (settable, boolean) Solid wedge, Value: off, ID: tool-Wedge
+		25 toggle button (settable, boolean) 6-membered · ⇧6, Value: off, ID: tool-Ring
+		26 toggle button (settable, boolean) Straight chain · ⇧X · Drag a regular zigzag toward the pointer, Value: off, ID: tool-Chain(Straight)
+		27 toggle button (settable, boolean) Snaking chain · Steer while dragging · Retrace to shorten, Value: off, ID: tool-Chain(Snaking)
+		28 toggle button (settable, boolean) Forward · e, Value: off, ID: tool-Arrow
+		29 toggle button (settable, boolean) Text label · t, Value: off, ID: tool-Text
+		30 toggle button (settable, boolean) Rectangle, Value: off, ID: tool-Graphic(Rectangle)
+		31 toggle button (settable, boolean) Ellipse, Value: off, ID: tool-Graphic(Ellipse)
+		32 toggle button (settable, boolean) Brackets · ⇧T, Value: off, ID: tool-Graphic(Brackets)
+		33 toggle button (settable, boolean) Graphic line, Value: off, ID: tool-Graphic(Line)
+		34 toggle button (settable, boolean) Bézier curve, Value: off, ID: tool-Graphic(Curve)
+		35 toggle button (settable, boolean) Pen path, Value: off, ID: tool-Graphic(Path)
+		36 toggle button (settable, boolean) Arc, Value: off, ID: tool-Graphic(Arc)
+		37 toggle button (settable, boolean) Circled plus · ⇧E, Value: off, ID: tool-Graphic(Symbol(CirclePlus))
+		38 toggle button (settable, boolean) p orbital · ⇧G, Value: off, ID: tool-Graphic(Orbital(P))
+		39 toggle button (settable, boolean) C · c, Value: off, ID: element-C
+		40 toggle button (settable, boolean) N · n, Value: off, ID: element-N
+		41 toggle button (settable, boolean) O · o, Value: off, ID: element-O
+		42 toggle button (settable, boolean) *, Value: off, ID: element-*
+		43 button Help and keyboard shortcuts, ID: help-open
+		44 button Draw with digits and letters; navigate atoms and bonds with arrows (F8), ID: context-command-1
+		45 button Join the selection to another structure at an atom or bond, ID: context-command-2
+		46 button Group, ID: context-command-3
+		47 button More: 3D optimize…, ID: context-overflow
+		48 button (disabled) Align, ID: arrange-menu-AlignObjects
+		49 button (disabled) Distribute, ID: arrange-menu-Distribute
+		50 button Order, ID: arrange-menu-Order
+		51 button Flip horizontal, ID: arrange-flip-horizontal
+		52 button Flip vertical, ID: arrange-flip-vertical
+		53 button Rotate 180°, ID: arrange-rotate
+		54 button Molecular properties: expanded, ID: inspector-section-Molecule
+		55 text field (settable) Scale (%), Value: 100, ID: transform-scale
+		56 text field (settable) Width (pt), Value: 23.58, ID: transform-width
+		57 toggle button (settable, boolean) Lock width and height proportions, Value: on, ID: transform-proportions
+		58 text field (settable) Height (pt), Value: 15.28, ID: transform-height
+		59 button More transform controls: tilt X and Y, ID: transform-more
+		60 button (disabled) Apply numeric transforms, ID: transform-apply
+		61 button Reference bond and edge controls, ID: reference-controls
+		62 button Pin selected center, ID: reference-pin-center
+		63 button Horizontal, ID: reference-horizontal
+		64 button Vertical, ID: reference-vertical
+		65 button To angle, ID: reference-to-angle
+		66 button Rotate, ID: reference-rotate
+		67 button Copy + rotate, ID: reference-copy-rotate
+		68 button Swap fixed end, ID: reference-swap-fixed
+		69 button Set length, ID: reference-stretch
+		70 button Drag to stretch, ID: reference-stretch-drag
+		71 button Grouping & frames: collapsed, ID: inspector-section-Groups
+		72 button Labels & chemistry: collapsed, ID: inspector-section-Chemistry
+		73 button Drawing style: collapsed, ID: inspector-section-DrawingStyle
+		74 button Dock NMR in the inspector, ID: nmr.mode
+		75 button Show or hide the NMR prediction results, ID: nmr.collapse
+		76 button Close NMR prediction, ID: nmr.close
+	77 close button
+	78 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	79 minimize button
+	80 text NATIVE-drawing-stretch-18.rsk • — ReShiki
+81 menu bar
+	82 ReShiki Drawing Review

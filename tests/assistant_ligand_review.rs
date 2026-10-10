@@ -401,6 +401,7 @@ fn hiding_explicit_charge_marks_retains_radical_marks() -> anyhow::Result<()> {
     atom.display.hide_charge = true;
     for kind in [MarkKind::Charge, MarkKind::CircledCharge] {
         atom.marks = vec![AtomMark {
+            id: None,
             kind,
             offset: Default::default(),
             angle: 0.,
@@ -411,6 +412,7 @@ fn hiding_explicit_charge_marks_retains_radical_marks() -> anyhow::Result<()> {
     for electrons in [1, 2] {
         atom.radical_electrons = electrons;
         atom.marks = vec![AtomMark {
+            id: None,
             kind: MarkKind::RadicalIon,
             offset: Default::default(),
             angle: 0.,

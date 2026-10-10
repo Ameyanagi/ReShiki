@@ -271,6 +271,77 @@ async fn arrow_styles_and_controls_survive_chemistry_and_cdxml_round_trip() {
     );
 }
 
+#[tokio::test]
+async fn independent_cubic_controls_survive_editable_cdxml_cdx_and_figure_exports() {
+    use reshiki::engine::{LocalEngine, Request};
+    let engine = LocalEngine::default();
+    let doc =
+        Document::from_native_file(include_bytes!("fixtures/mechanism-curvature-91/after.rsk"))
+            .unwrap();
+    for format in ["cdxml", "cdx"] {
+        let mut request = Request::molecule("export", doc.clone());
+        request.format = Some(format.into());
+        let output = engine.request(request).await.unwrap().output.unwrap();
+        let imported = engine
+            .request(Request::import(format, &output))
+            .await
+            .unwrap()
+            .document
+            .unwrap();
+        assert_eq!(imported.arrows.len(), doc.arrows.len());
+        for (original, restored) in doc.arrows.iter().zip(&imported.arrows) {
+            let mut restored_style = restored.appearance();
+            let original_style = original.appearance();
+            // Binary CDX stores line widths in 1/65536 point units.
+            assert!((restored_style.width_pt - original_style.width_pt).abs() < 1. / 65536.);
+            restored_style.width_pt = original_style.width_pt;
+            assert_eq!(restored_style, original_style);
+            assert!(restored.cubic.is_some());
+            for (a, b) in original
+                .bezier_controls()
+                .unwrap()
+                .into_iter()
+                .zip(restored.bezier_controls().unwrap())
+            {
+                near(
+                    Point::new(a.x - original.start.x, a.y - original.start.y),
+                    Point::new(b.x - restored.start.x, b.y - restored.start.y),
+                );
+            }
+            for i in 0..=20 {
+                let a = original.point(i as f32 / 20.);
+                let b = restored.point(i as f32 / 20.);
+                near(
+                    Point::new(a.x - original.start.x, a.y - original.start.y),
+                    Point::new(b.x - restored.start.x, b.y - restored.start.y),
+                );
+            }
+        }
+    }
+    for format in ["svg", "pdf", "png"] {
+        assert!(!reshiki::export::drawing(&doc, format).unwrap().is_empty());
+    }
+    for (pattern, shape) in [
+        (LinePattern::Dotted, HeadShape::Solid),
+        (LinePattern::Solid, HeadShape::Hollow),
+    ] {
+        let mut rejected = doc.clone();
+        let mut style = rejected.arrows[0].appearance();
+        style.pattern = pattern;
+        style.shape = shape;
+        rejected.arrows[0].style = Some(style);
+        let mut request = Request::molecule("export", rejected);
+        request.format = Some("cdxml".into());
+        assert!(
+            engine
+                .request(request)
+                .await
+                .unwrap_err()
+                .contains("native or image export")
+        );
+    }
+}
+
 #[test]
 fn elbow_has_two_straight_segments_and_editable_corner() {
     let mut a = arrow(Preset::Bent);

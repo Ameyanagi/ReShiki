@@ -96,11 +96,25 @@ pub(super) fn plane_endpoint(
     reshiki::projection::growth::Plane::at(doc, id)?.endpoint(cursor, drawing)
 }
 pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
+    // Only precompute label ownership when a foreground orbital may need to
+    // pass through it. Ordinary foreground graphics retain their fast path.
+    let orbital_label = doc
+        .graphics
+        .iter()
+        .any(|g| g.layer >= 0 && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
+        .then(|| reshiki::scene::atom_label_hit(doc, p, 0.));
     let graphic = |front| {
         doc.graphics
             .iter()
             .enumerate()
-            .filter(|(_, g)| (g.layer >= 0) == front && g.hit(p, r))
+            .filter(|(_, g)| {
+                (g.layer >= 0) == front
+                    // Orbital ink leaves these glyphs transparent. Selecting
+                    // a readable label must reach the atom that owns it.
+                    && !(orbital_label.flatten().is_some()
+                        && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
+                    && g.hit(p, r)
+            })
             .max_by_key(|(i, g)| (g.layer, *i))
             .map(|(_, g)| g.id)
     };
@@ -128,7 +142,7 @@ pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
         // A visible atom label owns its H/isotope/charge appendages when
         // selecting, just as it does for hover shortcuts. Keep the exact label
         // bounds so adjacent bonds remain targetable; growth still uses nearest.
-        .or_else(|| reshiki::scene::atom_label_hit(doc, p, 0.))
+        .or_else(|| orbital_label.unwrap_or_else(|| reshiki::scene::atom_label_hit(doc, p, 0.)))
         .or_else(|| doc.nearest(p, r))
         .or_else(|| {
             doc.annotations

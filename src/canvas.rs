@@ -32,6 +32,7 @@ mod input;
 pub mod layered;
 mod markers;
 mod movement;
+pub(crate) mod nmr;
 pub(crate) mod optimization;
 mod pages;
 mod paper;
@@ -56,6 +57,9 @@ pub(crate) mod rotation_gesture_tests;
 mod template_style_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(crate) mod pen_tests;
 #[cfg(test)]
 mod transform_shortcut_tests;
 
@@ -89,6 +93,7 @@ use render::draw_primitives;
 use reshiki::chains::{self, ChainMode};
 #[cfg(test)]
 use reshiki::graphics::{Graphic, GraphicKind, PathCommand};
+pub(crate) mod pen;
 #[cfg(test)]
 use reshiki::scene::{Primitive, primitives};
 #[cfg(test)]
@@ -123,11 +128,17 @@ pub enum Edit {
         target: Option<u64>,
     },
     Graphic(World, World, bool),
+    PenSegment(pen::Stroke),
+    /// Capture orbital snap preference and temporary bypass at release, just
+    /// as the live preview uses them; a chemical symbol's attachment is separate.
+    Orbital(World, World, bool, bool),
     GraphicPoint(u64, usize, World),
     AtomMark(u64, usize, World),
     AtomIndicator(reshiki::atom_labels::Owner, World),
     ArrowHandle(u64, usize, World),
     ArrowClick(u64),
+    ArrowTarget(World, bool),
+    CancelArrowSource,
     Select(Vec<u64>),
     /// Preserve the exact mouse position for a keyboard hotspot handoff.
     SelectAt(Vec<u64>, World),
@@ -154,6 +165,12 @@ pub enum Edit {
         y: f64,
     },
     Move(Vec<u64>, f32, f32),
+    /// Stretch a bridge without invoking automatic ring fusion or atom merging.
+    StretchBond {
+        fixed: u64,
+        moving: u64,
+        length: f32,
+    },
     /// Copy the objects to the offset, leaving the originals in place.
     Duplicate(Vec<u64>, f32, f32),
     Tilt {
@@ -263,6 +280,7 @@ enum Gesture {
         id: u64,
         index: usize,
     },
+    PathPoint(pen::PointDrag),
     ArrowHandle {
         id: u64,
         index: usize,
@@ -281,6 +299,10 @@ enum Gesture {
         start: World,
         ids: Vec<u64>,
         clicked: Vec<u64>,
+    },
+    StretchBond {
+        start: World,
+        plan: reshiki::editing::reference::Stretch,
     },
     Select {
         start: World,
@@ -315,6 +337,7 @@ fn delocalized_ring_size(tool: Tool, size: u8, modifiers: iced::keyboard::Modifi
 }
 
 pub struct MoleculeCanvas<'a> {
+    pub(crate) nmr: Option<nmr::Context<'a>>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
     pub(crate) keyboard_target: Option<World>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
@@ -336,12 +359,16 @@ pub struct MoleculeCanvas<'a> {
     pub template: Option<(&'a reshiki::templates::Template, reshiki::templates::Anchor)>,
     pub arrow_preset: reshiki::arrows::Preset,
     pub arrow_style: &'a reshiki::arrows::ArrowStyle,
+    pub arrow_source: Option<&'a reshiki::arrow_anchors::Pick>,
+    pub attach_arrow_targets: bool,
     pub orbital_phase: reshiki::scientific::Phase,
     pub phase_flipped: bool,
     pub attach_symbols: bool,
+    pub snap_orbitals: bool,
     pub graphic_constrain: bool,
     pub graphic_arc: reshiki::graphics::ArcGeometry,
     pub graphic_style: &'a GraphicStyle,
+    pub graphic_point: Option<(u64, usize)>,
     pub bracket_sides: BracketSides,
 }
 fn rgb(c: [u8; 3]) -> Color {

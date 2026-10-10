@@ -1,0 +1,85 @@
+Window: "ethyl-acetate-nmr-v3-native.rsk — ReShiki", App: ReShiki.
+0 standard window ethyl-acetate-nmr-v3-native.rsk — ReShiki, Secondary Actions: Raise
+	1 container
+		2 button About ReShiki; check for updates, ID: header-about
+		3 button New · ⌘N, ID: header-new
+		4 button Open · ⌘O, ID: header-open
+		5 button Save · ⌘S, ID: header-save
+		6 button Save as · ⇧⌘S, ID: header-save-as
+		7 button (disabled) Undo · ⌘Z, ID: header-undo
+		8 button (disabled) Redo · ⇧⌘Z, ID: header-redo
+		9 button Assistant, ID: header-assistant
+		10 button Import, ID: header-import
+		11 button Check drawing, ID: header-check
+		12 button Clean up…, ID: header-cleanup
+		13 button Export, ID: header-export
+		14 button Show or hide inspector, ID: header-inspector
+		15 button Text and object color, ID: style-color-menu
+		16 toggle button (settable, boolean) Select / move · v, Value: on, ID: tool-Select
+		17 toggle button (settable, boolean) Lasso select · l, Value: off, ID: tool-Lasso
+		18 toggle button (settable, boolean) 3D tilt, Value: off, ID: tool-Tilt
+		19 toggle button (settable, boolean) Eraser, Value: off, ID: tool-Erase
+		20 toggle button (settable, boolean) Atom label · C · c, Value: off, ID: tool-Atom
+		21 toggle button (settable, boolean) Single bond · 1, Value: off, ID: tool-Bond(1)
+		22 toggle button (settable, boolean) Double bond · 2, Value: off, ID: tool-Bond(2)
+		23 toggle button (settable, boolean) Triple bond · 3, Value: off, ID: tool-Bond(3)
+		24 toggle button (settable, boolean) Solid wedge, Value: off, ID: tool-Wedge
+		25 toggle button (settable, boolean) 6-membered · ⇧6, Value: off, ID: tool-Ring
+		26 toggle button (settable, boolean) Straight chain · ⇧X, Value: off, ID: tool-Chain(Straight)
+		27 toggle button (settable, boolean) Snaking chain, Value: off, ID: tool-Chain(Snaking)
+		28 toggle button (settable, boolean) Forward · e, Value: off, ID: tool-Arrow
+		29 toggle button (settable, boolean) Text label · t, Value: off, ID: tool-Text
+		30 toggle button (settable, boolean) Rectangle, Value: off, ID: tool-Graphic(Rectangle)
+		31 toggle button (settable, boolean) Ellipse, Value: off, ID: tool-Graphic(Ellipse)
+		32 toggle button (settable, boolean) Brackets · ⇧T, Value: off, ID: tool-Graphic(Brackets)
+		33 toggle button (settable, boolean) Graphic line, Value: off, ID: tool-Graphic(Line)
+		34 toggle button (settable, boolean) Bézier curve, Value: off, ID: tool-Graphic(Curve)
+		35 toggle button (settable, boolean) Arc, Value: off, ID: tool-Graphic(Arc)
+		36 toggle button (settable, boolean) Circled plus · ⇧E, Value: off, ID: tool-Graphic(Symbol(CirclePlus))
+		37 toggle button (settable, boolean) p orbital · ⇧G, Value: off, ID: tool-Graphic(Orbital(P))
+		38 toggle button (settable, boolean) C · c, Value: off, ID: element-C
+		39 toggle button (settable, boolean) N · n, Value: off, ID: element-N
+		40 toggle button (settable, boolean) O · o, Value: off, ID: element-O
+		41 toggle button (settable, boolean) S · s, Value: off, ID: element-S
+		42 toggle button (settable, boolean) P · p, Value: off, ID: element-P
+		43 toggle button (settable, boolean) *, Value: off, ID: element-*
+		44 button Help and keyboard shortcuts, ID: help-open
+		45 button Join the selection to another structure at an atom or bond, ID: context-command-2
+		46 button (disabled) Group, ID: context-command-3
+		47 button More: 3D optimize…, Keyboard drawing (F8), ID: context-overflow
+		48 button (disabled) Align, ID: arrange-menu-AlignObjects
+		49 button (disabled) Distribute, ID: arrange-menu-Distribute
+		50 button (disabled) Order, ID: arrange-menu-Order
+		51 button Flip horizontal, ID: arrange-flip-horizontal
+		52 button Flip vertical, ID: arrange-flip-vertical
+		53 button Rotate 180°, ID: arrange-rotate
+		54 button Molecular properties: collapsed, ID: inspector-section-Molecule
+		55 button Atom details: expanded, ID: inspector-section-Atoms
+		56 button Transform: collapsed, ID: inspector-section-Transform
+		57 button Grouping & frames: collapsed, ID: inspector-section-Groups
+		58 button Labels & chemistry: collapsed, ID: inspector-section-Chemistry
+		59 button Drawing style: collapsed, ID: inspector-section-DrawingStyle
+		60 button Dock NMR in the inspector, ID: nmr.mode
+		61 button Show or hide the NMR prediction results, ID: nmr.collapse
+		62 button Close NMR prediction, ID: nmr.close
+		63 toggle button (settable, boolean) Predict proton (¹H) NMR shifts, Value: off, ID: nmr.predict.1H
+		64 toggle button (settable, boolean) Predict carbon-13 (¹³C) NMR shifts, Value: on, ID: nmr.predict.13C
+		65 toggle button (settable, boolean) Show atom-linked NMR assignment labels on the drawing, Value: on, ID: nmr.labels
+		66 button (settable) NMR assignment label format, Value: Atom numbers, ID: nmr.labels.mode
+		67 toggle button (settable, boolean) Value: off, ID: nmr.marker.13C.4, Predicted shift marker. Select ¹³C NMR site atom #4: carbon atom. Predicted 170.700 ppm; sphere 2; 28 independent references; observed SD 1.254 ppm.
+		68 toggle button (settable, boolean) Value: on, ID: nmr.marker.13C.2, Predicted shift marker. Select ¹³C NMR site atom #2: carbon atom. Predicted 61.050 ppm; sphere 2; 58 independent references; observed SD 1.444 ppm.
+		69 toggle button (settable, boolean) Value: off, ID: nmr.marker.13C.5, Predicted shift marker. Select ¹³C NMR site atom #5: carbon atom. Predicted 20.900 ppm; sphere 3; 28 independent references; observed SD 1.005 ppm.
+		70 toggle button (settable, boolean) Value: off, ID: nmr.marker.13C.1, Predicted shift marker. Select ¹³C NMR site atom #1: carbon atom. Predicted 14.200 ppm; sphere 3; 58 independent references; observed SD 0.504 ppm.
+		71 toggle button (settable, boolean) Value: off, ID: nmr.site.13C.1, Select ¹³C NMR site atom #1: carbon atom. Predicted 14.200 ppm; sphere 3; 58 independent references; observed SD 0.504 ppm
+		72 toggle button (settable, boolean) Value: on, ID: nmr.site.13C.2, Select ¹³C NMR site atom #2: carbon atom. Predicted 61.050 ppm; sphere 2; 58 independent references; observed SD 1.444 ppm
+		73 toggle button (settable, boolean) Value: off, ID: nmr.site.13C.4, Select ¹³C NMR site atom #4: carbon atom. Predicted 170.700 ppm; sphere 2; 28 independent references; observed SD 1.254 ppm
+		74 toggle button (settable, boolean) Value: off, ID: nmr.site.13C.5, Select ¹³C NMR site atom #5: carbon atom. Predicted 20.900 ppm; sphere 3; 28 independent references; observed SD 1.005 ppm
+		75 button (settable) NMR prediction method, source, conditions and limitations, ID: nmr.method, Value: Status: ¹³C prediction: 4 of 4 atom-linked sites supported. HOSE spherical environments · median · ReShiki v1. nmrshiftdb2 2026-03-15 · measured CDCl3 subset v1. CDCl3; recorded temperature 273–323 K, pooled without temperature/concentration correction. Connectivity-only 2D environments do not distinguish E/Z or relative configurations, stereoisomers, or resolve diastereotopic H. Multiple attached H are an unresolved group median, not an assigned peak. Exchangeable H, charged/radical structures, metals and 
+		76 button Copy predicted NMR shifts with attribution, ID: nmr.copy
+		77 button Export predicted NMR shifts with attribution as TSV, ID: nmr.export
+	78 close button
+	79 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	80 minimize button
+	81 text ethyl-acetate-nmr-v3-native.rsk — ReShiki
+82 menu bar
+	83 ReShiki

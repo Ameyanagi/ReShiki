@@ -369,13 +369,20 @@ impl super::App {
         self.run(request, Job::Export(format))
     }
 
-    pub(super) fn structure_exported(&mut self, result: Result<Option<PathBuf>, String>) {
+    pub(super) fn structure_exported(
+        &mut self,
+        result: Result<Option<super::figure_export::Saved>, String>,
+    ) {
         match result {
-            Ok(Some(path)) => {
+            Ok(Some(saved)) => {
                 self.status = format!(
                     "Exported {}",
-                    path.file_name().unwrap_or_default().to_string_lossy()
+                    saved.path.file_name().unwrap_or_default().to_string_lossy()
                 );
+                for detail in saved.details {
+                    self.status.push_str(" · ");
+                    self.status.push_str(&detail);
+                }
                 self.error = false;
             }
             Ok(None) => {}

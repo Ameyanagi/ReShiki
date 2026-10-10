@@ -1,0 +1,218 @@
+{
+  "version": 19,
+  "atoms": [],
+  "bonds": [],
+  "arrows": [],
+  "annotations": [
+    {
+      "id": 101,
+      "position": {
+        "x": 0,
+        "y": -80
+      },
+      "text": "Open path: alternating bends"
+    },
+    {
+      "id": 102,
+      "position": {
+        "x": 0,
+        "y": 125
+      },
+      "text": "Closed path: asymmetric outline"
+    }
+  ],
+  "graphics": [
+    {
+      "id": 1,
+      "kind": "path",
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "axis_x": {
+        "x": 1,
+        "y": 0
+      },
+      "axis_y": {
+        "x": 0,
+        "y": 1
+      },
+      "style": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": null,
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0,
+            "y": 30
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0,
+              "y": -30
+            },
+            {
+              "x": 95,
+              "y": -30
+            },
+            {
+              "x": 95,
+              "y": 30
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 95,
+              "y": 90
+            },
+            {
+              "x": 190,
+              "y": 90
+            },
+            {
+              "x": 190,
+              "y": 30
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 190,
+              "y": -30
+            },
+            {
+              "x": 285,
+              "y": -30
+            },
+            {
+              "x": 285,
+              "y": 30
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "path",
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "axis_x": {
+        "x": 1,
+        "y": 0
+      },
+      "axis_y": {
+        "x": 0,
+        "y": 1
+      },
+      "style": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": null,
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 15,
+            "y": 215
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": -20,
+              "y": 175
+            },
+            {
+              "x": 45,
+              "y": 140
+            },
+            {
+              "x": 95,
+              "y": 175
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 150,
+              "y": 210
+            },
+            {
+              "x": 160,
+              "y": 145
+            },
+            {
+              "x": 215,
+              "y": 185
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 285,
+              "y": 235
+            },
+            {
+              "x": 195,
+              "y": 290
+            },
+            {
+              "x": 140,
+              "y": 245
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 80,
+              "y": 200
+            },
+            {
+              "x": 55,
+              "y": 265
+            },
+            {
+              "x": 15,
+              "y": 215
+            }
+          ]
+        },
+        {
+          "command": "close"
+        }
+      ]
+    }
+  ]
+}

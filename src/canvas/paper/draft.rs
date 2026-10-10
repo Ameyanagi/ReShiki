@@ -7,6 +7,9 @@ use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, tilt};
 use iced::{Point, Rectangle};
 use reshiki::graphics::{Graphic, GraphicKind};
 
+#[cfg(test)]
+mod stretch_tests;
+
 impl MoleculeCanvas<'_> {
     pub(super) fn preview_tilt(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft {
@@ -41,6 +44,7 @@ impl MoleculeCanvas<'_> {
             preview,
             ring_selection,
             smart,
+            template_notice,
             ..
         } = draft;
         if let Some(p) = state.cursor {
@@ -50,19 +54,50 @@ impl MoleculeCanvas<'_> {
             if let (Some(Gesture::Graphic { start }), Tool::Graphic(kind)) =
                 (&state.gesture, self.tool)
             {
-                if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+                if kind == GraphicKind::Path {
+                    if bounds.contains(p)
+                        && let Some(stroke) = self.pen_stroke(*start, end)
+                        && let Ok((doc, id, _)) = crate::canvas::pen::apply(
+                            self.doc,
+                            self.selected,
+                            self.graphic_style,
+                            stroke,
+                        )
+                    {
+                        *preview = std::borrow::Cow::Owned(doc);
+                        *ring_selection = Some(vec![id]);
+                    }
+                } else if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
                     let drawing = reshiki::scientific::Drawing {
                         kind,
                         style: self.graphic_style.clone(),
                         phase: self.orbital_phase,
                         flipped: self.phase_flipped,
                         attach: self.attach_symbols,
+                        snap_orbitals: self.snap_orbitals && !state.modifiers.alt(),
                     };
+                    if matches!(kind, GraphicKind::Orbital(_)) {
+                        let target =
+                            drawing.orbital_target(self.doc, *start, 10. / self.camera.zoom);
+                        *template_notice = Some((
+                            target.map_or_else(
+                                || "Orbital · Free node placement · Shift snaps angle".into(),
+                                |id| {
+                                    let label = self
+                                        .doc
+                                        .atom(id)
+                                        .map_or("atom", |atom| atom.element.as_str());
+                                    format!("Orbital · Node snapped to {label} · Option/Alt frees")
+                                },
+                            ),
+                            true,
+                        ));
+                    }
                     if let Ok(id) = drawing.place(
                         preview.to_mut(),
                         *start,
                         end,
-                        state.modifiers.shift(),
+                        state.modifiers.shift() || self.graphic_constrain,
                         10. / self.camera.zoom,
                     ) {
                         *ring_selection = Some(vec![id]);
@@ -135,6 +170,15 @@ impl MoleculeCanvas<'_> {
             {
                 g.edit_point(*index, end);
             }
+            if let Some(Gesture::PathPoint(drag)) = &state.gesture
+                && let Some(g) = preview
+                    .to_mut()
+                    .graphics
+                    .iter_mut()
+                    .find(|g| g.id == drag.id)
+            {
+                g.edit_point(drag.index, drag.target(end));
+            }
         }
     }
 
@@ -166,6 +210,19 @@ impl MoleculeCanvas<'_> {
             smart,
             ..
         } = draft;
+        if let (Some(Gesture::StretchBond { start, plan }), Some(p)) =
+            (&state.gesture, state.cursor)
+        {
+            let p = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let length = plan.dragged_length(World::new(p.x - start.x, p.y - start.y));
+            if let Ok(candidate) = plan.apply(self.doc, length) {
+                *preview.to_mut() = candidate;
+                *ring_selection = Some(plan.ids.clone());
+            }
+            return;
+        }
         if let (Some(Gesture::Move { start, ids, .. }), Some(p)) = (&state.gesture, state.cursor) {
             let p = self
                 .camera
