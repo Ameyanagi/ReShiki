@@ -35,3 +35,11 @@ tests/fixtures/rear-visibility-20261010/app-history-complete-bin.log -text white
 tests/fixtures/rear-visibility-20261010/model-actual-raster.log -text whitespace=-blank-at-eof
 tests/fixtures/rear-visibility-20261010/native-wgpu-bin.log -text whitespace=-blank-at-eof
 tests/fixtures/rear-visibility-20261010/root-exports.log -text whitespace=-blank-at-eof
+
+# Preserve five literal combined native AX records with captured trailing spaces.
+tests/fixtures/drawing-tools-integration/native-combined-v1/ax/03-nmr-carbon-ppm-161.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/drawing-tools-integration/native-combined-v1/ax/04-nmr-carbonyl-selected-both-161.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/drawing-tools-integration/native-combined-v1/ax/05-nmr-carbon-labels-off-161.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/drawing-tools-integration/native-combined-v1/ax/06-nmr-palette-moved-resized-161.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/drawing-tools-integration/native-combined-v1/ax/07-nmr-carbon-both-252.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/drawing-tools-integration/native-combined-v1/origins/ethyl-acetate-carbon-desktop.tsv -text whitespace=-blank-at-eol

@@ -1,0 +1,36 @@
+{
+  "record_kind": "AUTHORED_SUMMARY_OF_FROZEN_ACTUAL_RECORDS",
+  "original_record_sha256": "6582e26602548ed5ea5fe32f5284e108c010cd67f8c0901508f6626a13d31d1a",
+  "original_record_status": "NORMAL_MERGE_COMMIT_EXIT0_SOURCE_TREE_GUARDS_PASS",
+  "qualification": "Scoped source-qualified tests; not a full-workspace test count. Old failures retained privately. All source-head CI terminal; a later evidence-only head requires its own exact-head CI.",
+  "source_commit": "29157b3c66c70d627ea3828f305faa0d51a65e9f",
+  "source_tree": "2727374049423cd44cb1a28d716cbadd0cba45ec",
+  "normal_hooks_observed": [
+    "oxlint",
+    "oxfmt",
+    "ruff",
+    "ruff-format",
+    "ty",
+    "cargo-fmt",
+    "cargo-clippy",
+    "cargo-check"
+  ],
+  "normal_hook_log_sha256": "fca37adfbede24e9e094544ddbeebb650e5bee7b54eb7afd212660a1a16964d0",
+  "normal_hook_bypass": false,
+  "focused_result": {
+    "unique_focused": 196,
+    "combined_import": 1,
+    "explicit_manual_cold_measurement": 1
+  },
+  "focused_summary_sha256": "25b87ac5abf1843af80f1f131aa91eb55db5455af1195365d065747cde67dad3",
+  "combined_import_receipt_sha256": "c1ec1da5706b40ef9aeccd7a376ce6fe008e993aa7938a74703e9dfc9b01538f",
+  "manual_measurement_receipt_sha256": "7e1745d14008ee31d45ccb242cd28052db6f6f56fc616fd7d42537d64956caf6",
+  "source_head_CI": {
+    "head": "29157b3c66c70d627ea3828f305faa0d51a65e9f",
+    "success": 21,
+    "skipped": 4,
+    "all_terminal": 25,
+    "raw_record_path": "records/ci-source-terminal-20261011-v1.json",
+    "raw_record_sha256": "6c515abb8074a6ed3643ce48fdd59813b4f24b4813c9ec7ff443af41d298680c"
+  }
+}

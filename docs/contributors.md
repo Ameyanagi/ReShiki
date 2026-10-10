@@ -15,9 +15,9 @@ Windows SignPath signing and internal test-signed nightly integration: @Ameyanag
 
 Merged, unreleased: @Ameyanagi — checked numbered ChemDraw attachment import and original silicon fixtures for [issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) in [PR #284](https://github.com/Ameyanagi/ReShiki/pull/284), with [Mac File Open/native save/reopen and controlled Windows ChemDraw/PowerPoint clipboard evidence](changes/chemdraw-numbered-paste.md).
 
-MOL source3D import and ordinary-H presentation (under review, unreleased): @Ameyanagi; [review and desktop evidence](changes/mol-import-3d-review.md), [PR #282](https://github.com/Ameyanagi/ReShiki/pull/282).
+MOL source3D import and ordinary-H presentation (merged, unreleased): @Ameyanagi; [review and desktop evidence](changes/mol-import-3d-review.md), [PR #282](https://github.com/Ameyanagi/ReShiki/pull/282) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296).
 
-Under review, unreleased: @Ameyanagi — bounded Windows EMF picture import, retained source and original controlled spectrum fixtures for [issue #64](https://github.com/Ameyanagi/ReShiki/issues/64) in [PR #285](https://github.com/Ameyanagi/ReShiki/pull/285), with [Mac portable native save/resize/reopen and controlled Windows import/Word/PowerPoint native acceptance evidence](changes/emf-picture-import.md).
+Merged, unreleased: @Ameyanagi — bounded Windows EMF picture import, retained source and original controlled spectrum fixtures for [issue #64](https://github.com/Ameyanagi/ReShiki/issues/64) in [PR #285](https://github.com/Ameyanagi/ReShiki/pull/285), with [Mac portable native save/resize/reopen and controlled Windows import/Word/PowerPoint native acceptance evidence](changes/emf-picture-import.md) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296).
 
 Projected fullerene double-bond rendering and matched desktop/export review (under review): @Ameyanagi in [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271).
 

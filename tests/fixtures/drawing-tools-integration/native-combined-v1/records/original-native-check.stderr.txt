@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/drawing-native-fixture-proposal-v1/check_fixture.py", line 227, in <module>
+    print(json.dumps(run(args.native), indent=2, allow_nan=False))
+                     ^^^^^^^^^^^^^^^^
+  File "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/drawing-native-fixture-proposal-v1/check_fixture.py", line 160, in run
+    audit_object(collection, obj, original, source, native)
+  File "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/drawing-native-fixture-proposal-v1/check_fixture.py", line 109, in audit_object
+    assert equivalent(actual, original, native), (source["name"], kind, actual.keys(), original.keys())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ('methanol', 'arrows', dict_keys(['start_anchor', 'end_anchor', 'kind', 'style']), dict_keys(['start_anchor', 'end_anchor', 'kind', 'style']))

@@ -1,0 +1,19 @@
+{
+  "record_kind": "AUTHORED_SUMMARY_OF_FROZEN_ACTUAL_RECORDS",
+  "original_record_sha256": "7d16775f0a2526a153fa35c9ad5e5a66858b7c46350a4fe4daa40f9b8ca03d07",
+  "original_record_status": "FRESH_DEFAULT_BUILD_PASS",
+  "qualification": "Authored compact derivation; not an original log or signed attestation.",
+  "source_commit": "29157b3c66c70d627ea3828f305faa0d51a65e9f",
+  "source_tree": "2727374049423cd44cb1a28d716cbadd0cba45ec",
+  "source_hash_dictionary_sha256": "4fe991a7fc8a77bbc0223a509da14492d5aea37ae6a412534ee7935e4c78854c",
+  "full_tree_manifest_sha256": "363487d123700e8bd6ae5b1b8e1ffd039b5c626cc77560d0403e5381f0621c62",
+  "own_non_test_artifacts": 16,
+  "all_own_fresh_false": true,
+  "foreign_worktree_artifacts": [],
+  "depfile_receipt_sha256": "fc1804238d01691035714f24f49afdcc3f7339117110e55fb8e118f08252c150",
+  "compiler_messages_sha256": "b9f1f7a34bfa7fad72f4fbda54706b27b7b0c068301e8d61f783fc78122dc8f5",
+  "raw_executable_sha256": "0133d667928c11d5ae69bae91e10c0dba60eba9a7a3ead940c13b6d6df47ebd9",
+  "ordinary_package_receipt_sha256": "e5cfe9ac764105463906c931b07a6243f4d4df9e1b58f075c700a03f404b8f2f",
+  "producer_signed_executable_sha256": "0418185663fa9cf8a00a528cae034e09507b308d08c4b04d553488b90fc2b0f6",
+  "signature_scope": "Recorded normal ad-hoc verification; no notarization claim."
+}
