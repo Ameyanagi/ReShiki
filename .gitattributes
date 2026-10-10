@@ -1,1 +1,5 @@
 * text=auto eol=lf
+docs/changes/assets/coordination-join-windows-20261010/baseline-live-process.txt -text
+docs/changes/assets/coordination-join-windows-20261010/candidate-live-process.txt -text
+docs/changes/assets/coordination-join-windows-20261010/fresh-reopen-process.txt -text
+docs/changes/assets/coordination-join-windows-20261010/windows-build-receipt.txt -text

@@ -122,10 +122,12 @@ The portable verifier checks all **49 exact copies**, native graph/coordinate/
 chemical-field preservation, original test-log receipts, native history AX
 controls and eight deliberately corrupted semantic controls. Its optional source
 comparison checks the tested 1,067/532 dictionaries. It does not replay the GUI.
-Actual shortcut/save/reopen interaction here is **macOS ⌘J only**. The platform
-mapping regression passed on macOS; Windows/Linux Ctrl+J mapping source is
-present, but those test branches and desktop interaction remain pending for
-this follow-up. Existing projection and interchange limits remain in the
+This original desktop record exercises **macOS ⌘J**. The later
+[Windows native check](coordination-join-windows-20261010.md) verifies actual
+Ctrl+J for two contacts, chelate closure, Undo/Redo and fresh-process native
+reopen; six contacts were exercised on macOS. All native-host CI passed on
+Windows producer head `44d198c4`. Linux desktop interaction remains pending.
+Existing projection and interchange limits remain in the
 [coordination guide](../fragment-joining.md#coordination-contacts-in-place) and
 [earlier desktop record](../coordination-desktop-validation.md).
 
