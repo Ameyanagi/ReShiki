@@ -1,5 +1,10 @@
 # Rear-side opacity review
 
+This is the historical review of the initial midplane implementation. Its
+original captures remain unchanged. The [2026-10-10 visibility correction](changes/rear-visibility-20261010.md)
+shows matched before/after evidence for exposed cage rims, with new native
+history, rotation and fresh-process checks.
+
 Projected molecules previously had RGB depth fading, but no control for true
 rear transparency. The new Properties control retains the original opaque
 appearance at 100%, makes rear ink lighter at 25%, and removes it at 0% while

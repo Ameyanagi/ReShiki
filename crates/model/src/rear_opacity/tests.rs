@@ -14,7 +14,7 @@ fn chain() -> Document {
 }
 
 #[test]
-fn alpha_is_component_local_positive_z_front_bounded_and_flat_unchanged() {
+fn exposed_chain_is_opaque_at_every_depth_and_flat_output_is_unchanged() {
     let mut doc = chain();
     let ids = doc.all_ids();
     let original = doc.clone();
@@ -25,10 +25,10 @@ fn alpha_is_component_local_positive_z_front_bounded_and_flat_unchanged() {
     let paint = Paint::new(&doc);
     assert_eq!(
         ids.iter().map(|id| paint.atom(*id)).collect::<Vec<_>>(),
-        [0.25, 0.25, 1., 1.]
+        [1., 1., 1., 1.]
     );
     let bond = &doc.bonds[1];
-    assert_eq!(paint.bond(bond, -100.), 0.25);
+    assert_eq!(paint.bond(bond, -100.), 1.);
     assert_eq!(paint.bond(bond, 100.), 1.);
     assert_eq!(paint.bond(bond, 0.5), 1.);
     for atom in &mut doc.atoms {
@@ -75,11 +75,13 @@ fn opacity_persists_freezes_copies_and_is_one_display_only_history_edit() {
     assert_eq!(reopened.bonds, doc.bonds);
     let partial = editing::selection(&doc, &[ids[0], ids[1]]);
     assert!(!partial.depth_appearance[0].automatic);
-    assert_eq!(Paint::new(&partial).atom(ids[0]), 0.4);
+    assert_eq!(depth::rear_opacity(&partial, &ids[..2]), Some(0.4));
+    assert_eq!(Paint::new(&partial).atom(ids[0]), 1.);
     let mut target = chain();
     let original_target = target.clone();
     let pasted = editing::append(&mut target, &partial, Point::new(400., 0.));
-    assert_eq!(Paint::new(&target).atom(pasted[0]), 0.4);
+    assert_eq!(depth::rear_opacity(&target, &pasted), Some(0.4));
+    assert_eq!(Paint::new(&target).atom(pasted[0]), 1.);
     assert!(target.version >= 22);
     for atom in &original_target.atoms {
         assert_eq!(target.atom(atom.id), Some(atom));
@@ -90,11 +92,11 @@ fn opacity_persists_freezes_copies_and_is_one_display_only_history_edit() {
     for atom in &mut frozen.atoms {
         atom.depth = -atom.depth;
     }
-    // Classification remains frozen even if retained coordinates change.
-    assert_eq!(Paint::new(&frozen).atom(ids[0]), 0.4);
+    // RGB remains frozen; exposed chain ink stays solid after a view change.
+    assert_eq!(Paint::new(&frozen).atom(ids[0]), 1.);
     assert_eq!(crate::scene::svg(&frozen), svg);
     let materialized = depth::materialize(&doc);
-    assert_eq!(Paint::new(materialized.as_ref()).atom(ids[0]), 0.4);
+    assert_eq!(Paint::new(materialized.as_ref()).atom(ids[0]), 1.);
     assert_eq!(
         depth::materialize(materialized.as_ref()).as_ref(),
         materialized.as_ref()
@@ -157,7 +159,7 @@ fn crossing_cut_depends_on_visible_over_ink_including_explicit_layer_override() 
 }
 
 #[test]
-fn mixed_bond_clips_visible_ink_at_midplane_without_moving_either_endpoint() {
+fn exposed_bond_crossing_the_midplane_keeps_full_stroke_and_end_caps() {
     let mut doc = Document::default();
     let a = doc.add_atom("C", Point::new(0., 0.));
     let b = doc.add_atom("C", Point::new(100., 0.));
@@ -176,9 +178,9 @@ fn mixed_bond_clips_visible_ink_at_midplane_without_moving_either_endpoint() {
             2.,
         )],
     );
-    let vertices: Vec<_> = clipped.iter().flat_map(points).collect();
-    assert!(vertices.iter().all(|p| p.x >= 49.999));
-    assert!(vertices.iter().any(|p| p.x > 110.9)); // existing round endpoint retained
+    assert!(
+        matches!(clipped.as_slice(),[Primitive::Line(a,b,w)] if *a==Point::new(-10.,0.)&&*b==Point::new(110.,0.)&&*w==2.)
+    );
     assert_eq!(doc.atoms, original.atoms);
     assert_eq!(doc.bonds, original.bonds);
     depth::set_rear_opacity(&mut doc, &[a, b], 0.5).unwrap();
@@ -192,22 +194,34 @@ fn mixed_bond_clips_visible_ink_at_midplane_without_moving_either_endpoint() {
         )],
     );
     assert!(
-        clipped
-            .iter()
-            .any(|p| matches!(p,Primitive::Opacity{alpha,..} if *alpha==0.5))
+        matches!(clipped.as_slice(),[Primitive::Line(a,b,w)] if *a==Point::new(-10.,0.)&&*b==Point::new(110.,0.)&&*w==2.)
     );
 }
 
 #[test]
 fn rear_owned_labels_marks_numbers_highlights_and_front_owned_labels_follow_alpha() {
-    let mut doc = chain();
+    let mut doc = Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk"
+    ))
+    .unwrap();
     let ids = doc.all_ids();
-    for id in [ids[0], ids[3]] {
+    let paint = Paint::new(&doc);
+    let hidden = ids
+        .iter()
+        .copied()
+        .find(|id| paint.atom(*id) == 0.25)
+        .unwrap();
+    let exposed = ids
+        .iter()
+        .copied()
+        .find(|id| paint.atom(*id) == 1.)
+        .unwrap();
+    for (id, text) in [(hidden, "hidden"), (exposed, "exposed")] {
         let a = doc.atom_mut(id).unwrap();
         a.element = "O".into();
         a.label_h = 1;
         a.display.number = Some(crate::atom_labels::Number {
-            text: format!("atom{id}"),
+            text: text.into(),
             offset: Some(Point::new(0., 18.)),
             style: crate::atom_labels::number_style(),
         });
@@ -219,27 +233,26 @@ fn rear_owned_labels_marks_numbers_highlights_and_front_owned_labels_follow_alph
         )
         .unwrap();
     }
-    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
     let primitives = crate::scene::primitives(&doc);
     assert!(primitives.iter().any(|p|matches!(p,Primitive::Opacity{alpha,primitive} if *alpha==0.25 && matches!(primitive.as_ref(),Primitive::Text{text,..} if text=="O"))));
-    assert!(primitives.iter().any(|p|matches!(p,Primitive::Opacity{primitive,..} if matches!(primitive.as_ref(),Primitive::Text{text,..} if text=="atom1"))));
+    assert!(primitives.iter().any(|p|matches!(p,Primitive::Opacity{primitive,..} if matches!(primitive.as_ref(),Primitive::Text{text,..} if text=="hidden"))));
     assert!(
         primitives
             .iter()
-            .any(|p| matches!(p,Primitive::Text{text,..} if text=="atom4"))
+            .any(|p| matches!(p,Primitive::Text{text,..} if text=="exposed"))
     );
     assert!(primitives.iter().any(|p|matches!(p,Primitive::Opacity{primitive,..} if matches!(primitive.as_ref(),Primitive::Path{style,filled:true,..} if style.fill==Some(crate::palette::Color::Custom([255,200,50]))))));
     let original = doc.clone();
     depth::set_rear_opacity(&mut doc, &ids, 0.).unwrap();
     let svg = crate::scene::svg(&doc);
-    assert!(!svg.contains("atom1"));
-    assert!(svg.contains("atom4"));
+    assert!(!svg.contains("hidden"));
+    assert!(svg.contains("exposed"));
     assert_eq!(doc.atoms, original.atoms);
     assert_eq!(doc.bonds, original.bonds);
 }
 
 #[test]
-fn tilted_aromatic_curve_fill_and_arcs_share_one_depth_plane_and_default_geometry() {
+fn isolated_tilted_aromatic_fill_and_arcs_do_not_acquire_an_occluding_surface() {
     let mut doc = Document::default();
     let ids = editing::ring(&mut doc, Point::default(), 6, true, 0.);
     crate::projection::tilt(&mut doc, &ids, 65., true);
@@ -252,16 +265,19 @@ fn tilted_aromatic_curve_fill_and_arcs_share_one_depth_plane_and_default_geometr
     let original = doc.clone();
     let svg = crate::scene::svg(&doc);
     depth::set_rear_opacity(&mut doc, &ids, 0.5).unwrap();
-    let painted = crate::scene::primitives(&doc);
-    assert!(painted.iter().any(|p|matches!(p,Primitive::Opacity{primitive,..} if matches!(primitive.as_ref(),Primitive::Path{filled:true,style,..} if style.fill==Some(crate::palette::Color::Ink)))));
-    assert!(painted.iter().any(|p|matches!(p,Primitive::Opacity{primitive,..} if matches!(primitive.as_ref(),Primitive::Path{filled:true,style,..} if style.fill==Some(crate::palette::Color::Custom([200,220,255]))))));
+    assert_eq!(
+        crate::scene::svg(&doc),
+        svg,
+        "Exposed aromatic circle and ring fill remain opaque"
+    );
     assert_eq!(doc.atoms, original.atoms);
     assert_eq!(doc.bonds, original.bonds);
     for bond in &mut doc.bonds {
         bond.ring_arc = true;
     }
-    let arcs = crate::scene::primitives(&doc);
-    assert!(arcs.iter().any(|p|matches!(p,Primitive::Opacity{primitive,..} if matches!(primitive.as_ref(),Primitive::Path{filled:true,style,..} if style.fill==Some(crate::palette::Color::Ink)))));
+    let mut opaque_arcs = doc.clone();
+    opaque_arcs.depth_appearance.clear();
+    assert_eq!(crate::scene::svg(&doc), crate::scene::svg(&opaque_arcs));
     doc.bonds = original.bonds.clone();
     depth::set_rear_opacity(&mut doc, &ids, 1.).unwrap();
     assert_eq!(crate::scene::svg(&doc), svg);
@@ -292,7 +308,7 @@ fn rgb_first_partial_alpha_keeps_other_molecule_and_live_rgb_basis_native_and_hi
     depth::set_rear_opacity(&mut doc, &[first[0]], 0.25).unwrap();
     assert_eq!(depth::rear_opacity(&doc, &first), Some(0.25));
     assert_eq!(depth::rear_opacity(&doc, &second), Some(1.));
-    assert_eq!(Paint::new(&doc).atom(first[0]), 0.25);
+    assert_eq!(Paint::new(&doc).atom(first[0]), 1.);
     assert_eq!(Paint::new(&doc).atom(first[3]), 1.);
     assert!(second.iter().all(|id| Paint::new(&doc).atom(*id) == 1.));
     assert_eq!(
@@ -365,7 +381,7 @@ fn alpha_first_and_rgb_first_toggles_keep_mixed_settings_and_legacy_rgb_normaliz
                 assert_eq!(
                     Paint::new(&doc).atom(*id),
                     rear.atom(*id),
-                    "frozen rear classification"
+                    "exposed chain visibility after changing the view"
                 );
             }
         }
@@ -398,7 +414,7 @@ fn mixed_rear_settings_freeze_copy_remap_prune_and_validate_independently_of_rgb
     assert!(
         first[..2]
             .iter()
-            .all(|id| Paint::new(&partial).atom(*id) == 0.25)
+            .all(|id| Paint::new(&partial).atom(*id) == 1.)
     );
     for id in &first[..2] {
         assert_eq!(
@@ -409,14 +425,10 @@ fn mixed_rear_settings_freeze_copy_remap_prune_and_validate_independently_of_rgb
     let mut target = chain();
     let pasted = editing::append(&mut target, &partial, Point::new(500., 0.));
     assert_eq!(depth::rear_opacity(&target, &pasted), Some(0.25));
-    assert!(
-        pasted
-            .iter()
-            .all(|id| Paint::new(&target).atom(*id) == 0.25)
-    );
+    assert!(pasted.iter().all(|id| Paint::new(&target).atom(*id) == 1.));
     target.delete(&pasted[..1]);
     target.validate().unwrap();
-    assert_eq!(Paint::new(&target).atom(pasted[1]), 0.25);
+    assert_eq!(Paint::new(&target).atom(pasted[1]), 1.);
     depth::clear(&mut doc, &first);
     assert_eq!(depth::rear_opacity(&doc, &first), Some(1.));
     assert_eq!(depth::rear_opacity(&doc, &second), Some(1.));
@@ -435,40 +447,26 @@ fn mixed_rear_settings_freeze_copy_remap_prune_and_validate_independently_of_rgb
 }
 
 #[test]
-fn earlier_frozen_native_rear_weights_are_not_reinterpreted_from_changed_xyz() {
+fn earlier_frozen_native_weights_and_alpha_settings_are_retained_but_not_visibility_caches() {
     let (mut doc, first, second) = coordinated_chains();
     let all = doc.all_ids();
     depth::enable(&mut doc, &all, 0.6).unwrap();
     depth::freeze(&mut doc, &all);
     doc.depth_appearance[0].rear_opacity = 0.4;
     doc.version = 22;
-    let expected: Vec<_> = all
-        .iter()
-        .map(|id| {
-            if doc.depth_appearance[0].weights[id] > 0.5 {
-                0.4
-            } else {
-                1.
-            }
-        })
-        .collect();
+    let weights = doc.depth_appearance[0].weights.clone();
     assert!(doc.depth_appearance[0].rear_weights.is_empty());
     for atom in &mut doc.atoms {
         atom.depth = -atom.depth;
     }
     let mut reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
-    for (id, alpha) in all.iter().zip(&expected) {
-        assert_eq!(Paint::new(&reopened).atom(*id), *alpha);
-    }
+    assert_eq!(reopened.depth_appearance[0].weights, weights);
+    assert_eq!(depth::rear_opacity(&reopened, &all), Some(0.4));
+    assert!(all.iter().all(|id| Paint::new(&reopened).atom(*id) == 1.));
     depth::set_rear_opacity(&mut reopened, &first, 0.25).unwrap();
-    for id in &first {
-        let expected = if doc.depth_appearance[0].weights[id] > 0.5 {
-            0.25
-        } else {
-            1.
-        };
-        assert_eq!(Paint::new(&reopened).atom(*id), expected);
-    }
+    assert_eq!(depth::rear_opacity(&reopened, &first), Some(0.25));
+    assert_eq!(depth::rear_opacity(&reopened, &second), Some(0.4));
+    assert_eq!(reopened.depth_appearance[0].weights, weights);
     for id in &second {
         assert_eq!(Paint::new(&reopened).atom(*id), Paint::new(&doc).atom(*id));
     }
@@ -485,14 +483,14 @@ fn quadruple_and_partial_covalent_bonds_are_one_alpha_molecule() {
         doc.add_bond(a, b, order, "plain");
         depth::set_rear_opacity(&mut doc, &[a], 0.25).unwrap();
         assert_eq!(depth::rear_opacity(&doc, &[a, b]), Some(0.25));
-        assert_eq!(Paint::new(&doc).atom(a), 0.25);
+        assert_eq!(Paint::new(&doc).atom(a), 1.);
         assert_eq!(Paint::new(&doc).atom(b), 1.);
         assert_eq!(doc.depth_appearance.len(), 1);
     }
 }
 
 #[test]
-fn copying_a_full_rgb_owner_that_is_only_part_of_a_molecule_freezes_original_rear_depth() {
+fn copying_a_partial_molecule_retains_settings_and_frozen_rgb_without_inventing_a_shell() {
     let mut doc = chain();
     let ids = doc.all_ids();
     depth::enable(&mut doc, &ids, 0.6).unwrap();
@@ -503,8 +501,9 @@ fn copying_a_full_rgb_owner_that_is_only_part_of_a_molecule_freezes_original_rea
     let partial = editing::selection(&doc, &ids[..2]);
     assert_eq!(partial.depth_appearance.len(), 1);
     assert!(!partial.depth_appearance[0].automatic);
-    assert_eq!(Paint::new(&partial).atom(ids[0]), 0.25);
-    assert_eq!(Paint::new(&partial).atom(ids[1]), 0.25);
+    assert_eq!(depth::rear_opacity(&partial, &ids[..2]), Some(0.25));
+    assert_eq!(Paint::new(&partial).atom(ids[0]), 1.);
+    assert_eq!(Paint::new(&partial).atom(ids[1]), 1.);
     partial.validate().unwrap();
 }
 

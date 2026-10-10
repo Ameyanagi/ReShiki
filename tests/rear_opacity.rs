@@ -5,23 +5,11 @@ use reshiki::{
 };
 
 fn drawing(alpha: f32) -> Document {
-    let mut doc = Document::default();
-    let ids: Vec<_> = [
-        (0., 0., -20.),
-        (80., 0., -20.),
-        (120., 80., 20.),
-        (200., 80., 20.),
-    ]
-    .into_iter()
-    .map(|(x, y, z)| {
-        let id = doc.add_atom("C", Point::new(x, y));
-        doc.atom_mut(id).unwrap().depth = z;
-        id
-    })
-    .collect();
-    for pair in ids.windows(2) {
-        doc.add_bond(pair[0], pair[1], 1, "plain");
-    }
+    let mut doc = Document::from_json(include_bytes!(
+        "fixtures/rear-opacity/c60-rear-opacity-25.rsk"
+    ))
+    .unwrap();
+    let ids = doc.all_ids();
     depth::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
     doc
 }
@@ -51,8 +39,8 @@ fn transparent_raster_and_vector_exports_have_real_alpha_and_front_ink_on_each_t
         doc.canvas_theme = theme;
         let original = doc.clone();
         let image = rgba(&doc);
-        let rear = ink_alpha(&image, Point::new(40., 0.), &doc);
-        let front = ink_alpha(&image, Point::new(160., 80.), &doc);
+        let rear = ink_alpha(&image, Point::new(-8.102754, -18.966398), &doc);
+        let front = ink_alpha(&image, Point::new(-69.3732, 73.96892), &doc);
         assert!((126..=129).contains(&rear), "rear alpha {rear}");
         assert_eq!(front, 255);
         let expected = theme.color([0; 3]);
@@ -77,7 +65,7 @@ fn transparent_raster_and_vector_exports_have_real_alpha_and_front_ink_on_each_t
 }
 
 #[test]
-fn rear_hidden_foreground_continuous_and_restore_100_reproduces_original_figure() {
+fn hidden_cage_ink_disappears_whole_rim_stays_solid_and_100_restores_original_figure() {
     let mut doc = drawing(1.);
     let original = doc.clone();
     let svg = scene::svg(&doc);
@@ -85,7 +73,11 @@ fn rear_hidden_foreground_continuous_and_restore_100_reproduces_original_figure(
     depth::set_rear_opacity(&mut doc, &ids, 0.).unwrap();
     assert!(!scene::svg(&doc).contains("opacity="));
     let image = rgba(&doc);
-    assert_eq!(ink_alpha(&image, Point::new(160., 80.), &doc), 255);
+    assert_eq!(ink_alpha(&image, Point::new(-69.3732, 73.96892), &doc), 255);
+    assert_eq!(
+        ink_alpha(&image, Point::new(-8.102754, -18.966398), &doc),
+        0
+    );
     assert_eq!(doc.atoms, original.atoms);
     assert_eq!(doc.bonds, original.bonds);
     let ids = doc.all_ids();

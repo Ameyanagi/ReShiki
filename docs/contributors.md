@@ -15,6 +15,6 @@ Windows SignPath signing and internal test-signed nightly integration: @Ameyanag
 
 Projected fullerene double-bond rendering and matched desktop/export review (under review): @Ameyanagi in [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271).
 
-Rear-side opacity with preserved molecular data and matched native desktop/history review (under review): @Ameyanagi; [review record](rear-opacity-review.md), follow-up to [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271).
+Rear-side opacity and view-occluded cage visibility with preserved molecular data (under review): @Ameyanagi in [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289); [current review](changes/rear-visibility-20261010.md), following [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271).
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

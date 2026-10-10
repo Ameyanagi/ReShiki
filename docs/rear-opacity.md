@@ -1,7 +1,7 @@
 # Rear-side opacity (under review)
 
-Use **Properties → 3D appearance → Rear opacity (%)** to make the back of a
-projected molecule lighter while keeping the front visible. The default is
+Use **Properties → 3D appearance → Rear opacity (%)** to make view-occluded
+rear ink lighter while keeping exposed cage outlines solid. The default is
 **100%**, which keeps the existing drawing opaque.
 
 1. Open a drawing with retained 3D coordinates. Select part of a molecule to
@@ -11,7 +11,7 @@ projected molecule lighter while keeping the front visible. The default is
 3. Click **Apply**. **25%** leaves faint rear ink; **0%** makes rear ink
    transparent. Undo restores the previous setting and Redo restores the edit.
 
-![C60 with rear opacity set to 25%, its front bonds visible, and unchanged molecular properties](images/rear-opacity/c60-rear-opacity-25.jpg)
+![C60 at 25% rear opacity with faint occluded rear ink and a solid exposed rim](images/rear-visibility-20261010/c60-25-after.jpg)
 
 Opacity works against both light and dark backgrounds and in transparent
 figure exports. At 0%, the background shows through. Flat 2D molecules retain
@@ -28,5 +28,6 @@ conversion when making an external clipboard copy. Partial-opacity EMF
 export is refused with alternative formats offered. Windows print and EMF
 runtime validation remains pending.
 
-This feature is under review as a follow-up to [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271).
-See the [matched desktop views, saved-data checks and limits](rear-opacity-review.md).
+This feature is under review in [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289),
+following [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271).
+See the [corrected cage visibility, native checks and limits](changes/rear-visibility-20261010.md).

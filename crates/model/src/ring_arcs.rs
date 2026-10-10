@@ -71,6 +71,14 @@ impl Arcs {
 }
 
 pub fn render(doc: &Document) -> Arcs {
+    render_with_crossings(doc, true)
+}
+/// Original curve pieces for visibility preflight. Their geometry must not
+/// depend on opaque crossing cuts that managed foreground ink can suppress.
+pub(crate) fn uncut(doc: &Document) -> Arcs {
+    render_with_crossings(doc, false)
+}
+fn render_with_crossings(doc: &Document, apply_crossings: bool) -> Arcs {
     let mut result = Arcs {
         primitives: vec![],
         owners: vec![],
@@ -176,7 +184,11 @@ pub fn render(doc: &Document) -> Arcs {
                 },
                 filled: false,
             };
-            let (stroke, gaps) = crate::crossings::ring_stroke(doc, &ring, stroke);
+            let (stroke, gaps) = if apply_crossings {
+                crate::crossings::ring_stroke(doc, &ring, stroke)
+            } else {
+                (stroke, vec![])
+            };
             result.primitives.push(stroke);
             result.owners.push(ring.atoms.clone());
             result.crossings.extend(gaps);

@@ -106,6 +106,16 @@ pub(crate) fn gaps_with_opacity(
             if opacity.bond(over, if first_over { t } else { u }) < 1. {
                 continue;
             }
+            // Opacity-managed under-ink already carries its exact visibility
+            // interval. A conventional knockout would erase its faint base or
+            // make the transparent case wider than the physical occlusion.
+            if doc
+                .bonds
+                .get(under)
+                .is_some_and(|bond| opacity.manages_bond(bond))
+            {
+                continue;
+            }
             let length = from.distance(to);
             let other_length = if first_over {
                 a.distance(b)

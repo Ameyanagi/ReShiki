@@ -907,7 +907,7 @@ async fn paper_layers_match_captured_baseline() {
 
 #[tokio::test]
 #[ignore = "Actual native renderer alpha pixels; requires a headless renderer"]
-async fn rear_opacity_canvas_matches_half_ink_and_keeps_front_and_filled_marks_clean() {
+async fn rear_opacity_canvas_matches_reference_alpha_and_keeps_cage_rim_and_marks_clean() {
     let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
     let mut renderer = <Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
@@ -916,37 +916,24 @@ async fn rear_opacity_canvas_matches_half_ink_and_keeps_front_and_filled_marks_c
     )
     .await
     .expect("Headless renderer");
-    let bounds = Rectangle::with_size(iced::Size::new(640., 400.));
+    let bounds = Rectangle::with_size(iced::Size::new(640., 600.));
     let camera = Camera {
-        center: World::new(100., 40.),
+        center: World::new(0., 0.),
         zoom: 2.,
     };
     for theme in CanvasTheme::ALL {
-        for alpha in [0., 0.5, 1.] {
-            let mut doc = Document {
-                canvas_theme: theme,
-                ..Document::default()
-            };
-            let ids: Vec<_> = [
-                (0., 0., -20.),
-                (80., 0., -20.),
-                (120., 80., 20.),
-                (200., 80., 20.),
-            ]
-            .into_iter()
-            .map(|(x, y, z)| {
-                let id = doc.add_atom("C", World::new(x, y));
-                doc.atom_mut(id).unwrap().depth = z;
-                id
-            })
-            .collect();
-            for pair in ids.windows(2) {
-                doc.add_bond(pair[0], pair[1], 1, "plain");
-            }
+        for alpha in [0., 0.25, 0.5, 1.] {
+            let mut doc = Document::from_json(include_bytes!(
+                "../../tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk"
+            ))
+            .unwrap();
+            doc.canvas_theme = theme;
+            let ids = doc.all_ids();
+            let mark_anchor = doc.atom(52).unwrap().position;
             reshiki::scientific::attach(
-                doc.atom_mut(ids[0]).unwrap(),
+                doc.atom_mut(52).unwrap(),
                 reshiki::scientific::SymbolKind::LonePair,
-                World::new(0., -18.),
+                World::new(-100., 0.),
             )
             .unwrap();
             reshiki::depth_appearance::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
@@ -973,14 +960,14 @@ async fn rear_opacity_canvas_matches_half_ink_and_keeps_front_and_filled_marks_c
                 renderer.draw_geometry(geometry);
             }
             let pixels =
-                Headless::screenshot(&mut renderer, iced::Size::new(640, 400), 1., Color::WHITE);
+                Headless::screenshot(&mut renderer, iced::Size::new(640, 600), 1., Color::WHITE);
             let darkness = |point: World| {
                 let screen = camera.screen(point, bounds);
                 let x = screen.x.round() as usize;
                 let y = screen.y.round() as usize;
                 (x.saturating_sub(2)..=(x + 2).min(639))
                     .flat_map(|x| {
-                        (y.saturating_sub(2)..=(y + 2).min(399)).map(move |y| (y * 640 + x) * 4)
+                        (y.saturating_sub(2)..=(y + 2).min(599)).map(move |y| (y * 640 + x) * 4)
                     })
                     .map(|offset| {
                         let channel = pixels[offset];
@@ -1007,17 +994,21 @@ async fn rear_opacity_canvas_matches_half_ink_and_keeps_front_and_filled_marks_c
             }
             eprintln!(
                 "Rear pixel measurements {theme:?} alpha {alpha}: rear={}, front={}, filled_mark={}",
-                darkness(World::new(40., 0.)),
-                darkness(World::new(160., 80.)),
-                darkness(World::new(-2.1, -18.)),
+                darkness(World::new(-8.102754, -18.966398)),
+                darkness(World::new(-69.3732, 73.96892)),
+                darkness(mark_anchor.offset(-102.1, 0.)),
             );
             assert!(
-                (i16::from(darkness(World::new(40., 0.))) - expected).abs() <= 2,
+                (i16::from(darkness(World::new(-8.102754, -18.966398))) - expected).abs() <= 2,
                 "Rear ink alpha {alpha} {theme:?}"
             );
-            assert_eq!(darkness(World::new(160., 80.)), 255, "Front ink changed");
+            assert_eq!(
+                darkness(World::new(-69.3732, 73.96892)),
+                255,
+                "Front ink changed"
+            );
             assert!(
-                (i16::from(darkness(World::new(-2.1, -18.))) - expected).abs() <= 3,
+                (i16::from(darkness(mark_anchor.offset(-102.1, 0.))) - expected).abs() <= 3,
                 "Filled lone-pair alpha blended twice"
             );
         }

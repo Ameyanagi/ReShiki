@@ -828,7 +828,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         .enumerate()
         .filter(|(_, b)| doc.bond_visible(b.a, b.b))
     {
-        push_bond(scene, &mut out, &mut joined, bond_index, b);
+        push_bond(scene, &mut out, &mut joined, bond_index, b, None);
     }
     push_junctions(&mut out, &mut joined, &joins, &crossing_gaps, doc, &opacity);
     push_joined_outlines(&mut out, joined);
@@ -850,6 +850,106 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             .flat_map(graphic_primitive),
     );
     out
+}
+
+/// Real vector ink for visibility, with its chemical owner and current depth.
+/// Clearing only display scopes prevents visibility from recursively querying
+/// itself; coordinate, bond, label and projected-rail geometry remain exact.
+pub(crate) fn occlusion_ink(
+    doc: &Document,
+) -> Vec<(Vec<u64>, i16, crate::rear_opacity::Field, Vec<Primitive>)> {
+    let mut drawing = doc.clone();
+    drawing.depth_appearance.clear();
+    let doc = &drawing;
+    let opacity = crate::rear_opacity::Paint::new(doc);
+    let arcs = crate::ring_arcs::render(doc);
+    let circles = crate::aromatic::circles(doc);
+    let labels = collect_atom_labels(doc, &opacity);
+    let joins = crate::bond_joins::Joins::new(doc);
+    let gaps = vec![vec![]; doc.bonds.len()];
+    let scene = BondScene {
+        doc,
+        style: &doc.drawing_style,
+        arcs: &arcs,
+        circles: &circles,
+        label_bounds: &labels.bounds,
+        joins: &joins,
+        crossing_gaps: &gaps,
+        opacity: &opacity,
+    };
+    let mut ink = vec![];
+    for (index, bond) in doc
+        .bonds
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| doc.bond_visible(b.a, b.b))
+    {
+        let mut parts = vec![];
+        let mut joined = Default::default();
+        let mut sources = vec![];
+        push_bond(
+            scene,
+            &mut parts,
+            &mut joined,
+            index,
+            bond,
+            Some(&mut sources),
+        );
+        for (field, parts) in sources {
+            ink.push((vec![bond.a, bond.b], bond.z_order, field, parts));
+        }
+    }
+    for atom in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
+        let mut parts = vec![];
+        for part in labels.runs.get(&atom.id).into_iter().flatten() {
+            // Unknown/custom font outlines conservatively do not hide ink.
+            // Default label outlines preserve counters instead of using a box.
+            if let Primitive::Text {
+                position,
+                text,
+                size,
+                style,
+                ..
+            } = part
+                && style.family == crate::style::DEFAULT.font_family
+                && !style.bold
+                && !style.italic
+                && !style.underline
+            {
+                parts.push(Primitive::Path {
+                    commands: crate::style::outline_text(
+                        text,
+                        *size,
+                        position.offset(0., *size * crate::style::text_ascent(style)),
+                    ),
+                    style: crate::graphics::GraphicStyle {
+                        fill: Some(crate::palette::Color::Ink),
+                        width_pt: 0.,
+                        ..Default::default()
+                    },
+                    filled: true,
+                });
+            }
+        }
+        parts.extend(
+            crate::scientific::styled_mark_parts(atom, &doc.drawing_style)
+                .into_iter()
+                .map(|p| Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                }),
+        );
+        if !parts.is_empty() {
+            ink.push((
+                vec![atom.id],
+                0,
+                crate::rear_opacity::Field::Constant(atom.depth),
+                parts,
+            ));
+        }
+    }
+    ink
 }
 fn graphic_primitive(g: &&crate::graphics::Graphic) -> Vec<Primitive> {
     if g.kind == crate::graphics::GraphicKind::Picture {
@@ -1191,6 +1291,7 @@ fn push_bond(
     >,
     bond_index: usize,
     b: &Bond,
+    ink_sources: Option<&mut Vec<(crate::rear_opacity::Field, Vec<Primitive>)>>,
 ) {
     let BondScene { style, joins, .. } = scene;
     let Some(frame) = bond_frame(scene, b) else {
@@ -1206,6 +1307,7 @@ fn push_bond(
         ..
     } = frame;
     let bond_start = out.len();
+    let mut rail_depths = std::collections::BTreeMap::new();
     match b.display.as_str() {
         "plain" | "bold" | "wedge" if !matches!(b.order, 2 | 7) && joins.needed(b) => {
             out.push(Primitive::Polygon(joins.polygon(b, start, end)));
@@ -1237,15 +1339,39 @@ fn push_bond(
                 filled: false,
             });
         }
-        _ => push_bond_rails(scene, out, b, frame),
+        _ => push_bond_rails(scene, out, b, frame, &mut rail_depths),
     }
     if b.order == 5 && b.display == "plain" {
         head(out, end, uy.atan2(ux), false, style.line_width());
     }
-    cut_bond_crossings(scene, out, bond_index, bond_start);
-    if !scene.opacity.is_empty() {
-        let parts = out.drain(bond_start..).collect();
-        out.extend(scene.opacity.bond_parts(scene.doc, b, parts));
+    if let Some(sources) = ink_sources {
+        for (index, part) in out.iter().enumerate().skip(bond_start) {
+            let field = rail_depths
+                .get(&index)
+                .map(|r| r.field)
+                .unwrap_or_else(|| crate::rear_opacity::bond_field(scene.doc, b));
+            sources.push((field, vec![part.clone()]));
+        }
+    }
+    if scene.opacity.is_empty() {
+        cut_bond_crossings(scene, out, bond_index, bond_start);
+    } else {
+        let parts: Vec<_> = out.drain(bond_start..).collect();
+        for (index, part) in parts.into_iter().enumerate() {
+            let cut = crate::crossings::cut(
+                vec![part],
+                scene
+                    .crossing_gaps
+                    .get(bond_index)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+            );
+            if let Some(rail) = rail_depths.get(&(bond_start + index)) {
+                out.extend(scene.opacity.rail_parts(scene.doc, b, rail, cut));
+            } else {
+                out.extend(scene.opacity.bond_parts(scene.doc, b, cut));
+            }
+        }
     }
     collect_joined_outlines(scene, out, joined, bond_start, b);
     recolor_bond(out, bond_start, b);
@@ -1319,6 +1445,7 @@ fn push_bond_rails(
     out: &mut Vec<Primitive>,
     b: &Bond,
     frame: BondFrame<'_>,
+    rail_depths: &mut std::collections::BTreeMap<usize, projected_bonds::RailDepth>,
 ) {
     let BondScene {
         doc,
@@ -1378,7 +1505,7 @@ fn push_bond_rails(
         let projected =
             if matches!(order, 2 | 7) && b.double_position == DoublePosition::Auto && *offset != 0.
             {
-                projected_bonds::rail(
+                projected_bonds::rail_depth(
                     doc,
                     b,
                     start,
@@ -1394,8 +1521,8 @@ fn push_bond_rails(
             } else {
                 None
             };
-        let (first, last) = match projected {
-            Some(Some(rail)) => rail,
+        let (first, last) = match projected.as_ref() {
+            Some(Some(rail)) => rail.points,
             Some(None) => continue,
             None => (
                 start.offset(nx * offset + ux * trim, ny * offset + uy * trim),
@@ -1431,6 +1558,25 @@ fn push_bond_rails(
         if (last.x - first.x) * ux + (last.y - first.y) * uy <= 0.1 {
             continue;
         }
+        rail_depths.insert(
+            out.len(),
+            match projected {
+                Some(Some(mut rail)) => {
+                    rail.points = (first, last);
+                    rail
+                }
+                _ => projected_bonds::RailDepth {
+                    points: (first, last),
+                    field: crate::rear_opacity::Field::Bond {
+                        a: a.position,
+                        b: z.position,
+                        wa: a.depth,
+                        wb: z.depth,
+                    },
+                    support: vec![],
+                },
+            },
+        );
         if index == 0 && *offset == 0. && joins.needed(b) {
             out.push(Primitive::Polygon(joins.polygon(b, first, last)));
         } else if display == "bold" {

@@ -668,7 +668,7 @@ impl App {
                         ]
                         .spacing(8)
                         .align_y(Alignment::Center),
-                        text("100% keeps all ink. 0% hides the rear half. Front ink stays opaque.")
+                        text("100% keeps all ink. 0% hides occluded rear cage ink. Exposed outlines stay solid.")
                             .size(11)
                             .style(muted_text),
                     ]
