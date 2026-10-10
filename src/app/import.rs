@@ -12,6 +12,13 @@ use std::path::{Path, PathBuf};
 
 /// Widget id of the text box, focused whenever the tab opens.
 pub(super) const INPUT: &str = "import-input";
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum InputKind {
+    #[default]
+    Structure,
+    Name,
+}
 /// File extensions inserted as structures, with their import format.
 const STRUCTURES: [(&str, &str); 6] = [
     ("mol", "mol"),
@@ -42,6 +49,7 @@ const EXAMPLES: [Example; 4] = [
 
 #[derive(Debug, Clone)]
 pub enum Action {
+    InputKind(InputKind),
     Edit(text_editor::Action),
     ReplaceText(String),
     /// Opens or closes the Insert ▾ menu.
@@ -72,6 +80,7 @@ pub struct Batch {
 
 #[derive(Default)]
 pub struct State {
+    pub kind: InputKind,
     pub input: text_editor::Content,
     /// Import format of the text in the box, or None while it is blank.
     format: Option<&'static str>,
@@ -290,6 +299,15 @@ impl App {
 
     pub(super) fn import_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::InputKind(kind) => {
+                self.imports.kind = kind;
+                self.imports.menu = false;
+                self.imports.examples_menu = false;
+                if kind == InputKind::Structure {
+                    self.cancel_name_import();
+                }
+                return iced::widget::operation::focus(self.import_input_id());
+            }
             Action::Edit(action) => {
                 let edit = action.is_edit();
                 self.imports.input.perform(action);
@@ -485,6 +503,41 @@ impl App {
     }
 
     pub(super) fn import_panel(&self) -> Element<'_, Message> {
+        let kind = self.imports.kind;
+        let modes = row![
+            reshiki::accessibility::button(
+                "import-kind-structure",
+                "Import structure",
+                text("Structure").size(12),
+            )
+            .checked(kind == InputKind::Structure)
+            .style(super::workspace::control(kind == InputKind::Structure))
+            .on_press(Message::Imports(Action::InputKind(InputKind::Structure))),
+            reshiki::accessibility::button(
+                "import-kind-name",
+                "Import chemical name",
+                text("Name").size(12),
+            )
+            .checked(kind == InputKind::Name)
+            .style(super::workspace::control(kind == InputKind::Name))
+            .on_press(Message::Imports(Action::InputKind(InputKind::Name))),
+        ]
+        .spacing(4);
+        let body = match kind {
+            InputKind::Structure => self.structure_import_panel(),
+            InputKind::Name => self.name_import_panel(),
+        };
+        column![modes, body].spacing(12).into()
+    }
+
+    pub(super) fn import_input_id(&self) -> &'static str {
+        match self.imports.kind {
+            InputKind::Structure => INPUT,
+            InputKind::Name => "import-name",
+        }
+    }
+
+    fn structure_import_panel(&self) -> Element<'_, Message> {
         let state = &self.imports;
         let ready = state.format.is_some() && !self.tab.busy;
         let editor = text_editor(&state.input)

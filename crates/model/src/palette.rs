@@ -413,6 +413,7 @@ pub fn for_each_color_mut(doc: &mut Document, mut visit: impl FnMut(&mut Color))
             visit(color);
         }
         visit(&mut atom.display.stereo.style.color);
+        visit(&mut atom.display.mapping.style.color);
         if let Some(number) = &mut atom.display.number {
             visit(&mut number.style.color);
         }
@@ -462,7 +463,7 @@ pub fn any_color(doc: &Document, test: impl Fn(Color) -> bool) -> bool {
             .into_iter()
             .chain(a.display.highlight)
             .chain(a.display.hydrogen_color)
-            .chain([a.display.stereo.style.color])
+            .chain([a.display.stereo.style.color, a.display.mapping.style.color])
             .chain(a.display.number.as_ref().map(|n| n.style.color))
     });
     let bonds = doc.bonds.iter().flat_map(|b| {

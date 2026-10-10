@@ -1,0 +1,24 @@
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming-backend)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.68s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/agent_api_runtime.rs (/tmp/reshiki-opsin-core-target/debug/deps/agent_api_runtime-9a66f456c73fcdeb)
+
+running 6 tests
+test the_heap_ceiling_is_validated_and_applied ... ok
+test oversize_lines_are_refused_and_serving_continues ... ok
+test import_text_past_the_budget_is_a_budget_error ... ok
+test a_duplicate_in_flight_id_is_an_invalid_request ... ok
+test cancelled_renders_get_at_most_one_response ... ok
+test busy_answers_only_calls_beyond_the_executor_queue ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.14s
+
+     Running tests/chemical_naming_baseline.rs (/tmp/reshiki-opsin-core-target/debug/deps/chemical_naming_baseline-d87a60abf1ec6f6c)
+
+running 2 tests
+test naming_reference_graphs_are_valid_and_distinct_before_ui_changes ... ok
+test existing_import_rejects_names_and_accepts_the_graph_control ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

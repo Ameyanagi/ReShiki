@@ -1,0 +1,16 @@
+{
+  "signed_executable": "8d96eff1c44f124b2364da68a39e9808c5dc1889066dc980249fb88eba79477d",
+  "bundle_id": "dev.reshiki.names-maps-cleanup-review-20261011-v1",
+  "codesign_verified": true,
+  "launchservices_environment_overrides": {
+    "RESHIKI_NAMING_HELPER": "",
+    "RESHIKI_INCHI_HELPER": "",
+    "MORUNO_INCHI_HELPER": "",
+    "RESHIKI_GEOMETRY_HELPER": "",
+    "RESHIKI_RDKIT_HELPER": "",
+    "VIRTUAL_ENV": "",
+    "PYTHONPATH": "",
+    "PYTHONHOME": ""
+  },
+  "native_runtime": "pending"
+}

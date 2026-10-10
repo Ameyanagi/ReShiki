@@ -1,0 +1,29 @@
+{
+  "command": [
+    "cargo",
+    "clippy",
+    "--locked",
+    "-p",
+    "reshiki",
+    "-p",
+    "reshiki-model",
+    "--all-targets",
+    "-j",
+    "4",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "naming_helper": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/reshiki-compact-name-import-raw",
+  "inchi_helper": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/reshiki-compact-name-import-raw",
+  "require_inchi_helper": "1",
+  "started_unix": 1791619523.936049,
+  "elapsed_seconds": 522.0941700935364,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/clippy1.log",
+  "log_bytes": 2371,
+  "log_sha256": "1c3af8d3db4142c0fe04c71a6b9de75ebeb164b19c5d3e67d901f5596b0ba097"
+}

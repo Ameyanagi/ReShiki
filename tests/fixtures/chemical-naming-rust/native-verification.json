@@ -1,0 +1,180 @@
+{
+  "status": "PASS: native Rust naming forward/reverse, insertion/caption history, strict stereo rejection and fresh-process saved-document reopen",
+  "captured_at_utc": "2026-10-09T22:43:19.899326+00:00",
+  "operator": "root via cua_repl only",
+  "app_path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rust Naming Backend Verified.app",
+  "bundle_id": "dev.reshiki.rust-naming-backend-verified",
+  "signed_executable_sha256": "ef5948ea8c060ce2b7f77a927f45c4f28990052e0d33bb8da1feea98f0e8efd4",
+  "unsigned_default_executable_sha256": "f0b7108f0b0992b0d3363b0bff983fa0ba17375660a4f0910128b81569142c5c",
+  "source_parent": "0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9",
+  "source_patch_sha256": "f237bcec9a3f63bf9ff40e3f4cc2404ef49d7d1d25a456a4860a69043f89e238",
+  "root_independent_patch_apply34": "PASS",
+  "compiler_receipt_sha256": "8a69e3e8c377109aa4b2ebbac7dd2685d403afb681706c02cec9a59aad7af841",
+  "package_provenance_sha256": "e66d44d2bb35cb697dcb09272ffe68f09a2ed27a689b6e53115938a595ed9aa7",
+  "source_bridge_sha256": "2c17f8966c7aee0a2c3d83ca0bde1502aadfd65b780bee37e974e2138b09528d",
+  "initial_process_pid": 70852,
+  "initial_process_exit_confirmed": true,
+  "fresh_process_pid": 74928,
+  "raw_screenshot_size": [
+    2560,
+    1704
+  ],
+  "appearance": "light; JACS/ACS; Arial10; main camera250% after insertion/reopen; initial preview100%; keyboard drawing off; recovery draft untouched",
+  "checks": [
+    {
+      "workflow": "ethanol local parse and editable insert",
+      "result": "CCO; three atoms/two bonds; one Undo removes insertion; Redo restores"
+    },
+    {
+      "workflow": "selected ethanol local systematic name",
+      "result": "ethan-1-ol"
+    },
+    {
+      "workflow": "insert generated caption",
+      "result": "one ethan-1-ol text annotation; one Undo removes only caption; Redo restores; saved caption file differs only in annotations"
+    },
+    {
+      "workflow": "(R)-lactic acid local parse and reverse name",
+      "result": "C[C@@H](O)C(=O)O; six atoms/five bonds; (2R)-2-hydroxypropanoic acid"
+    },
+    {
+      "workflow": "(+)-lactic acid",
+      "result": "rejected with optical-rotation/stereochemistry explanation; no editable preview or graph edit observed"
+    },
+    {
+      "workflow": "fresh-process ethanol caption reopen",
+      "result": "same saved graph/caption; Undo and Redo disabled"
+    },
+    {
+      "workflow": "fresh-process R-lactic reopen and local name generation",
+      "result": "same wedge and six-atom/five-bond graph; generates (2R)-2-hydroxypropanoic acid; Undo and Redo stay disabled"
+    }
+  ],
+  "independent_semantic_receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/naming-backend-validation/independent-current-native-semantics.json",
+  "independent_semantic_receipt_sha256": "b2177b546fd26e0410466fceec41d8b4d848a0742911f13a3ca57c0ce8db9cbf",
+  "comparison_limits": [
+    "Current-app before-local-parse is a workflow before image, not a preimplementation baseline. Preimplementation screenshot remains pending.",
+    "Reopen automatically recenters the camera; image framing differs from insertion while graph coordinates stay unchanged.",
+    "Optical-rotation rejection was observed visually/history; no pre/post JSON byte claim is made for that specific action.",
+    "The forward Rust OPSIN port and reverse organic rules have bounded documented coverage, not full IUPAC/PIN coverage.",
+    "Development-only RDKit independent graph/stereo reconstruction is not a shipping dependency."
+  ],
+  "files": {
+    "ethanol-before-local-parse.ax.txt": {
+      "bytes": 4334,
+      "sha256": "2f4665bee798f3e5863b2c9302a4699481c842864925aadd8809d07ba9466f5b"
+    },
+    "ethanol-before-local-parse.jpg": {
+      "bytes": 380431,
+      "sha256": "c0f8b1cc3177b65e37df6a7327594eab4620081a032134ad9d4371a6dc0074c7"
+    },
+    "ethanol-caption-fresh-process-reopened.ax.txt": {
+      "bytes": 4268,
+      "sha256": "d0b9688bd9341aad7ce72b42dab8a272b4330a1294327fe624c3612ed266de39"
+    },
+    "ethanol-caption-fresh-process-reopened.jpg": {
+      "bytes": 329613,
+      "sha256": "bcf2e2050332b93dc67700524f2fda944522cadd2500dee4605cdb08f9836cae"
+    },
+    "ethanol-local-parse-preview.ax.txt": {
+      "bytes": 4518,
+      "sha256": "6d08ac50efe62e554d04309188b74ab45153b5ee67c4ae0d812f17dc9e7cbf69"
+    },
+    "ethanol-local-parse-preview.jpg": {
+      "bytes": 338755,
+      "sha256": "eb502fa208add06a9c445fc1d0d424fefacd4273c205685c76cae07358924de3"
+    },
+    "ethanol-native-generated-name.ax.txt": {
+      "bytes": 4402,
+      "sha256": "b7c40831e7c60916c7b39067de5762ca033fa4d7a04d5f867e00ab8574133389"
+    },
+    "ethanol-native-generated-name.jpg": {
+      "bytes": 466953,
+      "sha256": "991060f0468b42bdfc62a0cd3a9dff0b7cdb9b24ec563a2c52e4d2cc939e0842"
+    },
+    "ethanol-native-inserted.ax.txt": {
+      "bytes": 4534,
+      "sha256": "dde376a1588b52bc9855603d29d9c72952c0bfad137afd7c97e5f3f5bc4ec6ff"
+    },
+    "ethanol-native-inserted.jpg": {
+      "bytes": 404158,
+      "sha256": "b1c2938ce6a22656d59a3ec59bd0f1af89e133c859fad02df2a566eccf58d4d7"
+    },
+    "ethanol-native-name-caption.ax.txt": {
+      "bytes": 4458,
+      "sha256": "fbb5f7788f53e461ed5e5f383f3ca527aee4298f9160778ae26b508e2b5a1f4b"
+    },
+    "ethanol-native-name-caption.jpg": {
+      "bytes": 490119,
+      "sha256": "609fb434ab93a6362d1c31bfa61b6335485c67d7d588eef391529351243305c2"
+    },
+    "ethanol-one-caption-undo.ax.txt": {
+      "bytes": 4435,
+      "sha256": "07f0a7356ba11021205eb40187bc8fe92db46ae9fc665c4db4271464d81008f3"
+    },
+    "ethanol-one-caption-undo.jpg": {
+      "bytes": 470283,
+      "sha256": "b535ae0a7ffb6bd6d767a596111cd034f42d7643124f4eafaafe84c8f4567503"
+    },
+    "ethanol-one-undo-empty.ax.txt": {
+      "bytes": 4581,
+      "sha256": "fc742c0b2ab122bba95a69183a158ca7490008b7c2a4d054bcac3e6afac0ddbb"
+    },
+    "ethanol-one-undo-empty.jpg": {
+      "bytes": 375970,
+      "sha256": "a29a50eabe6703119fa2ead01ddfe1c2966424c39a0d798f10035ae7924eebaf"
+    },
+    "ethanol-rust-caption-native.rsk": {
+      "bytes": 2246,
+      "sha256": "d8a51047d9e1dc8866815246bebf2b3306a893dfbb0597731070f71e1098c004"
+    },
+    "ethanol-rust-native.rsk": {
+      "bytes": 1681,
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c"
+    },
+    "optical-rotation-native-rejected.ax.txt": {
+      "bytes": 4372,
+      "sha256": "c1cbaeaf030ad2c21d14fac9c4f50b6ad1b560357373ff349ddd976f33ab7da7"
+    },
+    "optical-rotation-native-rejected.jpg": {
+      "bytes": 512667,
+      "sha256": "e3f10e9538cea582da81b9685eda31d9b5722392f01cbdc6f486318e7009075b"
+    },
+    "r-lactic-fresh-process-regenerated-name.ax.txt": {
+      "bytes": 4264,
+      "sha256": "568ac1cc2f482cf22acbf3480884a6249ec83d09b89df929bfca9f44a0b80190"
+    },
+    "r-lactic-fresh-process-regenerated-name.jpg": {
+      "bytes": 475342,
+      "sha256": "67e05567d568dc16eea32ae1f068dafdb04c383e6a9b90dc7ee8a6b0d3471833"
+    },
+    "r-lactic-fresh-process-reopened.ax.txt": {
+      "bytes": 4247,
+      "sha256": "b8eff2f2ba9705b1ab6f05e8188c600cb677337be847cb0fe668d715cb65bd54"
+    },
+    "r-lactic-fresh-process-reopened.jpg": {
+      "bytes": 333709,
+      "sha256": "90b0c1c6c2cc834c20227a3c4c6d4fc2a9d123fdfce642612818b7b2e28ab7a9"
+    },
+    "r-lactic-native-generated-name.ax.txt": {
+      "bytes": 4603,
+      "sha256": "0b34e74d0eab804820cbf8d4ef926309e745b18d33bb0012d2f9b80b610a5e52"
+    },
+    "r-lactic-native-generated-name.jpg": {
+      "bytes": 506937,
+      "sha256": "21913a14755ce4530905e0856447baea60f83701d7a54ef04953eb050d428924"
+    },
+    "r-lactic-native-local-preview.ax.txt": {
+      "bytes": 4547,
+      "sha256": "1606ea6c02bae39867cc160adb345bf8288ee369016c77ba4b5a60fa74f3db04"
+    },
+    "r-lactic-native-local-preview.jpg": {
+      "bytes": 350347,
+      "sha256": "1d04f6dfea2df05cd6d6c47b45ea7f99dff8c76181324656e88348a75f683441"
+    },
+    "r-lactic-rust-native.rsk": {
+      "bytes": 3533,
+      "sha256": "27d7e0604d353410c216fa63be1e32424257422d7ceada204d7c28bba1753599"
+    }
+  }
+}

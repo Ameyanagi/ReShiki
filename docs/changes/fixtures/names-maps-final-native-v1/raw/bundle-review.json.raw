@@ -1,0 +1,245 @@
+{
+  "status": "PACKAGED_SIGNATURE_AND_SOURCE_PASS_NATIVE_ACCEPTANCE_UNRUN",
+  "utc": "2026-10-10T20:43:33.661338+00:00",
+  "source_tree": "bfbce003804680bd18aa39048490b035a09975dc",
+  "source_manifest_sha256": "e27f6025b6a34de08800fad211297d77bd946333bf38688aee70f351657f20be",
+  "build_provenance_receipt_sha256": "9ad84ca06f0004a72e1a80c255361350225649177ae4e4ce38de3a41ed114e93",
+  "bundle": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/names-maps-cleanup-native-proposal-v1/ReShiki Names Maps Final Review.app",
+  "bundle_id": "dev.reshiki.names-maps-cleanup-review-20261011-v1",
+  "raw_executable_sha256": "410bbb3dce4e8f2ada613d2d157389e2f78e1f7b599c4e249fe6fe2b0d7e4d3e",
+  "signed_executable_sha256": "8d96eff1c44f124b2364da68a39e9808c5dc1889066dc980249fb88eba79477d",
+  "test_helper_sha256": "9e770329748a6eab06615a600fca3b306be04b31b562f8440542d7af3cb4618a",
+  "test_helper_shipped": false,
+  "bundle_recipe_sha256": "8724d986efd11503c7d3f8749acbf62197b998e85dcf0b922eaa9468f27c94b0",
+  "wrapper_sha256": "8bd78d54b31269fc6debbf2431c7aec0cfa045610ab64cc791cd11ce28e1c906",
+  "signature": "Actual ordinary ad-hoc signature, strict verification passed; not notarized",
+  "single_executable": true,
+  "arm64": true,
+  "system_dylibs_only": true,
+  "license_notices": "Five original byte-exact files reused from qualified 22a package; all manifests, lock, licenses and notice-generation source unchanged. Not regenerated.",
+  "old_license_receipt_sha256": "b59e918f0e8621b0a7218dd5aca06dcd5e928ce451ed0c12e8cd4961ae05a833",
+  "license_source_delta": [
+    "src/app.rs",
+    "src/lib.rs",
+    "tests/composed_attachment_name_mapping.rs",
+    "tests/composed_map_rear_visibility.rs",
+    "tests/composed_native_roundtrip.rs"
+  ],
+  "files": {
+    "Contents/Info.plist": {
+      "sha256": "858effc6d6ff90c226a0360bba7debc1481789203f5bf3b5a3e93bc36a957427",
+      "bytes": 1965
+    },
+    "Contents/MacOS/reshiki": {
+      "sha256": "8d96eff1c44f124b2364da68a39e9808c5dc1889066dc980249fb88eba79477d",
+      "bytes": 252101712
+    },
+    "Contents/Resources/Licenses/LICENSE": {
+      "sha256": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab",
+      "bytes": 963
+    },
+    "Contents/Resources/Licenses/LICENSE-APACHE": {
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    "Contents/Resources/Licenses/LICENSE-MIT": {
+      "sha256": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891",
+      "bytes": 1091
+    },
+    "Contents/Resources/Licenses/NOTICE": {
+      "sha256": "de76896ac4ec7ab106edd6b3ef87bbc67487cccb53593cea13db2dbcb6989c21",
+      "bytes": 2112
+    },
+    "Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": {
+      "sha256": "f5c87d72c3b653072e1fc6815e1121c2295c9f7633977f6623f3f1c1c9edb50f",
+      "bytes": 3838092
+    },
+    "Contents/Resources/ReShiki.icns": {
+      "sha256": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766",
+      "bytes": 1325974
+    },
+    "Contents/_CodeSignature/CodeResources": {
+      "sha256": "ed5952fcc2d80969a35469b3e3a9ed344220dc58748d73c8a37c594a9a5fee9f",
+      "bytes": 3688
+    }
+  },
+  "ordinary_bundle_files": {
+    "Contents/Info.plist": {
+      "sha256": "f56a4b07f1051751ed3d0896461cf33f3f911054138161f4b9aa4800affee064",
+      "bytes": 1886
+    },
+    "Contents/MacOS/reshiki": {
+      "sha256": "6f997cbcf473c1d7de2c2c13169f4f73b18ef7b163581a76711ffa5f6b24fa41",
+      "bytes": 252101680
+    },
+    "Contents/Resources/Licenses/LICENSE": {
+      "sha256": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab",
+      "bytes": 963
+    },
+    "Contents/Resources/Licenses/LICENSE-APACHE": {
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    "Contents/Resources/Licenses/LICENSE-MIT": {
+      "sha256": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891",
+      "bytes": 1091
+    },
+    "Contents/Resources/Licenses/NOTICE": {
+      "sha256": "de76896ac4ec7ab106edd6b3ef87bbc67487cccb53593cea13db2dbcb6989c21",
+      "bytes": 2112
+    },
+    "Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": {
+      "sha256": "f5c87d72c3b653072e1fc6815e1121c2295c9f7633977f6623f3f1c1c9edb50f",
+      "bytes": 3838092
+    },
+    "Contents/Resources/ReShiki.icns": {
+      "sha256": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766",
+      "bytes": 1325974
+    },
+    "Contents/_CodeSignature/CodeResources": {
+      "sha256": "ed5952fcc2d80969a35469b3e3a9ed344220dc58748d73c8a37c594a9a5fee9f",
+      "bytes": 3688
+    }
+  },
+  "changed_for_review_identity_and_signature": [
+    "Contents/Info.plist",
+    "Contents/MacOS/reshiki"
+  ],
+  "payload_inventory_sha256": "c0979a1ef2293fbf2857e20c52ba6a321facce82bbc3e052d32008a5ca3df9d0",
+  "all_commands": [
+    {
+      "argv": [
+        "git",
+        "ls-files",
+        "--stage",
+        "-z"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e2d4255edd5e401fa9f0d149dca60d77c3213a274768f3edaa085bacd6923060",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e0e570c8565a181376b1d54582d78b2be413ebda3e33adf44c7503f92f05f141",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "codesign",
+        "--force",
+        "--deep",
+        "--sign",
+        "-",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/names-maps-cleanup-native-proposal-v1/ReShiki Names Maps Final Review.app"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "9299bf0728422663386080df7617169dc51417e93f9e4d79703c5bc0887bc8ff"
+    },
+    {
+      "argv": [
+        "/usr/bin/codesign",
+        "--force",
+        "--deep",
+        "--sign",
+        "-",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/names-maps-cleanup-native-proposal-v1/ReShiki Names Maps Final Review.app"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "9299bf0728422663386080df7617169dc51417e93f9e4d79703c5bc0887bc8ff"
+    },
+    {
+      "argv": [
+        "/usr/bin/codesign",
+        "--verify",
+        "--deep",
+        "--strict",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/names-maps-cleanup-native-proposal-v1/ReShiki Names Maps Final Review.app"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "/usr/bin/codesign",
+        "--display",
+        "--verbose=4",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/names-maps-cleanup-native-proposal-v1/ReShiki Names Maps Final Review.app"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "5adcb0c9fddede2719f8491f517c6f969ead60e9ce676d6f820c3a5c449bd7c5"
+    },
+    {
+      "argv": [
+        "/usr/bin/file",
+        "-b",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/names-maps-cleanup-native-proposal-v1/ReShiki Names Maps Final Review.app/Contents/MacOS/reshiki"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "643cc5d2dac8a288bdceeae0d8057fecf55ce5eb10dd5ea30d2d48cc957c662b",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "/usr/bin/lipo",
+        "-archs",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/names-maps-cleanup-native-proposal-v1/ReShiki Names Maps Final Review.app/Contents/MacOS/reshiki"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "c1669e1d8edca98769c37d494b76442a1d6e5ffffd7b4da1fb63aef8ebaf6f01",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "/usr/bin/otool",
+        "-L",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/main-integration-20261010-v1/names-maps-cleanup-native-proposal-v1/ReShiki Names Maps Final Review.app/Contents/MacOS/reshiki"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "11800e1bbb3b67601f63153d8c052e3202b3bb0f1052d0d03001100a5707da3d",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "git",
+        "ls-files",
+        "--stage",
+        "-z"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e2d4255edd5e401fa9f0d149dca60d77c3213a274768f3edaa085bacd6923060",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e0e570c8565a181376b1d54582d78b2be413ebda3e33adf44c7503f92f05f141",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "cargo_or_build_invocations": 0,
+  "app_worker_or_gui_invocations": 0,
+  "live_shared_target_access": false,
+  "native_gui_acceptance": "UNRUN_ROOT_ONLY",
+  "runtime_worker_acceptance": "UNRUN_FOR_THIS_BUNDLE",
+  "root_runtime_checklist": [
+    "Verify exact signed executable and unique bundle ID before launching the new private app.",
+    "Unset RESHIKI_NAMING_HELPER, RESHIKI_INCHI_HELPER, MORUNO_INCHI_HELPER and any geometry helper overrides; shipped worker routes use this app current_exe.",
+    "Keep VIRTUAL_ENV/PYTHONPATH/PYTHONHOME and repository/helper-path overrides out of the native acceptance environment; no Java/JAR/API configuration is needed.",
+    "Exercise local name import including (+)-lactic acid S identity, reverse naming, caption Undo/Redo and map labels with retained native fixtures.",
+    "Confirm InChI/naming worker children use Contents/MacOS/reshiki and close on cancellation; no separate helper is installed in the bundle.",
+    "Record native screenshot/save/reopen results separately; source and package verification do not assert GUI acceptance."
+  ]
+}

@@ -1,0 +1,28 @@
+   Compiling zune-jpeg v0.5.15 (/Users/ryuichi/dev/ReShiki-worktrees/projection/vendor/zune-jpeg)
+   Compiling usvg v0.45.1 (/Users/ryuichi/dev/ReShiki-worktrees/projection/vendor/usvg)
+   Compiling reshiki-depict-math v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/crates/depict-math)
+   Compiling reshiki-process-heap v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/crates/process-heap)
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection)
+   Compiling reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/crates/chemistry)
+   Compiling tiff v0.11.3
+   Compiling resvg v0.48.1
+   Compiling image v0.25.10
+   Compiling resvg v0.45.1
+   Compiling cosmolkit-core v0.3.0 (https://github.com/Ameyanagi/COSMolKit.git?rev=252a1f3d6480fc4a0abcd51d76707f51f69b4406#252a1f3d)
+   Compiling reshiki-macos v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/native/macos)
+   Compiling iced_graphics v0.14.0
+   Compiling iced_wgpu v0.14.0
+   Compiling reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/crates/model)
+   Compiling svg2pdf v0.13.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/vendor/svg2pdf)
+   Compiling iced_renderer v0.14.0
+   Compiling iced_program v0.14.0
+   Compiling iced_winit v0.14.1
+   Compiling iced_widget v0.14.2
+   Compiling iced v0.14.0
+   Compiling reshiki-geometry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/native/geometry)
+   Compiling reshiki-io v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/crates/io)
+   Compiling reshiki-agent v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/crates/agent)
+   Compiling reshiki-mcp v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/projection/crates/mcp)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 53.60s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`

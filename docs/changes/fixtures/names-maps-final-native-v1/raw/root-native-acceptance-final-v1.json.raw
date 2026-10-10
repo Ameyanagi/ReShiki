@@ -1,0 +1,224 @@
+{
+  "created_at_utc": "2026-10-10T20:59:33.170314+00:00",
+  "operator": "root",
+  "source_index_tree": "bfbce003804680bd18aa39048490b035a09975dc",
+  "status": "PASS for the focused fresh native acceptance sequence",
+  "scope": "Five cleanup files change formatting and an equivalent direct Document initializer. This is a focused GUI rerun, not a rerun of all earlier tests or a new count of distinct chemical cases.",
+  "package_id": "dev.reshiki.names-maps-cleanup-review-20261011-v1",
+  "package_receipt": {
+    "path": "bundle-review.json",
+    "bytes": 10538,
+    "sha256": "96940e93125cffe00d93d2e8a12c4bd9226b9eefdbe6107e1e4bde6f4cbd4e53"
+  },
+  "prelaunch_receipt": {
+    "path": "root-prelaunch-verification-v1.json",
+    "bytes": 500,
+    "sha256": "3be2b68dd01448ff3ebfbe2481790d7795e9a7be149aa75c02c173fa5448f344"
+  },
+  "native_files": [
+    {
+      "path": "plus-lactic-final.rsk",
+      "bytes": 4320,
+      "sha256": "93de1c1af124f6e2a881b65050e97876beb4bcdfa7bd0cfb666f3ad672013a87"
+    },
+    {
+      "path": "plus-lactic-generated-final.rsk",
+      "bytes": 4343,
+      "sha256": "9ee17d469528cb8ae238f7243e8ac0c0e34aaa8ec4597854941969585b0a67b1"
+    },
+    {
+      "path": "reaction-map-labels-final.rsk",
+      "bytes": 4782,
+      "sha256": "81665fa6645545a524386ae515dd4c03e1cce290a18bcf6ce8711a3deba0c0e0"
+    },
+    {
+      "path": "reaction-map-manual27-final.rsk",
+      "bytes": 4783,
+      "sha256": "09a4b4721850fcaf4c9624eb1f9e9dc476f89884d3e1b3fb8fb36c67883dbf7b"
+    },
+    {
+      "path": "reaction-map-undo-final.rsk",
+      "bytes": 4782,
+      "sha256": "81665fa6645545a524386ae515dd4c03e1cce290a18bcf6ce8711a3deba0c0e0"
+    }
+  ],
+  "captures": [
+    {
+      "step": "01-plus-lactic-entry",
+      "screenshot": {
+        "path": "01-plus-lactic-entry.jpg",
+        "bytes": 247109,
+        "sha256": "3db7d949fb28b0cd056cce5d31d4b2942da10e3248aa932b7a16b11d236c515f"
+      },
+      "accessibility": {
+        "path": "01-plus-lactic-entry.ax.txt",
+        "bytes": 4955,
+        "sha256": "b9861098ab7009c2e8ea0b97ac1ce78add7c80355ca4ab266b3373e95ebd801a"
+      }
+    },
+    {
+      "step": "02-plus-lactic-inserted",
+      "screenshot": {
+        "path": "02-plus-lactic-inserted.jpg",
+        "bytes": 331033,
+        "sha256": "a32e89515274db0696d969db4cfc856381533dfeda6fd466475407626ab22db4"
+      },
+      "accessibility": {
+        "path": "02-plus-lactic-inserted.ax.txt",
+        "bytes": 4976,
+        "sha256": "4fb0511bf48a0699578275cb02359adbe02ec90c5dc6f6d0f4a15d8ec80df56a"
+      }
+    },
+    {
+      "step": "03-plus-lactic-undo",
+      "screenshot": {
+        "path": "03-plus-lactic-undo.jpg",
+        "bytes": 250257,
+        "sha256": "8db93f3dce4e840c355e2ff5428ec9adb2e70e8a43f546129a4eb6d3ef373040"
+      },
+      "accessibility": {
+        "path": "03-plus-lactic-undo.ax.txt",
+        "bytes": 4944,
+        "sha256": "a5b02ebb59c9ff1a3b7d33d0914552af204c102735fbeb0914ccf620ae933130"
+      }
+    },
+    {
+      "step": "04-plus-lactic-redo",
+      "screenshot": {
+        "path": "04-plus-lactic-redo.jpg",
+        "bytes": 299194,
+        "sha256": "fb650af4e04072befd289f4368f3ebc5a4c7c6da874eff3f977409bdf7d0e21c"
+      },
+      "accessibility": {
+        "path": "04-plus-lactic-redo.ax.txt",
+        "bytes": 4940,
+        "sha256": "7df3773085830cdba2cee6549437a9deb0831ad79d99f02133f7648559b23bbf"
+      }
+    },
+    {
+      "step": "05-plus-lactic-saved",
+      "screenshot": {
+        "path": "05-plus-lactic-saved.jpg",
+        "bytes": 303687,
+        "sha256": "3de2ff9e6179bff9d509d819e7b55ad99a8d6ff5fb3a6df4fc54a2c6fe501abe"
+      },
+      "accessibility": {
+        "path": "05-plus-lactic-saved.ax.txt",
+        "bytes": 4967,
+        "sha256": "c285937e85b966a76240095ec5a19e4314f3b9ca670ac5a31c98442925e29803"
+      }
+    },
+    {
+      "step": "06-chemical-name-hidden",
+      "screenshot": {
+        "path": "06-chemical-name-hidden.jpg",
+        "bytes": 287452,
+        "sha256": "fab553c200311463c06d52a35d942698f0c1b4d555e4e54a7d26b40294a3659f"
+      },
+      "accessibility": {
+        "path": "06-chemical-name-hidden.ax.txt",
+        "bytes": 4879,
+        "sha256": "77fe1a6820a609c8d0aefda0c2675ad2893887658697a44fc413eaf15955e1b4"
+      }
+    },
+    {
+      "step": "07-local-generated-name",
+      "screenshot": {
+        "path": "07-local-generated-name.jpg",
+        "bytes": 346801,
+        "sha256": "1519f925f0f29e95ad5a38cbdf543540f8e02fe1ab92058103dba4b1a55aa301"
+      },
+      "accessibility": {
+        "path": "07-local-generated-name.ax.txt",
+        "bytes": 4879,
+        "sha256": "77fe1a6820a609c8d0aefda0c2675ad2893887658697a44fc413eaf15955e1b4"
+      }
+    },
+    {
+      "step": "08-fresh-process-generated-name",
+      "screenshot": {
+        "path": "08-fresh-process-generated-name.jpg",
+        "bytes": 382534,
+        "sha256": "54ab83cbafb1616263ea2fcab1bd94503c590a0d2ba7d2d854f16a0a209c8a95"
+      },
+      "accessibility": {
+        "path": "08-fresh-process-generated-name.ax.txt",
+        "bytes": 4609,
+        "sha256": "2d188ec86995b507c7953521b6586b9943f23ec6a6617eb02cbb6d6251d85365"
+      }
+    },
+    {
+      "step": "09-reaction-map-labels-reopened",
+      "screenshot": {
+        "path": "09-reaction-map-labels-reopened.jpg",
+        "bytes": 332975,
+        "sha256": "bbcadb6a14c902413efd556dea8694b845dd11eb0c14d3879d0bd1a55502817f"
+      },
+      "accessibility": {
+        "path": "09-reaction-map-labels-reopened.ax.txt",
+        "bytes": 4603,
+        "sha256": "11ee7e59ef8cd7db120c7042eaf25d52af5510f6a40cb9e830c882b41c65d600"
+      }
+    },
+    {
+      "step": "10-reactant-map-27",
+      "screenshot": {
+        "path": "10-reactant-map-27.jpg",
+        "bytes": 346330,
+        "sha256": "431ef8734985ba19bd3cac5d0082a1a34119ebc9bc0cde6ffe7592f100283a9d"
+      },
+      "accessibility": {
+        "path": "10-reactant-map-27.ax.txt",
+        "bytes": 4247,
+        "sha256": "83a00b1b5a39a9518575c0eb3ae6491ced6ac704fb78c6d451f91f5b4d14bd5f"
+      }
+    },
+    {
+      "step": "11-reactant-map-undo",
+      "screenshot": {
+        "path": "11-reactant-map-undo.jpg",
+        "bytes": 345545,
+        "sha256": "8d13a8bb3752a2b77491baf0338b8a4ec82dd59efbc8757e307c1c540e2aa83b"
+      },
+      "accessibility": {
+        "path": "11-reactant-map-undo.ax.txt",
+        "bytes": 4253,
+        "sha256": "33ca454119695babf19729ea2b67c20c8d0d4e08d88903cdaa33931cea5aab69"
+      }
+    }
+  ],
+  "supporting_receipts": [
+    {
+      "path": "root-native-graph-check-v1.json",
+      "bytes": 974,
+      "sha256": "6e41594d99b9e185f57fb9a215030df4c08d116838b2b53a0892c94277197a60"
+    },
+    {
+      "path": "fresh-process-reopen-preimage-v1.json",
+      "bytes": 342,
+      "sha256": "67d37c029aa610108ce83b0e53ada5d16a6d19fc8c2c80b3acd57838de8c60f5"
+    },
+    {
+      "path": "root-map-edit-undo-check-v1.json",
+      "bytes": 747,
+      "sha256": "6ca981703d7254eed8fd74511d6aa7bd10218ff8fd0b9c1ee987b372f6951b22"
+    }
+  ],
+  "observations": {
+    "plus_lactic_import": "Six atoms, five bonds, S stereocenter, linked (+)-lactic acid caption.",
+    "undo_redo": "Structure and caption disappear together on one Undo and return on Redo.",
+    "chemical_name_menu": "Hide removes the visible caption; Show generates (2S)-2-hydroxypropanoic acid locally.",
+    "caption_layout": "The full generated caption wraps onto two lines at 250% zoom. No one-line layout or clipping fix is claimed.",
+    "native_graphs": "Both native lactic saves match the earlier qualified saves byte for byte.",
+    "fresh_reopen": "PID41162 quit and was absent before PID42659 opened and saved the generated file byte for byte.",
+    "reaction_map_labels": "Maps1/2/3 visible on both sides after native reopen.",
+    "manual_mapping": "Changing reactant atom2 map2 to27 changes only that field across the whole native document.",
+    "mapping_undo": "One Undo and native save restore the whole original file byte for byte."
+  },
+  "limitations": [
+    "No J prediction.",
+    "The fresh sequence does not positively exercise automatic reaction alignment or reaction-SMILES export; earlier evidence is retained separately.",
+    "Ephemeral worker child PIDs were not observed; same-executable routing is qualified by package/source and missing external-helper overrides, not by a claimed child-process observation.",
+    "The source commit has not succeeded yet: seven normal gates passed and docs/feature-status.md still needs oxfmt formatting."
+  ]
+}

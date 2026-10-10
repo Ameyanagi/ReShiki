@@ -12,6 +12,45 @@ from license_notices import PROJECT_FILES, THIRD_PARTY_FILE, write_notices
 
 
 class LicenseNoticeTests(unittest.TestCase):
+    def test_separately_licensed_workspace_port_keeps_its_own_terms(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in PROJECT_FILES:
+                (root / name).write_text(f"Project {name}")
+            (root / "licenses/rust").mkdir(parents=True)
+            (root / "licenses/rust/manifest.json").write_text("{}")
+            packages = []
+            for name, license_name in [("reshiki", "MIT OR Apache-2.0"), ("opsin", "MIT")]:
+                source = root / name
+                source.mkdir()
+                (source / "Cargo.toml").write_text(f'name = "{name}"\nlicense = "{license_name}"\n')
+                packages.append(
+                    {
+                        "id": name,
+                        "name": name,
+                        "version": "1",
+                        "license": license_name,
+                        "manifest_path": str(source / "Cargo.toml"),
+                    }
+                )
+            upstream = b"Original OPSIN copyright and complete MIT terms\r\n"
+            attribution = b"Ported from the pinned upstream source, not original project code.\n"
+            (root / "opsin/LICENSE").write_bytes(upstream)
+            (root / "opsin/NOTICE").write_bytes(attribution)
+            write_notices(
+                root,
+                root / "output",
+                {"packages": packages, "workspace_members": ["reshiki", "opsin"]},
+            )
+            result = (root / "output" / THIRD_PARTY_FILE).read_bytes()
+            self.assertIn(b"opsin@1/LICENSE", result)
+            self.assertIn(b"opsin@1/NOTICE", result)
+            self.assertIn(b"opsin@1/Cargo.toml", result)
+            self.assertIn(upstream, result)
+            self.assertIn(attribution, result)
+            self.assertEqual(result.count(b"Original workspace crate:"), 1)
+            self.assertEqual(result.count(b"Separately licensed workspace component:"), 1)
+
     def test_nested_licenses_and_versioned_supplements_survive_packaging(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

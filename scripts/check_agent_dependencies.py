@@ -7,7 +7,8 @@ ship, so the interop test's rmcp `client` feature is out of scope):
 - rmcp features stay within the reviewed server-only allowlist;
 - rmcp's subtree contains no HTTP, TLS or WebSocket stack.
 Every Cargo package added since the baseline commit must have a license
-expression built only from the permissive licenses below. `cargo tree` resolves
+expression built only from the permissive licenses below, or match the exact
+reviewed package-specific MIT choice below. `cargo tree` resolves
 foreign targets without installing them, so one host covers all release targets.
 """
 
@@ -51,6 +52,17 @@ LICENSES = frozenset(
     }
 )
 JSON_WIDTH = 100
+# This publisher explicitly offers either license (COPYING). Select MIT only
+# for the reviewed crates.io archive; never generalize this to another OR branch,
+# package/version/source, or checksum. Preserve both terms in packaged notices.
+# Attribution and source-text hashes: licenses/rust/aho-corasick-1.1.5-mit-choice.json.
+AHO_CORASICK_MIT_CHOICE = {
+    "name": "aho-corasick",
+    "version": "1.1.5",
+    "license": "Unlicense OR MIT",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "checksum": "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba",
+}
 
 
 def run(root, *command):
@@ -138,11 +150,31 @@ def network_problems(target, packages):
     ]
 
 
-def license_problems(metadata, known):
+def selected_mit_license(package, locked_packages):
+    """Match the explicit MIT choice against both metadata and locked provenance."""
+    choice = AHO_CORASICK_MIT_CHOICE
+    if any(
+        package.get(field) != choice[field] for field in ("name", "version", "license", "source")
+    ):
+        return False
+    return any(
+        all(
+            locked.get(field) == choice[field]
+            for field in ("name", "version", "source", "checksum")
+        )
+        for locked in locked_packages
+    )
+
+
+def license_problems(metadata, known, locked_packages):
     problems = []
     for package in metadata["packages"]:
         key = f"{package['name']}@{package['version']}"
-        if key not in known and not license_allowed(package.get("license")):
+        if (
+            key not in known
+            and not license_allowed(package.get("license"))
+            and not selected_mit_license(package, locked_packages)
+        ):
             problems.append(
                 f"{key} has a license outside the allowed list: {package.get('license')!r}"
             )
@@ -163,7 +195,8 @@ def verify(root=ROOT, metadata=None):
         problems += network_problems(target, rmcp_packages(root, target))
     if metadata is None:
         metadata = json.loads(run(root, "cargo", "metadata", "--locked", "--format-version", "1"))
-    problems += license_problems(metadata, set(baseline["packages"]))
+    lock = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
+    problems += license_problems(metadata, set(baseline["packages"]), lock.get("package", []))
     if problems:
         raise ValueError("Agent dependency audit failed:\n" + "\n".join(f"- {p}" for p in problems))
 

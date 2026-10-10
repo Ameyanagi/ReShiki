@@ -1,0 +1,9 @@
+{
+  "first_pid": 41162,
+  "first_pid_after_quit": "absent",
+  "fresh_pid": 42659,
+  "file": "plus-lactic-generated-final.rsk",
+  "save_after_reopen_byte_exact": true,
+  "sha256": "9ee17d469528cb8ae238f7243e8ac0c0e34aaa8ec4597854941969585b0a67b1",
+  "next_map_copy_sha256": "81665fa6645545a524386ae515dd4c03e1cce290a18bcf6ce8711a3deba0c0e0"
+}

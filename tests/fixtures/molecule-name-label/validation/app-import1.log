@@ -1,0 +1,20 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-031b697453cae98b)
+
+running 11 tests
+test app::import::tests::background_file_insertion_keeps_its_status_guards_and_undo ... ok
+test app::import::tests::dropped_drawings_open_in_tabs_without_a_save_dialog ... ok
+test app::import::tests::files_insert_side_by_side_at_the_pointer_as_one_undo_step ... ok
+test app::import::tests::files_route_by_extension_and_label_the_drop ... ok
+test app::import::tests::hovered_files_drop_together_and_unsupported_files_change_nothing ... ok
+test app::import::tests::mixed_empty_batch_is_rejected_without_inserting_any_files ... ok
+test app::import::tests::open_reads_binary_cdx ... ok
+test app::import::tests::stale_import_does_not_release_a_new_documents_operation ... ok
+test app::import::tests::structure_files_reject_invalid_text_and_preserve_binary_cdx ... ok
+test app::import::tests::the_import_tab_focuses_its_box_and_its_menu_closes_like_other_menus ... ok
+test app::import::tests::typed_text_reports_its_detected_format ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 668 filtered out; finished in 7.85s
+
