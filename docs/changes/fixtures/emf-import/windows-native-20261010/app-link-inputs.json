@@ -1,0 +1,1637 @@
+﻿{
+    "when":  "2026-10-09T10:11:18.8752718Z",
+    "checkedSourceFiles":  2559,
+    "sourceVersion":  3,
+    "source":  "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009",
+    "method":  "Replay exact Cargo-captured app compiler argument vector; only --out-dir, linker /OUT and /PDB moved to owned guarded output paths. Same source, target, profile, features, libraries, resources and safe Cargo environment.",
+    "dependencies":  [
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\compiler-capture.exe",
+                             "bytes":  327680,
+                             "sha256":  "f23f6fc743e6cb241871ed0b318570c2120bbfc256f2d649ecb9505da1f5c97a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\compiler-captures\\reshiki-main.bin",
+                             "bytes":  6609,
+                             "sha256":  "8a928aaf6dec244975e96b38f09315b9797811f1b515531128a3f5f64f443225"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\0376cccfbd31d607-ocsp_asn.o",
+                             "bytes":  22710,
+                             "sha256":  "07e28027514ec470c5ae4ee22d3a2ed965dfb5def73949955f4ca4e02e066ac7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\0376cccfbd31d607-ocsp_client.o",
+                             "bytes":  14262,
+                             "sha256":  "4f0a4a75ca08d4616e70aecf57c5a0f1492da1f9523d02c5580ccc90b1ff6239"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\0376cccfbd31d607-ocsp_extension.o",
+                             "bytes":  9711,
+                             "sha256":  "91c48dced2be82196910fe041e77364b43fab17304b2f13cb3b6926b1f00edb3"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\0376cccfbd31d607-ocsp_http.o",
+                             "bytes":  11174,
+                             "sha256":  "ba25ac21961a07a563ce29d7692ff61326aa4779c3860921678473098199295e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\0376cccfbd31d607-ocsp_lib.o",
+                             "bytes":  7938,
+                             "sha256":  "6f518b26756a055c144f2a5aabfec7c61f84cfce676e5008ad4b928f6598e8a2"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\0376cccfbd31d607-ocsp_print.o",
+                             "bytes":  12195,
+                             "sha256":  "1beb96b77b08757c82137cecb165a82859bd9b6605037c7745abbc3072647e0a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\0376cccfbd31d607-ocsp_server.o",
+                             "bytes":  16836,
+                             "sha256":  "10ab32105f0c2e0d8be45718885f4398adfd45f71166a34499b7fa54af11c2f0"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\0376cccfbd31d607-ocsp_verify.o",
+                             "bytes":  20861,
+                             "sha256":  "f88c931328b3c08bef7c069c0de572d2333b405fb1880a92d2dccd3787a872cb"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\038c5bac7118b67c-cipher.o",
+                             "bytes":  13711,
+                             "sha256":  "930667735540b3da20d44489aa2b66298f9e2ce45d383320ee690f7dacfeb99f"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-cipher_extra.o",
+                             "bytes":  7112,
+                             "sha256":  "2c4335861388a94e4471ce823924a891a07d196c4c75801b33828967fc7362c9"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-cts.o",
+                             "bytes":  6717,
+                             "sha256":  "5255746739a8beaf2f2b446e15f9cd82cc8f7fa0867796b49ed15d549ddc63d5"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-derive_key.o",
+                             "bytes":  3693,
+                             "sha256":  "97761e8e74bd36ebd3128fb4b08dab0682eb813cef50c19db2541a86c4a43c35"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_aes_cbc_hmac_sha1.o",
+                             "bytes":  13927,
+                             "sha256":  "54c73d0ac990e122495aecb1513681e984c111ae11391e45fb9940b4b18d6302"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_aes_cbc_hmac_sha256.o",
+                             "bytes":  13692,
+                             "sha256":  "035a37e8366d2f28a7a25b4e3ea6620404370c32ad925ff9033bfe4972c77351"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_aesctrhmac.o",
+                             "bytes":  9552,
+                             "sha256":  "21ed8a792295783cdc9bf56db6c641d8c5c1ca5ac05bb1d1071eb8fc0e39157a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_aesgcmsiv.o",
+                             "bytes":  9984,
+                             "sha256":  "3d30db4e9afb34aec78e26c709d34e2705f90c49c8f61c8ffc9858ccd44824b2"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_chacha20poly1305.o",
+                             "bytes":  20289,
+                             "sha256":  "ef32cee02e46e829fff330e35e6bf06065af57dbc160eec48feece405321620d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_des.o",
+                             "bytes":  5096,
+                             "sha256":  "c48178dcb6e18da48a0d516e61dcda853cae857f21a811045c7e8bf16f860d91"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_null.o",
+                             "bytes":  1674,
+                             "sha256":  "21a9e4583ec162f4e75f5252ee04b75e59eb54a38b53e47eece41fa806b28bc1"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_rc2.o",
+                             "bytes":  10886,
+                             "sha256":  "cbb4f6535193c3a12c801da5630d17708f00d889f4d4e5ec00bb7d0917aff01c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_rc4.o",
+                             "bytes":  1748,
+                             "sha256":  "0e24eeffb9148f2e0aba39d1aa12c0e4ea3f50ee43ca5dc85fb2e05124d547f2"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-e_tls.o",
+                             "bytes":  27799,
+                             "sha256":  "02997853e7dc97d6a66c508186c41e92631f943accf879fb32973ef7faeec172"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05e200adf7708fba-tls_cbc.o",
+                             "bytes":  20314,
+                             "sha256":  "acb5c7a97e7290c0ef014bdcc34a4e6b2ef646e2c4fae1a27d2c5a7160b4eb04"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\05f94af72e45e6d8-hrss.o",
+                             "bytes":  39615,
+                             "sha256":  "93f8c865cafd459a8871abcc2ee579cb7b29652105a43052438b1cfe57f4b0cc"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\0ad0a0327b1fac2b-err_data.o",
+                             "bytes":  21238,
+                             "sha256":  "227b1705b1faedd19cf30cbf7ba84a765a0068fbdba6345cd17ce133f946c468"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\10ffda9389ab7476-ccrandomgeneratebytes.o",
+                             "bytes":  621,
+                             "sha256":  "5477fd0cc32f4ae8d7209ca7d724e3747ab96b4b6326bff9b053c64dd92be874"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\10ffda9389ab7476-deterministic.o",
+                             "bytes":  613,
+                             "sha256":  "721fd51c6dce872dd8072aee64adb11158de91b78b4f5ebfb1fd923373fb55ba"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\10ffda9389ab7476-getentropy.o",
+                             "bytes":  609,
+                             "sha256":  "88844d8979501475083e65ce3f770cf508089798e070a2e8609a928bded1214b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\10ffda9389ab7476-rand_extra.o",
+                             "bytes":  2941,
+                             "sha256":  "64abd99033cf831b907c3d27a6b3c87e03517330237577305df554f19874d7b6"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\10ffda9389ab7476-urandom.o",
+                             "bytes":  605,
+                             "sha256":  "f2e84d77d519ea161edcad59fc8a251d7cb50b19283cc6b0389f87d6c6161b5c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\10ffda9389ab7476-vm_ube_fallback.o",
+                             "bytes":  1210,
+                             "sha256":  "16f02e21ce5ff07fdaa557a038e3623fbee3ed7caa2ba619782c114ffb4a6273"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\10ffda9389ab7476-windows.o",
+                             "bytes":  2004,
+                             "sha256":  "bb5ac6d7039dd01c6ad1cc0e8c88530cecf8029870712e5be4eaf0726f1b29bd"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-evp_asn1.o",
+                             "bytes":  25425,
+                             "sha256":  "123ec05f1f219fcae93207e583e42c1ba9895b80ed80e063a6ba0ab908b7dd6f"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_dh.o",
+                             "bytes":  8796,
+                             "sha256":  "d445a9766cce482b9ff1adc55b7457cc0856c896cf3e117881e57b27a6bd5a75"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_dh_asn1.o",
+                             "bytes":  9562,
+                             "sha256":  "b38cbdf36c7076f1c98e775c358d2da64a8b7f254f8868bd67ed2fde694bbf70"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_dsa.o",
+                             "bytes":  13257,
+                             "sha256":  "64b03a8de79ca85d680078569ba72cdb555a48ce26d912c305e6bcecc3817947"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_dsa_asn1.o",
+                             "bytes":  9033,
+                             "sha256":  "a94fa684d8a37ee9e85ca5e15ad815bf3dbe8381cf676fde48efd077c4887dc4"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_ec_asn1.o",
+                             "bytes":  9391,
+                             "sha256":  "0fc833267170f9753be5636b2572edd6b2ea1fe29a2f9a1b3bc20d98f6d39f5a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_ed25519_asn1.o",
+                             "bytes":  12808,
+                             "sha256":  "fb0bdbc5fbdb0abb02f098abaf014b072272d2b8ce36247302b2ef38cd3f4400"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_hmac_asn1.o",
+                             "bytes":  2800,
+                             "sha256":  "ad87c13e982f88f4594e6d291287a683d1b58040a287be97741f46cdded61307"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_kem_asn1.o",
+                             "bytes":  15690,
+                             "sha256":  "3782376eb917e18948a41ad45dfd9f92eb5a163802023a9c4de6a9f5f66ced57"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_methods.o",
+                             "bytes":  2043,
+                             "sha256":  "2c1c28116ff8507a726cbb30c6891115ee5906f10bece42490e33223745c0eb0"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_pqdsa_asn1.o",
+                             "bytes":  17315,
+                             "sha256":  "36a72a19d9075ff435bab9a81a5ffc5e2f568aab2a2776194415943c6f097f1c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_rsa_asn1.o",
+                             "bytes":  9443,
+                             "sha256":  "1375cb4422e92a47c85f8ce34f2b3837a9d55d2d32910fff4d343c771f59028f"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_x25519.o",
+                             "bytes":  3966,
+                             "sha256":  "75ef24689757703424b6e26f5d200a505c1f6e345554425d3720dd4202704bd1"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-p_x25519_asn1.o",
+                             "bytes":  12079,
+                             "sha256":  "a980f8bf018ac622ec6f8630728ef732f7e1cb99b29e754495eaa665462c2105"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-print.o",
+                             "bytes":  13866,
+                             "sha256":  "a495089c141b11222626c399a840dcd906ff9aaaee5bfa3f72472c1a43c2c8f6"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-scrypt.o",
+                             "bytes":  9064,
+                             "sha256":  "f6b40142997915259a55a1f2e06742323a81b59c7bafcb08a6864a50fb2650cc"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\11ba1c435692038d-sign.o",
+                             "bytes":  5042,
+                             "sha256":  "4ab6cbdd9d3c6e33a59354446787a81405da8d881b619ef561968ae886811bb8"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_bitstr.o",
+                             "bytes":  7566,
+                             "sha256":  "6b68af76b21783ec9f1f7299bb04fd000bdf11795097c03a9e8ca689cfa8b91c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_bool.o",
+                             "bytes":  2330,
+                             "sha256":  "3f9335e1fe13cb62503a4c0a1a392397df923f671ef9b78b2be2de62fb69ee3c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_d2i_fp.o",
+                             "bytes":  2173,
+                             "sha256":  "7248a9ce9af7e491466584e30f491c33f3c1466d83b88fa774a6aeeaa7c73d55"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_dup.o",
+                             "bytes":  2089,
+                             "sha256":  "92e71b34f142f150de98869e3ef561ab5e88245deee09818afa3248515456932"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_gentm.o",
+                             "bytes":  5504,
+                             "sha256":  "f870c324496cc0693e108d834c555322ba4b0bb062ce2aceee7c46855123efeb"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_i2d_fp.o",
+                             "bytes":  3570,
+                             "sha256":  "a0ae776030b522ca417b86767b453866de5fe61da5e9da007a12296909b3a73c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_int.o",
+                             "bytes":  18440,
+                             "sha256":  "49180a08953766f4dc02dd9a96c79de7f14049632652b02cef8f1ddbc3db62f6"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_mbstr.o",
+                             "bytes":  7148,
+                             "sha256":  "b45ec024372d7374a7a5ca868c7b07fd9f6c3a7d85ed2dc13e8901d60f659073"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_object.o",
+                             "bytes":  7835,
+                             "sha256":  "f46c1b6363844d25bd2f7054c2917f74db08b2944521c1ce5aeb554c5cf0b57b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_octet.o",
+                             "bytes":  1893,
+                             "sha256":  "c9b5ae1ba7f08af695f681566cc8628379f1741ce52524bf47f102332362d397"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_strex.o",
+                             "bytes":  15153,
+                             "sha256":  "ed66fe221bdfeaf0e308a1b82f4073ac0e3b363406d2430b3f7d0644ec868336"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_strnid.o",
+                             "bytes":  7766,
+                             "sha256":  "dd10fec742a9d25063daf01f75f8401310b0217cc97743cffc80d25d7accc60c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_time.o",
+                             "bytes":  9987,
+                             "sha256":  "ec31bbaecf746b72481088c7cf3d70de58c32ec3d07152f842701dbbd7e4a101"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_type.o",
+                             "bytes":  5588,
+                             "sha256":  "b64840b714a895b95ac780e5dc03a4b7bb455d01c4d0438695b79e8ff8a83fe1"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_utctm.o",
+                             "bytes":  5768,
+                             "sha256":  "f873edcf365b3fa15c47464e8db1c247c6a32991ce7386e007c7095858d7f7b2"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-a_utf8.o",
+                             "bytes":  3709,
+                             "sha256":  "af64348f8e1a82787c5a54823bf0a77cc90fb52f2d080a821f5bb749bc5489b2"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-asn_pack.o",
+                             "bytes":  2531,
+                             "sha256":  "b0f8d1a532cecd56cf1fd556bc0a95edc4db75f4b455e1dad86379ea080b78fa"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-asn1_lib.o",
+                             "bytes":  10104,
+                             "sha256":  "003689d98df2c7d2cfbd7d82394889b487b382e44b72100754a2af1d156406f1"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-asn1_par.o",
+                             "bytes":  21176,
+                             "sha256":  "0aa6c283e8b94567c218317e0e15c50335c4e3ffebd7add32a78519f99b58dfa"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-f_int.o",
+                             "bytes":  4762,
+                             "sha256":  "6d7f741bfc790bc941d48dd9c2e2d33b4313182675bc4601c028ed77aee7c2e5"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-f_string.o",
+                             "bytes":  1808,
+                             "sha256":  "44dfddf3dff99d3dfb552ef1b54fe4c64213cb6c051203b567ab3377011a9034"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-posix_time.o",
+                             "bytes":  8122,
+                             "sha256":  "63c4d90f2cf4b946a49da54b5c7ac177c3b6883b2f0709755550defce3a7c0fb"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-tasn_dec.o",
+                             "bytes":  27943,
+                             "sha256":  "40f3a4a754b159c3730a7d5c0a24ca991db12fd6ee529b1371c7fc7618231954"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-tasn_enc.o",
+                             "bytes":  20311,
+                             "sha256":  "72126d2a29021e97888f36b6ebc1150fe6571c6752e1bafe1f7e2ae39d9a3353"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-tasn_fre.o",
+                             "bytes":  5690,
+                             "sha256":  "f0e216ea6595a32e07ee5bbb563d2e5f7dc61bfe8f1bf4b37d969e949b8dc695"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-tasn_new.o",
+                             "bytes":  6609,
+                             "sha256":  "2ed8432af751ada74243b1e7c198d3e8b7410d60f37386e9863271bbf04717dd"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-tasn_typ.o",
+                             "bytes":  29448,
+                             "sha256":  "bd356f5df1d6d897f2465fe9c35986bcb6253f2d96bf783795509d1ba8b51a0b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\12ac6ac83b700053-tasn_utl.o",
+                             "bytes":  7314,
+                             "sha256":  "d2cccec9f8eadff3cee2284fb4b69e8343e87e5739cead95d411e898c8dff6ad"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\1a8cd16084f4713d-ripemd.o",
+                             "bytes":  23243,
+                             "sha256":  "3ecbacb9d0bc5c5423fe23832945aeeac4dcafd3ca5e5624e279bc0a185a9d67"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\1e8e05d4f84122b9-err.o",
+                             "bytes":  26599,
+                             "sha256":  "894e6010c9991aa6c27e0dce4a9a2b75a72a8c87bd9f440156e01be329e66663"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\24088763753c1a80-console.o",
+                             "bytes":  13504,
+                             "sha256":  "34d7e1d25c6210762cb9f926326d903cdaae07e385a223aa5773da391ab5992b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\25c4a38a75dff9b0-ecdsa_asn1.o",
+                             "bytes":  6129,
+                             "sha256":  "328d283d13c057c2313840100a01d1feb769d2e32d07680ce7c031b640c700fa"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\269f87dfadc78f80-obj.o",
+                             "bytes":  173416,
+                             "sha256":  "609fa97c4889718afe4607b451913249ca2a061d7ccbfc121711387eacbf033c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\269f87dfadc78f80-obj_xref.o",
+                             "bytes":  2082,
+                             "sha256":  "f5ec7964814d49023ee8a92b7cd6beb04736117f414850042a3c64b117db34e7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\29b055c6dd92c9ff-obj_decrepit.o",
+                             "bytes":  2739,
+                             "sha256":  "7ff411323d77015df29e08f4e8bf041d2ddb14b31c8a94e75e912aa246da5edd"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\2d792cc1910c1f1f-dh_asn1.o",
+                             "bytes":  5175,
+                             "sha256":  "2ff0a925344ed8b2797b2ff092d3d8720eb211bc0f6be2e0fe4815b10dd703a4"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\2d792cc1910c1f1f-params.o",
+                             "bytes":  11646,
+                             "sha256":  "c76dcbd51a9c426e4216fcbde2a57c0fb02b956b083f6743c722584a0ae208e8"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\307a1cf338c197ca-jitterentropy-base.o",
+                             "bytes":  11861,
+                             "sha256":  "b8c38d440624007e7b89c4898a4774468900ad76b4b9c9f6f998096a705703f8"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\307a1cf338c197ca-jitterentropy-gcd.o",
+                             "bytes":  4325,
+                             "sha256":  "1141170cff5f4c402b0f8fa272b60784265645514d4291ed72e16a3acfe178ac"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\307a1cf338c197ca-jitterentropy-health.o",
+                             "bytes":  5439,
+                             "sha256":  "9b0fa841eff6f2309ae850bb0266d5e54d2f67e7594335f01f9050df59b33c78"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\307a1cf338c197ca-jitterentropy-noise.o",
+                             "bytes":  5916,
+                             "sha256":  "303e6a0a925b434cb755e47ddc69e843ef11e38995e11c32f1f2ddbe405edf46"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\307a1cf338c197ca-jitterentropy-sha3.o",
+                             "bytes":  14907,
+                             "sha256":  "0530b2d107f4483ae90e020a85b62f98e8bdc397f61abd83d8d7c792182d3877"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\307a1cf338c197ca-jitterentropy-timer.o",
+                             "bytes":  617,
+                             "sha256":  "fc018ff082ce2de50e6f86fb7e200a9c1fc834de4e5c9ec3d1f881361c104d4a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\3476555f3d1ec180-ui.o",
+                             "bytes":  1504,
+                             "sha256":  "3a435af3698feb1f6e38d11dc328d36e1309f5434eb984aae548f8a100d55550"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\3480db1ac18d7675-buf.o",
+                             "bytes":  6297,
+                             "sha256":  "a45471496e1131b6130eed94b500adb6ea245b5883aae72136ca26ffe2eaa882"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\3e0e353108465e78-chacha.o",
+                             "bytes":  10277,
+                             "sha256":  "a521e3dd51541e1e2eb9d984fdd9478cd11f268ea0cec2c88b51b54a2468c6b8"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\3ed0786f8b178938-conf.o",
+                             "bytes":  23845,
+                             "sha256":  "633f584d853eae2f36392c356dae87fd2d8ca3134e236c722ea929d0ee86cd56"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\40d490581ebd0d43-spake25519.o",
+                             "bytes":  11501,
+                             "sha256":  "b23635bac6f7a39ceb3b60b8853ba08cc99af3a940e619aecd2440aca4490e28"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\4a6557b724da9e0a-pmbtoken.o",
+                             "bytes":  60335,
+                             "sha256":  "bb49581c6f65506346b4500808d8c574a2d6c2490b76ff278c2c5f180019f0cc"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\4a6557b724da9e0a-trust_token.o",
+                             "bytes":  27833,
+                             "sha256":  "7b6ce61f80b22bd0442137bd9511baea934e2b70e597dca4739a0274c86b04c5"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\4a6557b724da9e0a-voprf.o",
+                             "bytes":  44822,
+                             "sha256":  "e4b20e708471bc42aeb0add99e027d51469fe65022862d389103e45a2d53e642"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\4e7c58e86587ab9c-base64_bio.o",
+                             "bytes":  18779,
+                             "sha256":  "7b1cc0b970d172f31f70be5d8c8ef6fa3cd68b4fcd57337ee6a1bc7c681cfa7e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\50e7c550470bd5d9-pkcs7.o",
+                             "bytes":  70570,
+                             "sha256":  "f24f77f4fdc15579d6504c778aef24173cdecfc9323a7245bedb6042632e3c18"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\50e7c550470bd5d9-pkcs7_asn1.o",
+                             "bytes":  22321,
+                             "sha256":  "5340e54ee4c3d4a7bbf5e6ac529af5d9111a3ec0b6a1521a221adf965e4a261d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\50e7c550470bd5d9-pkcs7_x509.o",
+                             "bytes":  23593,
+                             "sha256":  "5bd37830b7adc09022c31aac7f7a11302a9c2ecfeca6cf62d6cafff282ab14db"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\5164426efb60f70f-base64.o",
+                             "bytes":  12516,
+                             "sha256":  "81306d123e75e4e97aab7e28e79ca5908ad346481fe2f76c69720015baf0a8a8"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\547d59d107b9585b-p5_pbev2.o",
+                             "bytes":  10400,
+                             "sha256":  "159cff0e49edafa88189956524bc7fa5aabe4c36b2801faeead7a3db70dd7395"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\547d59d107b9585b-pkcs8.o",
+                             "bytes":  15826,
+                             "sha256":  "f3706f4b68bc311fdf6e8a28a1d4cbaf6114daf26bf527a669f6af697762672b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\547d59d107b9585b-pkcs8_x509.o",
+                             "bytes":  44745,
+                             "sha256":  "c436aee92865e17b27e075bfa1d79c820a4c3e91d5023ac469882bddb2d5e7a4"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\557dd484fa91696b-ec_asn1.o",
+                             "bytes":  26939,
+                             "sha256":  "64bda6b3e5c97db3d359d7001c350439292381b929e366ab62799371f8e83730"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\557dd484fa91696b-ec_brainpool.o",
+                             "bytes":  19379,
+                             "sha256":  "fadbcdef10110c8e84297bd5583a367b57e0dde402e7030087b95b8dcc59b223"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\557dd484fa91696b-ec_derive.o",
+                             "bytes":  4793,
+                             "sha256":  "ef140d1b2454f59e1fdafbb555ab0990575aba5eaa674bc049f5991312a8879c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\557dd484fa91696b-hash_to_curve.o",
+                             "bytes":  19657,
+                             "sha256":  "67ae5ab088f581b00a0bca5334db4130f615c09f7a4aeed0d63e619cff3eed34"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\5acd8651c9a538cf-fork_ube_detect.o",
+                             "bytes":  2130,
+                             "sha256":  "e9bb9d9bc534c4d78ce7a94d4a9129c6c346990f5f5ccfdfc7ac0f5eef9edf8d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\5acd8651c9a538cf-ube.o",
+                             "bytes":  6941,
+                             "sha256":  "eefa4851cacd04a6b3fc25d980bb70e62e77a945a970c1de58d06960f9f76c75"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\5acd8651c9a538cf-vm_ube_detect.o",
+                             "bytes":  1130,
+                             "sha256":  "7f9d03301f35a01adcddee809f7142eee04c365846598b639d054239d3fa723f"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\5e7b0e08b07b6019-bcm.o",
+                             "bytes":  2302325,
+                             "sha256":  "6a41439781b5075f6819f38fa4fd7530242b2a0badffffa7e2b94f1af76faf8e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\6724e66ed9164afb-cfb.o",
+                             "bytes":  4843,
+                             "sha256":  "d2c89247b3d665869983d0f13c5187603fefbfa12c70b4bbbc5c910433a3536e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\6933a7c73f615127-hpke.o",
+                             "bytes":  29416,
+                             "sha256":  "8fa64f8f1a12d4e3aa2cd84e4ac9d235475c42cb7c99c26b20e9358eb24a679e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\6b49134f44611489-engine.o",
+                             "bytes":  2829,
+                             "sha256":  "fbb821c279ab06a34271b24f16b117ff1e181ea217c5fcd7347ebe81c0db827a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\74be7a8787aeb0e6-dsa.o",
+                             "bytes":  26607,
+                             "sha256":  "bbcb2c647199a27ef257c0b749c690d92869f57d7019d49261eb7e2ce8c4406e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\74be7a8787aeb0e6-dsa_asn1.o",
+                             "bytes":  15081,
+                             "sha256":  "22d9c15992757ecaa2f220f6dc8a426f46ba213c2b7978d3d98278400f7b41f3"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\84416aafcc71485c-stack.o",
+                             "bytes":  12416,
+                             "sha256":  "7fa8c12dd411dc0aceb4812d8298562267786f1ca011a46208d9f8b84b147bf0"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\8806a65501cb5d99-md4.o",
+                             "bytes":  11650,
+                             "sha256":  "188bacf7328661dad25b0da1c78b447b8eb074e7c0cf3df50c93d553a1dde671"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\8fb80b492e601acc-keccak.o",
+                             "bytes":  2945,
+                             "sha256":  "c3f7409648c29cd3bfcc1e24b3d08031cf5cf8554d535e4ff16e71ee026d1f25"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\939f31ce1136640d-cpucap.o",
+                             "bytes":  798,
+                             "sha256":  "503c7a969df7843dc93463bcd83f8eb3d112893a3a366b267d971fb53a976847"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\9d4be0bb3fd16dd3-rsa_decrepit.o",
+                             "bytes":  3829,
+                             "sha256":  "f9e374bbec40dadf4eab192ec9d788d3e5b93a4744257dbd4d5b42d48e8361a6"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\a0acef6bc5ca26ab-blowfish.o",
+                             "bytes":  25042,
+                             "sha256":  "89bb39fcf74f51929f4b3953b3282c2e2ed6e78cd6ac766fc739aaced529a9ab"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\a3f63feefd602046-rsa_asn1.o",
+                             "bytes":  13183,
+                             "sha256":  "10f323f09428dbc6f84c6eca6de0596f0111802d77cdbafe4457448d2729a482"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\a3f63feefd602046-rsa_crypt.o",
+                             "bytes":  19756,
+                             "sha256":  "29aeb05a3bbcf2b5ae445f1408ff9725ea6a998be7224c34fab5334f0d993a17"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\a3f63feefd602046-rsa_print.o",
+                             "bytes":  2345,
+                             "sha256":  "6b2e2f956b40a7a8a18b5342a9cd06e7e842ed249bce183edd7bcbebbb97842a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\a3f63feefd602046-rsassa_pss_asn1.o",
+                             "bytes":  16595,
+                             "sha256":  "fe59bf64dd0295e50df704d72292943558d44d9aa53eb378dd8a983cc87bdfcd"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\a79698bcfe7af24e-blake2.o",
+                             "bytes":  7915,
+                             "sha256":  "d262dda222a11de7b11ce0c512d53b5d5b52b3dddf2237de86ec3ce1cfd055bc"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\a98ec6d07e3ab9aa-cast.o",
+                             "bytes":  28133,
+                             "sha256":  "de8060dba047eb3e649ccdd8281b2a63ee48db05c404a8db7d1c67b760843c9e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\a98ec6d07e3ab9aa-cast_tables.o",
+                             "bytes":  9253,
+                             "sha256":  "12e866c584125c58605faea0a7f845b8c50cd0aa0f0043880d9cf5b9fd542978"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aa3883b9c76e19d7-asn1_compat.o",
+                             "bytes":  2741,
+                             "sha256":  "7d05f2e9ebc44ebe7fedf44947ccd969928ade8d8d9c063344698ee8898748a4"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aa3883b9c76e19d7-ber.o",
+                             "bytes":  7711,
+                             "sha256":  "f70ca426c6c642314435c654a9a4bbf0383348055854a55528acbc2c78fbb2a1"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aa3883b9c76e19d7-cbb.o",
+                             "bytes":  27497,
+                             "sha256":  "cd82d66049d4e90e5451418c0076372b9f0b79136dc0e2c9e158823cfa10a161"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aa3883b9c76e19d7-cbs.o",
+                             "bytes":  28850,
+                             "sha256":  "34b75cbb84c7e2e0446ea3bd50200fdd36b332b05f77d3d051f08504da97b602"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aa3883b9c76e19d7-unicode.o",
+                             "bytes":  4780,
+                             "sha256":  "ad25807e1b1f7a959f69afc30abc6799ee45a8de23f3b85a5164b7c25dddddde"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ae09488282793820-lhash.o",
+                             "bytes":  6929,
+                             "sha256":  "cede4e6d9325eb864720576347fad11a11e7bb45951605e7ea7acfb287dfeb2d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aes128gcmsiv-x86_64.obj",
+                             "bytes":  19201,
+                             "sha256":  "ebba11296e778b9ffe49c048f2a10122058c1d710845c7204f027c382489e99e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aesni-gcm-avx512.obj",
+                             "bytes":  463,
+                             "sha256":  "ea64cd1d512b4a9f22eb925a2bdb80e29493b74e390fc9c3021a9cc988b3ad60"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aesni-gcm-x86_64.obj",
+                             "bytes":  7358,
+                             "sha256":  "e935c37e2e081b04a3f1ecb9d2b818a083abd0e91bb1d6f1a4664494889e8c56"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aesni-sha1-x86_64.obj",
+                             "bytes":  13893,
+                             "sha256":  "572250f439747e261cb5a71be4160be72cc7f20130d131bb6e7242769f218d2e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aesni-sha256-x86_64.obj",
+                             "bytes":  21719,
+                             "sha256":  "c50e717a6090f15bfe8066de12019f3daba430f0064927ec07557fa8f501ef48"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aesni-x86_64.obj",
+                             "bytes":  22037,
+                             "sha256":  "562c6d941a24139555a5af9d38957a3f84ec5f25545fe5815d9706dd1001dd08"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aesni-xts-avx512.obj",
+                             "bytes":  32673,
+                             "sha256":  "6b205191402f389ce3a994062e8d71011f26b7fc0ff9aa0852a51f54d70253c5"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\aws_lc_0_45_0_crypto.lib",
+                             "bytes":  6085404,
+                             "sha256":  "6bcbb3fd5799a8a814496f141aecbeb990adfbcc7dd48138992105559ae111ec"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\b5351e3976260e16-ecdh_extra.o",
+                             "bytes":  2633,
+                             "sha256":  "94875719b1ac6a09decfcfb020924c478eb6adf848f58bf7085087e9a5c52ba7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ba777d9bb4a01b9c-dh_decrepit.o",
+                             "bytes":  1784,
+                             "sha256":  "bd1fe25b1f14f3d8ae3a364bcc89dc43fc120f8d5ded15e6dc1ba5fd8fd1a9a2"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\bd1a0f655ace03cf-digest_extra.o",
+                             "bytes":  14468,
+                             "sha256":  "2517adcd9112b4eac4ba281e2f4876be8a180c3d5004a984f923647b1b728b9b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\be11e840a9ab9403-poly1305.o",
+                             "bytes":  9895,
+                             "sha256":  "f6539ebc161515fd088ae4a51d9d77268e8ee02ea258ca2cc5be9c0eb173bb2b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\be11e840a9ab9403-poly1305_arm.o",
+                             "bytes":  613,
+                             "sha256":  "d19ed4bcdff21b6dbfdf99a752d7ff1ea70a669eafa3ff1fb3a5456e25a88eba"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\be11e840a9ab9403-poly1305_vec.o",
+                             "bytes":  613,
+                             "sha256":  "c392f83ed678947e3e706db7a24bee6a967c5db8e32bcc25c650c6f0a50bc277"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\c43f8ebc3523362c-bn_asn1.o",
+                             "bytes":  3353,
+                             "sha256":  "50e53e045c9da1d34f1e64e1bde5be4d86363d21d74c4fec35e2a95d559b70cb"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\c43f8ebc3523362c-convert.o",
+                             "bytes":  12574,
+                             "sha256":  "3992d6e365500751e783ee606ac2039c67eb6e4b97b7a45c543460477c542151"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\c8efed0834c825de-evp_do_all.o",
+                             "bytes":  8558,
+                             "sha256":  "ed52c144f4cf727a9f49af2020cf546b5fbbe820069ae8e73160273e52691141"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ce62a7f50183cf60-des.o",
+                             "bytes":  61563,
+                             "sha256":  "0dae7a7bfb2b6c30694393629760643194229b9e22df00bdd206375cc989ea54"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\chacha20_poly1305_x86_64.obj",
+                             "bytes":  52451,
+                             "sha256":  "16f0183bafaf472d372b2cea495a766a0109064740c6894837440f6fb66e5f68"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\chacha-x86_64.obj",
+                             "bytes":  11699,
+                             "sha256":  "11133b497dfec1bf4078217960e7d35c53b22292d1a26ca782072158d03aeb92"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\d072c0d39dfa6e4a-pool.o",
+                             "bytes":  12913,
+                             "sha256":  "5ffa89c116cc7e4b22113d9e5b854c7b96464657510689609cea7cd0a5cd8e3b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dba2ea08771f4364-rc4.o",
+                             "bytes":  2028,
+                             "sha256":  "88362ef9ae7b3b5654ba8336bc04f14714cee827181ce951ed9c5ff9488546c9"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-crypto.o",
+                             "bytes":  4270,
+                             "sha256":  "12c6ee5c927fcc840eae9fac69e4bc3709edfd313f42a8ac70451532c73f4725"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-ex_data.o",
+                             "bytes":  7955,
+                             "sha256":  "c67be07b3252e17102b3784557d31f7b89424f4f339020d7740dc4f5aefbbb53"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-mem.o",
+                             "bytes":  29283,
+                             "sha256":  "3512ec3711a64c2b97cc75f5efdc5bb94fd2d43e3bd8c449ede54975fa8b8213"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-refcount_c11.o",
+                             "bytes":  613,
+                             "sha256":  "c1be17dcb75ba6f0c98dd2fbfd91075859f05aa47176e21713856f843dd74034"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-refcount_lock.o",
+                             "bytes":  613,
+                             "sha256":  "6efe0c88f94ee77cfdd82ce24f429ee9b3a0a20c536ecfb63f8248bf6d62cfbe"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-refcount_win.o",
+                             "bytes":  2371,
+                             "sha256":  "ed494d60477e46203ed7bacf366bc5399cdeba6e6c6b642aee69fabb85d6ab3c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-thread.o",
+                             "bytes":  2102,
+                             "sha256":  "c127d6ecbf29cc99f182f36a803dafb5c5c1ed6a3d6702f53c8fa99ddd6d6a16"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-thread_none.o",
+                             "bytes":  609,
+                             "sha256":  "7dd28554aa272dc0e30c596311bb12acca964633a79059946d56244aa2042916"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-thread_pthread.o",
+                             "bytes":  613,
+                             "sha256":  "50c24ad40c35ce916375bcfb0975bd4583fbfbbf54a94056696b46188697eea7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\dca3e397edfb2cc7-thread_win.o",
+                             "bytes":  9265,
+                             "sha256":  "22448f82facc2423b7c5a8a6e382955fd9f29c470a9015926ff4d88ab89b5430"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-a_digest.o",
+                             "bytes":  1862,
+                             "sha256":  "c1cece430a4df4dc3d42549b2da6dee8e9a3df3839e12f195138a86b56637540"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-a_sign.o",
+                             "bytes":  3619,
+                             "sha256":  "788120b3ae76398b45f4238792def09d48ad55c149d24cca5b57a1226edb378c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-a_verify.o",
+                             "bytes":  2736,
+                             "sha256":  "8f4f4776d781f73d71d867ab5904d1cd43c5e97bc3240b2501db486db4e53da8"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-algorithm.o",
+                             "bytes":  5854,
+                             "sha256":  "5a36698af1b362236ccb8db7396914b99394708f1e03bd92f3ebb8440efb338e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-asn1_gen.o",
+                             "bytes":  21850,
+                             "sha256":  "7b3e284f581275554905b07beb036e37415e6c54f071732b8fddc87fe058075b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-by_dir.o",
+                             "bytes":  14956,
+                             "sha256":  "d6c5fc8bc803e4b5c9854f932d9a985584fb50925452cdcf8795aea89df5ad24"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-by_file.o",
+                             "bytes":  9482,
+                             "sha256":  "34be283c91e14e83e13a4ded336e7afd31cd54339ae3a3fd629b4ca16d080c00"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-i2d_pr.o",
+                             "bytes":  2304,
+                             "sha256":  "ff2cac69b9c13fac69df1e805bfbaa71a6769d70725cc8ed283302717bbeb585"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-name_print.o",
+                             "bytes":  5365,
+                             "sha256":  "7d3b1eb44b034e7f709ffa56dd9cb827c0a923654c3dffc4836cf123a04b15ae"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-policy.o",
+                             "bytes":  32301,
+                             "sha256":  "75efea748b24ec6d364e32f3a86f50e11ab2d75184b59aa7192927dbc169c9a2"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-rsa_pss.o",
+                             "bytes":  13704,
+                             "sha256":  "fa6d20e6c6eab3d4f349e6db70e0156818704b2e208b192f1df09e87fd5790f7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-t_crl.o",
+                             "bytes":  6072,
+                             "sha256":  "91460da609e8295cab465db0d99136dcafaea64cab035a717809c4e34a5ad841"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-t_req.o",
+                             "bytes":  9375,
+                             "sha256":  "79b90720dbe447c9929aa29a703885a152a68d30e186ce11fda463e0790fbd83"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-t_x509.o",
+                             "bytes":  9898,
+                             "sha256":  "1b91338f045543dd839d173def0de92fda197b8ee87fc446c6c24cf2a6ed6cfc"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-t_x509a.o",
+                             "bytes":  4209,
+                             "sha256":  "656a75b33e99cef17555cb176f49512d15e68107edc54ddb75d1c68d867aa13b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_akey.o",
+                             "bytes":  6911,
+                             "sha256":  "d51712017bcb86c80a0467932accecbd0947114bd459f86b4fb6af1828b0348c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_akeya.o",
+                             "bytes":  3015,
+                             "sha256":  "9b02fa2f92220ed5b8f9225da124bcc8c0e2f0512c3aed64c0af661885ad1735"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_alt.o",
+                             "bytes":  23391,
+                             "sha256":  "6f918572bb41acb8a075b6c6b36545e20eb51c06bbde96790fb290d8a9233c8b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_bcons.o",
+                             "bytes":  5364,
+                             "sha256":  "2f1de45966f1bce28b55268dd0bf8ea3325ccaf7800d22e78935316305ccfbd1"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_bitst.o",
+                             "bytes":  5704,
+                             "sha256":  "27905462d76150f7d4eddf920789184aedca4c7956f5f44b20ea6e8250ca1d76"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_conf.o",
+                             "bytes":  15287,
+                             "sha256":  "47cee85bed6c344a29328ed3230bec3d1c2308b5c61aa16a1b8f2a773dbd5a7f"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_cpols.o",
+                             "bytes":  24099,
+                             "sha256":  "ae3d911599b4287641ba47106bdcfba1cd6432fe304ebdf54cb0f3b9aae1c212"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_crld.o",
+                             "bytes":  25795,
+                             "sha256":  "886550b64b37bde5e5a51461f21c12d450fcceb0976cb3be0febf192a25b6c1b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_enum.o",
+                             "bytes":  3000,
+                             "sha256":  "a38a4cd7e956537bdda48977e8d761d09696fa5db21c20db16960250cdd1024f"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_extku.o",
+                             "bytes":  7254,
+                             "sha256":  "821501a0c99c707d765b304006b6887ee6953fe95f9e0506fe407747062ebc74"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_genn.o",
+                             "bytes":  11387,
+                             "sha256":  "a6d99911a04072b75aa733c629a653ceef6ca6e1a87abc8cf3e39da3d43888f6"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_ia5.o",
+                             "bytes":  3592,
+                             "sha256":  "014b3510a2a9fb153897ad17750cac0c71de54e80684af918a0bdab9fbdef054"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_info.o",
+                             "bytes":  10327,
+                             "sha256":  "90fbcf18a33013f08859fc3c55dfbe6d83f9afde5eb1fc1ae9b44fc3c5f93d9a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_int.o",
+                             "bytes":  2065,
+                             "sha256":  "1dd0de45aeccd59d0c0cc4dd490f8f6c2c0143d485c3bc1a13546d34caeaa6e0"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_lib.o",
+                             "bytes":  14697,
+                             "sha256":  "b4025acafa7ebc4f5e32dc7353b0175b373261d7c57dec84316b367541f328be"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_ncons.o",
+                             "bytes":  25234,
+                             "sha256":  "44f686d470fb3be513b081cbc832eb15360b46f581cab0ca08550a92eda07ad3"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_ocsp.o",
+                             "bytes":  4789,
+                             "sha256":  "3681c0cf1c29324d366a08f314c4cf72506548bba303645359ce053d3627196c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_pcons.o",
+                             "bytes":  4862,
+                             "sha256":  "43fdacfd3f7bda061cc7cbac2549862ab8296c99c691b3aca563aab6344522f7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_pmaps.o",
+                             "bytes":  7199,
+                             "sha256":  "4c7a582a2b143c7d3e4b4639c402937b8c5a3b4aed25db7578d3bfeb9b7ccf91"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_prn.o",
+                             "bytes":  8294,
+                             "sha256":  "7797c9d0b03b60dccd0182dc4cb314103347bd1318bf68b595203ed01a7f53b3"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_purp.o",
+                             "bytes":  20058,
+                             "sha256":  "4244d5f4db05786eaebd561ad3cd74d5e27f7e396d66a2b5447a150b62b83f0b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_skey.o",
+                             "bytes":  4361,
+                             "sha256":  "26790fea831ea42753ab01d21764861dbd57a25e3c8b75870b23c522cc06f144"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-v3_utl.o",
+                             "bytes":  40170,
+                             "sha256":  "c07d5cef9149836f1f43ddccf750c282f00ba10ec8bf27ebf961a55874d09955"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_algor.o",
+                             "bytes":  5268,
+                             "sha256":  "33ba22f0fa2f4045b218bddf4141ce9700f22e5a72aac988d157cd62bc62f51a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_all.o",
+                             "bytes":  30609,
+                             "sha256":  "bec5d8bdaf1867e38adbd1af31573580d47dae383d7c586396218c15373e40a9"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_attrib.o",
+                             "bytes":  4171,
+                             "sha256":  "c0340642245f33790645c112959489149e2a8fcc71150ecb7e42033bc30d6b65"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_crl.o",
+                             "bytes":  18589,
+                             "sha256":  "29d4f645110c7b049aabdbaf83403c2d630ec3f866ffddb1714276fa8a4dbb64"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_exten.o",
+                             "bytes":  4265,
+                             "sha256":  "a616f9441469df52ae259ea98a2c004169c13de11f14fc851ad2521378105ccf"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_name.o",
+                             "bytes":  17651,
+                             "sha256":  "02a4b8eb0f2a96076a7306aa5b65c268b367304789599fe4b3b42e2f9e5cf863"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_pubkey.o",
+                             "bytes":  6905,
+                             "sha256":  "17f21f6426eb49f353804fe43378c6f66513c3c352a2ab2fe0c110cfd3069264"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_req.o",
+                             "bytes":  6092,
+                             "sha256":  "85becb6de949f2033ce666660a5e407be0f1bc75f33ad00cdf5133b104c1b6b9"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_sig.o",
+                             "bytes":  3022,
+                             "sha256":  "ff60215df190ebca708d6bf41ba29239cab27c1f96a53be813daffa4fc8e9c1b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_spki.o",
+                             "bytes":  4617,
+                             "sha256":  "b900f3ba8d6258793cbc10ae779f13f892e10aeb1a3fb0dce4849064c7a23cb9"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_val.o",
+                             "bytes":  2740,
+                             "sha256":  "afbacec693e420eef10b6c863a9466cee363e49fb3db0d35aef1cb44e0a032e1"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_x509.o",
+                             "bytes":  15457,
+                             "sha256":  "f4d5e659fc88719d267accbc8bd01af0eff21de7624efd26ec5400f6ed089675"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x_x509a.o",
+                             "bytes":  8263,
+                             "sha256":  "614b451a8090c32bb4140a6e0433c432c9ed13078b0c9a600ae314b0bd1a3890"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509.o",
+                             "bytes":  1872,
+                             "sha256":  "86859403093c5f94aff93b5a0339f8720ad1eac67e8edce826fb82b6ed5bbcc7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_att.o",
+                             "bytes":  7177,
+                             "sha256":  "588ae9d7eeced8cd89686be8587cb4890c97a585715f3e15f9c5ecbb5fc92501"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_cmp.o",
+                             "bytes":  11787,
+                             "sha256":  "438da13229bfe52d1316d1d48a99f789707569150f82da2dda6aeb44a616691d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_d2.o",
+                             "bytes":  2158,
+                             "sha256":  "38a35a4545cbc962fadc7c96b5945c29747086dfd8d13287ed57969bc553ea7e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_def.o",
+                             "bytes":  1505,
+                             "sha256":  "d316af32eef69cf521d002b5f4a8da1ecaf2a591de73f1cfd704522a26b36ec0"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_ext.o",
+                             "bytes":  9943,
+                             "sha256":  "2d2bb4c8078eaa9f606d5ef55d7a7f7e77e6bb351fc11cfa724aa5dfba9532c5"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_lu.o",
+                             "bytes":  25836,
+                             "sha256":  "b735c23c593a8906afab9cd47140de6ea1529230b8fb8dba71d657dea90abda3"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_obj.o",
+                             "bytes":  5274,
+                             "sha256":  "08fa0d09119ecb453f4db8b6432ef617b87056f5c5f38450af59b5bbe5b775ae"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_req.o",
+                             "bytes":  12380,
+                             "sha256":  "fe7b5a95b7ce4f3b19f11856e0a7572e84956026ef1afb4d57a402c304d517ca"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_set.o",
+                             "bytes":  8606,
+                             "sha256":  "3901d825123399a15ac5a0240d954366370be90353d13f1ff564a96e6fe9c4d5"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_trs.o",
+                             "bytes":  5151,
+                             "sha256":  "bf80172c7a5120c4ffd7cdf72625fcf2471e8e4a2168620d46e2bf3e0e36b3f9"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_txt.o",
+                             "bytes":  8187,
+                             "sha256":  "c75540954f1b842b42181a4184eb45411d723ba73fbf064d070816707d2d50ca"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_v3.o",
+                             "bytes":  8741,
+                             "sha256":  "373e5df98fee3a5b6215b910f747b7e5085ba2de0e82f85336e4ce346005be23"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_vfy.o",
+                             "bytes":  43668,
+                             "sha256":  "f15d578d956baac8374b6b40a806311c2d366b977505ad5184ece9d001b707c8"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509_vpm.o",
+                             "bytes":  17783,
+                             "sha256":  "d78c32c7eb4e9a0657d282e8001d954e20ba7c6bc751db918190feb54576339f"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509cset.o",
+                             "bytes":  9050,
+                             "sha256":  "c6904e21040f8e1ad7f6905233ea888ad168b97d6f375aea83ad2c8aaf8af458"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509name.o",
+                             "bytes":  11474,
+                             "sha256":  "cd12419c2238baefe517f76ab1c1378308f53e0a29aff0e391f475a6b7aeb7cf"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509rset.o",
+                             "bytes":  3280,
+                             "sha256":  "c417c96b5bc606e9497ebb4c4d25afa39fb9e5627dd3a03b874a78c307c928a9"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e42f9f6bdad1fa77-x509spki.o",
+                             "bytes":  6455,
+                             "sha256":  "5bcd3886d694ae0995df9bc7564e247a22292d11b035b48bc77d4c6544eda939"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\e9cb070b02391a5e-x509_decrepit.o",
+                             "bytes":  2583,
+                             "sha256":  "bb7211f8fd6b2e30b5d16ef06ff2fd8ad35b8152b4e8840d338f6e0aaf82810b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-bio.o",
+                             "bytes":  32187,
+                             "sha256":  "0ff7f7e29931f0435950e10fdc9a192a6e266a7f63f9aa674dd251e300e1ce90"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-bio_addr.o",
+                             "bytes":  6182,
+                             "sha256":  "1b1756e222eaf8890d736e72fba68030a2ff15b0922c1d32aa49fba39d48405a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-bio_mem.o",
+                             "bytes":  9417,
+                             "sha256":  "814188c0511a783da39402428118c4c611fc549fcf015cde8e88464e905b768b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-connect.o",
+                             "bytes":  14920,
+                             "sha256":  "e24864f21931087a8e52345388d1ec3f561e775fbbe68c8ce2e8a1998f7203fb"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-dgram.o",
+                             "bytes":  18431,
+                             "sha256":  "ffab68accb7856fd9b336f60c9c49fa1fded49e3bdbd9201e83ee1cd16b0fe59"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-errno.o",
+                             "bytes":  1341,
+                             "sha256":  "2d1531e08f29bf4782e4dea202c115d73f554cc0e3c6701ad08a180de3deec92"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-fd.o",
+                             "bytes":  4998,
+                             "sha256":  "847492a5fc800b2cf83dbdd81a47a09223e36561f957947e11b61af4015e8888"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-file.o",
+                             "bytes":  9874,
+                             "sha256":  "5e424220aafb1647cd05f8ef53f762121d683dc3752a2c2115cc17fa9c7f720d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-hexdump.o",
+                             "bytes":  4466,
+                             "sha256":  "96960d05b49c675fb447e3711070ed29e36615252feaf2ec3fa59f68a7b3d136"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-md.o",
+                             "bytes":  8806,
+                             "sha256":  "d81f386c7c5c38d0f45b0438c44f5a4a3bb80765c7042c418d9e8ba5a2bb9ef7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-pair.o",
+                             "bytes":  18959,
+                             "sha256":  "b64fa2c01380c853f4dff39e6222d1c94285239d10356f1730bbbd96bb9a90b7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-printf.o",
+                             "bytes":  3276,
+                             "sha256":  "315820a3147d3e8e59318ced02ca7d6bdc96819ee0f1ebed85966da2e6411b1c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-socket.o",
+                             "bytes":  3414,
+                             "sha256":  "c9014075708574ea4dd7c902c1b966fbde511fb47848a9ee4b3356a81202619b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ebffcd00b33ce285-socket_helper.o",
+                             "bytes":  4695,
+                             "sha256":  "b88d0d2e22c6383331abb3716d9d7fe169c41a65861854128166d61e74757934"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ee395b23cddfa507-pem_all.o",
+                             "bytes":  39886,
+                             "sha256":  "f7d5f5fbfa7cb78b3330195589f4e35cbde40c3ca48759c9b5496b4db9a8d25a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ee395b23cddfa507-pem_info.o",
+                             "bytes":  11708,
+                             "sha256":  "aeda9381d8aefeaa0cc9328b9fe8327337a97995cf717448d6cf84d5d1fe019d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ee395b23cddfa507-pem_lib.o",
+                             "bytes":  26603,
+                             "sha256":  "691e416a9cde0dd9fe970ec719317464e03bf17e03b947ed153a18c631efe3a6"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ee395b23cddfa507-pem_oth.o",
+                             "bytes":  1735,
+                             "sha256":  "4c4ff61d89105a92be585fd028b9a6ce9831c33f074d6a1da598e59086547c11"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ee395b23cddfa507-pem_pk8.o",
+                             "bytes":  14504,
+                             "sha256":  "7b2ee597aab49d4d94dd3e483a00efac7ed294036c19d12de8b5888beb4eca8a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ee395b23cddfa507-pem_pkey.o",
+                             "bytes":  11542,
+                             "sha256":  "77c884a0200f4b82bb21bcad6b7a899eaba2eb4e6e18ab9d919e6f70385fd3b1"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ee395b23cddfa507-pem_x509.o",
+                             "bytes":  3775,
+                             "sha256":  "b389bd54263e87d2f8233fe283b06c0493e80d8a77117d0b3ee9135047774f6e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ee395b23cddfa507-pem_xaux.o",
+                             "bytes":  3911,
+                             "sha256":  "26f3c237e74c06bc5af68ceefe297619f0c6bc3f424f0d67b24ee79a93fd774b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\f768ee73e3268744-siphash.o",
+                             "bytes":  3993,
+                             "sha256":  "42feeaa1099ad6cd9f88660d255beae37604956e802af7398dbba4f1fbba8271"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ghash-ssse3-x86_64.obj",
+                             "bytes":  2701,
+                             "sha256":  "87cd6c829523581bebe974b84d379b1941b48521a0fc52e2ad70e154c4add27d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\ghash-x86_64.obj",
+                             "bytes":  8425,
+                             "sha256":  "234f2c338ac22005514c76dfb7c0f01faf0c4aab80351295485d15b89a38d754"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\libaws_lc_0_45_0_crypto.a",
+                             "bytes":  6085404,
+                             "sha256":  "6bcbb3fd5799a8a814496f141aecbeb990adfbcc7dd48138992105559ae111ec"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\md5-x86_64.obj",
+                             "bytes":  3377,
+                             "sha256":  "37f602434c26b903fbe0ce0de8c19ce5b9f87c4444314f2d7633b17b06b1f39c"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\p256_beeu-x86_64-asm.obj",
+                             "bytes":  1655,
+                             "sha256":  "467003d3aced2d65b543278e4d22f4c5d2e9a7464e0f1c413fe945f857670c71"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\p256-x86_64-asm.obj",
+                             "bytes":  25780,
+                             "sha256":  "5694e9cfefc23187bc63d9aac75d65cc988280d7f98a112746303b34e2f14c45"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\rdrand-x86_64.obj",
+                             "bytes":  350,
+                             "sha256":  "1a02b5577bf7db9c1efc7b43a1b412c3642d26b1967262971f53112c119c0fe8"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\rsaz-2k-avx512.obj",
+                             "bytes":  6582,
+                             "sha256":  "7c6618b9e219f2fc19c938643f2f49b60227f3e9fc93806a683329fec176aafc"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\rsaz-3k-avx512.obj",
+                             "bytes":  9838,
+                             "sha256":  "5cb2a4e9e12223d8ab36a4c5f18d396465ccc6a3c40461d59e252e8b710fdb9b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\rsaz-4k-avx512.obj",
+                             "bytes":  10583,
+                             "sha256":  "dac828b21b7b1235730856c762bf1a414fa2e2d5c92c3c54a1ceea8555cf48d1"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\rsaz-avx2.obj",
+                             "bytes":  10567,
+                             "sha256":  "75084788b669a3195ef6e6eb47c5b6b6601f84881a25a3a910b863448ff69329"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\sha1-x86_64.obj",
+                             "bytes":  22337,
+                             "sha256":  "7382acef1b76de9ce65125eb2573fefe912ce304b9f92bec1a8bd5bcc5338dd5"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\sha256-x86_64.obj",
+                             "bytes":  16761,
+                             "sha256":  "b94fc15d8941cbdbb51cd9b9627f3f88de62e7187e4bbf939e44c40785cf0fb3"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\sha512-x86_64.obj",
+                             "bytes":  12426,
+                             "sha256":  "2ebb73370fd81a21124fd292311ea636cad87c967a6c5430d7415c55c6bab84a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\trampoline-x86_64.obj",
+                             "bytes":  6113,
+                             "sha256":  "3e29d4b436d0d3879acb0caa3574c56f04232a6868002d6b68fc41f18541c842"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\vpaes-x86_64.obj",
+                             "bytes":  10033,
+                             "sha256":  "e5f694e8c616d0cb94ecdba6517e978aa1745e44976872cf0007c8e6ee75baa4"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\x86_64-mont.obj",
+                             "bytes":  7622,
+                             "sha256":  "50e740e87ff6c57262af3f432a6b1ee185a2534b8a5b99ba5efc02199f28574e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\aws-lc-sys-c6f19f40c46cc47e\\out\\x86_64-mont5.obj",
+                             "bytes":  18749,
+                             "sha256":  "d8646c7f4a299c9fb568786a2bbc1657b11c7fea1ce8de1d6b334759ab38550b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\build\\reshiki-d5924d1ab425aa30\\out\\reshiki.res",
+                             "bytes":  87952,
+                             "sha256":  "b2e8c61b6d1661b44343f228144b5755f17e459c18ba2e877edd342755331865"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libaccesskit-ea76ed1b25f968d9.rlib",
+                             "bytes":  1123280,
+                             "sha256":  "855773ce90b46b62241913e70d6d5449b7960d702127c186728ec01ea8c5ce82"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libbase64-e514eef6129c32ce.rlib",
+                             "bytes":  515380,
+                             "sha256":  "45b5cfcfa2f3ece30fcbc6928ab5f16214aa79bdc67a7c0d6b6ce7d501c3cc84"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libcosmolkit_inchi-935574439259826d.rlib",
+                             "bytes":  65560440,
+                             "sha256":  "14553cde98e7af1f96360399294a0df4b109f68ef73a6a7376c54b223d11d744"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libdirectories_next-3618be205adaaffc.rlib",
+                             "bytes":  125026,
+                             "sha256":  "62f29c1c8f11a39a341ba924f0ad16da56daaea7d9a72e2f749c9325d75bae9a"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libiced-d09abed2f545a71b.rlib",
+                             "bytes":  420332,
+                             "sha256":  "5c7432c65809b060f30b3aa4fc7a9d593302f3f6685f8aa5a9d7e39223713bee"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libimage-b227e25971fc1759.rlib",
+                             "bytes":  19110604,
+                             "sha256":  "13c9617dee3e7d09d8bd9b758228e0de0139241da3d917598cb732c3065083a4"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libopen-5da01fdd350c214a.rlib",
+                             "bytes":  227508,
+                             "sha256":  "a9bb03b05583eb8bf02c4c5913d3edbd1cfa5c9775a057813db5bfd068aa2dde"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libpdf_writer-074018b020f76a5a.rlib",
+                             "bytes":  4661890,
+                             "sha256":  "08823a7719ad8210a9637047d900cc2c6c7cae785acc1db785a69ede34b78dbf"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libpng-fc899941abf12726.rlib",
+                             "bytes":  2064410,
+                             "sha256":  "b7ab8b4ca9748524890c717a9288bb0fd712a32bd78fb964640388810af903f7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreqwest-d6bcb451b7cacafc.rlib",
+                             "bytes":  10441684,
+                             "sha256":  "ad6503436e0bba8304cafbbae47c8d1c8ea2a332407dee8987fac8529192a5d0"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki_agent-370f1e703f64b3ff.rlib",
+                             "bytes":  15616116,
+                             "sha256":  "7a89152ee498a4001ecc43d731b55ae67b55f2f7f65777382c856b1f2e43f64d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki_chemistry-1d4d910764e31057.rlib",
+                             "bytes":  34613506,
+                             "sha256":  "8b274676be27d9e2dd3405590f2b9133b41924bc94ecb00da4c0fb906bcdb038"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki_depict_math-838154eecb02c04b.rlib",
+                             "bytes":  4282,
+                             "sha256":  "47bea894a3ed79f0baf5f4f09e0d1c2dce9bdd39f5e5f9f1dc6a4dc8729b3ea7"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki_geometry-d23a44bdc0174e68.rlib",
+                             "bytes":  2360012,
+                             "sha256":  "5e5174923e13d293e7180923f246856c3c39db272817304315fe3a1a2118a4f0"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki_io-35ac9d867d541d05.rlib",
+                             "bytes":  41837348,
+                             "sha256":  "a424a68dc0aa155166aa403dc1783e5d43485a37b9de1e144348a87698074efa"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki_mcp-1f69857ff4c429fc.rlib",
+                             "bytes":  11885434,
+                             "sha256":  "34771c8944ceccab53c6e79f39b51457fe4cd34a91a2bf7cc9b5d269bc648cc3"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki_model-c08cb25bee0df536.rlib",
+                             "bytes":  45798398,
+                             "sha256":  "68189a79da88a827cc4fecf56bbd56de178fccd395774f7ca3509349be47cb54"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki_process_heap-b8ccb26b243f64f2.rlib",
+                             "bytes":  85892,
+                             "sha256":  "b93d6a07601aa6e7648ce5efd865d2aaa2281ac3d0513b8cf5900d3545f332ec"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki_windows-142295b639768479.rlib",
+                             "bytes":  12888442,
+                             "sha256":  "783034e18abc63a8b5cdce1c3e9102be106fc5d324b85a423ebe4135f8dcdf26"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libreshiki-cad93879d68fdb74.rlib",
+                             "bytes":  33756290,
+                             "sha256":  "c0fe4ad0a8476fb3361e6d8d050188d8d7fb5d830d27afdfb6fcda18085dc415"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libresvg-003dd88f23f11fdd.rlib",
+                             "bytes":  2615010,
+                             "sha256":  "3517b19ed2213e3e3a379f6e81db849d46b077bfcae2502e1a1ba0da6671be02"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\librfd-98b84a4f82d69222.rlib",
+                             "bytes":  1569262,
+                             "sha256":  "843db1e7de4dce3220f7e008e91cb1262b9f3978d4ec26005570714a31452f8b"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libroxmltree-d10f57da35744abf.rlib",
+                             "bytes":  1357986,
+                             "sha256":  "0c85fd03961243084450250b036e71bceb474ae6883653434b029a582071be3f"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libsemver-06db9367b2dbdfff.rlib",
+                             "bytes":  436534,
+                             "sha256":  "20d1d7a13717edef5274bef370a54b742187f36ff25dfedb75cd5a297f837039"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libserde_json-25ed28563eb2c733.rlib",
+                             "bytes":  3367484,
+                             "sha256":  "e185b630dbe6fcc5c233a2a366b752426880fa14870bbb5b9de332ace4822a7f"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libserde-6525338bacfbb914.rlib",
+                             "bytes":  994332,
+                             "sha256":  "1bffb0827aa45e92c21f995693e8e6b839b4491c7683a6aedc8db83eb5ba21ec"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libsha2-f61991d236b86623.rlib",
+                             "bytes":  241498,
+                             "sha256":  "bc848266569258689fa759ae7534c2edf0de960738de16bddc9dfe446860755d"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libsvg2pdf-88d45c7f82aa6554.rlib",
+                             "bytes":  2245102,
+                             "sha256":  "717ebc761db7b2a964340bbcb3e2764461bb1b16ffcdac823a2d3de51b96f541"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libswash-cbe9d5dd8cc6eff8.rlib",
+                             "bytes":  11016370,
+                             "sha256":  "761d2e44c7cda0aea9c6329b3e0d09328128f3a7921675205d5d9ad06d523dba"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libtempfile-a4142dd762cb8735.rlib",
+                             "bytes":  776934,
+                             "sha256":  "2b373905a02875beb915917bb7d4a886f87aa2f6e4ffd28e55c9749818364832"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libthiserror-629889f8e8b3a72f.rlib",
+                             "bytes":  32348,
+                             "sha256":  "543016f9f3bca8380bbf0742fe9fb27214ff367bc5e31c4480ef2d140dd4502e"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libtiff-413c2b028aeac86e.rlib",
+                             "bytes":  3708962,
+                             "sha256":  "75bc2924d1e8f01d2d4a10eabfcc8e06309a4903fe057de276eedfb347c27eec"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libtokio-0044ebd3df8814ed.rlib",
+                             "bytes":  18148756,
+                             "sha256":  "c518e465a745fca7778ba401e2cc071b76b48c89599472aad5caf58883ef9ceb"
+                         },
+                         {
+                             "path":  "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target\\x86_64-pc-windows-msvc\\debug\\deps\\libttf_parser-f7335c811a1db18b.rlib",
+                             "bytes":  5899780,
+                             "sha256":  "53260fd040bafceb949ec2626876674019c1a4c628ec21a4c2c745bb70929733"
+                         },
+                         {
+                             "path":  "F:\\reshiki-selected-issues-20261002\\.build\\cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\windows_x86_64_msvc-0.52.6\\lib\\windows.0.52.0.lib",
+                             "bytes":  5210890,
+                             "sha256":  "24d8cbc445955b0d48041948a3c71ce2cddb948c089b25ec7106fadd9f3efde0"
+                         },
+                         {
+                             "path":  "F:\\reshiki-selected-issues-20261002\\.build\\rustup\\toolchains\\1.99.0-x86_64-pc-windows-msvc\\bin\\rustc.exe",
+                             "bytes":  110592,
+                             "sha256":  "fc40f1c8b65095a22a48c111aadc279c26a049b7e4161e8b99ffe3eb23873e86"
+                         }
+                     ],
+    "initialFree":  [
+                        {
+                            "Name":  "C",
+                            "Free":  476278784
+                        },
+                        {
+                            "Name":  "F",
+                            "Free":  342986752
+                        }
+                    ],
+    "app":  "C:\\Users\\ryuichi\\dev\\reshiki-emf-candidate-20261009\\reshiki.exe",
+    "objectDirectory":  "F:\\reshiki-emf-link-20261009",
+    "sourceReceiptSHA256":  "a69a98986c7be5ed5f3bf224d7b74e118722a86067102b0a4a0d6934c2e9f540"
+}

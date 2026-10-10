@@ -1,0 +1,19 @@
+{
+  "initial_file": "candidate-alkane-3d-desktop.rsk",
+  "rotated_file": "candidate-alkane-3d-rotated.rsk",
+  "rotated_sha256": "1678b6193dc004b9d4bef7ae96cadc86c2c3e878bf353d11913596d9551108c9",
+  "atom_identity_preserved": true,
+  "bond_graph_identity_preserved": true,
+  "graph_comparison": "Covalent endpoints unordered; directional dative endpoints ordered; stereo controls reversed together with swapped covalent endpoints.",
+  "atoms": 6,
+  "bonds": 5,
+  "visible_h": 0,
+  "finite_xyz": true,
+  "nonzero_z": 6,
+  "proper_rotation_determinant": 0.9999999999999999,
+  "rigid_fit_rms_source_units": 7.38336532982201e-8,
+  "rigid_fit_max_source_units": 1.232311233690618e-7,
+  "max_heavy_distance_error_source_units": 2.1390600046800046e-7,
+  "signed_torsion_error_radians": 1.2650284375581577e-8,
+  "projection_changed": true
+}

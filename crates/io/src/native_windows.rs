@@ -5,6 +5,7 @@ use crate::{document::Document, scene};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use resvg::{tiny_skia, usvg};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 fn transform(value: usvg::Transform) -> [f32; 6] {
     [value.sx, value.ky, value.kx, value.sy, value.tx, value.ty]
 }
@@ -20,14 +21,15 @@ fn collect(
     group: &usvg::Group,
     parent: usvg::Transform,
     output: &mut Vec<Value>,
+    sources: &HashMap<String, &[u8]>,
 ) -> Result<(), String> {
     // Flattened text is a separate subtree: its cached absolute transforms do
     // not include the SVG viewBox. Compose local transforms while traversing.
     let absolute = parent.pre_concat(group.transform());
     for node in group.children() {
         match node {
-            usvg::Node::Group(group) => collect(group, absolute, output)?,
-            usvg::Node::Text(text) => collect(text.flattened(), absolute, output)?,
+            usvg::Node::Group(group) => collect(group, absolute, output, sources)?,
+            usvg::Node::Text(text) => collect(text.flattened(), absolute, output, sources)?,
             usvg::Node::Path(path) if path.is_visible() => {
                 let commands: Vec<Vec<f32>> = path
                     .data()
@@ -65,6 +67,17 @@ fn collect(
                 }));
             }
             usvg::Node::Image(image) if image.is_visible() => {
+                // usvg moves an SVG image's ID to its placement group and
+                // leaves the contained image unnamed. Keep that association
+                // while using the same resolved size and transform as PNG.
+                if let Some(bytes) = sources.get(image.id()).or_else(|| sources.get(group.id())) {
+                    output.push(json!({
+                        "kind": "metafile", "transform": transform(absolute),
+                        "width": image.size().width(), "height": image.size().height(),
+                        "data": STANDARD.encode(bytes)
+                    }));
+                    continue;
+                }
                 let bytes = match image.kind() {
                     usvg::ImageKind::PNG(bytes) | usvg::ImageKind::JPEG(bytes) => bytes,
                     _ => return Err("Unsupported native print image; export a PDF instead.".into()),
@@ -79,6 +92,18 @@ fn collect(
         }
     }
     Ok(())
+}
+fn metafile_sources(doc: &Document) -> HashMap<String, &[u8]> {
+    doc.graphics
+        .iter()
+        .filter_map(|graphic| {
+            graphic
+                .picture
+                .as_ref()
+                .and_then(|picture| picture.emf())
+                .map(|bytes| (format!("reshiki-picture-{}", graphic.id), bytes))
+        })
+        .collect()
 }
 
 pub fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
@@ -104,7 +129,14 @@ pub fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
             "fill": [r, g, b, 255], "stroke": null, "even_odd": false
         }));
     }
-    collect(tree.root(), usvg::Transform::identity(), &mut primitives)?;
+    // Printing uses the portable preview. Original metafile playback is only
+    // allowed in the disposable EMF export worker.
+    collect(
+        tree.root(),
+        usvg::Transform::identity(),
+        &mut primitives,
+        &HashMap::new(),
+    )?;
     let pages: Result<Vec<_>, String> = (0..layout.count())
         .map(|index| {
             let (lo, _) = layout.bounds(index).ok_or("Invalid print page")?;
@@ -125,34 +157,43 @@ pub fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
 pub fn office_metafile(doc: &Document) -> Result<Vec<u8>, String> {
     doc.validate()?;
     let tree = crate::export::parse_svg(scene::svg(doc))?;
-    metafile(&tree)
+    metafile(&tree, doc)
 }
 
 /// Use the figure renderer's resolved geometry, fonts, background and bounds.
-pub(crate) fn metafile(tree: &usvg::Tree) -> Result<Vec<u8>, String> {
-    record_metafile(tree, reshiki_windows::metafile)
+pub(crate) fn metafile(tree: &usvg::Tree, doc: &Document) -> Result<Vec<u8>, String> {
+    record_metafile(tree, doc, false)
 }
 
-pub(crate) fn file_metafile(tree: &usvg::Tree) -> Result<Vec<u8>, String> {
-    record_metafile(tree, reshiki_windows::file_metafile)
+pub(crate) fn file_metafile(tree: &usvg::Tree, doc: &Document) -> Result<Vec<u8>, String> {
+    record_metafile(tree, doc, true)
 }
 
-fn record_metafile(
-    tree: &usvg::Tree,
-    record: fn(&[u8]) -> Result<Vec<u8>, String>,
-) -> Result<Vec<u8>, String> {
+fn record_metafile(tree: &usvg::Tree, doc: &Document, file: bool) -> Result<Vec<u8>, String> {
     if tree.size().width() * 0.75 > 2880. || tree.size().height() * 0.75 > 2880. {
         return Err("Drawing exceeds EMF's supported 40-inch dimensions; use SVG or PDF.".into());
     }
     let mut primitives = Vec::new();
-    collect(tree.root(), usvg::Transform::identity(), &mut primitives)?;
+    let sources = metafile_sources(doc);
+    collect(
+        tree.root(),
+        usvg::Transform::identity(),
+        &mut primitives,
+        &sources,
+    )?;
     let bytes = serde_json::to_vec(&json!({
         "version": 1, "width_pt": tree.size().width() * 0.75,
         "height_pt": tree.size().height() * 0.75,
         "pages": [[0., 0.]], "primitives": primitives
     }))
     .map_err(|e| e.to_string())?;
-    record(&bytes)
+    if !sources.is_empty() {
+        reshiki_windows::isolated_metafile(&bytes, file)
+    } else if file {
+        reshiki_windows::file_metafile(&bytes)
+    } else {
+        reshiki_windows::metafile(&bytes)
+    }
 }
 
 #[cfg(test)]

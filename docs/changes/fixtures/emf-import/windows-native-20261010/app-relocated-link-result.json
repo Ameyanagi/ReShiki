@@ -1,0 +1,33 @@
+﻿{
+    "when":  "2026-10-09T10:11:31.6530804Z",
+    "durationSeconds":  12.7798292,
+    "exitCode":  null,
+    "stoppedBySpaceGuard":  false,
+    "minimumFreeC":  273358848,
+    "minimumFreeF":  186671104,
+    "finalFree":  [
+                      {
+                          "Name":  "C",
+                          "Free":  374329344
+                      },
+                      {
+                          "Name":  "F",
+                          "Free":  245432320
+                      }
+                  ],
+    "candidate":  null,
+    "objects":  [
+                    {
+                        "Name":  "replayed-compiler.txt",
+                        "Length":  7570
+                    },
+                    {
+                        "Name":  "reshiki.d",
+                        "Length":  8604
+                    },
+                    {
+                        "Name":  "reshiki.pdb",
+                        "Length":  97529856
+                    }
+                ]
+}

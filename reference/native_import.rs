@@ -70,6 +70,68 @@ fn compare(actual: Response, expected: Response) -> anyhow::Result<()> {
     Ok(())
 }
 
+// The unchanged worker flattens Z. Adapt exactly that deliberate display
+// delta, retaining full equality for chemistry, source IDs, all other drawing
+// fields and every unaffected 2D response. Explicit-H folding has separate
+// independent actual-executable graph/stereo/XYZ controls.
+fn mol_source_xyz(mut expected: Response, text: &str) -> anyhow::Result<Response> {
+    let imported = reshiki::chemistry::molfile::read(text)?;
+    if !imported.annotations.is_3d
+        && !imported
+            .molecule
+            .positions
+            .iter()
+            .any(|position| position.z != 0.)
+    {
+        return Ok(expected);
+    }
+    let doc = expected
+        .document
+        .as_mut()
+        .context("Missing source MOL drawing")?;
+    let points: std::collections::HashMap<_, _> = imported
+        .molecule
+        .ids
+        .iter()
+        .copied()
+        .zip(&imported.molecule.positions)
+        .collect();
+    for atom in &mut doc.atoms {
+        atom.depth = (points
+            .get(&atom.id)
+            .context("Missing original source atom")?
+            .z
+            * 28.) as f32;
+    }
+    let mut any = std::collections::HashSet::new();
+    for (bond, metadata) in imported
+        .molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .zip(&imported.molecule.state.metadata.bonds)
+    {
+        if bond.order == 2 && metadata.stereo == 1 {
+            let a = imported.molecule.ids[bond.a];
+            let b = imported.molecule.ids[bond.b];
+            any.insert((a.min(b), a.max(b)));
+        }
+    }
+    for bond in &mut doc.bonds {
+        if bond.order == 2 {
+            bond.stereo_authoritative = true;
+            if any.contains(&(bond.a.min(bond.b), bond.a.max(bond.b))) {
+                bond.stereo = Some("any".into());
+            }
+        }
+        if matches!(bond.order, 1 | 2 | 4) && !(bond.order == 1 && bond.display == "wavy") {
+            bond.projection = true;
+        }
+    }
+    Ok(expected)
+}
+
 // Match the real bridge's deferred-image and Value -> Response boundary.
 fn wire_response(mut value: Value) -> anyhow::Result<Response> {
     if let Some(graphics) = value
@@ -192,7 +254,15 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
             }
             (Ok(Outcome::Complete(a)), Some(b)) => {
                 accepted += 1;
-                compare(*a, b).err().map(|e| e.to_string())
+                let expected = if format == "mol" {
+                    mol_source_xyz(b, &case.text)
+                } else {
+                    Ok(b)
+                };
+                expected
+                    .and_then(|b| compare(*a, b))
+                    .err()
+                    .map(|e| e.to_string())
             }
             (Err(_), None) => {
                 rejected += 1;
@@ -230,7 +300,7 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn mol_import_matches_complete_original_responses() -> anyhow::Result<()> {
+async fn mol_import_retains_original_responses_with_source_xyz() -> anyhow::Result<()> {
     reference_cases("mol", "reference/molfile_engine_reference.py").await
 }
 #[tokio::test]

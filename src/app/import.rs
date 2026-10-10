@@ -21,7 +21,10 @@ const STRUCTURES: [(&str, &str); 6] = [
     ("smi", "smiles"),
     ("smiles", "smiles"),
 ];
-const PICTURES: [&str; 6] = ["png", "jpg", "jpeg", "tif", "tiff", "webp"];
+#[cfg(not(windows))]
+const PICTURES: &[&str] = &["png", "jpg", "jpeg", "tif", "tiff", "webp"];
+#[cfg(windows)]
+const PICTURES: &[&str] = &["png", "jpg", "jpeg", "tif", "tiff", "webp", "emf"];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Example(&'static str, &'static str);
@@ -205,11 +208,13 @@ fn picture_drawing(picture: &Picture) -> Document {
 async fn read(engine: &LocalEngine, path: &Path) -> Result<(Document, Vec<String>), String> {
     match kind(path) {
         Kind::Picture => {
-            let path = path.to_owned();
-            let picture = tokio::task::spawn_blocking(move || Picture::open(&path))
-                .await
-                .map_err(|e| e.to_string())??;
-            Ok((picture_drawing(&picture), vec![]))
+            let picture = reshiki::metafile::open(path).await?;
+            let warnings = if picture.emf().is_some() {
+                vec!["EMF imported at physical size. Save .rsk or export EMF on Windows to retain vectors; other formats use a preview.".into()]
+            } else {
+                vec![]
+            };
+            Ok((picture_drawing(&picture), warnings))
         }
         Kind::Structure(format) => {
             let bytes = tokio::fs::read(path).await.map_err(|e| e.to_string())?;
@@ -244,7 +249,11 @@ async fn load(engine: LocalEngine, paths: Vec<PathBuf>) -> Result<Batch, String>
     Ok(batch)
 }
 async fn choose() -> Vec<PathBuf> {
-    let extensions: Vec<_> = STRUCTURES.iter().map(|(e, _)| *e).chain(PICTURES).collect();
+    let extensions: Vec<_> = STRUCTURES
+        .iter()
+        .map(|(e, _)| *e)
+        .chain(PICTURES.iter().copied())
+        .collect();
     rfd::AsyncFileDialog::new()
         .set_title("Insert structures or pictures")
         .add_filter("Structures and pictures", &extensions)

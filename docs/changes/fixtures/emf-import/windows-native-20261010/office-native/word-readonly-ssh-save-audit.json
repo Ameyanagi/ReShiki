@@ -1,0 +1,32 @@
+{
+  "observed_utc": "2026-10-09T23:14:06.3730996Z",
+  "word_processes": [
+    {
+      "pid": 5024,
+      "parent_pid": 7520,
+      "session_id": 2,
+      "path": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+      "created_utc": "2026-10-09T23:10:28.1816700Z",
+      "exe_bytes": 1557224,
+      "exe_sha256": "a6a4da14ca3edfa90e475339f649791c5dc2ebd77fb53d556d84880762f69a0b",
+      "file_version": "16.0.20527.20032",
+      "product_version": "16.0.20527.20032"
+    }
+  ],
+  "first_read": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-word-emf-20261010.docx",
+    "bytes": 17657,
+    "created_utc": "2026-10-09T23:13:24.3424033Z",
+    "modified_utc": "2026-10-09T23:13:24.4248346Z",
+    "sha256": "5fd87ef65c29d3355d2293d95ffebf2e1852fd2e635e5a2b81b432b1f2fc25fc"
+  },
+  "second_read": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-word-emf-20261010.docx",
+    "bytes": 17657,
+    "created_utc": "2026-10-09T23:13:24.3424033Z",
+    "modified_utc": "2026-10-09T23:13:24.4248346Z",
+    "sha256": "5fd87ef65c29d3355d2293d95ffebf2e1852fd2e635e5a2b81b432b1f2fc25fc"
+  },
+  "file_error": null,
+  "read_method": "Read-only FileStream with ReadWrite/Delete sharing; default Get-FileHash sharing failed while Word kept the file open"
+}

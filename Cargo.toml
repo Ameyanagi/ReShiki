@@ -31,6 +31,7 @@ members = [
   "crates/io",
   "crates/mcp",
   "crates/model",
+  "crates/metafile",
   "crates/process-heap",
 ]
 default-members = [
@@ -159,6 +160,11 @@ svg2pdf = { path = "vendor/svg2pdf" }
 smithay-clipboard = { path = "vendor/smithay-clipboard" }
 
 # Independent oracle suites live in reference/ and require the development reference.
+
+[[test]]
+name = "metafile_worker"
+path = "tests/metafile_worker.rs"
+harness = false
 
 [[test]]
 name = "abbreviation_detection"

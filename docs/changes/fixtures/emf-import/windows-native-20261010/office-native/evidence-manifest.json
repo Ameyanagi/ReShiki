@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "description": "Supplemental actual Word/PowerPoint saves and fresh reopens; byte-exact copies. Earlier package remains separate. Save-dialog and snap-overlay captures remain excluded scratch history.",
+  "files": [
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/desktop-powerpoint-emf-20261010.pptx",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/desktop-powerpoint-emf-20261010.pptx",
+      "bytes": 37482,
+      "sha256": "6ccd40accae9fbb41c9e9dac03d4933f2fe82da7f9746dea647931f71ff26563"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/desktop-word-emf-20261010.docx",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/desktop-word-emf-20261010.docx",
+      "bytes": 17657,
+      "sha256": "5fd87ef65c29d3355d2293d95ffebf2e1852fd2e635e5a2b81b432b1f2fc25fc"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/powerpoint-readonly-ssh-save-audit.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/powerpoint-readonly-ssh-save-audit.json",
+      "bytes": 812,
+      "sha256": "f95bbb39cee5de5b6b8b9f3a0b3355cb3f62cf528d4d9feafbcf61e78d7a2f52"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/powerpoint-executable-process-audit.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/powerpoint-executable-process-audit.json",
+      "bytes": 401,
+      "sha256": "21577002090aa7f1cf55eccf7e762642e0a3994c37e73aec999b72b48cecd013"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/powerpoint-native-container-audit.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/powerpoint-native-container-audit.json",
+      "bytes": 4208,
+      "sha256": "1248e73d50265989e9dfa84cc497a9fe97c3eb3d2102a290412f25769765e842"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/powerpoint-fresh-reopen-process-audit.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/powerpoint-fresh-reopen-process-audit.json",
+      "bytes": 1513,
+      "sha256": "a8a44adbf54afa616c699002a9e6b2331002742aa47b61e657c9b18011a26c53"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/word-readonly-ssh-save-audit.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/word-readonly-ssh-save-audit.json",
+      "bytes": 1374,
+      "sha256": "1fd693872e8d1b8d507592162f5b3020ef52f84a5ab773bbddf579b0de70e70e"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/word-native-container-audit.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/word-native-container-audit.json",
+      "bytes": 4157,
+      "sha256": "c68f9221c8302cb7cfe89055feca3001bbe34199af8ef3a1ca680f350150676f"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/word-fresh-reopen-process-audit.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/word-fresh-reopen-process-audit.json",
+      "bytes": 2084,
+      "sha256": "35b9e554800bc252b44ab39d491cf65925e631dbec1bd53dd8d958fde3748491"
+    },
+    {
+      "path": "docs/images/emf-import/office-native/powerpoint-emf-saved-intrinsic-size.jpg",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/powerpoint-emf-saved-intrinsic-size.jpg",
+      "bytes": 329669,
+      "sha256": "3eab9caa663416bf86beb8d3ba008aba34d81eb5ddcd3f05008869829737b628"
+    },
+    {
+      "path": "docs/images/emf-import/office-native/powerpoint-emf-fresh-process-reopened.jpg",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/powerpoint-emf-fresh-process-reopened.jpg",
+      "bytes": 309306,
+      "sha256": "5323d39d062b8d2e0a78acc4423c442e6fd90d974f372eba54e284e8b1f84e75"
+    },
+    {
+      "path": "docs/images/emf-import/office-native/word-emf-saved-intrinsic-size.jpg",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/word-emf-saved-intrinsic-size.jpg",
+      "bytes": 379140,
+      "sha256": "cea7f727cff3069425f8116845c60fcdad1eca856d3f51d01c8323b15c3939d6"
+    },
+    {
+      "path": "docs/images/emf-import/office-native/word-emf-fresh-process-reopened.jpg",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/word-emf-fresh-process-reopened.jpg",
+      "bytes": 352243,
+      "sha256": "9e7ea04c5ddd7fda7ce59820d1af0370541df5d0e4498460c750720141d3024a"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/root-office-native-acceptance.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/root-office-native-acceptance.json",
+      "bytes": 3546,
+      "sha256": "f3fc32a93d21b419dab9a0c88525de461c762d528abab05e5df7e5595f4250a6"
+    }
+  ]
+}

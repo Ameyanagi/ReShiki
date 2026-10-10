@@ -1583,7 +1583,7 @@ fn render_svg(doc: &Document, background: bool) -> String {
                 use base64::Engine as _;
                 if let Some(picture) = &g.picture {
                     let data = base64::engine::general_purpose::STANDARD.encode(picture.png());
-                    s.push_str(&format!("<image width=\"1\" height=\"1\" preserveAspectRatio=\"none\" transform=\"matrix({} {} {} {} {} {})\" href=\"data:image/png;base64,{}\"/>",g.axis_x.x,g.axis_x.y,g.axis_y.x,g.axis_y.y,g.origin.x,g.origin.y,data));
+                    s.push_str(&format!("<image id=\"reshiki-picture-{}\" width=\"1\" height=\"1\" preserveAspectRatio=\"none\" transform=\"matrix({} {} {} {} {} {})\" href=\"data:image/png;base64,{}\"/>",g.id,g.axis_x.x,g.axis_x.y,g.axis_y.x,g.axis_y.y,g.origin.x,g.origin.y,data));
                 }
             }
             Primitive::Path {

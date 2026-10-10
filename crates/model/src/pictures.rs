@@ -1,5 +1,5 @@
-//! Self-contained raster pictures. Decode untrusted inputs once with bounded
-//! dimensions, retain portable PNG data, and share image storage across Undo.
+//! Self-contained pictures with a portable PNG preview. Windows EMF imports
+//! additionally retain their original vectors. Storage is shared across Undo.
 pub mod exchange;
 use crate::{
     document::{Document, Point},
@@ -17,11 +17,14 @@ use std::{
 
 pub const MAX_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_PIXELS: u64 = 16_000_000;
+pub use reshiki_metafile::validate as emf_dimensions;
 const MAX_SIDE: u32 = 8192;
 #[derive(Clone)]
 pub struct Picture(Arc<Data>);
 struct Data {
     png: Bytes,
+    /// Original vector picture; PNG remains the portable viewing preview.
+    emf: Option<Bytes>,
     width: u32,
     height: u32,
     handle: Handle,
@@ -38,17 +41,44 @@ impl std::fmt::Debug for Picture {
 }
 impl PartialEq for Picture {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) || self.0.png == other.0.png
+        Arc::ptr_eq(&self.0, &other.0) || self.0.png == other.0.png && self.0.emf == other.0.emf
     }
 }
 impl Serialize for Picture {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&STANDARD.encode(&self.0.png))
+        if let Some(emf) = &self.0.emf {
+            StoredMetafile {
+                png: STANDARD.encode(&self.0.png),
+                emf: STANDARD.encode(emf),
+            }
+            .serialize(serializer)
+        } else {
+            serializer.serialize_str(&STANDARD.encode(&self.0.png))
+        }
     }
 }
 impl<'de> Deserialize<'de> for Picture {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let text = String::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Stored {
+            Png(String),
+            Metafile(StoredMetafile),
+        }
+        let text = match Stored::deserialize(deserializer)? {
+            Stored::Png(text) => text,
+            Stored::Metafile(source) => {
+                let decode = |text: &str| {
+                    if text.len() > MAX_BYTES.div_ceil(3) * 4 {
+                        return Err("Picture exceeds 16 MB".to_owned());
+                    }
+                    STANDARD.decode(text).map_err(|error| error.to_string())
+                };
+                let png = decode(&source.png).map_err(serde::de::Error::custom)?;
+                let emf = decode(&source.emf).map_err(serde::de::Error::custom)?;
+                return Self::from_emf(&emf, &png).map_err(serde::de::Error::custom);
+            }
+        };
         if text.len() > MAX_BYTES.div_ceil(3) * 4 {
             return Err(serde::de::Error::custom("Picture exceeds 16 MB"));
         }
@@ -59,6 +89,12 @@ impl<'de> Deserialize<'de> for Picture {
         }
         Self::from_decoded(decoded).map_err(serde::de::Error::custom)
     }
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StoredMetafile {
+    png: String,
+    emf: String,
 }
 fn decode(bytes: &[u8]) -> Result<(DynamicImage, ImageFormat), String> {
     decode_limited(bytes, None, MAX_PIXELS)
@@ -124,6 +160,7 @@ impl Picture {
         let handle = Handle::from_bytes(png.clone());
         Self(Arc::new(Data {
             png,
+            emf: None,
             width,
             height,
             handle,
@@ -133,6 +170,23 @@ impl Picture {
     pub fn import(bytes: &[u8]) -> Result<Self, String> {
         let (image, _) = decode(bytes)?;
         Self::from_decoded(image)
+    }
+    /// Retain validated original EMF and the bounded native-playback preview.
+    /// New EMF input is decoded by the isolated Windows worker; stored drawings
+    /// can be reopened using their PNG preview on every platform.
+    pub fn from_emf(emf: &[u8], png: &[u8]) -> Result<Self, String> {
+        reshiki_metafile::validate(emf)?;
+        if emf.len().saturating_add(png.len()) > MAX_BYTES {
+            return Err("EMF and its preview exceed the 16 MB picture storage limit".into());
+        }
+        let (image, _) = decode_limited(png, Some(ImageFormat::Png), MAX_PIXELS)?;
+        let mut picture = Self::from_decoded(image)?;
+        let data = Arc::get_mut(&mut picture.0).ok_or("Picture storage is shared")?;
+        if emf.len().saturating_add(data.png.len()) > MAX_BYTES {
+            return Err("EMF and its preview exceed the 16 MB picture storage limit".into());
+        }
+        data.emf = Some(Bytes::from(emf.to_vec()));
+        Ok(picture)
     }
     fn from_decoded(image: DynamicImage) -> Result<Self, String> {
         let (width, height) = (image.width(), image.height());
@@ -155,6 +209,12 @@ impl Picture {
     }
     pub fn png(&self) -> &[u8] {
         &self.0.png
+    }
+    pub fn emf(&self) -> Option<&[u8]> {
+        self.0.emf.as_deref()
+    }
+    pub fn stored_bytes(&self) -> usize {
+        self.0.png.len() + self.0.emf.as_ref().map_or(0, |bytes| bytes.len())
     }
     /// An opaque copy for consumers that may discard alpha. Composite before
     /// encoding RGB so transparent black backgrounds cannot swallow line art.
@@ -203,8 +263,16 @@ impl Picture {
             crate::style::DEFAULT.world(100. * 72. / 25.4)
                 / (self.width().max(self.height()) as f32),
         );
-        let width = self.width() as f32 * scale;
-        let height = self.height() as f32 * scale;
+        let (width, height) = self
+            .emf()
+            .and_then(|bytes| reshiki_metafile::validate(bytes).ok())
+            .map(|size| {
+                (
+                    crate::style::DEFAULT.world(size.width_pt),
+                    crate::style::DEFAULT.world(size.height_pt),
+                )
+            })
+            .unwrap_or((self.width() as f32 * scale, self.height() as f32 * scale));
         let mut graphic = Graphic::dragged(
             id,
             GraphicKind::Picture,
