@@ -1,0 +1,2 @@
+There has been no change in the accessibility tree for Window: "plus-lactic-acid.rsk — ReShiki".
+The focused UI element is 117 text field (settable) Chemical name, Value: (+)-butan-2-ol, ID: import-name

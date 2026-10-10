@@ -1,0 +1,6 @@
+The following is a diff from the previous accessibility tree for Window: "Untitled • — ReShiki" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~0 standard window Untitled • — ReShiki, Secondary Actions: Raise
+~		68 button Undo · ⌘Z, ID: header-undo
+~		69 button (disabled) Redo · ⇧⌘Z, ID: header-redo
+~		105 button Generate an optimized conformer using MMFF or UFF; preview before applying, ID: context-command-0
+~	60 text Untitled • — ReShiki

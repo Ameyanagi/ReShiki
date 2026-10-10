@@ -1,0 +1,81 @@
+{
+  "kind": "Authored compact source/artifact summary; not a fresh compiler/signature/native run",
+  "before": {
+    "source_tree": "11b50562b9f625665a244679fc1b42cb83c3d25b",
+    "raw_executable_sha256": "fabd7acc8491de3269ceab9b2c1412dccd1d0142ec28701a6defd5a8f29c8926",
+    "signed_executable_sha256": "420c2ef8d7e95ea5edc394b7871fb424a7939ce46601c4d0b718ef53c0a20970",
+    "native_observations_original_sha256": "8215bea6b7146af7ff0620a8263ed35595428ab195bc35d02a0559a342b98f42",
+    "framing": "Already present ethanol with ethan-1-ol caption,250%; rejected (+)-lactic acid left it intact"
+  },
+  "after": {
+    "source_tree": "22a60b33376bfbcb9e2af32880b128f27877ec65",
+    "raw_executable_sha256": "7946db16e4a0d8a6d17fc9a2bb065c3c99c12945c686e570cd83a342a863a713",
+    "signed_executable_sha256": "e7c850e53616c0d57058790d9e26392992b5ddac6b82da1f13f95cb91c186ecb",
+    "bundle_id": "dev.reshiki.plus-lactic-review-20261011-v1",
+    "signature": "Ad-hoc development, not notarized",
+    "bundle_review_original_sha256": "b59e918f0e8621b0a7218dd5aca06dcd5e928ce451ed0c12e8cd4961ae05a833",
+    "input_review_original_sha256": "0515091504d30231acc217e994e3afd1f72dfaa3d68131bd2736fe6efb37669e",
+    "default_own_artifacts": 19,
+    "source_inputs": 690,
+    "resource_inputs": 78,
+    "cached_owned_artifacts_verified": 16,
+    "newly_compiled_artifacts": 3,
+    "framing": "Insertion begins from empty canvas;02-05 at250%,06 generated name at220%",
+    "fresh_process_reopen": "PENDING_ROOT_NATIVE_RECORD"
+  },
+  "changed_five_paths": [
+    {
+      "path": "src/naming.rs",
+      "before_sha256": "b0e61b980bf468b6c20591326babfd098c63cbe55344b6bf40bc1fe6b0cf0158",
+      "after_sha256": "1f407e20f0af5e8d04aa0516896773099777b036b73777c7cce5dcbdbac2c606"
+    },
+    {
+      "path": "src/naming/local.rs",
+      "before_sha256": "61052ee9ac2788511e3d0a2213954437586916e6d20a2e41044a210f15926b12",
+      "after_sha256": "2119f41c3dc11d1450954aa3ad1c7df44565b003e2167a80e5ae19a893002d04"
+    },
+    {
+      "path": "src/naming/local/tests.rs",
+      "before_sha256": "53cd1a07e17235e0362b3944e6e4d88c6b80ebefadfff6248d4dd1d91ce26684",
+      "after_sha256": "08ab8b374e802f19e5d10a10f87266539cb2e9939d41ec96712de6adf414f38f"
+    },
+    {
+      "path": "src/app/naming/import_dock/tests.rs",
+      "before_sha256": "69d435224e038ab2ae81a98f2f88ffdc9ed75a11aa2e02c6fbdf317d78a43110",
+      "after_sha256": "a1194ea889e3c97211101023bf21a7ee7cb7ec3bc593bccf94003de2f9e4718a"
+    },
+    {
+      "path": "docs/chemical-naming-rust.md",
+      "before_sha256": "8597db38ffb3140874cd0b73f845822c2156817c81ebbfd3110fed32a7160595",
+      "after_sha256": "ce48bf5b8ef0152d0b27819a77179caabee58133897372708e181898230c592e"
+    }
+  ],
+  "unchanged": {
+    "opsin_paths": 191,
+    "worker_protocol": 2,
+    "native_heap_bytes": 100663296,
+    "resident_limit_bytes": 402653184,
+    "process_deadline_seconds": 15,
+    "input_limit_bytes": 2048,
+    "editable_graph_atom_limit": 512,
+    "reverse_rules_process_supervisors_cargo": true,
+    "no_api_java_or_network_fallback": true
+  },
+  "test_qualification": {
+    "prior_base_tests": 559,
+    "prior_base_tree": "11b50562b9f625665a244679fc1b42cb83c3d25b",
+    "changed_scoped_passes": 23,
+    "new_tests": 3,
+    "overlap_rerun": 20,
+    "note": "559 prior-base checks plus23 rerun passes, including3new; not582distinct tests at the after tree."
+  },
+  "primary_reference": {
+    "url": "https://www.ebi.ac.uk/chebi/CHEBI:422",
+    "entry_modified": "2024-04-18",
+    "retained_name": "(+)-lactic acid",
+    "systematic_name": "(2S)-2-hydroxypropanoic acid",
+    "smiles": "C[C@H](O)C(=O)O",
+    "inchi_stereo_layer": "/t2-/m0/s1",
+    "scope": "Exact retained-name equivalence only; never general + or - to R/S assignment."
+  }
+}

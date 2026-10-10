@@ -1,0 +1,48 @@
+{
+  "status": "PASS_ROOT_INDEPENDENT23_NAMED_LOG_REVIEW",
+  "source_tree": "22a60b33376bfbcb9e2af32880b128f27877ec65",
+  "groups": [
+    {
+      "group": "40-local",
+      "passed": 13,
+      "result_sha256": "9ca819a3ad93a2cca255fada150656199d8dfb0c9fbf5a991fe3b19469a35757"
+    },
+    {
+      "group": "41-import-dock",
+      "passed": 10,
+      "result_sha256": "cf7af75c9471b8c8c77a8c3f449e6dcf6c28431aa06cab85c0f81413e5ec3e04"
+    }
+  ],
+  "new_tests": [
+    "naming::local::tests::retained_lactic_name_is_exact_and_requires_its_specific_absolute_graph",
+    "naming::local::tests::retained_plus_lactic_name_uses_local_parser_and_exact_s_reverse",
+    "app::naming::import_dock::tests::retained_plus_lactic_import_keeps_stereo_caption_and_atomic_history"
+  ],
+  "all_passed_names": [
+    "naming::local::tests::actual_parser_rejects_ambiguous_stereo_polymers_salts_and_unknown_names",
+    "naming::local::tests::an_escaped_pipe_holder_cannot_extend_the_completion_deadline",
+    "naming::local::tests::cancellation_kills_and_reaps_child_and_removes_private_payload",
+    "naming::local::tests::dropping_queued_and_running_futures_recovers_the_worker_permit",
+    "naming::local::tests::exited_main_child_cannot_leave_a_descendant_holding_response_pipes",
+    "naming::local::tests::measured_resource_breaches_cannot_enter_the_exit_race_grace_path",
+    "naming::local::tests::missing_native_worker_fails_without_a_foreign_runtime_or_service",
+    "naming::local::tests::oversized_actual_child_output_is_bounded_and_worker_is_stopped",
+    "naming::local::tests::parser_cannot_accept_a_rule_generation_response",
+    "naming::local::tests::pinned_local_engine_matches_independent_connected_graphs_and_stereo",
+    "naming::local::tests::retained_lactic_name_is_exact_and_requires_its_specific_absolute_graph",
+    "naming::local::tests::retained_plus_lactic_name_uses_local_parser_and_exact_s_reverse",
+    "naming::local::tests::strict_adapter_rejects_semantic_loss_and_inconsistent_provenance",
+    "app::naming::import_dock::tests::actual_local_parser_result_inserts_directly_with_verified_source_title",
+    "app::naming::import_dock::tests::busy_requests_and_unsupported_names_leave_drawing_and_history_untouched",
+    "app::naming::import_dock::tests::cancelled_edited_switched_or_stale_import_completions_never_commit",
+    "app::naming::import_dock::tests::completion_routes_only_to_originating_tab",
+    "app::naming::import_dock::tests::default_dock_exposes_one_insert_and_collapses_preview_and_details",
+    "app::naming::import_dock::tests::edited_preview_never_inserts_original_name_or_unapplied_smiles",
+    "app::naming::import_dock::tests::insert_without_caption_and_optional_preview_reuse_need_no_acknowledgement",
+    "app::naming::import_dock::tests::linked_name_survives_native_copy_and_ordinary_figure_and_editable_exports",
+    "app::naming::import_dock::tests::one_insert_resolves_and_commits_structure_and_verified_caption_together",
+    "app::naming::import_dock::tests::retained_plus_lactic_import_keeps_stereo_caption_and_atomic_history"
+  ],
+  "executor_final_sha256": "561f807d836e04e6151a2ec41831d9b9921ae6470dc5b3fdccc5e95d6e2fa1e4",
+  "default_input_review_sha256": "0515091504d30231acc217e994e3afd1f72dfaa3d68131bd2736fe6efb37669e"
+}

@@ -1,0 +1,18 @@
+
+running 13 tests
+test naming::local::tests::actual_parser_rejects_ambiguous_stereo_polymers_salts_and_unknown_names ... ok
+test naming::local::tests::an_escaped_pipe_holder_cannot_extend_the_completion_deadline ... ok
+test naming::local::tests::cancellation_kills_and_reaps_child_and_removes_private_payload ... ok
+test naming::local::tests::dropping_queued_and_running_futures_recovers_the_worker_permit ... ok
+test naming::local::tests::exited_main_child_cannot_leave_a_descendant_holding_response_pipes ... ok
+test naming::local::tests::measured_resource_breaches_cannot_enter_the_exit_race_grace_path ... ok
+test naming::local::tests::missing_native_worker_fails_without_a_foreign_runtime_or_service ... ok
+test naming::local::tests::oversized_actual_child_output_is_bounded_and_worker_is_stopped ... ok
+test naming::local::tests::parser_cannot_accept_a_rule_generation_response ... ok
+test naming::local::tests::pinned_local_engine_matches_independent_connected_graphs_and_stereo ... ok
+test naming::local::tests::retained_lactic_name_is_exact_and_requires_its_specific_absolute_graph ... ok
+test naming::local::tests::retained_plus_lactic_name_uses_local_parser_and_exact_s_reverse ... ok
+test naming::local::tests::strict_adapter_rejects_semantic_loss_and_inconsistent_provenance ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 137 filtered out; finished in 13.99s
+

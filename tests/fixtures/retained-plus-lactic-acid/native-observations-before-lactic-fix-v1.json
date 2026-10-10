@@ -1,0 +1,304 @@
+{
+  "status": "PASS_ROOT_NATIVE_NAMES_AND_MAPS_ON_11b_SOURCE_BEFORE_RETAINED_LACTIC_FIX",
+  "source_tree": "11b50562b9f625665a244679fc1b42cb83c3d25b",
+  "raw_executable_sha256": "fabd7acc8491de3269ceab9b2c1412dccd1d0142ec28701a6defd5a8f29c8926",
+  "signed_executable_sha256": "420c2ef8d7e95ea5edc394b7871fb424a7939ce46601c4d0b718ef53c0a20970",
+  "actual_root_screenshots": 23,
+  "actual_root_accessibility_captures": 23,
+  "interruption": [
+    "05 redo was interleaved with user screen control; no clean qualification claimed",
+    "06 resumed state retained; original user trial saved as interrupted-user-trial.rsk"
+  ],
+  "verified": [
+    "07-09 independent fresh tab direct ethanol import with name below and one Undo/Redo for both graph and caption",
+    "10-12 context menu Hide chemical name and Show generated ethan-1-ol",
+    "14 reaction SMILES CCO>>CC=O imports 6 atoms/4 bonds and one assigned arrow",
+    "15-16 reviewed graph proposal matches 3 pairs/0 unmatched then applies displayed atom map labels1/2/3",
+    "18-19 manual map2 to27, one Undo returns2",
+    "20 drag reactant map2 label by60/-47 screen pixels without changing atom positions",
+    "21 save native reaction with paired maps1/2/3 and custom offset",
+    "22-23 normal CmdQ PID91926 exit and fresh PID98658 reopen; history empty and second native save byte-identical for reaction and ethanol"
+  ],
+  "limitations": [
+    "17 Align mapped structures on already aligned oxidation is a no-op, not evidence of a changed layout",
+    "13 (+)-lactic acid rejection records prior build; requested narrow fix applied in22a tree; fresh native acceptance still pending",
+    "AX captures include literal diffs and no-change states, not reconstructed full trees"
+  ],
+  "saved_files": {
+    "ethanol-caption.rsk": "880b1eccb624bc9fe627cff4937b75fe216bc94a026ee53b77823d2617b5bdc5",
+    "reaction-map-labels.rsk": "81665fa6645545a524386ae515dd4c03e1cce290a18bcf6ce8711a3deba0c0e0"
+  },
+  "inventory": [
+    {
+      "path": "01-empty-before-name-import.ax.txt",
+      "sha256": "f9188974753a84b634c069268552681de9a6deb65000c96421d95845b89ba661",
+      "bytes": 86
+    },
+    {
+      "path": "01-empty-before-name-import.jpg",
+      "sha256": "55487573aac344dd03e95b0a30dee7e5feaf43e88510411b86d922f176f8a0a9",
+      "bytes": 250682
+    },
+    {
+      "path": "02-compact-name-dock-before-insert.ax.txt",
+      "sha256": "41190b69a68535479d54d97d58409499445d2daca22242a998e9984e8211590b",
+      "bytes": 520
+    },
+    {
+      "path": "02-compact-name-dock-before-insert.jpg",
+      "sha256": "62dd8ac7d4d782067a4ea1144eef3d0edd189cd0a1120d1e66e46d4d0597c7e8",
+      "bytes": 246483
+    },
+    {
+      "path": "03-ethanol-caption-direct-insert.ax.txt",
+      "sha256": "5399984964987da2d5bf3da75a2d371c57faa0f81c1569b83563f878164c5d0e",
+      "bytes": 189
+    },
+    {
+      "path": "03-ethanol-caption-direct-insert.jpg",
+      "sha256": "a9f5b9e2e819bc96dbacbde1d9608fc14aae0475f73b2b6410b30babd0a9077a",
+      "bytes": 292770
+    },
+    {
+      "path": "04-ethanol-one-undo.ax.txt",
+      "sha256": "9547d2fde112a26daad515e63bf3519f65924ab3f4abfa57e747e38d7773d444",
+      "bytes": 1693
+    },
+    {
+      "path": "04-ethanol-one-undo.jpg",
+      "sha256": "b3ec3561a35f9f6eb6eab258b86f4b213bf23466554ac56582cd4e19298b8ce3",
+      "bytes": 246063
+    },
+    {
+      "path": "05-ethanol-one-redo.ax.txt",
+      "sha256": "014f4e31ec6d4a2ccefa0868ad92e0625a2f54fbea070648242298847570573d",
+      "bytes": 529
+    },
+    {
+      "path": "05-ethanol-one-redo.jpg",
+      "sha256": "1b469c1ddc73e8cf8d10e5c4121d1a4af9ee4404050debdaf7a4335bf43a4577",
+      "bytes": 270936
+    },
+    {
+      "path": "06-resumed-after-user-screen-control.ax.txt",
+      "sha256": "5e163fabeca3a5441541cba338c669ee6fc6d8bea890fd57a1b83f99d533676f",
+      "bytes": 90
+    },
+    {
+      "path": "06-resumed-after-user-screen-control.jpg",
+      "sha256": "a4119174974cd786d8ee7ecd47d081f89fe1ae277a0b979a59433d10f916fec3",
+      "bytes": 271409
+    },
+    {
+      "path": "07-fresh-ethanol-with-caption.ax.txt",
+      "sha256": "934eb563b1e26707b50e035869c2eda233514d2cd96dd5c20509ff92a9c85bac",
+      "bytes": 1566
+    },
+    {
+      "path": "07-fresh-ethanol-with-caption.jpg",
+      "sha256": "ed6af9e5fde44171e6202de2facc2e5b5b0c951ae4cc9a5c62e9c2ca85f0cc30",
+      "bytes": 293997
+    },
+    {
+      "path": "08-fresh-ethanol-one-undo.ax.txt",
+      "sha256": "9547d2fde112a26daad515e63bf3519f65924ab3f4abfa57e747e38d7773d444",
+      "bytes": 1693
+    },
+    {
+      "path": "08-fresh-ethanol-one-undo.jpg",
+      "sha256": "3e225755bdacb43211e8afea7ed235397f795b5588be60aa20f71035e3b1e93d",
+      "bytes": 247542
+    },
+    {
+      "path": "09-fresh-ethanol-one-redo.ax.txt",
+      "sha256": "ab9bbe3d20efe422b7870a549b00a1a880bf5dbb63acdba45b97e32a065dbbc0",
+      "bytes": 628
+    },
+    {
+      "path": "09-fresh-ethanol-one-redo.jpg",
+      "sha256": "6bdc601a9025e43e7b085ad000d7749fc94173db457a7766b7db061606c6ab22",
+      "bytes": 271859
+    },
+    {
+      "path": "10-hide-chemical-name-menu.ax.txt",
+      "sha256": "5e163fabeca3a5441541cba338c669ee6fc6d8bea890fd57a1b83f99d533676f",
+      "bytes": 90
+    },
+    {
+      "path": "10-hide-chemical-name-menu.jpg",
+      "sha256": "6ccec07f54d23ed3e7c7a5afde13ef3ba8bef86122f24fe59ec74f6c8ea27763",
+      "bytes": 305216
+    },
+    {
+      "path": "11-chemical-name-hidden.ax.txt",
+      "sha256": "42450b7d7a3b0fa73767825191a7360237703169793968bca9ec1d172435aad4",
+      "bytes": 4577
+    },
+    {
+      "path": "11-chemical-name-hidden.jpg",
+      "sha256": "ebd28928be5e50deee49fcb50cf2f1eb9da109b18a925aea08c08a1b2c798543",
+      "bytes": 269137
+    },
+    {
+      "path": "12-chemical-name-shown.ax.txt",
+      "sha256": "42450b7d7a3b0fa73767825191a7360237703169793968bca9ec1d172435aad4",
+      "bytes": 4577
+    },
+    {
+      "path": "12-chemical-name-shown.jpg",
+      "sha256": "3ac9c50912430f2db6a6194b656555371173092fabcb53c95f38735be7111dd7",
+      "bytes": 285181
+    },
+    {
+      "path": "13-unsupported-name-intact-drawing.ax.txt",
+      "sha256": "5420460065f0751a255fa9a8d9b96d5ae09e85db9b6744762c83de0643813955",
+      "bytes": 204
+    },
+    {
+      "path": "13-unsupported-name-intact-drawing.jpg",
+      "sha256": "549187421c80b72429e3fbd12bcf5bd1f4769f27f4b617511d89b0b41c1543f5",
+      "bytes": 297027
+    },
+    {
+      "path": "14-reaction-smiles-import-before-maps.ax.txt",
+      "sha256": "f629d2e398f9b2945e6c2a9e8adc0873957dcc1ad6b6a695b137aef8fa163fd8",
+      "bytes": 1580
+    },
+    {
+      "path": "14-reaction-smiles-import-before-maps.jpg",
+      "sha256": "c231586e63736b7a4c37d8874e4799761b8eceb79d1a99405119f3a5d2bee24e",
+      "bytes": 310304
+    },
+    {
+      "path": "15-auto-map-proposal.ax.txt",
+      "sha256": "5e163fabeca3a5441541cba338c669ee6fc6d8bea890fd57a1b83f99d533676f",
+      "bytes": 90
+    },
+    {
+      "path": "15-auto-map-proposal.jpg",
+      "sha256": "ed99b933ac5522ba996f789d4cccf52a284b4864d0d04599950fc99e81b4982b",
+      "bytes": 342811
+    },
+    {
+      "path": "16-reaction-map-applied-ax.txt",
+      "sha256": "5e163fabeca3a5441541cba338c669ee6fc6d8bea890fd57a1b83f99d533676f",
+      "bytes": 90
+    },
+    {
+      "path": "16-reaction-map-applied.jpg",
+      "sha256": "ddf0697d20431fb14c41d2855992e22903c732a18c8db0763502dd201cfde086",
+      "bytes": 342835
+    },
+    {
+      "path": "17-reaction-map-aligned-ax.txt",
+      "sha256": "5e163fabeca3a5441541cba338c669ee6fc6d8bea890fd57a1b83f99d533676f",
+      "bytes": 90
+    },
+    {
+      "path": "17-reaction-map-aligned.jpg",
+      "sha256": "73918e9ca9ad1ddcd4430a407fd692c89e351f90ccc3343308d6a029dea3efca",
+      "bytes": 338328
+    },
+    {
+      "path": "18-reaction-manual-map-27-ax.txt",
+      "sha256": "5e163fabeca3a5441541cba338c669ee6fc6d8bea890fd57a1b83f99d533676f",
+      "bytes": 90
+    },
+    {
+      "path": "18-reaction-manual-map-27.jpg",
+      "sha256": "c4cfeb35a2b778d5d7da35aa133cd8e0c848c8c22458a532ba4c5a93b148ac3d",
+      "bytes": 338719
+    },
+    {
+      "path": "19-reaction-manual-map-undo-ax.txt",
+      "sha256": "0239b0542d98156a8698e9b398ea4eb2b56ad04bb2c8d3daca6fa505ab871975",
+      "bytes": 326
+    },
+    {
+      "path": "19-reaction-manual-map-undo.jpg",
+      "sha256": "84903ba0f4b11ce1ebd8a6be32eb032d43ef5e0263cad4ac51c2f8919e9cce56",
+      "bytes": 337932
+    },
+    {
+      "path": "20-reaction-map-label-drag-ax.txt",
+      "sha256": "e7bcf339926f0e311ea6c85b02428ccfe8730ef2fb42585bb40f2adae43af892",
+      "bytes": 898
+    },
+    {
+      "path": "20-reaction-map-label-drag.jpg",
+      "sha256": "5d176f274be1368cede710393479b5d2f5ade8281b77d892eee5fbda786e4043",
+      "bytes": 363534
+    },
+    {
+      "path": "21-reaction-map-saved-ax.txt",
+      "sha256": "dc2eb761469914c7b85edb9cfb81786813247db0771535c7924c02584ff160e5",
+      "bytes": 4261
+    },
+    {
+      "path": "21-reaction-map-saved.jpg",
+      "sha256": "7d1d10269d0a3c340514e748e56f33a31b0507782a4566e5d9f3f8f1d2521864",
+      "bytes": 340462
+    },
+    {
+      "path": "22-reaction-map-fresh-reopen-ax.txt",
+      "sha256": "d03598fb4ca758efc4989df98209d588134182e5c593db23d22176c2839e469b",
+      "bytes": 4611
+    },
+    {
+      "path": "22-reaction-map-fresh-reopen.jpg",
+      "sha256": "5c3e19dacacc561185026be68b0cf0709c99c565899ea261caaf6c27555d8f06",
+      "bytes": 326028
+    },
+    {
+      "path": "23-ethanol-caption-fresh-reopen-ax.txt",
+      "sha256": "2066e28aab7e07b7014522195bc0105594465d2a8063a00e0f101fd218bbcd89",
+      "bytes": 4797
+    },
+    {
+      "path": "23-ethanol-caption-fresh-reopen.jpg",
+      "sha256": "a285a058aaeec7bb74ce5503f769c43189a070eeaecf316386e5e1d9771ceb07",
+      "bytes": 331864
+    },
+    {
+      "path": "bundle-review.json",
+      "sha256": "460af9b524a4967de60e0a0b71aee1735749dfe20cf737a18ac6df7111c37be6",
+      "bytes": 6318
+    },
+    {
+      "path": "ethanol-caption.rsk",
+      "sha256": "880b1eccb624bc9fe627cff4937b75fe216bc94a026ee53b77823d2617b5bdc5",
+      "bytes": 2443
+    },
+    {
+      "path": "input-review.json",
+      "sha256": "045de821cb0b59fa814aeb4839da5dd79eafe3141aeb165c5064c185ad543c2f",
+      "bytes": 9268
+    },
+    {
+      "path": "interrupted-user-trial.rsk",
+      "sha256": "7cb7228353dae2906475650ab2341ec6d332aeca5f9e8a2df05bdcb7d256e52a",
+      "bytes": 1697
+    },
+    {
+      "path": "process-after-normal-quit.txt",
+      "sha256": "9fa69749411f24872d0e28f1b31aba78873bb48d60bf51e2cc33bc81cd5f2cad",
+      "bytes": 88
+    },
+    {
+      "path": "process-before-normal-quit.txt",
+      "sha256": "397a1d018baa0f3d3c440afd1e95d44744f4776ca1220ff61245a60efc2fdff6",
+      "bytes": 205
+    },
+    {
+      "path": "process-fresh-reopen.txt",
+      "sha256": "81cdb8988c46a4bbba985b40842d78a51128c8c7ce973a939b842eb6f3ce07b8",
+      "bytes": 205
+    },
+    {
+      "path": "reaction-map-labels.rsk",
+      "sha256": "81665fa6645545a524386ae515dd4c03e1cce290a18bcf6ce8711a3deba0c0e0",
+      "bytes": 4782
+    }
+  ],
+  "utc": "2026-10-10T19:16:20.294832+00:00"
+}

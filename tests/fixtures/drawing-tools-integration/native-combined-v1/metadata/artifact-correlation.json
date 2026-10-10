@@ -1,0 +1,14 @@
+{
+  "record_kind": "AUTHORED_SUMMARY_OF_FROZEN_ACTUAL_RECORDS",
+  "source_commit": "29157b3c66c70d627ea3828f305faa0d51a65e9f",
+  "source_tree": "2727374049423cd44cb1a28d716cbadd0cba45ec",
+  "runtime_inputs_sha256": "4fe991a7fc8a77bbc0223a509da14492d5aea37ae6a412534ee7935e4c78854c",
+  "runtime_inputs_digest_scope": "Recorded source hash dictionary, separately bound to original full-tree manifest and actual compiler/depfile checks.",
+  "executable_sha256": "1713db30b834bf6f0416973df388245e1b53ce9e0e4bd2d35c938ac4a70e04be",
+  "bundle_id": "dev.reshiki.drawing-main-review-20261011-v1",
+  "basis_paths": [
+    "metadata/build-basis.json",
+    "metadata/root-artifact-basis.json",
+    "metadata/checks-basis.json"
+  ]
+}

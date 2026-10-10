@@ -1,0 +1,82 @@
+{
+  "kind": "Authored compact correlation summary; raw receipts remain unchanged",
+  "source_index_tree": "bfbce003804680bd18aa39048490b035a09975dc",
+  "native_version": 25,
+  "default_document_version": 15,
+  "package": {
+    "bundle_id": "dev.reshiki.names-maps-cleanup-review-20261011-v1",
+    "raw_default_gui_sha256": "410bbb3dce4e8f2ada613d2d157389e2f78e1f7b599c4e249fe6fe2b0d7e4d3e",
+    "signed_gui_sha256": "8d96eff1c44f124b2364da68a39e9808c5dc1889066dc980249fb88eba79477d",
+    "retained_development_helper_sha256": "9e770329748a6eab06615a600fca3b306be04b31b562f8440542d7af3cb4618a",
+    "development_helper_shipped": false,
+    "signature": "Recorded ordinary ad-hoc signature and strict verification; not notarized",
+    "source_manifest_sha256": "e27f6025b6a34de08800fad211297d77bd946333bf38688aee70f351657f20be",
+    "default_build_receipt_sha256": "9ad84ca06f0004a72e1a80c255361350225649177ae4e4ce38de3a41ed114e93",
+    "actual_own_non_test_artifacts": 19,
+    "artifact_qualification": "3 compiled; 16 individually qualified retained cache artifacts",
+    "included_source_inputs": 690,
+    "included_resource_inputs": 78,
+    "license_resources": "Five byte-original notice files reused from qualified22a; lock/manifests/license-generation source unchanged",
+    "third_party_notices_sha256": "f5c87d72c3b653072e1fc6815e1121c2295c9f7633977f6623f3f1c1c9edb50f",
+    "launchservices_preflight": "Recorded signature/unique-ID check and empty helper/Python overrides; no API/Java fallback"
+  },
+  "recorded_native_scope": {
+    "insertion": "Six atoms/five bonds and linked entered-name caption; one Undo/Redo",
+    "context_caption": "Hide followed by local Show generates (2S)-2-hydroxypropanoic acid",
+    "fresh_process": {
+      "old_pid": 41162,
+      "old_pid_absent": true,
+      "new_pid": 42659,
+      "generated_second_save_byte_exact": true
+    },
+    "maps": "Reopened labeled reaction; only atom2.map_num 2->27; one Undo restores entire baseline bytes",
+    "selected_original_captures": 6,
+    "selected_original_AX": 6,
+    "native_fixtures": 5,
+    "whole_native_final_receipt": {
+      "path": "raw/root-native-acceptance-final-v1.json.raw",
+      "sha256": "b3c522606945e47844afb9d61417beedd0b3037c9d8e7898e9efed0d4d00d934",
+      "status": "PASS for the focused fresh native acceptance sequence",
+      "full_original_capture_inventory": 11,
+      "selected_copies": 6
+    },
+    "scope_limits": [
+      "Fresh packaging/native acceptance only",
+      "No all-23 GUI rerun or new unique chemistry test count",
+      "No new auto-map/alignment/cross-platform GUI qualification",
+      "No pixel-layout or general CIP oracle",
+      "No positively rerun automatic reaction alignment or reaction-SMILES export",
+      "Ephemeral worker PIDs not observed; same-executable routing qualified by package/source/preflight"
+    ]
+  },
+  "inherited_validation": {
+    "earlier_source11b_checks": 559,
+    "source22a_scoped_passes": 23,
+    "new_cases": 3,
+    "rerun_cases": 20,
+    "not582distinct": true,
+    "new_Rust_tests_executed_for_supplement": 0
+  },
+  "publication_gates": {
+    "natural_source_commit_hooks": "PASS: all eight normal hooks on actual commit699fa744; prior seven-pass/formatter failure retained",
+    "exact_head_CI": "Pending actual publication head"
+  },
+  "project_credit": "@Ameyanagi \u2014 project creator and maintainer",
+  "notice_scope": "Existing OPSIN MIT, aho-corasick MIT choice/both license texts/COPYING, original MIT OR Apache-2.0 terms preserved; no new third-party payload",
+  "source_bridge": {
+    "native_tested_source_index_tree": "bfbce003804680bd18aa39048490b035a09975dc",
+    "normal_source_commit": "699fa7449b0c65e16b2f1a8435dd91da2c3ba423",
+    "normal_source_tree": "6262c40dbcdc71980f71d7f354fea64a0b97a9d1",
+    "only_intervening_path": "docs/feature-status.md",
+    "old_path_sha256": "5b4c6d364624697bda0cb88a70b501a0253cbdec6bb198bd0ce1464bf44d1811",
+    "new_path_sha256": "251d02e732322d5b8f56266554a09bf2baffbfebcdc711a365843e585302b3a4",
+    "formatting_change": "Markdown column padding and separator dash widths only",
+    "all_table_cell_content_and_alignment_preserved_independently_checked": true,
+    "all_other_document_lines_unchanged": true,
+    "all_690_compiled_source_inputs_and_78_resources_unchanged": true,
+    "raw_normal_hook_receipt": "raw/root-normal-hooks-success-v1.json.raw",
+    "hook_receipt_sha256": "cbf68fef64c4397fb54aab65acfe16ca68607e4be2be80754ab9ad127d5136cb",
+    "actual_normal_hooks": "Eight PASS; prior failures retained; no bypass",
+    "exact_publication_head_CI": "Pending actual publication head"
+  }
+}

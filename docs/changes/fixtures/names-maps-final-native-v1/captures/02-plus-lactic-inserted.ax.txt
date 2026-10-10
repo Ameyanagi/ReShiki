@@ -1,0 +1,72 @@
+Window: "Untitled • — ReShiki", App: ReShiki Names Maps Final Review.
+0 standard window Untitled • — ReShiki, Secondary Actions: Raise
+	1 container
+		2 button About ReShiki; check for updates, ID: header-about
+		3 button New · ⌘N, ID: header-new
+		4 button Open · ⌘O, ID: header-open
+		5 button Save · ⌘S, ID: header-save
+		6 button Save as · ⇧⌘S, ID: header-save-as
+		7 button Undo · ⌘Z, ID: header-undo
+		8 button (disabled) Redo · ⇧⌘Z, ID: header-redo
+		9 button Assistant, ID: header-assistant
+		10 button Import, ID: header-import
+		11 button Check drawing, ID: header-check
+		12 button Clean up…, ID: header-cleanup
+		13 button Export, ID: header-export
+		14 button Show or hide inspector, ID: header-inspector
+		15 button Text and object color, ID: style-color-menu
+		16 toggle button (settable, boolean) Select / move · Escape or toolbar, Value: on, ID: tool-Select
+		17 toggle button (settable, boolean) Lasso select · Toolbar, Value: off, ID: tool-Lasso
+		18 toggle button (settable, boolean) 3D tilt, Value: off, ID: tool-Tilt
+		19 toggle button (settable, boolean) Eraser, Value: off, ID: tool-Erase
+		20 toggle button (settable, boolean) Atom label · C · c, Value: off, ID: tool-Atom
+		21 toggle button (settable, boolean) Single bond · 1, Value: off, ID: tool-Bond(1)
+		22 toggle button (settable, boolean) Double bond · 2, Value: off, ID: tool-Bond(2)
+		23 toggle button (settable, boolean) Triple bond · 3, Value: off, ID: tool-Bond(3)
+		24 toggle button (settable, boolean) Solid wedge, Value: off, ID: tool-Wedge
+		25 toggle button (settable, boolean) 6-membered · ⇧6, Value: off, ID: tool-Ring
+		26 toggle button (settable, boolean) Straight chain · ⇧X · Drag a regular zigzag toward the pointer, Value: off, ID: tool-Chain(Straight)
+		27 toggle button (settable, boolean) Snaking chain · Steer while dragging · Retrace to shorten, Value: off, ID: tool-Chain(Snaking)
+		28 toggle button (settable, boolean) Forward · e, Value: off, ID: tool-Arrow
+		29 toggle button (settable, boolean) Text label · t, Value: off, ID: tool-Text
+		30 toggle button (settable, boolean) Rectangle, Value: off, ID: tool-Graphic(Rectangle)
+		31 toggle button (settable, boolean) Ellipse, Value: off, ID: tool-Graphic(Ellipse)
+		32 toggle button (settable, boolean) Brackets · ⇧T, Value: off, ID: tool-Graphic(Brackets)
+		33 toggle button (settable, boolean) Graphic line, Value: off, ID: tool-Graphic(Line)
+		34 toggle button (settable, boolean) Bézier curve, Value: off, ID: tool-Graphic(Curve)
+		35 toggle button (settable, boolean) Pen path, Value: off, ID: tool-Graphic(Path)
+		36 toggle button (settable, boolean) Arc, Value: off, ID: tool-Graphic(Arc)
+		37 toggle button (settable, boolean) Circled plus · ⇧E, Value: off, ID: tool-Graphic(Symbol(CirclePlus))
+		38 toggle button (settable, boolean) p orbital · ⇧G, Value: off, ID: tool-Graphic(Orbital(P))
+		39 toggle button (settable, boolean) C · c, Value: off, ID: element-C
+		40 toggle button (settable, boolean) N · n, Value: off, ID: element-N
+		41 toggle button (settable, boolean) O · o, Value: off, ID: element-O
+		42 toggle button (settable, boolean) *, Value: off, ID: element-*
+		43 button Help and keyboard shortcuts, ID: help-open
+		44 toggle button (settable, boolean) Leave keyboard drawing · F8 · Active Single bond 1–2, Value: on, ID: keyboard-done
+		45 button Join the selection to another structure at an atom or bond, ID: context-command-1
+		46 button Group, ID: context-command-2
+		47 button (disabled) Choose an atom with arrows or the mouse before marking · [, ID: keyboard-mark
+		48 button (disabled) Mark an atom with [ before connecting · ], ID: keyboard-connect
+		49 button More: 3D optimize…, ID: context-overflow
+		50 button (disabled) Align, ID: arrange-menu-AlignObjects
+		51 button (disabled) Distribute, ID: arrange-menu-Distribute
+		52 button Order, ID: arrange-menu-Order
+		53 button Flip horizontal, ID: arrange-flip-horizontal
+		54 button Flip vertical, ID: arrange-flip-vertical
+		55 button Rotate 180°, ID: arrange-rotate
+		56 toggle button (settable, boolean) Import structure, Value: off, ID: import-kind-structure
+		57 toggle button (settable, boolean) Import chemical name, Value: on, ID: import-kind-name
+		58 text field (settable) Chemical name, Value: (+)-lactic acid, ID: import-name
+		59 toggle button (settable, boolean) Add name below, Value: on, ID: import-name-caption
+		60 button Optional editable preview, ID: import-name-preview
+		61 button Insert chemical name as structure, ID: import-name-insert
+		62 button Name import details, ID: import-name-details
+	63 close button
+	64 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	65 minimize button
+	66 text Untitled • — ReShiki
+67 menu bar
+	68 ReShiki Names Maps Final Review
+
+The focused UI element is 58 text field (settable) Chemical name, Value: (+)-lactic acid, ID: import-name

@@ -1,0 +1,13 @@
+{
+  "name": "JACS / ACS",
+  "font_family": "Arial",
+  "bond_length_world": 42.0,
+  "bond_length_pt": 14.4,
+  "font_size_pt": 10.0,
+  "line_width_pt": 0.6,
+  "bold_width_pt": 2.0,
+  "margin_width_pt": 1.6,
+  "hash_spacing_pt": 2.5,
+  "bond_spacing_ratio": 0.18,
+  "png_dpi": 1200
+}

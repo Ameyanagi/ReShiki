@@ -1,0 +1,14 @@
+{
+  "status": "PASS_ROOT_INDEPENDENT_LOG_AND_DEFAULT_INPUT_REVIEW",
+  "source_tree": "22a60b33376bfbcb9e2af32880b128f27877ec65",
+  "tracked_paths": 3565,
+  "scoped_tests": "PENDING_SEPARATE_LOG_REVIEW",
+  "default_own_artifacts": 19,
+  "source_inputs": 690,
+  "resource_inputs": 78,
+  "cached_own_artifacts": 16,
+  "newly_compiled_artifacts": 3,
+  "prior_559_test_qualification": "Preserved at11b source; unchanged paths are not rerun",
+  "native_gui_status": "NOT_STARTED",
+  "utc": "2026-10-10T19:18:05.898569+00:00"
+}
