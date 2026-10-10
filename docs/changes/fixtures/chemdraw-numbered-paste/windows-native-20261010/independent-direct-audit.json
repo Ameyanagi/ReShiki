@@ -1,0 +1,305 @@
+{
+  "status": "PASS",
+  "candidate_source": "127d1a6247d390d33d420f2168f4a657d2659f7b",
+  "actual_before_source": "44d198c4e6791a15017af7ac6d356c245b7073ca",
+  "historical_reference_base": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "source_checkout_head": "127d1a6247d390d33d420f2168f4a657d2659f7b",
+  "git_status": "",
+  "saved_native": {
+    "path": "windows-si-clipboard-after-v1.rsk",
+    "bytes": 11031,
+    "sha256": "30fd5d77ea94b88ae05ec1a36e6e1b050de7d1f2c75f2b506de2b06ac4bf628d"
+  },
+  "producer": {
+    "path": "windows-si-single-v1.cdx",
+    "bytes": 1767,
+    "sha256": "4daf91a99999dc284083bed64703c8a4bdc253460e0892d99296a5bd24ca4400"
+  },
+  "raw_external_connection_property": {
+    "tag": 1099,
+    "offset": 1440,
+    "payload_offset": 1444,
+    "length": 1,
+    "hex": "01"
+  },
+  "raw_node_type_property": {
+    "tag": 1024,
+    "offset": 1434,
+    "payload_offset": 1438,
+    "length": 2,
+    "hex": "0c00"
+  },
+  "property_context": {
+    "code": 32772,
+    "id": 15,
+    "ancestors": [
+      {
+        "code": 32768,
+        "id": 0
+      },
+      {
+        "code": 32769,
+        "id": 37
+      },
+      {
+        "code": 32771,
+        "id": 2
+      },
+      {
+        "code": 32772,
+        "id": 5
+      },
+      {
+        "code": 32771,
+        "id": 38
+      }
+    ]
+  },
+  "current_reference_codec_typed_and_graph_roundtrip": "PASS (not full XML/binary equality)",
+  "historical_reference_codec_diagnostics": {
+    "51fa0991da2507bb00b27c1b420e807468de6423": "Unsupported binary drawing property 0x044b",
+    "44d198c4e6791a15017af7ac6d356c245b7073ca": "Unsupported binary drawing property 0x044b"
+  },
+  "producer_node_and_bond_attributes_match_mac_reference": true,
+  "native_chemical_atoms_and_all_bonds_match_mac_reference": true,
+  "native_abbreviation_and_atom_label_settings_match_mac_reference": true,
+  "clipboard_translation_world": {
+    "x": -276.416687,
+    "y": -289.54166
+  },
+  "maximum_geometry_residual_world": 1.2999999967178155e-5,
+  "identity_reference": {
+    "acceptors": 1,
+    "donors": 0,
+    "exact_mass": 104.065741534,
+    "formula": "C4H12OSi",
+    "inchi": "InChI=1S/C4H12OSi/c1-5-6(2,3)4/h1-4H3",
+    "inchikey": "POPACFLNWGUDSR-UHFFFAOYSA-N",
+    "logp": 1.4677,
+    "mass": 104.225,
+    "rings": 0,
+    "smiles": "CO[Si](C)(C)C",
+    "tpsa": 9.23,
+    "unpaired_electrons": 0
+  },
+  "identity_limit": "Full typed graph equals independently analyzed preserved reference; no new InChI/SMILES computation was run.",
+  "presentation_differences": [
+    "Windows cp1252 Arial font table versus mac_roman font entries",
+    "Windows clipboard retains target default JACS/ACS drawing style; Mac File Open adopted Imported style",
+    "Windows clipboard explicitly stores per-atom Arial10 black text overrides; Mac reference may inherit them",
+    "Paste placement translation and floating-point rounding; no bond-length/orientation change"
+  ],
+  "source_parity": [
+    {
+      "path": "crates/io/src/exchange/mod.rs",
+      "base_sha256": "ecd6856b15cd997884ceaab55a7b420f5535d2607980a3542cf9ca5c40fa202f",
+      "old_co_sha256": "ecd6856b15cd997884ceaab55a7b420f5535d2607980a3542cf9ca5c40fa202f",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/exchange/decode.rs",
+      "base_sha256": "eec2ad590014fcda30f30fea79d9b41c75a9afdce1f5372ee539e50633895b11",
+      "old_co_sha256": "eec2ad590014fcda30f30fea79d9b41c75a9afdce1f5372ee539e50633895b11",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/exchange/schema.rs",
+      "base_sha256": "84fa262b2103db8fff8ff7e09733737672e06fe9e63816702ab446ac721e4709",
+      "old_co_sha256": "84fa262b2103db8fff8ff7e09733737672e06fe9e63816702ab446ac721e4709",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/exchange/values.rs",
+      "base_sha256": "e031fbaa3aeed2909dbff908ae7e6e39887e2b59180e2466cf3d9dd58742b510",
+      "old_co_sha256": "e031fbaa3aeed2909dbff908ae7e6e39887e2b59180e2466cf3d9dd58742b510",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/chemistry/cdxml/abbreviations.rs",
+      "base_sha256": "88ace659ba73458920d5382414a8d2a16c47571b4357a88aebe5603d721b5d3f",
+      "old_co_sha256": "88ace659ba73458920d5382414a8d2a16c47571b4357a88aebe5603d721b5d3f",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/chemistry/cdxml/attachments.rs",
+      "base_sha256": "002277a4b98657502f1d1811f9ed906135c433a838f4b41d38ab23e12d02e8fd",
+      "old_co_sha256": "002277a4b98657502f1d1811f9ed906135c433a838f4b41d38ab23e12d02e8fd",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/chemistry/cdxml/preparation.rs",
+      "base_sha256": "8981f4e9b71d7a9a06225a2ba210342475e2ad8dcc7808dc2f9e61e7203030e7",
+      "old_co_sha256": "8981f4e9b71d7a9a06225a2ba210342475e2ad8dcc7808dc2f9e61e7203030e7",
+      "equal": true
+    },
+    {
+      "path": "src/clipboard.rs",
+      "base_sha256": "49a9a14d15a5d63eb33cfa754d0b73fcc9f36bb8dadb06147967b9647b86f2a3",
+      "old_co_sha256": "49a9a14d15a5d63eb33cfa754d0b73fcc9f36bb8dadb06147967b9647b86f2a3",
+      "equal": true
+    },
+    {
+      "path": "src/app/clipboard.rs",
+      "base_sha256": "e1413d6e93c20bc45c370445cbfd3241990262aeb6281ce9696e951a69a9be0e",
+      "old_co_sha256": "e1413d6e93c20bc45c370445cbfd3241990262aeb6281ce9696e951a69a9be0e",
+      "equal": true
+    },
+    {
+      "path": "native/windows/src/clipboard.rs",
+      "base_sha256": "81d63ab5415e40d271a4c9f1ccf322444a914f35631afafca953179386017beb",
+      "old_co_sha256": "81d63ab5415e40d271a4c9f1ccf322444a914f35631afafca953179386017beb",
+      "equal": true
+    }
+  ],
+  "negative_controls": [
+    {
+      "name": "zero external number",
+      "rejected": true,
+      "diagnostic": "ExternalConnectionNum must be a positive signed byte"
+    },
+    {
+      "name": "negative signed external number",
+      "rejected": true,
+      "diagnostic": "ExternalConnectionNum must be a positive signed byte"
+    },
+    {
+      "name": "wrong node applicability",
+      "rejected": true,
+      "diagnostic": "ExternalConnectionNum requires an external connection point"
+    },
+    {
+      "name": "unknown property fail closed",
+      "rejected": true,
+      "diagnostic": "Unsupported binary drawing property 0x7777"
+    },
+    {
+      "name": "native bond order",
+      "rejected": true,
+      "diagnostic": ""
+    },
+    {
+      "name": "native formal charge",
+      "rejected": true,
+      "diagnostic": ""
+    },
+    {
+      "name": "native abbreviation anchor",
+      "rejected": true,
+      "diagnostic": ""
+    },
+    {
+      "name": "native relative geometry",
+      "rejected": true,
+      "diagnostic": ""
+    }
+  ],
+  "raw_evidence": [
+    {
+      "path": "windows-si-single-v1.cdx",
+      "bytes": 1767,
+      "sha256": "4daf91a99999dc284083bed64703c8a4bdc253460e0892d99296a5bd24ca4400"
+    },
+    {
+      "path": "private-record/native-284-process-producer-v1.stdout.raw",
+      "bytes": 671,
+      "sha256": "cee9e916c0ace0c172c8e93a34b1a045876c1c6616e3b49ddff60660ff7ab86e"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-before.jpg",
+      "bytes": 257321,
+      "sha256": "3ca8b57dd9790868c097557576737e1b083be95f4f469568eccc7165db1de303"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-after.jpg",
+      "bytes": 298027,
+      "sha256": "1dbe156af26859fc2abf09ac77941c4372c7b3cedb6c4849e05fe5ed7da0db83"
+    },
+    {
+      "path": "private-record/windows-si-clipboard-undo-v1.jpg",
+      "bytes": 246017,
+      "sha256": "30692c33ecd80bafea74e81b3a43fa187875f6e40f376ca38742e52d8231dc23"
+    },
+    {
+      "path": "private-record/windows-si-clipboard-saved-v1.jpg",
+      "bytes": 286874,
+      "sha256": "0e71d454d490586cc7fc20adbea3a44929e2e81cda85e7e2a30dbc08f8491c75"
+    },
+    {
+      "path": "private-record/windows-si-clipboard-reopened-v1.jpg",
+      "bytes": 279874,
+      "sha256": "3a22f99790f0048d2d90c85f2652c99f61b339d4e9c5ddf23926e12b03b2962a"
+    },
+    {
+      "path": "private-record/windows-si-clipboard-before-v1.jpg",
+      "bytes": 247812,
+      "sha256": "eb6c789f7cc00cb6f9278f2b0588597c19c0dfe98b1a4caee43f2ac629a2f6c0"
+    }
+  ],
+  "excluded_capture": "windows-si-clipboard-before-v1.jpg is an unsuccessful OSK transport attempt and is not error reproduction evidence",
+  "visual_readback": "before-menu exact0x044b footer; after SiMe3/6atoms5bonds/C4H12OSi; Undo blank; reopen cleanfilename6/5. Green Keyboard toggle visible throughout. Reopen panel calculating; no completed property result claimed from that capture.",
+  "limits": [
+    "Controlled single silicon group; no original private failing PowerPoint file",
+    "Producer CDX saved via GUI is audited; raw clipboard payload was not intercepted",
+    "Reopen was a new tab in the same process, not yet a fresh-process acceptance",
+    "PowerPoint route, two/sparse Windows controls and new molecular export identity remain outside this audit",
+    "No Cargo, builds, native executable launches, clipboard manipulation, guest writes, source edits, Git mutations or publication"
+  ],
+  "_provenance": {
+    "original_record": "audit.json",
+    "original_sha256": "e1278011a07ea0eb26b5f68eed009b20d14fb5ac9b765e5716eff70c43a12217",
+    "representation": "Derived JSON, not a byte-original receipt. Only path strings were normalized; values and conclusions are retained.",
+    "normalization_mapping": [
+      {
+        "pointer": "/saved_native/path",
+        "original_basename": "windows-si-clipboard-after-v1.rsk",
+        "public_value": "windows-si-clipboard-after-v1.rsk"
+      },
+      {
+        "pointer": "/producer/path",
+        "original_basename": "windows-si-single-v1.cdx",
+        "public_value": "windows-si-single-v1.cdx"
+      },
+      {
+        "pointer": "/raw_evidence/0/path",
+        "original_basename": "windows-si-single-v1.cdx",
+        "public_value": "windows-si-single-v1.cdx"
+      },
+      {
+        "pointer": "/raw_evidence/1/path",
+        "original_basename": "native-284-process-producer-v1.stdout.raw",
+        "public_value": "private-record/native-284-process-producer-v1.stdout.raw"
+      },
+      {
+        "pointer": "/raw_evidence/2/path",
+        "original_basename": "windows-si-clipboard-before-menu-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-before.jpg"
+      },
+      {
+        "pointer": "/raw_evidence/3/path",
+        "original_basename": "windows-si-clipboard-after-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-after.jpg"
+      },
+      {
+        "pointer": "/raw_evidence/4/path",
+        "original_basename": "windows-si-clipboard-undo-v1.jpg",
+        "public_value": "private-record/windows-si-clipboard-undo-v1.jpg"
+      },
+      {
+        "pointer": "/raw_evidence/5/path",
+        "original_basename": "windows-si-clipboard-saved-v1.jpg",
+        "public_value": "private-record/windows-si-clipboard-saved-v1.jpg"
+      },
+      {
+        "pointer": "/raw_evidence/6/path",
+        "original_basename": "windows-si-clipboard-reopened-v1.jpg",
+        "public_value": "private-record/windows-si-clipboard-reopened-v1.jpg"
+      },
+      {
+        "pointer": "/raw_evidence/7/path",
+        "original_basename": "windows-si-clipboard-before-v1.jpg",
+        "public_value": "private-record/windows-si-clipboard-before-v1.jpg"
+      }
+    ],
+    "original_storage": "Immutable private acceptance/audit record; full original-to-public mapping is retained for maintainer review."
+  }
+}
