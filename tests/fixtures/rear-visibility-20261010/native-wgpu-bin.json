@@ -1,0 +1,32 @@
+{
+  "phase": "native-wgpu-bin",
+  "argv": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "reshiki",
+    "--bin",
+    "reshiki",
+    "rear_opacity_canvas_matches_reference_alpha_and_keeps_cage_rim_and_marks_clean",
+    "--",
+    "--ignored",
+    "--nocapture"
+  ],
+  "env": {
+    "CARGO_TARGET_DIR": "/Users/ryuichi/dev/ReShiki/target",
+    "CARGO_BUILD_JOBS": "4",
+    "RESHIKI_PERF_RENDERER": "wgpu"
+  },
+  "start": "2026-10-09T22:44:20.931827+00:00",
+  "end": "2026-10-09T22:44:36.905136+00:00",
+  "seconds": 15.973023083,
+  "exit_code": 0,
+  "source_count": 1071,
+  "source_aggregate": "173a0dd53b1af5c66095f774f737cdde36657e865c991a8af5d5ed7a14fbb59e",
+  "protected_count": 164,
+  "pre_hashes_exact": true,
+  "post_hashes_exact": true,
+  "stdout_sha256": "8ccd0dbea8bd30f1f434c21e104944ce2876a5aecd9ed16501cb4ea49a50fd22",
+  "stderr_sha256": "e5421649b848756bc849731049690602afb5d091ac7b0d621f5097fbd021fbce"
+}

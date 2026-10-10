@@ -868,7 +868,7 @@ impl App {
                 commands.push(RowCommand {
                     label: if automatic { "Freeze depth" } else { "Enhance depth" },
                     menu: if automatic { "Freeze depth appearance" } else { "Enhance depth appearance" },
-                    hint: "Rear ink fades with depth; freezing keeps positions and editable appearance",
+                    hint: "Fade hidden rear cage ink while keeping exposed outlines solid; freezing preserves depth colors",
                     message: Message::DepthAppearance(super::depth_appearance::Action::Enhance(!automatic)),
                     enabled: true,
                 });

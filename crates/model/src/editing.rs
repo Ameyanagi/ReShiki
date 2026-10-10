@@ -276,6 +276,9 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     doc.reactions.extend(part.reactions);
     doc.ring_fills.extend(part.ring_fills);
     doc.depth_appearance.extend(part.depth_appearance);
+    if crate::rear_opacity::present(doc) {
+        doc.version = doc.version.max(22);
+    }
     if !doc.reactions.is_empty() {
         doc.version = doc.version.max(15);
     }

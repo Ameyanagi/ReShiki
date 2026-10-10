@@ -1,0 +1,75 @@
+{
+  "accepted": {
+    "model-actual-raster": {
+      "passed": 17,
+      "ignored": 0,
+      "named_passed": [
+        "rear_opacity::visibility_tests::view_visibility_degenerate_cap_masks_never_restore_an_entire_hidden_bond",
+        "rear_opacity::visibility_tests::view_visibility_centered_double_rails_do_not_erase_managed_rear_ink",
+        "rear_opacity::visibility_tests::view_visibility_hidden_middle_is_split_without_fading_exposed_endpoints",
+        "rear_opacity::visibility_tests::view_visibility_open_chains_and_single_tilted_rings_do_not_invent_surfaces",
+        "rear_opacity::visibility_tests::view_visibility_external_foreground_clips_cap_without_hitting_rim_anchor",
+        "rear_opacity::visibility_tests::view_visibility_exposed_miter_sectors_retain_opaque_compound_ink",
+        "rear_opacity::visibility_tests::view_visibility_freezing_rgb_keeps_settings_but_visibility_tracks_rotation",
+        "rear_opacity::visibility_tests::view_visibility_rim_exemption_does_not_leak_to_unrelated_foreground_ink",
+        "rear_opacity::visibility_tests::view_visibility_rotated_rim_first_failure_diagnostic",
+        "rear_opacity::visibility_tests::view_visibility_cages_keep_entire_rim_and_fade_hidden_interior",
+        "rear_opacity::visibility_tests::view_visibility_rim_backbone_and_inward_rail_have_independent_depth",
+        "rear_opacity::visibility_tests::view_visibility_query_budget_tracks_nonopaque_owners_and_independent_cages",
+        "rear_opacity::visibility_tests::view_visibility_budget_fallback_is_wholly_opaque_and_order_independent",
+        "rear_opacity::visibility_tests::view_visibility_validates_complete_mesh_and_rejects_partial_folded_or_duplicate_cages",
+        "rear_opacity::visibility_tests::view_visibility_shell_respects_external_and_own_explicit_bond_layers",
+        "rear_opacity::visibility_tests::view_visibility_rotations_are_live_and_opaque_output_is_exact",
+        "rear_opacity::visibility_tests::view_visibility_svg_raster_keeps_full_rim_stroke_and_real_hidden_alpha_on_both_themes"
+      ],
+      "named_ignored": [],
+      "receipt_sha256": "ed19204f1e6986a9a25768509e2e6a83e1c52de9183f3ba2b99efe83036dabdf",
+      "stdout_sha256": "e9a357bd30e1eac3399a19c71523ac7ae78b4da36df9ae777a9c9ec373da9c43"
+    },
+    "root-exports": {
+      "passed": 5,
+      "ignored": 0,
+      "named_passed": [
+        "native_preserves_opacity_and_external_editable_copy_reports_presentation_loss",
+        "flat_retained_rear_setting_keeps_distinct_color_highlight_overlap_and_exact_output",
+        "opaque_front_atom_highlight_stays_above_different_color_bond_with_rear_alpha_elsewhere",
+        "hidden_cage_ink_disappears_whole_rim_stays_solid_and_100_restores_original_figure",
+        "transparent_raster_and_vector_exports_have_real_alpha_and_front_ink_on_each_theme"
+      ],
+      "named_ignored": [],
+      "receipt_sha256": "85b3ebd710581ec77a562d38788ab61b322baad9b664e58ff3a34db538b87ced",
+      "stdout_sha256": "d3c60b7a23e8391e0282346a06bc724b22496b4cb6577fd03f0b9e2f57776bd9"
+    },
+    "app-history-complete-bin": {
+      "passed": 3,
+      "ignored": 1,
+      "named_passed": [
+        "app::tests::rear_opacity_draft_apply_is_one_undo_and_rejects_stale_invalid_or_late_input",
+        "app::tests::rear_target_selection_includes_quadruple_and_partial_covalent_bonds",
+        "app::tests::rgb_first_coordinate_contact_rear_apply_targets_one_molecule_and_retains_history"
+      ],
+      "named_ignored": [
+        "canvas::render_parity_tests::rear_opacity_canvas_matches_reference_alpha_and_keeps_cage_rim_and_marks_clean"
+      ],
+      "receipt_sha256": "4a1d091b7d9b81159ba64a57a067dd76284d580874f21ceed99a22173e921241",
+      "stdout_sha256": "26b8942de103a33b4a868baf176e52fd65247b051455c0337f883de63dd74200"
+    },
+    "native-wgpu-bin": {
+      "passed": 1,
+      "ignored": 0,
+      "named_passed": [
+        "canvas::render_parity_tests::rear_opacity_canvas_matches_reference_alpha_and_keeps_cage_rim_and_marks_clean"
+      ],
+      "named_ignored": [],
+      "receipt_sha256": "7ba6782648697d0334ca2a0373512d647045b2c21104458224dfe4005f343602",
+      "stdout_sha256": "8ccd0dbea8bd30f1f434c21e104944ce2876a5aecd9ed16501cb4ea49a50fd22"
+    }
+  },
+  "excluded_zero_tests": [
+    "app-history",
+    "native-wgpu"
+  ],
+  "supplemental_partial_route": "app-history-bin",
+  "unique_accepted_pass_count": 26,
+  "no_inferred_pass_from_zero_tests": true
+}

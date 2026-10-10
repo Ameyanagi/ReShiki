@@ -19,15 +19,17 @@ fn color(paint: &usvg::Paint, opacity: f32) -> Result<[u8; 4], String> {
 fn collect(
     group: &usvg::Group,
     parent: usvg::Transform,
+    parent_opacity: f32,
     output: &mut Vec<Value>,
 ) -> Result<(), String> {
     // Flattened text is a separate subtree: its cached absolute transforms do
     // not include the SVG viewBox. Compose local transforms while traversing.
     let absolute = parent.pre_concat(group.transform());
+    let opacity = (parent_opacity * group.opacity().get()).clamp(0., 1.);
     for node in group.children() {
         match node {
-            usvg::Node::Group(group) => collect(group, absolute, output)?,
-            usvg::Node::Text(text) => collect(text.flattened(), absolute, output)?,
+            usvg::Node::Group(group) => collect(group, absolute, opacity, output)?,
+            usvg::Node::Text(text) => collect(text.flattened(), absolute, opacity, output)?,
             usvg::Node::Path(path) if path.is_visible() => {
                 let commands: Vec<Vec<f32>> = path
                     .data()
@@ -45,11 +47,11 @@ fn collect(
                     .collect();
                 let fill = path
                     .fill()
-                    .map(|fill| color(fill.paint(), fill.opacity().get()))
+                    .map(|fill| color(fill.paint(), fill.opacity().get() * opacity))
                     .transpose()?;
                 let stroke = path.stroke().map(|stroke| -> Result<Value, String> {
                     Ok(json!({
-                        "color": color(stroke.paint(), stroke.opacity().get())?,
+                        "color": color(stroke.paint(), stroke.opacity().get() * opacity)?,
                         "width": stroke.width().get(),
                         "dashes": stroke.dasharray(),
                         "dash_offset": stroke.dashoffset(),
@@ -104,7 +106,12 @@ pub fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
             "fill": [r, g, b, 255], "stroke": null, "even_odd": false
         }));
     }
-    collect(tree.root(), usvg::Transform::identity(), &mut primitives)?;
+    collect(
+        tree.root(),
+        usvg::Transform::identity(),
+        1.,
+        &mut primitives,
+    )?;
     let pages: Result<Vec<_>, String> = (0..layout.count())
         .map(|index| {
             let (lo, _) = layout.bounds(index).ok_or("Invalid print page")?;
@@ -137,6 +144,22 @@ pub(crate) fn file_metafile(tree: &usvg::Tree) -> Result<Vec<u8>, String> {
     record_metafile(tree, reshiki_windows::file_metafile)
 }
 
+fn partial_transparency(group: &usvg::Group) -> bool {
+    (0. ..1.).contains(&group.opacity().get())
+        || group.children().iter().any(|node| match node {
+            usvg::Node::Group(group) => partial_transparency(group),
+            usvg::Node::Text(text) => partial_transparency(text.flattened()),
+            usvg::Node::Path(path) => {
+                path.fill()
+                    .is_some_and(|fill| (0. ..1.).contains(&fill.opacity().get()))
+                    || path
+                        .stroke()
+                        .is_some_and(|stroke| (0. ..1.).contains(&stroke.opacity().get()))
+            }
+            _ => false,
+        })
+}
+
 fn record_metafile(
     tree: &usvg::Tree,
     record: fn(&[u8]) -> Result<Vec<u8>, String>,
@@ -145,7 +168,15 @@ fn record_metafile(
         return Err("Drawing exceeds EMF's supported 40-inch dimensions; use SVG or PDF.".into());
     }
     let mut primitives = Vec::new();
-    collect(tree.root(), usvg::Transform::identity(), &mut primitives)?;
+    collect(
+        tree.root(),
+        usvg::Transform::identity(),
+        1.,
+        &mut primitives,
+    )?;
+    if partial_transparency(tree.root()) {
+        return Err("EMF for Office cannot reliably preserve partial transparency. Use SVG, PDF or PNG, or set rear opacity to 0% or 100%.".into());
+    }
     let bytes = serde_json::to_vec(&json!({
         "version": 1, "width_pt": tree.size().width() * 0.75,
         "height_pt": tree.size().height() * 0.75,

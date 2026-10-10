@@ -107,6 +107,15 @@ fn subtract(a: Point, b: Point) -> Point {
     Point::new(a.x - b.x, a.y - b.y)
 }
 impl Joins<'_> {
+    /// Existing shared miter sector owned by an atom's junction. A renderer
+    /// can retain this corner without adding paint outside the bond outline.
+    pub(crate) fn corner(&self, b: &Bond, id: u64) -> Option<Vec<Point>> {
+        let point = self.doc.atom(id)?.position;
+        let opposite = self.doc.atom(other(b, id))?.position;
+        let [left, right] = self.cap(b, id, point, opposite);
+        (cross(subtract(left, point), subtract(right, point)).abs() > 1e-10)
+            .then_some(vec![left, right, point])
+    }
     fn cap(&self, b: &Bond, id: u64, point: Point, opposite: Point) -> [Point; 2] {
         let doc = self.doc;
         let length = point.distance(opposite).max(0.001);

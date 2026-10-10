@@ -33,10 +33,15 @@ fn cross_xy(a: Point, b: Point) -> f32 {
 }
 
 struct Face {
+    atoms: Vec<u64>,
     points: Vec<Point>,
     tangent: Point,
     inward: Point,
     side: f32,
+    origin: V,
+    end: V,
+    tangent_xyz: V,
+    inward_xyz: V,
 }
 
 /// Enumerate shortest alternate paths with sorted neighbors. The canonical
@@ -201,10 +206,15 @@ fn face(doc: &Document, bond: &Bond) -> Option<Face> {
             1.
         };
         return Some(Face {
+            atoms: path,
             points: atoms.iter().map(|a| a.position).collect(),
             tangent,
             inward,
             side,
+            origin: a,
+            end: b,
+            tangent_xyz: t,
+            inward_xyz: unit([wx - along * tx, wy - along * ty, wz - along * tz])?,
         });
     }
     None
@@ -230,6 +240,10 @@ fn convex(points: &[Point], tolerance: f32) -> bool {
     true
 }
 
+pub(crate) fn face_atoms(doc: &Document, bond: &Bond) -> Option<Vec<u64>> {
+    Some(face(doc, bond)?.atoms)
+}
+
 pub(super) fn automatic_side(doc: &Document, bond: &Bond) -> Option<f32> {
     Some(face(doc, bond)?.side)
 }
@@ -237,6 +251,7 @@ pub(super) fn automatic_side(doc: &Document, bond: &Bond) -> Option<f32> {
 /// `None` keeps the established 2D fallback; `Some(None)` means a valid face
 /// whose rail is too collapsed to draw. Never restore a fixed screen gap in
 /// the latter case, and never divide by a face's projection cosine.
+#[cfg(test)]
 pub(super) fn rail(
     doc: &Document,
     bond: &Bond,
@@ -246,6 +261,26 @@ pub(super) fn rail(
     trim: f32,
     half_width: f32,
 ) -> Option<Option<(Point, Point)>> {
+    rail_depth(doc, bond, start, end, offset, trim, half_width)
+        .map(|rail| rail.map(|rail| rail.points))
+}
+
+/// The existing XY rail plus its own XYZ centerline and one support face.
+#[derive(Clone)]
+pub(crate) struct RailDepth {
+    pub points: (Point, Point),
+    pub field: crate::rear_opacity::Field,
+    pub support: Vec<u64>,
+}
+pub(crate) fn rail_depth(
+    doc: &Document,
+    bond: &Bond,
+    start: Point,
+    end: Point,
+    offset: f32,
+    trim: f32,
+    half_width: f32,
+) -> Option<Option<RailDepth>> {
     let face = face(doc, bond)?;
     let d = offset * face.side;
     let tangent_length = face.tangent.distance(Point::default());
@@ -263,11 +298,36 @@ pub(super) fn rail(
     );
     // Inward offset rails are shortened against the actual projected face.
     // Explicit outward or centered rails retain their chosen arrangement.
-    Some(if d > 0. && trim > 0. {
+    let points = if d > 0. && trim > 0. {
         clip(first, last, &face.points, half_width)
     } else {
         Some((first, last))
-    })
+    };
+    let axis = minus(xy(face.end), xy(face.origin));
+    let length = dot([axis.x, axis.y, 0.], [axis.x, axis.y, 0.]);
+    if length <= 0.000001 || !length.is_finite() {
+        return Some(None);
+    }
+    let lift = |p: Point| {
+        let delta = minus(p, xy(face.origin));
+        let t = (delta.x * axis.x + delta.y * axis.y) / length;
+        face.origin[2] + t * (face.end[2] - face.origin[2])
+    };
+    let first_z = lift(start) + d * face.inward_xyz[2] + trim * face.tangent_xyz[2];
+    let last_z = lift(end) + d * face.inward_xyz[2] - trim * face.tangent_xyz[2];
+    if !first_z.is_finite() || !last_z.is_finite() {
+        return Some(None);
+    }
+    Some(points.map(|points| RailDepth {
+        points,
+        field: crate::rear_opacity::Field::Bond {
+            a: first,
+            b: last,
+            wa: first_z,
+            wb: last_z,
+        },
+        support: face.atoms,
+    }))
 }
 
 fn clip(first: Point, last: Point, points: &[Point], margin: f32) -> Option<(Point, Point)> {

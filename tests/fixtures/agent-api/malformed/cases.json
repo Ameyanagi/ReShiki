@@ -358,11 +358,11 @@
     "expect": {"tool_error":"failed","prefix":null,"id":51,"contains":"Could not open document: "}
   },
   {
-    "name": "native_version_20",
+    "name": "native_version_23",
     "phase": "modern",
     "source": "ops:failed",
-    "lines": {"json":{"jsonrpc":"2.0","id":52,"method":"tools/call","params":{"name":"import","arguments":{"format":"reshiki","text":"{\"version\": 20, \"atoms\": [], \"bonds\": []}"},"_meta":"${meta}"}}},
-    "expect": {"tool_error":"failed","prefix":null,"id":52,"message":"Could not open document: This drawing was made with a newer version of ReShiki (document version 20). Update ReShiki to open it."}
+    "lines": {"json":{"jsonrpc":"2.0","id":52,"method":"tools/call","params":{"name":"import","arguments":{"format":"reshiki","text":"{\"version\": 23, \"atoms\": [], \"bonds\": []}"},"_meta":"${meta}"}}},
+    "expect": {"tool_error":"failed","prefix":null,"id":52,"message":"Could not open document: This drawing was made with a newer version of ReShiki (document version 23). Update ReShiki to open it."}
   },
   {
     "name": "truncated_cdx",

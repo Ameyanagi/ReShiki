@@ -1,0 +1,25 @@
+{
+  "phase": "required-fmt",
+  "argv": [
+    "cargo",
+    "fmt",
+    "--all",
+    "--",
+    "--check"
+  ],
+  "env": {
+    "CARGO_TARGET_DIR": "/Users/ryuichi/dev/ReShiki/target",
+    "CARGO_BUILD_JOBS": "4"
+  },
+  "start": "2026-10-09T22:47:43.686390+00:00",
+  "end": "2026-10-09T22:47:47.126828+00:00",
+  "seconds": 3.4402431669999998,
+  "exit_code": 0,
+  "source_count": 1071,
+  "source_aggregate": "173a0dd53b1af5c66095f774f737cdde36657e865c991a8af5d5ed7a14fbb59e",
+  "protected_count": 164,
+  "pre_hashes_exact": true,
+  "post_hashes_exact": true,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -1,0 +1,22 @@
+{
+  "status": "PASS",
+  "controls": [
+    {
+      "case": "changed-XYZ",
+      "rejected": true,
+      "reason": "immutable native SHA changed: 25"
+    },
+    {
+      "case": "wrong-Redo",
+      "rejected": true,
+      "reason": "raw equality: ['25', '25-redo', '0-undo', '25-fresh-reopen', '25-noop']"
+    },
+    {
+      "case": "double-alpha",
+      "rejected": true,
+      "reason": "alpha applied more than once"
+    }
+  ],
+  "modified_original_inputs": false,
+  "all_mutations_in_new_proof_subdirectories": true
+}

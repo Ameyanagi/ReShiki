@@ -1,0 +1,29 @@
+{
+  "phase": "model-actual-raster",
+  "argv": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "reshiki-model",
+    "view_visibility",
+    "--",
+    "--nocapture"
+  ],
+  "env": {
+    "CARGO_TARGET_DIR": "/Users/ryuichi/dev/ReShiki/target",
+    "CARGO_BUILD_JOBS": "4",
+    "RESHIKI_VISIBILITY_TEST_OUTPUT": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/app-validation-20261010-fn0utjm0/model-renders"
+  },
+  "start": "2026-10-09T22:35:46.627997+00:00",
+  "end": "2026-10-09T22:37:02.299494+00:00",
+  "seconds": 75.67064279200001,
+  "exit_code": 0,
+  "source_count": 1071,
+  "source_aggregate": "173a0dd53b1af5c66095f774f737cdde36657e865c991a8af5d5ed7a14fbb59e",
+  "protected_count": 164,
+  "pre_hashes_exact": true,
+  "post_hashes_exact": true,
+  "stdout_sha256": "e9a357bd30e1eac3399a19c71523ac7ae78b4da36df9ae777a9c9ec373da9c43",
+  "stderr_sha256": "c6715ccab1ceb92d86630ecf565364851d45dc8cf80b7b25801c4a66b17c1bce"
+}
