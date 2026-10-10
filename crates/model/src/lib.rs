@@ -45,6 +45,7 @@ pub mod pages;
 pub mod palette;
 pub mod pictures;
 pub mod projection;
+pub mod reaction_mapping;
 pub mod reactions;
 pub mod ring_arcs;
 pub mod ring_fills;

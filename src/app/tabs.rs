@@ -667,6 +667,7 @@ pub(super) fn document_result(message: &Message) -> bool {
             )
             | Message::Assistant(assistant::Action::Poll | assistant::Action::Done { .. })
             | Message::LabelsReady(..)
+            | Message::Mapping(super::reaction_mapping::Action::Ready(..))
             | Message::InspectorAction(super::inspector::Action::PropertiesCalculated(..))
             | Message::Imports(import::Action::Loaded(..))
             | Message::ClipboardWritten { .. }

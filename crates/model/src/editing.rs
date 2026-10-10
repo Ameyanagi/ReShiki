@@ -164,6 +164,10 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
                 .hydrogens
                 .get_or_insert(source.atom_labels.hydrogens);
             a.display
+                .mapping
+                .show
+                .get_or_insert(source.atom_labels.maps);
+            a.display
                 .stereo
                 .show
                 .get_or_insert(source.atom_labels.stereo);
@@ -480,6 +484,7 @@ fn map_positions(
             for offset in [
                 a.display.number.as_mut().and_then(|n| n.offset.as_mut()),
                 a.display.stereo.offset.as_mut(),
+                a.display.mapping.offset.as_mut(),
             ]
             .into_iter()
             .flatten()

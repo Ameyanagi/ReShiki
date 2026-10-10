@@ -1,0 +1,76 @@
+{
+  "status": "PASS",
+  "artifact_hashes_checked": 15,
+  "semantic_results": {
+    "custom_label_owner": "Mapping(2), reactant O",
+    "custom_label_offset": {
+      "x": 36.582657,
+      "y": -34.99306
+    },
+    "product_rotation_degrees": -89.99999225615299,
+    "determinant": 1.0,
+    "max_rigid_fit_residual": 5.735684269249599e-6,
+    "max_pair_distance_delta": 9.999998681564648e-6,
+    "native_save_version": [15, 19]
+  },
+  "negative_controls": [
+    {
+      "name": "correlated element corruption in both native files",
+      "rejected": true,
+      "reason": "Authored chemical expectation: atom 1 element"
+    },
+    {
+      "name": "correlated bond-order corruption in both native files",
+      "rejected": true,
+      "reason": "Authored bond graph/order/display"
+    },
+    {
+      "name": "correlated agent-role deletion in both native files",
+      "rejected": true,
+      "reason": "Authored roles/maps/coefficients"
+    },
+    {
+      "name": "duplicate map2 assigned to carbon",
+      "rejected": true,
+      "reason": "Authored chemical expectation: atom 1 map_num"
+    },
+    {
+      "name": "custom map offset attached to wrong atom",
+      "rejected": true,
+      "reason": "Wrong custom label owner/style"
+    },
+    {
+      "name": "Cα overwritten consistently in all alignment files",
+      "rejected": true,
+      "reason": "Cα/custom number or map style changed"
+    },
+    {
+      "name": "distance-preserving product reflection",
+      "rejected": true,
+      "reason": "Product reflection/orientation reversal"
+    },
+    {
+      "name": "product uniform scaling",
+      "rejected": true,
+      "reason": "Product scale/bond distortion"
+    },
+    {
+      "name": "one product atom distorted",
+      "rejected": true,
+      "reason": "Product scale/bond distortion"
+    },
+    {
+      "name": "reactant moved by alignment",
+      "rejected": true,
+      "reason": "Alignment changed a reactant or its custom number"
+    },
+    {
+      "name": "wrong native-save version",
+      "rejected": true,
+      "reason": "Native save version normalization"
+    }
+  ],
+  "verifier_sha256": "85484aea05cabc269d002cf3b17c24ed88fce25c87824ad7d13cf8fa347350f5",
+  "provenance_sha256": "376b7c2869cef72d761724cee8bd6689adfcf78221f0c28690cc82005fa7bbeb",
+  "scope": "Artifact integrity/semantics only; does not launch or retest the mapper/GUI"
+}

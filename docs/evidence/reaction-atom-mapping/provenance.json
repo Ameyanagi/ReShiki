@@ -1,0 +1,179 @@
+{
+  "schema": 1,
+  "created_utc": "2026-10-10T09:50:07.674957+00:00",
+  "license": "MIT OR Apache-2.0",
+  "origin": "Original project-authored verification fixtures and unedited native application captures; no third-party code/data copied.",
+  "platform": {
+    "os": "macOS 26.5.1",
+    "build": "25F80",
+    "architecture": "arm64",
+    "application_version": "0.11.0",
+    "capture_format": "JPEG",
+    "gpu_backend_and_display_scale": "Not measured; JPEG dimensions and native zoom are recorded per image."
+  },
+  "before_build": {
+    "description": "Historical ReShiki Coordination Join Verified default-feature debug snapshot, not the exact candidate base.",
+    "base_commit": "39b25cd4cdf58d1628e75449181b11877509d198",
+    "patch_sha256": "25679b74a8e4ee135bc36eb318d40229e3dd967a8788006273f37dc23a81ac66",
+    "signed_executable_sha256": "0dd54d1ab7749e7bbb5ace90146a6af41486903353d72e280156f1542bb78ed1"
+  },
+  "candidate_build": {
+    "branch": "feat/reaction-atom-mapping",
+    "base_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "captured_state": "Uncommitted frozen mapping implementation before this documentation package; no final PR commit claimed.",
+    "source_content_digest": "db61021177c5136d3fbb2108dd832124b5832430bc6dec738ca37aa4b109aed8",
+    "default_features_only": true,
+    "profile": "debug",
+    "raw_executable_sha256": "b0fcddc8a30408fdbfd4bf2ea897b9a2d7cb1602386d2cb98bce28e535f44ccf",
+    "signed_executable_sha256": "e8c345d7cb85e7f878b3983e653920915f86af433ed31094b0e22e0e9569bed4",
+    "bundle_content_digest": "03dba01520119992a3e1abc1ea18164b99d3a90e6b0250fcc3783dfefd05cdab",
+    "bundle_id": "dev.reshiki.reaction-mapping-verified",
+    "shipping_artifacts_fresh_false": true
+  },
+  "comparison_scope": {
+    "imported_map_pair": "Same controlled imported chemical input, exact old saved native document opened by new app. Old 159% vs new 144% zoom and framing differ; not a pixel-matched geometry claim.",
+    "alignment_pair": "Same controlled native input/action/130% zoom; product changes only through the native Align command.",
+    "reopen": "Custom-label file: close saved tab and open exact path into a fresh tab in the same running app. No fresh-process restart; no alignment reopen claimed.",
+    "private_receipts": "Failed wrong-row Open selection, earlier AX diff/no-change captures, full raw action inventory, compiler/depfile proof and frozen source inventory retained privately. They are not copied into this compact package."
+  },
+  "files": [
+    {
+      "path": "docs/images/reaction-atom-mapping/before-native.jpg",
+      "sha256": "035101525927e646a58bdf960becfdedd2400665ef11ab7129baef94db284658",
+      "bytes": 322275,
+      "jpeg_pixels": [2560, 1704],
+      "kind": "raw native screenshot, byte-identical copy",
+      "zoom_percent": 159,
+      "description": "Historical old native import: maps retained in chemistry but invisible on canvas.",
+      "private_source_name": "maps-not-visible-before.jpg"
+    },
+    {
+      "path": "docs/images/reaction-atom-mapping/imported-maps-visible.jpg",
+      "sha256": "60aa77f47888d54f676adafdd09381a8e2d32168eade1c41a994b54125b3d198",
+      "bytes": 324869,
+      "jpeg_pixels": [2560, 1704],
+      "kind": "raw native screenshot, byte-identical copy",
+      "zoom_percent": 144,
+      "description": "Verified new app opens exact saved old native input; maps appear on canvas.",
+      "private_source_name": "mapped-import-visible-after-v1.jpg"
+    },
+    {
+      "path": "docs/images/reaction-atom-mapping/manual-map-seven.jpg",
+      "sha256": "12ef665b0e2370dd24bfc94773b0e5c9955513d37d4caef5a9892539ce683231",
+      "bytes": 343449,
+      "jpeg_pixels": [2560, 1704],
+      "kind": "raw native screenshot, byte-identical copy",
+      "zoom_percent": 141,
+      "description": "Native Set changes selected reactant carbon map 1 to 7; counterpart remains 1.",
+      "private_source_name": "manual-map-seven-after-v1.jpg"
+    },
+    {
+      "path": "docs/images/reaction-atom-mapping/manual-map-label-moved.jpg",
+      "sha256": "bbc7d6ebb47aae995249cbd21e6d120f1a3303f805bfc7c6e54ce726c4374c06",
+      "bytes": 341560,
+      "jpeg_pixels": [2560, 1704],
+      "kind": "raw native screenshot, byte-identical copy",
+      "zoom_percent": 141,
+      "description": "Native map 2 handle drag moves the reactant O indicator, showing its independent owner.",
+      "private_source_name": "manual-map-label-moved-v1.jpg"
+    },
+    {
+      "path": "docs/images/reaction-atom-mapping/review-before-apply.jpg",
+      "sha256": "c66c606bc1984d527dbe96f24d02f7936380031a2724d16a7784400f6113d720",
+      "bytes": 341454,
+      "jpeg_pixels": [2560, 1704],
+      "kind": "raw native screenshot, byte-identical copy",
+      "zoom_percent": 141,
+      "description": "Native detached review: after clearing C map 1, two pairs, zero unmatched; proposed map 1 appears only in preview until Apply.",
+      "private_source_name": "automatic-proposal-reviewed-before-apply-v1.jpg"
+    },
+    {
+      "path": "docs/images/reaction-atom-mapping/applied-map.jpg",
+      "sha256": "17f3b487da820786d5c8d611b15c4db87e31b53e0e843b28db5bf259cfa10c5b",
+      "bytes": 332639,
+      "jpeg_pixels": [2560, 1704],
+      "kind": "raw native screenshot, byte-identical copy",
+      "zoom_percent": 141,
+      "description": "Native Apply restores reactant C map 1 on the main canvas.",
+      "private_source_name": "automatic-map-applied-after-v1.jpg"
+    },
+    {
+      "path": "docs/images/reaction-atom-mapping/custom-label-reopened.jpg",
+      "sha256": "0e7f70fddce9d0a2c873c2cd7b127ce48596f9afb3a21bb14de2e2984b59890a",
+      "bytes": 367507,
+      "jpeg_pixels": [2560, 1704],
+      "kind": "raw native screenshot, byte-identical copy",
+      "zoom_percent": 141,
+      "description": "Same-process fresh-tab exact-path native reopen retains custom O map 2 offset; not a fresh-process restart.",
+      "private_source_name": "custom-map-label-fresh-tab-reopened-v1.jpg"
+    },
+    {
+      "path": "docs/images/reaction-atom-mapping/alignment-before.jpg",
+      "sha256": "29ba9638b7edd013980b91ab7fd32735ef604658d4004a84cd118224a2e4fa5b",
+      "bytes": 344242,
+      "jpeg_pixels": [2560, 1704],
+      "kind": "raw native screenshot, byte-identical copy",
+      "zoom_percent": 130,
+      "description": "Native controlled authored input: complete product rotated 90 degrees about centroid, no chemical change.",
+      "private_source_name": "mapped-structure-quarter-turn-before-v1.jpg"
+    },
+    {
+      "path": "docs/images/reaction-atom-mapping/alignment-after.jpg",
+      "sha256": "aff4fe92760fe36fe16cc6c9d3214b375b7b4fedccb424bd659bbe3cabfc18c1",
+      "bytes": 345772,
+      "jpeg_pixels": [2560, 1704],
+      "kind": "raw native screenshot, byte-identical copy",
+      "zoom_percent": 130,
+      "description": "Native Align mapped structures restores product orientation; custom Cα number and chemical maps coexist.",
+      "private_source_name": "mapped-structure-aligned-after-v1.jpg"
+    },
+    {
+      "path": "docs/evidence/reaction-atom-mapping/mapped-methanol-oxidation.rsmi",
+      "sha256": "a60a3470cd326ffb5a478069f8aa7a63e4ab120e95f668434f52333dc7d72674",
+      "bytes": 30,
+      "kind": "raw input/native/authored artifact, byte-identical copy",
+      "description": "Authored controlled concrete reaction SMILES; not third-party producer data.",
+      "private_source_name": "mapped-methanol-oxidation.rsmi"
+    },
+    {
+      "path": "docs/evidence/reaction-atom-mapping/native-before.rsk",
+      "sha256": "6aa6549fe2f76c0fc3132d10393cf2941a5f27ffe927f133b60566da8e76301b",
+      "bytes": 3557,
+      "kind": "raw input/native/authored artifact, byte-identical copy",
+      "description": "Actual old native app Save of the imported controlled reaction; 5 atoms, 2 bonds, 1 reaction, map multiset 0/1/1/2/2.",
+      "private_source_name": "mapped-methanol-oxidation-before.rsk"
+    },
+    {
+      "path": "docs/evidence/reaction-atom-mapping/native-custom-label-after.rsk",
+      "sha256": "ce1c6c6aa0b00da79eb67226137f446b63584c347bd1010c7f90319d17379cdb",
+      "bytes": 4581,
+      "kind": "raw input/native/authored artifact, byte-identical copy",
+      "description": "Actual verified new native app Save As after manual mapping/Undo, reviewed proposal Apply, label drag and visibility checks; only custom O map 2 offset differs from native-before.",
+      "private_source_name": "mapped-methanol-oxidation-custom-label-v1.rsk"
+    },
+    {
+      "path": "docs/evidence/reaction-atom-mapping/authored-oxidation-after.rsk",
+      "sha256": "339e8d6f1503231acf510a92f74a186b3a1401856767d9d84c115b23a8c18305",
+      "bytes": 4679,
+      "kind": "raw input/native/authored artifact, byte-identical copy",
+      "description": "Authored test-writer output after applying a reviewed mapping/alignment and adding custom Cα; not a native save or external producer output.",
+      "private_source_name": "oxidation-after.rsk"
+    },
+    {
+      "path": "docs/evidence/reaction-atom-mapping/alignment-input.rsk",
+      "sha256": "ed9c05c7c90adbae9ec66226c0b8cd59151cdd354724ba4f25fc9e5f7b780f72",
+      "bytes": 4730,
+      "kind": "raw input/native/authored artifact, byte-identical copy",
+      "description": "Controlled JSON derivative of authored oxidation fixture, only product IDs 5/6/7 positions rotated +90 degrees about centroid; not a native save.",
+      "private_source_name": "oxidation-quarter-turn-input-v1.rsk"
+    },
+    {
+      "path": "docs/evidence/reaction-atom-mapping/alignment-native-after.rsk",
+      "sha256": "d88fb3c0bf83bc0dffa7e68cf5deea447740d626fdc9cb7b58f6d65a0bb49239",
+      "bytes": 4685,
+      "kind": "raw input/native/authored artifact, byte-identical copy",
+      "description": "Actual verified new native app Save As after Align/Undo/Redo. Product-only proper rotation; existing native save normalizes document version 15 to 19.",
+      "private_source_name": "oxidation-aligned-native-after-v1.rsk"
+    }
+  ]
+}

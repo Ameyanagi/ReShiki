@@ -21,6 +21,7 @@ pub(super) fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
     }) {
         return match i.owner {
             reshiki::atom_labels::Owner::Number(id)
+            | reshiki::atom_labels::Owner::Mapping(id)
             | reshiki::atom_labels::Owner::AtomStereo(id) => {
                 vec![id]
             }

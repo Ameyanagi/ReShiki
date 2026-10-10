@@ -52,6 +52,7 @@ impl App {
             Message::InspectorScroll(y) => self.scroll_templates(y),
             Message::TemplateNavigate(forward) => return Some(self.navigate_templates(forward)),
             Message::Reaction(action) => return Some(self.reaction_action(action)),
+            Message::Mapping(action) => return Some(self.mapping_action(action)),
             Message::Templates(action) => return Some(self.template_message(action)),
             Message::ResetBondDrawing => self.reset_bond_drawing(),
             Message::FixedLength(on) => self.tab.bond_drawing.fixed_length = on,
@@ -201,6 +202,7 @@ impl App {
         match message {
             Message::Optimization(action) => return self.optimization_action(action),
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
+            Message::Mapping(action) => return self.mapping_action(action),
             Message::FigureExported(result) => self.figure_exported(result),
             Message::Printing(action) => return self.print_action(action),
             Message::DrawingStyle(action) => return self.drawing_style_action(action),
