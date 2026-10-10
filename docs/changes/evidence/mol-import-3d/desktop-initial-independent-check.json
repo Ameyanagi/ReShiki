@@ -1,0 +1,17 @@
+{
+  "native_file": "candidate-alkane-3d-desktop.rsk",
+  "native_sha256": "fdef4da9fbe2f76b50e7dba90bf3ad9b12162a788641c4b219013cd3c9da43c3",
+  "source_file": "alkane-3d-v2000.mol",
+  "atoms": 6,
+  "bonds": 5,
+  "visible_h": 0,
+  "source_ids": [1, 2, 3, 4, 5, 6],
+  "maximum_canvas_xyz_error": 2.673339849934564e-6,
+  "all_retained_source_xyz_exact_f32": true,
+  "nonzero_z": 6,
+  "independent_formula": "C6H14",
+  "independent_canonical_smiles": "CCCCCC",
+  "atoms_exactly_match_headless": true,
+  "bonds_exactly_match_headless": true,
+  "serialization_decimal_comparison_note": "JSON stores shortest decimal that round trips to the native f32. Cast parsed decimal to f32 before exact storage comparison."
+}

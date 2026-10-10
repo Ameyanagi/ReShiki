@@ -1,0 +1,237 @@
+{
+  "production_source_commit": "783be63a2752103cd2c436a79e02a03d442e6085",
+  "before_routing_control": {
+    "base": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "source": "src/app/import.rs",
+    "sha256": "8dfe63709f73a4115c9903cf15d48089ec84deab6402bffb37b84161e49420fc",
+    "method": "Compile unchanged routing functions and format constants from exact base; this checks file routing, not GUI interaction or EMF playback.",
+    "runtime_control_stdout": "Reject(\"Can't import .emf\")",
+    "runtime_control_exit": 0,
+    "runner_sha256": "ed497729036e191348409831a7c04b7bc260430c3db3d85cbb77bd947b968554",
+    "runner_source_sha256": "ca209311595eb721580d41c9c7a4a62fb7ca9b7c46b24e452527780859db751b",
+    "scope": "Unchanged exact-base routing functions compiled into a detached runner; no actual desktop before screenshot or Windows GUI check."
+  },
+  "existing_required_checks": [
+    {
+      "check": "fmt",
+      "command": ["cargo", "fmt", "--all", "--check"],
+      "exit": 0
+    },
+    {
+      "check": "malformed",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--test",
+        "agent_api_malformed",
+        "modern_cases_share_one_process"
+      ],
+      "exit": 0
+    },
+    {
+      "check": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--all-targets",
+        "--all-features",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0
+    },
+    {
+      "check": "check",
+      "command": ["cargo", "check", "--all-targets", "--all-features", "--locked"],
+      "exit": 0
+    }
+  ],
+  "existing_log_receipts": [
+    {
+      "original_log_basename": "emf-pictures-tests.log",
+      "sha256": "c3417b7ab4eb1c9c9ed6cad85481c99fd6406d95950070dfb0ca6c72fdb6cd25",
+      "result": "11 passed"
+    },
+    {
+      "original_log_basename": "emf-budget-tests.log",
+      "sha256": "de75766cf481da547e168796a523d74a7714c2946c3541549ef259a303ef652e",
+      "result": "2 passed"
+    },
+    {
+      "original_log_basename": "emf-import-tests.log",
+      "sha256": "96c16d0653071724b6fa6e7608d825d5716e2496fd8cb0c26c25316fa3d9de4b",
+      "result": "11 passed"
+    },
+    {
+      "original_log_basename": "emf-validator-tests.log",
+      "sha256": "f7d4bf21fbeaf7aa74a08b26924bcede99776e8a18921d86caf230f4075462c0",
+      "result": "6 passed"
+    },
+    {
+      "original_log_basename": "emf-malformed.log",
+      "sha256": "a5e722c736aab49fe672def3dcc96fd2ce435bef44e0ff3c7f35b8ea59128ab0",
+      "result": "modern malformed corpus passed"
+    },
+    {
+      "original_log_basename": "emf-clippy.log",
+      "sha256": "0f7a3bf6591af8ce9e4c7da80d7e8f040c77bc77ee0b5c6ef91139120e53c674",
+      "result": "exit 0"
+    },
+    {
+      "original_log_basename": "emf-check.log",
+      "sha256": "e7dc96b9fc88d380076bf31bd2a9d8e4a3159876ff53fe398c054e59e7db9819",
+      "result": "exit 0"
+    },
+    {
+      "original_log_basename": "metafile-validator.log",
+      "sha256": "75622b780f32cd6bd2c68f027c32abae983e4c8be0d9658ea10962e96736c951",
+      "result": "6 passed on Windows"
+    },
+    {
+      "original_log_basename": "native-printing.log",
+      "sha256": "1964b37aa5d7cc544f2317f3ce05ee3116e39db1cd13f7dc0a9ef296a3514f7e",
+      "result": "5 passed on Windows"
+    },
+    {
+      "original_log_basename": "native-io-before.log",
+      "sha256": "43c59b7a0b229f1e837266c42e76f865a1f9211e1234203181e0f16f14786243",
+      "result": "Preserved source-ID lookup failure before correction"
+    },
+    {
+      "original_log_basename": "native-io-after.log",
+      "sha256": "bad3c1b28031940a69817e515727d30644678fb47266f9fa2020d72005318565",
+      "result": "2 passed after source-ID lookup correction"
+    },
+    {
+      "original_log_basename": "native-clippy.log",
+      "sha256": "94ff0ab02abbf7802099b1ce037bc0f5eaf56251618bc26cea3339398d0d7e17",
+      "result": "native all-targets Clippy passed"
+    }
+  ],
+  "windows_native_worker_harness": {
+    "started": "2026-10-09T09:20:10.5541329Z",
+    "ended": "2026-10-09T09:21:35.2334673Z",
+    "sourceVersion": 3,
+    "productionLibrarySourceVersion": 2,
+    "exeSHA256": "39d8bef0c1d8066ec70df4f5c809102da4c68d020a8f716f37426a1caefa83fe",
+    "exitCode": 0,
+    "exports": [
+      {
+        "name": "portable-preview.pdf",
+        "bytes": 163140,
+        "sha256": "a4f07e667d31f5369eab77207840111f57bf1178fe72e825db55feb85747eeda"
+      },
+      {
+        "name": "portable-preview.png",
+        "bytes": 1033021,
+        "sha256": "2f4c5bd057577339871ba4bdb78cc1077694dd8a17c2f13d691921ab20b52386"
+      },
+      {
+        "name": "portable-preview.svg",
+        "bytes": 474858,
+        "sha256": "657318047036c6a2b919d314f244e3f7ca45971571f629147b0a55b6dcd1d57e"
+      },
+      {
+        "name": "retained-source.rsk",
+        "bytes": 492401,
+        "sha256": "c329e5d2f28242cbbbf4156f2e533e7497e63391aac4cbdd9046f2ea357e8098"
+      },
+      {
+        "name": "source.emf",
+        "bytes": 12860,
+        "sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a"
+      },
+      {
+        "name": "vector-reexport.emf",
+        "bytes": 14704,
+        "sha256": "f8bf4153051ab9fab56b25c4714749a3375129e431151b4c79c6bf2a648ce630"
+      },
+      {
+        "name": "worker-preview.png",
+        "bytes": 355832,
+        "sha256": "1dabe5ad6f5806cd121f294a19eaa697dfc9f6957518da19ecbfe858733139ca"
+      }
+    ]
+  },
+  "windows_actual_app_worker": {
+    "when": "2026-10-09T10:12:46.6468123Z",
+    "sourceVersion": 3,
+    "candidate": {
+      "bytes": 101817344,
+      "sha256": "124336a60753ad7cd3bba0c9bf4f453298d6fac7d857dbe1562903e2e0fc88b2"
+    },
+    "pdb": {
+      "bytes": 97529856,
+      "sha256": "6634f0499501bb5cd9c218051ebd345eeaca2d936dcddc241dcadf38dc5bc709"
+    },
+    "workerMode": "--emf-worker",
+    "exitCode": 0,
+    "durationSeconds": 5.5596407,
+    "input": {
+      "sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a"
+    },
+    "output": {
+      "bytes": 355832,
+      "sha256": "1dabe5ad6f5806cd121f294a19eaa697dfc9f6957518da19ecbfe858733139ca"
+    },
+    "matchesVerifiedNativeHarnessPNG": true,
+    "stderr": "",
+    "method": "Run complete app executable only in early-dispatched CLI EMF worker mode; no GUI launch. Verify bounded successful exit and exact PNG agreement with previously passed production native worker harness."
+  },
+  "windows_harness_scope": "Actual executable transport import/reexport, version 20 save/reopen and independent watchdog after supervisor death; not actual Windows/Office GUI.",
+  "mcp_goldens_correction": [
+    {
+      "file": "tests/fixtures/mcp/stdio-modern.jsonl",
+      "version_occurrences_corrected": 1,
+      "before_sha256": "5279605762eeda59bcf4508eec6bfa94d57908b525e148e5890c20f61505ef0c",
+      "after_sha256": "0df021b1fce247a2de8fc9571afe16e3c52877aec2dabb27ae9af885dad94c76",
+      "only_change": "Expected document version 19 to 20; transcript JSON remains valid."
+    },
+    {
+      "file": "tests/fixtures/mcp/stdio-legacy.jsonl",
+      "version_occurrences_corrected": 1,
+      "before_sha256": "49e9a650d032a678e9e0c6f9d23409525f7eacdd44f4667d33a10ac1a3481b03",
+      "after_sha256": "1dd39da27233319aa6e79c2d20b2be2c8767623dcfbcd22217f134728c7efa9c",
+      "only_change": "Expected document version 19 to 20; transcript JSON remains valid."
+    },
+    {
+      "file": "tests/fixtures/mcp/tools-modern.jsonl",
+      "version_occurrences_corrected": 9,
+      "before_sha256": "f3d15b83c32a193ac9530d90cf6e48b78a0dd61512c76c138aefce1932e7f666",
+      "after_sha256": "e662d3a6735a6e074a68bf87863f1924c67a42ee98e3f67501c798d21d2097e6",
+      "only_change": "Expected document version 19 to 20; transcript JSON remains valid."
+    },
+    {
+      "file": "tests/fixtures/mcp/tools-legacy.jsonl",
+      "version_occurrences_corrected": 9,
+      "before_sha256": "864c55ad7a42d5ff15a49c59cb10001f3fbe687df13f37a8b379e6d9208597ff",
+      "after_sha256": "b224da5848d83210281e6d06bc5d59cdc1383c8b0dfabb0fcde483bd4f9f760a",
+      "only_change": "Expected document version 19 to 20; transcript JSON remains valid."
+    },
+    {
+      "file": "crates/mcp/tests/transcripts/tools-fake-modern.jsonl",
+      "version_occurrences_corrected": 11,
+      "before_sha256": "9c2ea6b8eede00653d0c69b7a5dfa15d96c9ccc696b681977b91880df2e7ded7",
+      "after_sha256": "4f0a86d5763a552bfef7f6b2e01c2948032e33b6299d1fa57ac61ff34cb28e10",
+      "only_change": "Expected document version 19 to 20; transcript JSON remains valid."
+    },
+    {
+      "file": "crates/mcp/tests/transcripts/tools-fake-legacy.jsonl",
+      "version_occurrences_corrected": 11,
+      "before_sha256": "d03b0dd886620458431c7ea15586054bffb1652808ce298675d13be55caefa6c",
+      "after_sha256": "937804d3deae1917ea9dffb10bebdbba4461b9051c02a6002b3b479118474cef",
+      "only_change": "Expected document version 19 to 20; transcript JSON remains valid."
+    }
+  ],
+  "fresh_mcp_cargo_tests": "Pending fresh CI; no Cargo lease or new compilation used for this docs/test-fixture package.",
+  "preserved_application_cli_info": {
+    "mode": "--cli info (early-dispatched headless mode)",
+    "exit": 0,
+    "reported_document_version": 20,
+    "stdout_sha256": "4c5f2f5d340977a2053494d7b8d4cf02f2438d8a41029a42fed12e1ddb52a929",
+    "scope": "Lightweight real app version confirmation; not a full MCP transcript test or fresh Cargo/CI pass."
+  }
+}

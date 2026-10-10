@@ -1,0 +1,39 @@
+﻿{
+    "when":  "2026-10-09T10:12:46.6468123Z",
+    "sourceVersion":  3,
+    "candidate":  {
+                      "path":  "C:\\Users\\ryuichi\\dev\\reshiki-emf-candidate-20261009\\reshiki.exe",
+                      "bytes":  101817344,
+                      "sha256":  "124336a60753ad7cd3bba0c9bf4f453298d6fac7d857dbe1562903e2e0fc88b2"
+                  },
+    "pdb":  {
+                "path":  "F:\\reshiki-emf-link-20261009\\reshiki.pdb",
+                "bytes":  97529856,
+                "sha256":  "6634f0499501bb5cd9c218051ebd345eeaca2d936dcddc241dcadf38dc5bc709"
+            },
+    "workerMode":  "--emf-worker",
+    "exitCode":  0,
+    "durationSeconds":  5.5596407,
+    "input":  {
+                  "path":  "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\source.emf",
+                  "sha256":  "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a"
+              },
+    "output":  {
+                   "path":  "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\actual-app-worker-preview.png",
+                   "bytes":  355832,
+                   "sha256":  "1dabe5ad6f5806cd121f294a19eaa697dfc9f6957518da19ecbfe858733139ca"
+               },
+    "matchesVerifiedNativeHarnessPNG":  true,
+    "stderr":  "",
+    "free":  [
+                 {
+                     "Name":  "C",
+                     "Free":  374067200
+                 },
+                 {
+                     "Name":  "F",
+                     "Free":  245067776
+                 }
+             ],
+    "method":  "Run complete app executable only in early-dispatched CLI EMF worker mode; no GUI launch. Verify bounded successful exit and exact PNG agreement with previously passed production native worker harness."
+}

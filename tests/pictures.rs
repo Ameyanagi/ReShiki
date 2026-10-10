@@ -24,6 +24,79 @@ fn picture() -> Picture {
     Picture::import(&encoded(&image, ImageFormat::Png)).unwrap()
 }
 
+// An original minimal EMF envelope: 1 × 0.5 inch physical frame, nonzero
+// frame origin, deliberately unrelated reference display resolution.
+fn emf_envelope() -> Vec<u8> {
+    let mut bytes = vec![0; 108];
+    for (offset, value) in [
+        (0, 1),
+        (4, 88),
+        (24, 100),
+        (28, 200),
+        (32, 2640),
+        (36, 1470),
+        (40, 0x464d4520),
+        (44, 0x10000),
+        (48, 108),
+        (52, 2),
+        (56, 1),
+        (72, 1920),
+        (76, 1080),
+        (80, 400),
+        (84, 300),
+        (88, 14),
+        (92, 20),
+        (100, 16),
+        (104, 20),
+    ] {
+        bytes[offset..offset + 4].copy_from_slice(&u32::to_le_bytes(value));
+    }
+    bytes
+}
+
+#[test]
+fn retained_emf_round_trips_at_its_physical_size_with_portable_preview() {
+    let original = emf_envelope();
+    let preview = picture();
+    let imported = Picture::from_emf(&original, preview.png()).unwrap();
+    assert_eq!(imported.emf().unwrap(), original);
+    assert_eq!(
+        imported.stored_bytes(),
+        imported.png().len() + original.len()
+    );
+    let doc = imported.document();
+    doc.validate().unwrap();
+    let graphic = &doc.graphics[0];
+    let points = reshiki::style::DEFAULT.points_per_world();
+    assert!((graphic.axis_x.x * points - 72.).abs() < 0.0001);
+    assert!((graphic.axis_y.y * points - 36.).abs() < 0.0001);
+    let json = serde_json::to_string(&doc).unwrap();
+    let reopened: Document = serde_json::from_str(&json).unwrap();
+    assert_eq!(reopened, doc);
+    let picture = reopened.graphics[0].picture.as_ref().unwrap();
+    assert_eq!(picture.emf().unwrap(), original);
+    assert_eq!(
+        image::load_from_memory(picture.png()).unwrap().to_rgba8(),
+        image::load_from_memory(preview.png()).unwrap().to_rgba8()
+    );
+    // Existing raster serialization stays a string; older files still open.
+    assert!(serde_json::to_value(preview).unwrap().is_string());
+    assert!(serde_json::to_value(picture).unwrap()["emf"].is_string());
+}
+
+#[test]
+fn malformed_emf_or_non_png_preview_cannot_enter_native_storage() {
+    let preview = picture();
+    let mut source = emf_envelope();
+    source[48..52].copy_from_slice(&104u32.to_le_bytes());
+    assert!(Picture::from_emf(&source, preview.png()).is_err());
+    let jpeg = encoded(&DynamicImage::new_rgb8(2, 1), ImageFormat::Jpeg);
+    assert!(Picture::from_emf(&emf_envelope(), &jpeg).is_err());
+    let invalid = serde_json::json!({"png": "", "emf": "", "ignored": true});
+    assert!(serde_json::from_value::<Picture>(invalid).is_err());
+    assert!(Picture::from_emf(&emf_envelope(), &vec![0; reshiki::pictures::MAX_BYTES]).is_err());
+}
+
 #[test]
 fn opaque_copy_preserves_black_line_art_and_original_transparency() -> anyhow::Result<()> {
     // A typical transparent chemical drawing: every RGB sample is black;

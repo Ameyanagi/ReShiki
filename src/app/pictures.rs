@@ -41,18 +41,20 @@ impl Default for State {
     }
 }
 async fn choose_picture() -> Result<Option<Picture>, String> {
+    let mut extensions = vec!["png", "jpg", "jpeg", "tif", "tiff", "webp"];
+    if cfg!(windows) {
+        extensions.push("emf");
+    }
     let Some(file) = rfd::AsyncFileDialog::new()
-        .set_title("Replace the picture — PNG, JPEG, TIFF or WebP")
-        .add_filter("Pictures", &["png", "jpg", "jpeg", "tif", "tiff", "webp"])
+        .set_title("Replace the picture")
+        .add_filter("Pictures", &extensions)
         .pick_file()
         .await
     else {
         return Ok(None);
     };
     let path: PathBuf = file.path().to_path_buf();
-    tokio::task::spawn_blocking(move || Picture::open(&path).map(Some))
-        .await
-        .map_err(|e| format!("Could not load picture: {e}"))?
+    reshiki::metafile::open(&path).await.map(Some)
 }
 fn millimetres(world: f32) -> f32 {
     world * reshiki::style::DEFAULT.points_per_world() * 25.4 / 72.
@@ -290,6 +292,10 @@ impl App {
         let mut panel = column![section("PICTURE")].spacing(9);
         if let Some(g) = self.selected_picture() {
             if let Some(p) = &g.picture {
+                if p.emf().is_some() {
+                    panel = panel.push(text("EMF vector picture").size(12));
+                    panel = panel.push(text("Windows EMF export keeps the original vectors. PNG, SVG, PDF and print use a preview.").size(11).style(muted_text));
+                }
                 panel = panel.push(
                     text(format!("{} × {} pixels", p.width(), p.height()))
                         .size(12)

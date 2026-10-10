@@ -1,0 +1,18 @@
+{
+  "observed_utc": "2026-10-09T23:05:13.2806289Z",
+  "first_read": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-powerpoint-emf-20261010.pptx",
+    "bytes": 37482,
+    "created_utc": "2026-10-09T23:04:32.6133384Z",
+    "modified_utc": "2026-10-09T23:04:32.6367443Z",
+    "sha256": "6ccd40accae9fbb41c9e9dac03d4933f2fe82da7f9746dea647931f71ff26563"
+  },
+  "powerpoint_processes": [],
+  "second_read": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-powerpoint-emf-20261010.pptx",
+    "bytes": 37482,
+    "created_utc": "2026-10-09T23:04:32.6133384Z",
+    "modified_utc": "2026-10-09T23:04:32.6367443Z",
+    "sha256": "6ccd40accae9fbb41c9e9dac03d4933f2fe82da7f9746dea647931f71ff26563"
+  }
+}

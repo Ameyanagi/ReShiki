@@ -75,6 +75,12 @@ fn files_route_by_extension_and_label_the_drop() {
     assert_eq!(plan(&one).label(), "Drop to insert · caffeine.mol");
     let pictures = paths(&["a.png", "b.JPG", "c.jpeg", "d.tif", "e.tiff", "f.webp"]);
     assert_eq!(plan(&pictures), Plan::Insert(pictures.clone()));
+    let metafile = paths(&["spectrum.EMF"]);
+    if cfg!(windows) {
+        assert_eq!(plan(&metafile), Plan::Insert(metafile.clone()));
+    } else {
+        assert_eq!(plan(&metafile).label(), "Can't import .emf");
+    }
     for native in ["x.rsk", "x.reshiki", "x.moruno"] {
         let path = paths(&[native]);
         assert_eq!(plan(&path), Plan::Open(path.clone()));

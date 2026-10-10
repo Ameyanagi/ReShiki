@@ -1,0 +1,28 @@
+{
+  "files": {
+    "candidate-alkane-3d-desktop": {
+      "path": "candidate-alkane-3d-desktop.rsk",
+      "sha256": "fdef4da9fbe2f76b50e7dba90bf3ad9b12162a788641c4b219013cd3c9da43c3"
+    },
+    "candidate-alkane-3d-rotated": {
+      "path": "candidate-alkane-3d-rotated.rsk",
+      "sha256": "1678b6193dc004b9d4bef7ae96cadc86c2c3e878bf353d11913596d9551108c9"
+    },
+    "candidate-alkane-3d-undo": {
+      "path": "candidate-alkane-3d-undo.rsk",
+      "sha256": "fdef4da9fbe2f76b50e7dba90bf3ad9b12162a788641c4b219013cd3c9da43c3"
+    },
+    "candidate-alkane-3d-redo": {
+      "path": "candidate-alkane-3d-redo.rsk",
+      "sha256": "1678b6193dc004b9d4bef7ae96cadc86c2c3e878bf353d11913596d9551108c9"
+    }
+  },
+  "checks": {
+    "undo_atom_array_exact": true,
+    "undo_bond_array_exact": true,
+    "redo_atom_array_exact": true,
+    "redo_bond_array_exact": true,
+    "undo_entire_native_exact": true,
+    "redo_entire_native_exact": true
+  }
+}

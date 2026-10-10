@@ -171,7 +171,7 @@ pub fn cost(doc: &Document) -> u64 {
     (objects(doc) as u64).saturating_add(1)
 }
 
-/// The PNG bytes of every picture in `docs`, counting each storage once.
+/// Stored PNG and original EMF bytes in `docs`, counting each storage once.
 ///
 /// Picture clones share one storage, so a picture held by many documents or
 /// history frames counts once. Storages are keyed by the address of their
@@ -182,7 +182,7 @@ pub fn picture_memory<'a>(docs: impl IntoIterator<Item = &'a Document>) -> u64 {
         .flat_map(|doc| &doc.graphics)
         .filter_map(|graphic| graphic.picture.as_ref())
         .filter(|picture| seen.insert(picture.png().as_ptr() as usize))
-        .map(|picture| picture.png().len() as u64)
+        .map(|picture| picture.stored_bytes() as u64)
         .fold(0, u64::saturating_add)
 }
 

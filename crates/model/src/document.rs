@@ -148,7 +148,7 @@ fn forward() -> String {
 }
 
 /// The newest document format this build reads. Saved files are marked with it.
-pub const VERSION: u32 = 19;
+pub const VERSION: u32 = 20;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -485,7 +485,7 @@ impl Document {
         let mut picture_bytes = 0_usize;
         let mut picture_pixels = 0_u64;
         for picture in self.graphics.iter().filter_map(|g| g.picture.as_ref()) {
-            picture_bytes = picture_bytes.saturating_add(picture.png().len());
+            picture_bytes = picture_bytes.saturating_add(picture.stored_bytes());
             picture_pixels = picture_pixels
                 .saturating_add(u64::from(picture.width()) * u64::from(picture.height()));
             if picture_bytes > 64 * 1024 * 1024 || picture_pixels > 64_000_000 {
