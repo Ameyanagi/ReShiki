@@ -72,9 +72,16 @@ geometry/query budgets fall back to opaque output when exceeded; their
 preflight estimates are resource heuristics, not a formal per-operation bound
 or proof for every molecule and pixel. Native version 22 retains opacity.
 Chemical and editable external formats retain their documented appearance
-limitations; Windows print/EMF runtime checks remain pending. The portable
-verifier checks bytes, source receipts and these three native graphs; it does
-not rerender screenshots or prove pixel visibility.
+limitations. At published head `dd26cae3`, the
+[Windows print-alpha test failed](https://github.com/Ameyanagi/ReShiki/actions/runs/38017370974/job/114110577818):
+its open-chain fixture expected fading on exposed ink. The test-only revision
+uses the existing closed C60 cage to retain the partial-alpha/EMF-rejection
+checks and separately tests opaque chain paint and vector EMF acceptance.
+Actual Windows execution of the revised tests remains pending. The portable
+verifier pins that single test-source delta while retaining the original
+source/compiler/native receipts and every captured Mac shipping dependency.
+It checks bytes and these three native graphs; it does not rerender screenshots
+or prove pixel visibility.
 
 Under review in [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289),
 contributed by @Ameyanagi. Reusable caption: **Rear opacity hides occluded cage

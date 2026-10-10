@@ -16,6 +16,12 @@ ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 SIGNED_APP = "bc9b3d61b3acb8c65e0b2ff1b6be2e0c3835ef9ebd097c1785f8210b28fb31f7"
 SOURCE_AGGREGATE = "173a0dd53b1af5c66095f774f737cdde36657e865c991a8af5d5ed7a14fbb59e"
+# Exact test-only publication delta; captured compiler/native receipts stay original.
+WINDOWS_TEST_DELTA = {
+    "path": "crates/io/src/native_windows/tests.rs",
+    "original": "b7041e29df58d627e5540b14d92ff08f8d5bfbdefcb2238086a62289c242ca28",
+    "current": "5055db17a4cae9f7e015854cb69ac3c8bf306e0da3af3c62252993c5f7590aac",
+}
 RAW_SHA256 = {
     "docs/images/rear-visibility-20261010/c60-25-after.jpg": "3b9560ad0f83a2fd2b2c699d27474e6c9019f648645e284b864155762f7fad5b",
     "docs/images/rear-visibility-20261010/c60-25-before.jpg": "b511eae8cfaffe60761793f847c86ddda9adcf4c44c91628b5c4202779bc37ff",
@@ -195,17 +201,23 @@ def validate_native(docs):
     return residual, pair_drift
 
 
+def validate_current_source_hashes(inputs, current):
+    require(set(current) == set(inputs), "Current source inventory")
+    path = WINDOWS_TEST_DELTA["path"]
+    require(inputs[path] == WINDOWS_TEST_DELTA["original"], "Original Windows test linkage")
+    for relative, original in inputs.items():
+        expected = WINDOWS_TEST_DELTA["current"] if relative == path else original
+        require(current[relative] == expected, "Current source changed: " + relative)
+
+
 def validate_provenance():
     source = load("frozen-source-receipt.json")
     inputs = source["source_inputs"]
     require(source["source_input_count"] == len(inputs) == 1071, "Source count")
     aggregate = digest(json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode())
     require(aggregate == source["source_aggregate"] == SOURCE_AGGREGATE, "Source aggregate")
-    for relative, expected in inputs.items():
-        require(
-            digest((ROOT / relative).read_bytes()) == expected,
-            "Compiled source changed: " + relative,
-        )
+    current = {relative: digest((ROOT / relative).read_bytes()) for relative in inputs}
+    validate_current_source_hashes(inputs, current)
     require(len(source["changed_hashes"]) == 13, "Correction source count")
     require(all(inputs[k] == v for k, v in source["changed_hashes"].items()), "Frozen correction")
     artifacts = load("compiler-artifact-origin.json")
@@ -223,15 +235,23 @@ def validate_provenance():
         == digest((HERE / "frozen-source-receipt.json").read_bytes()),
         "Compiler receipt linkage",
     )
+    shipping_sources = set()
     for dep in artifacts["depfiles"].values():
         for relative, expected in dep["frozen_source_dependencies"].items():
+            shipping_sources.add(relative)
             require(inputs[relative] == expected, "Compiler dependency linkage")
+            require(current[relative] == expected, "Shipping compiler source changed: " + relative)
         for relative, entry in dep["included_non_rust_files_exact_to_base"].items():
             require(entry["unchanged_from_base_head"] is True, "Embedded dependency baseline")
             require(
                 digest((ROOT / relative).read_bytes()) == entry["sha256"],
                 "Embedded source changed: " + relative,
             )
+    require(len(shipping_sources) == 529, "Distinct shipping source dependency count")
+    require(
+        WINDOWS_TEST_DELTA["path"] not in shipping_sources,
+        "Windows-only test is a captured shipping dependency",
+    )
     signed = load("signed-app-provenance.json")
     native = load("root-native-acceptance.json")
     require(
@@ -331,7 +351,21 @@ def corruption_controls(docs):
     rejects(
         lambda: require(digest(sample + b" ") == digest(sample), "Corrupted bytes"), "byte checksum"
     )
-    return len(controls) + 1
+    inputs = load("frozen-source-receipt.json")["source_inputs"]
+    current = dict(inputs)
+    path = WINDOWS_TEST_DELTA["path"]
+    current[path] = WINDOWS_TEST_DELTA["current"]
+    bad = dict(current)
+    bad[path] = WINDOWS_TEST_DELTA["original"]
+    rejects(lambda: validate_current_source_hashes(inputs, bad), "unrevised Windows test")
+    bad = dict(current)
+    other = "crates/model/src/rear_opacity.rs"
+    bad[other] = "0" * 64
+    rejects(lambda: validate_current_source_hashes(inputs, bad), "shipping source drift")
+    bad_inputs = dict(inputs)
+    bad_inputs[path] = "0" * 64
+    rejects(lambda: validate_current_source_hashes(bad_inputs, current), "original test linkage")
+    return len(controls) + 4
 
 
 def main():
@@ -341,7 +375,7 @@ def main():
     validate_provenance()
     controls = corruption_controls(docs)
     print(
-        f"PASS: {len(RAW_SHA256)} raw originals, 7 JPEGs, 3 complete native drawings, 1071 source hashes, 15 fresh:false artifacts, {controls} corruption controls"
+        f"PASS: {len(RAW_SHA256)} raw originals, 7 JPEGs, 3 complete native drawings, 1070 original source hashes + 1 exact Windows-test delta, 529 unchanged shipping dependencies, 15 fresh:false artifacts, {controls} corruption controls"
     )
     print(
         f"Rigid tilt max XYZ residual {residual:.9g}; max pair-distance drift {pair_drift:.9g} document units"
