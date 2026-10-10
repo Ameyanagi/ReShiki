@@ -8,9 +8,14 @@ command in the shared selection menus.
 The original limitation is confirmed in
 [baseline source at 51fa0991](https://github.com/Ameyanagi/ReShiki/blob/51fa0991da2507bb00b27c1b420e807468de6423/src/app/shortcuts.rs#L356):
 only two selected IDs or four IDs with two bonds reach a successful Join branch;
-three selected IDs return the selection diagnostic. The native screenshots below
-show the pre-action and resulting states in the corrected app. They do not
-claim a native baseline-error reproduction.
+three selected IDs return the selection diagnostic. A separate
+[qualified native baseline check](fixtures/join-atom-merge/macos-qualified-baseline/README.md)
+also reproduced that rejection on the unchanged input: Cmd+J left six atoms and
+three bonds, a clean title and disabled Undo/Redo. Its signed app includes
+unrelated Generic features, so it is not a clean main build; its three recorded
+shipping Join source files exactly match this base. The original source check
+is independent of that native reproduction. Final-app v2 before images remain
+pre-action captures of the corrected app.
 
 ## Behavior and safeguards
 
@@ -91,9 +96,15 @@ process produced a clean fresh document with Undo/Redo disabled. The whole
 molecule reports C3H9N and `CN(C)C`. This is a fresh-document check, not a process
 restart. An independent graph/visual/source/signature audit confirmed the result.
 
-| Before the action in the corrected app                                                                | Saved result reopened in the same process                                                                                         |
-| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| ![Six atoms in three arms before Join](../images/join-atom-merge/macos-join-three-arms-before-v2.jpg) | ![Red nitrogen with three carbon arms after Join and reopen](../images/join-atom-merge/macos-join-fresh-document-reopened-v2.jpg) |
+| Original Join route rejects Cmd+J in the qualified baseline app                                                                 | Corrected Join result reopened in the same process                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| ![Three selected atoms unchanged after original Join rejection](../images/join-atom-merge/macos-baseline-cmd-j-rejected-v3.jpg) | ![Red nitrogen with three carbon arms after Join and reopen](../images/join-atom-merge/macos-join-fresh-document-reopened-v2.jpg) |
+
+Both checks use the same input, Arial 10 pt, 250% zoom and keyboard drawing off.
+Inspector width, controlled test tab strip, selection/cursor state and canvas
+framing differ. The qualified baseline's exact saved graph remains six atoms and
+three bonds; its unrelated Generic schema makes that native file version20.
+The unchanged input and corrected Join result are version19.
 
 The asymmetric input's NH2/OH labels overlap before the merge. Raw captures retain
 that condition and ordinary chrome/notices. No screenshot was retouched. The

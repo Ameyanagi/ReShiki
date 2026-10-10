@@ -68,8 +68,8 @@
     {
       "path": "docs/changes/fixtures/join-atom-merge/macos-native-v2/README.md",
       "kind": "authored evidence summary",
-      "bytes": 5372,
-      "sha256": "28369557369896301231ad8f656600168dfe2be04071acb8b4a4528ccd7bd378"
+      "bytes": 5723,
+      "sha256": "cfae70fd528e3c698152352de9c918e06d19a1d64d10f99447d40c66c5d09f3c"
     }
   ],
   "self_inventory_note": "This inventory does not hash itself; the private proposal-ready receipt pins the complete package."

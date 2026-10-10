@@ -7,6 +7,12 @@ and pressed Cmd+J. This is one controlled fixture in the corrected app. The
 before screenshot shows its state **before the action**, not an earlier binary
 reproducing the original rejection.
 
+The original three-atom rejection was reproduced separately in the
+[qualified baseline app](../macos-qualified-baseline/README.md), whose recorded
+shipping Join route matches base exactly and which includes unrelated Generic
+features. It is not a clean main build. Its v3 rejection image is distinct from
+this corrected app's pre-action v2 captures.
+
 ## Actual actions and result
 
 1. Open the controlled input with clean history, 250% view and keyboard drawing

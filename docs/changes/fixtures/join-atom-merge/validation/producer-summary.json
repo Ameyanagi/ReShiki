@@ -13,8 +13,8 @@
     "fallback_diagnostic_lines": [405, 408],
     "fallback_diagnostic": "Select two atoms, or the four endpoints of two bonds, from separate fragments to join",
     "conclusion": "Exactly three selected atom IDs bypass both successful branches and return the diagnostic; commit_hotkey leaves the document unchanged on Err.",
-    "evidence_kind": "Exact baseline source confirmation; no native baseline-error reproduction claimed.",
-    "native_before_images": "Pre-action state in the corrected final app, not screenshots from the baseline binary."
+    "evidence_kind": "Exact baseline source confirmation, independent of the separately qualified native reproduction.",
+    "native_before_images": "Final-app v2 before captures are pre-action in the corrected app. Qualified baseline v3 captures separately show the original three-atom Join rejection."
   },
   "producer_source": {
     "base_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
@@ -305,5 +305,51 @@
     "Different Mac and ChemDraw inputs, font sizes, hydrogen display and coordinate units.",
     "Projection depth remains the selected-depth mean; the reference does not establish a 3D rule.",
     "Historical arithmetic-placement v1 receipts and bundles remain unchanged and superseded for XY placement."
-  ]
+  ],
+  "qualified_native_baseline": {
+    "status": "Actual three-selected-atom Cmd+J rejection PASS in qualified app with base-identical shipping Join route.",
+    "reference": "../macos-qualified-baseline/README.md",
+    "clean_main_build": false,
+    "unrelated_work": "Generic Structures",
+    "base_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "signed_executable_sha256": "ad1e436b20db6d94fa392f78f2b3270af28ab4381f1e3c971233b932ec1e83e4",
+    "private_provenance_sha256": "98cfa720206b85f52953c9bde827cbdf7145de24744ab1b6aede8923b78ded12",
+    "shipping_input_count": 537,
+    "all_recorded_shipping_inputs_matched": true,
+    "own_compiler_units_fresh_false": true,
+    "exact_base_join_inputs": [
+      {
+        "path": "src/app/shortcuts.rs",
+        "sha256": "3716d597060d4f910faddf3780dcf762394f7faf8f6a995bd833e1c7c14ff0c5",
+        "matches_exact_base": true,
+        "recorded_shipping_input": true
+      },
+      {
+        "path": "src/app/joining.rs",
+        "sha256": "5e0b3684d7c5426ea9e22655cf996e3569938b4ba84e440c85d52161ab8140ce",
+        "matches_exact_base": true,
+        "recorded_shipping_input": true
+      },
+      {
+        "path": "crates/model/src/joining.rs",
+        "sha256": "a781b12878d08db608013ad4eec955ae9186d87e07d404785ee056b3ffc61996",
+        "matches_exact_base": true,
+        "recorded_shipping_input": true
+      }
+    ],
+    "native_protocol_sha256": "1a85aef7035e9bc15f9a6533bbaf8eefa911ca9e89d78928e0d5026a16916adf",
+    "valid_native_run": "v3 only",
+    "selected_ids": [1, 3, 5],
+    "visible_diagnostic_prefix": "Select two atoms, or the four endpoints of two bonds,",
+    "full_diagnostic_independently_from_base": "Select two atoms, or the four endpoints of two bonds, from separate fragments to join",
+    "clean_title_and_disabled_undo_redo_after_rejection": true,
+    "saved_atom_count": 6,
+    "saved_bond_count": 3,
+    "saved_id_element_positions_edges_match_input": true,
+    "saved_native_rsk_version": 20,
+    "input_rsk_version": 19,
+    "saved_native_sha256": "56a7830d476e34315af70a4c0a2956d00c446092e6bffbfdd03883cc8e6901dd",
+    "capture_conditions": "Same unchanged input, Arial10pt, 250%, F8 off; different inspector width, tab strip, selection/cursor state and framing.",
+    "limits": "Not a clean main build, fresh-process test, version19 reopening of version20, or Windows/Linux ReShiki runtime claim."
+  }
 }
