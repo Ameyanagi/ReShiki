@@ -7,6 +7,9 @@ use crate::{
 };
 use std::collections::{HashMap, HashSet};
 
+mod atom_merge;
+pub use atom_merge::{merge_atoms, merge_atoms_at};
+
 #[derive(Debug, Clone)]
 pub struct Prepared {
     pub original: Document,

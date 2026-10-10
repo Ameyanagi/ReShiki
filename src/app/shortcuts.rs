@@ -27,6 +27,7 @@ pub enum Action {
     Crosshair,
     Nudge(f32, f32),
     Join,
+    MergeAtoms,
     CopyText(&'static str),
 }
 
@@ -122,6 +123,7 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
         Message::InvertSelection => (shift, "A"),
         Message::Group => (command, "G"),
         Message::Ungroup => (shift, "G"),
+        Message::Shortcut(Action::Join) => (command, "J"),
         Message::Fit => (command, "/"),
         Message::BondDepth(front) => (command, if *front { "]" } else { "[" }),
         Message::Transform(Transform::FlipHorizontal) => (shift, "V"),
@@ -333,7 +335,11 @@ impl App {
             }
             Action::Join => {
                 let result = self.join_shortcut();
-                self.commit_hotkey(result, "Joined selected attachment sites");
+                self.commit_hotkey(result, "Joined selected atoms or bonds");
+            }
+            Action::MergeAtoms => {
+                let result = self.merge_selected_atoms();
+                self.commit_hotkey(result, "Merged selected atoms");
             }
             Action::CopyText(format) => {
                 if self.tab.selected.is_empty() {
@@ -353,7 +359,7 @@ impl App {
         Task::none()
     }
 
-    fn join_shortcut(&self) -> Result<(Document, Vec<u64>), String> {
+    pub(super) fn join_shortcut(&self) -> Result<(Document, Vec<u64>), String> {
         use reshiki::{
             joining::Prepared,
             templates::{Anchor, Connection},
@@ -381,7 +387,12 @@ impl App {
                 .iter()
                 .filter(|b| self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b))
                 .collect();
-            if let [source, target] = bonds.as_slice() {
+            if let [source, target] = bonds.as_slice()
+                && source.a != target.a
+                && source.a != target.b
+                && source.b != target.a
+                && source.b != target.b
+            {
                 let prepared = Prepared::new(&self.tab.doc, &[source.a, source.b])?;
                 let a = prepared
                     .base
@@ -402,8 +413,11 @@ impl App {
                 );
             }
         }
+        if self.tab.selected.len() >= 3 {
+            return self.merge_selected_atoms();
+        }
         Err(
-            "Select two atoms, or the four endpoints of two bonds, from separate fragments to join"
+            "Select two atoms or two bonds from separate fragments, or at least three atoms to merge"
                 .into(),
         )
     }

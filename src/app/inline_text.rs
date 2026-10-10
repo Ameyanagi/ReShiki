@@ -655,6 +655,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                     | super::shortcuts::Action::FixedAngles
                     | super::shortcuts::Action::Nudge(..)
                     | super::shortcuts::Action::Join
+                    | super::shortcuts::Action::MergeAtoms
                     | super::shortcuts::Action::CopyText(_)
             )
             | Message::New

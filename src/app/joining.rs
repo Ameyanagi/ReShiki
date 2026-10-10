@@ -4,6 +4,7 @@ use crate::canvas::{TemplateAnchorPreview, Tool};
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Length, Task};
 use reshiki::{
+    document::{Document, Point},
     joining::Prepared,
     templates::{Anchor, Connection},
 };
@@ -23,6 +24,67 @@ pub struct State {
     pub epoch: u64,
 }
 impl App {
+    /// Shared by the context row, its overflow menu and the selection menu.
+    pub(super) fn selected_join_commands(&self) -> [super::workspace::RowCommand; 2] {
+        use super::{shortcuts, workspace::RowCommand};
+        let atoms = self.tab.selected.iter().all(|id| {
+            self.tab.doc.atom(*id).is_some_and(|a| {
+                a.centroid.is_empty()
+                    && a.attachment.is_none()
+                    && !self
+                        .tab
+                        .doc
+                        .abbreviations
+                        .iter()
+                        .any(|group| group.members.contains(id))
+            })
+        });
+        let active = self.tab.cleanup.is_none() && self.tab.joining.is_none();
+        [
+            RowCommand {
+                label: "Join",
+                menu: "Join selected atoms / bonds",
+                hint: "Share two attachment sites or combine three or more selected atoms",
+                message: Message::Shortcut(shortcuts::Action::Join),
+                enabled: active && atoms && self.tab.selected.len() >= 2,
+            },
+            RowCommand {
+                label: "Merge atoms",
+                menu: "Merge selected atoms",
+                hint: "Combine three or more atoms into the first selected atom; surrounding atoms stay in place",
+                message: Message::Shortcut(shortcuts::Action::MergeAtoms),
+                enabled: active && atoms && self.tab.selected.len() >= 3,
+            },
+        ]
+    }
+
+    /// Use only selected chemical labels, falling back to the atom position when
+    /// its label is hidden. Other objects and selection handles do not contribute.
+    pub(super) fn merge_selected_atoms(&self) -> Result<(Document, Vec<u64>), String> {
+        let mut bounds: Option<(Point, Point)> = None;
+        for id in &self.tab.selected {
+            let atom = self
+                .tab
+                .doc
+                .atom(*id)
+                .ok_or("Select only atoms to merge.")?;
+            let (lo, hi) = reshiki::scene::atom_label_ink_bounds(atom, &self.tab.doc)
+                .unwrap_or((atom.position, atom.position));
+            bounds = Some(bounds.map_or((lo, hi), |(a, b)| {
+                (
+                    Point::new(a.x.min(lo.x), a.y.min(lo.y)),
+                    Point::new(b.x.max(hi.x), b.y.max(hi.y)),
+                )
+            }));
+        }
+        let (lo, hi) = bounds.ok_or("Select at least three distinct atoms to merge.")?;
+        let center = Point::new(
+            ((f64::from(lo.x) + f64::from(hi.x)) / 2.) as f32,
+            ((f64::from(lo.y) + f64::from(hi.y)) / 2.) as f32,
+        );
+        reshiki::joining::merge_atoms_at(&self.tab.doc, &self.tab.selected, center)
+    }
+
     pub(super) fn cancel_join(&mut self) {
         if let Some(state) = self.tab.joining.take() {
             self.tab.selected = state

@@ -1,0 +1,71 @@
+{
+  "schema": "reshiki.join.native-reference-public-evidence.v1",
+  "scope": "One controlled Windows ChemDraw Prime 26.1.0.6327 fixture; no ReShiki native acceptance claim.",
+  "original_count": 7,
+  "authored_summary_count": 1,
+  "files": [
+    {
+      "path": "docs/changes/fixtures/join-atom-merge/chemdraw-26.1/join-three-arms-valid-input-v2.cdxml",
+      "kind": "byte-exact original",
+      "source_basename": "join-three-arms-valid-input-v2.cdxml",
+      "bytes": 1109,
+      "sha256": "ab46f63daa2b64e28980e1de3a118d46b20dda615518b3b9f83ba9e5c3959dcc",
+      "source_sha256": "ab46f63daa2b64e28980e1de3a118d46b20dda615518b3b9f83ba9e5c3959dcc"
+    },
+    {
+      "path": "docs/changes/fixtures/join-atom-merge/chemdraw-26.1/join-three-arms-chemdraw-native-before-v2.cdxml",
+      "kind": "byte-exact original",
+      "source_basename": "join-three-arms-chemdraw-native-before-v2.cdxml",
+      "bytes": 3871,
+      "sha256": "fd683e1502f2676aa9556f595fc94255abdede94776132406b4c8d92710ba3bd",
+      "source_sha256": "fd683e1502f2676aa9556f595fc94255abdede94776132406b4c8d92710ba3bd"
+    },
+    {
+      "path": "docs/changes/fixtures/join-atom-merge/chemdraw-26.1/join-three-arms-chemdraw-native-after-v2.cdxml",
+      "kind": "byte-exact original",
+      "source_basename": "join-three-arms-chemdraw-native-after-v2.cdxml",
+      "bytes": 3241,
+      "sha256": "263a64b85dfdd41f0647eba8d67495b3d7bf7a57a1acf9f0a11167f7247f6926",
+      "source_sha256": "263a64b85dfdd41f0647eba8d67495b3d7bf7a57a1acf9f0a11167f7247f6926"
+    },
+    {
+      "path": "docs/images/join-atom-merge/windows-join-three-selected-v2.jpg",
+      "kind": "byte-exact original",
+      "source_basename": "windows-join-three-selected-v2.jpg",
+      "bytes": 242371,
+      "sha256": "ffbb45fb960cc1afd2aa9c824e5c2be4aec23b55f55792b248dd010429dd7574",
+      "source_sha256": "ffbb45fb960cc1afd2aa9c824e5c2be4aec23b55f55792b248dd010429dd7574"
+    },
+    {
+      "path": "docs/images/join-atom-merge/windows-join-fresh-document-reopened-v2.jpg",
+      "kind": "byte-exact original",
+      "source_basename": "windows-join-fresh-document-reopened-v2.jpg",
+      "bytes": 238270,
+      "sha256": "b830067e2974ea51692c2b725a2b7c17ab3687b6f566256ce3225f279f5f9ee5",
+      "source_sha256": "b830067e2974ea51692c2b725a2b7c17ab3687b6f566256ce3225f279f5f9ee5"
+    },
+    {
+      "path": "docs/images/join-atom-merge/windows-join-one-undo-v2.jpg",
+      "kind": "byte-exact original",
+      "source_basename": "windows-join-one-undo-v2.jpg",
+      "bytes": 246005,
+      "sha256": "d3c0cfcdd4f425f632102131b508cfaf14e89a4cc0870c90e1f561b39ccbaaf6",
+      "source_sha256": "d3c0cfcdd4f425f632102131b508cfaf14e89a4cc0870c90e1f561b39ccbaaf6"
+    },
+    {
+      "path": "docs/images/join-atom-merge/windows-join-redo-v2.jpg",
+      "kind": "byte-exact original",
+      "source_basename": "windows-join-redo-v2.jpg",
+      "bytes": 236982,
+      "sha256": "4cef70ea9b0f084d81e3e3ae1f59b4243bc5cee813ebbc4fd335a120a8918481",
+      "source_sha256": "4cef70ea9b0f084d81e3e3ae1f59b4243bc5cee813ebbc4fd335a120a8918481"
+    },
+    {
+      "path": "docs/changes/fixtures/join-atom-merge/chemdraw-26.1/README.md",
+      "kind": "authored provenance summary",
+      "bytes": 4595,
+      "sha256": "30680c11c1f86110f9c6b72c731f1ec1a13d8aacd3b8cf9dd80cf80fbbe9d7b8"
+    }
+  ],
+  "self_inventory_note": "This inventory does not hash itself; the private ready receipt pins the complete proposed package."
+}

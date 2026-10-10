@@ -1,0 +1,391 @@
+{
+  "schema": "reshiki.join.public-focused-results-summary.v2",
+  "record_kind": "Curated summary of preserved actual Cargo receipts/stdout/stderr; not a rerun.",
+  "source_freeze_sha256": "1b187a1e4cc0e3ce649dab7c77e2d3d4d63424609f644aaf8148904ae1654f20",
+  "original_focused_results_sha256": "8d6eda3b535bc885ec34995e0168b235adab792b72617ef77371352e3e10bfab",
+  "unique_tests": {
+    "passed": 38,
+    "failed": 0,
+    "ignored": 0,
+    "breakdown": {
+      "model_atom_merge": 16,
+      "shortcut_compatibility": 14,
+      "app_joining": 8
+    }
+  },
+  "separate_required_nocapture_geometry_run": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "already_counted_in_unique_tests": true
+  },
+  "named_results": [
+    {
+      "name": "joining::atom_merge::tests::asymmetric_three_atoms_use_bounds_center_and_first_style_with_fixed_neighbors",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::centroid_and_semantic_attachment_targets_remap_and_collapse_is_rejected",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::chemical_metadata_conflicts_are_specific_and_atomic",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::depth_paint_remaps_without_stale_ids_and_conflicts_are_rejected",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::four_and_many_atoms_merge_in_selection_order_including_different_labels",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::groups_reaction_roles_coefficients_and_captions_survive_remapping",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::joins_between_separate_reaction_participants_keep_the_existing_diagnostic",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::merged_stereocenters_collapsed_neighbors_and_incident_stereo_bonds_are_rejected",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::mixed_objects_duplicate_ids_small_selections_and_abbreviations_are_rejected",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::native_valence_accepts_three_and_four_arms_and_metal_centers_and_rejects_five_carbons",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::painted_ring_members_remap_and_collapsed_ring_paint_is_rejected",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::remote_double_bond_stereo_references_remap_and_incident_stereo_is_rejected",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::remote_stereo_references_remap_without_changing_winding_or_neighbor_order",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::reversed_dative_duplicates_are_rejected_without_losing_direction",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::self_loops_disappear_and_identical_duplicate_bonds_coalesce",
+      "status": "ok"
+    },
+    {
+      "name": "joining::atom_merge::tests::supplied_position_is_used_and_nonfinite_positions_reject_atomically",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::dispatcher_preserves_shift_and_does_not_fall_through_modifier_chords",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::displayed_shortcuts_are_the_keys_that_run_their_commands",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::every_bond_hotkey_is_undoable_and_preserves_endpoints",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::failed_atom_merge_keeps_selection_document_and_history",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::group_shortcuts_are_atomic_and_modal_editors_block_them",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::join_four_atoms_with_adjacent_bonds_merges_instead_of_attempting_fusion",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::join_keeps_two_bond_fusion_and_explicit_merge_handles_the_four_atom_ambiguity",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::join_merges_sites_instead_of_adding_an_extra_bond_and_undo_restores_all",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::join_three_atoms_retains_the_first_at_label_bounds_center_in_one_history_step",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::new_group_and_pi_ligand_keys_undo_and_respect_text_editors",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::numeric_hotkeys_distinguish_hovered_bond_atom_and_blank_canvas",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::only_key_symbols_change_font",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::primary_shift_d_starts_a_detached_3d_preview_instead_of_duplicating",
+      "status": "ok"
+    },
+    {
+      "name": "app::shortcuts::compatibility_tests::triple_shortcut_geometry_and_order_undo_and_redo_as_one_edit",
+      "status": "ok"
+    },
+    {
+      "name": "app::joining::tests::a_changed_document_cannot_be_overwritten_by_a_prepared_join",
+      "status": "ok"
+    },
+    {
+      "name": "app::joining::tests::anchor_picker_switches_between_atom_and_bond_modes",
+      "status": "ok"
+    },
+    {
+      "name": "app::joining::tests::both_atom_merge_commands_use_rendered_ink_and_exclude_unselected_objects",
+      "status": "ok"
+    },
+    {
+      "name": "app::joining::tests::cancel_switching_tools_and_invalid_targets_keep_the_original",
+      "status": "ok"
+    },
+    {
+      "name": "app::joining::tests::direct_join_commands_share_selection_requirements_and_routes",
+      "status": "ok"
+    },
+    {
+      "name": "app::joining::tests::hidden_selected_labels_use_atom_bounds_without_terminal_arms",
+      "status": "ok"
+    },
+    {
+      "name": "app::joining::tests::joining_uses_the_preview_and_is_one_undo_step",
+      "status": "ok"
+    },
+    {
+      "name": "app::joining::tests::native_fixture_visual_center_uses_recomputed_labels",
+      "status": "ok"
+    }
+  ],
+  "commands": [
+    {
+      "label": "model-atom-merge1",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "reshiki-model",
+        "joining::atom_merge",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "actual_test_count": 16,
+      "test_summaries": [
+        {
+          "status": "ok",
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "receipt_sha256": "d8e8a918df8bdf0e28c74ad1917a7ab2e92b892db10e59a91854f11267bb3f05",
+      "stdout_sha256": "6b431a92a850af0db89f448e9342209dddff67312cae8bf2ab38be422f0c8ae3",
+      "stderr_sha256": "017e6175a7444688b1a24db1b70f0c76a4639cb59cc9611a62f60dc534983983"
+    },
+    {
+      "label": "shortcut-compatibility1",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--bin",
+        "reshiki",
+        "app::shortcuts::compatibility_tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "actual_test_count": 14,
+      "test_summaries": [
+        {
+          "status": "ok",
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "receipt_sha256": "b7045fb9b5753a11a8dc84e15a12de3743c0c99b3d300e5f5ad4bcc72c193305",
+      "stdout_sha256": "6cfc38be8b9b5226093e2ae0122147746ec676a513915ff90a34a3cfc65556d4",
+      "stderr_sha256": "d6cbfb5625acc45042d5c48ee5cc5a22da320735653ad6924333b5f84c8bfb93"
+    },
+    {
+      "label": "app-joining1",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--bin",
+        "reshiki",
+        "app::joining::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "actual_test_count": 8,
+      "test_summaries": [
+        {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "receipt_sha256": "bdaa59bb5fe0b486a72cd99473aa411872c88123364027f0a50eea499dfe90aa",
+      "stdout_sha256": "7bfad81467d5f8327863e1a9b4aaf3aa55b822ca4081026c524605427f32cf7d",
+      "stderr_sha256": "2427a67420012d394e9eb174729bff3b0cf25c2cd973563a0c8d9fb72404b8fa"
+    },
+    {
+      "label": "native-fixture-geometry1",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--bin",
+        "reshiki",
+        "app::joining::tests::native_fixture_visual_center_uses_recomputed_labels",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "actual_test_count": 1,
+      "test_summaries": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "receipt_sha256": "49316028e9b24cf3a9bcc854dd2d2e16e1959d1157fc206ded96817e76d4d6f3",
+      "stdout_sha256": "d6b6364096f2893f3ddb9a3899f5a5758ed80d56aa5ec6d2742fe109b95bf412",
+      "stderr_sha256": "ba8298cfd1f3cb7c11c40b67b9a6d9eac4b73fa6165c2138ae367e8d98fe790c"
+    },
+    {
+      "label": "model-clippy1",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-j",
+        "4",
+        "-p",
+        "reshiki-model",
+        "--lib",
+        "--tests",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "actual_test_count": 0,
+      "test_summaries": [],
+      "receipt_sha256": "cadba3d9ef43487719486c9987320172d3b0bafa68706a995f82c65f4a86a136",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "708ff961ab40835dbaf61fa4f82a45389749bbd8df1a80569a7282849cfc395e"
+    },
+    {
+      "label": "app-clippy1",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-j",
+        "4",
+        "-p",
+        "reshiki",
+        "--bin",
+        "reshiki",
+        "--tests",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "actual_test_count": 0,
+      "test_summaries": [],
+      "receipt_sha256": "0478417d5947124ee47825358e0d33cea0e5c043168b99942cd712a85824f65b",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "db8bf38f91e47afeb65216593567d9e7bb356b763ee24b4df567c2dea66ee154"
+    },
+    {
+      "label": "fmt1",
+      "command": ["cargo", "fmt", "--all", "--", "--check"],
+      "exit_code": 0,
+      "actual_test_count": 0,
+      "test_summaries": [],
+      "receipt_sha256": "95477436c227176737fa234a04d4dfa06d002004ab328e92c6aa94eca7b25610",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "diff-check1",
+      "command": ["git", "diff", "--check"],
+      "exit_code": 0,
+      "actual_test_count": 0,
+      "test_summaries": [],
+      "receipt_sha256": "e2a7760ccec7b24413abb0620087e8a9b1e0e1dbc3c09671c292526c7b0d78a1",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "default-build1",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-j",
+        "4",
+        "-p",
+        "reshiki",
+        "--bin",
+        "reshiki",
+        "--message-format",
+        "json"
+      ],
+      "exit_code": 0,
+      "actual_test_count": 0,
+      "test_summaries": [],
+      "receipt_sha256": "d3c98a0bee0602f72a3bda95071464f7fcfd7b3f5ed770b9f70bddae17b4c363",
+      "stdout_sha256": "11a1bdc497a437a3b5660ec6c09050e59289f2ff14275226e3d4183e550fd3ed",
+      "stderr_sha256": "eaece458df87a4e3c243f711d099ed37030734840570168b5a61585cfae33022"
+    },
+    {
+      "label": "package2",
+      "command": ["explicit native CPython 3.14.2", "private package.py"],
+      "exit_code": 0,
+      "actual_test_count": 0,
+      "test_summaries": [],
+      "receipt_sha256": "678dc4f56a0fc7dba18a40362fcfcf5a981db1586792a723d2357a305896d1c2",
+      "stdout_sha256": "19ff315f86fac54b562e2d630a2d62662bc8c43fbce38a98c7fe880aec6f6ca9",
+      "stderr_sha256": "bef17e17c5228cc3a4946acb4a60ea315fe100a91691dfc38b0461f1707d2a21"
+    }
+  ],
+  "environment": {
+    "architecture": "macOS arm64",
+    "default_features": true,
+    "max_cargo_jobs": 4
+  },
+  "compiler_errors": 0,
+  "notice": "Existing block v0.1.6 future-incompatibility notice is retained in raw logs.",
+  "failure_retention": "The newly added adjacent-bond dispatch regression failed before the distinct-endpoint guard, then passed in the final fourteen-test shortcut suite. Raw failed and successful attempts remain private."
+}

@@ -387,7 +387,7 @@ fn file_shortcuts() -> Element<'static, Message> {
                 "Import / Export",
             ),
             (keys(command, "P"), "Print"),
-            (keys(command, "J"), "Join selected atoms / bonds"),
+            (keys(command, "J"), "Join sites / merge three or more atoms"),
             (keys(command | shift, "K"), "Clean up"),
             (
                 shortcut_label(Message::Optimization(super::optimization::Action::Begin)),

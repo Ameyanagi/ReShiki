@@ -64,6 +64,7 @@ fn displayed_shortcuts_are_the_keys_that_run_their_commands() {
         Message::InvertSelection,
         Message::Group,
         Message::Ungroup,
+        Message::Shortcut(Action::Join),
         Message::Fit,
         Message::BondDepth(true),
         Message::BondDepth(false),
@@ -382,4 +383,115 @@ fn join_merges_sites_instead_of_adding_an_extra_bond_and_undo_restores_all() -> 
     assert!(app.error);
     assert_eq!(app.tab.doc, original);
     Ok(())
+}
+
+#[test]
+fn join_three_atoms_retains_the_first_at_label_bounds_center_in_one_history_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/join-three-atoms-before.rsk"
+    ))
+    .unwrap();
+    app.tab.selected = vec![1, 3, 5];
+    let before = app.tab.doc.clone();
+    let expected = app.merge_selected_atoms().unwrap().0;
+    let _ = app.update(Message::Shortcut(Action::Join));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (4, 3));
+    assert_eq!(app.tab.selected, [1]);
+    let survivor = app.tab.doc.atom(1).unwrap();
+    assert_eq!(survivor.position, expected.atom(1).unwrap().position);
+    assert_ne!(survivor.position, Point::default());
+    assert_eq!(survivor.element, "N");
+    assert_eq!(survivor.text_style, before.atom(1).unwrap().text_style);
+    assert_eq!(app.tab.history.frames(), 1);
+    let joined = app.tab.doc.clone();
+    let reopened = Document::from_json(&serde_json::to_vec(&joined).unwrap()).unwrap();
+    assert_eq!(reopened.atoms, joined.atoms);
+    assert_eq!(reopened.bonds, joined.bonds);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, joined);
+}
+
+#[test]
+fn join_keeps_two_bond_fusion_and_explicit_merge_handles_the_four_atom_ambiguity() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::default();
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    let c = app.tab.doc.add_atom("C", Point::new(150., 0.));
+    let d = app.tab.doc.add_atom("C", Point::new(192., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.doc.add_bond(c, d, 1, "plain");
+    app.tab.selected = vec![d, c, b, a];
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Shortcut(Action::Join));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (2, 1));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    app.tab.selected = vec![d, c, b, a];
+    let expected = app.merge_selected_atoms().unwrap().0;
+    let _ = app.update(Message::Shortcut(Action::MergeAtoms));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (1, 0));
+    assert_eq!(app.tab.selected, [d]);
+    assert_eq!(
+        app.tab.doc.atom(d).unwrap().position,
+        expected.atom(d).unwrap().position
+    );
+}
+
+#[test]
+fn failed_atom_merge_keeps_selection_document_and_history() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::default();
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("C", Point::new(12., 0.));
+    let c = app.tab.doc.add_atom("C", Point::new(6., 12.));
+    app.tab.doc.atom_mut(b).unwrap().map_num = 7;
+    app.tab.selected = vec![c, b, a];
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Shortcut(Action::Join));
+    assert!(app.error);
+    assert!(app.status.contains("atom maps"));
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.selected, [c, b, a]);
+    assert_eq!(app.tab.history.frames(), 0);
+}
+
+#[test]
+fn join_four_atoms_with_adjacent_bonds_merges_instead_of_attempting_fusion() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::default();
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(20., 0.));
+    let c = app.tab.doc.add_atom("C", Point::new(20., 20.));
+    let d = app.tab.doc.add_atom("N", Point::new(80., 80.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.doc.add_bond(b, c, 1, "plain");
+    app.tab.selected = vec![d, a, b, c];
+    let before = app.tab.doc.clone();
+    let expected = app
+        .merge_selected_atoms()
+        .unwrap()
+        .0
+        .atom(d)
+        .unwrap()
+        .position;
+    let _ = app.update(Message::Shortcut(Action::Join));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (1, 0));
+    assert_eq!(app.tab.selected, [d]);
+    assert_eq!(app.tab.doc.atom(d).unwrap().element, "N");
+    assert_eq!(app.tab.doc.atom(d).unwrap().position, expected);
+    assert_eq!(app.tab.history.frames(), 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
 }
