@@ -1,0 +1,20 @@
+{
+  "command": [
+    "git",
+    "commit",
+    "-m",
+    "Add compact name import and linked molecule captions"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "naming_helper": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/reshiki-compact-name-import-raw",
+  "inchi_helper": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/reshiki-compact-name-import-raw",
+  "require_inchi_helper": "1",
+  "started_unix": 1791620403.895434,
+  "elapsed_seconds": 745.301206111908,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/commit1.log",
+  "log_bytes": 9350,
+  "log_sha256": "0149687802855137e8a8b56a3bdf75516c83a567d97525bbb057d79799e739fb"
+}

@@ -8,12 +8,19 @@ mod placement;
 
 impl App {
     pub(super) fn edit(&mut self, edit: Edit) {
-        if let Edit::ContextMenu { position, selected } = edit {
+        if let Edit::ContextMenu {
+            position,
+            selected,
+            hit,
+        } = edit
+        {
             if self.tab.cleanup.is_none() {
                 self.tab.selected = selected;
                 self.tool = Tool::Select;
                 self.sync_typography();
-                self.context_menu = Some(context_menu::State::new(position, Default::default()));
+                let mut menu = context_menu::State::new(position, Default::default());
+                menu.hit = Some(hit);
+                self.context_menu = Some(menu);
             }
             return;
         }

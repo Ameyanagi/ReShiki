@@ -1542,17 +1542,7 @@ impl App {
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
-            InspectorTab::Import => column![
-                self.import_panel(),
-                reshiki::accessibility::button(
-                    "import.chemical-names",
-                    "Chemical names",
-                    text("Chemical names…")
-                )
-                .on_press(Message::Inspector(InspectorTab::Names)),
-            ]
-            .spacing(12)
-            .into(),
+            InspectorTab::Import => self.import_panel(),
             InspectorTab::Names => self.naming_panel(),
             InspectorTab::Export => self.export_panel(),
         };

@@ -1,0 +1,63 @@
+The following is a diff from the previous accessibility tree for Window: "ethanol-direct-import.rsk • — ReShiki" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 2-12
+~0 standard window ethanol-direct-import.rsk • — ReShiki, Secondary Actions: Raise
++		19 button About ReShiki; check for updates, ID: header-about
++		20 button New · ⌘N, ID: header-new
++		21 button Open · ⌘O, ID: header-open
++		22 button Save · ⌘S, ID: header-save
++		23 button Save as · ⇧⌘S, ID: header-save-as
++		24 button Undo · ⌘Z, ID: header-undo
++		25 button (disabled) Redo · ⇧⌘Z, ID: header-redo
++		26 button Assistant, ID: header-assistant
++		27 button Import, ID: header-import
++		28 button Check drawing, ID: header-check
++		29 button Clean up…, ID: header-cleanup
++		30 button Export, ID: header-export
++		31 button Show or hide inspector, ID: header-inspector
++		32 button Text and object color, ID: style-color-menu
++		33 toggle button (settable, boolean) Select / move · v, Value: on, ID: tool-Select
++		34 toggle button (settable, boolean) Lasso select · l, Value: off, ID: tool-Lasso
++		35 toggle button (settable, boolean) 3D tilt, Value: off, ID: tool-Tilt
++		36 toggle button (settable, boolean) Eraser, Value: off, ID: tool-Erase
++		37 toggle button (settable, boolean) Atom label · C · c, Value: off, ID: tool-Atom
++		38 toggle button (settable, boolean) Single bond · 1, Value: off, ID: tool-Bond(1)
++		39 toggle button (settable, boolean) Double bond · 2, Value: off, ID: tool-Bond(2)
++		40 toggle button (settable, boolean) Triple bond · 3, Value: off, ID: tool-Bond(3)
++		41 toggle button (settable, boolean) Solid wedge, Value: off, ID: tool-Wedge
++		42 toggle button (settable, boolean) 6-membered · ⇧6, Value: off, ID: tool-Ring
++		43 toggle button (settable, boolean) Straight chain · ⇧X, Value: off, ID: tool-Chain(Straight)
++		44 toggle button (settable, boolean) Snaking chain, Value: off, ID: tool-Chain(Snaking)
++		45 toggle button (settable, boolean) Forward · e, Value: off, ID: tool-Arrow
++		46 toggle button (settable, boolean) Text label · t, Value: off, ID: tool-Text
++		47 toggle button (settable, boolean) Rectangle, Value: off, ID: tool-Graphic(Rectangle)
++		48 toggle button (settable, boolean) Ellipse, Value: off, ID: tool-Graphic(Ellipse)
++		49 toggle button (settable, boolean) Brackets · ⇧T, Value: off, ID: tool-Graphic(Brackets)
++		50 toggle button (settable, boolean) Graphic line, Value: off, ID: tool-Graphic(Line)
++		51 toggle button (settable, boolean) Bézier curve, Value: off, ID: tool-Graphic(Curve)
++		52 toggle button (settable, boolean) Arc, Value: off, ID: tool-Graphic(Arc)
++		53 toggle button (settable, boolean) Circled plus · ⇧E, Value: off, ID: tool-Graphic(Symbol(CirclePlus))
++		54 toggle button (settable, boolean) p orbital · ⇧G, Value: off, ID: tool-Graphic(Orbital(P))
++		55 toggle button (settable, boolean) C · c, Value: off, ID: element-C
++		56 toggle button (settable, boolean) N · n, Value: off, ID: element-N
++		57 toggle button (settable, boolean) O · o, Value: off, ID: element-O
++		58 toggle button (settable, boolean) S · s, Value: off, ID: element-S
++		59 toggle button (settable, boolean) P · p, Value: off, ID: element-P
++		60 toggle button (settable, boolean) *, Value: off, ID: element-*
++		61 button Help and keyboard shortcuts, ID: help-open
++		62 button Join the selection to another structure at an atom or bond, ID: context-command-2
++		63 button (disabled) Group, ID: context-command-3
++		64 button More: 3D optimize…, Keyboard drawing (F8), ID: context-overflow
++		65 button (disabled) Align, ID: arrange-menu-AlignObjects
++		66 button (disabled) Distribute, ID: arrange-menu-Distribute
++		67 button (disabled) Order, ID: arrange-menu-Order
++		68 button Flip horizontal, ID: arrange-flip-horizontal
++		69 button Flip vertical, ID: arrange-flip-vertical
++		70 button Rotate 180°, ID: arrange-rotate
++		71 toggle button (settable, boolean) Import structure, Value: off, ID: import-kind-structure
++		72 toggle button (settable, boolean) Import chemical name, Value: on, ID: import-kind-name
++		73 text field (settable) Chemical name, Value: ethanol, ID: import-name
++		74 toggle button (settable, boolean) Add name below, Value: on, ID: import-name-caption
++		75 button Optional editable preview, ID: import-name-preview
++		76 button Insert chemical name as structure, ID: import-name-insert
++		77 button Name import details, ID: import-name-details
+~	16 text ethanol-direct-import.rsk • — ReShiki

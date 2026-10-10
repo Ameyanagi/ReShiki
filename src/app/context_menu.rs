@@ -65,6 +65,8 @@ pub enum Action {
 pub(super) struct State {
     pub position: Point,
     pub page: Page,
+    /// Raw hit IDs; `None` denotes a menu opened from the context toolbar.
+    pub hit: Option<Vec<u64>>,
     children: Vec<Child>,
     focused: Option<(usize, usize)>,
     keyboard: bool,
@@ -79,6 +81,7 @@ impl State {
         Self {
             position,
             page,
+            hit: None,
             children: vec![],
             focused: None,
             keyboard: false,
@@ -246,6 +249,22 @@ impl App {
             ));
         }
         if atoms {
+            if let Some(target) = self.context_name_target() {
+                let shown = reshiki::molecule_names::label(&self.tab.doc, &target).is_some();
+                entries.push(command(
+                    if shown {
+                        "Hide chemical name"
+                    } else {
+                        "Show chemical name"
+                    },
+                    Message::Naming(if shown {
+                        super::naming::Action::HideMoleculeName(target)
+                    } else {
+                        super::naming::Action::ShowMoleculeName(target)
+                    }),
+                    self.naming_can_show_molecule(),
+                ));
+            }
             let connected: Vec<_> =
                 reshiki::editing::groups(&self.tab.doc, &self.tab.doc.all_ids())
                     .into_iter()

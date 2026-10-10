@@ -192,6 +192,10 @@ pub struct Document {
     pub bonds: Vec<Bond>,
     #[serde(default)]
     pub annotations: Vec<Annotation>,
+    /// Optional native links; older readers retain visible annotation text but
+    /// cannot preserve its molecule association.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub molecule_names: Vec<crate::molecule_names::MoleculeName>,
     #[serde(default)]
     pub arrows: Vec<Arrow>,
     #[serde(default)]
@@ -220,6 +224,7 @@ impl Default for Document {
             atoms: vec![],
             bonds: vec![],
             annotations: vec![],
+            molecule_names: vec![],
             arrows: vec![],
             graphics: vec![],
             groups: vec![],
@@ -425,6 +430,7 @@ impl Document {
         self.bonds
             .retain(|b| !ids.contains(&b.a) && !ids.contains(&b.b));
         self.annotations.retain(|a| !ids.contains(&a.id));
+        crate::molecule_names::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
         crate::projection::prune_centroids(self);
@@ -603,6 +609,7 @@ impl Document {
         for a in &self.annotations {
             a.format.validate(&a.text)?;
         }
+        crate::molecule_names::validate(self)?;
         for graphic in &self.graphics {
             graphic.validate()?;
         }
