@@ -1,0 +1,38 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.63s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-ba50b1304e6a1bdf)
+
+running 29 tests
+test app::nmr::palette::tests::pointer_history_preserves_masks_and_invalidates_left_entry_and_unfocus ... ok
+test app::nmr::palette::tests::pointer_history_uses_ordered_motion_and_never_resyncs_from_redraw ... ok
+test app::nmr::plot::tests::actual_plot_has_four_teal_sticks_separate_labels_and_preserves_history ... ok
+test app::nmr::plot::tests::carbon_labels_stay_individual_and_stagger_close_real_shifts ... ok
+test app::nmr::plot::tests::dense_coincident_and_long_id_reports_keep_every_owner_in_cycleable_groups ... ok
+test app::nmr::plot::tests::dense_marker_keeps_all_distinct_original_atoms_accessible_and_cycleable ... ok
+test app::nmr::plot::tests::extreme_finite_shifts_keep_axis_and_packed_positions_finite ... ok
+test app::nmr::plot::tests::maximum_dense_report_preserves_native_accessibility_and_all_marker_actions ... ok
+test app::nmr::plot::tests::missing_data_and_nonfinite_values_never_become_zero_shift_markers ... ok
+test app::nmr::tests::assignment_labels_survive_geometry_but_close_and_chemical_edits_clear_them ... ok
+test app::nmr::tests::compact_nmr_scrolls_to_later_sites_without_scrolling_the_drawing ... ok
+test app::nmr::tests::default_and_reset_palette_clear_fixture_drawing_without_moving_camera ... ok
+test app::nmr::tests::drawing_gesture_ending_over_nmr_stops_without_erasing_after_release ... ok
+test app::nmr::tests::floating_nmr_preserves_canvas_and_owns_only_its_pointer_input ... ok
+test app::nmr::tests::foreground_or_background_result_never_lands_in_another_tab ... ok
+test app::nmr::tests::hybrid_docking_preserves_report_and_camera_and_restores_a_hidden_inspector ... ok
+test app::nmr::tests::hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edits ... ok
+test app::nmr::tests::label_checkbox_and_popup_use_real_checked_actions_and_own_batched_clicks ... ok
+test app::nmr::tests::label_menu_dismissal_and_foreign_canvas_release_keep_pointer_ownership ... ok
+test app::nmr::tests::mock_aligned_panel_measures_rows_and_recovers_small_viewport_scrolling ... ok
+test app::nmr::tests::native_batched_palette_buttons_use_ordered_press_and_release_targets ... ok
+test app::nmr::tests::native_batched_palette_drags_keep_press_position_and_release_ownership ... ok
+test app::nmr::tests::nearby_plot_markers_cycle_distinct_original_atoms_without_editing ... ok
+test app::nmr::tests::opening_and_resetting_palette_preserve_origin_when_resizing_visible_corner ... ok
+test app::nmr::tests::pending_prediction_survives_move_but_chemical_edits_reject_stale_result ... ok
+test app::nmr::tests::rendered_nmr_controls_publish_values_and_live_native_actions ... ok
+test app::nmr::tests::reopening_from_properties_predicts_the_newly_selected_molecule ... ok
+test app::nmr::tests::tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls ... ok
+test app::nmr::tests::visible_resize_glyph_drags_without_stealing_footer_controls ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 663 filtered out; finished in 24.67s
+

@@ -71,6 +71,11 @@ impl Glyph {
             Icon::Tool(Tool::Select) => tools::select(f, ink),
             Icon::Tool(Tool::Lasso) => tools::lasso(f, ink),
             Icon::Tool(Tool::Tilt) => tools::tilt(f, ink),
+            Icon::Tool(Tool::StretchBond { .. }) => {
+                line(f, ink, &[(3., 12.), (21., 12.)]);
+                line(f, ink, &[(7., 8.), (3., 12.), (7., 16.)]);
+                line(f, ink, &[(17., 8.), (21., 12.), (17., 16.)]);
+            }
             Icon::Tool(Tool::Bond(order)) => bonds::bond(f, ink, order),
             Icon::Tool(Tool::StyledBond(preset)) => bonds::styled_bond(f, ink, preset),
             Icon::Tool(Tool::Wedge) => bonds::wedge(f, ink),

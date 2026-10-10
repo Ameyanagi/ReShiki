@@ -761,6 +761,7 @@ def export_cdxml(
     points.extend(a["position"] for a in doc.get("annotations", []))
     for arrow in doc.get("arrows", []):
         points.extend(arrow[k] for k in ("start", "end", "control") if arrow.get(k))
+        points.extend(arrow.get("cubic") or [])
     for graphic in doc.get("graphics", []):
         if graphic.get("kind") == "picture":
             o, x, y = [graphic[k] for k in ("origin", "axis_x", "axis_y")]

@@ -1,0 +1,164 @@
+{
+  "status": "ROOT native PASS; publication and new-head CI pending",
+  "recorded_utc": "2026-10-10T00:20:35.694647+00:00",
+  "before_provenance": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-before/capture-provenance.json",
+  "signed_candidate_sha256": "bc9b3d61b3acb8c65e0b2ff1b6be2e0c3835ef9ebd097c1785f8210b28fb31f7",
+  "candidate_source_root_audit": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/root-candidate-source-provenance-audit.json",
+  "candidate_initial_pid": 2914,
+  "fresh_pid": 24802,
+  "fresh_process_observation": "24802 Sat Oct 10 09:02:29 2026     /Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Visibility Verified.app/Contents/MacOS/reshiki\n26056 Sat Oct 10 09:05:42 2026     /Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Resize Verified.app/Contents/MacOS/reshiki\n",
+  "root_native_actions": [
+    "25percent original C60 before/after at209percent; solid entire exposedrim and faint rearcagesurface",
+    "25\u21920 Apply:rear disappears,whole exposedrim stayssolid; singleUndo restores25/clean andRedo restores0/modified",
+    "SaveAs owned0 file:clean; original25 input unchanged",
+    "3Dtilt drag [903,822]\u2192[1043,907], then blank[1610,650] clears selection/rearghost editing overlay; exposed rotatedrimsolid at0",
+    "SaveAs distinct tilted0 file:clean",
+    "cleannativequit oldPID2914; rootps observed no2914; freshlaunch PID24802created2026-10-10 09:02:29JST exactcandidatepath",
+    "freshactualnativeOpen tilted0:clean60atoms90bondsC60, UndoRedodisabled; automaticfit203percentnot209; noresave",
+    "freshactualOpen25:209percent,clean/UndoRedodisabled; faintrearandsolidouterrim",
+    "freshactualOpenunrotated0:209percent,clean/UndoRedodisabled; whitebackandsolidouterrim; noresave"
+  ],
+  "native_graphs": [
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/back-opacity/tests/fixtures/rear-opacity/c60-visibility-native-25.rsk",
+      "bytes": 46103,
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/back-opacity/tests/fixtures/rear-opacity/c60-visibility-native-0.rsk",
+      "bytes": 46102,
+      "sha256": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/back-opacity/tests/fixtures/rear-opacity/c60-visibility-native-0-tilted.rsk",
+      "bytes": 46108,
+      "sha256": "1ca19b3dbdd78bf4b6bdd1d5fd759246d179a2fd058029d0082086bb4e7cf915"
+    }
+  ],
+  "original25_saved_byte_exact": true,
+  "opacity_only_diff": [
+    [
+      "/depth_appearance/0/rear_opacity",
+      0.25,
+      0.0
+    ]
+  ],
+  "tilt_diff_count": 180,
+  "tilt_coordinates_change_not_originalXYZ": true,
+  "root_expected_rigid_rotation_max_abs_residual": 1.1327625117019124e-05,
+  "all_chemistry_styles_noncoordinate_atom_fields_bond_records_scope_exact": true,
+  "independent_semantic_audit": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/independent-native-semantic-audit.json",
+    "bytes": 7408,
+    "sha256": "5475ebd152340476fa7802c46652d403cd376298649a96d49fd036eefb2bebcc"
+  },
+  "raw_captures": [
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-before/c60-25-before.ax.txt",
+      "bytes": 101,
+      "sha256": "2dbececd5fc3fce46797dde1468d4477ea231c324d6dc9bef2d83cb670e5f2c1"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-before/c60-25-before.full.ax.txt",
+      "bytes": 4909,
+      "sha256": "60e4dffe06df562aa3cdbdb8844d00c3d9371f7dfdcce806141dc50c11d33cf8"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-before/c60-25-before.jpg",
+      "bytes": 448773,
+      "sha256": "b511eae8cfaffe60761793f847c86ddda9adcf4c44c91628b5c4202779bc37ff"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-25-after.ax.txt",
+      "bytes": 4893,
+      "sha256": "1d46a649bbf25c1df53d822197250b3c589e935ad4a9a286120b3d244db83452"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-25-after.jpg",
+      "bytes": 463342,
+      "sha256": "3b9560ad0f83a2fd2b2c699d27474e6c9019f648645e284b864155762f7fad5b"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-25-fresh-process-reopened.ax.txt",
+      "bytes": 4908,
+      "sha256": "b217603dff9565b4c208f174bfb8ac859d774867eb2e794ba16a9fb78bbe7a3f"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-25-fresh-process-reopened.jpg",
+      "bytes": 469221,
+      "sha256": "8835fb3d2df33b7c1fdaf607bf3cb23c5037ce9806a656da162a9b11bea7a267"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-after.ax.txt",
+      "bytes": 5019,
+      "sha256": "87c5788586c9c7a76c1e5a0078a38e227afdd3721832119a6dc919ad7534ea92"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-after.jpg",
+      "bytes": 450685,
+      "sha256": "1fe1247ced7a3583b745de098b08ff9ad314a32f84fdf2f9db17d3bc0e785d5b"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-fresh-process-reopened.ax.txt",
+      "bytes": 4904,
+      "sha256": "ceef45cb95d17a91b2916cb0f35eb300ef54445d89a996d04981f16996068bc4"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-fresh-process-reopened.jpg",
+      "bytes": 452054,
+      "sha256": "48217528b42c53e3559974629457f3923d0baeeabf776adce4e0b89d251797ee"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-one-undo-restores25.ax.txt",
+      "bytes": 5009,
+      "sha256": "aa8e90909c333b8f64b156c358318c65e0085fd5d798140d4b8391ca568408a3"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-one-undo-restores25.jpg",
+      "bytes": 466846,
+      "sha256": "e6434f011ce12975211bc1341a84cca0feb29706ead751031748f5d2b8cb1443"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-redo-restores0.ax.txt",
+      "bytes": 5019,
+      "sha256": "87c5788586c9c7a76c1e5a0078a38e227afdd3721832119a6dc919ad7534ea92"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-redo-restores0.jpg",
+      "bytes": 445956,
+      "sha256": "9012d3624d4b2827e1f7595defc2a4b26c0785907c3d60275555822f7d4b5021"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-tilted-after.ax.txt",
+      "bytes": 4005,
+      "sha256": "03de5403f4fb756ba4ddc777b7fd53a501aaad5edafd9742fbc923dd6ecd4faa"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-tilted-after.jpg",
+      "bytes": 469586,
+      "sha256": "cd39a719d0382fcbd19a50c56eabe503c3a20c0317db3e451ea3f382e25ba35f"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-tilted-fresh-process-reopened.ax.txt",
+      "bytes": 4964,
+      "sha256": "9e2317b23ccd969d99d606d5140e61b7079f6462bc531b060366fa9238e4f252"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-tilted-fresh-process-reopened.jpg",
+      "bytes": 437734,
+      "sha256": "f77a5658bdc07fde0538bad8f34083c4117da5bd837c59953c8b3eb08ffb9c46"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-tilted-selection-cleared.ax.txt",
+      "bytes": 3960,
+      "sha256": "6a80ff270108951b43e362e74fe845174efcfda452be9c167d3d9c9dbd6fe9ca"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-tilted-selection-cleared.jpg",
+      "bytes": 387639,
+      "sha256": "f1178535a9c93ebf9fdf44ed801d241041475bca43f47d0844fdecb6669e06da"
+    }
+  ],
+  "UI_context": "lightJACS/ACSArial10F8ON; recoverybannerleftuntouched. Initial25matched209percent; freshrotated0automaticfit203percent disclosed. Screenshotsraw2560x1704nocrop/noedit. Tiltselectionghost is aneditingoverlay and excludedfromfinalappearance screenshots.",
+  "limits": "Native scope C60 these poses; visibility query budgets are documented heuristic resource guards, not universal geometriccertification. NoGUI performedbythisreceipt script."
+}

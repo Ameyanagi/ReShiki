@@ -1,0 +1,62 @@
+{
+  "utc": "2026-10-10T02:02:26.023833+00:00",
+  "exit_code": 0,
+  "prefix": "canvas::nmr::",
+  "listed_names": [
+    "canvas::nmr::tests::actual_nmr_selection_is_a_filled_halo_and_ordinary_selection_is_unchanged",
+    "canvas::nmr::tests::assignment_ink_is_legible_on_light_and_dark_pages_and_independent_of_chrome",
+    "canvas::nmr::tests::assignment_numbers_use_original_atoms_and_avoid_fixture_symbols_and_each_other",
+    "canvas::nmr::tests::collapsed_assignments_retain_original_owners_at_the_visible_group_anchor",
+    "canvas::nmr::tests::crowded_label_uses_a_leader_only_when_displaced_from_its_real_owner",
+    "canvas::nmr::tests::missing_or_nonfinite_predictions_do_not_gain_labels_or_selected_halos",
+    "canvas::nmr::tests::offscreen_owners_do_not_leave_clamped_labels_on_empty_canvas",
+    "canvas::nmr::tests::proton_assignments_name_the_parent_and_unresolved_group_not_individual_protons",
+    "canvas::nmr::tests::shift_and_combined_modes_follow_moved_atom_without_changing_predictions_or_export"
+  ],
+  "named_results": [
+    [
+      "canvas::nmr::tests::actual_nmr_selection_is_a_filled_halo_and_ordinary_selection_is_unchanged",
+      "ok"
+    ],
+    [
+      "canvas::nmr::tests::assignment_ink_is_legible_on_light_and_dark_pages_and_independent_of_chrome",
+      "ok"
+    ],
+    [
+      "canvas::nmr::tests::assignment_numbers_use_original_atoms_and_avoid_fixture_symbols_and_each_other",
+      "ok"
+    ],
+    [
+      "canvas::nmr::tests::collapsed_assignments_retain_original_owners_at_the_visible_group_anchor",
+      "ok"
+    ],
+    [
+      "canvas::nmr::tests::crowded_label_uses_a_leader_only_when_displaced_from_its_real_owner",
+      "ok"
+    ],
+    [
+      "canvas::nmr::tests::missing_or_nonfinite_predictions_do_not_gain_labels_or_selected_halos",
+      "ok"
+    ],
+    [
+      "canvas::nmr::tests::offscreen_owners_do_not_leave_clamped_labels_on_empty_canvas",
+      "ok"
+    ],
+    [
+      "canvas::nmr::tests::proton_assignments_name_the_parent_and_unresolved_group_not_individual_protons",
+      "ok"
+    ],
+    [
+      "canvas::nmr::tests::shift_and_combined_modes_follow_moved_atom_without_changing_predictions_or_export",
+      "ok"
+    ]
+  ],
+  "passed": 9,
+  "failed": 0,
+  "ignored": 0,
+  "source_manifest_sha256": "30dba3b57746dc1cec7a16ff4aa95c34a6a1d0c6139282b0f11a2c9ee9bbad14",
+  "logs": {
+    "list.log": "cd2122e20e1b8f27980d2474b9c04ded79ff3b8a96097a0d7468b72734414509",
+    "tests.log": "dc0fb46eedf7a9afd8c76f242db7fc8e840fbb807066a95c680fe9da5d884250"
+  }
+}

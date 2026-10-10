@@ -101,11 +101,14 @@ fn everything() -> (Document, Ids) {
     });
     let arrow = doc.next_id();
     doc.arrows.push(Arrow {
+        start_anchor: None,
+        end_anchor: None,
         id: arrow,
         start: Point::new(80., 0.),
         end: Point::new(160., 0.),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     let png: Picture = serde_json::from_value(json!(PNG_BASE64)).unwrap();

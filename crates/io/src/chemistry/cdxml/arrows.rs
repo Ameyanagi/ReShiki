@@ -13,6 +13,9 @@ use crate::{
 };
 use serde::Serialize;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ArrowError {
     #[error(transparent)]
@@ -56,6 +59,8 @@ pub struct NativeArrow {
     pub end: ImportPoint,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub control: Option<ImportPoint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cubic: Option<[ImportPoint; 2]>,
 }
 impl NativeArrow {
     /// Explicit narrowing after native helper acceptance. Palette channels and
@@ -63,11 +68,17 @@ impl NativeArrow {
     pub fn into_document(self) -> Result<Arrow> {
         let s = self.style;
         Ok(Arrow {
+            start_anchor: None,
+            end_anchor: None,
             id: self.id,
             kind: self.kind.kind().into(),
             start: drawing_point(self.start)?,
             end: drawing_point(self.end)?,
             control: self.control.map(drawing_point).transpose()?,
+            cubic: self
+                .cubic
+                .map(|[a, b]| -> Result<_> { Ok([drawing_point(a)?, drawing_point(b)?]) })
+                .transpose()?,
             style: Some(ArrowStyle {
                 head: s.head,
                 tail: s.tail,
@@ -305,6 +316,7 @@ impl ArrowReader {
                     source_scale,
                 )?,
                 control: None,
+                cubic: None,
             });
         }
         let flags = flags(node.attr("CurveType").unwrap_or("0"))?;
@@ -320,7 +332,7 @@ impl ArrowReader {
             .collect::<Vec<_>>();
         if !matches!(values.len(), 12 | 18) {
             return Err(ArrowError::Invalid(
-                "Only quadratic and single-elbow arrow curves are supported",
+                "Only single-segment Bézier and single-elbow arrow curves are supported",
             ));
         }
         let points = values
@@ -353,11 +365,12 @@ impl ArrowReader {
                 start: *start,
                 end: *end,
                 control: Some(*corner),
+                cubic: None,
             });
         }
         let [_, start, a, b, end, _] = points.as_slice() else {
             return Err(ArrowError::Invalid(
-                "Only quadratic and single-elbow arrow curves are supported",
+                "Only single-segment Bézier and single-elbow arrow curves are supported",
             ));
         };
         let c1 = ImportPoint {
@@ -368,11 +381,10 @@ impl ArrowReader {
             x: end.x + 1.5 * (b.x - end.x),
             y: end.y + 1.5 * (b.y - end.y),
         };
-        if native_hypot(c1.x - c2.x, c1.y - c2.y) > 0.15 {
-            return Err(ArrowError::Invalid(
-                "This cubic arrow cannot be represented by a single quadratic bend",
-            ));
-        }
+        // Keep every independently authored cubic control. Only an exact
+        // degree-elevated quadratic takes the legacy representation; the old
+        // 0.15-world-unit approximation discarded valid control differences.
+        let quadratic = native_hypot(c1.x - c2.x, c1.y - c2.y) < 1e-8;
         Ok(NativeArrow {
             id: identifier,
             kind: if matches!(head, Head::Left | Head::Right) {
@@ -383,10 +395,11 @@ impl ArrowReader {
             style,
             start: *start,
             end: *end,
-            control: Some(ImportPoint {
+            control: quadratic.then_some(ImportPoint {
                 x: (c1.x + c2.x) / 2.,
                 y: (c1.y + c2.y) / 2.,
             }),
+            cubic: (!quadratic).then_some([*a, *b]),
         })
     }
 }

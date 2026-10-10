@@ -75,6 +75,9 @@ impl App {
             Message::AtomRadical(value) => self.set_radical(value),
             Message::ToggleInspector => return Some(self.toggle_inspector()),
             Message::Inspector(tab) => {
+                if tab == InspectorTab::Nmr {
+                    return Some(self.nmr_action(super::nmr::Action::Dock));
+                }
                 if let Some(task) = self.show_inspector_tab(tab) {
                     return Some(task);
                 }
@@ -116,6 +119,7 @@ impl App {
             Message::Paste => return Some(self.paste_clipboard()),
             Message::Duplicate => self.duplicate_selection(),
             Message::Transform(transform) => self.transform_selection(transform),
+            Message::Nmr(action) => return Some(self.nmr_action(action)),
             Message::NumericTransform(action) => {
                 return Some(self.numeric_transform_action(action));
             }
@@ -200,6 +204,7 @@ impl App {
     pub(super) fn update_document_result(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Optimization(action) => return self.optimization_action(action),
+            Message::Nmr(action) => return self.nmr_action(action),
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
             Message::FigureExported(result) => self.figure_exported(result),
             Message::Printing(action) => return self.print_action(action),

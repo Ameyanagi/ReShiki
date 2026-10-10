@@ -37,6 +37,7 @@ impl App {
         start: Point,
         end: Point,
         constrain: bool,
+        snap_orbitals: bool,
         before: Document,
     ) {
         if let Tool::Graphic(kind) = self.tool {
@@ -51,6 +52,7 @@ impl App {
                     phase: self.tab.orbital_phase,
                     flipped: self.tab.phase_flipped,
                     attach: self.tab.attach_symbols,
+                    snap_orbitals,
                 };
                 match drawing.place(
                     &mut self.tab.doc,

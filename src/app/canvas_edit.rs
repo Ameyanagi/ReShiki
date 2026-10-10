@@ -8,7 +8,21 @@ mod placement;
 
 impl App {
     pub(super) fn edit(&mut self, edit: Edit) {
+        match edit {
+            Edit::ArrowTarget(p, bypass) => {
+                self.arrow_target_click(p, bypass);
+                return;
+            }
+            Edit::CancelArrowSource => {
+                self.error = false;
+                self.tab.arrow_source = None;
+                self.status = "Arrow source canceled".into();
+                return;
+            }
+            _ => {}
+        }
         if let Edit::ContextMenu { position, selected } = edit {
+            self.tab.arrow_source = None;
             if self.tab.cleanup.is_none() {
                 self.tab.selected = selected;
                 self.tool = Tool::Select;
@@ -70,8 +84,11 @@ impl App {
             return;
         }
         let before = self.tab.doc.clone();
+        if matches!(edit, Edit::Bond(..)) {
+            self.tab.arrow_source = None;
+        }
         match edit {
-            Edit::ContextMenu { .. } => return,
+            Edit::ContextMenu { .. } | Edit::ArrowTarget(..) | Edit::CancelArrowSource => return,
             Edit::Hover(_)
             | Edit::RelaxDragStart { .. }
             | Edit::RelaxDragTarget { .. }
@@ -90,7 +107,13 @@ impl App {
                 target,
             } => return self.place_chain(&points, source, target, before),
             Edit::Graphic(start, end, constrain) => {
-                return self.place_graphic(start, end, constrain, before);
+                return self.place_graphic(start, end, constrain, self.tab.snap_orbitals, before);
+            }
+            Edit::Orbital(start, end, constrain, snap) => {
+                return self.place_graphic(start, end, constrain, snap, before);
+            }
+            Edit::PenSegment(stroke) => {
+                return self.place_pen_segment(stroke, before);
             }
             Edit::AtomIndicator(owner, p) => {
                 if let Some(anchor) = owner.anchor(&self.tab.doc) {
@@ -113,8 +136,17 @@ impl App {
                 }
             }
             Edit::GraphicPoint(id, index, p) => {
+                self.tab.path_point = Some((id, index));
                 if let Some(g) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) {
-                    g.edit_point(index, p);
+                    if g.path_handles().is_some() {
+                        if let Err(error) = g.move_path_point(index, p) {
+                            self.status = error;
+                            self.error = true;
+                            return;
+                        }
+                    } else {
+                        g.edit_point(index, p);
+                    }
                 }
                 self.sync_arc();
             }
@@ -182,6 +214,27 @@ impl App {
                     self.tab.selected = ids;
                 }
             }
+            Edit::StretchBond {
+                fixed,
+                moving,
+                length,
+            } => {
+                if !self.reference_stretch_active(fixed, moving) {
+                    self.status = "Choose a bond in this drawing before stretching".into();
+                    self.error = true;
+                    return;
+                }
+                match editing::reference::Stretch::new(&self.tab.doc, fixed, moving)
+                    .and_then(|plan| plan.apply(&self.tab.doc, length))
+                {
+                    Ok(candidate) => self.tab.doc = candidate,
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
+            }
             Edit::Duplicate(ids, dx, dy) => {
                 let part = editing::selection(&self.tab.doc, &ids);
                 let copy = editing::append(&mut self.tab.doc, &part, Point::new(dx, dy));
@@ -209,7 +262,7 @@ impl App {
         }
         self.changed(before);
     }
-    fn place_arrow(&mut self, start: Point, end: Point) {
+    pub(super) fn place_arrow(&mut self, start: Point, end: Point) {
         let id = self.tab.doc.next_id();
         self.tab.doc.arrows.push(Arrow::new(
             id,

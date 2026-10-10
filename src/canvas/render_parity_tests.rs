@@ -111,11 +111,14 @@ fn routing_document() -> Document {
     });
     doc.annotations[0].format.style.underline = true;
     doc.arrows.push(Arrow {
+        start_anchor: None,
+        end_anchor: None,
         id: doc.next_id(),
         start: World::new(260., 215.),
         end: World::new(365., 215.),
         kind: "forward".into(),
         control: Some(World::new(305., 160.)),
+        cubic: None,
         style: None,
     });
     for (layer, origin, axis_y) in [
@@ -149,11 +152,14 @@ fn paper_document() -> (Document, Vec<u64>, [u64; 4]) {
     doc.add_bond(n, o, 1, "plain");
     let arrow = doc.next_id();
     doc.arrows.push(Arrow {
+        start_anchor: None,
+        end_anchor: None,
         id: arrow,
         start: World::new(260., 330.),
         end: World::new(365., 330.),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     doc.annotations.push(Annotation {
@@ -233,6 +239,107 @@ fn load_pictures(
             Some(renderer.load_image(&picture.handle(flip).unwrap()).unwrap())
         })
         .collect()
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer attachment geometry and pending-source highlight regression"]
+async fn mechanism_attachment_92_native_renderer_uses_resolved_curve_and_clear_source_highlight() {
+    use reshiki::{
+        arrow_anchors,
+        arrows::{ArrowStyle, Preset},
+    };
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .expect("Headless renderer");
+    let bounds = Rectangle::with_size(iced::Size::new(640., 400.));
+    let mut doc = Document::from_native_file(include_bytes!(
+        "../../tests/fixtures/mechanism-attachments-92/before.rsk"
+    ))
+    .unwrap();
+    let source = arrow_anchors::pick(&doc, World::new(0., -29.166668), 2.).unwrap();
+    let camera = Camera {
+        center: World::new(-18., -20.),
+        zoom: 2.5,
+    };
+    let mut render = |doc: &Document, pending: bool| {
+        renderer.reset(bounds);
+        let mut canvas = tests::chain_canvas(doc, ChainMode::Straight);
+        canvas.camera = camera;
+        canvas.tool = if pending { Tool::Arrow } else { Tool::Select };
+        canvas.arrow_preset = Preset::Curved;
+        canvas.arrow_source = pending.then_some(&source);
+        for geometry in canvas.draw(
+            &State::default(),
+            &renderer,
+            &Theme::Light,
+            bounds,
+            mouse::Cursor::Unavailable,
+        ) {
+            renderer.draw_geometry(geometry);
+        }
+        Headless::screenshot(&mut renderer, iced::Size::new(640, 400), 1., Color::WHITE)
+    };
+    let before = render(&doc, false);
+    let highlighted = render(&doc, true);
+    assert_ne!(
+        before, highlighted,
+        "the pending source is visibly highlighted"
+    );
+    for (plain, selected) in before
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(highlighted.as_chunks::<4>().0.iter())
+    {
+        if plain[..3].iter().all(|channel| *channel < 40) {
+            assert_eq!(
+                plain, selected,
+                "source highlight must leave lone-pair ink legible"
+            );
+        }
+    }
+    arrow_anchors::create(
+        &mut doc,
+        &source,
+        &arrow_anchors::Pick::Atom(1),
+        Preset::Curved,
+        ArrowStyle::preset(Preset::Curved),
+    )
+    .unwrap();
+    let mut expected = doc.clone();
+    for arrow in &mut expected.arrows {
+        arrow.start_anchor = None;
+        arrow.end_anchor = None;
+    }
+    let (dx, dy) = (-15., -7.);
+    let atom = expected.atom_mut(2).unwrap();
+    atom.position = atom.position.offset(dx, dy);
+    let arrow = &mut expected.arrows[0];
+    arrow.start = arrow.start.offset(dx, dy);
+    arrow.cubic.as_mut().unwrap()[0] = arrow.cubic.unwrap()[0].offset(dx, dy);
+    doc.translate(&[2], dx, dy);
+    let actual = render(&doc, false);
+    assert_same_pixels(
+        "target move paints exactly the resolved independent curve",
+        &actual,
+        &render(&expected, false),
+    );
+    if let Some(directory) = std::env::var_os("RESHIKI_ATTACHMENT_EVIDENCE") {
+        let directory = std::path::PathBuf::from(directory);
+        for (name, pixels) in [
+            ("native-source-highlight", highlighted),
+            ("native-target-moved", actual),
+        ] {
+            image::RgbaImage::from_raw(640, 400, pixels)
+                .unwrap()
+                .save(directory.join(format!("{name}.png")))
+                .unwrap();
+        }
+    }
 }
 
 #[tokio::test]
@@ -901,6 +1008,116 @@ async fn paper_layers_match_captured_baseline() {
                 "line_long does not draw past line_short's early return"
             ),
             _ => {}
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "Actual native renderer alpha pixels; requires a headless renderer"]
+async fn rear_opacity_canvas_matches_reference_alpha_and_keeps_cage_rim_and_marks_clean() {
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        backend.as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    let bounds = Rectangle::with_size(iced::Size::new(640., 600.));
+    let camera = Camera {
+        center: World::new(0., 0.),
+        zoom: 2.,
+    };
+    for theme in CanvasTheme::ALL {
+        for alpha in [0., 0.25, 0.5, 1.] {
+            let mut doc = Document::from_json(include_bytes!(
+                "../../tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk"
+            ))
+            .unwrap();
+            doc.canvas_theme = theme;
+            let ids = doc.all_ids();
+            let mark_anchor = doc.atom(52).unwrap().position;
+            reshiki::scientific::attach(
+                doc.atom_mut(52).unwrap(),
+                reshiki::scientific::SymbolKind::LonePair,
+                World::new(-100., 0.),
+            )
+            .unwrap();
+            reshiki::depth_appearance::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
+            renderer.reset(bounds);
+            let mut frame = layered::Frame::new(&renderer, bounds.size()).with_canvas(theme);
+            frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
+            // Independent existing-renderer alpha reference. Wgpu blends in
+            // linear light and encodes sRGB; CPU backends may blend directly.
+            // The chemical scene must use that backend's actual convention,
+            // with alpha applied once, rather than assuming an encoded 128.
+            frame.fill_rectangle(
+                Point::new(16., 16.),
+                iced::Size::new(16., 16.),
+                Color::from_rgba(0., 0., 0., alpha),
+            );
+            draw_primitives(
+                &mut frame,
+                &reshiki::scene::primitives(&doc),
+                camera,
+                bounds,
+                0.,
+            );
+            for geometry in frame.finish() {
+                renderer.draw_geometry(geometry);
+            }
+            let pixels =
+                Headless::screenshot(&mut renderer, iced::Size::new(640, 600), 1., Color::WHITE);
+            let darkness = |point: World| {
+                let screen = camera.screen(point, bounds);
+                let x = screen.x.round() as usize;
+                let y = screen.y.round() as usize;
+                (x.saturating_sub(2)..=(x + 2).min(639))
+                    .flat_map(|x| {
+                        (y.saturating_sub(2)..=(y + 2).min(599)).map(move |y| (y * 640 + x) * 4)
+                    })
+                    .map(|offset| {
+                        let channel = pixels[offset];
+                        if theme.is_light() {
+                            255 - channel
+                        } else {
+                            channel
+                        }
+                    })
+                    .max()
+                    .unwrap()
+            };
+            let reference = pixels[(24 * 640 + 24) * 4];
+            let expected = i16::from(if theme.is_light() {
+                255 - reference
+            } else {
+                reference
+            });
+            if alpha > 0. && alpha < 1. {
+                assert!(
+                    (1..255).contains(&expected),
+                    "Partial native reference alpha"
+                );
+            }
+            eprintln!(
+                "Rear pixel measurements {theme:?} alpha {alpha}: rear={}, front={}, filled_mark={}",
+                darkness(World::new(-8.102754, -18.966398)),
+                darkness(World::new(-69.3732, 73.96892)),
+                darkness(mark_anchor.offset(-102.1, 0.)),
+            );
+            assert!(
+                (i16::from(darkness(World::new(-8.102754, -18.966398))) - expected).abs() <= 2,
+                "Rear ink alpha {alpha} {theme:?}"
+            );
+            assert_eq!(
+                darkness(World::new(-69.3732, 73.96892)),
+                255,
+                "Front ink changed"
+            );
+            assert!(
+                (i16::from(darkness(mark_anchor.offset(-102.1, 0.))) - expected).abs() <= 3,
+                "Filled lone-pair alpha blended twice"
+            );
         }
     }
 }

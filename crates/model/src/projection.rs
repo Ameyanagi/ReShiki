@@ -157,6 +157,7 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     }
     sync_centroids(doc);
     refresh_depth_bonds(doc, &ids);
+    crate::arrow_anchors::reconcile(doc);
 }
 
 /// Emphasize single, double and aromatic outlines without rewriting stereo or order.

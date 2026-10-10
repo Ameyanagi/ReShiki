@@ -260,11 +260,14 @@ fn sections() -> anyhow::Result<Vec<Section>> {
     ));
     let mut arrow = Document::default();
     arrow.arrows.push(reshiki::document::Arrow {
+        start_anchor: None,
+        end_anchor: None,
         id: 1,
         start: Point::default(),
         end: Point::new(140., 0.),
         kind: "forward".into(),
         control: None,
+        cubic: None,
         style: None,
     });
     tools.push(sample("a / e · Reaction arrow tool", arrow));

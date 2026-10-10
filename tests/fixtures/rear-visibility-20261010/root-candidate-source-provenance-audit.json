@@ -1,0 +1,14 @@
+{
+  "time": "2026-10-09T23:06:11.262318+00:00",
+  "status": "PASS",
+  "signed_binary_sha256": "bc9b3d61b3acb8c65e0b2ff1b6be2e0c3835ef9ebd097c1785f8210b28fb31f7",
+  "frozen_inputs_independently_checked": 1071,
+  "own_fresh_false": 15,
+  "strict_signature_and_all_bundle_files": 9,
+  "counts": {
+    "depfiles": 15,
+    "source_dependencies": 917,
+    "embedded_asset_dependencies": 64
+  },
+  "native_pending": true
+}

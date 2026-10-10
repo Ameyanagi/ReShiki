@@ -35,6 +35,7 @@ pub mod geometry;
 #[cfg(windows)]
 #[doc(hidden)]
 pub mod native_windows;
+pub mod nmr;
 pub mod recovery;
 pub mod template_library;
 

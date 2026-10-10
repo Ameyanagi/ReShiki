@@ -4,11 +4,13 @@ Added 2026-09-20. **JACS / ACS remains the default**: Arial 10 pt, black drawing
 
 ## Drawing workflow
 
-- Choose **Straight chain** (`X`) and drag to grow a zigzag. The preview counts new carbon atoms and bonds. Set **Atoms** for an exact size, or clear it to **Auto** so drag distance controls size. Counts include existing attachment endpoints. Clicking places the chosen size; Auto click places six atoms.
-- Choose **Snaking chain** (`Shift+X`) to steer while dragging, or hold Ctrl during a straight-chain drag to begin bending. Retrace an earlier vertex to remove the tail. The **Max atoms** field caps a snaking gesture; it does not force a short drag to create the full maximum.
+- Choose **Straight chain** (uppercase `X`) and drag to grow a zigzag. The preview counts new carbon atoms and bonds. Set **Atoms** for an exact size, or clear it to **Auto** so drag distance controls size. Counts include existing attachment endpoints. Clicking places the chosen size; Auto click places six atoms.
+- Choose **Snaking chain** from the toolbar to steer while dragging, or hold Ctrl during a straight-chain drag to begin bending. Retrace an earlier vertex to remove the tail. The **Max atoms** field caps a snaking gesture; it does not force a short drag to create the full maximum.
 - Start on an atom to extend its molecule. Ending near another atom reuses that atom when it is close to the final generated point. Starting and ending attachment atoms retain their IDs and elements. A click at an existing chain end continues the zigzag along its existing direction.
 - Shift changes the starting zigzag side. For a straight chain it changes the whole preview; for a snaking chain it sets the first turn. Overlapping an intermediate atom shows a red preview and leaves the document unchanged on release.
 - Escape, losing window focus, or releasing outside the canvas cancels. Retracing a drag all the way to its start also cancels. The entire chain is one history edit; Undo/Redo removes/restores all its new atoms and bonds together.
+
+The straight-chain toolbar icon uses a four-carbon zigzag with conventional 120° bends. The snaking icon adds a steering arrow above that zigzag; it describes pointer steering and retracing, rather than a cis/trans conformation. Hover either tool for its interaction description.
 
 ## Constraints and defaults
 

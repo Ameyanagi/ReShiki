@@ -219,6 +219,13 @@ impl Layout {
         crate::scene::primitives(doc)
             .iter()
             .filter(|primitive| {
+                let mut primitive = *primitive;
+                while let crate::scene::Primitive::Opacity {
+                    primitive: inner, ..
+                } = primitive
+                {
+                    primitive = inner.as_ref();
+                }
                 let crate::scene::Primitive::Path {
                     commands,
                     style,

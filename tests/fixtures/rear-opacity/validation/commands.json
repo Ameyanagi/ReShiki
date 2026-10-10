@@ -1,0 +1,283 @@
+[
+  {
+    "label": "codesign",
+    "argv": [
+      "codesign",
+      "--verify",
+      "--deep",
+      "--strict",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app"
+    ],
+    "exit_code": 0,
+    "seconds": 0.2175,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "cli-info",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "info"
+    ],
+    "exit_code": 0,
+    "seconds": 0.0143,
+    "stdout_sha256": "78eef8b1298147ccb151112242113174bda7ae96da26a35b86baff4cf8809d62",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "analyze-100",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "analyze",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-100.rsk"
+    ],
+    "exit_code": 0,
+    "seconds": 0.15,
+    "stdout_sha256": "779d1831d4cd494d313068619f84decdd6810a630f9e4418bddda23998292c80",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "export-100-svg",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-100.rsk",
+      "--to",
+      "svg",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-100.svg",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.1791,
+    "stdout_sha256": "8a91115828a04495b5221b13bd4d49d0f10cfc4276ab12bd99d2974f55b50991",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "export-100-png",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-100.rsk",
+      "--to",
+      "png",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-100.png",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.6666,
+    "stdout_sha256": "c23a0ebae0d6c85ca22634bd85fca5b174e7ec00a0374e0570041353a1feb947",
+    "stderr_sha256": "c9501249a3faced35ea11b8fe086417d40bebc2a8d6830f9b921c1d9e6c1c7fa"
+  },
+  {
+    "label": "export-100-pdf",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-100.rsk",
+      "--to",
+      "pdf",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-100.pdf",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.2804,
+    "stdout_sha256": "7c5fea699baaf6f2331ab7264e3d2a1432eea17475fe012335686c5674198469",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "analyze-25",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "analyze",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-25.rsk"
+    ],
+    "exit_code": 0,
+    "seconds": 0.1474,
+    "stdout_sha256": "779d1831d4cd494d313068619f84decdd6810a630f9e4418bddda23998292c80",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "export-25-svg",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-25.rsk",
+      "--to",
+      "svg",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-25.svg",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.1748,
+    "stdout_sha256": "99cf2265a0381ccc6b84ed500939cdef2a0619ee6decb620a8d0fb0e61a17c1b",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "export-25-png",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-25.rsk",
+      "--to",
+      "png",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-25.png",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 1.1822,
+    "stdout_sha256": "298002d11376a49319b7517ab1c020560b887384a330fce441cd578a3e33e4e2",
+    "stderr_sha256": "c9501249a3faced35ea11b8fe086417d40bebc2a8d6830f9b921c1d9e6c1c7fa"
+  },
+  {
+    "label": "export-25-pdf",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-25.rsk",
+      "--to",
+      "pdf",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-25.pdf",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.3499,
+    "stdout_sha256": "c7f1c0c8ae6227317db71db27d2405ef081ca7008df36bbabb0f38448f871325",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "analyze-0",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "analyze",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-0.rsk"
+    ],
+    "exit_code": 0,
+    "seconds": 0.1945,
+    "stdout_sha256": "779d1831d4cd494d313068619f84decdd6810a630f9e4418bddda23998292c80",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "export-0-svg",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-0.rsk",
+      "--to",
+      "svg",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-0.svg",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.2328,
+    "stdout_sha256": "3ef6e3795e02efeb8af8b415d172827edea8a3a6e780271d42a102fb740762c7",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "export-0-png",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-0.rsk",
+      "--to",
+      "png",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-0.png",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.7571,
+    "stdout_sha256": "58f8115fa2870755135e22d44ce763273119ba4130b8bd1b932711368404091c",
+    "stderr_sha256": "a67ed2b218cc065fdcfc53f0b1a2a1a5966bfd141717b60db2af5569080ac996"
+  },
+  {
+    "label": "export-0-pdf",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/desktop/c60-rear-opacity-0.rsk",
+      "--to",
+      "pdf",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-0.pdf",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.3636,
+    "stdout_sha256": "4475e433fd540fdaeb24a8f2061941efced5ef1e318ba93af5ea42ef27cfea3c",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "export-typed-before-svg",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/c60-rear-opacity-before-desktop.rsk",
+      "--to",
+      "svg",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-typed-before.svg",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.1205,
+    "stdout_sha256": "8a91115828a04495b5221b13bd4d49d0f10cfc4276ab12bd99d2974f55b50991",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "export-typed-before-png",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/c60-rear-opacity-before-desktop.rsk",
+      "--to",
+      "png",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-typed-before.png",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.4607,
+    "stdout_sha256": "c23a0ebae0d6c85ca22634bd85fca5b174e7ec00a0374e0570041353a1feb947",
+    "stderr_sha256": "c9501249a3faced35ea11b8fe086417d40bebc2a8d6830f9b921c1d9e6c1c7fa"
+  },
+  {
+    "label": "export-typed-before-pdf",
+    "argv": [
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+      "--cli",
+      "convert",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/c60-rear-opacity-before-desktop.rsk",
+      "--to",
+      "pdf",
+      "-o",
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-independent-desktop-w6jp2diy/c60-typed-before.pdf",
+      "--receipt"
+    ],
+    "exit_code": 0,
+    "seconds": 0.1909,
+    "stdout_sha256": "7c5fea699baaf6f2331ab7264e3d2a1432eea17475fe012335686c5674198469",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

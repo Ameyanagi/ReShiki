@@ -1,0 +1,272 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 20,
+  "atoms": [],
+  "bonds": [],
+  "annotations": [
+    {
+      "id": 101,
+      "position": {
+        "x": 0.0,
+        "y": -80.0
+      },
+      "text": "Open path: alternating bends",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 102,
+      "position": {
+        "x": 0.0,
+        "y": 125.0
+      },
+      "text": "Closed path: asymmetric outline",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    }
+  ],
+  "arrows": [],
+  "graphics": [
+    {
+      "id": 1,
+      "kind": "path",
+      "origin": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": 1.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 1.0
+      },
+      "style": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": null,
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0.0,
+            "y": 30.0
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.0,
+              "y": -30.0
+            },
+            {
+              "x": 114.736046,
+              "y": -39.872604
+            },
+            {
+              "x": 114.736046,
+              "y": 20.127396
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 114.736046,
+              "y": 80.127396
+            },
+            {
+              "x": 190.0,
+              "y": 90.0
+            },
+            {
+              "x": 190.0,
+              "y": 30.0
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 190.0,
+              "y": -30.0
+            },
+            {
+              "x": 285.0,
+              "y": -30.0
+            },
+            {
+              "x": 285.0,
+              "y": 30.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "path",
+      "origin": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": 1.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 1.0
+      },
+      "style": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": null,
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 15.0,
+            "y": 215.0
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": -20.0,
+              "y": 175.0
+            },
+            {
+              "x": 45.0,
+              "y": 140.0
+            },
+            {
+              "x": 95.0,
+              "y": 175.0
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 150.0,
+              "y": 210.0
+            },
+            {
+              "x": 160.0,
+              "y": 145.0
+            },
+            {
+              "x": 215.0,
+              "y": 185.0
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 285.0,
+              "y": 235.0
+            },
+            {
+              "x": 195.0,
+              "y": 290.0
+            },
+            {
+              "x": 140.0,
+              "y": 245.0
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 80.0,
+              "y": 200.0
+            },
+            {
+              "x": 55.0,
+              "y": 265.0
+            },
+            {
+              "x": 15.0,
+              "y": 215.0
+            }
+          ]
+        },
+        {
+          "command": "close"
+        }
+      ]
+    }
+  ],
+  "groups": []
+}

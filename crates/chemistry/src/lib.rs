@@ -38,6 +38,7 @@ pub mod hydrogens;
 pub mod inchi;
 pub mod kekulize;
 mod native_order;
+pub mod nmr;
 pub mod normalize;
 pub mod ranking;
 pub mod rings;

@@ -1,0 +1,176 @@
+{
+  "version": 20,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": 0,
+        "y": 51
+      },
+      "charge": 0
+    },
+    {
+      "id": 2,
+      "element": "O",
+      "position": {
+        "x": 36,
+        "y": 30
+      },
+      "charge": -1
+    },
+    {
+      "id": 3,
+      "element": "C",
+      "position": {
+        "x": 146,
+        "y": 30
+      },
+      "charge": 0
+    },
+    {
+      "id": 4,
+      "element": "O",
+      "position": {
+        "x": 182,
+        "y": 51
+      },
+      "charge": 0
+    },
+    {
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": 110,
+        "y": 51
+      },
+      "charge": 0
+    },
+    {
+      "id": 11,
+      "element": "C",
+      "position": {
+        "x": 0,
+        "y": 211
+      },
+      "charge": 0
+    },
+    {
+      "id": 12,
+      "element": "O",
+      "position": {
+        "x": 36,
+        "y": 190
+      },
+      "charge": -1
+    },
+    {
+      "id": 13,
+      "element": "C",
+      "position": {
+        "x": 146,
+        "y": 190
+      },
+      "charge": 0
+    },
+    {
+      "id": 14,
+      "element": "O",
+      "position": {
+        "x": 182,
+        "y": 211
+      },
+      "charge": 0
+    },
+    {
+      "id": 15,
+      "element": "C",
+      "position": {
+        "x": 110,
+        "y": 211
+      },
+      "charge": 0
+    }
+  ],
+  "bonds": [
+    {
+      "a": 1,
+      "b": 2,
+      "order": 1
+    },
+    {
+      "a": 3,
+      "b": 4,
+      "order": 2
+    },
+    {
+      "a": 3,
+      "b": 5,
+      "order": 1
+    },
+    {
+      "a": 11,
+      "b": 12,
+      "order": 1
+    },
+    {
+      "a": 13,
+      "b": 14,
+      "order": 2
+    },
+    {
+      "a": 13,
+      "b": 15,
+      "order": 1
+    }
+  ],
+  "arrows": [
+    {
+      "id": 101,
+      "start": {
+        "x": 42,
+        "y": 15
+      },
+      "end": {
+        "x": 139,
+        "y": 21
+      },
+      "kind": "curved",
+      "cubic": [
+        {
+          "x": 42,
+          "y": -55
+        },
+        {
+          "x": 139,
+          "y": -55
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "start": {
+        "x": 42,
+        "y": 175
+      },
+      "end": {
+        "x": 139,
+        "y": 181
+      },
+      "kind": "fishhook",
+      "cubic": [
+        {
+          "x": 42,
+          "y": 140
+        },
+        {
+          "x": 139,
+          "y": 208
+        }
+      ]
+    }
+  ],
+  "annotations": [],
+  "graphics": [],
+  "groups": []
+}

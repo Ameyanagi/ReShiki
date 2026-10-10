@@ -19,6 +19,7 @@ static ALLOCATOR: reshiki_process_heap::allocation_metrics::MeasuredAllocator<st
 
 pub mod abbreviations;
 pub mod aromatic;
+pub mod arrow_anchors;
 pub mod arrows;
 pub mod atom_labels;
 pub mod atom_text;
@@ -46,6 +47,7 @@ pub mod palette;
 pub mod pictures;
 pub mod projection;
 pub mod reactions;
+pub mod rear_opacity;
 pub mod ring_arcs;
 pub mod ring_fills;
 pub mod rings;

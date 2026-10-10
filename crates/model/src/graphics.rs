@@ -1,5 +1,9 @@
 //! Editable vector graphics in drawing coordinates. Shared by preview and export.
 mod arc;
+mod path;
+pub use path::PathHandle;
+#[cfg(test)]
+mod path_tests;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
 use serde::{Deserialize, Serialize};
@@ -22,7 +26,7 @@ pub enum GraphicKind {
     Path,
 }
 impl GraphicKind {
-    pub const DRAWABLE: [Self; 9] = [
+    pub const DRAWABLE: [Self; 10] = [
         Self::Rectangle,
         Self::RoundedRectangle,
         Self::Ellipse,
@@ -32,6 +36,7 @@ impl GraphicKind {
         Self::Parentheses,
         Self::Braces,
         Self::Curve,
+        Self::Path,
     ];
     pub fn closed(self) -> bool {
         matches!(
@@ -57,7 +62,7 @@ impl std::fmt::Display for GraphicKind {
             Self::Parentheses => "Parentheses",
             Self::Braces => "Braces",
             Self::Curve => "Bézier curve",
-            Self::Path => "Custom path",
+            Self::Path => "Pen path",
             Self::Picture => "Picture",
         })
     }
@@ -230,6 +235,9 @@ impl Graphic {
         sides: BracketSides,
         constrain: bool,
     ) -> Self {
+        if kind == GraphicKind::Path {
+            return Self::pen_curve(id, start, end, style);
+        }
         if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
             let delta = Point::new(end.x - start.x, end.y - start.y);
             let length = delta.distance(Point::default());
@@ -488,6 +496,10 @@ impl Graphic {
             return;
         }
         if self.kind == GraphicKind::Picture {
+            return;
+        }
+        if self.path_handles().is_some() {
+            let _ = self.move_path_point(index, p);
             return;
         }
         let mut commands = self.commands();

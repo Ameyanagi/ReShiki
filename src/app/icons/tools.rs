@@ -8,25 +8,46 @@ pub(super) fn chain(f: &mut Frame<'_>, ink: Color, mode: reshiki::chains::ChainM
         line(
             f,
             ink,
-            &[(2., 15.), (7., 8.), (12., 15.), (17., 8.), (22., 15.)],
+            &[(2., 14.), (8.67, 10.15), (15.33, 14.), (22., 10.15)],
         );
     } else {
-        line(
-            f,
-            ink,
-            &[
-                (2., 19.),
-                (7., 13.),
-                (5., 6.),
-                (12., 3.),
-                (17., 9.),
-                (23., 7.),
-            ],
-        );
+        line(f, ink, &[(2., 19.), (7.2, 16.), (12.4, 19.), (17.6, 16.)]);
+        // A steering gesture above the same ordinary zigzag distinguishes the
+        // interaction without suggesting a different alkyl conformation.
+        let steering = Path::new(|b| {
+            b.move_to(Point::new(6., 10.));
+            b.bezier_curve_to(
+                Point::new(8., 3.),
+                Point::new(21., 2.),
+                Point::new(21., 10.),
+            );
+        });
+        f.stroke(&steering, Stroke::default().with_color(ink).with_width(1.5));
+        line(f, ink, &[(18., 7.), (21., 10.), (23., 7.)]);
     }
 }
 
 pub(super) fn graphic(f: &mut Frame<'_>, ink: Color, kind: reshiki::graphics::GraphicKind) {
+    if kind == reshiki::graphics::GraphicKind::Path {
+        let path = Path::new(|builder| {
+            builder.move_to(Point::new(3., 13.));
+            builder.bezier_curve_to(
+                Point::new(3., 1.),
+                Point::new(12., 1.),
+                Point::new(12., 13.),
+            );
+            builder.bezier_curve_to(
+                Point::new(12., 25.),
+                Point::new(22., 25.),
+                Point::new(22., 13.),
+            );
+        });
+        f.stroke(&path, Stroke::default().with_color(ink).with_width(1.5));
+        for x in [3., 12., 22.] {
+            f.fill(&Path::circle(Point::new(x, 13.), 2.), ink);
+        }
+        return;
+    }
     use reshiki::{
         document::Point as World,
         graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand},

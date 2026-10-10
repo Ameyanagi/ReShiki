@@ -7,6 +7,29 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+mod label_clearance;
+mod mark_placement;
+#[cfg(test)]
+mod mark_placement_tests;
+#[cfg(test)]
+mod orbital_tests;
+pub(crate) use label_clearance::readable_orbital_parts;
+
+/// Styled orbital vectors with the same transparent atom-label clearance as
+/// the figure scene. Exchange keeps these vectors rather than orbital controls.
+pub fn orbital_parts_with_label_clearance(
+    graphic: &Graphic,
+    doc: &crate::document::Document,
+) -> Vec<Part> {
+    let labels: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|atom| doc.atom_visible(atom.id))
+        .flat_map(|atom| crate::scene::atom_label_ink_boxes(atom, doc))
+        .collect();
+    readable_orbital_parts(graphic, &labels)
+}
+
 macro_rules! choices {
     ($name:ident { $first:ident => $label:literal $(,$variant:ident => $text:literal)* $(,)? }) => {
         #[derive(Debug,Clone,Copy,Default,PartialEq,Eq,Serialize,Deserialize)]
@@ -39,6 +62,9 @@ impl MarkKind {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AtomMark {
+    /// Stable within the parent atom; absent on legacy unanchored marks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<u64>,
     pub kind: MarkKind,
     pub offset: Point,
     #[serde(default)]
@@ -411,13 +437,28 @@ fn attach_inner(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), 
     if mark.charge() || mark.radical() {
         atom.label_h = 0;
     }
+    let id = next_mark_id(atom)?;
+    atom.mark_serial = id;
     atom.marks.push(AtomMark {
+        id: Some(id),
         kind: mark,
         offset,
         angle: 0.,
         size_pt: None,
     });
     Ok(())
+}
+
+pub fn next_mark_id(atom: &Atom) -> Result<u64, String> {
+    atom.marks
+        .iter()
+        .filter_map(|m| m.id)
+        .max()
+        .unwrap_or(0)
+        .max(atom.mark_serial)
+        .checked_add(1)
+        .filter(|id| *id < u64::MAX)
+        .ok_or_else(|| "No free positioned-mark ID".into())
 }
 
 #[derive(Clone)]
@@ -427,8 +468,20 @@ pub struct Drawing {
     pub phase: Phase,
     pub flipped: bool,
     pub attach: bool,
+    pub snap_orbitals: bool,
 }
 impl Drawing {
+    /// Orbital snapping is independent of atom-owned chemical symbols.
+    pub fn orbital_target(
+        &self,
+        doc: &crate::document::Document,
+        start: Point,
+        radius: f32,
+    ) -> Option<u64> {
+        (self.snap_orbitals && matches!(self.kind, GraphicKind::Orbital(_)))
+            .then(|| doc.nearest(start, radius))
+            .flatten()
+    }
     pub fn place(
         &self,
         doc: &mut crate::document::Document,
@@ -442,10 +495,30 @@ impl Drawing {
             && let Some(id) = doc.nearest(start, radius)
         {
             let default_label_size = doc.drawing_style.font_size_pt;
+            let automatic_pair = if start.distance(end) < 3.
+                && matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar)
+            {
+                let atom = doc
+                    .atom(id)
+                    .ok_or("The symbol's attachment atom is unavailable")?;
+                Some(mark_placement::lone_pair(
+                    doc,
+                    atom,
+                    if kind == SymbolKind::LonePair {
+                        MarkKind::LonePair
+                    } else {
+                        MarkKind::LonePairBar
+                    },
+                ))
+            } else {
+                None
+            };
             let atom = doc
                 .atom_mut(id)
                 .ok_or("The symbol's attachment atom is unavailable")?;
-            let offset = if start.distance(end) < 3. {
+            let offset = if let Some((offset, _)) = automatic_pair {
+                offset
+            } else if start.distance(end) < 3. {
                 {
                     let angle = (-90. - 90. * (atom.marks.len() % 4) as f32).to_radians();
                     let label_size = atom
@@ -460,18 +533,20 @@ impl Drawing {
                 Point::new(end.x - atom.position.x, end.y - atom.position.y)
             };
             attach(atom, kind, offset)?;
+            if let Some((_, angle)) = automatic_pair
+                && let Some(mark) = atom.marks.last_mut()
+            {
+                mark.angle = angle;
+            }
             if !matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar) {
                 doc.invalidate_chemistry(&[id]);
             }
             return Ok(id);
         }
-        let origin = if matches!(self.kind, GraphicKind::Orbital(_)) {
-            doc.nearest(start, radius)
-                .and_then(|id| doc.atom(id))
-                .map_or(start, |a| a.position)
-        } else {
-            start
-        };
+        let origin = self
+            .orbital_target(doc, start, radius)
+            .and_then(|id| doc.atom(id))
+            .map_or(start, |a| a.position);
         let id = doc.next_id();
         let mut g = Graphic::dragged(
             id,

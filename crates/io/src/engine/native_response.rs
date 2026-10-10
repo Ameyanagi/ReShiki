@@ -164,7 +164,15 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
                 analysis: None,
                 output: Some(output),
                 engine_version: chemistry::RDKIT_VERSION.into(),
-                warnings: vec![crate::attachments::ANALYSIS_NOTICE.into()],
+                warnings: {
+                    let mut warnings = vec![crate::attachments::ANALYSIS_NOTICE.into()];
+                    if request.format.as_deref() == Some("mol")
+                        && crate::rear_opacity::present(document)
+                    {
+                        warnings.push(crate::rear_opacity::EXPORT_NOTICE.into());
+                    }
+                    warnings
+                },
             })
         })
         .await?;
@@ -217,7 +225,11 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
                 analysis: None,
                 output: Some(output),
                 engine_version: chemistry::RDKIT_VERSION.into(),
-                warnings: vec!["Drawing exported; chemical assignments remain unvalidated.".into()],
+                warnings: std::iter::once(
+                    "Drawing exported; chemical assignments remain unvalidated.".into(),
+                )
+                .chain(crate::arrow_anchors::export_notice(document))
+                .collect(),
             })
         })
         .await?;
@@ -418,7 +430,22 @@ fn finish(
         if !draft.figure_only && !document.reactions.is_empty() {
             response.warnings.push("This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme.".into());
         }
+        if matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
+            && let Some(notice) = crate::arrow_anchors::export_notice(document)
+        {
+            response.warnings.push(notice);
+        }
         let format = request.format.as_deref();
+        if matches!(format, Some("mol" | "smiles" | "inchi"))
+            && request
+                .document
+                .as_ref()
+                .is_some_and(crate::rear_opacity::present)
+        {
+            response
+                .warnings
+                .push(crate::rear_opacity::EXPORT_NOTICE.into());
+        }
         if document.bonds.iter().any(|bond| match format {
             Some("mol") => matches!(bond.order, 0 | 6 | 7),
             Some("smiles") => matches!(bond.order, 0 | 7),

@@ -1,0 +1,42 @@
+   Compiling reshiki-process-heap v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/process-heap)
+   Compiling cosmolkit-core v0.3.0 (https://github.com/Ameyanagi/COSMolKit.git?rev=252a1f3d6480fc4a0abcd51d76707f51f69b4406#252a1f3d)
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr)
+   Compiling reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/chemistry)
+   Compiling reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/model)
+   Compiling reshiki-geometry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/geometry)
+   Compiling reshiki-io v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/io)
+   Compiling reshiki-agent v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/agent)
+   Compiling reshiki-mcp v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/mcp)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 18s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-ba50b1304e6a1bdf)
+app::nmr::palette::tests::pointer_history_preserves_masks_and_invalidates_left_entry_and_unfocus: test
+app::nmr::palette::tests::pointer_history_uses_ordered_motion_and_never_resyncs_from_redraw: test
+app::nmr::plot::tests::actual_plot_has_four_teal_sticks_separate_labels_and_preserves_history: test
+app::nmr::plot::tests::carbon_labels_stay_individual_and_stagger_close_real_shifts: test
+app::nmr::plot::tests::dense_coincident_and_long_id_reports_keep_every_owner_in_cycleable_groups: test
+app::nmr::plot::tests::dense_marker_keeps_all_distinct_original_atoms_accessible_and_cycleable: test
+app::nmr::plot::tests::extreme_finite_shifts_keep_axis_and_packed_positions_finite: test
+app::nmr::plot::tests::maximum_dense_report_preserves_native_accessibility_and_all_marker_actions: test
+app::nmr::plot::tests::missing_data_and_nonfinite_values_never_become_zero_shift_markers: test
+app::nmr::tests::assignment_labels_survive_geometry_but_close_and_chemical_edits_clear_them: test
+app::nmr::tests::compact_nmr_scrolls_to_later_sites_without_scrolling_the_drawing: test
+app::nmr::tests::default_and_reset_palette_clear_fixture_drawing_without_moving_camera: test
+app::nmr::tests::drawing_gesture_ending_over_nmr_stops_without_erasing_after_release: test
+app::nmr::tests::floating_nmr_preserves_canvas_and_owns_only_its_pointer_input: test
+app::nmr::tests::foreground_or_background_result_never_lands_in_another_tab: test
+app::nmr::tests::hybrid_docking_preserves_report_and_camera_and_restores_a_hidden_inspector: test
+app::nmr::tests::hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edits: test
+app::nmr::tests::label_checkbox_and_popup_use_real_checked_actions_and_own_batched_clicks: test
+app::nmr::tests::label_menu_dismissal_and_foreign_canvas_release_keep_pointer_ownership: test
+app::nmr::tests::mock_aligned_panel_measures_rows_and_recovers_small_viewport_scrolling: test
+app::nmr::tests::native_batched_palette_buttons_use_ordered_press_and_release_targets: test
+app::nmr::tests::native_batched_palette_drags_keep_press_position_and_release_ownership: test
+app::nmr::tests::nearby_plot_markers_cycle_distinct_original_atoms_without_editing: test
+app::nmr::tests::opening_and_resetting_palette_preserve_origin_when_resizing_visible_corner: test
+app::nmr::tests::pending_prediction_survives_move_but_chemical_edits_reject_stale_result: test
+app::nmr::tests::rendered_nmr_controls_publish_values_and_live_native_actions: test
+app::nmr::tests::reopening_from_properties_predicts_the_newly_selected_molecule: test
+app::nmr::tests::tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls: test
+app::nmr::tests::visible_resize_glyph_drags_without_stealing_footer_controls: test

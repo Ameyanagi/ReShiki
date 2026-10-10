@@ -4,11 +4,13 @@ Implemented and desktop-checked on 2026-09-20. Supported graphics workflows and 
 
 ## Drawing and editing
 
-- The main palette now includes rectangles, ellipses, brackets, graphic lines, Bézier curves and arcs. The contextual shape selector also offers rounded rectangles, parentheses and braces.
-- Drag to preview and size an object. Shift constrains boxes/ellipses to a square/circle and lines/curves to 45° directions. Escape cancels. Committing returns to Select.
+- The main palette includes rectangles, ellipses, brackets, graphic lines, Bézier curves, pen paths and arcs. The contextual shape selector also offers rounded rectangles, parentheses and braces. Arc presets still offer 90°, 120°, 180°, 270° and 360° sweeps.
+- Drag to preview and size an object. Shift constrains boxes/ellipses to a square/circle and lines/curves to 45° directions. Escape cancels. Single-shape tools return to Select after committing.
 - Properties controls stroke color, separate fill color, line width in points, and solid/dashed/dotted strokes. Stroke swatches are the palette's Ink and Strong row, and fill swatches its Tint row, where the crossed-out swatch removes the fill; RGB hex entry is available, and numeric/hex fields apply with Enter. Brackets offer both, left or right sides.
 - Select to move, copy, duplicate, rotate, reflect or proportionally resize. Background graphics leave molecular atoms and bonds selectable. Send to back / Bring to front places graphics behind or above the chemical drawing.
-- Select a curve and choose **Edit curve points**. Drag anchors or control points, then choose Done. Undo/Redo retains the selected curve. Each drag commits one history step.
+- Choose **Pen path** and drag its first segment. Keep drawing the same object by clicking for a line or dragging a new node to set its tangent. Click its first node after three or more nodes to close, or choose **Finish**. **New path** starts a separate object; **Continue drawing** extends a selected open path. Each completed segment commits one history step; Escape cancels the active gesture.
+- Select a curve or path and choose **Edit curve points**. Round nodes carry their adjacent tangent controls when moved; square controls adjust each tangent independently. Properties lets you choose a node, insert after it, delete it, change its following segment between straight and curved, and open or close the path. Closing adds a straight segment from the last node to the first; opening removes that closing segment. Choose the last node and Curved segment to reshape the closing edge. Inserting a cubic node exactly splits the segment without reshaping it; deletion joins its neighbors while retaining their outer tangent controls. Undo/Redo retains the selected object.
+- General node operations support one continuous subpath. Imported compound paths retain their generic point editor and native geometry, while node insertion/deletion and pen continuation require a single connected path.
 
 Native format version 4 adds graphics with an affine coordinate frame, so transformations preserve editable shapes. Versions 1–3 still open with no graphics by default. Cleanup and analysis preserve graphic objects. Undo of graphic or typography changes keeps the current chemistry analysis. The tool palette scrolls when the window is short. The scene used for canvas preview also drives SVG, PDF and PNG export.
 
@@ -18,7 +20,7 @@ CDXML exports solid/dashed graphics as editable Bézier paths. Separate fill and
 
 CDXML does not retain ReShiki's parametric shape type. External saves may split grouped bracket strokes, change stacking values and quantize colors/coordinates. A subsequent import keeps the supported visible paths but may have a different number of graphic objects. Native saves preserve ReShiki's exact model.
 
-Dotted CDXML export is explicitly rejected; native/SVG/PDF/PNG retain dots. Chemical polymer semantics, unsupported legacy shapes, arrowed/doubled/shaded curves, transparency, shadows and arbitrary external styling are not implemented. General point insertion/deletion, a freehand pen, nonproportional resize handles, shape-specific corner radii and numeric transform controls remain gaps. Graphical brackets do not define polymers or repeating units.
+Dotted CDXML export is explicitly rejected; native/SVG/PDF/PNG retain dots. Chemical polymer semantics, unsupported legacy shapes, arrowed/doubled/shaded curves, transparency, shadows and arbitrary external styling are not implemented. Continuous freehand stroke tracing, nonproportional resize handles and shape-specific corner radii remain gaps. Graphical brackets do not define polymers or repeating units. Pen paths reuse the existing native path commands and need no additional serialized fields.
 
 Format references: the [published CDXML DTD](https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd), and the published format documentation for [curves](https://bobhanson.github.io/IUPAC-FAIRSpec/cdx_sdk/Curve.htm), [graphics](https://bobhanson.github.io/IUPAC-FAIRSpec/cdx_sdk/Graphic.htm) and [curve flags](https://bobhanson.github.io/IUPAC-FAIRSpec/cdx_sdk/properties/Curve_Type.htm).
 

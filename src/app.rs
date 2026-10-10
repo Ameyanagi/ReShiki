@@ -50,6 +50,7 @@ mod joining;
 mod keyboard_drawing;
 mod label_refresh;
 mod molecule_shortcuts;
+mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
 #[cfg(test)]
@@ -103,6 +104,7 @@ pub enum InspectorTab {
     Pages,
     Abbreviations,
     Properties,
+    Nmr,
     Labels,
     Templates,
     Import,
@@ -119,6 +121,7 @@ pub enum Message {
     ObjectToolbar(object_toolbar::Action),
     InspectorAction(inspector::Action),
     NumericTransform(numeric_transforms::Action),
+    Nmr(nmr::Action),
     Updates(updates::Action),
     Reaction(reactions::Action),
     DrawingStyle(document_styles::Action),
@@ -276,7 +279,7 @@ pub enum Message {
     /// A task result for the drawing in this tab, which may no longer be in front.
     Tab(document_tab::TabId, Box<Message>),
     Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
-    Exported(Result<Option<PathBuf>, String>),
+    Exported(Result<Option<figure_export::Saved>, String>),
     FigureExported(Result<Option<figure_export::Saved>, String>),
     Close(iced::window::Id),
     Discard,
@@ -539,6 +542,9 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
+        if self.tab.doc != before {
+            self.tab.arrow_source = None;
+        }
         self.tab.cleanup = None;
         let reconciled = match reshiki::transaction::reconcile(&mut self.tab.doc, before) {
             Ok(reconciled) => reconciled,
@@ -565,6 +571,9 @@ impl App {
             self.tab.file_epoch,
             continuing,
         );
+        self.tab
+            .nmr
+            .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
         if committed.chemistry_changed {
             self.tab.labels_dirty = true;
@@ -795,6 +804,9 @@ impl App {
             self.keyboard_pointer_selection(point);
         }
         let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
+        self.tab
+            .nmr
+            .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
         self.sync_numeric_transforms();
         if refresh_dimensions {
             self.refresh_numeric_dimensions();
@@ -837,9 +849,9 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         reshiki::accessibility::focus_scope(file_shortcuts::wrap(
-            self.with_updates(self.with_assistant_image(
+            self.with_updates(self.with_assistant_image(self.with_nmr(
                 self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
-            )),
+            ))),
             self.help_open,
             self.assistant.viewed_image.is_some(),
             self.updates.open,
@@ -898,9 +910,13 @@ fn tagged(task: Task<Message>, id: document_tab::TabId) -> Task<Message> {
     })
 }
 
-fn export_file(contents: String, format: &'static str) -> Task<Message> {
+fn export_file(contents: String, format: &'static str, details: Vec<String>) -> Task<Message> {
     Task::perform(
-        save_export(contents.into_bytes(), format),
+        async move {
+            Ok(save_export(contents.into_bytes(), format)
+                .await?
+                .map(|path| figure_export::Saved { path, details }))
+        },
         Message::Exported,
     )
 }

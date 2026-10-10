@@ -55,6 +55,15 @@ impl MoleculeCanvas<'_> {
                 }
             }
             Gesture::Graphic { start } => {
+                if self.tool == Tool::Graphic(GraphicKind::Path) {
+                    if !inside {
+                        return Some(Action::request_redraw().and_capture());
+                    }
+                    let Some(stroke) = self.pen_stroke(start, p) else {
+                        return Some(Action::request_redraw().and_capture());
+                    };
+                    return Some(Action::publish(Edit::PenSegment(stroke)).and_capture());
+                }
                 if !inside
                     || (start.distance(p) < 3.0 / self.camera.zoom
                         && !matches!(
@@ -64,7 +73,17 @@ impl MoleculeCanvas<'_> {
                 {
                     return Some(Action::request_redraw().and_capture());
                 }
-                Edit::Graphic(start, p, state.modifiers.shift() || self.graphic_constrain)
+                let constrain = state.modifiers.shift() || self.graphic_constrain;
+                if matches!(self.tool, Tool::Graphic(GraphicKind::Orbital(_))) {
+                    Edit::Orbital(
+                        start,
+                        p,
+                        constrain,
+                        self.snap_orbitals && !state.modifiers.alt(),
+                    )
+                } else {
+                    Edit::Graphic(start, p, constrain)
+                }
             }
             Gesture::ArrowHandle { id, index } => {
                 match self.release_arrow_handle(state, id, index, p, bounds, inside) {
@@ -80,6 +99,7 @@ impl MoleculeCanvas<'_> {
             }
             Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
+            Gesture::PathPoint(drag) => Edit::GraphicPoint(drag.id, drag.index, drag.target(p)),
             Gesture::Transform(drag) => {
                 match self.release_transform(state, *drag, p, position, inside) {
                     ControlFlow::Continue(edit) => edit,
@@ -108,6 +128,16 @@ impl MoleculeCanvas<'_> {
                 ControlFlow::Continue(edit) => edit,
                 ControlFlow::Break(action) => return Some(action),
             },
+            Gesture::StretchBond { start, plan } => {
+                if !inside || start.distance(p) < 1. / self.camera.zoom {
+                    return Some(Action::request_redraw().and_capture());
+                }
+                Edit::StretchBond {
+                    fixed: plan.fixed,
+                    moving: plan.moving,
+                    length: plan.dragged_length(World::new(p.x - start.x, p.y - start.y)),
+                }
+            }
             Gesture::Select { start } => {
                 let polygon = vec![start, World::new(p.x, start.y), p, World::new(start.x, p.y)];
                 Edit::Select(region_selection(
@@ -148,7 +178,7 @@ impl MoleculeCanvas<'_> {
         if !inside {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        if self.tool == Tool::Arrow
+        if (self.tool == Tool::Arrow || index >= 3)
             && self
                 .doc
                 .arrows
@@ -157,6 +187,9 @@ impl MoleculeCanvas<'_> {
                 .and_then(|a| a.handles().get(index).copied())
                 .is_some_and(|handle| handle.distance(p) < 3. / self.camera.zoom)
         {
+            if index >= 3 {
+                return ControlFlow::Break(Action::request_redraw().and_capture());
+            }
             return ControlFlow::Break(Action::publish(Edit::ArrowClick(id)).and_capture());
         }
         let end = if index < 2 {
@@ -272,7 +305,17 @@ impl MoleculeCanvas<'_> {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
         ControlFlow::Continue(if start.distance(p) < 3.0 / self.camera.zoom {
-            Edit::Click(p)
+            if self.tool == Tool::Arrow
+                && self.attach_arrow_targets
+                && matches!(
+                    self.arrow_preset,
+                    reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
+                )
+            {
+                Edit::ArrowTarget(p, state.modifiers.alt())
+            } else {
+                Edit::Click(p)
+            }
         } else {
             let origin = id
                 .and_then(|id| self.doc.atom(id).map(|a| a.position))

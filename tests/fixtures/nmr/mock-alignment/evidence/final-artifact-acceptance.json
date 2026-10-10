@@ -1,0 +1,648 @@
+{
+  "started_utc": "2026-10-10T02:15:44.343074+00:00",
+  "scope": "Independent final source/test/dependency/signed-artifact acceptance; no Cargo, source/Git/GUI mutations, delegation or new source manifest; new native-review directory excluded",
+  "status": "PASS",
+  "source": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/source-manifest.json",
+    "manifest_sha256": "30dba3b57746dc1cec7a16ff4aa95c34a6a1d0c6139282b0f11a2c9ee9bbad14",
+    "count": 2592,
+    "all_current_paths_and_bytes_match": true,
+    "head": "d92b0fa1305749a10b4e2aa14b5a0ce421afe6b6",
+    "uncommitted_source": true,
+    "aggregate": "c0e2df84a8e307044a16231aac6ae578297b1c14764213fbe3654fecec597089",
+    "runner_hashes": {
+      "validate.py": "56d21a7e0ae278943cc9a83c95ab8140a49dd969c5aeaae34cca55034aa02226",
+      "package.py": "403dc7d0479dafe3b539103a5c20c9cd19de569b74d400bb59de1a8485568120"
+    }
+  },
+  "focused_tests": {
+    "focused-app": {
+      "count": 29,
+      "failed": 0,
+      "ignored": 0,
+      "names": [
+        "app::nmr::palette::tests::pointer_history_preserves_masks_and_invalidates_left_entry_and_unfocus",
+        "app::nmr::palette::tests::pointer_history_uses_ordered_motion_and_never_resyncs_from_redraw",
+        "app::nmr::plot::tests::actual_plot_has_four_teal_sticks_separate_labels_and_preserves_history",
+        "app::nmr::plot::tests::carbon_labels_stay_individual_and_stagger_close_real_shifts",
+        "app::nmr::plot::tests::dense_coincident_and_long_id_reports_keep_every_owner_in_cycleable_groups",
+        "app::nmr::plot::tests::dense_marker_keeps_all_distinct_original_atoms_accessible_and_cycleable",
+        "app::nmr::plot::tests::extreme_finite_shifts_keep_axis_and_packed_positions_finite",
+        "app::nmr::plot::tests::maximum_dense_report_preserves_native_accessibility_and_all_marker_actions",
+        "app::nmr::plot::tests::missing_data_and_nonfinite_values_never_become_zero_shift_markers",
+        "app::nmr::tests::assignment_labels_survive_geometry_but_close_and_chemical_edits_clear_them",
+        "app::nmr::tests::compact_nmr_scrolls_to_later_sites_without_scrolling_the_drawing",
+        "app::nmr::tests::default_and_reset_palette_clear_fixture_drawing_without_moving_camera",
+        "app::nmr::tests::drawing_gesture_ending_over_nmr_stops_without_erasing_after_release",
+        "app::nmr::tests::floating_nmr_preserves_canvas_and_owns_only_its_pointer_input",
+        "app::nmr::tests::foreground_or_background_result_never_lands_in_another_tab",
+        "app::nmr::tests::hybrid_docking_preserves_report_and_camera_and_restores_a_hidden_inspector",
+        "app::nmr::tests::hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edits",
+        "app::nmr::tests::label_checkbox_and_popup_use_real_checked_actions_and_own_batched_clicks",
+        "app::nmr::tests::label_menu_dismissal_and_foreign_canvas_release_keep_pointer_ownership",
+        "app::nmr::tests::mock_aligned_panel_measures_rows_and_recovers_small_viewport_scrolling",
+        "app::nmr::tests::native_batched_palette_buttons_use_ordered_press_and_release_targets",
+        "app::nmr::tests::native_batched_palette_drags_keep_press_position_and_release_ownership",
+        "app::nmr::tests::nearby_plot_markers_cycle_distinct_original_atoms_without_editing",
+        "app::nmr::tests::opening_and_resetting_palette_preserve_origin_when_resizing_visible_corner",
+        "app::nmr::tests::pending_prediction_survives_move_but_chemical_edits_reject_stale_result",
+        "app::nmr::tests::rendered_nmr_controls_publish_values_and_live_native_actions",
+        "app::nmr::tests::reopening_from_properties_predicts_the_newly_selected_molecule",
+        "app::nmr::tests::tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls",
+        "app::nmr::tests::visible_resize_glyph_drags_without_stealing_footer_controls"
+      ],
+      "tests_log_sha256": "8c3b700ef2b2f96c1abdcc745075fed283305e7321036ee60e61848f159f9273",
+      "result_sha256": "a00df63c23e82e697921dd43e766d3669a92160cfe1bb6d746c37a1f354e0894"
+    },
+    "focused-canvas": {
+      "count": 9,
+      "failed": 0,
+      "ignored": 0,
+      "names": [
+        "canvas::nmr::tests::actual_nmr_selection_is_a_filled_halo_and_ordinary_selection_is_unchanged",
+        "canvas::nmr::tests::assignment_ink_is_legible_on_light_and_dark_pages_and_independent_of_chrome",
+        "canvas::nmr::tests::assignment_numbers_use_original_atoms_and_avoid_fixture_symbols_and_each_other",
+        "canvas::nmr::tests::collapsed_assignments_retain_original_owners_at_the_visible_group_anchor",
+        "canvas::nmr::tests::crowded_label_uses_a_leader_only_when_displaced_from_its_real_owner",
+        "canvas::nmr::tests::missing_or_nonfinite_predictions_do_not_gain_labels_or_selected_halos",
+        "canvas::nmr::tests::offscreen_owners_do_not_leave_clamped_labels_on_empty_canvas",
+        "canvas::nmr::tests::proton_assignments_name_the_parent_and_unresolved_group_not_individual_protons",
+        "canvas::nmr::tests::shift_and_combined_modes_follow_moved_atom_without_changing_predictions_or_export"
+      ],
+      "tests_log_sha256": "dc0fb46eedf7a9afd8c76f242db7fc8e840fbb807066a95c680fe9da5d884250",
+      "result_sha256": "dd9779785848257848bba2233b8126b94a7d8136e7e03289d12251c09457bcab"
+    },
+    "focused-markers": {
+      "count": 1,
+      "failed": 0,
+      "ignored": 0,
+      "names": [
+        "canvas::markers::tests::indexed_markers_preserve_document_and_selection_order_and_abbreviation_visibility"
+      ],
+      "tests_log_sha256": "bd928e2ec5c46d06f02bb216e113364683ad838ea9c6013101cd45bba556f12f",
+      "result_sha256": "1b2d67fdb2558ba7cdde5e46fd9e9fd5f250fb360457ff976bfc630b366f50f1"
+    },
+    "focused-cache": {
+      "count": 3,
+      "failed": 0,
+      "ignored": 0,
+      "names": [
+        "canvas::cache::tests::document_edits_loads_and_history_cannot_reuse_stale_geometry",
+        "canvas::cache::tests::guide_layouts_outlive_other_selection_reads_but_not_edits",
+        "canvas::cache::tests::selection_changes_do_not_invalidate_scene_or_claim_partial_moves_are_rigid"
+      ],
+      "tests_log_sha256": "b1dcfc28b64b4f38d799b2fd8bd1348d6b1cfbf01d28600b13857663664e238a",
+      "result_sha256": "a41e4a5915bf0fef3fcdaaf08b4e72d6c2fcb639f945abf7f669e0d50c103bee"
+    }
+  },
+  "checks": {
+    "clippy": {
+      "commands": [
+        [
+          "cargo",
+          "clippy",
+          "--locked",
+          "-p",
+          "reshiki",
+          "--all-targets",
+          "--all-features",
+          "--",
+          "-D",
+          "warnings"
+        ]
+      ],
+      "exit_code": 0,
+      "result_sha256": "533368cbc68e0230dd3719a2dbcbb6297c697fd3fdfa4d57e333802d23f5e0b9",
+      "logs": {
+        "check-1.log": "29577f37e4aac482e747b0bcbcd8059d098ac308d4eb65f7717ca218cfc6ad38"
+      }
+    },
+    "default-check": {
+      "commands": [
+        [
+          "cargo",
+          "check",
+          "--locked",
+          "-p",
+          "reshiki",
+          "--all-targets"
+        ]
+      ],
+      "exit_code": 0,
+      "result_sha256": "61bfc1d780fba3b578cd66ef5de312be37c7b8d65e1d4d6a3228801f2353f893",
+      "logs": {
+        "check-1.log": "287cef22021a1d69b9a8acad694fa26160fcbb043be870de6762d7ca07192f78"
+      }
+    },
+    "format": {
+      "commands": [
+        [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        [
+          "git",
+          "diff",
+          "--check"
+        ]
+      ],
+      "exit_code": 0,
+      "result_sha256": "2a4829fe9fa886c8b3a2a7673c45abe85b4e2de05a2ae8657abfad06192da2c5",
+      "logs": {
+        "check-1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "check-2.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  "build": {
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--bin",
+      "reshiki",
+      "--message-format=json"
+    ],
+    "jobs": 4,
+    "default_features_enabled": true,
+    "cargo_jsonl_sha256": "7d805d3d816d89399cb1d67aede517d0b09d4e3f34ec388cfbefd2f34b7e4795",
+    "own_fresh_false": 15,
+    "foreign_source_artifacts": [],
+    "retained_depfiles": 16,
+    "included_inputs": 568,
+    "included_kinds": {
+      "frozen-worktree": 568
+    },
+    "all_input_bytes_and_depfile_memberships_verified": true,
+    "actual_depfile_artifacts": [
+      {
+        "target": "reshiki_depict_math",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/depict-math/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/00-reshiki_depict_math.d",
+        "sha256": "ca991af9391952fc6c073493970a8b0271e9b50bd288680861799ad86d0c6d64",
+        "input_count": 1,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "reshiki_process_heap",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/process-heap/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/01-reshiki_process_heap.d",
+        "sha256": "b011ac0dec42ba1c838c9cb862e157c48cf40b61d52f51bd77b75704c984b5c5",
+        "input_count": 1,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "zune_jpeg",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/zune-jpeg/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/02-zune_jpeg.d",
+        "sha256": "298084544fa418493f267c012636e77845b11f129086ca315e6991b4a617f0c7",
+        "input_count": 27,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "usvg",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/usvg/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/03-usvg.d",
+        "sha256": "d7074b7c363524af7359013011fc25611b89a96c130552c5d67b6d22aba4f77d",
+        "input_count": 29,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "reshiki_chemistry",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/chemistry/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/04-reshiki_chemistry.d",
+        "sha256": "1be415bd262755f44ad91ff81aef37331ba3ea4e344cce1615cdabd6db6ccd67",
+        "input_count": 104,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "build-script-build",
+        "kind": [
+          "custom-build"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/build.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/05-build-script-build.d",
+        "sha256": "5c1b69bc2d4fd44ef8f012f4837141d7bd8af6ed8b82f9648e9c5e216eb15465",
+        "input_count": 1,
+        "compiled_binding": "exact compiled executable bytes"
+      },
+      {
+        "target": "reshiki_macos",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/macos/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/06-reshiki_macos.d",
+        "sha256": "446ffeac09c4f832c07eb86d6952b23258e8a685e579736addf00b2c6919e307",
+        "input_count": 5,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "reshiki_model",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/model/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/07-reshiki_model.d",
+        "sha256": "fdfa2135acbda99bec6397204561ac402b66194806111da288040db049201390",
+        "input_count": 73,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "svg2pdf",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/svg2pdf/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/08-svg2pdf.d",
+        "sha256": "4d04ee1f118921043e1a2bac1fbc37b632503c78fafef294d5954370b4bf1aa2",
+        "input_count": 17,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "reshiki_geometry",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/geometry/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/09-reshiki_geometry.d",
+        "sha256": "76067af0d5ab0f12bfb7630143633162ce74a9cfc15e6a5c2ebfef122510b44c",
+        "input_count": 3,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "reshiki_io",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/io/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/10-reshiki_io.d",
+        "sha256": "6f6512497545f9f1e6c68b55b64c466ad2f89d818252834d88c492f7bfb642ad",
+        "input_count": 94,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "reshiki_agent",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/agent/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/11-reshiki_agent.d",
+        "sha256": "3ac382f481316f76b232abe2f4407dacb720b8de9e3cca81d96513a4e9098955",
+        "input_count": 45,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "reshiki_mcp",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/mcp/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/12-reshiki_mcp.d",
+        "sha256": "7837efe37eb037a35f5ef513407e88cb952e24e075a650e8e6993b494ab98cb5",
+        "input_count": 10,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "reshiki",
+        "kind": [
+          "lib"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/src/lib.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/13-reshiki.d",
+        "sha256": "ae64ecfc7cc5b9c204c87dc78e96c8f3a767d67ddb4d8db661d6782d85b3d356",
+        "input_count": 35,
+        "compiled_binding": "exact Cargo output basename"
+      },
+      {
+        "target": "reshiki",
+        "kind": [
+          "bin"
+        ],
+        "entrypoint": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/src/main.rs",
+        "fresh": false,
+        "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/14-reshiki.d",
+        "sha256": "8dc603a03021e0985cfa6c63b79125a6ea40cd64ae2253604ff6afd57cd69e13",
+        "input_count": 121,
+        "compiled_binding": "exact compiled executable bytes"
+      }
+    ],
+    "depfile_receipt_sha256": "aaa68eb7a9da4a7b46523e6fbd333f0e1604e092cd4fe45d30b6ee40d94be67d",
+    "dependency_inputs_sha256": "69161f7937565c7af1e74e96abda2f24cac57afdd834f5dc05a266034f885041",
+    "retained_raw_matches_Cargo_root_executable": true
+  },
+  "preservation": {
+    "roots": {
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-hybrid-build-root": {
+        "files": 9,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-hybrid-native-review": {
+        "files": 40,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-input-amendment": {
+        "files": 15,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-input-build": {
+        "files": 13,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-input-native-review": {
+        "files": 11,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-affordance-amendment": {
+        "files": 33,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build": {
+        "files": 31,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-native-review": {
+        "files": 38,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-alignment-build": {
+        "files": 10,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-alignment-build-validation2": {
+        "files": 12,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-alignment-build-validation3": {
+        "files": 12,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-alignment-build-validation4": {
+        "files": 37,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-alignment-build-validation5": {
+        "files": 76,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-alignment-package-continuation": {
+        "files": 31,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-alignment-native-review": {
+        "files": 7,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Hybrid Verified.app": {
+        "files": 9,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Input Verified.app": {
+        "files": 9,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Resize Verified.app": {
+        "files": 9,
+        "all_original_names_and_bytes_match": true
+      },
+      "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Mock Verified.app": {
+        "files": 9,
+        "all_original_names_and_bytes_match": true
+      }
+    },
+    "root_count": 19,
+    "file_count": 411,
+    "receipt_sha256": "0445800d164211653393d1d9d3898bbd0a6cd633a755a20996421494a68c68e4"
+  },
+  "native_packaging_interpreter": {
+    "recorded": {
+      "executable": "/Users/ryuichi/.local/share/uv/python/cpython-3.12-macos-aarch64-none/bin/python3.12",
+      "version": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+      "platform": "darwin",
+      "machine": "arm64",
+      "sha256": "cf450e6bc0b00adecd12b7b13024de7000c7350801addc802bd3b45782104e79"
+    },
+    "independent_probe": {
+      "command": [
+        "/Users/ryuichi/.local/share/uv/python/cpython-3.12-macos-aarch64-none/bin/python3.12",
+        "-B",
+        "-c",
+        "import sys,platform,hashlib,json;print(json.dumps({\"version\":platform.python_version(),\"platform\":sys.platform,\"machine\":platform.machine(),\"file_digest\":hasattr(hashlib,\"file_digest\")}))"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"version\": \"3.12.12\", \"platform\": \"darwin\", \"machine\": \"arm64\", \"file_digest\": true}\n",
+      "stderr": ""
+    }
+  },
+  "package_execution": {
+    "package_log_sha256": "29164e7ac1633fd4d3c1a553b8592a26403587e6d4c12e09f43cfb007532e1ce",
+    "tools": [
+      {
+        "command": [
+          "cargo",
+          "metadata",
+          "--no-deps",
+          "--format-version",
+          "1",
+          "--locked"
+        ],
+        "utc": "2026-10-10T02:12:36.635940+00:00",
+        "index": 0,
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "cargo",
+          "metadata",
+          "--no-deps",
+          "--format-version",
+          "1",
+          "--locked"
+        ],
+        "utc": "2026-10-10T02:12:39.187102+00:00",
+        "index": 1,
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "cargo",
+          "metadata",
+          "--format-version",
+          "1",
+          "--locked"
+        ],
+        "utc": "2026-10-10T02:12:41.709310+00:00",
+        "index": 2,
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "codesign",
+          "--force",
+          "--deep",
+          "--sign",
+          "-",
+          "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app"
+        ],
+        "utc": "2026-10-10T02:12:49.186046+00:00",
+        "index": 3,
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "codesign",
+          "--force",
+          "--deep",
+          "--sign",
+          "-",
+          "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app"
+        ],
+        "utc": "2026-10-10T02:12:52.218125+00:00",
+        "index": 4,
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "codesign",
+          "--verify",
+          "--deep",
+          "--strict",
+          "--verbose=2",
+          "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app"
+        ],
+        "utc": "2026-10-10T02:12:55.111689+00:00",
+        "index": 5,
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "codesign",
+          "-d",
+          "--verbose=4",
+          "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app"
+        ],
+        "utc": "2026-10-10T02:12:57.667258+00:00",
+        "index": 6,
+        "exit_code": 0
+      }
+    ],
+    "all_retained_tool_log_hashes_match": true
+  },
+  "bundle": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app",
+    "provenance_sha256": "2ef7ab164d1ad7ece733fbc3563d6f8b2400d762a4f94dbe78f6948063e7e824",
+    "manifest_sha256": "30bb8a408c4a0e017e6fb96202a58c06fcb2f24b75e401a734aa5b7d3877821c",
+    "file_count": 9,
+    "single_executable": true,
+    "no_symlinks": true,
+    "bundle_id": "dev.reshiki.nmr-final-verified",
+    "mach_o": {
+      "raw": {
+        "sha256": "59c1d3a8db32f74530e7acb1d82e027152ed33844b6a236bcbc4fb31579dbb2d",
+        "size": 225182312,
+        "cpu_type": 16777228,
+        "file_type": 2,
+        "ncmds": 32
+      },
+      "signed": {
+        "sha256": "f35b6519387059084e658fbf1b0ee9e205b14f01f6ee5f0eb644b20a85aa8851",
+        "size": 223891264,
+        "cpu_type": 16777228,
+        "file_type": 2,
+        "ncmds": 32
+      }
+    },
+    "five_licenses_match_all_four_prior_apps": {
+      "LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "LICENSE": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab",
+      "NOTICE": "3b0bffb476a767847f100c0f394aa8f296fd1153e349b7e91c0a6f0e6aaad2b4",
+      "THIRD-PARTY-NOTICES.txt": "3d3be1f406a83e1a76d3b03d833720465bfb0161851aa1c7405fd735ed8908a9",
+      "LICENSE-MIT": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+    },
+    "codesign_verify": {
+      "command": [
+        "codesign",
+        "--verify",
+        "--deep",
+        "--strict",
+        "--verbose=2",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app: valid on disk\n/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app: satisfies its Designated Requirement\n"
+    },
+    "codesign_details": {
+      "command": [
+        "codesign",
+        "-d",
+        "--verbose=4",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "Executable=/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app/Contents/MacOS/reshiki\nIdentifier=dev.reshiki.nmr-final-verified\nFormat=app bundle with Mach-O thin (arm64)\nCodeDirectory v=20400 size=436631 flags=0x2(adhoc) hashes=13638+3 location=embedded\nVersionPlatform=1\nVersionMin=720896\nVersionSDK=1704448\nHash type=sha256 size=32\nCandidateCDHash sha256=77411ba5401f7c484db8418fcd04d81c5d395339\nCandidateCDHashFull sha256=77411ba5401f7c484db8418fcd04d81c5d395339faf8b426dd303d3d5e33c740\nHash choices=sha256\nCMSDigest=77411ba5401f7c484db8418fcd04d81c5d395339faf8b426dd303d3d5e33c740\nCMSDigestType=2\nExecutable Segment base=0\nExecutable Segment limit=92848128\nExecutable Segment flags=0x1\nPage size=16384\nCDHash=77411ba5401f7c484db8418fcd04d81c5d395339\nSignature=adhoc\nInfo.plist entries=13\nTeamIdentifier=not set\nSealed Resources version=2 rules=13 files=6\nInternal requirements count=0 size=12\n"
+    },
+    "file": {
+      "command": [
+        "file",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/reshiki-nmr-final-unsigned",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app/Contents/MacOS/reshiki"
+      ],
+      "exit_code": 0,
+      "stdout": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/reshiki-nmr-final-unsigned:      Mach-O 64-bit executable arm64\n/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app/Contents/MacOS/reshiki: Mach-O 64-bit executable arm64\n",
+      "stderr": ""
+    },
+    "lipo": {
+      "command": [
+        "lipo",
+        "-archs",
+        "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Final Verified.app/Contents/MacOS/reshiki"
+      ],
+      "exit_code": 0,
+      "stdout": "arm64\n",
+      "stderr": ""
+    }
+  },
+  "limitations": [
+    "Artifact/source/log acceptance only; no native UI or published-commit acceptance inferred. New final-native-review directory was not inspected.",
+    "Source is uncommitted over recorded HEAD and identified by exact whole-source manifest.",
+    "The 568 hashed inputs are the exact union of own per-artifact and aggregate depfiles, all frozen worktree files; no claim that every external transitive crate was independently rebuilt or audited.",
+    "No Cargo, test/build execution, signing, app launch, source/Git mutation or delegation in this audit; only read-only codesign/file/lipo and native interpreter identity probe.",
+    "Retained Cargo logs may contain the already-known third-party block v0.1.6 future-incompatibility notice; strict Clippy command itself exited zero."
+  ],
+  "finished_utc": "2026-10-10T02:15:47.630158+00:00"
+}

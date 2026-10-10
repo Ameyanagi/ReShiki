@@ -1,0 +1,627 @@
+{
+  "utc": "2026-10-10T02:12:30.711909+00:00",
+  "actual_crate_depfiles": 15,
+  "aggregate_depfiles": 1,
+  "artifacts": [
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/depict-math#reshiki-depict-math@0.1.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/depict-math/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki_depict_math",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/depict-math/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "1",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_depict_math-a50134aeb7663b15.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_depict_math-a50134aeb7663b15.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_depict_math-a50134aeb7663b15.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/00-reshiki_depict_math.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "ca991af9391952fc6c073493970a8b0271e9b50bd288680861799ad86d0c6d64"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/process-heap#reshiki-process-heap@0.1.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/process-heap/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki_process_heap",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/process-heap/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_process_heap-0cf957d83ff4a565.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_process_heap-0cf957d83ff4a565.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_process_heap-0cf957d83ff4a565.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/01-reshiki_process_heap.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "b011ac0dec42ba1c838c9cb862e157c48cf40b61d52f51bd77b75704c984b5c5"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/zune-jpeg#0.5.15",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/zune-jpeg/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "zune_jpeg",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/zune-jpeg/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default",
+          "neon",
+          "std",
+          "x86"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libzune_jpeg-990a75736ba62e85.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libzune_jpeg-990a75736ba62e85.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/zune_jpeg-990a75736ba62e85.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/02-zune_jpeg.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "298084544fa418493f267c012636e77845b11f129086ca315e6991b4a617f0c7"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/usvg#0.45.1",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/usvg/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "usvg",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/usvg/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "fontdb",
+          "memmap-fonts",
+          "rustybuzz",
+          "system-fonts",
+          "text",
+          "unicode-bidi",
+          "unicode-script",
+          "unicode-vo"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libusvg-2696cd57b2c44d82.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libusvg-2696cd57b2c44d82.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/usvg-2696cd57b2c44d82.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/03-usvg.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "d7074b7c363524af7359013011fc25611b89a96c130552c5d67b6d22aba4f77d"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/chemistry#reshiki-chemistry@0.1.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/chemistry/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki_chemistry",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/chemistry/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_chemistry-ea36e16a342f379e.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_chemistry-ea36e16a342f379e.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_chemistry-ea36e16a342f379e.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/04-reshiki_chemistry.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "1be415bd262755f44ad91ff81aef37331ba3ea4e344cce1615cdabd6db6ccd67"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr#reshiki@0.11.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/Cargo.toml",
+        "target": {
+          "kind": [
+            "custom-build"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "build-script-build",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/build.rs",
+          "edition": "2024",
+          "doc": false,
+          "doctest": false,
+          "test": false
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/build/reshiki-8fc41fba92ab4153/build-script-build"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/build/reshiki-8fc41fba92ab4153/build_script_build-8fc41fba92ab4153.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/05-build-script-build.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "5c1b69bc2d4fd44ef8f012f4837141d7bd8af6ed8b82f9648e9c5e216eb15465"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/native/macos#reshiki-macos@0.1.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/macos/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki_macos",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/macos/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_macos-2e31a0b8bb6ff6ca.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_macos-2e31a0b8bb6ff6ca.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_macos-2e31a0b8bb6ff6ca.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/06-reshiki_macos.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "446ffeac09c4f832c07eb86d6952b23258e8a685e579736addf00b2c6919e307"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/model#reshiki-model@0.1.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/model/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki_model",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/model/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_model-ffe9e995b39d2b4c.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_model-ffe9e995b39d2b4c.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_model-ffe9e995b39d2b4c.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/07-reshiki_model.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "fdfa2135acbda99bec6397204561ac402b66194806111da288040db049201390"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/svg2pdf#0.13.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/svg2pdf/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "svg2pdf",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/vendor/svg2pdf/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "image",
+          "resvg",
+          "text"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libsvg2pdf-63e414b6c99ed3e9.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libsvg2pdf-63e414b6c99ed3e9.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/svg2pdf-63e414b6c99ed3e9.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/08-svg2pdf.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "4d04ee1f118921043e1a2bac1fbc37b632503c78fafef294d5954370b4bf1aa2"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/native/geometry#reshiki-geometry@0.1.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/geometry/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki_geometry",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/native/geometry/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_geometry-956aa89dfe114f51.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_geometry-956aa89dfe114f51.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_geometry-956aa89dfe114f51.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/09-reshiki_geometry.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "76067af0d5ab0f12bfb7630143633162ce74a9cfc15e6a5c2ebfef122510b44c"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/io#reshiki-io@0.1.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/io/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki_io",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/io/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_io-b49b8effa68c45b8.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_io-b49b8effa68c45b8.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_io-b49b8effa68c45b8.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/10-reshiki_io.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "6f6512497545f9f1e6c68b55b64c466ad2f89d818252834d88c492f7bfb642ad"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/agent#reshiki-agent@0.1.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/agent/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki_agent",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/agent/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_agent-3ae3372280e5514c.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_agent-3ae3372280e5514c.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_agent-3ae3372280e5514c.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/11-reshiki_agent.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "3ac382f481316f76b232abe2f4407dacb720b8de9e3cca81d96513a4e9098955"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/mcp#reshiki-mcp@0.1.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/mcp/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki_mcp",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/crates/mcp/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_mcp-661ab565df499b58.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki_mcp-661ab565df499b58.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_mcp-661ab565df499b58.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/12-reshiki_mcp.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "7837efe37eb037a35f5ef513407e88cb952e24e075a650e8e6993b494ab98cb5"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr#reshiki@0.11.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/Cargo.toml",
+        "target": {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "reshiki",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/src/lib.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki-7c9fd445a8f709d3.rlib",
+          "/Users/ryuichi/dev/ReShiki/target/debug/deps/libreshiki-7c9fd445a8f709d3.rmeta"
+        ],
+        "executable": null,
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-7c9fd445a8f709d3.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/13-reshiki.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "ae64ecfc7cc5b9c204c87dc78e96c8f3a767d67ddb4d8db661d6782d85b3d356"
+    },
+    {
+      "artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/nmr#reshiki@0.11.0",
+        "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/Cargo.toml",
+        "target": {
+          "kind": [
+            "bin"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "reshiki",
+          "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/nmr/src/main.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": false,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 1,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default"
+        ],
+        "filenames": [
+          "/Users/ryuichi/dev/ReShiki/target/debug/reshiki"
+        ],
+        "executable": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+        "fresh": false
+      },
+      "original_depfile": "/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-55be4b22279efcc5.d",
+      "retained_depfile": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-final-build/build/depfiles/14-reshiki.d",
+      "relative_input_base": "/Users/ryuichi/dev/ReShiki-worktrees/nmr",
+      "sha256": "8dc603a03021e0985cfa6c63b79125a6ea40cd64ae2253604ff6afd57cd69e13"
+    }
+  ],
+  "depfile_aggregate": "1fae30771a69020bfa952105dc64ccc5684594df0a3062a27225a5e11475acbc",
+  "included_input_count": 568,
+  "each_included_input_hashed": true,
+  "dependency_inputs_sha256": "69161f7937565c7af1e74e96abda2f24cac57afdd834f5dc05a266034f885041",
+  "depfile_inventory_sha256": "a45ee8e730fd431ba9dbfca08465fb8c165eaf139ea929041a1449d3b2532841"
+}

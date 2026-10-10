@@ -1,0 +1,87 @@
+{
+  "baseline_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "implementation_commit": "812273150976ef18d1184e102a70b1e5ee7df21a",
+  "preserved_signed_executable_sha256": "ecb6bfb989e196edc959e23a2a95298945456023d2aacdc5d9c02683609078c8",
+  "input": "methanol-click-input.rsk",
+  "desktop_saved_after": "methanol-click-after-desktop.rsk",
+  "native_version": 19,
+  "comparison": "All top-level fields, atoms and bonds match after excluding only atom marks and computed label_h caches. New mark is checked separately against the exact-head model replay.",
+  "persistent_graph_equal": true,
+  "bond_fields_equal": true,
+  "new_mark": {
+    "owner_atom_id": 2,
+    "kind": "lone_pair",
+    "offset": {
+      "x": 0.0,
+      "y": -15.906372
+    },
+    "angle": 0.0,
+    "size_pt": null
+  },
+  "cache_changes": [
+    {
+      "atom_id": 1,
+      "field": "label_h",
+      "before": 0,
+      "after": 3,
+      "reason": "Computed implicit-hydrogen label cache refreshed for skeletal methyl carbon; explicit H and no_implicit remain unchanged."
+    }
+  ],
+  "unchanged_oxygen_label_h": 1,
+  "desktop_properties_before_and_after": {
+    "formula": "CH4O",
+    "atoms": 2,
+    "bonds": 1,
+    "canonical_smiles": "CO",
+    "weight_g_mol": 32.042,
+    "exact_mass_Da": 32.02621,
+    "cLogP": -0.39,
+    "TPSA_A2": 20.23,
+    "H_bond_donors": 1,
+    "H_bond_acceptors": 1,
+    "rings": 0,
+    "unpaired_electrons": 0
+  },
+  "property_provenance": "Read from the actual before/after native Properties panels. They are not synthetic CLI reports.",
+  "undo_redo": "Root actual native review: one Undo removes the new mark; one Redo restores it.",
+  "manual_marks": "Separate production regression and unchanged manual native fixture/export verify exact stored offsets. Existing marks are not reflowed on reopen.",
+  "orbital_desktop_controls": {
+    "candidate_commit": "812273150976ef18d1184e102a70b1e5ee7df21a",
+    "input": "orbital-methanol-P-Shaded-layer-1-Dark.rsk",
+    "action": "p orbital drag from screen (988, 992) to (988, 1240), same 250% camera, F8 off; compare Snap to atoms on versus off; Save As and one Undo after each.",
+    "snap_on_file": "orbital-snap-on-desktop.rsk",
+    "snap_off_file": "orbital-snap-off-desktop.rsk",
+    "snap_on_origin": {
+      "x": 0.0,
+      "y": 0.0
+    },
+    "snap_off_origin": {
+      "x": 3.8168068,
+      "y": 0.0
+    },
+    "snap_on_axis_x": {
+      "x": 3.8168082,
+      "y": 49.600002
+    },
+    "snap_off_axis_x": {
+      "x": -2.1680848e-06,
+      "y": 49.6
+    },
+    "same_pointer_endpoint_within_world_units": 1e-05,
+    "snap_on_endpoint": {
+      "x": 3.8168082,
+      "y": 49.600002
+    },
+    "snap_off_endpoint": {
+      "x": 3.8168046319152,
+      "y": 49.6
+    },
+    "original_orbital_full_fields_equal": true,
+    "original_atom_bond_graph_equal_excluding_computed_label_h": true,
+    "new_graphic_id": 4,
+    "original_graphic_id": 3,
+    "computed_cache_exception": "C label_h 0\u21923 in both saved candidate files; O stays 1.",
+    "control_screenshot": "orbital-snap-option-off.jpg shows the unchecked context/Properties controls and actual Option/Alt command hint. It is not a captured held-Option drag.",
+    "temporary_modifier_validation": "Actual canvas preview/release regression covers Alt (Option on macOS), combined with Shift, at three zooms; desktop control on/off drags independently checked."
+  }
+}

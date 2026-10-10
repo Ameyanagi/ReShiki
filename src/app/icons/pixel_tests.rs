@@ -45,6 +45,7 @@ fn tool_family(tool: Tool) -> &'static str {
         Tool::Select => "tool-select",
         Tool::Lasso => "tool-lasso",
         Tool::Tilt => "tool-tilt",
+        Tool::StretchBond { .. } => "tool-stretch",
         Tool::Chain(_) => "tool-chain",
         Tool::Bond(_) => "tool-bond",
         Tool::StyledBond(_) => "tool-styled-bond",
@@ -116,6 +117,10 @@ fn all_icons() -> Vec<(String, Icon)> {
         Tool::Select,
         Tool::Lasso,
         Tool::Tilt,
+        Tool::StretchBond {
+            fixed: 1,
+            moving: 2,
+        },
         Tool::Wedge,
         Tool::Hash,
         Tool::Wavy,
@@ -152,13 +157,7 @@ fn all_icons() -> Vec<(String, Icon)> {
             .iter()
             .map(|&orbital| Tool::Graphic(reshiki::graphics::GraphicKind::Orbital(orbital))),
     );
-    tools.extend(
-        [
-            reshiki::graphics::GraphicKind::Picture,
-            reshiki::graphics::GraphicKind::Path,
-        ]
-        .map(Tool::Graphic),
-    );
+    tools.push(Tool::Graphic(reshiki::graphics::GraphicKind::Picture));
     icons.extend(tools.into_iter().map(|tool| {
         let debug = format!("{tool:?}");
         let parts: Vec<&str> = debug
@@ -201,6 +200,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
         "tool-text",
         "tool-erase",
         "tool-edit-points",
+        "tool-stretch",
     ]
     .into_iter()
     .map(|family| (family, 1))
@@ -221,7 +221,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
             reshiki::graphics::GraphicKind::DRAWABLE.len()
                 + reshiki::scientific::SymbolKind::ALL.len()
                 + reshiki::scientific::OrbitalKind::ALL.len()
-                + 2,
+                + 1,
         ),
     ]);
     counts
@@ -237,7 +237,7 @@ fn icon_fixtures_cover_every_variant() {
         *counts.entry(family(*icon)).or_insert(0) += 1;
     }
     assert_eq!(counts, expected_counts());
-    assert_eq!(icons.len(), 125);
+    assert_eq!(icons.len(), 126);
 }
 
 fn render(

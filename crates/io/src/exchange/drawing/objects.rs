@@ -17,18 +17,23 @@ impl Writer<'_> {
             };
             let start = P::from(a.start);
             let end = P::from(a.end);
+            let cubic = a.cubic.map(|[a, b]| [P::from(a), P::from(b)]);
             let control = a.control.map(P::from).or_else(|| {
+                if cubic.is_some() {
+                    return None;
+                }
                 matches!(a.kind.as_str(), "curved" | "fishhook" | "bent").then_some(P {
                     x: (start.x + end.x - end.y + start.y) / 2.,
                     y: (start.y + end.y + end.x - start.x) / 2.,
                 })
             });
+            let curved = control.is_some() || cubic.is_some();
             if s.pattern == LinePattern::Dotted || a.kind == "retro" {
                 return Err(invalid(
                     "Dotted and retrosynthesis arrows require native or image export",
                 ));
             }
-            if a.kind == "equilibrium" && (control.is_some() || s.equilibrium_ratio != 1.) {
+            if a.kind == "equilibrium" && (curved || s.equilibrium_ratio != 1.) {
                 return Err(invalid(
                     "Bent or unequal equilibrium arrows require native or image export",
                 ));
@@ -44,7 +49,7 @@ impl Writer<'_> {
             {
                 return Err(invalid("Equilibrium exchange requires half heads"));
             }
-            if control.is_some()
+            if curved
                 && (s.shape != HeadShape::Solid
                     || s.dipole
                     || s.no_go != NoGo::None
@@ -65,7 +70,7 @@ impl Writer<'_> {
             let color = self.color(s.color)?;
             let n = self.tree.add(
                 Some(self.page),
-                if control.is_some() { "curve" } else { "arrow" },
+                if curved { "curve" } else { "arrow" },
                 [
                     ("id", id),
                     ("ArrowheadHead", head(s.head).into()),
@@ -122,28 +127,34 @@ impl Writer<'_> {
                 self.tree
                     .set(n, "ArrowShaftSpacing", integer(style_real(s.gap_pt) * 100.))?;
             }
-            if let Some(c) = control {
-                let points = if a.kind == "bent" {
-                    vec![
-                        start,
-                        start,
-                        start.lerp(c, 1. / 3.),
-                        start.lerp(c, 2. / 3.),
-                        c,
-                        c.lerp(end, 1. / 3.),
-                        c.lerp(end, 2. / 3.),
-                        end,
-                        end,
-                    ]
+            if curved {
+                let points = if let Some([a, b]) = cubic {
+                    vec![start, start, a, b, end, end]
+                } else if let Some(c) = control {
+                    if a.kind == "bent" {
+                        vec![
+                            start,
+                            start,
+                            start.lerp(c, 1. / 3.),
+                            start.lerp(c, 2. / 3.),
+                            c,
+                            c.lerp(end, 1. / 3.),
+                            c.lerp(end, 2. / 3.),
+                            end,
+                            end,
+                        ]
+                    } else {
+                        vec![
+                            start,
+                            start,
+                            start.add(2. * (c.x - start.x) / 3., 2. * (c.y - start.y) / 3.),
+                            end.add(2. * (c.x - end.x) / 3., 2. * (c.y - end.y) / 3.),
+                            end,
+                            end,
+                        ]
+                    }
                 } else {
-                    vec![
-                        start,
-                        start,
-                        start.add(2. * (c.x - start.x) / 3., 2. * (c.y - start.y) / 3.),
-                        end.add(2. * (c.x - end.x) / 3., 2. * (c.y - end.y) / 3.),
-                        end,
-                        end,
-                    ]
+                    return Err(invalid("Missing curved arrow controls"));
                 };
                 self.tree.set(
                     n,
@@ -374,7 +385,14 @@ impl Writer<'_> {
             };
             let mut parsed = Vec::new();
             for part in parts {
-                part.style.validate().map_err(invalid)?;
+                // Scene-created fill pieces have no stroke. Their original
+                // orbital boundary is exported separately, so clipping edges
+                // must not acquire an artificial outline.
+                let mut checked_style = part.style.clone();
+                if part.filled && checked_style.width_pt == 0. {
+                    checked_style.width_pt = 0.6;
+                }
+                checked_style.validate().map_err(invalid)?;
                 if part.style.pattern == LinePattern::Dotted {
                     return Err(invalid("Dotted graphics require native or image export"));
                 }
@@ -417,19 +435,22 @@ impl Writer<'_> {
                         parent
                     };
                     if let Some(fill) = paint.fill {
-                        self.curve(target, points, *closed, fill, true, 0., false, z)?;
+                        let n = self.curve(target, points, *closed, fill, true, 0., false, z)?;
+                        object = Some(if parent != self.page { parent } else { n });
                     }
-                    let n = self.curve(
-                        target,
-                        points,
-                        *closed,
-                        paint.stroke,
-                        false,
-                        real(paint.width_pt),
-                        paint.pattern == LinePattern::Dashed,
-                        z,
-                    )?;
-                    object = Some(if parent != self.page { parent } else { n });
+                    if paint.width_pt > 0. {
+                        let n = self.curve(
+                            target,
+                            points,
+                            *closed,
+                            paint.stroke,
+                            false,
+                            real(paint.width_pt),
+                            paint.pattern == LinePattern::Dashed,
+                            z,
+                        )?;
+                        object = Some(if parent != self.page { parent } else { n });
+                    }
                 }
             }
             if let Some(n) = object {

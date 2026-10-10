@@ -65,6 +65,8 @@ pub fn chemistry_changed(before: &Document, after: &Document) -> bool {
             b.text_style = None;
             a.marks.clear();
             b.marks.clear();
+            a.mark_serial = 0;
+            b.mark_serial = 0;
             a.display = Default::default();
             b.display = Default::default();
             a.cip_label = None;
@@ -134,6 +136,7 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
     crate::ring_fills::prune(doc);
     crate::depth_appearance::prune(doc);
     doc.reconcile_abbreviations(&before);
+    crate::arrow_anchors::reconcile(doc);
     if let Err(error) = crate::reactions::reconcile(doc) {
         *doc = before;
         return Err(Rejection::Reactions(error));

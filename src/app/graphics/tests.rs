@@ -250,6 +250,7 @@ fn no_selection_changes_drawing_defaults_without_document_history() {
     let _ = app.update(Message::Graphics(Action::FlipPhase(true)));
     let _ = app.update(Message::Graphics(Action::Sides(BracketSides::Left)));
     let _ = app.update(Message::Graphics(Action::AttachSymbols(false)));
+    let _ = app.update(Message::Graphics(Action::SnapOrbitals(false)));
     let kind = GraphicKind::Orbital(OrbitalKind::Dxy);
     let _ = app.update(Message::Graphics(Action::ScientificKind(kind)));
     assert_eq!(app.tool, Tool::Graphic(kind));
@@ -258,6 +259,7 @@ fn no_selection_changes_drawing_defaults_without_document_history() {
     assert!(app.tab.phase_flipped);
     assert_eq!(app.tab.bracket_sides, BracketSides::Left);
     assert!(!app.tab.attach_symbols);
+    assert!(!app.tab.snap_orbitals);
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.tab.doc, before);
     assert_eq!(app.tab.revision, revision);
@@ -276,4 +278,82 @@ fn style_message_restyles_selected_graphics_and_defaults() {
     assert_eq!(app.tab.graphic_style.pattern, dashed);
     assert_eq!(app.tab.doc.graphics[0].style.pattern, dashed);
     assert!(!app.error, "{}", app.status);
+}
+
+#[test]
+fn orbital_snap_preference_and_free_node_history_preserve_the_drawing() {
+    let mut app = ready(vec![], vec![]);
+    let atom = app.tab.doc.add_atom("N", Point::default());
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Graphics(Action::SnapOrbitals(false)));
+    assert!(!app.tab.snap_orbitals);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let orbital = GraphicKind::Orbital(OrbitalKind::P);
+    let _ = app.update(Message::Tool(Tool::Graphic(orbital)));
+    let _ = app.update(Message::Tool(Tool::Select));
+    let _ = app.update(Message::Tool(Tool::Graphic(orbital)));
+    assert!(
+        !app.tab.snap_orbitals,
+        "Preference survives switching tools"
+    );
+    app.edit(crate::canvas::Edit::Orbital(
+        Point::new(4., 0.),
+        Point::new(4., -42.),
+        false,
+        false,
+    ));
+    assert_eq!(app.tab.doc.atom(atom), before.atom(atom));
+    assert_eq!(app.tab.doc.graphics[0].origin, Point::new(4., 0.));
+    assert!(!app.error, "{}", app.status);
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before, "One undo removes only the new orbital");
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(
+        app.tab.doc, after,
+        "Redo restores its node, axis, phase and layer"
+    );
+    let saved = app.tab.doc.file_json().unwrap();
+    assert_eq!(
+        Document::from_native_file(&saved).unwrap(),
+        app.tab.doc.current()
+    );
+}
+
+#[test]
+fn click_lone_pairs_and_manual_marks_have_separate_exact_history_steps() {
+    let mut app = ready(vec![], vec![]);
+    let id = app.tab.doc.add_atom("O", Point::default());
+    app.tab.doc.atom_mut(id).unwrap().label_h = 1;
+    let pair = GraphicKind::Symbol(SymbolKind::LonePair);
+    app.tool = Tool::Graphic(pair);
+    let original = app.tab.doc.clone();
+    app.edit(crate::canvas::Edit::Graphic(
+        Point::default(),
+        Point::default(),
+        false,
+    ));
+    let auto = app.tab.doc.atom(id).unwrap().marks[0].clone();
+    assert!(auto.offset.distance(Point::default()) < app.tab.doc.drawing_style.font_size());
+    assert_undo_redo(&mut app, &original);
+    let before_drag = app.tab.doc.clone();
+    app.tool = Tool::Graphic(pair);
+    app.edit(crate::canvas::Edit::Graphic(
+        Point::default(),
+        Point::new(8., -15.),
+        false,
+    ));
+    assert_eq!(app.tab.doc.atom(id).unwrap().marks[0], auto);
+    assert_eq!(
+        app.tab.doc.atom(id).unwrap().marks[1].offset,
+        Point::new(8., -15.)
+    );
+    assert_eq!(app.tab.doc.atom(id).unwrap().label_h, 1);
+    assert_undo_redo(&mut app, &before_drag);
+    assert_eq!(
+        Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap(),
+        app.tab.doc.current()
+    );
 }

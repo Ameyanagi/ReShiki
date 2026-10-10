@@ -1,0 +1,54 @@
+{
+  "utc": "2026-10-10T00:53:05.604125+00:00",
+  "kind": "root native BEFORE qualification",
+  "application": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Resize Verified.app/Contents/MacOS/reshiki",
+    "bytes": 223766736,
+    "sha256": "37e9409b75661f9acaa346603d55b47e2f4a522d112637632d795832f69f33e0"
+  },
+  "process": "26056 Sat Oct 10 09:05:42 2026     /Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki NMR Resize Verified.app/Contents/MacOS/reshiki",
+  "input_document": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-native-review/ethyl-acetate-nmr-v3-native.rsk",
+    "bytes": 3377,
+    "sha256": "08978db95416b8f58df2d8b12cbe949328327c8ddc0d0a75c7e32668e0f14cca"
+  },
+  "historical_complete_source_proof": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/final-app-provenance.json",
+    "bytes": 26749,
+    "sha256": "ec5cb14d656d4302c03ac7ad81db7729939fca02b879bc65d088da239144ea0f"
+  },
+  "historical_depfile_audit": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-resize-build/root-independent-depfiles/audit-receipt.json",
+    "bytes": 31191,
+    "sha256": "38b95e4393ae684748a2f5c2a4794b2ae4a42c90c72a44cd085c39f7a1b5d71d"
+  },
+  "captures": [
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-alignment-native-review/before-carbon13-atom-labels-160-percent-keyboard-off.jpg",
+      "bytes": 339410,
+      "sha256": "42ee67b6a0f251b0c45ad74f1c54091b0186ed1c9a8387dbb6c578645cce70bc"
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/nmr-mock-alignment-native-review/before-carbon13-atom-labels-160-percent-keyboard-off.ax.txt",
+      "bytes": 7793,
+      "sha256": "34a3dda022003fce100262f31884fb97c828c81ce287e8bc1c7e83f317612764"
+    }
+  ],
+  "observed_ui": {
+    "window": "ethyl-acetate-nmr-v3-native.rsk \u2014 ReShiki",
+    "report": "13C 4 of 4",
+    "label_mode": "Atom",
+    "labels_on": true,
+    "selected_atom": 2,
+    "manual_zoom_percent": 160,
+    "keyboard_drawing": false,
+    "undo_redo_disabled": true,
+    "document_dirty": false,
+    "inspector": "shown; molecular properties collapsed, Atom details expanded"
+  },
+  "limits": [
+    "160% manually selected through native minus buttons; separate original250% capture is historical proof, not unchanged zoom",
+    "Input is owned native version19 save; original version17 normalization is accounted separately.",
+    "Runtime UI mock mismatch; no accepted new-source AFTER yet."
+  ]
+}

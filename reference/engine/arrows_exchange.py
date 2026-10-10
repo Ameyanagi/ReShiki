@@ -1,8 +1,8 @@
 """Editable CDXML arrow exchange, checked against ChemDraw-saved objects.
 
-Circular/elliptical arcs and arbitrary splines are rejected rather than silently
-converted to a different curve. ReShiki's single quadratic Bézier arrows use the
-CDXML curve object's exact cubic representation.
+Circular/elliptical arcs and multi-segment splines are rejected rather than
+converted to a different curve. Single cubic Bézier arrows retain both controls;
+legacy quadratic arrows use the exact equivalent cubic representation.
 """
 
 import math
@@ -46,6 +46,8 @@ def appearance(arrow):
 
 
 def control(arrow):
+    if arrow.get("cubic") is not None:
+        return None
     if arrow.get("control") is not None:
         return arrow["control"]
     if arrow.get("kind") in ("curved", "fishhook", "bent"):
@@ -159,19 +161,22 @@ def read_arrow(el, root, point, colors, identifier):
                 s["pattern"] = "dashed"
             return result
         if len(values) != 12:
-            raise ValueError("Only quadratic and single-elbow arrow curves are supported")
+            raise ValueError(
+                "Only single-segment Bézier and single-elbow arrow curves are supported"
+            )
         points = [point(" ".join(values[i : i + 2])) for i in range(0, 12, 2)]
         start, a, b, end = points[1:5]
         c1 = {k: start[k] + 1.5 * (a[k] - start[k]) for k in ("x", "y")}
         c2 = {k: end[k] + 1.5 * (b[k] - end[k]) for k in ("x", "y")}
-        if math.hypot(c1["x"] - c2["x"], c1["y"] - c2["y"]) > 0.15:
-            raise ValueError("This cubic arrow cannot be represented by a single quadratic bend")
         result.update(
             start=start,
             end=end,
-            control={k: (c1[k] + c2[k]) / 2 for k in ("x", "y")},
             kind="fishhook" if head in ("left", "right") else "curved",
         )
+        if math.hypot(c1["x"] - c2["x"], c1["y"] - c2["y"]) < 1e-8:
+            result["control"] = {k: (c1[k] + c2[k]) / 2 for k in ("x", "y")}
+        else:
+            result["cubic"] = [a, b]
         if flags & 2:
             s["pattern"] = "dashed"
     else:
@@ -182,11 +187,13 @@ def read_arrow(el, root, point, colors, identifier):
 def write_arrow(parent, arrow, identifier, position, color_id):
     s = appearance(arrow)
     c = control(arrow)
+    cubic = arrow.get("cubic")
+    curved = c is not None or cubic is not None
     if s["pattern"] == "dotted" or arrow.get("kind") == "retro":
         raise ValueError(
             "Dotted and retrosynthesis arrows need native/SVG/PDF/PNG export; CDXML support is not available yet"
         )
-    if arrow.get("kind") == "equilibrium" and (c is not None or s["equilibrium_ratio"] != 1):
+    if arrow.get("kind") == "equilibrium" and (curved or s["equilibrium_ratio"] != 1):
         raise ValueError("Bent or unequal equilibrium arrows need native/SVG/PDF/PNG export")
     if s["dipole"] and s["tail"] != "none":
         raise ValueError("ChemDraw removes the tail head on dipole arrows; use native/SVG/PDF/PNG")
@@ -194,11 +201,11 @@ def write_arrow(parent, arrow, identifier, position, color_id):
         s["head"] not in ("left", "right") or s["tail"] not in ("left", "right")
     ):
         raise ValueError("CDXML equilibrium exchange requires half heads; use native/SVG/PDF/PNG")
-    if c is not None and s["shape"] != "solid":
+    if curved and s["shape"] != "solid":
         raise ValueError(
             "ChemDraw does not preserve angled or hollow heads on these Bézier curves; use native/SVG/PDF/PNG"
         )
-    if c is not None and (
+    if curved and (
         s["dipole"] or s["no_go"] != "none" or (s["head"] == "none" and s["tail"] == "none")
     ):
         raise ValueError("This curved arrow decoration needs native/SVG/PDF/PNG export")
@@ -222,7 +229,7 @@ def write_arrow(parent, arrow, identifier, position, color_id):
     if arrow.get("kind") == "equilibrium":
         attrs["ArrowShaftSpacing"] = str(round(s["gap_pt"] * 100))
     start, end = arrow["start"], arrow["end"]
-    if c is None:
+    if not curved:
         attrs.update(Tail3D=position(start) + " 0", Head3D=position(end) + " 0")
         return ET.SubElement(parent, "arrow", attrs)
     if arrow.get("kind") == "bent":
@@ -247,8 +254,11 @@ def write_arrow(parent, arrow, identifier, position, color_id):
             Closed="no",
         )
         return ET.SubElement(parent, "curve", attrs)
-    a = {k: start[k] + 2 * (c[k] - start[k]) / 3 for k in ("x", "y")}
-    b = {k: end[k] + 2 * (c[k] - end[k]) / 3 for k in ("x", "y")}
+    if cubic is not None:
+        a, b = cubic
+    else:
+        a = {k: start[k] + 2 * (c[k] - start[k]) / 3 for k in ("x", "y")}
+        b = {k: end[k] + 2 * (c[k] - end[k]) / 3 for k in ("x", "y")}
     attrs.update(
         CurvePoints=" ".join(position(p) for p in (start, start, a, b, end, end)),
         CurveType=str(2 if s["pattern"] == "dashed" else 0),

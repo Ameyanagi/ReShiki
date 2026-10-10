@@ -34,8 +34,31 @@ pub(super) fn draw_primitives(
     bounds: Rectangle,
     minimum: f32,
 ) {
+    draw_primitives_with_opacity(frame, primitives, camera, bounds, minimum, 1.);
+}
+
+fn draw_primitives_with_opacity(
+    frame: &mut layered::Frame<'_>,
+    primitives: &[Primitive],
+    camera: Camera,
+    bounds: Rectangle,
+    minimum: f32,
+    opacity: f32,
+) {
+    let alpha = |mut color: Color| {
+        color.a *= opacity;
+        color
+    };
     for primitive in primitives {
         match primitive {
+            Primitive::Opacity { alpha, primitive } => draw_primitives_with_opacity(
+                frame,
+                std::slice::from_ref(primitive.as_ref()),
+                camera,
+                bounds,
+                minimum,
+                opacity * alpha,
+            ),
             Primitive::Picture(g) => {
                 if let Some(picture) = &g.picture {
                     let flip = g.axis_x.x * g.axis_y.y - g.axis_x.y * g.axis_y.x < 0.;
@@ -83,11 +106,11 @@ pub(super) fn draw_primitives(
                     }
                 });
                 if *filled && let Some(c) = style.fill {
-                    frame.fill(&path, rgb(c.rgb()));
+                    frame.fill(&path, alpha(rgb(c.rgb())));
                 }
                 let dashes: Vec<_> = style.dashes().iter().map(|v| v * camera.zoom).collect();
                 let stroke = Stroke::default()
-                    .with_color(rgb(style.stroke.rgb()))
+                    .with_color(alpha(rgb(style.stroke.rgb())))
                     .with_width(if style.width_pt > 0. {
                         (style.width() * camera.zoom).max(minimum)
                     } else {
@@ -106,7 +129,7 @@ pub(super) fn draw_primitives(
                 Stroke::default()
                     .with_width((*width * camera.zoom).max(minimum))
                     .with_line_cap(canvas::LineCap::Round)
-                    .with_color(Color::BLACK),
+                    .with_color(alpha(Color::BLACK)),
             ),
             Primitive::Polygon(points) => {
                 let path = Path::new(|builder| {
@@ -118,7 +141,7 @@ pub(super) fn draw_primitives(
                         builder.close();
                     }
                 });
-                frame.fill(&path, Color::BLACK);
+                frame.fill(&path, alpha(Color::BLACK));
             }
             Primitive::Text {
                 position,
@@ -150,7 +173,7 @@ pub(super) fn draw_primitives(
                             position_screen.y,
                         );
                     for (path, color) in &paths.paths {
-                        frame.fill(&path.transform(&transform), *color);
+                        frame.fill(&path.transform(&transform), alpha(*color));
                     }
                 }
                 if style.underline {
@@ -162,7 +185,7 @@ pub(super) fn draw_primitives(
                         ),
                         Stroke::default()
                             .with_width((*size * 0.045 * camera.zoom).max(0.5))
-                            .with_color(rgb(*color)),
+                            .with_color(alpha(rgb(*color))),
                     );
                 }
             }

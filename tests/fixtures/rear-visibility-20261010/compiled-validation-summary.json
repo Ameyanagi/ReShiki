@@ -1,0 +1,247 @@
+{
+  "time": "2026-10-09T23:04:54.937032+00:00",
+  "status": "compiled_and_signed_validation_PASS_native_desktop_pending",
+  "worktree": "/Users/ryuichi/dev/ReShiki-worktrees/back-opacity",
+  "base_head": "52fd95d6c537c9ae5c7c35a3da98cd63b48bfd74",
+  "production_source_uncommitted": true,
+  "reviewed_source_receipt_sha256": "f3c41047b14793f01eb376bcadefa9f99d2021e52d6955dc968df64c20749037",
+  "source_count": 1071,
+  "source_aggregate": "173a0dd53b1af5c66095f774f737cdde36657e865c991a8af5d5ed7a14fbb59e",
+  "source1071_exact": true,
+  "protected164_exact": true,
+  "bundle9_exact": true,
+  "own_default_artifacts": 15,
+  "all_own_default_artifacts_fresh_false": true,
+  "foreign_worktree_sources_rejected": true,
+  "relative_depfiles_resolved_with_unambiguous_exact_own_compiler_entrypoint": "Cargo invocation directory or manifest directory; included non-Rust files checked to base Git",
+  "accepted_named_focused_tests": {
+    "model-actual-raster": {
+      "passed": 17,
+      "ignored": 0,
+      "named_passed": [
+        "rear_opacity::visibility_tests::view_visibility_degenerate_cap_masks_never_restore_an_entire_hidden_bond",
+        "rear_opacity::visibility_tests::view_visibility_centered_double_rails_do_not_erase_managed_rear_ink",
+        "rear_opacity::visibility_tests::view_visibility_hidden_middle_is_split_without_fading_exposed_endpoints",
+        "rear_opacity::visibility_tests::view_visibility_open_chains_and_single_tilted_rings_do_not_invent_surfaces",
+        "rear_opacity::visibility_tests::view_visibility_external_foreground_clips_cap_without_hitting_rim_anchor",
+        "rear_opacity::visibility_tests::view_visibility_exposed_miter_sectors_retain_opaque_compound_ink",
+        "rear_opacity::visibility_tests::view_visibility_freezing_rgb_keeps_settings_but_visibility_tracks_rotation",
+        "rear_opacity::visibility_tests::view_visibility_rim_exemption_does_not_leak_to_unrelated_foreground_ink",
+        "rear_opacity::visibility_tests::view_visibility_rotated_rim_first_failure_diagnostic",
+        "rear_opacity::visibility_tests::view_visibility_cages_keep_entire_rim_and_fade_hidden_interior",
+        "rear_opacity::visibility_tests::view_visibility_rim_backbone_and_inward_rail_have_independent_depth",
+        "rear_opacity::visibility_tests::view_visibility_query_budget_tracks_nonopaque_owners_and_independent_cages",
+        "rear_opacity::visibility_tests::view_visibility_budget_fallback_is_wholly_opaque_and_order_independent",
+        "rear_opacity::visibility_tests::view_visibility_validates_complete_mesh_and_rejects_partial_folded_or_duplicate_cages",
+        "rear_opacity::visibility_tests::view_visibility_shell_respects_external_and_own_explicit_bond_layers",
+        "rear_opacity::visibility_tests::view_visibility_rotations_are_live_and_opaque_output_is_exact",
+        "rear_opacity::visibility_tests::view_visibility_svg_raster_keeps_full_rim_stroke_and_real_hidden_alpha_on_both_themes"
+      ],
+      "named_ignored": [],
+      "receipt_sha256": "ed19204f1e6986a9a25768509e2e6a83e1c52de9183f3ba2b99efe83036dabdf",
+      "stdout_sha256": "e9a357bd30e1eac3399a19c71523ac7ae78b4da36df9ae777a9c9ec373da9c43"
+    },
+    "root-exports": {
+      "passed": 5,
+      "ignored": 0,
+      "named_passed": [
+        "native_preserves_opacity_and_external_editable_copy_reports_presentation_loss",
+        "flat_retained_rear_setting_keeps_distinct_color_highlight_overlap_and_exact_output",
+        "opaque_front_atom_highlight_stays_above_different_color_bond_with_rear_alpha_elsewhere",
+        "hidden_cage_ink_disappears_whole_rim_stays_solid_and_100_restores_original_figure",
+        "transparent_raster_and_vector_exports_have_real_alpha_and_front_ink_on_each_theme"
+      ],
+      "named_ignored": [],
+      "receipt_sha256": "85b3ebd710581ec77a562d38788ab61b322baad9b664e58ff3a34db538b87ced",
+      "stdout_sha256": "d3c60b7a23e8391e0282346a06bc724b22496b4cb6577fd03f0b9e2f57776bd9"
+    },
+    "app-history-complete-bin": {
+      "passed": 3,
+      "ignored": 1,
+      "named_passed": [
+        "app::tests::rear_opacity_draft_apply_is_one_undo_and_rejects_stale_invalid_or_late_input",
+        "app::tests::rear_target_selection_includes_quadruple_and_partial_covalent_bonds",
+        "app::tests::rgb_first_coordinate_contact_rear_apply_targets_one_molecule_and_retains_history"
+      ],
+      "named_ignored": [
+        "canvas::render_parity_tests::rear_opacity_canvas_matches_reference_alpha_and_keeps_cage_rim_and_marks_clean"
+      ],
+      "receipt_sha256": "4a1d091b7d9b81159ba64a57a067dd76284d580874f21ceed99a22173e921241",
+      "stdout_sha256": "26b8942de103a33b4a868baf176e52fd65247b051455c0337f883de63dd74200"
+    },
+    "native-wgpu-bin": {
+      "passed": 1,
+      "ignored": 0,
+      "named_passed": [
+        "canvas::render_parity_tests::rear_opacity_canvas_matches_reference_alpha_and_keeps_cage_rim_and_marks_clean"
+      ],
+      "named_ignored": [],
+      "receipt_sha256": "7ba6782648697d0334ca2a0373512d647045b2c21104458224dfe4005f343602",
+      "stdout_sha256": "8ccd0dbea8bd30f1f434c21e104944ce2876a5aecd9ed16501cb4ea49a50fd22"
+    }
+  },
+  "focused_named_pass_count": 26,
+  "prior_frozen_full_model_result": {
+    "passed": 175,
+    "ignored": 7,
+    "scope": "isolated model run on same f3c41047 source; shared17 subset is not an additional unique17"
+  },
+  "required_checks": [
+    "workspace_all_targets_all_features_check",
+    "workspace_all_targets_all_features_clippy_D_warnings",
+    "workspace_fmt",
+    "diff_whitespace"
+  ],
+  "phases": {
+    "app-history-bin": {
+      "exit_code": 0,
+      "receipt_sha256": "d1e48e8178a7ab5fcb3dbf727dc9f962a7e3771b8081487e98ca6b0aa45d2b89",
+      "source1071_exact_after": true,
+      "seconds": 46.574048917
+    },
+    "app-history-complete-bin": {
+      "exit_code": 0,
+      "receipt_sha256": "4a1d091b7d9b81159ba64a57a067dd76284d580874f21ceed99a22173e921241",
+      "source1071_exact_after": true,
+      "seconds": 7.638799292
+    },
+    "app-history": {
+      "exit_code": 0,
+      "receipt_sha256": "f28d06e2dafc385ac472b68a5d87cc67f70cc5fc491cbb5e517aaa2584dd95da",
+      "source1071_exact_after": true,
+      "seconds": 29.734649375
+    },
+    "artifact-preservation-all-relative-verified": {
+      "exit_code": 1,
+      "receipt_sha256": "491a9ebedd5f64a135a880c22fee36321c8b39b04d405bb3b51c2e6e6e62c269",
+      "source1071_exact_after": true,
+      "seconds": 0.557121708
+    },
+    "artifact-preservation-relative-verified": {
+      "exit_code": 1,
+      "receipt_sha256": "2c129ff74978e1e5e6fcf2b5ff2ee4b7327d97ca7f9f44feecb0bef11e8b89bc",
+      "source1071_exact_after": true,
+      "seconds": 0.35487054100000004
+    },
+    "artifact-preservation-unambiguous-verified": {
+      "exit_code": 0,
+      "receipt_sha256": "8733065c0150558d32a075050bd0638862a21e3fe84c037aaf32a60323418096",
+      "source1071_exact_after": true,
+      "seconds": 1.459052583
+    },
+    "artifact-preservation": {
+      "exit_code": 1,
+      "receipt_sha256": "a39c359dbc7b4c5dfded293c597c19374aeecd1972cf8d55c0410ebf234179c0",
+      "source1071_exact_after": true,
+      "seconds": 0.481978542
+    },
+    "compiled-artifact-file-hashes": {
+      "exit_code": 0,
+      "receipt_sha256": "be7ac83c3dc079c7bb8e486e434b46d0ac1263476608a4b0fad5b8a3ab6e8f97",
+      "source1071_exact_after": true,
+      "seconds": 0.601328667
+    },
+    "default-build": {
+      "exit_code": 0,
+      "receipt_sha256": "d5fd1a574e475c4f76873896ea3958f886566450cf4cdf24b0c0a282d72e5035",
+      "source1071_exact_after": true,
+      "seconds": 77.24684075
+    },
+    "model-actual-raster": {
+      "exit_code": 0,
+      "receipt_sha256": "ed19204f1e6986a9a25768509e2e6a83e1c52de9183f3ba2b99efe83036dabdf",
+      "source1071_exact_after": true,
+      "seconds": 75.67064279200001
+    },
+    "native-wgpu-bin": {
+      "exit_code": 0,
+      "receipt_sha256": "7ba6782648697d0334ca2a0373512d647045b2c21104458224dfe4005f343602",
+      "source1071_exact_after": true,
+      "seconds": 15.973023083
+    },
+    "native-wgpu": {
+      "exit_code": 0,
+      "receipt_sha256": "081512fc621aaac057180330f35ea5c93d12de0f279478a6a8347c40e5e7f60a",
+      "source1071_exact_after": true,
+      "seconds": 0.755378958
+    },
+    "package-sign": {
+      "exit_code": 0,
+      "receipt_sha256": "42ef8dff86b517adab8e77cc45bb4355ceb06728f39cf8064c2fb4f751fa330e",
+      "source1071_exact_after": true,
+      "seconds": 10.630886958
+    },
+    "required-check": {
+      "exit_code": 0,
+      "receipt_sha256": "1a3cf55f05b756949d8e0940b5e9b00e60770e679065c75b31e4da11e159578d",
+      "source1071_exact_after": true,
+      "seconds": 345.25687450000004
+    },
+    "required-clippy": {
+      "exit_code": 0,
+      "receipt_sha256": "da3e99dfa1f7be13cc85955cb4e32bae88176f60f5ced0f857babb4d7db73fff",
+      "source1071_exact_after": true,
+      "seconds": 303.95558954100005
+    },
+    "required-fmt": {
+      "exit_code": 0,
+      "receipt_sha256": "01b42edc990bf37fc1a5382c963ef45d067f453670427c296774f653d4a9f142",
+      "source1071_exact_after": true,
+      "seconds": 3.4402431669999998
+    },
+    "required-whitespace": {
+      "exit_code": 0,
+      "receipt_sha256": "fc2e2c6e7c5ab8e157b23d74423859776544f73f7a55bde5d66e97428f783c89",
+      "source1071_exact_after": true,
+      "seconds": 0.45005379199999995
+    },
+    "root-exports": {
+      "exit_code": 0,
+      "receipt_sha256": "85b3ebd710581ec77a562d38788ab61b322baad9b664e58ff3a34db538b87ced",
+      "source1071_exact_after": true,
+      "seconds": 131.231405708
+    },
+    "signed-cli-exports": {
+      "exit_code": 0,
+      "receipt_sha256": "0bd67b2203ea7360d5951e6c51871bedf28c9e7fe99bb0373694839f1d8b4892",
+      "source1071_exact_after": true,
+      "seconds": 6.084657041
+    }
+  },
+  "excluded_or_supplemental_preserved_attempts": {
+    "app-history": "zero tests due library target; not acceptance evidence",
+    "native-wgpu": "zero tests due library target; not acceptance evidence",
+    "app-history-bin": "partial one-app-test route; complete route separately ran3",
+    "artifact-preservation": "parser incorrectly assumed absolute source paths",
+    "artifact-preservation-relative-verified": "parser supported only relative custom build, not root library",
+    "artifact-preservation-all-relative-verified": "parser assumed manifest base, not workspace invocation base"
+  },
+  "app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Visibility Verified.app",
+  "raw_binary_sha256": "df9cb1b00cf30134a2367f291f50457967504ba4b37491a1062a8323b53f9243",
+  "signed_binary_sha256": "bc9b3d61b3acb8c65e0b2ff1b6be2e0c3835ef9ebd097c1785f8210b28fb31f7",
+  "signed_app_provenance_sha256": "b3d92098d0317387ef5776853fae71c41ad2c277e01c333d2a6737c6299e6075",
+  "artifact_origin_sha256": "621a1f8a6e5a119af7d20c862fd2ccf607b9e865c616772e81cffab725977624",
+  "compiled_artifact_files_sha256": "fa0b6ca99b164b76273f0fe3c5822ab272fb1effe7e7a6393b5912da81ccff3a",
+  "signed_cli_verification_sha256": "785ba93441b6f9cdf2bbaa57ec7fe72ef38d7a5b9b9a569cfa9867ee68352481",
+  "signed_cli_commands": 14,
+  "signed_cli_checks": {
+    "same_chemistry_100_25_0": true,
+    "svg_png_pdf_all9": true,
+    "old_new100_svg_png_byte_equal": true,
+    "rim_boundary_bonds": 20,
+    "rim_samples_per_alpha": 100,
+    "rim_opaque_at100_25_0": true,
+    "hidden_darkness_on_white_paper": {
+      "100": 255,
+      "25": 64,
+      "0": 0
+    },
+    "PDF_true_alpha25": true
+  },
+  "shared_Cargo_lease_returned_to_ROOT": true,
+  "no_more_Cargo_authorized": true,
+  "ROOT_sole_GUI_and_publication_owner": true,
+  "desktop_after_screenshots_native_save_history_reopen_pending": true,
+  "windows_print_EMF_not_run": true,
+  "no_source_commit_push_PR_or_merge": true
+}

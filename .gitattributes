@@ -4,3 +4,34 @@ docs/changes/fixtures/emf-import/windows-native-20261010/app-link-inputs.json -t
 docs/changes/fixtures/emf-import/windows-native-20261010/actual-app-worker-result.json -text whitespace=cr-at-eol
 docs/changes/fixtures/emf-import/windows-native-20261010/app-relocated-link-result.json -text whitespace=cr-at-eol
 docs/changes/fixtures/emf-import/windows-native-20261010/windows-app-link-launch-failed.json -text whitespace=cr-at-eol
+
+# Preserve exact inherited license, exported data, and captured evidence whitespace.
+licenses/nmrshiftdb2/DATABASE-LICENSE.txt -text whitespace=-blank-at-eof,-blank-at-eol
+tests/fixtures/nmr/ethyl-acetate-carbon-desktop.tsv -text whitespace=-blank-at-eol
+tests/fixtures/nmr/explicit-assigned-h.sd -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mixed-measured-calculated.sd -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-both-labels-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-corner-resize-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-default-160-percent-atom-labels-keyboard-off.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-default-250-percent-atom-labels-keyboard-off.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-details-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-details-controls-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-details-method-scrolled-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-docked-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-final-saved-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-labels-off-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-plot-linked-selection-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-ppm-labels-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-reset-position-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-title-drag-160-percent.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/after-carbon13-tsv-export.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/before-carbon13-atom-labels-160-percent-keyboard-off.ax.txt -text whitespace=-blank-at-eol
+tests/fixtures/nmr/mock-alignment/evidence/build/focused-app/tests.log -text whitespace=-blank-at-eof
+tests/fixtures/nmr/mock-alignment/evidence/build/focused-cache/tests.log -text whitespace=-blank-at-eof
+tests/fixtures/nmr/mock-alignment/evidence/build/focused-canvas/tests.log -text whitespace=-blank-at-eof
+tests/fixtures/nmr/mock-alignment/evidence/build/focused-markers/tests.log -text whitespace=-blank-at-eof
+tests/fixtures/nmr/mock-alignment/evidence/final-carbon13.tsv -text whitespace=-blank-at-eol
+tests/fixtures/rear-visibility-20261010/app-history-complete-bin.log -text whitespace=-blank-at-eof
+tests/fixtures/rear-visibility-20261010/model-actual-raster.log -text whitespace=-blank-at-eof
+tests/fixtures/rear-visibility-20261010/native-wgpu-bin.log -text whitespace=-blank-at-eof
+tests/fixtures/rear-visibility-20261010/root-exports.log -text whitespace=-blank-at-eof

@@ -56,6 +56,7 @@ fn centers(doc: &mut Document, cases: &[(&str, &[(f32, f32)])]) -> Vec<u64> {
 
 fn mark(kind: MarkKind) -> AtomMark {
     AtomMark {
+        id: None,
         kind,
         offset: Point::default(),
         angle: 0.,
