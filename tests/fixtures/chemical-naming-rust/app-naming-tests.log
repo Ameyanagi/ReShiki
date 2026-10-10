@@ -1,0 +1,21 @@
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming-backend)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 20.30s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/tmp/reshiki-opsin-core-target/debug/deps/reshiki-5180b610091c22a5)
+
+running 11 tests
+test app::naming::tests::controls_publish_named_native_actions_and_editable_values ... ignored, Opt-in native renderer accessibility metadata and dispatch
+test app::naming::tests::scrolled_insert_click_reaches_button_instead_of_preview ... ignored, Opt-in real renderer scrolled preview pointer regression
+test app::naming::tests::changed_preview_no_longer_claims_original_chemical_name ... ok
+test app::naming::tests::local_parse_cancels_obsolete_tickets ... ok
+test app::naming::tests::stale_results_cannot_reach_another_local_document_or_request ... ok
+test app::naming::tests::preview_text_edits_do_not_cancel_independent_local_name_generation ... ok
+test app::naming::tests::warnings_and_unapplied_smiles_edits_block_insertion ... ok
+test app::naming::tests::preview_insertion_is_native_editable_and_one_history_step ... ok
+test app::naming::tests::caption_requires_current_graph_and_is_undoable ... ok
+test app::naming::tests::typing_during_preview_rebuild_retains_new_text_and_rejects_old_completion ... ok
+test app::naming::tests::native_preview_and_exchange_retain_specified_and_unspecified_stereo ... ok
+
+test result: ok. 9 passed; 0 failed; 2 ignored; 0 measured; 654 filtered out; finished in 0.50s
+

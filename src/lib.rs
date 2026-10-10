@@ -22,10 +22,10 @@ static ALLOCATOR: allocation_metrics::MeasuredAllocator<std::alloc::System> =
 pub use reshiki_model::{
     abbreviations, aromatic, arrow_anchors, arrows, atom_labels, atom_text, attachments, bonds,
     canvas_theme, chains, color_contrast, common_groups, crossings, depth_appearance, document,
-    editing, erasing, graphics, grouping, haworth, highlights, joining, ligands, pages, palette,
-    pictures, projection, reactions, rear_opacity, ring_arcs, ring_fills, rings, scene, scientific,
-    selection_region, storage, style, templates, theme_files, theme_generator, transaction,
-    typography,
+    editing, erasing, graphics, grouping, haworth, highlights, joining, ligands, molecule_names,
+    pages, palette, pictures, projection, reaction_mapping, reactions, rear_opacity, ring_arcs,
+    ring_fills, rings, scene, scientific, selection_region, storage, style, templates, theme_files,
+    theme_generator, transaction, typography,
 };
 
 pub use reshiki_agent::envelope;
@@ -45,6 +45,7 @@ pub mod hotkeys;
 pub mod keyboard_drawing;
 pub mod libreoffice;
 pub mod metafile;
+pub mod naming;
 #[cfg(not(windows))]
 pub(crate) mod native_process;
 pub mod office_addin;

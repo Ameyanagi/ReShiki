@@ -1,0 +1,44 @@
+// Development-only exhaustive suffix-rule selection oracle.
+package uk.ac.cam.ch.wwmm.opsin;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.util.*;
+import java.lang.reflect.*;
+public final class ExportSuffixRules {
+    static String q(String text) { return ExportFrontend.quote(text); }
+    @SuppressWarnings("unchecked")
+    public static void main(String[] args) throws Exception {
+        SuffixRules rules = new SuffixRules(new ResourceGetter("uk/ac/cam/ch/wwmm/opsin/resources/"));
+        Field attributes = SuffixRule.class.getDeclaredField("attributes");
+        attributes.setAccessible(true);
+        try (PrintWriter out = new PrintWriter(args[1], "UTF-8")) {
+            for (String row : Files.readAllLines(Paths.get(args[0]), StandardCharsets.UTF_8)) {
+                String[] fields = row.split("\\t", -1);
+                String subtype = fields[2].equals("<NULL>") ? null : fields[2];
+                out.print("{\"group_type\":" + q(fields[0]) + ",\"suffix\":" + q(fields[1]) + ",\"sub_type\":" + q(subtype));
+                out.print(",\"specific_group_type\":" + rules.isGroupTypeWithSpecificSuffixRules(fields[0]));
+                try {
+                    List<SuffixRule> selected = rules.getSuffixRuleTags(fields[0], fields[1], subtype);
+                    out.print(",\"rules\":[");
+                    for (int i=0; i<selected.size(); i++) {
+                        if (i>0) out.print(',');
+                        SuffixRule rule=selected.get(i);
+                        out.print("{\"kind\":" + q(rule.getType().name()) + ",\"attributes\":[");
+                        List<Attribute> attrs=(List<Attribute>) attributes.get(rule);
+                        for(int j=0;j<attrs.size();j++) {
+                            if(j>0)out.print(',');
+                            out.print("[" + q(attrs.get(j).getName()) + "," + q(attrs.get(j).getValue()) + "]");
+                        }
+                        out.print("]}");
+                    }
+                    out.print("],\"error\":null");
+                } catch(Exception error) {
+                    out.print(",\"rules\":null,\"error\":" + q(error.getMessage()));
+                }
+                out.println('}');
+            }
+        }
+    }
+}
+

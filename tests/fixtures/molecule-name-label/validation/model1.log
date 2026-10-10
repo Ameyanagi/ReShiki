@@ -1,0 +1,25 @@
+   Compiling usvg v0.45.1 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/vendor/usvg)
+   Compiling tiff v0.11.3
+   Compiling reshiki-process-heap v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/process-heap)
+   Compiling reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/chemistry)
+   Compiling image v0.25.10
+   Compiling resvg v0.45.1
+   Compiling reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/model)
+error[E0609]: no field `clockwise` on type `&mut AtomStereo`
+   --> crates/model/src/molecule_names/tests.rs:275:12
+    |
+275 |     stereo.clockwise = !stereo.clockwise;
+    |            ^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `winding`, `neighbors`
+
+error[E0609]: no field `clockwise` on type `&mut AtomStereo`
+   --> crates/model/src/molecule_names/tests.rs:275:32
+    |
+275 |     stereo.clockwise = !stereo.clockwise;
+    |                                ^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `winding`, `neighbors`
+
+For more information about this error, try `rustc --explain E0609`.
+error: could not compile `reshiki-model` (lib test) due to 2 previous errors

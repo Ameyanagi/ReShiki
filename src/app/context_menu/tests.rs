@@ -30,6 +30,46 @@ fn labels(app: &App, page: Page) -> Vec<&'static str> {
 }
 
 #[test]
+fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide()
+-> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::document::Document::from_json(include_bytes!(
+        "../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
+    ))?;
+    let first: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    let source = app.tab.doc.clone();
+    reshiki::editing::append(&mut app.tab.doc, &source, World::new(250., 0.));
+    let all = app.tab.doc.all_ids();
+    app.tab.doc.group_selection(&all)?;
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: all,
+        hit: vec![first[0]],
+    });
+    assert!(app.context_entries(Page::Main).iter().any(|entry| matches!(entry,
+        Entry::Item { label: "Show chemical name", enabled: true, action: Action::Run(message) }
+            if matches!(message.as_ref(), Message::Naming(super::super::naming::Action::ShowMoleculeName(atoms)) if *atoms == first)
+    )));
+    reshiki::molecule_names::show(
+        &mut app.tab.doc,
+        &first,
+        "ethan-1-ol".into(),
+        "CCO".into(),
+        Default::default(),
+    )?;
+    assert!(labels(&app, Page::Main).contains(&"Hide chemical name"));
+    assert!(!labels(&app, Page::Main).contains(&"Show chemical name"));
+    let shown = app.tab.doc.clone();
+    run_item(&mut app, Page::Main, "Hide chemical name")?;
+    assert!(app.tab.doc.annotations.is_empty());
+    assert!(app.tab.doc.molecule_names.is_empty());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, shown);
+    Ok(())
+}
+
+#[test]
 fn copy_as_menu_names_scope_and_explains_disabled_reactions() -> Result<(), String> {
     use reshiki::clipboard::CopyFormat;
     let (mut app, _) = App::new();
@@ -264,6 +304,7 @@ fn context_tilt_routes_all_axes_and_tool_without_losing_selection() -> Result<()
         let before = app.tab.doc.clone();
         app.edit(Edit::ContextMenu {
             position: Point::new(20., 20.),
+            hit: vec![],
             selected: ids.clone(),
         });
         run_item(&mut app, Page::Main, "3D tilt")?;
@@ -290,6 +331,7 @@ fn context_tilt_routes_all_axes_and_tool_without_losing_selection() -> Result<()
         assert_eq!(app.tab.doc, expected);
         app.edit(Edit::ContextMenu {
             position: Point::new(20., 20.),
+            hit: vec![],
             selected: ids.clone(),
         });
         run_item(&mut app, Page::Tilt, "Drag to tilt")?;
@@ -349,6 +391,7 @@ fn context_alignment_preserves_molecular_geometry_and_undo_restores_every_group(
     let ids = app.tab.doc.all_ids();
     app.edit(Edit::ContextMenu {
         position: Point::new(20., 20.),
+        hit: vec![],
         selected: ids.clone(),
     });
     assert_eq!(app.alignment_count(), 3);
@@ -387,6 +430,7 @@ fn context_alignment_preserves_molecular_geometry_and_undo_restores_every_group(
     assert_eq!(app.tab.doc, before);
     app.edit(Edit::ContextMenu {
         position: Point::new(20., 20.),
+        hit: vec![],
         selected: ids,
     });
     let _ = app.update(Message::Escape);

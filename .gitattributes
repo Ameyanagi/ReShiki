@@ -35,3 +35,7 @@ tests/fixtures/rear-visibility-20261010/app-history-complete-bin.log -text white
 tests/fixtures/rear-visibility-20261010/model-actual-raster.log -text whitespace=-blank-at-eof
 tests/fixtures/rear-visibility-20261010/native-wgpu-bin.log -text whitespace=-blank-at-eof
 tests/fixtures/rear-visibility-20261010/root-exports.log -text whitespace=-blank-at-eof
+
+# Preserve the pinned OPSIN license and oracle fixtures byte-for-byte.
+crates/opsin/LICENSE -text
+crates/opsin/tests/fixtures/** -text

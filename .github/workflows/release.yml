@@ -239,6 +239,7 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
           RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/release/reshiki
+          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/release/reshiki
         run: cargo test --release --locked --no-default-features --lib --target x86_64-apple-darwin
       - name: Test the nightly application and renderer regressions
         if: inputs.nightly

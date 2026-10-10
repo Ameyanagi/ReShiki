@@ -26,6 +26,7 @@ fn display(value: NativeAtomDisplay) -> Result<AtomDisplay> {
         hydrogens: Some(value.hydrogens),
         hydrogen_position: value.hydrogen_position,
         stereo: indicator(value.stereo)?,
+        mapping: Default::default(),
         number: value
             .number
             .map(|n| -> Result<Number> {

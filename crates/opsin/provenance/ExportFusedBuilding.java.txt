@@ -1,0 +1,77 @@
+// Development-only resolved-fragment FusedRingBuilder stage oracle.
+package uk.ac.cam.ch.wwmm.opsin;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.util.*;
+import javax.xml.stream.*;
+public final class ExportFusedBuilding {
+    static String q(String text) { return ExportFrontend.quote(text); }
+    static Element tree(String xml) throws Exception {
+        XMLStreamReader reader=XMLInputFactory.newInstance().createXMLStreamReader(new StringReader(xml));
+        Element root=null,current=null;
+        StringBuilder value=new StringBuilder();
+        while(reader.hasNext()) {
+            int event=reader.next();
+            if(event==XMLStreamConstants.START_ELEMENT) {
+                if(root==null) root=new GroupingEl(reader.getLocalName());
+                else {
+                    current=new TokenEl(reader.getLocalName(),"");
+                    for(int i=0;i<reader.getAttributeCount();i++)
+                        current.addAttribute(new Attribute(reader.getAttributeLocalName(i),reader.getAttributeValue(i)));
+                    root.addChild(current);value.setLength(0);
+                }
+            } else if(event==XMLStreamConstants.CHARACTERS && current!=null) value.append(reader.getText());
+            else if(event==XMLStreamConstants.END_ELEMENT && current!=null) { current.setValue(value.toString());current=null; }
+        }
+        reader.close();return root;
+    }
+    static String snapshot(Fragment fragment) {
+        List<Atom> atoms=fragment.getAtomList();
+        IdentityHashMap<Atom,Integer> indices=new IdentityHashMap<>();
+        for(int i=0;i<atoms.size();i++)indices.put(atoms.get(i),i);
+        StringBuilder out=new StringBuilder("{\"atoms\":[");
+        for(int i=0;i<atoms.size();i++) {
+            if(i>0)out.append(',');
+            Atom atom=atoms.get(i);
+            out.append("{\"element\":").append(q(atom.getElement().name())).append(",\"locants\":[");
+            List<String> locants=atom.getLocants();
+            for(int j=0;j<locants.size();j++){if(j>0)out.append(',');out.append(q(locants.get(j)));}
+            out.append("],\"spare_valency\":").append(atom.hasSpareValency()).append('}');
+        }
+        out.append("],\"bonds\":[");
+        boolean first=true;
+        for(Bond bond:fragment.getBondSet()) {
+            if(!first)out.append(',');first=false;
+            out.append("{\"from\":").append(indices.get(bond.getFromAtom()));
+            out.append(",\"to\":").append(indices.get(bond.getToAtom()));
+            out.append(",\"order\":").append(bond.getOrder()).append('}');
+        }
+        return out.append("]}").toString();
+    }
+    public static void main(String[] args) throws Exception {
+        try(PrintWriter out=new PrintWriter(args[1],"UTF-8")) {
+            for(String row:Files.readAllLines(Paths.get(args[0]),StandardCharsets.UTF_8)) {
+                String[] fields=row.split("\\t",2);
+                Element root=tree(fields[1]);
+                // ComponentProcessor always supplies a root inside a word.
+                Element word=new GroupingEl("word");word.addChild(root);
+                BuildState state=new BuildState(new NameToStructureConfig());
+                Element parent=null;
+                for(Element group:root.getChildElements("group")) {
+                    Fragment fragment=state.fragManager.buildSMILES(group.getAttributeValue("value"),group,"numeric");
+                    group.setFrag(fragment);state.xmlSuffixMap.put(group,new ArrayList<Fragment>());parent=group;
+                }
+                out.print("{\"name\":"+q(fields[0])+",\"parent_context\":\"word\",\"input_xml\":"+q(fields[1])+",\"before\":"+q(root.toXML()));
+                try {
+                    FusedRingBuilder.processFusedRings(state,root);
+                    out.print(",\"error\":null,\"after\":"+q(root.toXML())+",\"graph\":"+snapshot(parent.getFrag()));
+                }catch(Exception error) {
+                    out.print(",\"error\":"+q(error.getMessage())+",\"after\":null,\"graph\":null");
+                }
+                out.println('}');
+            }
+        }
+    }
+}
+

@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "build",
+    "--locked",
+    "-p",
+    "reshiki",
+    "--bin",
+    "reshiki",
+    "-j",
+    "4",
+    "--message-format=json-render-diagnostics"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "naming_helper": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+  "started_unix": 1791618951.1082518,
+  "elapsed_seconds": 88.9128782749176,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/build2.log",
+  "log_bytes": 362779,
+  "log_sha256": "5d64898bd3163f0a9fb72b60a9b9b92679577b9aa595027fad2e0af839f17bd7"
+}

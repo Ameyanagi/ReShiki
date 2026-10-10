@@ -1,0 +1,997 @@
+substituent	carbonyl	<NULL>
+substituent	carbonyl	
+substituent	carbonyl	notARealSubtype
+substituent	carbonimidoyl	<NULL>
+substituent	carbonimidoyl	
+substituent	carbonimidoyl	notARealSubtype
+substituent	ide	<NULL>
+substituent	ide	
+substituent	ide	notARealSubtype
+substituent	ium	<NULL>
+substituent	ium	
+substituent	ium	notARealSubtype
+substituent	oximino	<NULL>
+substituent	oximino	
+substituent	oximino	notARealSubtype
+substituent	oxy	<NULL>
+substituent	oxy	
+substituent	oxy	notARealSubtype
+substituent	oyl	<NULL>
+substituent	oyl	
+substituent	oyl	notARealSubtype
+substituent	selenenyl	<NULL>
+substituent	selenenyl	
+substituent	selenenyl	notARealSubtype
+substituent	seleninyl	<NULL>
+substituent	seleninyl	
+substituent	seleninyl	notARealSubtype
+substituent	selenonyl	<NULL>
+substituent	selenonyl	
+substituent	selenonyl	notARealSubtype
+substituent	sulfenyl	<NULL>
+substituent	sulfenyl	
+substituent	sulfenyl	notARealSubtype
+substituent	sulfinyl	<NULL>
+substituent	sulfinyl	
+substituent	sulfinyl	notARealSubtype
+substituent	sulfonyl	<NULL>
+substituent	sulfonyl	
+substituent	sulfonyl	notARealSubtype
+substituent	tellurenyl	<NULL>
+substituent	tellurenyl	
+substituent	tellurenyl	notARealSubtype
+substituent	tellurinyl	<NULL>
+substituent	tellurinyl	
+substituent	tellurinyl	notARealSubtype
+substituent	telluronyl	<NULL>
+substituent	telluronyl	
+substituent	telluronyl	notARealSubtype
+substituent	uide	<NULL>
+substituent	uide	
+substituent	uide	notARealSubtype
+substituent	yl	<NULL>
+substituent	yl	
+substituent	yl	notARealSubtype
+substituent	ylidene	<NULL>
+substituent	ylidene	
+substituent	ylidene	notARealSubtype
+substituent	ylidyne	<NULL>
+substituent	ylidyne	
+substituent	ylidyne	notARealSubtype
+substituent	ylium	<NULL>
+substituent	ylium	
+substituent	ylium	notARealSubtype
+substituent	notARealSuffix	<NULL>
+substituent	notARealSuffix	
+substituent	notARealSuffix	notARealSubtype
+acidStem	acylium	<NULL>
+acidStem	acylium	
+acidStem	acylium	ylForAcyl
+acidStem	acylium	ylForYl
+acidStem	acylium	notARealSubtype
+acidStem	aldehyde	<NULL>
+acidStem	aldehyde	
+acidStem	aldehyde	ylForAcyl
+acidStem	aldehyde	ylForYl
+acidStem	aldehyde	notARealSubtype
+acidStem	aldoxime	<NULL>
+acidStem	aldoxime	
+acidStem	aldoxime	ylForAcyl
+acidStem	aldoxime	ylForYl
+acidStem	aldoxime	notARealSubtype
+acidStem	amide	<NULL>
+acidStem	amide	
+acidStem	amide	ylForAcyl
+acidStem	amide	ylForYl
+acidStem	amide	notARealSubtype
+acidStem	amidrazone	<NULL>
+acidStem	amidrazone	
+acidStem	amidrazone	ylForAcyl
+acidStem	amidrazone	ylForYl
+acidStem	amidrazone	notARealSubtype
+acidStem	amidylium	<NULL>
+acidStem	amidylium	
+acidStem	amidylium	ylForAcyl
+acidStem	amidylium	ylForYl
+acidStem	amidylium	notARealSubtype
+acidStem	amidine	<NULL>
+acidStem	amidine	
+acidStem	amidine	ylForAcyl
+acidStem	amidine	ylForYl
+acidStem	amidine	notARealSubtype
+acidStem	amidinium	<NULL>
+acidStem	amidinium	
+acidStem	amidinium	ylForAcyl
+acidStem	amidinium	ylForYl
+acidStem	amidinium	notARealSubtype
+acidStem	amidium	<NULL>
+acidStem	amidium	
+acidStem	amidium	ylForAcyl
+acidStem	amidium	ylForYl
+acidStem	amidium	notARealSubtype
+acidStem	amido	<NULL>
+acidStem	amido	
+acidStem	amido	ylForAcyl
+acidStem	amido	ylForYl
+acidStem	amido	notARealSubtype
+acidStem	anilide	<NULL>
+acidStem	anilide	
+acidStem	anilide	ylForAcyl
+acidStem	anilide	ylForYl
+acidStem	anilide	notARealSubtype
+acidStem	ate	<NULL>
+acidStem	ate	
+acidStem	ate	ylForAcyl
+acidStem	ate	ylForYl
+acidStem	ate	notARealSubtype
+acidStem	hydrazide	<NULL>
+acidStem	hydrazide	
+acidStem	hydrazide	ylForAcyl
+acidStem	hydrazide	ylForYl
+acidStem	hydrazide	notARealSubtype
+acidStem	hydrazido	<NULL>
+acidStem	hydrazido	
+acidStem	hydrazido	ylForAcyl
+acidStem	hydrazido	ylForYl
+acidStem	hydrazido	notARealSubtype
+acidStem	hydroxamate	<NULL>
+acidStem	hydroxamate	
+acidStem	hydroxamate	ylForAcyl
+acidStem	hydroxamate	ylForYl
+acidStem	hydroxamate	notARealSubtype
+acidStem	hydroxamic	<NULL>
+acidStem	hydroxamic	
+acidStem	hydroxamic	ylForAcyl
+acidStem	hydroxamic	ylForYl
+acidStem	hydroxamic	notARealSubtype
+acidStem	ic	<NULL>
+acidStem	ic	
+acidStem	ic	ylForAcyl
+acidStem	ic	ylForYl
+acidStem	ic	notARealSubtype
+acidStem	ic_O_acid	<NULL>
+acidStem	ic_O_acid	
+acidStem	ic_O_acid	ylForAcyl
+acidStem	ic_O_acid	ylForYl
+acidStem	ic_O_acid	notARealSubtype
+acidStem	ic_S_acid	<NULL>
+acidStem	ic_S_acid	
+acidStem	ic_S_acid	ylForAcyl
+acidStem	ic_S_acid	ylForYl
+acidStem	ic_S_acid	notARealSubtype
+acidStem	ic_Se_acid	<NULL>
+acidStem	ic_Se_acid	
+acidStem	ic_Se_acid	ylForAcyl
+acidStem	ic_Se_acid	ylForYl
+acidStem	ic_Se_acid	notARealSubtype
+acidStem	ic_Te_acid	<NULL>
+acidStem	ic_Te_acid	
+acidStem	ic_Te_acid	ylForAcyl
+acidStem	ic_Te_acid	ylForYl
+acidStem	ic_Te_acid	notARealSubtype
+acidStem	ide	<NULL>
+acidStem	ide	
+acidStem	ide	ylForAcyl
+acidStem	ide	ylForYl
+acidStem	ide	notARealSubtype
+acidStem	imide	<NULL>
+acidStem	imide	
+acidStem	imide	ylForAcyl
+acidStem	imide	ylForYl
+acidStem	imide	notARealSubtype
+acidStem	imidium	<NULL>
+acidStem	imidium	
+acidStem	imidium	ylForAcyl
+acidStem	imidium	ylForYl
+acidStem	imidium	notARealSubtype
+acidStem	imido	<NULL>
+acidStem	imido	
+acidStem	imido	ylForAcyl
+acidStem	imido	ylForYl
+acidStem	imido	notARealSubtype
+acidStem	imidylium	<NULL>
+acidStem	imidylium	
+acidStem	imidylium	ylForAcyl
+acidStem	imidylium	ylForYl
+acidStem	imidylium	notARealSubtype
+acidStem	ium	<NULL>
+acidStem	ium	
+acidStem	ium	ylForAcyl
+acidStem	ium	ylForYl
+acidStem	ium	notARealSubtype
+acidStem	lactam	<NULL>
+acidStem	lactam	
+acidStem	lactam	ylForAcyl
+acidStem	lactam	ylForYl
+acidStem	lactam	notARealSubtype
+acidStem	lactim	<NULL>
+acidStem	lactim	
+acidStem	lactim	ylForAcyl
+acidStem	lactim	ylForYl
+acidStem	lactim	notARealSubtype
+acidStem	lactone	<NULL>
+acidStem	lactone	
+acidStem	lactone	ylForAcyl
+acidStem	lactone	ylForYl
+acidStem	lactone	notARealSubtype
+acidStem	nitrile	<NULL>
+acidStem	nitrile	
+acidStem	nitrile	ylForAcyl
+acidStem	nitrile	ylForYl
+acidStem	nitrile	notARealSubtype
+acidStem	nitrilium	<NULL>
+acidStem	nitrilium	
+acidStem	nitrilium	ylForAcyl
+acidStem	nitrilium	ylForYl
+acidStem	nitrilium	notARealSubtype
+acidStem	nitrolic acid	<NULL>
+acidStem	nitrolic acid	
+acidStem	nitrolic acid	ylForAcyl
+acidStem	nitrolic acid	ylForYl
+acidStem	nitrolic acid	notARealSubtype
+acidStem	onaphthone	<NULL>
+acidStem	onaphthone	
+acidStem	onaphthone	ylForAcyl
+acidStem	onaphthone	ylForYl
+acidStem	onaphthone	notARealSubtype
+acidStem	ophenone	<NULL>
+acidStem	ophenone	
+acidStem	ophenone	ylForAcyl
+acidStem	ophenone	ylForYl
+acidStem	ophenone	notARealSubtype
+acidStem	oximino	<NULL>
+acidStem	oximino	
+acidStem	oximino	ylForAcyl
+acidStem	oximino	ylForYl
+acidStem	oximino	notARealSubtype
+acidStem	oxy	<NULL>
+acidStem	oxy	
+acidStem	oxy	ylForAcyl
+acidStem	oxy	ylForYl
+acidStem	oxy	notARealSubtype
+acidStem	oyl	<NULL>
+acidStem	oyl	
+acidStem	oyl	ylForAcyl
+acidStem	oyl	ylForYl
+acidStem	oyl	notARealSubtype
+acidStem	sultam	<NULL>
+acidStem	sultam	
+acidStem	sultam	ylForAcyl
+acidStem	sultam	ylForYl
+acidStem	sultam	notARealSubtype
+acidStem	sultim	<NULL>
+acidStem	sultim	
+acidStem	sultim	ylForAcyl
+acidStem	sultim	ylForYl
+acidStem	sultim	notARealSubtype
+acidStem	sultine	<NULL>
+acidStem	sultine	
+acidStem	sultine	ylForAcyl
+acidStem	sultine	ylForYl
+acidStem	sultine	notARealSubtype
+acidStem	sultone	<NULL>
+acidStem	sultone	
+acidStem	sultone	ylForAcyl
+acidStem	sultone	ylForYl
+acidStem	sultone	notARealSubtype
+acidStem	uide	<NULL>
+acidStem	uide	
+acidStem	uide	ylForAcyl
+acidStem	uide	ylForYl
+acidStem	uide	notARealSubtype
+acidStem	yl	<NULL>
+acidStem	yl	
+acidStem	yl	ylForAcyl
+acidStem	yl	ylForYl
+acidStem	yl	notARealSubtype
+acidStem	ylidene	<NULL>
+acidStem	ylidene	
+acidStem	ylidene	ylForAcyl
+acidStem	ylidene	ylForYl
+acidStem	ylidene	notARealSubtype
+acidStem	ylidyne	<NULL>
+acidStem	ylidyne	
+acidStem	ylidyne	ylForAcyl
+acidStem	ylidyne	ylForYl
+acidStem	ylidyne	notARealSubtype
+acidStem	ylium	<NULL>
+acidStem	ylium	
+acidStem	ylium	ylForAcyl
+acidStem	ylium	ylForYl
+acidStem	ylium	notARealSubtype
+acidStem	notARealSuffix	<NULL>
+acidStem	notARealSuffix	
+acidStem	notARealSuffix	ylForAcyl
+acidStem	notARealSuffix	ylForYl
+acidStem	notARealSuffix	notARealSubtype
+aminoAcid	al	<NULL>
+aminoAcid	al	
+aminoAcid	al	endInAn
+aminoAcid	al	endInIne
+aminoAcid	al	notARealSubtype
+aminoAcid	aldehyde	<NULL>
+aminoAcid	aldehyde	
+aminoAcid	aldehyde	endInAn
+aminoAcid	aldehyde	endInIne
+aminoAcid	aldehyde	notARealSubtype
+aminoAcid	aldoxime	<NULL>
+aminoAcid	aldoxime	
+aminoAcid	aldoxime	endInAn
+aminoAcid	aldoxime	endInIne
+aminoAcid	aldoxime	notARealSubtype
+aminoAcid	amide	<NULL>
+aminoAcid	amide	
+aminoAcid	amide	endInAn
+aminoAcid	amide	endInIne
+aminoAcid	amide	notARealSubtype
+aminoAcid	amidrazone	<NULL>
+aminoAcid	amidrazone	
+aminoAcid	amidrazone	endInAn
+aminoAcid	amidrazone	endInIne
+aminoAcid	amidrazone	notARealSubtype
+aminoAcid	amidylium	<NULL>
+aminoAcid	amidylium	
+aminoAcid	amidylium	endInAn
+aminoAcid	amidylium	endInIne
+aminoAcid	amidylium	notARealSubtype
+aminoAcid	amidium	<NULL>
+aminoAcid	amidium	
+aminoAcid	amidium	endInAn
+aminoAcid	amidium	endInIne
+aminoAcid	amidium	notARealSubtype
+aminoAcid	amido	<NULL>
+aminoAcid	amido	
+aminoAcid	amido	endInAn
+aminoAcid	amido	endInIne
+aminoAcid	amido	notARealSubtype
+aminoAcid	anilide	<NULL>
+aminoAcid	anilide	
+aminoAcid	anilide	endInAn
+aminoAcid	anilide	endInIne
+aminoAcid	anilide	notARealSubtype
+aminoAcid	ate	<NULL>
+aminoAcid	ate	
+aminoAcid	ate	endInAn
+aminoAcid	ate	endInIne
+aminoAcid	ate	notARealSubtype
+aminoAcid	hydrazide	<NULL>
+aminoAcid	hydrazide	
+aminoAcid	hydrazide	endInAn
+aminoAcid	hydrazide	endInIne
+aminoAcid	hydrazide	notARealSubtype
+aminoAcid	hydrazido	<NULL>
+aminoAcid	hydrazido	
+aminoAcid	hydrazido	endInAn
+aminoAcid	hydrazido	endInIne
+aminoAcid	hydrazido	notARealSubtype
+aminoAcid	hydroxamate	<NULL>
+aminoAcid	hydroxamate	
+aminoAcid	hydroxamate	endInAn
+aminoAcid	hydroxamate	endInIne
+aminoAcid	hydroxamate	notARealSubtype
+aminoAcid	hydroxamic	<NULL>
+aminoAcid	hydroxamic	
+aminoAcid	hydroxamic	endInAn
+aminoAcid	hydroxamic	endInIne
+aminoAcid	hydroxamic	notARealSubtype
+aminoAcid	ic	<NULL>
+aminoAcid	ic	
+aminoAcid	ic	endInAn
+aminoAcid	ic	endInIne
+aminoAcid	ic	notARealSubtype
+aminoAcid	ic_O_acid	<NULL>
+aminoAcid	ic_O_acid	
+aminoAcid	ic_O_acid	endInAn
+aminoAcid	ic_O_acid	endInIne
+aminoAcid	ic_O_acid	notARealSubtype
+aminoAcid	ic_S_acid	<NULL>
+aminoAcid	ic_S_acid	
+aminoAcid	ic_S_acid	endInAn
+aminoAcid	ic_S_acid	endInIne
+aminoAcid	ic_S_acid	notARealSubtype
+aminoAcid	ic_Se_acid	<NULL>
+aminoAcid	ic_Se_acid	
+aminoAcid	ic_Se_acid	endInAn
+aminoAcid	ic_Se_acid	endInIne
+aminoAcid	ic_Se_acid	notARealSubtype
+aminoAcid	ic_Te_acid	<NULL>
+aminoAcid	ic_Te_acid	
+aminoAcid	ic_Te_acid	endInAn
+aminoAcid	ic_Te_acid	endInIne
+aminoAcid	ic_Te_acid	notARealSubtype
+aminoAcid	imide	<NULL>
+aminoAcid	imide	
+aminoAcid	imide	endInAn
+aminoAcid	imide	endInIne
+aminoAcid	imide	notARealSubtype
+aminoAcid	imidium	<NULL>
+aminoAcid	imidium	
+aminoAcid	imidium	endInAn
+aminoAcid	imidium	endInIne
+aminoAcid	imidium	notARealSubtype
+aminoAcid	imido	<NULL>
+aminoAcid	imido	
+aminoAcid	imido	endInAn
+aminoAcid	imido	endInIne
+aminoAcid	imido	notARealSubtype
+aminoAcid	imidylium	<NULL>
+aminoAcid	imidylium	
+aminoAcid	imidylium	endInAn
+aminoAcid	imidylium	endInIne
+aminoAcid	imidylium	notARealSubtype
+aminoAcid	ium	<NULL>
+aminoAcid	ium	
+aminoAcid	ium	endInAn
+aminoAcid	ium	endInIne
+aminoAcid	ium	notARealSubtype
+aminoAcid	nitrile	<NULL>
+aminoAcid	nitrile	
+aminoAcid	nitrile	endInAn
+aminoAcid	nitrile	endInIne
+aminoAcid	nitrile	notARealSubtype
+aminoAcid	nitrilium	<NULL>
+aminoAcid	nitrilium	
+aminoAcid	nitrilium	endInAn
+aminoAcid	nitrilium	endInIne
+aminoAcid	nitrilium	notARealSubtype
+aminoAcid	ol	<NULL>
+aminoAcid	ol	
+aminoAcid	ol	endInAn
+aminoAcid	ol	endInIne
+aminoAcid	ol	notARealSubtype
+aminoAcid	olate	<NULL>
+aminoAcid	olate	
+aminoAcid	olate	endInAn
+aminoAcid	olate	endInIne
+aminoAcid	olate	notARealSubtype
+aminoAcid	oyl	<NULL>
+aminoAcid	oyl	
+aminoAcid	oyl	endInAn
+aminoAcid	oyl	endInIne
+aminoAcid	oyl	notARealSubtype
+aminoAcid	yl	<NULL>
+aminoAcid	yl	
+aminoAcid	yl	endInAn
+aminoAcid	yl	endInIne
+aminoAcid	yl	notARealSubtype
+aminoAcid	oMeaningYl	<NULL>
+aminoAcid	oMeaningYl	
+aminoAcid	oMeaningYl	endInAn
+aminoAcid	oMeaningYl	endInIne
+aminoAcid	oMeaningYl	notARealSubtype
+aminoAcid	locantedAminoAcidOrCarbohydrateYl	<NULL>
+aminoAcid	locantedAminoAcidOrCarbohydrateYl	
+aminoAcid	locantedAminoAcidOrCarbohydrateYl	endInAn
+aminoAcid	locantedAminoAcidOrCarbohydrateYl	endInIne
+aminoAcid	locantedAminoAcidOrCarbohydrateYl	notARealSubtype
+aminoAcid	locantedAminoAcidOrCarbohydrateYlidene	<NULL>
+aminoAcid	locantedAminoAcidOrCarbohydrateYlidene	
+aminoAcid	locantedAminoAcidOrCarbohydrateYlidene	endInAn
+aminoAcid	locantedAminoAcidOrCarbohydrateYlidene	endInIne
+aminoAcid	locantedAminoAcidOrCarbohydrateYlidene	notARealSubtype
+aminoAcid	notARealSuffix	<NULL>
+aminoAcid	notARealSuffix	
+aminoAcid	notARealSuffix	endInAn
+aminoAcid	notARealSuffix	endInIne
+aminoAcid	notARealSuffix	notARealSubtype
+carbohydrate	itol	<NULL>
+carbohydrate	itol	
+carbohydrate	itol	carbohydrateStemAldose
+carbohydrate	itol	systematicCarbohydrateStemAldose
+carbohydrate	itol	notARealSubtype
+carbohydrate	onamide	<NULL>
+carbohydrate	onamide	
+carbohydrate	onamide	carbohydrateStemAldose
+carbohydrate	onamide	systematicCarbohydrateStemAldose
+carbohydrate	onamide	notARealSubtype
+carbohydrate	onic acid	<NULL>
+carbohydrate	onic acid	
+carbohydrate	onic acid	carbohydrateStemAldose
+carbohydrate	onic acid	systematicCarbohydrateStemAldose
+carbohydrate	onic acid	notARealSubtype
+carbohydrate	onate	<NULL>
+carbohydrate	onate	
+carbohydrate	onate	carbohydrateStemAldose
+carbohydrate	onate	systematicCarbohydrateStemAldose
+carbohydrate	onate	notARealSubtype
+carbohydrate	ononitrile	<NULL>
+carbohydrate	ononitrile	
+carbohydrate	ononitrile	carbohydrateStemAldose
+carbohydrate	ononitrile	systematicCarbohydrateStemAldose
+carbohydrate	ononitrile	notARealSubtype
+carbohydrate	onoyl	<NULL>
+carbohydrate	onoyl	
+carbohydrate	onoyl	carbohydrateStemAldose
+carbohydrate	onoyl	systematicCarbohydrateStemAldose
+carbohydrate	onoyl	notARealSubtype
+carbohydrate	lactone	<NULL>
+carbohydrate	lactone	
+carbohydrate	lactone	carbohydrateStemAldose
+carbohydrate	lactone	systematicCarbohydrateStemAldose
+carbohydrate	lactone	notARealSubtype
+carbohydrate	osonamide	<NULL>
+carbohydrate	osonamide	
+carbohydrate	osonamide	carbohydrateStemAldose
+carbohydrate	osonamide	systematicCarbohydrateStemAldose
+carbohydrate	osonamide	notARealSubtype
+carbohydrate	osonate	<NULL>
+carbohydrate	osonate	
+carbohydrate	osonate	carbohydrateStemAldose
+carbohydrate	osonate	systematicCarbohydrateStemAldose
+carbohydrate	osonate	notARealSubtype
+carbohydrate	osonic acid	<NULL>
+carbohydrate	osonic acid	
+carbohydrate	osonic acid	carbohydrateStemAldose
+carbohydrate	osonic acid	systematicCarbohydrateStemAldose
+carbohydrate	osonic acid	notARealSubtype
+carbohydrate	osononitrile	<NULL>
+carbohydrate	osononitrile	
+carbohydrate	osononitrile	carbohydrateStemAldose
+carbohydrate	osononitrile	systematicCarbohydrateStemAldose
+carbohydrate	osononitrile	notARealSubtype
+carbohydrate	osulose	<NULL>
+carbohydrate	osulose	
+carbohydrate	osulose	carbohydrateStemAldose
+carbohydrate	osulose	systematicCarbohydrateStemAldose
+carbohydrate	osulose	notARealSubtype
+carbohydrate	glycoside	<NULL>
+carbohydrate	glycoside	
+carbohydrate	glycoside	carbohydrateStemAldose
+carbohydrate	glycoside	systematicCarbohydrateStemAldose
+carbohydrate	glycoside	notARealSubtype
+carbohydrate	uronamide	<NULL>
+carbohydrate	uronamide	
+carbohydrate	uronamide	carbohydrateStemAldose
+carbohydrate	uronamide	systematicCarbohydrateStemAldose
+carbohydrate	uronamide	notARealSubtype
+carbohydrate	uronate	<NULL>
+carbohydrate	uronate	
+carbohydrate	uronate	carbohydrateStemAldose
+carbohydrate	uronate	systematicCarbohydrateStemAldose
+carbohydrate	uronate	notARealSubtype
+carbohydrate	uronic acid	<NULL>
+carbohydrate	uronic acid	
+carbohydrate	uronic acid	carbohydrateStemAldose
+carbohydrate	uronic acid	systematicCarbohydrateStemAldose
+carbohydrate	uronic acid	notARealSubtype
+carbohydrate	urononitrile	<NULL>
+carbohydrate	urononitrile	
+carbohydrate	urononitrile	carbohydrateStemAldose
+carbohydrate	urononitrile	systematicCarbohydrateStemAldose
+carbohydrate	urononitrile	notARealSubtype
+carbohydrate	uronoyl	<NULL>
+carbohydrate	uronoyl	
+carbohydrate	uronoyl	carbohydrateStemAldose
+carbohydrate	uronoyl	systematicCarbohydrateStemAldose
+carbohydrate	uronoyl	notARealSubtype
+carbohydrate	yl	<NULL>
+carbohydrate	yl	
+carbohydrate	yl	carbohydrateStemAldose
+carbohydrate	yl	systematicCarbohydrateStemAldose
+carbohydrate	yl	notARealSubtype
+carbohydrate	locantedAminoAcidOrCarbohydrateYl	<NULL>
+carbohydrate	locantedAminoAcidOrCarbohydrateYl	
+carbohydrate	locantedAminoAcidOrCarbohydrateYl	carbohydrateStemAldose
+carbohydrate	locantedAminoAcidOrCarbohydrateYl	systematicCarbohydrateStemAldose
+carbohydrate	locantedAminoAcidOrCarbohydrateYl	notARealSubtype
+carbohydrate	locantedAminoAcidOrCarbohydrateYlidene	<NULL>
+carbohydrate	locantedAminoAcidOrCarbohydrateYlidene	
+carbohydrate	locantedAminoAcidOrCarbohydrateYlidene	carbohydrateStemAldose
+carbohydrate	locantedAminoAcidOrCarbohydrateYlidene	systematicCarbohydrateStemAldose
+carbohydrate	locantedAminoAcidOrCarbohydrateYlidene	notARealSubtype
+carbohydrate	notARealSuffix	<NULL>
+carbohydrate	notARealSuffix	
+carbohydrate	notARealSuffix	carbohydrateStemAldose
+carbohydrate	notARealSuffix	systematicCarbohydrateStemAldose
+carbohydrate	notARealSuffix	notARealSubtype
+chalcogenAcidStem	acylium	<NULL>
+chalcogenAcidStem	acylium	
+chalcogenAcidStem	acylium	notARealSubtype
+chalcogenAcidStem	amide	<NULL>
+chalcogenAcidStem	amide	
+chalcogenAcidStem	amide	notARealSubtype
+chalcogenAcidStem	amidylium	<NULL>
+chalcogenAcidStem	amidylium	
+chalcogenAcidStem	amidylium	notARealSubtype
+chalcogenAcidStem	amido	<NULL>
+chalcogenAcidStem	amido	
+chalcogenAcidStem	amido	notARealSubtype
+chalcogenAcidStem	ate	<NULL>
+chalcogenAcidStem	ate	
+chalcogenAcidStem	ate	notARealSubtype
+chalcogenAcidStem	ic	<NULL>
+chalcogenAcidStem	ic	
+chalcogenAcidStem	ic	notARealSubtype
+chalcogenAcidStem	oyl	<NULL>
+chalcogenAcidStem	oyl	
+chalcogenAcidStem	oyl	notARealSubtype
+chalcogenAcidStem	yl	<NULL>
+chalcogenAcidStem	yl	
+chalcogenAcidStem	yl	notARealSubtype
+chalcogenAcidStem	ylidene	<NULL>
+chalcogenAcidStem	ylidene	
+chalcogenAcidStem	ylidene	notARealSubtype
+chalcogenAcidStem	notARealSuffix	<NULL>
+chalcogenAcidStem	notARealSuffix	
+chalcogenAcidStem	notARealSuffix	notARealSubtype
+nonCarboxylicAcid	acylium	<NULL>
+nonCarboxylicAcid	acylium	
+nonCarboxylicAcid	acylium	ylForAcyl
+nonCarboxylicAcid	acylium	notARealSubtype
+nonCarboxylicAcid	ate	<NULL>
+nonCarboxylicAcid	ate	
+nonCarboxylicAcid	ate	ylForAcyl
+nonCarboxylicAcid	ate	notARealSubtype
+nonCarboxylicAcid	ic	<NULL>
+nonCarboxylicAcid	ic	
+nonCarboxylicAcid	ic	ylForAcyl
+nonCarboxylicAcid	ic	notARealSubtype
+nonCarboxylicAcid	ite	<NULL>
+nonCarboxylicAcid	ite	
+nonCarboxylicAcid	ite	ylForAcyl
+nonCarboxylicAcid	ite	notARealSubtype
+nonCarboxylicAcid	ous	<NULL>
+nonCarboxylicAcid	ous	
+nonCarboxylicAcid	ous	ylForAcyl
+nonCarboxylicAcid	ous	notARealSubtype
+nonCarboxylicAcid	yl	<NULL>
+nonCarboxylicAcid	yl	
+nonCarboxylicAcid	yl	ylForAcyl
+nonCarboxylicAcid	yl	notARealSubtype
+nonCarboxylicAcid	oyl	<NULL>
+nonCarboxylicAcid	oyl	
+nonCarboxylicAcid	oyl	ylForAcyl
+nonCarboxylicAcid	oyl	notARealSubtype
+nonCarboxylicAcid	notARealSuffix	<NULL>
+nonCarboxylicAcid	notARealSuffix	
+nonCarboxylicAcid	notARealSuffix	ylForAcyl
+nonCarboxylicAcid	notARealSuffix	notARealSubtype
+standardGroup	acylium	<NULL>
+standardGroup	acylium	
+standardGroup	acylium	notARealSubtype
+standardGroup	al	<NULL>
+standardGroup	al	
+standardGroup	al	notARealSubtype
+standardGroup	aldehyde	<NULL>
+standardGroup	aldehyde	
+standardGroup	aldehyde	notARealSubtype
+standardGroup	aldoxime	<NULL>
+standardGroup	aldoxime	
+standardGroup	aldoxime	notARealSubtype
+standardGroup	amide	<NULL>
+standardGroup	amide	
+standardGroup	amide	notARealSubtype
+standardGroup	amidrazone	<NULL>
+standardGroup	amidrazone	
+standardGroup	amidrazone	notARealSubtype
+standardGroup	amidylium	<NULL>
+standardGroup	amidylium	
+standardGroup	amidylium	notARealSubtype
+standardGroup	amidine	<NULL>
+standardGroup	amidine	
+standardGroup	amidine	notARealSubtype
+standardGroup	amidinium	<NULL>
+standardGroup	amidinium	
+standardGroup	amidinium	notARealSubtype
+standardGroup	amidium	<NULL>
+standardGroup	amidium	
+standardGroup	amidium	notARealSubtype
+standardGroup	amido	<NULL>
+standardGroup	amido	
+standardGroup	amido	notARealSubtype
+standardGroup	amine	<NULL>
+standardGroup	amine	
+standardGroup	amine	notARealSubtype
+standardGroup	aminide	<NULL>
+standardGroup	aminide	
+standardGroup	aminide	notARealSubtype
+standardGroup	aminium	<NULL>
+standardGroup	aminium	
+standardGroup	aminium	notARealSubtype
+standardGroup	aminyl	<NULL>
+standardGroup	aminyl	
+standardGroup	aminyl	notARealSubtype
+standardGroup	aminylium	<NULL>
+standardGroup	aminylium	
+standardGroup	aminylium	notARealSubtype
+standardGroup	anilide	<NULL>
+standardGroup	anilide	
+standardGroup	anilide	notARealSubtype
+standardGroup	arsonous	<NULL>
+standardGroup	arsonous	
+standardGroup	arsonous	notARealSubtype
+standardGroup	ate	<NULL>
+standardGroup	ate	
+standardGroup	ate	notARealSubtype
+standardGroup	azonic	<NULL>
+standardGroup	azonic	
+standardGroup	azonic	notARealSubtype
+standardGroup	arsonite	<NULL>
+standardGroup	arsonite	
+standardGroup	arsonite	notARealSubtype
+standardGroup	azonate	<NULL>
+standardGroup	azonate	
+standardGroup	azonate	notARealSubtype
+standardGroup	azonite	<NULL>
+standardGroup	azonite	
+standardGroup	azonite	notARealSubtype
+standardGroup	azonous	<NULL>
+standardGroup	azonous	
+standardGroup	azonous	notARealSubtype
+standardGroup	boronate	<NULL>
+standardGroup	boronate	
+standardGroup	boronate	notARealSubtype
+standardGroup	boronic	<NULL>
+standardGroup	boronic	
+standardGroup	boronic	notARealSubtype
+standardGroup	boronicacidpinacolester	<NULL>
+standardGroup	boronicacidpinacolester	
+standardGroup	boronicacidpinacolester	notARealSubtype
+standardGroup	carbamate	<NULL>
+standardGroup	carbamate	
+standardGroup	carbamate	notARealSubtype
+standardGroup	carbamic	<NULL>
+standardGroup	carbamic	
+standardGroup	carbamic	notARealSubtype
+standardGroup	carbolactone	<NULL>
+standardGroup	carbolactone	
+standardGroup	carbolactone	notARealSubtype
+standardGroup	carbonimidoyl	<NULL>
+standardGroup	carbonimidoyl	
+standardGroup	carbonimidoyl	notARealSubtype
+standardGroup	carbonyl	<NULL>
+standardGroup	carbonyl	
+standardGroup	carbonyl	notARealSubtype
+standardGroup	carbonylium	<NULL>
+standardGroup	carbonylium	
+standardGroup	carbonylium	notARealSubtype
+standardGroup	carboxamide	<NULL>
+standardGroup	carboxamide	
+standardGroup	carboxamide	notARealSubtype
+standardGroup	carboxylic	<NULL>
+standardGroup	carboxylic	
+standardGroup	carboxylic	notARealSubtype
+standardGroup	carboxylate	<NULL>
+standardGroup	carboxylate	
+standardGroup	carboxylate	notARealSubtype
+standardGroup	carboxylite	<NULL>
+standardGroup	carboxylite	
+standardGroup	carboxylite	notARealSubtype
+standardGroup	diazonium	<NULL>
+standardGroup	diazonium	
+standardGroup	diazonium	notARealSubtype
+standardGroup	dicarboximide	<NULL>
+standardGroup	dicarboximide	
+standardGroup	dicarboximide	notARealSubtype
+standardGroup	dicarboximido	<NULL>
+standardGroup	dicarboximido	
+standardGroup	dicarboximido	notARealSubtype
+standardGroup	hydrazide	<NULL>
+standardGroup	hydrazide	
+standardGroup	hydrazide	notARealSubtype
+standardGroup	hydrazido	<NULL>
+standardGroup	hydrazido	
+standardGroup	hydrazido	notARealSubtype
+standardGroup	hydrazonic	<NULL>
+standardGroup	hydrazonic	
+standardGroup	hydrazonic	notARealSubtype
+standardGroup	hydroxamate	<NULL>
+standardGroup	hydroxamate	
+standardGroup	hydroxamate	notARealSubtype
+standardGroup	hydroxamic	<NULL>
+standardGroup	hydroxamic	
+standardGroup	hydroxamic	notARealSubtype
+standardGroup	ic	<NULL>
+standardGroup	ic	
+standardGroup	ic	notARealSubtype
+standardGroup	ic_O_acid	<NULL>
+standardGroup	ic_O_acid	
+standardGroup	ic_O_acid	notARealSubtype
+standardGroup	ic_S_acid	<NULL>
+standardGroup	ic_S_acid	
+standardGroup	ic_S_acid	notARealSubtype
+standardGroup	ic_Se_acid	<NULL>
+standardGroup	ic_Se_acid	
+standardGroup	ic_Se_acid	notARealSubtype
+standardGroup	ic_Te_acid	<NULL>
+standardGroup	ic_Te_acid	
+standardGroup	ic_Te_acid	notARealSubtype
+standardGroup	ide	<NULL>
+standardGroup	ide	
+standardGroup	ide	notARealSubtype
+standardGroup	imine	<NULL>
+standardGroup	imine	
+standardGroup	imine	notARealSubtype
+standardGroup	iminide	<NULL>
+standardGroup	iminide	
+standardGroup	iminide	notARealSubtype
+standardGroup	iminium	<NULL>
+standardGroup	iminium	
+standardGroup	iminium	notARealSubtype
+standardGroup	iminyl	<NULL>
+standardGroup	iminyl	
+standardGroup	iminyl	notARealSubtype
+standardGroup	iminylium	<NULL>
+standardGroup	iminylium	
+standardGroup	iminylium	notARealSubtype
+standardGroup	io	<NULL>
+standardGroup	io	
+standardGroup	io	notARealSubtype
+standardGroup	ium	<NULL>
+standardGroup	ium	
+standardGroup	ium	notARealSubtype
+standardGroup	lactam	<NULL>
+standardGroup	lactam	
+standardGroup	lactam	notARealSubtype
+standardGroup	lactim	<NULL>
+standardGroup	lactim	
+standardGroup	lactim	notARealSubtype
+standardGroup	lactone	<NULL>
+standardGroup	lactone	
+standardGroup	lactone	notARealSubtype
+standardGroup	nitrile	<NULL>
+standardGroup	nitrile	
+standardGroup	nitrile	notARealSubtype
+standardGroup	nitrilium	<NULL>
+standardGroup	nitrilium	
+standardGroup	nitrilium	notARealSubtype
+standardGroup	nitrolic acid	<NULL>
+standardGroup	nitrolic acid	
+standardGroup	nitrolic acid	notARealSubtype
+standardGroup	ol	<NULL>
+standardGroup	ol	
+standardGroup	ol	notARealSubtype
+standardGroup	olate	<NULL>
+standardGroup	olate	
+standardGroup	olate	notARealSubtype
+standardGroup	olide	<NULL>
+standardGroup	olide	
+standardGroup	olide	notARealSubtype
+standardGroup	oMeaningYl	<NULL>
+standardGroup	oMeaningYl	
+standardGroup	oMeaningYl	notARealSubtype
+standardGroup	onaphthone	<NULL>
+standardGroup	onaphthone	
+standardGroup	onaphthone	notARealSubtype
+standardGroup	one	<NULL>
+standardGroup	one	
+standardGroup	one	notARealSubtype
+standardGroup	ophenone	<NULL>
+standardGroup	ophenone	
+standardGroup	ophenone	notARealSubtype
+standardGroup	oximino	<NULL>
+standardGroup	oximino	
+standardGroup	oximino	notARealSubtype
+standardGroup	oxy	<NULL>
+standardGroup	oxy	
+standardGroup	oxy	notARealSubtype
+standardGroup	oyl	<NULL>
+standardGroup	oyl	
+standardGroup	oyl	notARealSubtype
+standardGroup	phosphonite	<NULL>
+standardGroup	phosphonite	
+standardGroup	phosphonite	notARealSubtype
+standardGroup	phosphonous	<NULL>
+standardGroup	phosphonous	
+standardGroup	phosphonous	notARealSubtype
+standardGroup	selenenic	<NULL>
+standardGroup	selenenic	
+standardGroup	selenenic	notARealSubtype
+standardGroup	selenenyl	<NULL>
+standardGroup	selenenyl	
+standardGroup	selenenyl	notARealSubtype
+standardGroup	seleninyl	<NULL>
+standardGroup	seleninyl	
+standardGroup	seleninyl	notARealSubtype
+standardGroup	selenonyl	<NULL>
+standardGroup	selenonyl	
+standardGroup	selenonyl	notARealSubtype
+standardGroup	selone	<NULL>
+standardGroup	selone	
+standardGroup	selone	notARealSubtype
+standardGroup	stibonite	<NULL>
+standardGroup	stibonite	
+standardGroup	stibonite	notARealSubtype
+standardGroup	stibonous	<NULL>
+standardGroup	stibonous	
+standardGroup	stibonous	notARealSubtype
+standardGroup	sulfamate	<NULL>
+standardGroup	sulfamate	
+standardGroup	sulfamate	notARealSubtype
+standardGroup	sulfamic	<NULL>
+standardGroup	sulfamic	
+standardGroup	sulfamic	notARealSubtype
+standardGroup	sulfenamide	<NULL>
+standardGroup	sulfenamide	
+standardGroup	sulfenamide	notARealSubtype
+standardGroup	sulfenamido	<NULL>
+standardGroup	sulfenamido	
+standardGroup	sulfenamido	notARealSubtype
+standardGroup	selenenate	<NULL>
+standardGroup	selenenate	
+standardGroup	selenenate	notARealSubtype
+standardGroup	sulfenate	<NULL>
+standardGroup	sulfenate	
+standardGroup	sulfenate	notARealSubtype
+standardGroup	sulfenic	<NULL>
+standardGroup	sulfenic	
+standardGroup	sulfenic	notARealSubtype
+standardGroup	sulfenoselenoate	<NULL>
+standardGroup	sulfenoselenoate	
+standardGroup	sulfenoselenoate	notARealSubtype
+standardGroup	sulfenoselenoic	<NULL>
+standardGroup	sulfenoselenoic	
+standardGroup	sulfenoselenoic	notARealSubtype
+standardGroup	sulfenoselenoyl	<NULL>
+standardGroup	sulfenoselenoyl	
+standardGroup	sulfenoselenoyl	notARealSubtype
+standardGroup	sulfenothioate	<NULL>
+standardGroup	sulfenothioate	
+standardGroup	sulfenothioate	notARealSubtype
+standardGroup	sulfenothioic	<NULL>
+standardGroup	sulfenothioic	
+standardGroup	sulfenothioic	notARealSubtype
+standardGroup	sulfenothioyl	<NULL>
+standardGroup	sulfenothioyl	
+standardGroup	sulfenothioyl	notARealSubtype
+standardGroup	sulfenyl	<NULL>
+standardGroup	sulfenyl	
+standardGroup	sulfenyl	notARealSubtype
+standardGroup	sulfinyl	<NULL>
+standardGroup	sulfinyl	
+standardGroup	sulfinyl	notARealSubtype
+standardGroup	sulfonyl	<NULL>
+standardGroup	sulfonyl	
+standardGroup	sulfonyl	notARealSubtype
+standardGroup	sultam	<NULL>
+standardGroup	sultam	
+standardGroup	sultam	notARealSubtype
+standardGroup	sultim	<NULL>
+standardGroup	sultim	
+standardGroup	sultim	notARealSubtype
+standardGroup	sultine	<NULL>
+standardGroup	sultine	
+standardGroup	sultine	notARealSubtype
+standardGroup	sultone	<NULL>
+standardGroup	sultone	
+standardGroup	sultone	notARealSubtype
+standardGroup	tellone	<NULL>
+standardGroup	tellone	
+standardGroup	tellone	notARealSubtype
+standardGroup	tellurenate	<NULL>
+standardGroup	tellurenate	
+standardGroup	tellurenate	notARealSubtype
+standardGroup	tellurenic	<NULL>
+standardGroup	tellurenic	
+standardGroup	tellurenic	notARealSubtype
+standardGroup	tellurenyl	<NULL>
+standardGroup	tellurenyl	
+standardGroup	tellurenyl	notARealSubtype
+standardGroup	tellurinyl	<NULL>
+standardGroup	tellurinyl	
+standardGroup	tellurinyl	notARealSubtype
+standardGroup	telluronyl	<NULL>
+standardGroup	telluronyl	
+standardGroup	telluronyl	notARealSubtype
+standardGroup	thione	<NULL>
+standardGroup	thione	
+standardGroup	thione	notARealSubtype
+standardGroup	uide	<NULL>
+standardGroup	uide	
+standardGroup	uide	notARealSubtype
+standardGroup	yl	<NULL>
+standardGroup	yl	
+standardGroup	yl	notARealSubtype
+standardGroup	ylidene	<NULL>
+standardGroup	ylidene	
+standardGroup	ylidene	notARealSubtype
+standardGroup	ylidyne	<NULL>
+standardGroup	ylidyne	
+standardGroup	ylidyne	notARealSubtype
+standardGroup	ylium	<NULL>
+standardGroup	ylium	
+standardGroup	ylium	notARealSubtype
+standardGroup	notARealSuffix	<NULL>
+standardGroup	notARealSuffix	
+standardGroup	notARealSuffix	notARealSubtype
+notARealType	yl	<NULL>

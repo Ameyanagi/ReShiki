@@ -80,7 +80,8 @@ impl App {
             Action::PositionIndicators => {
                 self.tab.selected = ids;
                 self.tool = Tool::EditPoints;
-                self.status = "Drag a number or stereochemistry handle · Escape finishes".into();
+                self.status =
+                    "Drag a number, atom map or stereochemistry handle · Escape finishes".into();
             }
             Action::Carbons(value) => {
                 if self.tab.labels.scope == Scope::Drawing {
@@ -235,6 +236,7 @@ impl App {
                     .filter(|a| ids.contains(&a.id))
                 {
                     for s in std::iter::once(&mut a.display.stereo.style)
+                        .chain(std::iter::once(&mut a.display.mapping.style))
                         .chain(a.display.number.iter_mut().map(|n| &mut n.style))
                     {
                         if let Some(size) = size {
@@ -267,6 +269,7 @@ impl App {
                     .filter(|a| ids.contains(&a.id))
                 {
                     a.display.stereo.offset = None;
+                    a.display.mapping.offset = None;
                     if let Some(n) = &mut a.display.number {
                         n.offset = None;
                     }
@@ -294,6 +297,7 @@ impl App {
                     a.display.hydrogens = None;
                     a.display.hydrogen_position = HydrogenPosition::Auto;
                     a.display.stereo.show = None;
+                    a.display.mapping.show = None;
                 }
                 for b in self
                     .tab

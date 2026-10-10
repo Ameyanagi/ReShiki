@@ -46,4 +46,6 @@ under review in [PR #277](https://github.com/Ameyanagi/ReShiki/pull/277) for
 
 Offline atom-linked HOSE NMR prediction, compact palette that preserves drawing space, measured-data provenance and native desktop validation (under review): @Ameyanagi in [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272).
 
+Local Rust chemical naming and editor integration (under review): @Ameyanagi. The separate parser is introduced in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291); the [guide and native review](chemical-naming-rust.md) describe the bounded app workflow.
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

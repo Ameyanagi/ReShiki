@@ -163,7 +163,7 @@ fn forward() -> String {
 }
 
 /// The newest document format this build reads. Saved files are marked with it.
-pub const VERSION: u32 = 24;
+pub const VERSION: u32 = 25;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -207,6 +207,10 @@ pub struct Document {
     pub bonds: Vec<Bond>,
     #[serde(default)]
     pub annotations: Vec<Annotation>,
+    /// Optional native links; older readers retain visible annotation text but
+    /// cannot preserve its molecule association.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub molecule_names: Vec<crate::molecule_names::MoleculeName>,
     #[serde(default)]
     pub arrows: Vec<Arrow>,
     #[serde(default)]
@@ -235,6 +239,7 @@ impl Default for Document {
             atoms: vec![],
             bonds: vec![],
             annotations: vec![],
+            molecule_names: vec![],
             arrows: vec![],
             graphics: vec![],
             groups: vec![],
@@ -443,6 +448,7 @@ impl Document {
         self.bonds
             .retain(|b| !ids.contains(&b.a) && !ids.contains(&b.b));
         self.annotations.retain(|a| !ids.contains(&a.id));
+        crate::molecule_names::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
         crate::projection::prune_centroids(self);
@@ -543,6 +549,9 @@ impl Document {
         let empty_neighbors = HashSet::new();
         for a in &self.atoms {
             a.display.validate()?;
+            if a.map_num > i32::MAX as u32 {
+                return Err("Atom maps must be from 1 to 2147483647, or 0 to clear".into());
+            }
             if a.display.variable.is_some() && a.element != "*" {
                 return Err("Variable labels require wildcard atoms".into());
             }
@@ -623,6 +632,7 @@ impl Document {
         for a in &self.annotations {
             a.format.validate(&a.text)?;
         }
+        crate::molecule_names::validate(self)?;
         for graphic in &self.graphics {
             graphic.validate()?;
         }

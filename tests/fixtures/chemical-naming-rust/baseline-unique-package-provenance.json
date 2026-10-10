@@ -1,0 +1,42 @@
+{
+  "created_at_utc": "2026-10-09T22:50:54.241655+00:00",
+  "purpose": "Unique app identity for native preimplementation Import comparison; packaging only, no rebuild/source edits",
+  "original_app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Projection.app",
+  "original_signed_executable_sha256": "82a0047bd037f77f063233a284f9f7c7de79f36b1c1e98f6eb673ed514d389c0",
+  "new_app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Naming Baseline Verified.app",
+  "bundle_id": "dev.reshiki.naming-baseline-verified",
+  "new_signed_executable_sha256": "17479a4b236b6df36ddab82087031315b78bd6fbf6e58de394558e0437d48c24",
+  "copy_byte_equal_before_metadata_and_signing": true,
+  "changed_bundle_paths": [
+    "Contents/Info.plist",
+    "Contents/MacOS/reshiki"
+  ],
+  "all_other_bundle_files_unchanged": true,
+  "source_commit": "427d5f4e2bc05456213c0c98b6daa01351666bf2",
+  "declared_naming_parent": "0e6e9009ca2e8bfebe149c260fc5a2f484f7dfb9",
+  "source_parity_receipt": "tests/fixtures/chemical-naming-rust/baseline-import-source-provenance.json",
+  "codesign_strict_pass": true,
+  "codesign_output": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Naming Baseline Verified.app: replacing existing signature\n",
+  "original_bundle_hashes": {
+    "Contents/Info.plist": "f56a4b07f1051751ed3d0896461cf33f3f911054138161f4b9aa4800affee064",
+    "Contents/_CodeSignature/CodeResources": "ffe71d6b9d14dc01071214269d16a38160c4ccbd312eba4c4a25637447177b53",
+    "Contents/MacOS/reshiki": "82a0047bd037f77f063233a284f9f7c7de79f36b1c1e98f6eb673ed514d389c0",
+    "Contents/Resources/ReShiki.icns": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766",
+    "Contents/Resources/Licenses/LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "Contents/Resources/Licenses/LICENSE": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab",
+    "Contents/Resources/Licenses/NOTICE": "b64e8c1d4e9017a01067cf6ad362d01f1f415ea68f5a36d5be217a6d53c89b21",
+    "Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": "74938cb827f841a71f0431cc1a18a1d4cdecdcd094b8fd57fd9000d3be1a5b49",
+    "Contents/Resources/Licenses/LICENSE-MIT": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+  },
+  "unique_bundle_hashes": {
+    "Contents/Info.plist": "abee7b0b74ddb87b46a1811e981b51b3775fe3fdfa07326d41741efb985adc1c",
+    "Contents/_CodeSignature/CodeResources": "ffe71d6b9d14dc01071214269d16a38160c4ccbd312eba4c4a25637447177b53",
+    "Contents/MacOS/reshiki": "17479a4b236b6df36ddab82087031315b78bd6fbf6e58de394558e0437d48c24",
+    "Contents/Resources/ReShiki.icns": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766",
+    "Contents/Resources/Licenses/LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "Contents/Resources/Licenses/LICENSE": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab",
+    "Contents/Resources/Licenses/NOTICE": "b64e8c1d4e9017a01067cf6ad362d01f1f415ea68f5a36d5be217a6d53c89b21",
+    "Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": "74938cb827f841a71f0431cc1a18a1d4cdecdcd094b8fd57fd9000d3be1a5b49",
+    "Contents/Resources/Licenses/LICENSE-MIT": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+  }
+}

@@ -1,0 +1,23 @@
+   Compiling reshiki-process v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming-backend/native/process)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.88s
+     Running unittests src/lib.rs (/tmp/reshiki-opsin-core-target/debug/deps/reshiki_process-d3ce90939034ccfb)
+
+running 9 tests
+test tests::child_fixture ... ok
+test tests::invalid_resource_policy_fails_before_starting_a_child ... ok
+test tests::supervisor_fixture ... ok
+test unix::ownership_tests::linux_resident_snapshot_distinguishes_no_mm_from_invalid_values ... ok
+test tests::actual_termination_reaps_direct_child ... ok
+test tests::observer_closes_more_than_one_descriptor_batch_and_failed_exec_pipe ... ok
+test unix::ownership_tests::observed_exit_completes_group_cleanup_before_releasing_child_identity ... ok
+test tests::killing_supervisor_at_startup_and_after_eof_ends_worker_independently ... ok
+test tests::actual_child_resident_limit_is_observable ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+   Doc-tests reshiki_process
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

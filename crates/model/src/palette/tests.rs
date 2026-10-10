@@ -209,9 +209,9 @@ fn both_color_visitors_see_every_stored_color() {
         visited += 1;
         *c = Color::Palette(Hue::ALL[visited % 8], Row::Strong);
     });
-    // Atom 4 (style, H, stereo, number) + second atom stereo, bond 2, text 2,
-    // arrow 1, graphic 2, ring fill 1.
-    assert_eq!(visited, 13);
+    // Atom 5 (style, H, stereo, mapping, number) + second atom stereo/mapping,
+    // bond 2, text 2, arrow 1, graphic 2, ring fill 1.
+    assert_eq!(visited, 15);
     let seen = std::cell::Cell::new(0);
     assert!(!any_color(&doc, |c| {
         seen.set(seen.get() + 1);
@@ -299,4 +299,157 @@ fn recent_custom_colors_keep_the_newest_eight() {
             .unwrap()
             .contains("recent_colors")
     );
+}
+
+fn mapping_color_sample(color: Color) -> (Document, u64) {
+    use crate::{atom_labels::Number, document::Point, typography::TextStyle};
+    let mut doc = Document::default();
+    let id = doc.add_atom("N", Point::new(12., -8.));
+    let atom = doc.atom_mut(id).unwrap();
+    atom.map_num = 17;
+    atom.isotope = 15;
+    atom.charge = 1;
+    atom.explicit_h = 2;
+    atom.no_implicit = true;
+    atom.depth = 7.;
+    atom.display.mapping.show = Some(false);
+    atom.display.mapping.offset = Some(Point::new(9., -6.));
+    atom.display.mapping.style = TextStyle {
+        family: "Times New Roman".into(),
+        size_pt: 9.5,
+        bold: true,
+        italic: true,
+        underline: true,
+        color,
+        ..Default::default()
+    };
+    atom.display.number = Some(Number {
+        text: "A-42".into(),
+        offset: Some(Point::new(-11., 5.)),
+        style: TextStyle {
+            family: "Courier New".into(),
+            size_pt: 12.,
+            ..Default::default()
+        },
+    });
+    (doc, id)
+}
+
+#[test]
+fn mapping_only_color_is_found_and_mutated_without_changing_its_owner() {
+    let source = Color::Custom([31, 78, 121]);
+    let replacement = Color::Palette(Hue::Teal, Row::Strong);
+    let (mut doc, id) = mapping_color_sample(source);
+    assert!(any_color(&doc, |color| color == source));
+    let mut expected = doc.clone();
+    expected.atom_mut(id).unwrap().display.mapping.style.color = replacement;
+    for_each_color_mut(&mut doc, |color| {
+        if *color == source {
+            *color = replacement;
+        }
+    });
+    assert_eq!(doc, expected);
+    assert!(!any_color(&doc, |color| color == source));
+    assert!(any_color(&doc, |color| color == replacement));
+}
+
+#[test]
+fn mapping_only_palette_resolves_on_both_canvases_with_embedded_hues() {
+    for canvas in CanvasTheme::ALL {
+        for custom_hues in [false, true] {
+            let color = Color::Palette(Hue::Blue, Row::Strong);
+            let (mut doc, id) = mapping_color_sample(color);
+            doc.canvas_theme = canvas;
+            if custom_hues {
+                let mut hues = Hues::default();
+                hues.set(Hue::Blue, 145);
+                set_hues(&mut doc, hues);
+            }
+            let original = doc.clone();
+            let visible = Palette::of(&doc).rgb(color);
+            let resolved = crate::canvas_theme::resolved_document(&doc);
+            assert!(matches!(resolved, std::borrow::Cow::Owned(_)));
+            let mut expected = original.atom(id).unwrap().display.mapping.clone();
+            expected.style.color = Color::Custom(visible);
+            assert_eq!(resolved.atom(id).unwrap().display.mapping, expected);
+            let canonical = crate::canvas_theme::canonical_document(&doc);
+            assert_eq!(
+                canvas.color(
+                    canonical
+                        .atom(id)
+                        .unwrap()
+                        .display
+                        .mapping
+                        .style
+                        .color
+                        .rgb()
+                ),
+                visible
+            );
+            let pasted = crate::canvas_theme::for_paste(doc.clone(), canvas.toggled());
+            assert_eq!(pasted.atom(id).unwrap().display.mapping, expected);
+            assert_eq!(doc, original);
+        }
+    }
+}
+
+#[test]
+fn applying_a_theme_resets_mapping_ink_without_changing_labels_or_chemistry() {
+    for theme in ColorTheme::ALL {
+        let (mut doc, id) = mapping_color_sample(Color::Custom([31, 78, 121]));
+        set_hues(&mut doc, Hues::default());
+        let mut expected = doc.clone();
+        expected.color_theme = theme;
+        expected.custom_theme = None;
+        expected.atom_mut(id).unwrap().display.mapping.style.color = Color::Ink;
+        theme.apply(&mut doc);
+        assert_eq!(doc, expected);
+    }
+}
+
+#[test]
+fn mapping_rgb_fade_matches_existing_indicators_and_is_a_terminal_snapshot() {
+    use crate::depth_appearance as depth;
+    for canvas in CanvasTheme::ALL {
+        for color in [
+            Color::Custom([20, 80, 140]),
+            Color::Palette(Hue::Blue, Row::Strong),
+        ] {
+            let (mut doc, id) = mapping_color_sample(color);
+            doc.canvas_theme = canvas;
+            let atom = doc.atom_mut(id).unwrap();
+            atom.display.stereo.style.color = color;
+            atom.display.number.as_mut().unwrap().style.color = color;
+            depth::enable(&mut doc, &[id], 1.).unwrap();
+            depth::override_fade(&mut doc, &[id], Some(0.5)).unwrap();
+            let original = doc.clone();
+            let faded = depth::materialize(&doc);
+            let atom = faded.atom(id).unwrap();
+            let ink = atom.display.stereo.style.color;
+            assert_eq!(atom.display.mapping.style.color, ink);
+            assert_eq!(atom.display.number.as_ref().unwrap().style.color, ink);
+            if matches!(color, Color::Custom(_)) {
+                let golden = if canvas.is_light() {
+                    [138, 168, 198]
+                } else {
+                    [10, 40, 70]
+                };
+                assert_eq!(ink, Color::Custom(golden));
+            }
+            let before = original.atom(id).unwrap();
+            let mut mapping = before.display.mapping.clone();
+            mapping.style.color = ink;
+            assert_eq!(atom.display.mapping, mapping);
+            let mut number = before.display.number.clone().unwrap();
+            number.style.color = ink;
+            assert_eq!(atom.display.number.as_ref(), Some(&number));
+            let mut chemical_owner = atom.clone();
+            chemical_owner.display = before.display.clone();
+            chemical_owner.text_style = before.text_style.clone();
+            assert_eq!(&chemical_owner, before);
+            assert!(faded.depth_appearance.is_empty());
+            assert_eq!(depth::materialize(&faded).as_ref(), faded.as_ref());
+            assert_eq!(doc, original);
+        }
+    }
 }

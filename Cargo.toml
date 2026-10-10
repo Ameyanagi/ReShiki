@@ -25,6 +25,7 @@ members = [
   "native/windows",
   "native/linux",
   "native/geometry",
+  "native/process",
   "crates/agent",
   "crates/chemistry",
   "crates/depict-math",
@@ -32,6 +33,7 @@ members = [
   "crates/mcp",
   "crates/model",
   "crates/metafile",
+  "crates/opsin",
   "crates/process-heap",
 ]
 default-members = [
@@ -61,7 +63,9 @@ iced_tiny_skia = { version = "0.14", default-features = false }
 iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 
 [dependencies]
+opsin = { path = "crates/opsin" }
 reshiki-geometry = { path = "native/geometry" }
+reshiki-process = { path = "native/process" }
 accesskit = "=0.24.1"
 reshiki-process-heap = { path = "crates/process-heap" }
 cosmolkit-inchi = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "252a1f3d6480fc4a0abcd51d76707f51f69b4406" }
