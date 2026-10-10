@@ -1,0 +1,26 @@
+<!ELEMENT suffixRulesList (rule)+>
+
+<!ELEMENT rule (addgroup|addSuffixPrefixIfNonePresentAndCyclic|setOutAtom|changecharge|addFunctionalAtomsToHydroxyGroups|chargeHydroxyGroups|removeTerminalOxygen|convertHydroxyGroupsToOutAtoms|convertHydroxyGroupsToPositiveCharge|setAcidicElement)+>
+<!ATTLIST rule value CDATA #REQUIRED>
+
+<!ELEMENT addgroup EMPTY>
+<!ATTLIST addgroup SMILES CDATA #REQUIRED
+                    labels CDATA #IMPLIED
+                    functionalIDs CDATA #IMPLIED
+                    outIDs CDATA #IMPLIED
+                    ketoneLocant (yes) #IMPLIED>
+
+<!ELEMENT addSuffixPrefixIfNonePresentAndCyclic EMPTY>
+<!ATTLIST addSuffixPrefixIfNonePresentAndCyclic SMILES CDATA #REQUIRED>
+<!ELEMENT setOutAtom EMPTY>
+<!ATTLIST setOutAtom outValency CDATA #IMPLIED>
+<!ELEMENT changecharge EMPTY>
+<!ATTLIST changecharge charge CDATA #REQUIRED protons CDATA #REQUIRED>
+<!ELEMENT addFunctionalAtomsToHydroxyGroups EMPTY>
+<!ELEMENT chargeHydroxyGroups EMPTY>
+<!ELEMENT removeTerminalOxygen EMPTY>
+<!ATTLIST removeTerminalOxygen order CDATA #REQUIRED>
+<!ELEMENT convertHydroxyGroupsToOutAtoms EMPTY>
+<!ELEMENT convertHydroxyGroupsToPositiveCharge EMPTY>
+<!ELEMENT setAcidicElement EMPTY>
+<!ATTLIST setAcidicElement element CDATA #REQUIRED>

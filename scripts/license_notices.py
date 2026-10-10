@@ -64,11 +64,15 @@ def consolidated_notices(root, metadata):
         for field in ("license", "license_file", "source", "repository", "homepage", "authors"):
             if package.get(field):
                 index.append(f"  {field}: {json.dumps(package[field], ensure_ascii=False)}\n")
-        if package.get("id") in workspace:
+        if package.get("id") in workspace and package.get("license") == "MIT OR Apache-2.0":
             index.append(
                 "  Original workspace crate: see LICENSE, LICENSE-MIT, LICENSE-APACHE and NOTICE.\n"
             )
             continue
+        if package.get("id") in workspace:
+            index.append(
+                "  Separately licensed workspace component: complete terms follow below.\n"
+            )
         files = list(notice_files(source))
         for candidate, relative in files:
             record(f"{key}/{relative.as_posix()}", candidate.read_bytes())

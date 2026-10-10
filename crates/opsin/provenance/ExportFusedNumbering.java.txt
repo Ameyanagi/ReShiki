@@ -1,0 +1,58 @@
+// Development-only pinned SSSRFinder and FusedRingNumberer oracle.
+package uk.ac.cam.ch.wwmm.opsin;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.util.*;
+public final class ExportFusedNumbering {
+    static String q(String text) { return ExportFrontend.quote(text); }
+    static String ints(List<Integer> values) { return values.toString(); }
+    public static void main(String[] args) throws Exception {
+        try (PrintWriter out = new PrintWriter(args[1], "UTF-8")) {
+            for (String row : Files.readAllLines(Paths.get(args[0]), StandardCharsets.UTF_8)) {
+                String[] fields = row.split("\\t", 3);
+                out.print("{\"name\":" + q(fields[0]) + ",\"smiles\":" + q(fields[1]) + ",\"expected_labels\":" + q(fields[2]));
+                try {
+                    Fragment fragment = new SMILESFragmentBuilder(new IDManager()).build(fields[1], "", XmlDeclarations.NONE_LABELS_VAL);
+                    List<Atom> originalAtoms = new ArrayList<>(fragment.getAtomList());
+                    List<Bond> originalBonds = new ArrayList<>(fragment.getBondSet());
+                    IdentityHashMap<Atom,Integer> atomIndex = new IdentityHashMap<>();
+                    IdentityHashMap<Bond,Integer> bondIndex = new IdentityHashMap<>();
+                    for (int i=0; i<originalAtoms.size(); i++) atomIndex.put(originalAtoms.get(i),i);
+                    for (int i=0; i<originalBonds.size(); i++) bondIndex.put(originalBonds.get(i),i);
+                    out.print(",\"sssr\":[");
+                    List<Ring> rings = SSSRFinder.getSetOfSmallestRings(fragment);
+                    for (int i=0; i<rings.size(); i++) {
+                        if (i>0) out.print(',');
+                        List<Integer> atoms = new ArrayList<>(), bonds = new ArrayList<>();
+                        for (Atom atom : rings.get(i).getAtomList()) atoms.add(atomIndex.get(atom));
+                        for (Bond bond : rings.get(i).getBondList()) bonds.add(bondIndex.get(bond));
+                        out.print("{\"atoms\":" + ints(atoms) + ",\"bonds\":" + ints(bonds) + "}");
+                    }
+                    out.print("]");
+                    try {
+                        FusedRingNumberer.numberFusedRing(fragment);
+                        out.print(",\"error\":null");
+                    } catch (Exception error) {
+                        out.print(",\"error\":" + q(error.getMessage()));
+                    }
+                    List<Integer> reordered = new ArrayList<>();
+                    for (Atom atom : fragment.getAtomList()) reordered.add(atomIndex.get(atom));
+                    out.print(",\"reordered_atoms\":" + ints(reordered) + ",\"locants_by_original_atom\":[");
+                    for (int i=0; i<originalAtoms.size(); i++) {
+                        if (i>0) out.print(',');
+                        out.print('[');
+                        List<String> locants=originalAtoms.get(i).getLocants();
+                        for (int j=0; j<locants.size(); j++) { if (j>0) out.print(','); out.print(q(locants.get(j))); }
+                        out.print(']');
+                    }
+                    out.print(']');
+                } catch (Exception error) {
+                    out.print(",\"error\":" + q(error.getMessage()));
+                }
+                out.println('}');
+            }
+        }
+    }
+}
+
