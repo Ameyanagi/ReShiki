@@ -1,0 +1,151 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 21,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": -36.373,
+        "y": -21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 2,
+      "element": "O",
+      "position": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "marks": [
+        {
+          "id": 1,
+          "kind": "lone_pair",
+          "offset": {
+            "x": -0.0000012749156,
+            "y": -29.166668
+          },
+          "angle": 0.0,
+          "size_pt": null
+        }
+      ],
+      "mark_serial": 1,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [],
+  "arrows": [
+    {
+      "id": 3,
+      "start": {
+        "x": -0.000001561776,
+        "y": -35.72927
+      },
+      "end": {
+        "x": -32.835995,
+        "y": -24.879839
+      },
+      "start_anchor": {
+        "target": {
+          "kind": "lone_pair",
+          "atom": 2,
+          "mark": 1
+        },
+        "offset": {
+          "x": -2.8686043e-7,
+          "y": -6.562603
+        },
+        "direction": {
+          "x": -4.371139e-8,
+          "y": -1.0
+        },
+        "gap": 3.5000002
+      },
+      "end_anchor": {
+        "target": {
+          "kind": "atom",
+          "atom": 1
+        },
+        "offset": {
+          "x": 3.5370064,
+          "y": -3.879839
+        },
+        "direction": {
+          "x": 0.67370254,
+          "y": -0.73900265
+        },
+        "gap": 3.5000002
+      },
+      "kind": "curved",
+      "cubic": [
+        {
+          "x": -0.0000022420077,
+          "y": -51.291157
+        },
+        {
+          "x": -22.351913,
+          "y": -36.38011
+        }
+      ],
+      "style": {
+        "head": "full",
+        "tail": "none",
+        "shape": "solid",
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "width_pt": 0.6,
+        "pattern": "solid",
+        "head_length_pt": 6.0,
+        "head_width_pt": 1.5,
+        "equilibrium_ratio": 1.0,
+        "head_notch": 0.125,
+        "gap_pt": 2.0,
+        "no_go": "none",
+        "dipole": false
+      }
+    }
+  ],
+  "graphics": [],
+  "groups": []
+}

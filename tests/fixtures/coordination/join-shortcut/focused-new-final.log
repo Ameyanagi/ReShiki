@@ -1,0 +1,14 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-ba50b1304e6a1bdf)
+
+running 5 tests
+test app::shortcuts::coordination_tests::join_uses_command_j_on_macos_and_control_j_elsewhere ... ok
+test app::shortcuts::coordination_tests::join_still_fuses_two_ordinary_bonds_and_undo_restores_both_fragments ... ok
+test app::shortcuts::coordination_tests::join_keeps_a_different_existing_metal_bond_and_rejects_a_whole_ligand_selection ... ok
+test app::shortcuts::coordination_tests::join_coordinates_all_six_en_donors_in_either_selection_order_without_moving_atoms ... ok
+test app::shortcuts::coordination_tests::join_rejects_unsupported_metal_partners_without_sharing_or_recording_history ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 659 filtered out; finished in 6.62s
+

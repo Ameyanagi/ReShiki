@@ -1,0 +1,14 @@
+{
+  "kind": "Authored final-status supplement; preserves earlier snapshots",
+  "basis": "matched-before-after-root-review.json",
+  "basis_sha256": "734ea405cf83f7d711dae7c119aef775f4940d273d3e69d98124ec7ac0ce8c36",
+  "native_status": "PASS_ROOT_MATCHED_AND_FRESH_NATIVE",
+  "remaining_pending": [
+    "Normal current source/publication hook result before qualification",
+    "Exact publication-headCI after Root commits/pushes"
+  ],
+  "selected_originals": 43,
+  "selected_screenshots": 16,
+  "selected_AX": 16,
+  "selected_native_files": 4
+}

@@ -36,6 +36,7 @@ pub mod depth_appearance;
 pub mod document;
 pub mod editing;
 pub mod erasing;
+pub mod generic;
 pub mod graphics;
 pub mod grouping;
 pub mod haworth;

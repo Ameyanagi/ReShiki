@@ -46,6 +46,8 @@ pub struct Imported {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct FileAnnotations {
+    #[serde(skip_serializing_if = "crate::generic::Generic::is_empty")]
+    pub generic: crate::generic::Generic,
     /// Original ChemDraw directions for the application's Haworth recognition.
     /// Excluded from the RDKit-compatible serialized parser snapshot.
     #[serde(skip)]
@@ -116,7 +118,8 @@ impl Imported {
             self.annotations.is_3d,
             &self.annotations.dummy_labels,
         )?
-        .with_attachments(&self.annotations.attachments)
+        .with_attachments(&self.annotations.attachments)?
+        .with_generic(&self.annotations.generic)
     }
 }
 
@@ -261,6 +264,7 @@ struct FileBond {
     query: bool,
 }
 struct Parsed {
+    generic: crate::generic::Generic,
     chemdraw: bool,
     graph: Graph,
     metadata: Metadata,
@@ -280,6 +284,7 @@ enum Context {
 impl Parsed {
     fn new(marked_3d: bool) -> Self {
         Self {
+            generic: Default::default(),
             chemdraw: false,
             graph: Graph {
                 atoms: Vec::new(),
@@ -330,7 +335,7 @@ impl Parsed {
             Vec::new()
         };
         if !matches!(context, Context::Molecule)
-            && self.bonds.iter().any(|b| b.attachment.is_some())
+            && (!self.generic.is_empty() || self.bonds.iter().any(|b| b.attachment.is_some()))
         {
             return Err(ReadError::Unsupported(
                 "RXN attachment targets; use CDXML or native ReShiki",
@@ -365,6 +370,11 @@ impl Parsed {
         }
         let groups = std::mem::take(&mut self.groups);
         groups.apply(&mut self)?;
+        if !matches!(context, Context::Molecule) && !self.generic.is_empty() {
+            return Err(ReadError::Unsupported(
+                "generic RXN substance groups; use CDXML or native ReShiki",
+            ));
+        }
         for (atom, props) in self.graph.atoms.iter().zip(&self.atoms) {
             match props.query {
                 FileQuery::None => (),
@@ -528,6 +538,7 @@ impl Parsed {
                 state,
             },
             annotations: FileAnnotations {
+                generic: self.generic,
                 chemdraw_directions,
                 attachments: self
                     .bonds

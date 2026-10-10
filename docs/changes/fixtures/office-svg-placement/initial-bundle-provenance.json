@@ -1,0 +1,19 @@
+{
+  "app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Office SVG Verified.app",
+  "unsigned_executable_sha256": "81224c4409a74cdbd6171539a73023d883c71cd03936628f2d4ebd6a7fa77cf5",
+  "signed_executable_sha256": "a526729562d646abb83038001f9a51041329ebb6ec768e72f634b8e99ec8b5a9",
+  "signature": "ad-hoc development bundle; not Developer ID/notarization",
+  "verification": "codesign --verify --deep --strict passed",
+  "files": {
+    "Contents/Info.plist": "f56a4b07f1051751ed3d0896461cf33f3f911054138161f4b9aa4800affee064",
+    "Contents/MacOS/reshiki": "a526729562d646abb83038001f9a51041329ebb6ec768e72f634b8e99ec8b5a9",
+    "Contents/Resources/Licenses/LICENSE": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab",
+    "Contents/Resources/Licenses/LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "Contents/Resources/Licenses/LICENSE-MIT": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891",
+    "Contents/Resources/Licenses/NOTICE": "b64e8c1d4e9017a01067cf6ad362d01f1f415ea68f5a36d5be217a6d53c89b21",
+    "Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": "74938cb827f841a71f0431cc1a18a1d4cdecdcd094b8fd57fd9000d3be1a5b49",
+    "Contents/Resources/ReShiki.icns": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766",
+    "Contents/_CodeSignature/CodeResources": "ffe71d6b9d14dc01071214269d16a38160c4ccbd312eba4c4a25637447177b53"
+  },
+  "launched": false
+}

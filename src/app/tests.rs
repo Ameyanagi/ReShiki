@@ -116,11 +116,13 @@ fn idle_windows_stop_polling_and_pending_work_restarts_timers() -> Result<(), St
     // Window close and keyboard/mouse events are always subscribed.
     // macOS adds Finder events; macOS/Windows add the native accessibility
     // action receiver and window/input events; Linux adds window-open
-    // events for clipboard initialization. These streams do not poll.
+    // events for clipboard initialization. Windows/Linux add desktop launch
+    // requests. These streams do not poll.
     let event_streams = 2
         + usize::from(cfg!(target_os = "macos"))
         + 2 * usize::from(cfg!(any(target_os = "macos", windows)))
-        + usize::from(cfg!(target_os = "linux"));
+        + usize::from(cfg!(target_os = "linux"))
+        + usize::from(cfg!(any(windows, target_os = "linux")));
     assert_eq!(idle, event_streams);
     app.assistant.busy = true;
     assert_eq!(subscriptions(&app), idle + 1);

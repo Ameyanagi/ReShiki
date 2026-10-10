@@ -35,7 +35,7 @@ pub fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
 }
 
 /// Ink extents for persistent label backgrounds, excluding font line padding.
-pub(crate) fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
+pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
     label_ink_boxes(&atom_label(a, doc))
         .into_iter()
         .reduce(|(lo, hi), (a, b)| {
@@ -115,6 +115,21 @@ fn resolve_label_fonts(primitive: Primitive) -> Vec<Primitive> {
 }
 
 fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
+    atom_label_runs_with_charge_layout(a, doc, ChargeLayout::Automatic)
+}
+
+#[derive(Clone, Copy)]
+enum ChargeLayout {
+    Automatic,
+    Unplaced,
+    Omitted,
+}
+
+fn atom_label_runs_with_charge_layout(
+    a: &Atom,
+    doc: &Document,
+    charge_layout: ChargeLayout,
+) -> Vec<Primitive> {
     if !doc.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
         return vec![];
     }
@@ -157,11 +172,18 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
     let small = size * 0.7;
     let label = internal_group
         .map(|group| group.label.as_str())
-        .or_else(|| a.display.variable.as_deref().filter(|_| a.element == "*"))
+        .or_else(|| {
+            a.display
+                .variable
+                .as_deref()
+                .filter(|_| a.element == "*" || doc.generic.links.iter().any(|s| s.atom == a.id))
+        })
         .unwrap_or(&a.element);
-    let condensed = (internal_group.is_some() || a.element == "*")
-        .then(|| crate::atom_labels::condensed_label(label))
-        .flatten();
+    let condensed = (internal_group.is_some()
+        || a.element == "*"
+        || doc.generic.links.iter().any(|s| s.atom == a.id))
+    .then(|| crate::atom_labels::condensed_label(label))
+    .flatten();
     let label = condensed.map_or(label, |(core, _)| core);
     let element_width = text_width(label, size);
     let origin = a.position.offset(
@@ -199,10 +221,21 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if internal_group.is_some() {
         return cursor.runs;
     }
-    push_hydrogens(a, doc, frame, &mut cursor, show_element);
+    if !doc.generic.links.iter().any(|s| s.atom == a.id) {
+        push_hydrogens(a, doc, frame, &mut cursor, show_element);
+    }
     push_isotope(a, frame, &mut cursor);
+    if matches!(charge_layout, ChargeLayout::Omitted) {
+        return cursor.runs;
+    }
+    let charge_start = cursor.runs.len();
     push_charge(a, frame, &mut cursor);
+    let automatic_charge = cursor.runs.len() > charge_start;
     push_radicals(a, frame, &mut cursor);
+    if matches!(charge_layout, ChargeLayout::Automatic) && show_element && automatic_charge {
+        let (core, charge) = cursor.runs.split_at_mut(charge_start);
+        place_automatic_charge(a, doc, frame, core, charge);
+    }
     cursor.runs
 }
 
@@ -475,6 +508,143 @@ fn push_radicals(a: &Atom, frame: LabelFrame<'_>, cursor: &mut LabelCursor) {
             "•".repeat(a.radical_electrons as usize),
             small,
         ));
+    }
+}
+
+/// Keep the usual superscript unless its ink extends into an incident shaft.
+/// Charge and any automatic radical dots travel together; explicit marks and
+/// the chemical document are never moved. If no nearby raised slot clears the
+/// bonds and label ink, retain the original position and genuine bond clipping.
+fn place_automatic_charge(
+    a: &Atom,
+    doc: &Document,
+    frame: LabelFrame<'_>,
+    core: &[Primitive],
+    charge: &mut [Primitive],
+) {
+    let core_boxes = label_ink_boxes(core);
+    let charge_boxes = label_ink_boxes(charge);
+    let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
+    let neighbors: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter(|b| (b.a == a.id || b.b == a.id) && doc.bond_visible(b.a, b.b))
+        .filter_map(|b| doc.atom(if b.a == a.id { b.b } else { b.a }))
+        .collect();
+    let rays: Vec<_> = neighbors
+        .iter()
+        .copied()
+        .filter_map(|other| {
+            let length = a.position.distance(other.position);
+            if length < 0.1 {
+                return None;
+            }
+            let ux = (other.position.x - a.position.x) / length;
+            let uy = (other.position.y - a.position.y) / length;
+            let end = label_end(a.position, ux, uy, &core_boxes, length, margin);
+            let trim = (end.x - a.position.x) * ux + (end.y - a.position.y) * uy;
+            let other_core = if visible(other, doc) || doc.abbreviation(other.id).is_some() {
+                label_ink_boxes(&atom_label_runs_with_charge_layout(
+                    other,
+                    doc,
+                    ChargeLayout::Omitted,
+                ))
+            } else {
+                vec![]
+            };
+            let other_end = label_end(other.position, -ux, -uy, &other_core, length, margin);
+            let other_trim =
+                (other.position.x - other_end.x) * ux + (other.position.y - other_end.y) * uy;
+            // Both endpoint cores participate in genuine bond clipping.
+            // Their jointly covered span has no shaft for charge to rescue.
+            (length - trim - other_trim > 0.1).then_some((ux, uy, length, trim))
+        })
+        .collect();
+    let blocks_shaft = |boxes: &[(Point, Point)]| {
+        rays.iter().any(|&(ux, uy, length, trim)| {
+            let end = label_end(a.position, ux, uy, boxes, length, margin);
+            (end.x - a.position.x) * ux + (end.y - a.position.y) * uy > trim + 0.1
+        })
+    };
+    if !blocks_shaft(&charge_boxes) {
+        return;
+    }
+    let extent = |boxes: &[(Point, Point)]| {
+        boxes.iter().copied().reduce(|(lo, hi), (a, b)| {
+            (
+                Point::new(lo.x.min(a.x), lo.y.min(a.y)),
+                Point::new(hi.x.max(b.x), hi.y.max(b.y)),
+            )
+        })
+    };
+    let (Some((core_lo, core_hi)), Some((charge_lo, charge_hi))) =
+        (extent(&core_boxes), extent(&charge_boxes))
+    else {
+        return;
+    };
+    let mut occupied = core_boxes;
+    let mut reserve_marks = |atom: &Atom| {
+        for part in crate::scientific::styled_mark_parts(atom, &doc.drawing_style) {
+            let points: Vec<_> = part
+                .commands
+                .iter()
+                .flat_map(crate::graphics::PathCommand::iter_points)
+                .map(|p| (p, p))
+                .collect();
+            if let Some((lo, hi)) = extent(&points) {
+                let pad = part.style.width() * 0.5;
+                occupied.push((lo.offset(-pad, -pad), hi.offset(pad, pad)));
+            }
+        }
+    };
+    reserve_marks(a);
+    // Even a core-covered bond's visible neighbor still paints its label and
+    // user-positioned marks; only its shaft constraint was discarded above.
+    for other in &neighbors {
+        reserve_marks(other);
+    }
+    for other in &neighbors {
+        // Unplaced neighbor runs avoid recursive charge/indicator placement.
+        occupied.extend(label_ink_boxes(&atom_label_runs_with_charge_layout(
+            other,
+            doc,
+            ChargeLayout::Unplaced,
+        )));
+    }
+    let gap = frame.size * 0.12;
+    let left = core_lo.x - gap - charge_hi.x;
+    let center = (core_lo.x + core_hi.x - charge_lo.x - charge_hi.x) * 0.5;
+    let mut best: Option<(f32, Point)> = None;
+    // At most 18 nearby slots. Raise rather than lowering a formal charge
+    // into a subscript position; ties prefer the familiar right-hand side.
+    for rise in 0..=5 {
+        for dx in [0., left, center] {
+            let offset = Point::new(dx, -(rise as f32) * frame.size * 0.25);
+            let boxes: Vec<_> = charge_boxes
+                .iter()
+                .map(|(lo, hi)| (lo.offset(offset.x, offset.y), hi.offset(offset.x, offset.y)))
+                .collect();
+            if blocks_shaft(&boxes)
+                || boxes.iter().any(|(lo, hi)| {
+                    occupied.iter().any(|(a, b)| {
+                        hi.x > a.x - gap && lo.x < b.x + gap && hi.y > a.y - gap && lo.y < b.y + gap
+                    })
+                })
+            {
+                continue;
+            }
+            let distance = offset.x * offset.x + offset.y * offset.y;
+            if best.is_none_or(|(previous, _)| distance < previous) {
+                best = Some((distance, offset));
+            }
+        }
+    }
+    if let Some((_, offset)) = best {
+        for run in charge {
+            if let Primitive::Text { position, .. } = run {
+                *position = position.offset(offset.x, offset.y);
+            }
+        }
     }
 }
 
@@ -856,6 +1026,27 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         circles,
         crossing_gaps,
     } = push_ring_strokes(&mut out, doc, &opacity);
+    // Projection tip orientation is independent of dative donor→acceptor
+    // direction. Normalize only a detached render copy, after collecting the
+    // chemical labels from the original graph (reversing a dative graph would
+    // otherwise change donor hydrogen counts).
+    let projection_paint = if doc
+        .bonds
+        .iter()
+        .any(|b| b.order == 5 && b.display.ends_with("_end"))
+    {
+        let mut painted = doc.clone();
+        for bond in &mut painted.bonds {
+            if bond.order == 5 && bond.display.ends_with("_end") {
+                bond.display = bond.display.trim_end_matches("_end").into();
+                bond.reverse();
+            }
+        }
+        std::borrow::Cow::Owned(painted)
+    } else {
+        std::borrow::Cow::Borrowed(doc)
+    };
+    let doc = projection_paint.as_ref();
     // Fill joined bond outlines together. Separate antialiased polygons leave
     // translucent seams even when their mathematical corners agree exactly.
     let joins = crate::bond_joins::Joins::new(doc);
@@ -1246,6 +1437,22 @@ fn push_atom_labels(
     }
 }
 fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
+    for unit in &doc.generic.repeats {
+        if let Some(graphic) = unit
+            .bracket
+            .and_then(|id| doc.graphics.iter().find(|g| g.id == id))
+        {
+            let (_, hi) = graphic.bounds();
+            let style = doc.drawing_style.text_style();
+            out.push(Primitive::Text {
+                position: hi.offset(4., 4.),
+                text: unit.label.clone(),
+                size: style.size(),
+                color: style.color.rgb(),
+                style,
+            });
+        }
+    }
     for a in &doc.arrows {
         out.extend(a.paths().into_iter().map(|p| Primitive::Path {
             commands: p.commands,
@@ -1993,6 +2200,8 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, theme: crate::canvas_theme:
     }
 }
 
+#[cfg(test)]
+mod charge_placement_tests;
 #[cfg(test)]
 mod label_parity_tests;
 #[cfg(test)]

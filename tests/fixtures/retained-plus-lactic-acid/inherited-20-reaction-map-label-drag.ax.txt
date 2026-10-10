@@ -1,0 +1,12 @@
+The following is a diff from the previous accessibility tree for Window: "Untitled • — ReShiki" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~		133 button (disabled) Redo · ⇧⌘Z, ID: header-redo
+~		141 toggle button (settable, boolean) Select / move · v, Value: on, ID: tool-Select
+~		169 button Join the selection to another structure at an atom or bond, ID: context-command-2
++		170 button Group, ID: context-command-3
++		171 button More: 3D optimize…, Keyboard drawing (F8), ID: context-overflow
++		172 button Align, ID: arrange-menu-AlignObjects
++		173 button (disabled) Distribute, ID: arrange-menu-Distribute
++		174 button Order, ID: arrange-menu-Order
++		175 button Flip horizontal, ID: arrange-flip-horizontal
++		176 button Flip vertical, ID: arrange-flip-vertical
++		177 button Rotate 180°, ID: arrange-rotate

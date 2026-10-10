@@ -1,0 +1,1 @@
+{"observed_utc":"2026-10-09T23:37:04.5689661Z","processes":[{"pid":6988,"session_id":2,"creation_utc":"2026-10-09T23:32:11.3484730Z","executable_path":"C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\base-51fa0991\\reshiki.exe","executable_sha256":"135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d"}]}

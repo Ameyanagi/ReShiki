@@ -31,6 +31,7 @@
     "docs/changes/fixtures/emf-import/windows-native-20261010/windows-app-link-launch-failed.json",
     "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/powerpoint-native-container-audit.json",
     "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/word-native-container-audit.json",
-    "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/root-office-native-acceptance.json"
+    "docs/changes/fixtures/emf-import/windows-native-20261010/office-native/root-office-native-acceptance.json",
+    "docs/changes/fixtures/office-svg-placement/final-candidate-export-receipt.json"
   ]
 }

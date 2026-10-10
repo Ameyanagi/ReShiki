@@ -1,0 +1,36 @@
+{
+  "baseline_sha256": "81665fa6645545a524386ae515dd4c03e1cce290a18bcf6ce8711a3deba0c0e0",
+  "manual27_sha256": "09a4b4721850fcaf4c9624eb1f9e9dc476f89884d3e1b3fb8fb36c67883dbf7b",
+  "undo_sha256": "81665fa6645545a524386ae515dd4c03e1cce290a18bcf6ce8711a3deba0c0e0",
+  "atoms": 6,
+  "bonds": 4,
+  "only_manual_change": "atom2.map_num2->27",
+  "whole_document_except_that_field_equal": true,
+  "undo_entire_native_bytes_equal": true,
+  "visual_maps_initial": [
+    [
+      1,
+      2,
+      3
+    ],
+    [
+      1,
+      2,
+      3
+    ]
+  ],
+  "visual_maps_edited": [
+    [
+      1,
+      27,
+      3
+    ],
+    [
+      1,
+      2,
+      3
+    ]
+  ],
+  "fresh_process_pid": 42659,
+  "source_index_tree": "bfbce003804680bd18aa39048490b035a09975dc"
+}

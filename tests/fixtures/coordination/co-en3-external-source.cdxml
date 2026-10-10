@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML CreationProgram="ReShiki issue 246 reference fixture" Name="Co(en)3 donor and acceptor projection tips" BondLength="14.4" LabelSize="10" LabelFont="21" LineWidth="0.6" BoldWidth="2" HashSpacing="2.5" MarginWidth="1.6" HideImplicitHydrogens="no"><fonttable><font id="21" charset="iso-8859-1" name="Arial"/></fonttable><page id="1" BoundingBox="0 0 400 240"><fragment id="2">
+<n id="3" p="100 120" Element="27" Charge="3"/>
+<n id="4" p="127.96607 106.95921" Element="7" NumHydrogens="2"/>
+<n id="5" p="146.95502 104.74339" Element="6"/>
+<n id="6" p="146.95502 135.25661" Element="6"/>
+<n id="7" p="127.96607 133.04079" Element="7" NumHydrogens="2"/>
+<n id="8" p="97.31062 150.73972" Element="7" NumHydrogens="2"/>
+<n id="9" p="89.73510 168.29254" Element="6"/>
+<n id="10" p="63.30988 153.03593" Element="6"/>
+<n id="11" p="74.72331 137.69893" Element="7" NumHydrogens="2"/>
+<n id="12" p="74.72331 102.30107" Element="7" NumHydrogens="2"/>
+<n id="13" p="63.30988 86.96407" Element="6"/>
+<n id="14" p="89.73510 71.70746" Element="6"/>
+<n id="15" p="97.31062 89.26028" Element="7" NumHydrogens="2"/>
+<n id="16" p="280 120" Element="27" Charge="3"/>
+<n id="17" p="307.96607 106.95921" Element="7" NumHydrogens="2"/>
+<n id="18" p="326.95502 104.74339" Element="6"/>
+<n id="19" p="326.95502 135.25661" Element="6"/>
+<n id="20" p="307.96607 133.04079" Element="7" NumHydrogens="2"/>
+<n id="21" p="277.31062 150.73972" Element="7" NumHydrogens="2"/>
+<n id="22" p="269.73510 168.29254" Element="6"/>
+<n id="23" p="243.30988 153.03593" Element="6"/>
+<n id="24" p="254.72331 137.69893" Element="7" NumHydrogens="2"/>
+<n id="25" p="254.72331 102.30107" Element="7" NumHydrogens="2"/>
+<n id="26" p="243.30988 86.96407" Element="6"/>
+<n id="27" p="269.73510 71.70746" Element="6"/>
+<n id="28" p="277.31062 89.26028" Element="7" NumHydrogens="2"/>
+<b id="100" B="4" E="5" Order="1" Display="Solid"/>
+<b id="101" B="5" E="6" Order="1" Display="Solid"/>
+<b id="102" B="6" E="7" Order="1" Display="Solid"/>
+<b id="103" B="4" E="3" Order="dative" Display="WedgeBegin"/>
+<b id="104" B="7" E="3" Order="dative" Display="WedgeBegin"/>
+<b id="105" B="8" E="9" Order="1" Display="Solid"/>
+<b id="106" B="9" E="10" Order="1" Display="Solid"/>
+<b id="107" B="10" E="11" Order="1" Display="Solid"/>
+<b id="108" B="8" E="3" Order="dative" Display="WedgedHashBegin"/>
+<b id="109" B="11" E="3" Order="dative" Display="WedgedHashBegin"/>
+<b id="110" B="12" E="13" Order="1" Display="Solid"/>
+<b id="111" B="13" E="14" Order="1" Display="Solid"/>
+<b id="112" B="14" E="15" Order="1" Display="Solid"/>
+<b id="113" B="12" E="3" Order="dative" Display="Solid"/>
+<b id="114" B="15" E="3" Order="dative" Display="Solid"/>
+<b id="115" B="17" E="18" Order="1" Display="Solid"/>
+<b id="116" B="18" E="19" Order="1" Display="Solid"/>
+<b id="117" B="19" E="20" Order="1" Display="Solid"/>
+<b id="118" B="17" E="16" Order="dative" Display="WedgeEnd"/>
+<b id="119" B="20" E="16" Order="dative" Display="WedgeEnd"/>
+<b id="120" B="21" E="22" Order="1" Display="Solid"/>
+<b id="121" B="22" E="23" Order="1" Display="Solid"/>
+<b id="122" B="23" E="24" Order="1" Display="Solid"/>
+<b id="123" B="21" E="16" Order="dative" Display="WedgedHashEnd"/>
+<b id="124" B="24" E="16" Order="dative" Display="WedgedHashEnd"/>
+<b id="125" B="25" E="26" Order="1" Display="Solid"/>
+<b id="126" B="26" E="27" Order="1" Display="Solid"/>
+<b id="127" B="27" E="28" Order="1" Display="Solid"/>
+<b id="128" B="25" E="16" Order="dative" Display="Solid"/>
+<b id="129" B="28" E="16" Order="dative" Display="Solid"/>
+</fragment></page></CDXML>

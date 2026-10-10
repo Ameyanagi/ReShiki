@@ -1114,3 +1114,37 @@ async fn keyboard_bar_publishes_native_actions_and_fits_compact_canvas() {
         "Exercise Connect through the actual responsive More popup"
     );
 }
+
+#[test]
+fn marked_coordination_is_explicit_and_preserves_ordinary_connect_checks() {
+    let mut app = app();
+    let co = app.tab.doc.add_atom("Co", Point::default());
+    app.tab.doc.atom_mut(co).unwrap().charge = 3;
+    let donor = app.tab.doc.add_atom("N", Point::new(40., 0.));
+    app.tab.doc.atom_mut(donor).unwrap().explicit_h = 2;
+    let c = app.tab.doc.add_atom("C", Point::new(80., 0.));
+    app.tab.doc.add_bond(donor, c, 1, "plain");
+    let original = app.tab.doc.clone();
+    app.tab
+        .keyboard_drawing
+        .set_target(Target::Atom(donor), &app.tab.doc);
+    let _ = app.keyboard_drawing_action(Action::Mark);
+    app.tab
+        .keyboard_drawing
+        .set_target(Target::Atom(co), &app.tab.doc);
+    let _ = app.keyboard_drawing_action(Action::Connect);
+    assert!(app.error);
+    assert_eq!(app.tab.doc, original);
+    let _ = app.keyboard_context_key("}");
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.atoms, original.atoms);
+    assert!(
+        app.tab
+            .doc
+            .bonds
+            .iter()
+            .any(|b| (b.a, b.b, b.order) == (donor, co, 5))
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+}

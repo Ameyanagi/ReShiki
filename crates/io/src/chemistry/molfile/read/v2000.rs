@@ -190,10 +190,45 @@ fn properties(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
                 }
             }
             "M  ALS" => {
-                r.index(r.field_integer(line, 7, 10)?, p.graph.atoms.len())?;
-                r.field(line, 14, 15)?;
-                if r.field_integer(line, 10, 13)? != 0 {
-                    return Err(ReadError::Unsupported("atom list query"));
+                let atom = r.index(r.field_integer(line, 7, 10)?, p.graph.atoms.len())?;
+                let excluded = match r.field(line, 14, 15)? {
+                    "T" => true,
+                    "F" => false,
+                    _ => return Err(r.invalid("Invalid atom-list exclusion flag")),
+                };
+                let count = r.count(r.field_integer(line, 10, 13)?, 118)?;
+                if count == 0 {
+                    return Err(r.invalid("An atom list cannot be empty"));
+                }
+                let mut choices = Vec::new();
+                for i in 0..count {
+                    let symbol = r.field(line, 16 + 4 * i, 20 + 4 * i)?.trim();
+                    let a = r.symbol(symbol, false)?;
+                    if a.atomic_number == 0 {
+                        return Err(ReadError::Unsupported("non-element MOL alternatives"));
+                    }
+                    choices.push(crate::generic::Alternative::Element {
+                        symbol: ELEMENTS
+                            .get(usize::from(a.atomic_number))
+                            .ok_or(ReadError::Limit)?
+                            .symbol
+                            .into(),
+                        isotope: a.isotope.into(),
+                    });
+                }
+                if count > 0 {
+                    p.graph
+                        .atoms
+                        .get_mut(atom)
+                        .ok_or(ReadError::Limit)?
+                        .atomic_number = 0;
+                    p.generic
+                        .alternatives
+                        .push(crate::generic::AlternativeSite {
+                            atom: atom as u64 + 1,
+                            choices,
+                            excluded,
+                        });
                 }
             }
             "M  MRV" if line.starts_with("M  MRV SMA") => {
@@ -208,25 +243,9 @@ fn properties(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
                 groups.read_v2000(r, p, line)?
             }
             "M  LIN" => {
-                let count = r.count(r.field_integer(line, 6, 9)?, 999)?;
-                for i in 0..count {
-                    let start = 9 + 16 * i;
-                    r.index(
-                        r.field_integer(line, start, start + 4)?,
-                        p.graph.atoms.len(),
-                    )?;
-                    if r.field_integer(line, start + 4, start + 8)? < 2 {
-                        return Err(r.invalid("Invalid link-node repeat count"));
-                    }
-                    r.index(
-                        r.field_integer(line, start + 8, start + 12)?,
-                        p.graph.atoms.len(),
-                    )?;
-                    let other = r.optional_integer(line, start + 12, start + 16)?;
-                    // The pinned native reader rejects the single-substituent
-                    // V2000 form; preserve its accepted-input boundary.
-                    r.index(other, p.graph.atoms.len())?;
-                }
+                return Err(ReadError::Unsupported(
+                    "V2000 link nodes; use V3000 LINKNODE, CDXML or native ReShiki",
+                ));
             }
             "M  CRS" => return Err(ReadError::Unsupported("SGroup subtype")),
             "S  SKP" => {

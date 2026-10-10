@@ -72,9 +72,13 @@ pub fn include_annotations(doc: &Document, ids: &[u64]) -> Vec<u64> {
         .collect()
 }
 
+#[cfg(test)]
+thread_local! { pub(crate) static IDENTITY_ENTRIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
 /// Exact native chemical identity for a complete component. This does not
 /// generate a name and never replaces unsupported stereo with a plain graph.
 fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
+    #[cfg(test)]
+    IDENTITY_ENTRIES.with(|v| v.set(v.get() + 1));
     let seed = atoms.first().copied().ok_or("Select a molecule")?;
     if atoms.len() > 512 || !same_atoms(&component(doc, seed), atoms) {
         return Err("The named molecule changed its connected component".into());
@@ -270,6 +274,101 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || name.text.len() > 32_768
         {
             return Err("Invalid molecule-name caption association".into());
+        }
+    }
+    Ok(())
+}
+/// Transfer an existing association through an exact remap/common translation.
+/// This proves inheritance of a complete unchanged component, not the truth of
+/// arbitrary native SMILES/name claims. The caller precharges component scans,
+/// endpoint searches, string comparisons and snapshots under its shared budget.
+pub(crate) fn certify_inherited(
+    source: &Document,
+    part: &Document,
+    mapping: &HashMap<u64, u64>,
+    offset: Point,
+) -> Result<(), String> {
+    if source.molecule_names.len() != part.molecule_names.len() {
+        return Err("Prepared insertion changed name associations".into());
+    }
+    for (old, new) in source.molecule_names.iter().zip(&part.molecule_names) {
+        let seed = old
+            .atoms
+            .first()
+            .copied()
+            .ok_or("Empty inherited named component")?;
+        let complete: HashSet<_> = component(source, seed).into_iter().collect();
+        if complete.len() != old.atoms.len() || old.atoms.iter().any(|id| !complete.contains(id)) {
+            return Err("Prepared insertion requires a complete inherited named component".into());
+        }
+        let ids: Option<Vec<_>> = old
+            .atoms
+            .iter()
+            .map(|id| mapping.get(id).copied())
+            .collect();
+        if mapping.get(&old.annotation) != Some(&new.annotation)
+            || ids.as_ref() != Some(&new.atoms)
+            || old.smiles != new.smiles
+            || old.text != new.text
+        {
+            return Err("Prepared insertion changed inherited name metadata".into());
+        }
+        let caption = source
+            .annotations
+            .iter()
+            .find(|a| a.id == old.annotation)
+            .ok_or("Missing inherited caption")?;
+        let actual = part
+            .annotations
+            .iter()
+            .find(|a| a.id == new.annotation)
+            .ok_or("Missing remapped caption")?;
+        if caption.text != old.text
+            || actual.text != caption.text
+            || actual.format != caption.format
+            || actual.position != caption.position.offset(offset.x, offset.y)
+        {
+            return Err(
+                "Prepared insertion changed inherited caption text, style or translation".into(),
+            );
+        }
+        for &id in &old.atoms {
+            let old_atom = source.atom(id).ok_or("Missing inherited named atom")?;
+            let mut expected = old_atom.clone();
+            expected.id = *mapping.get(&id).ok_or("Missing inherited atom remap")?;
+            expected.position = expected.position.offset(offset.x, offset.y);
+            for id in &mut expected.centroid {
+                *id = *mapping.get(id).ok_or("Missing inherited centroid remap")?;
+            }
+            if let Some(stereo) = &mut expected.stereo {
+                for id in &mut stereo.neighbors {
+                    *id = *mapping.get(id).ok_or("Missing inherited stereo remap")?;
+                }
+            }
+            if part.atom(expected.id) != Some(&expected) {
+                return Err(
+                    "Prepared insertion changed named-atom chemistry or presentation".into(),
+                );
+            }
+        }
+        if source.bonds.len() != part.bonds.len() {
+            return Err("Prepared insertion changed inherited bond storage".into());
+        }
+        for (bond, actual) in source.bonds.iter().zip(&part.bonds) {
+            if !complete.contains(&bond.a) && !complete.contains(&bond.b) {
+                continue;
+            }
+            let mut expected = bond.clone();
+            expected.a = *mapping.get(&bond.a).ok_or("Missing inherited bond remap")?;
+            expected.b = *mapping.get(&bond.b).ok_or("Missing inherited bond remap")?;
+            for id in &mut expected.stereo_atoms {
+                *id = *mapping
+                    .get(id)
+                    .ok_or("Missing inherited bond stereo remap")?;
+            }
+            if actual != &expected {
+                return Err("Prepared insertion changed inherited named-component bonds".into());
+            }
         }
     }
     Ok(())

@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.57s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-75ff9495b9c4a5ec)
+
+running 1 test
+test app::inspector::tests::figure_menu_lists_vector_formats_before_raster_and_closes_after_a_choice ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 654 filtered out; finished in 5.87s
+

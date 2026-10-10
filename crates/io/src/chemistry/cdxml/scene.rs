@@ -100,6 +100,10 @@ pub struct NativeScene {
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct CdxmlScene {
+    #[serde(skip_serializing_if = "crate::generic::Generic::is_empty")]
+    pub generic: crate::generic::Generic,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub generic_labels: Vec<(u64, String)>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<crate::attachments::Attachment>,
     pub molecule: Molecule,
@@ -868,7 +872,14 @@ fn scene_result(
     {
         return Err(SceneError::Invalid("No supported drawing objects found"));
     }
+    let (generic, generic_labels) = prepared.generic.restore(
+        &prepared.expanded_xml,
+        &prepared.fragments,
+        &objects.entries,
+    )?;
     Ok(CdxmlScene {
+        generic,
+        generic_labels,
         attachments: prepared.attachments.clone(),
         molecule: prepared.molecule.clone(),
         conformer_3d: prepared.conformer_3d,

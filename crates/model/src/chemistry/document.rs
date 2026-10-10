@@ -245,6 +245,9 @@ fn build(document: &Document) -> Result<Input, Error> {
 /// reference's legacy stereo. Full CIP labeling and identifiers are separate.
 /// Errors retain their stage/cause; the original document is never changed.
 pub fn prepare(document: &Document) -> Result<Molecule, Error> {
+    if crate::generic::present(document) {
+        return Err(invalid(crate::generic::NOTICE));
+    }
     let input = build(document)?;
     prepare_input(document, input)
 }
@@ -258,6 +261,9 @@ pub fn drawing_graph(document: &Document) -> Result<Graph, Error> {
 /// Cleanup retains native f64 drawing coordinates between reconstruction and
 /// its chemical/visible stereo checks. Do not narrow them through the canvas.
 pub fn prepare_at(document: &Document, positions: &[Point3]) -> Result<Molecule, Error> {
+    if crate::generic::present(document) {
+        return Err(invalid(crate::generic::NOTICE));
+    }
     let mut input = build(document)?;
     if positions.len() != input.positions.len()
         || positions

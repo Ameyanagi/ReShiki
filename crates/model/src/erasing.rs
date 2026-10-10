@@ -116,6 +116,7 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
         doc.invalidate_chemistry(&affected);
         doc.bonds.retain(|b| !bonds.contains(&(b.a, b.b)));
         crate::ring_fills::prune(doc);
+        crate::generic::prune(doc);
     }
 }
 

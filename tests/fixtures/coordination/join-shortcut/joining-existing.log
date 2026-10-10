@@ -1,0 +1,16 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-ba50b1304e6a1bdf)
+
+running 7 tests
+test app::joining::tests::a_changed_document_cannot_be_overwritten_by_a_prepared_join ... ok
+test app::joining::tests::anchor_picker_switches_between_atom_and_bond_modes ... ok
+test app::joining::tests::cancel_switching_tools_and_invalid_targets_keep_the_original ... ok
+test app::joining::tests::joining_uses_the_preview_and_is_one_undo_step ... ok
+test app::joining::tests::coordination_projection_flip_changes_tip_and_never_chemical_direction ... ok
+test app::joining::tests::first_and_second_chelate_contacts_are_in_place_cancellable_and_one_undo_each ... ok
+test app::joining::tests::coordination_export_reports_the_measured_drawing_limits ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 657 filtered out; finished in 6.53s
+

@@ -3,7 +3,7 @@
 mod arithmetic;
 mod compute;
 
-pub use compute::{Error, Options, compute, compute_with_rank_properties};
+pub use compute::{Error, Options, compute, compute_with_rank_properties, compute_with_work};
 
 pub mod attachment;
 pub mod collision;

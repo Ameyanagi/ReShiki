@@ -42,6 +42,16 @@ impl Groups {
                 if !self.entries.contains_key(&id) {
                     return Ok(());
                 }
+                if matches!(kind, "SPL" | "SNC")
+                    && self
+                        .entries
+                        .get(&id)
+                        .is_some_and(|g| !matches!(g.kind.as_str(), "SUP" | "DAT"))
+                {
+                    return Err(ReadError::Unsupported(
+                        "polymer parent or component group record",
+                    ));
+                }
                 match kind {
                     "SDS" => (),
                     "SST" | "SCN" => {
@@ -54,6 +64,13 @@ impl Groups {
                         };
                         if !allowed.contains(&value) {
                             return Err(r.invalid("Invalid substance-group subtype or connection"));
+                        }
+                        if let Some(group) = self.entries.get_mut(&id) {
+                            if kind == "SCN" {
+                                group.connection = Some(value.into());
+                            } else {
+                                group.subtype = Some(value.into());
+                            }
                         }
                         f.pos += 4;
                     }
@@ -77,6 +94,9 @@ impl Groups {
         };
         match kind {
             "SAL" | "SPA" | "SBL" => {
+                if kind == "SPA" && !matches!(group.kind.as_str(), "SUP" | "DAT") {
+                    return Err(ReadError::Unsupported("polymer parent-atom membership"));
+                }
                 for _ in 0..f.count()? {
                     f.minimum(4)?;
                     let mark = f.integer(false)?;
@@ -105,6 +125,14 @@ impl Groups {
             }
             "SMT" | "SCL" => {
                 f.minimum(2)?;
+                if kind == "SMT" {
+                    group.label = Some(
+                        text.get(f.pos + 1..)
+                            .ok_or(ReadError::Limit)?
+                            .trim_end()
+                            .into(),
+                    );
+                }
             }
             "SBV" => {
                 let index = r.index(f.integer(false)?, p.graph.bonds.len())?;

@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE CDXML SYSTEM "https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd" >
+<CDXML
+ CreationProgram="ChemDraw 26.0.0.6599"
+ Name="OMe-OPh-native-clean-v2.cdxml"
+ BoundingBox="180.85 142.16 241.45 153.26"
+ WindowPosition="0 0"
+ WindowSize="0 0"
+ FractionalWidths="yes"
+ InterpretChemically="yes"
+ ShowAtomQuery="yes"
+ ShowAtomStereo="no"
+ ShowAtomEnhancedStereo="yes"
+ ShowAtomNumber="no"
+ ShowResidueID="no"
+ ShowBondQuery="yes"
+ ShowBondRxn="yes"
+ ShowBondStereo="no"
+ ShowTerminalCarbonLabels="no"
+ ShowNonTerminalCarbonLabels="no"
+ HideImplicitHydrogens="no"
+ LabelFont="58"
+ LabelSize="10"
+ LabelFace="96"
+ CaptionFont="58"
+ CaptionSize="10"
+ HashSpacing="2.49"
+ MarginWidth="1.59"
+ LineWidth="0.60"
+ BoldWidth="2.01"
+ BondLength="14.40"
+ BondSpacing="18"
+ ChainAngle="120"
+ LabelJustification="Auto"
+ CaptionJustification="Left"
+ AminoAcidTermini="HOH"
+ ShowSequenceTermini="yes"
+ ShowSequenceBonds="yes"
+ ShowSequenceUnlinkedBranches="no"
+ ShowPrimeLabels="no"
+ ResidueWrapCount="40"
+ PrintMargins="36 36 36 36"
+ MacPrintInfo="00030000004800480000000002FC0240FFF2FFEE030A02520367052803FB00020000004800480000000002FC0240000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000400000000000000000000100000000000000000000000000000000"
+ ChemPropName=""
+ ChemPropFormula="Chemical formula: "
+ ChemPropExactMass="Exact mass: "
+ ChemPropMolWt="Molecular weight: "
+ ChemPropMOverZ="m/z: "
+ ChemPropAnalysis="Elemental analysis: "
+ ChemPropBoilingPt="Boiling point: "
+ ChemPropMeltingPt="Melting point: "
+ ChemPropCritTemp="Critical temp: "
+ ChemPropCritPres="Critical pres: "
+ ChemPropCritVol="Critical vol: "
+ ChemPropGibbs="Gibbs energy: "
+ ChemPropLogP="Log P: "
+ ChemPropMR="MR: "
+ ChemPropHenry="Henry&apos;s law: "
+ ChemPropEForm="Heat of form: "
+ ChemProptPSA="tPSA: "
+ ChemPropID=""
+ ChemPropFragmentLabel=""
+ color="0"
+ bgcolor="1"
+ RxnAutonumberStart="1"
+ RxnAutonumberConditions="no"
+ RxnAutonumberStyle="Roman"
+ RxnAutonumberFormat="(#)"
+ MonomerRenderingStyle="graphic"
+><colortable>
+<color r="1" g="1" b="1"/>
+<color r="0" g="0" b="0"/>
+<color r="1" g="0" b="0"/>
+<color r="1" g="1" b="0"/>
+<color r="0" g="1" b="0"/>
+<color r="0" g="1" b="1"/>
+<color r="0" g="0" b="1"/>
+<color r="1" g="0" b="1"/>
+</colortable><fonttable>
+<font id="58" charset="x-mac-roman" name="Arial"/>
+</fonttable><page
+ id="12"
+ BoundingBox="0 0 540 720"
+ HeaderPosition="36"
+ FooterPosition="36"
+ PrintTrimMarks="yes"
+ HeightPages="1"
+ WidthPages="1"
+><fragment
+ id="8"
+ BoundingBox="180.85 142.16 241.45 153.26"
+ Z="2"
+><n
+ id="7"
+ p="181 153"
+ Z="1"
+ AS="N"
+ AtomID="1"
+/><n
+ id="9"
+ p="193.47 145.80"
+ Z="3"
+ NodeType="AnonymousAlternativeGroup"
+ NeedsClean="yes"
+ AS="N"
+ GenericNickname="[OMe,OPh]"
+ AtomID="2"
+><fragment
+ id="13"
+><n
+ id="14"
+ p="193.47 145.80"
+ Element="8"
+ NumHydrogens="0"
+/><n
+ id="15"
+ p="193.47 131.45"
+ NumHydrogens="3"
+/><n
+ id="16"
+ p="181.04 152.97"
+ NodeType="ExternalConnectionPoint"
+/><b
+ id="17"
+ B="14"
+ E="15"
+/><b
+ id="18"
+ B="16"
+ E="14"
+/></fragment><fragment
+ id="20"
+><n
+ id="21"
+ p="193.47 145.80"
+ Element="8"
+ NumHydrogens="0"
+/><n
+ id="22"
+ p="205.90 152.97"
+/><n
+ id="23"
+ p="205.90 167.32"
+/><n
+ id="24"
+ p="218.33 174.50"
+/><n
+ id="25"
+ p="230.75 167.32"
+/><n
+ id="26"
+ p="230.75 152.97"
+/><n
+ id="27"
+ p="218.33 145.80"
+/><n
+ id="28"
+ p="181.04 152.97"
+ NodeType="ExternalConnectionPoint"
+/><b
+ id="29"
+ B="26"
+ E="27"
+ Order="2"
+/><b
+ id="30"
+ B="25"
+ E="26"
+/><b
+ id="31"
+ B="24"
+ E="25"
+ Order="2"
+/><b
+ id="32"
+ B="23"
+ E="24"
+/><b
+ id="33"
+ B="22"
+ E="23"
+ Order="2"
+/><b
+ id="34"
+ B="22"
+ E="27"
+/><b
+ id="35"
+ B="21"
+ E="22"
+/><b
+ id="36"
+ B="28"
+ E="21"
+/></fragment><t
+ p="192.08 149.44"
+ BoundingBox="192.76 142.16 241.45 151.43"
+ LabelJustification="Left"
+ LabelAlignment="Left"
+><s font="58" size="10" color="0" face="96">[OMe,OPh]</s></t></n><b
+ id="10"
+ Z="4"
+ B="7"
+ E="9"
+ BS="N"
+/></fragment></page></CDXML>

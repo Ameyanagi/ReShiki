@@ -353,15 +353,19 @@ fn fragment(node: Node<'_, '_>, bond_length: f64) -> Result<Fragment> {
             _ => return Err(Error::Unsupported("query or unsupported bond order")),
         };
         let display = child.attribute("Display").unwrap_or("Solid");
-        if matches!(display, "WedgeEnd" | "WedgedHashEnd") {
+        if order != 5 && matches!(display, "WedgeEnd" | "WedgedHashEnd") {
             std::mem::swap(&mut a, &mut b);
         }
-        let (direction, cfg) = match display {
-            "WedgeBegin" | "WedgeEnd" => (Direction::Wedge, Some(1)),
-            "WedgedHashBegin" | "WedgedHashEnd" => (Direction::Hash, Some(3)),
-            "Wavy" if order == 1 => (Direction::Unknown, Some(2)),
-            "Wavy" if order == 2 => (Direction::EitherDouble, None),
-            _ => (Direction::None, None),
+        let (direction, cfg) = if order == 5 {
+            (Direction::None, None)
+        } else {
+            match display {
+                "WedgeBegin" | "WedgeEnd" => (Direction::Wedge, Some(1)),
+                "WedgedHashBegin" | "WedgedHashEnd" => (Direction::Hash, Some(3)),
+                "Wavy" if order == 1 => (Direction::Unknown, Some(2)),
+                "Wavy" if order == 2 => (Direction::EitherDouble, None),
+                _ => (Direction::None, None),
+            }
         };
         let aromatic = order == 4;
         if aromatic {

@@ -1,0 +1,355 @@
+{
+  "schema": "reshiki.join.public-producer-summary.v2",
+  "record_kind": "Curated summary of immutable private producer, build/source receipts and independently checked native evidence.",
+  "baseline_confirmation": {
+    "commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "path": "src/app/shortcuts.rs",
+    "command": ["git", "show", "51fa0991da2507bb00b27c1b420e807468de6423:src/app/shortcuts.rs"],
+    "source_sha256": "3716d597060d4f910faddf3780dcf762394f7faf8f6a995bd833e1c7c14ff0c5",
+    "function": "App::join_shortcut",
+    "lines": [356, 409],
+    "two_atom_branch_line": 361,
+    "four_atom_branch_line": 376,
+    "fallback_diagnostic_lines": [405, 408],
+    "fallback_diagnostic": "Select two atoms, or the four endpoints of two bonds, from separate fragments to join",
+    "conclusion": "Exactly three selected atom IDs bypass both successful branches and return the diagnostic; commit_hotkey leaves the document unchanged on Err.",
+    "evidence_kind": "Exact baseline source confirmation, independent of the separately qualified native reproduction.",
+    "native_before_images": "Final-app v2 before captures are pre-action in the corrected app. Qualified baseline v3 captures separately show the original three-atom Join rejection."
+  },
+  "producer_source": {
+    "base_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "branch": "feat/join-atom-merge",
+    "state": "Reviewed uncommitted Join source, frozen before compiling. A later documentation head is not the compiler producer commit.",
+    "source_freeze_sha256": "1b187a1e4cc0e3ce649dab7c77e2d3d4d63424609f644aaf8148904ae1654f20",
+    "frozen_file_count": 2552,
+    "all_frozen_bytes_unchanged_through_build_sign_and_native_acceptance": true,
+    "rust_cargo_file_count": 1065,
+    "rust_cargo_sorted_path_hash_pairs_sha256": "1ef91bef956877b7f965256fb3aee23b1428078d36928ca7478972ff1b747030",
+    "hash_pair_encoding": "UTF-8 json.dumps(sorted [{path,sha256}], sort_keys=True, separators=(comma,colon))",
+    "owned_rust_cargo_hashes": [
+      {
+        "path": "crates/model/src/joining.rs",
+        "sha256": "c065967790dd75551a970d59f45f67d80bf0b35769c397bce90e69b47e9a06a5"
+      },
+      {
+        "path": "crates/model/src/joining/atom_merge.rs",
+        "sha256": "da5614683f5f7b4fdd53ed3e6eeba5a5edfb5bdcd0588e5bc492e0ae53063256"
+      },
+      {
+        "path": "crates/model/src/joining/atom_merge/tests.rs",
+        "sha256": "5d889ec1b908c7a04f69dd4219990e875af89a76bba9003663aad8abd0682d78"
+      },
+      {
+        "path": "crates/model/src/scene.rs",
+        "sha256": "44d34fe1583cf7940a4918c2ccab1aff45f12904b405d0a2612f18d9512a0bd7"
+      },
+      {
+        "path": "src/app/context_menu.rs",
+        "sha256": "ed53311412a2d0075fbd3a2489f5df7fdcf0dcb9fb5f65d4701b0d00f66b8517"
+      },
+      {
+        "path": "src/app/help.rs",
+        "sha256": "6ca53a507d8754c1a943fb6d87c7869f77115809db7771bc8a688ab3b31d4f53"
+      },
+      {
+        "path": "src/app/inline_text.rs",
+        "sha256": "49d125122805f8b22229d80507720b90d3de22f3291fa32602171b586056fc4c"
+      },
+      {
+        "path": "src/app/joining.rs",
+        "sha256": "e49bb2a6abc9adef85f2c99b6aa44512995677048cda7d804fe38727ae573fe0"
+      },
+      {
+        "path": "src/app/joining/tests.rs",
+        "sha256": "b6e3aed4a26de4dacec1b19e499e1682ff35f90d642480b2f709f896ceb0317d"
+      },
+      {
+        "path": "src/app/shortcuts.rs",
+        "sha256": "1e096dacfc9852bef3fbfd3569e0d60ab2f42fb7afd758c5de1ed3109a677893"
+      },
+      {
+        "path": "src/app/shortcuts/compatibility_tests.rs",
+        "sha256": "5facdee31aab004e1fc0f463285c46e013f46c631dcc6cdf1deb7b6076692238"
+      },
+      {
+        "path": "src/app/workspace.rs",
+        "sha256": "1e77f76e35717d5af549928b4546e49c563e9936f495530452c867516461275e"
+      }
+    ]
+  },
+  "producer": {
+    "bundle_name": "ReShiki Join Label Bounds Verified 20261010T120358Z.app",
+    "bundle_identifier": "dev.reshiki.joinlabelbounds.20261010T120358Z",
+    "architecture": "macOS arm64",
+    "profile": "locked development build; default features empty; ad-hoc signed",
+    "default_features": true,
+    "compiler_features": ["default"],
+    "declared_default_features": [],
+    "own_compiler_units": [
+      {
+        "package": "reshiki-depict-math@0.1.0",
+        "manifest": "crates/depict-math/Cargo.toml",
+        "target": "reshiki_depict_math",
+        "kind": ["lib"],
+        "source": "crates/depict-math/src/lib.rs",
+        "features": [],
+        "fresh": false
+      },
+      {
+        "package": "reshiki-process-heap@0.1.0",
+        "manifest": "crates/process-heap/Cargo.toml",
+        "target": "reshiki_process_heap",
+        "kind": ["lib"],
+        "source": "crates/process-heap/src/lib.rs",
+        "features": [],
+        "fresh": false
+      },
+      {
+        "package": "0.5.15",
+        "manifest": "vendor/zune-jpeg/Cargo.toml",
+        "target": "zune_jpeg",
+        "kind": ["lib"],
+        "source": "vendor/zune-jpeg/src/lib.rs",
+        "features": ["default", "neon", "std", "x86"],
+        "fresh": false
+      },
+      {
+        "package": "0.45.1",
+        "manifest": "vendor/usvg/Cargo.toml",
+        "target": "usvg",
+        "kind": ["lib"],
+        "source": "vendor/usvg/src/lib.rs",
+        "features": [
+          "fontdb",
+          "memmap-fonts",
+          "rustybuzz",
+          "system-fonts",
+          "text",
+          "unicode-bidi",
+          "unicode-script",
+          "unicode-vo"
+        ],
+        "fresh": false
+      },
+      {
+        "package": "reshiki-chemistry@0.1.0",
+        "manifest": "crates/chemistry/Cargo.toml",
+        "target": "reshiki_chemistry",
+        "kind": ["lib"],
+        "source": "crates/chemistry/src/lib.rs",
+        "features": ["default"],
+        "fresh": false
+      },
+      {
+        "package": "reshiki@0.11.0",
+        "manifest": "Cargo.toml",
+        "target": "build-script-build",
+        "kind": ["custom-build"],
+        "source": "build.rs",
+        "features": ["default"],
+        "fresh": false
+      },
+      {
+        "package": "reshiki-macos@0.1.0",
+        "manifest": "native/macos/Cargo.toml",
+        "target": "reshiki_macos",
+        "kind": ["lib"],
+        "source": "native/macos/src/lib.rs",
+        "features": [],
+        "fresh": false
+      },
+      {
+        "package": "0.13.0",
+        "manifest": "vendor/svg2pdf/Cargo.toml",
+        "target": "svg2pdf",
+        "kind": ["lib"],
+        "source": "vendor/svg2pdf/src/lib.rs",
+        "features": ["image", "resvg", "text"],
+        "fresh": false
+      },
+      {
+        "package": "reshiki-model@0.1.0",
+        "manifest": "crates/model/Cargo.toml",
+        "target": "reshiki_model",
+        "kind": ["lib"],
+        "source": "crates/model/src/lib.rs",
+        "features": ["default"],
+        "fresh": false
+      },
+      {
+        "package": "reshiki-geometry@0.1.0",
+        "manifest": "native/geometry/Cargo.toml",
+        "target": "reshiki_geometry",
+        "kind": ["lib"],
+        "source": "native/geometry/src/lib.rs",
+        "features": [],
+        "fresh": false
+      },
+      {
+        "package": "reshiki-io@0.1.0",
+        "manifest": "crates/io/Cargo.toml",
+        "target": "reshiki_io",
+        "kind": ["lib"],
+        "source": "crates/io/src/lib.rs",
+        "features": ["default"],
+        "fresh": false
+      },
+      {
+        "package": "reshiki-agent@0.1.0",
+        "manifest": "crates/agent/Cargo.toml",
+        "target": "reshiki_agent",
+        "kind": ["lib"],
+        "source": "crates/agent/src/lib.rs",
+        "features": ["default"],
+        "fresh": false
+      },
+      {
+        "package": "reshiki-mcp@0.1.0",
+        "manifest": "crates/mcp/Cargo.toml",
+        "target": "reshiki_mcp",
+        "kind": ["lib"],
+        "source": "crates/mcp/src/lib.rs",
+        "features": [],
+        "fresh": false
+      },
+      {
+        "package": "reshiki@0.11.0",
+        "manifest": "Cargo.toml",
+        "target": "reshiki",
+        "kind": ["lib"],
+        "source": "src/lib.rs",
+        "features": ["default"],
+        "fresh": false
+      },
+      {
+        "package": "reshiki@0.11.0",
+        "manifest": "Cargo.toml",
+        "target": "reshiki",
+        "kind": ["bin"],
+        "source": "src/main.rs",
+        "features": ["default"],
+        "fresh": false
+      }
+    ],
+    "own_shipping_depfile_input_count": 533,
+    "no_foreign_worktree_depfile_inputs": true,
+    "depfile_sha256": "1f39528e887ecf322a202c500b9a494303afed4067279772e5b770f7bd68ff86",
+    "source_input_hashes_verified": true,
+    "raw_executable_sha256": "b14c3633d5f790cd4ee17261f40210abd7dd2392fdfad1dbf99ce34833f338bd",
+    "signed_executable_sha256": "07dc07b4d8639878d6463a2bd20ce03181059c4d9d287a9a676917edafe5405b",
+    "strict_codesign_verified": true,
+    "immutable_signed_inventory_file_count": 9,
+    "packaging_python": {
+      "explicit_native_interpreter": true,
+      "version": "3.14.2",
+      "architecture": "arm64"
+    },
+    "private_bundle_provenance_sha256": "2f970262b9b4ce8f100a62ed053bb7acbb98a278a2cb31e28d04d55cfd1ddb30"
+  },
+  "native_mac": {
+    "status": "PASS for one controlled fixture",
+    "date": "2026-10-10",
+    "native_protocol_sha256": "12950d30df8dd04c00d8d5f457dbd50dd1e947cdd8418f6f2b8bfc49fbf5b7da",
+    "independent_graph_visual_source_signature_audit_sha256": "d56665b40c3173db3ab15a69edaabe81c8c9a09b7640eaa3ea240cc4b813bad1",
+    "saved_file": "../macos-native-v2/join-three-arms-native-after-v2.rsk",
+    "saved_file_sha256": "d73c9cd8408b89312522d0b6691fbffe4e17ce6a576a49187d7cdd01fa2f1e73",
+    "selected_ids": [1, 3, 5],
+    "survivor_id": 1,
+    "saved_position": {
+      "x": 4.873413,
+      "y": 2.1815796
+    },
+    "actual_helper_expected_position": {
+      "x": 4.8734130859375,
+      "y": 2.18157958984375
+    },
+    "tolerance_world": 0.0001,
+    "atom_count": 4,
+    "bond_count": 3,
+    "terminal_ids": [2, 4, 6],
+    "terminal_coordinates_unchanged": true,
+    "edges": [
+      [1, 2],
+      [1, 4],
+      [1, 6]
+    ],
+    "survivor_style": {
+      "family": "Arial",
+      "size_pt": 10.0,
+      "bold": false,
+      "italic": false,
+      "underline": false,
+      "color": [189, 43, 57],
+      "script": "normal",
+      "formula": false
+    },
+    "actual_cmd_j_one_undo_redo_save_as_and_reopen": true,
+    "reopen_scope": "Same running process, fresh document with clean title and disabled Undo/Redo.",
+    "zoom_percent": 250,
+    "keyboard_drawing": false,
+    "whole_molecule_formula": "C3H9N",
+    "whole_molecule_smiles": "CN(C)C",
+    "actual_helper_expected_geometry_receipt_sha256": "57505f3c5f5bb8f9cb2de84785b5be4f1d44df363042c4fe52c6e41567994d6a"
+  },
+  "native_chemdraw": {
+    "version": "Windows ChemDraw Prime 26.1.0.6327",
+    "reference": "../chemdraw-26.1/README.md",
+    "observed_selected_label_union_midpoint": [250, 224.675],
+    "saved_survivor_position": [250, 224.68],
+    "agreement_tolerance_pt": 0.005,
+    "arithmetic_node_mean": [250, 210],
+    "interpretation": "One fixture is consistent with selected visual-label bounds centering; not a universal algorithm or a numerical cross-app identity."
+  },
+  "limits": [
+    "No fresh-process restart or Windows/Linux ReShiki runtime acceptance claimed.",
+    "Different Mac and ChemDraw inputs, font sizes, hydrogen display and coordinate units.",
+    "Projection depth remains the selected-depth mean; the reference does not establish a 3D rule.",
+    "Historical arithmetic-placement v1 receipts and bundles remain unchanged and superseded for XY placement."
+  ],
+  "qualified_native_baseline": {
+    "status": "Actual three-selected-atom Cmd+J rejection PASS in qualified app with base-identical shipping Join route.",
+    "reference": "../macos-qualified-baseline/README.md",
+    "clean_main_build": false,
+    "unrelated_work": "Generic Structures",
+    "base_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "signed_executable_sha256": "ad1e436b20db6d94fa392f78f2b3270af28ab4381f1e3c971233b932ec1e83e4",
+    "private_provenance_sha256": "98cfa720206b85f52953c9bde827cbdf7145de24744ab1b6aede8923b78ded12",
+    "shipping_input_count": 537,
+    "all_recorded_shipping_inputs_matched": true,
+    "own_compiler_units_fresh_false": true,
+    "exact_base_join_inputs": [
+      {
+        "path": "src/app/shortcuts.rs",
+        "sha256": "3716d597060d4f910faddf3780dcf762394f7faf8f6a995bd833e1c7c14ff0c5",
+        "matches_exact_base": true,
+        "recorded_shipping_input": true
+      },
+      {
+        "path": "src/app/joining.rs",
+        "sha256": "5e0b3684d7c5426ea9e22655cf996e3569938b4ba84e440c85d52161ab8140ce",
+        "matches_exact_base": true,
+        "recorded_shipping_input": true
+      },
+      {
+        "path": "crates/model/src/joining.rs",
+        "sha256": "a781b12878d08db608013ad4eec955ae9186d87e07d404785ee056b3ffc61996",
+        "matches_exact_base": true,
+        "recorded_shipping_input": true
+      }
+    ],
+    "native_protocol_sha256": "1a85aef7035e9bc15f9a6533bbaf8eefa911ca9e89d78928e0d5026a16916adf",
+    "valid_native_run": "v3 only",
+    "selected_ids": [1, 3, 5],
+    "visible_diagnostic_prefix": "Select two atoms, or the four endpoints of two bonds,",
+    "full_diagnostic_independently_from_base": "Select two atoms, or the four endpoints of two bonds, from separate fragments to join",
+    "clean_title_and_disabled_undo_redo_after_rejection": true,
+    "saved_atom_count": 6,
+    "saved_bond_count": 3,
+    "saved_id_element_positions_edges_match_input": true,
+    "saved_native_rsk_version": 20,
+    "input_rsk_version": 19,
+    "saved_native_sha256": "56a7830d476e34315af70a4c0a2956d00c446092e6bffbfdd03883cc8e6901dd",
+    "capture_conditions": "Same unchanged input, Arial10pt, 250%, F8 off; different inspector width, tab strip, selection/cursor state and framing.",
+    "limits": "Not a clean main build, fresh-process test, version19 reopening of version20, or Windows/Linux ReShiki runtime claim."
+  }
+}

@@ -137,11 +137,15 @@ pub async fn execute(
         mut warnings,
     } = *prepared;
     let attachments = crate::attachments::present(&document);
-    let analysis = if molecule.state.graph.atoms.is_empty() || attachments {
+    let generic = crate::generic::present(&document);
+    let analysis = if molecule.state.graph.atoms.is_empty() || attachments || generic {
         None
     } else {
         Some(native_response::analyze_prepared(Arc::new(molecule), config).await?)
     };
+    if generic {
+        warnings.push(crate::generic::NOTICE.into());
+    }
     if attachments {
         warnings.push(crate::attachments::ANALYSIS_NOTICE.into());
     }
@@ -271,7 +275,8 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
 }
 
 // Sanitization can normalize an overvalent metal contact to a dative bond.
-// A wedge/hash on the source single bond has no equivalent dative appearance.
+// A source single bond is different chemical input from an explicit dative
+// projection, even when both can now retain wedge/hash paint.
 // Preserve that drawing explicitly instead of either dropping its style or
 // publishing properties for a different graph. Ordinary molecular parsing
 // and supported plain/dashed coordinate bonds retain their strict behavior.

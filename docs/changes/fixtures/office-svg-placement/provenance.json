@@ -1,0 +1,198 @@
+{
+  "format": 1,
+  "status": "under review; draft PR planned; Addresses #64 without closing it",
+  "branch": "fix/office-svg-placement",
+  "source_base": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "production_source_commit": "3d261b32e9baa73b6d2cb133de2163fa3699569a",
+  "creator_credit": "@Ameyanagi — project creator and maintainer",
+  "original_contribution_license": "MIT OR Apache-2.0; screenshots retain displayed application UI",
+  "producers": {
+    "historical_before": {
+      "signed_executable_sha256": "493a0cb49f79f76ae2ee0716a690c20ce3981f15f701c0a9651552addaa8bf95",
+      "role": "Actual native ordinary-SVG export used in baseline Mac Office documents",
+      "compiler_correlation_to_declared_source_base": "UNVERIFIED"
+    },
+    "initial_candidate": {
+      "signed_executable_sha256": "a526729562d646abb83038001f9a51041329ebb6ec768e72f634b8e99ec8b5a9",
+      "unsigned_executable_sha256": "81224c4409a74cdbd6171539a73023d883c71cd03936628f2d4ebd6a7fa77cf5",
+      "role": "Actual Office-SVG export inserted into Mac Word and PowerPoint; all Office candidate captures"
+    },
+    "final_candidate": {
+      "signed_executable_sha256": "3d343a93e4cf5f3977252804f85eb419e809132eb9ac0a245f4d7c05d2fabbe7",
+      "unsigned_executable_sha256": "9509f5189d370fdc320478ea362f6907f56b9df3fe27e70d70510cf694f85167",
+      "role": "Final actual native menu/export captures and byte-identical ordinary/Office/native exports",
+      "observed_pid": 62457,
+      "native_process_proof": "ROOT kernel lsof executable path and SHA; exited after checks",
+      "signature": "Ad-hoc development signing; strict deep verification passed, not notarization"
+    }
+  },
+  "identity_bridge": {
+    "production_input_delta_from_initial_to_final": ["src/app/inspector.rs"],
+    "separate_test_delta": ["src/app/inspector/tests.rs"],
+    "behavior_delta": "Two button-label expressions use FigureFormat Display; export implementation unchanged",
+    "ordinary_svg_sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+    "office_svg_sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d",
+    "native_drawing_sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+    "office_screenshots_are_not_final_app_captures": true,
+    "final_desktop_receipt": "final-candidate-export-receipt.json",
+    "final_desktop_receipt_sha256": "327d3777f9e87f6cbecb8db8d5f5706f6aa6694490c7c96dc9a8b91f03e4dc8c"
+  },
+  "input": {
+    "file": "single-baseline-after-export.rsk",
+    "original_controlled_data": true,
+    "native_version": 19,
+    "atoms": 6,
+    "bonds": 5,
+    "formula": "C4H12OSi",
+    "canonical_smiles": "CO[Si](C)(C)C",
+    "abbreviation": "SiMe3",
+    "style": "Imported/Custom",
+    "font": "Arial 10",
+    "theme": "light",
+    "native_zoom_percent": 233,
+    "F8": false,
+    "selection": "none",
+    "undo_redo": "disabled"
+  },
+  "actual_office_checks": {
+    "platform": "macOS",
+    "applications": ["Microsoft Word", "Microsoft PowerPoint"],
+    "version": "16.113.4",
+    "build": "16.113.26100421",
+    "route": "Picture from File in own blank document/slide; save, close and fresh reopen",
+    "actions_not_applied": ["object resize", "crop", "reposition", "style change"],
+    "view_zoom_percent": 400,
+    "before": "Clipped O and SiMe3 tops; horizontal bond below shifted text center, persists after reopen",
+    "after": "Complete O and SiMe3/subscript with aligned bond endpoints, persists after reopen",
+    "all_four_saved_picture_extents_emu": [1104900, 368300],
+    "all_four_saved_picture_extents_mm": [30.691666666666666, 10.230555555555556],
+    "powerpoint_before_after_offsets_emu": [5543550, 3244850],
+    "word_picture_transform_offsets_emu": [0, 0],
+    "office_svg_points": [87.59132, 28.906626],
+    "authored_svg_mm": [30.900271222222223, 10.197615283333333],
+    "office_vs_authored_percent": [-0.6750897235022831, 0.32301936587134034],
+    "size_claim": "Before/after Office sizes match exactly; authored-point size is not exactly retained. No precise Office rounding algorithm established.",
+    "office_rewrites_svg_payloads": true,
+    "embedded_ordinary_svg_sha256": "c57ec65d4c2b5cab105d95481ad0f1ed2ed6e89705645b5e45393578fc7edc56",
+    "embedded_outlined_svg_sha256": "8fd43b86eaa7e03d23e5408efc220a962fd91fc2ad93af0a3ec255e87da2d359",
+    "ordinary_embedded_text_nodes": 3,
+    "ordinary_source_dominant_baseline_attributes": 3,
+    "ordinary_embedded_dominant_baseline_attributes": 0,
+    "outlined_embedded_text_nodes": 0,
+    "outlined_embedded_paths": 5,
+    "diagnostic_inference": "Dropped dominant-baseline attributes support a baseline-handling explanation for this controlled example; no universal importer cause is proved."
+  },
+  "capture_conditions": {
+    "raw_screenshots_unmodified": true,
+    "powerpoint": "Baseline picture selection handles remain visible; candidate picture is deselected",
+    "word": "Viewport, caret and selection differ; primary saved/reopened pairs use the same 400% view",
+    "final_native": "Recovery draft banner and update badge visible, left untouched",
+    "zoom_is_view_not_object_scale": true,
+    "provisional_receipts": "Original receipts preserve their then-current pending fields; later final receipt and saved/reopened receipts establish completed scope"
+  },
+  "build_source_proof": {
+    "compiled_input_count": 533,
+    "rust_manifest_input_count": 1061,
+    "initial_local_artifacts_fresh_false_count": 15,
+    "final_application_artifact_fresh_false": true,
+    "foreign_worktree_inputs": [],
+    "initial_and_final_source_hashes": "Preserved dictionaries; --source-root verifier compares both final dictionaries with current checkout",
+    "shared_cargo_lease": "Exclusive lease returned to ROOT before this documentation package"
+  },
+  "validation": {
+    "source_scope": "Original full workspace checks precede two display-label expression changes; final labels verified by live AX test/default build/fmt/focused production lint. No exporter/schema change after original checks.",
+    "checks": [
+      {
+        "check": "fresh initial default production build",
+        "exit": 0,
+        "log": "initial-default-build.stderr.log",
+        "sha256": "d5ceaf3b2dd98dc88741352e173c714ad71fd9230ad33917be57ad6abf8639d5"
+      },
+      {
+        "check": "focused IO export tests8 active/1 intentionally ignored",
+        "exit": 0,
+        "log": "initial-io-export-tests.log",
+        "sha256": "07cf5cb6df1b6629e492a43da29400a0db47caaf501f9f4775da772aef4d7a74"
+      },
+      {
+        "check": "focused app snapshot tests3 active",
+        "exit": 0,
+        "log": "initial-app-figure-export-tests.log",
+        "sha256": "0d2142aadfb8712f1e5133775fadf5a984c5b3fe1dd50b3bc4f3aedc11d9c98d"
+      },
+      {
+        "check": "initial menu test1 active",
+        "exit": 0,
+        "log": "initial-app-figure-menu-test.log",
+        "sha256": "881f2dcb46a1bcd5577729b87a0776a9a4a7d71b3a30a2d6bc2c671160c7dd8d"
+      },
+      {
+        "check": "workspace fmt",
+        "exit": 0,
+        "log": "initial-fmt.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "check": "locked all-targets/all-features strictClippy before label-only correction",
+        "exit": 0,
+        "log": "initial-clippy-all-targets-all-features.log",
+        "sha256": "0424883970c2a58526fa0c024e4391ffe0addb5cd8ced618780784a1a9693bea"
+      },
+      {
+        "check": "first all-targets/all-features check interrupted; not pass",
+        "exit": 143,
+        "log": "initial-check-all-targets-all-features.log",
+        "sha256": "e196b3573b0cb5a589c9684614bced32b20226e9d20f084444ed51f278f0be7c"
+      },
+      {
+        "check": "locked all-targets/all-features check incremental0 retry before label-only correction",
+        "exit": 0,
+        "log": "initial-check-all-targets-all-features-inc0-retry.log",
+        "sha256": "7746857a15cbce3aa18ff0c9ca51e4189b4d6ccea50d5d922c20f0ecbf7a572e"
+      },
+      {
+        "check": "final live-widget menu AX regression1 active",
+        "exit": 0,
+        "log": "final-app-figure-menu-ax-test.log",
+        "sha256": "66e90f9e9d26e794c2122f4d81864ce9086eceb558fef646f63bd2f54252536d"
+      },
+      {
+        "check": "final workspace fmt",
+        "exit": 0,
+        "log": "final-fmt.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "check": "final fresh default production build",
+        "exit": 0,
+        "log": "final-default-build.stderr.log",
+        "sha256": "a94f1deb53fa19a9775db3659f7050380afdfe0989e17b849db275f42607083c"
+      },
+      {
+        "check": "final focused production strictClippy",
+        "exit": 0,
+        "log": "final-clippy-production-labels.log",
+        "sha256": "a97989eecd065a19a63a3100ef02615ce1fc69585d845fb30f8497c22311de42"
+      }
+    ],
+    "interrupted_check": "Exit143 is not a pass. Incremental-disabled retry passed; no compiler/cache root cause claimed.",
+    "portable_verifier": "verify.py; artifact/source/geometry/identity checks with seven rejecting controls, not GUI replay",
+    "fresh_remote_ci": "Not claimed by this package"
+  },
+  "public_raw_evidence": {
+    "manifest": "evidence-manifest.json",
+    "files": 53,
+    "bytes": 3131008,
+    "unrelated_private_documents_or_proprietary_application_binaries": false,
+    "formatting_exception": {
+      "config": ".oxfmtrc.json",
+      "literal_ignored_path": "docs/changes/fixtures/office-svg-placement/final-candidate-export-receipt.json",
+      "reason": "Preserve exact raw final desktop receipt SHA327d; no raw bytes rewritten"
+    }
+  },
+  "remaining_acceptance": [
+    "Windows Office GUI unverified because CUA Windows App timed out",
+    "No full #64 completion or issue closure",
+    "Controlled macOS example and specified Office version only"
+  ]
+}

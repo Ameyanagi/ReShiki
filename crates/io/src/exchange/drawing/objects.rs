@@ -358,6 +358,9 @@ impl Writer<'_> {
             } else {
                 index + 2 + fill_layer
             };
+            if self.generic_bracket(g, z)? {
+                continue;
+            }
             if g.kind == GraphicKind::Picture {
                 let n = self.picture(g, z)?;
                 self.objects.push((g.id, n));

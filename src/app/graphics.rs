@@ -235,6 +235,11 @@ impl App {
                 .padding(6),
             );
         }
+        if let [graphic] = selected.as_slice()
+            && graphic.kind.brackets()
+        {
+            panel = panel.push(self.generic_bracket_controls(graphic.id));
+        }
         // Editing points ends with Done in the context row or Escape.
         if self.tool != Tool::EditPoints
             && matches!(selected.as_slice(), [g] if matches!(g.kind, GraphicKind::Curve | GraphicKind::Path | GraphicKind::Arc))
@@ -280,6 +285,17 @@ impl App {
             self.tab.orbital_phase = g.phase;
             self.tab.phase_flipped = g.phase_flipped;
             self.tab.bracket_sides = g.sides;
+            if let Some(unit) = self
+                .tab
+                .doc
+                .generic
+                .repeats
+                .iter()
+                .find(|u| u.bracket == Some(g.id) || u.bracket_objects.contains(&g.id))
+            {
+                self.generic.label = unit.label.clone();
+                self.generic.pattern = unit.pattern;
+            }
             if !matches!(
                 self.inspector_tab,
                 InspectorTab::Templates

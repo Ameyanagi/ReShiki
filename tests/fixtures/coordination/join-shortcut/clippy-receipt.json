@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "clippy",
+    "--workspace",
+    "--all-targets",
+    "--locked",
+    "--no-default-features",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/coordination",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "started_unix": 1791582131.627696,
+  "elapsed_seconds": 273.07603216171265,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/clippy.log",
+  "log_bytes": 2274,
+  "log_sha256": "d345a2aa438f559b1ee7b1614d0c1d0ca62e646d2f70dbc2f8b462795aa4f621"
+}

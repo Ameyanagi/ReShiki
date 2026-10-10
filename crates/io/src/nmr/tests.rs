@@ -200,3 +200,56 @@ fn ethyl_acetate_is_a_fully_supported_small_organic_acceptance_example() {
         );
     }
 }
+
+#[test]
+fn generic_nmr_gate_covers_connected_dependencies_but_not_independent_components() {
+    use reshiki_model::generic::{self, Crossing, RepeatCount, RepeatPattern, RepeatUnit};
+    let plain = ethanol();
+    let identity = fingerprint(&plain, &[1, 2, 3]).unwrap();
+    let unit = |inside, left, right| RepeatUnit {
+        bracket: None,
+        bracket_objects: vec![],
+        members: vec![inside],
+        crossings: vec![
+            Crossing {
+                inside,
+                outside: left,
+            },
+            Crossing {
+                inside,
+                outside: right,
+            },
+        ],
+        crossing_brackets: vec![],
+        head_count: Some(1),
+        usage: "SRU".into(),
+        pattern: RepeatPattern::HeadToTail,
+        count: RepeatCount::Finite { min: 1, max: 3 },
+        label: "1-3".into(),
+        flip: "NoFlip".into(),
+    };
+    let mut touched = plain.clone();
+    generic::set_repeat_unit(&mut touched, unit(2, 1, 3)).unwrap();
+    let before = touched.clone();
+    assert!(
+        fingerprint(&touched, &[1])
+            .unwrap_err()
+            .contains("Expand Generic Structures")
+    );
+    assert!(fingerprint(&touched, &[1, 2, 3]).is_err());
+    assert!(
+        prepare(&touched, &[1])
+            .unwrap_err()
+            .contains("Expand Generic Structures")
+    );
+    assert_eq!(touched, before);
+
+    let mut independent = plain.clone();
+    let ids = editing::append(&mut independent, &plain, Point::new(300., 0.));
+    generic::set_repeat_unit(&mut independent, unit(ids[1], ids[0], ids[2])).unwrap();
+    assert_eq!(fingerprint(&independent, &[1, 2, 3]).unwrap(), identity);
+    let request = prepare(&independent, &[1]).unwrap();
+    assert_eq!(request.atom_ids, vec![1, 2, 3]);
+    assert!(request.source.generic.is_empty());
+    assert_eq!(request.fingerprint, identity);
+}

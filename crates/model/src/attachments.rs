@@ -90,6 +90,12 @@ pub fn interchange_graph(doc: &Document) -> Result<Document, String> {
     // Labels do not affect chemistry; haptic group definitions include their
     // anchor through attachment membership rather than a covalent bond.
     copy.abbreviations.clear();
+    copy.generic = Default::default();
+    for a in &mut copy.atoms {
+        if a.element != "*" {
+            a.display.variable = None;
+        }
+    }
     for a in &mut copy.atoms {
         if a.attachment.take().is_some() {
             a.centroid.clear();
@@ -205,6 +211,9 @@ pub fn movement_selection(doc: &Document, ids: &[u64]) -> Vec<u64> {
 /// inventing covalent metal–carbon bonds. No identifier or valence claim for
 /// the assembled coordination complex is made by this composition calculation.
 pub fn composition(doc: &Document) -> Result<crate::chemistry::Properties, String> {
+    if crate::generic::present(doc) {
+        return Err(crate::generic::NOTICE.into());
+    }
     doc.validate()?;
     if doc.atoms.iter().any(|a| {
         a.element == "*"

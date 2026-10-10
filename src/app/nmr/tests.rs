@@ -2168,3 +2168,133 @@ async fn label_menu_dismissal_and_foreign_canvas_release_keep_pointer_ownership(
     }
     assert!(!app.tab.erase_stroke);
 }
+
+fn generic_nmr_bracket(app: &mut App, x: f32) -> u64 {
+    let bracket = app.tab.doc.next_id();
+    app.tab
+        .doc
+        .graphics
+        .push(reshiki::graphics::Graphic::dragged(
+            bracket,
+            reshiki::graphics::GraphicKind::Brackets,
+            Point::new(x - 10., -10.),
+            Point::new(x + 10., 10.),
+            Default::default(),
+            reshiki::graphics::BracketSides::Both,
+            false,
+        ));
+    let _ = app.generic_action(crate::app::generic::Action::RepeatLabel("1-3".into()));
+    bracket
+}
+fn generic_nmr_report(request: &engine::Request) -> Arc<Report> {
+    Arc::new(engine::Report {
+        nucleus: Nucleus::H1,
+        atom_ids: request.atom_ids.clone(),
+        fingerprint: request.fingerprint.clone(),
+        rows: vec![],
+        method: String::new(),
+        data_version: String::new(),
+        conditions: String::new(),
+        limitations: String::new(),
+        attribution: String::new(),
+    })
+}
+
+#[test]
+fn generic_definition_blocks_pending_and_completed_nmr_and_old_delivery_after_clear() {
+    for completed in [false, true] {
+        let mut app = app();
+        let bracket = generic_nmr_bracket(&mut app, 42.);
+        let _ = app.nmr_action(Action::Predict(Nucleus::H1));
+        let key = app.tab.nmr.pending.clone().unwrap();
+        let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
+        let report = generic_nmr_report(&request);
+        if completed {
+            let _ = app.nmr_action(Action::Finished(key.clone(), Ok(Arc::clone(&report))));
+            app.tab.nmr.labels = true;
+            app.tab.nmr.label_menu = true;
+            assert!(app.tab.nmr.result.is_some());
+        }
+        let _ = app.generic_action(crate::app::generic::Action::DefineRepeat(bracket));
+        assert!(!app.error);
+        assert!(app.tab.nmr.pending.is_none());
+        assert!(app.tab.nmr.result.is_none());
+        assert!(!app.tab.nmr.labels && !app.tab.nmr.label_menu);
+        assert!(
+            app.tab
+                .nmr
+                .notice
+                .as_deref()
+                .unwrap()
+                .contains("chemistry changed")
+        );
+        let generic_source = app.tab.doc.clone();
+        let _ = app.nmr_action(Action::Finished(key.clone(), Ok(Arc::clone(&report))));
+        assert!(app.tab.nmr.result.is_none());
+        assert_eq!(app.tab.doc, generic_source);
+        let _ = app.nmr_action(Action::Predict(Nucleus::H1));
+        assert!(app.tab.nmr.pending.is_none());
+        assert!(
+            app.tab
+                .nmr
+                .notice
+                .as_deref()
+                .unwrap()
+                .contains("Expand Generic Structures")
+        );
+        let _ = app.generic_action(crate::app::generic::Action::ClearRepeat(bracket));
+        let _ = app.nmr_action(Action::Finished(key, Ok(report)));
+        assert!(
+            app.tab.nmr.result.is_none(),
+            "clearing does not revive old worker capabilities"
+        );
+
+        let _ = app.nmr_action(Action::Predict(Nucleus::H1));
+        let key = app.tab.nmr.pending.clone().unwrap();
+        let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
+        let _ = app.nmr_action(Action::Finished(key, Ok(generic_nmr_report(&request))));
+        assert!(app.tab.nmr.result.is_some());
+        app.step_history(false);
+        assert!(reshiki::generic::present(&app.tab.doc));
+        assert!(
+            app.tab.nmr.result.is_none(),
+            "undo restores unresolved chemistry and invalidates concrete results"
+        );
+        app.step_history(true);
+        assert!(!reshiki::generic::present(&app.tab.doc));
+        assert!(app.tab.nmr.result.is_none());
+    }
+}
+
+#[test]
+fn unrelated_generic_definition_keeps_pending_result_and_nmr_labels_through_history() {
+    let mut app = app();
+    let a = app.tab.doc.add_atom("C", Point::new(300., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(342., 0.));
+    let c = app.tab.doc.add_atom("C", Point::new(384., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.doc.add_bond(b, c, 1, "plain");
+    let bracket = generic_nmr_bracket(&mut app, 342.);
+    let _ = app.nmr_action(Action::Predict(Nucleus::H1));
+    let key = app.tab.nmr.pending.clone().unwrap();
+    let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
+    let report = generic_nmr_report(&request);
+    let _ = app.generic_action(crate::app::generic::Action::DefineRepeat(bracket));
+    assert_eq!(app.tab.nmr.pending.as_ref(), Some(&key));
+    let _ = app.nmr_action(Action::Finished(key, Ok(Arc::clone(&report))));
+    assert!(Arc::ptr_eq(app.tab.nmr.result.as_ref().unwrap(), &report));
+    app.tab.nmr.labels = true;
+    app.tab.nmr.label_menu = true;
+    let serial = app.tab.nmr.serial;
+    let _ = app.generic_action(crate::app::generic::Action::ClearRepeat(bracket));
+    app.step_history(false);
+    app.step_history(true);
+    assert_eq!(app.tab.nmr.serial, serial);
+    assert!(Arc::ptr_eq(app.tab.nmr.result.as_ref().unwrap(), &report));
+    assert!(app.tab.nmr.labels && app.tab.nmr.label_menu);
+    assert!(app.tab.nmr.notice.is_none());
+    assert_eq!(
+        engine::fingerprint(&app.tab.doc, &request.atom_ids).unwrap(),
+        request.fingerprint
+    );
+}

@@ -98,6 +98,11 @@ impl Default for State {
     }
 }
 impl State {
+    #[cfg(test)]
+    pub(super) fn docking_state_for_test(&self) -> (bool, bool, Option<(bool, InspectorTab)>) {
+        (self.docked, self.restore_dock, self.dock_return)
+    }
+
     pub(super) fn take_layout_transition(&mut self, size: Size) -> bool {
         self.layout_transition.take().is_some_and(|expected| {
             (size.width - expected.width).abs() < 1. && (size.height - expected.height).abs() < 1.

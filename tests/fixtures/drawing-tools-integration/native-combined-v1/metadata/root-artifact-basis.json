@@ -1,0 +1,29 @@
+{
+  "record_kind": "AUTHORED_SUMMARY_OF_FROZEN_ACTUAL_RECORDS",
+  "original_record_sha256": "da7504f96866fdebebb75e478debbdd0ebb5e07d75ee04d72139a274fdce1a71",
+  "original_record_status": "ROOT_INDEPENDENT_ARTIFACT_REVIEW_PASS_NATIVE_UNRUN",
+  "qualification": "Authored compact derivation; not an original log or signed attestation.",
+  "source_commit": "29157b3c66c70d627ea3828f305faa0d51a65e9f",
+  "source_tree": "2727374049423cd44cb1a28d716cbadd0cba45ec",
+  "executable_sha256": "1713db30b834bf6f0416973df388245e1b53ce9e0e4bd2d35c938ac4a70e04be",
+  "bundle_id": "dev.reshiki.drawing-main-review-20261011-v1",
+  "included_inputs_checked": 587,
+  "depfiles_checked": 17,
+  "own_non_test_artifacts_checked": 16,
+  "changed_bundle_paths": ["Contents/Info.plist", "Contents/MacOS/reshiki"],
+  "review_bundle_hashes": {
+    "Contents/Info.plist": "071480c501c1c6e958227ef3d759b355eeba9840a8a3dd6a930d526d85712b18",
+    "Contents/_CodeSignature/CodeResources": "674d3e9176b329101fdda494a46c0de27821df759dc92365fdd38b5df5a4f313",
+    "Contents/MacOS/reshiki": "1713db30b834bf6f0416973df388245e1b53ce9e0e4bd2d35c938ac4a70e04be",
+    "Contents/Resources/ReShiki.icns": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766",
+    "Contents/Resources/Licenses/LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "Contents/Resources/Licenses/LICENSE": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab",
+    "Contents/Resources/Licenses/NOTICE": "3b0bffb476a767847f100c0f394aa8f296fd1153e349b7e91c0a6f0e6aaad2b4",
+    "Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": "eea1a41c67718e6cc477d8f1d4c823019623404242c0226639b9798744120ed8",
+    "Contents/Resources/Licenses/LICENSE-MIT": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+  },
+  "signature_verification": "codesign --verify --deep --strict --verbose=2 completed exit0 in initial attempt before delta guard",
+  "original_status_time": "Artifact-only review preceded ROOT's later native actions.",
+  "retained_initial_guard_failure_sha256": "14028a99119570630dcae72072e23f6e7e9fe44e7d5fd5e66fb1d6b2100fe530",
+  "guard_correction": "CodeResources remained byte exact after re-signing unchanged resources. Required exactly Info.plist and signed executable changes; all seven other payloads retained."
+}

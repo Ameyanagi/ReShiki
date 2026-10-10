@@ -180,7 +180,9 @@ impl CdxmlScene {
                 bond.order = old.order;
             }
             bond.display = old.display;
-            if bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge") {
+            if bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge")
+                || bond.order == 5 && !matches!(bond.display.as_str(), "plain" | "dashed")
+            {
                 bond.projection = true;
             }
             bond.secondary_display = old.secondary_display;
@@ -282,6 +284,14 @@ impl CdxmlScene {
         document.groups = self.base.groups;
         document.ring_fills = self.base.ring_fills;
         document.abbreviations = self.base.abbreviations;
+        document.generic = self.generic;
+        for (id, label) in self.generic_labels {
+            let atom = document
+                .atom_mut(id)
+                .ok_or(SceneError::Invalid("Missing generic label atom"))?;
+            atom.display.variable = Some(label);
+            atom.cip_label = None;
+        }
         for attachment in self.attachments {
             let atom = document
                 .atom_mut(attachment.id)

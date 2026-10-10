@@ -47,12 +47,39 @@ pub fn compute(
     coordinates: Option<&Coordinates>,
     options: Options,
 ) -> Result<Conformer, Error> {
+    let mut remaining = options.work_limit.min(expansion::MAX_WORK);
     compute_inner(
         state,
         ranks::Input::Numeric(chiral_ranks),
         coordinates,
         options,
+        &mut remaining,
     )
+}
+
+/// Consume the caller's aggregate allowance, including work spent before an
+/// error. The per-call option is a ceiling, never a fresh allowance.
+pub fn compute_with_work(
+    state: &State,
+    chiral_ranks: &[Option<u32>],
+    coordinates: Option<&Coordinates>,
+    options: Options,
+    remaining: &mut usize,
+) -> Result<Conformer, Error> {
+    let allowance = (*remaining)
+        .min(options.work_limit)
+        .min(expansion::MAX_WORK);
+    let mut available = allowance;
+    let result = compute_inner(
+        state,
+        ranks::Input::Numeric(chiral_ranks),
+        coordinates,
+        options,
+        &mut available,
+    );
+    let used = allowance.checked_sub(available).ok_or(Error::Limit)?;
+    *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
+    result
 }
 
 /// Retain native property-conversion failures until a selected ordering reads
@@ -63,11 +90,13 @@ pub fn compute_with_rank_properties(
     coordinates: Option<&Coordinates>,
     options: Options,
 ) -> Result<Conformer, Error> {
+    let mut remaining = options.work_limit.min(expansion::MAX_WORK);
     compute_inner(
         state,
         ranks::Input::Properties(properties),
         coordinates,
         options,
+        &mut remaining,
     )
 }
 
@@ -76,12 +105,12 @@ fn compute_inner(
     rank_properties: ranks::Input<'_>,
     coordinates: Option<&Coordinates>,
     options: Options,
+    remaining: &mut usize,
 ) -> Result<Conformer, Error> {
     if !options.bond_length.is_finite() || options.bond_length <= 0.0 {
         return Err(Error::BondLength);
     }
-    let mut remaining = options.work_limit.min(expansion::MAX_WORK);
-    if remaining == 0 {
+    if *remaining == 0 {
         return Err(Error::Limit);
     }
     let mut initial = expansion::compute_initial_ranks_with_work(
@@ -97,28 +126,24 @@ fn compute_inner(
             },
             use_ring_templates: options.use_ring_templates,
         },
-        &mut remaining,
+        remaining,
     )?;
     let collision = collision::Input::new_with_work(
         &initial.state.graph,
         &initial.state.metadata,
         &initial.state.rings,
-        &mut remaining,
+        remaining,
     )?;
     // Native ordering completes flips for every fragment before opening angles
     // or shortening bonds. Never publish the temporary stereo/ring state.
     for fragment in &mut initial.fragments {
-        *fragment = collision.apply_with_work(
-            fragment,
-            collision::Stage::BondAndSpiroFlip,
-            &mut remaining,
-        )?;
+        *fragment =
+            collision.apply_with_work(fragment, collision::Stage::BondAndSpiroFlip, remaining)?;
     }
     for fragment in &mut initial.fragments {
+        *fragment = collision.apply_with_work(fragment, collision::Stage::OpenAngles, remaining)?;
         *fragment =
-            collision.apply_with_work(fragment, collision::Stage::OpenAngles, &mut remaining)?;
-        *fragment =
-            collision.apply_with_work(fragment, collision::Stage::ShortenBonds, &mut remaining)?;
+            collision.apply_with_work(fragment, collision::Stage::ShortenBonds, remaining)?;
     }
     let result = finalize::finish_with_work(
         state.graph.atoms.len(),
@@ -128,7 +153,7 @@ fn compute_inner(
             canonical_orientation: options.canonical_orientation,
             work_limit: options.work_limit,
         },
-        &mut remaining,
+        remaining,
     )?;
     Ok(result.conformer)
 }

@@ -1,0 +1,90 @@
+{
+  "version": 17,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": 210.0,
+        "y": 240.0
+      }
+    },
+    {
+      "id": 2,
+      "element": "C",
+      "position": {
+        "x": 246.4,
+        "y": 219.0
+      }
+    },
+    {
+      "id": 3,
+      "element": "O",
+      "position": {
+        "x": 282.8,
+        "y": 240.0
+      }
+    },
+    {
+      "id": 4,
+      "element": "C",
+      "position": {
+        "x": 319.2,
+        "y": 219.0
+      }
+    },
+    {
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": 355.6,
+        "y": 240.0
+      }
+    },
+    {
+      "id": 6,
+      "element": "O",
+      "position": {
+        "x": 319.2,
+        "y": 177.0
+      }
+    }
+  ],
+  "bonds": [
+    {
+      "id": 7,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain"
+    },
+    {
+      "id": 8,
+      "a": 2,
+      "b": 3,
+      "order": 1,
+      "display": "plain"
+    },
+    {
+      "id": 9,
+      "a": 3,
+      "b": 4,
+      "order": 1,
+      "display": "plain"
+    },
+    {
+      "id": 10,
+      "a": 4,
+      "b": 5,
+      "order": 1,
+      "display": "plain"
+    },
+    {
+      "id": 11,
+      "a": 4,
+      "b": 6,
+      "order": 2,
+      "display": "plain"
+    }
+  ]
+}

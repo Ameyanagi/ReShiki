@@ -23,6 +23,7 @@ impl App {
             self.tab.revision = self.tab.revision.wrapping_add(1);
             if chemistry_changed(&before, &self.tab.doc) {
                 self.tab.analysis = None;
+                self.tab.chemistry_notice = None;
                 reshiki::atom_labels::clear_computed(&mut self.tab.doc);
                 self.tab.labels_dirty = true;
             }

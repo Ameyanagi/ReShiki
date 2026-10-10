@@ -1,0 +1,314 @@
+{
+  "schema": "drawing-evidence-v2",
+  "status": "ACTUAL_FILES_FROZEN",
+  "qualification": "Private literal-copy proposal from ROOT frozen actual records; publication review pending. Static audit is separate from GUI acceptance.",
+  "native_restore": "native/NATIVE-drawing-restored.rsk",
+  "native_stretch": "native/NATIVE-drawing-stretch-18.rsk",
+  "native_reopened": "native/NATIVE-drawing-fresh-reopened.rsk",
+  "files": [
+    {
+      "path": "ax/01-open-paper-fit.ax.txt",
+      "bytes": 113,
+      "sha256": "a285c5dc42fca6fe54da9eee340f0aa4dc70d96b5b7f9d0d07da306b8ba1b46d",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/02-nmr-proton-161.ax.txt",
+      "bytes": 113,
+      "sha256": "a285c5dc42fca6fe54da9eee340f0aa4dc70d96b5b7f9d0d07da306b8ba1b46d",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/03-nmr-carbon-ppm-161.ax.txt",
+      "bytes": 7548,
+      "sha256": "1218882749922af3e60523aaa7ce472aa53a6bb9a5bb4db5e6507d1f4553d055",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/04-nmr-carbonyl-selected-both-161.ax.txt",
+      "bytes": 7474,
+      "sha256": "8ab6c7084311dfb1245a20d41f19cee66cf8b9165821592ca62130a85cf822ec",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/05-nmr-carbon-labels-off-161.ax.txt",
+      "bytes": 8134,
+      "sha256": "9a3a4d9b0e8c0a885477930dd2276eb22be39ef3ef6986e081289f1911da09af",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/06-nmr-palette-moved-resized-161.ax.txt",
+      "bytes": 8123,
+      "sha256": "a86fd38f73d42d26414ba545dedcc54c10c8b34b1caadf8af29d1c929baf3b3a",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/07-nmr-carbon-both-252.ax.txt",
+      "bytes": 7474,
+      "sha256": "8ab6c7084311dfb1245a20d41f19cee66cf8b9165821592ca62130a85cf822ec",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/08-combined-cage-zero-61.ax.txt",
+      "bytes": 5301,
+      "sha256": "490062866ffa93af822806e86c5efcfb883ea5930a85fd83133786e5184a3590",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/09-combined-cage-undo-25.ax.txt",
+      "bytes": 5291,
+      "sha256": "04304e1c9324f465349b8f9e199a60090b07e4a92559215f3ac50e82580a1d1f",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/10-combined-cage-redo-zero.ax.txt",
+      "bytes": 5301,
+      "sha256": "490062866ffa93af822806e86c5efcfb883ea5930a85fd83133786e5184a3590",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/11-combined-stretch-before.ax.txt",
+      "bytes": 5598,
+      "sha256": "ca40e7c2977d8e398457c92330d6eb8cb8680fad2f56c031fa0cfc066151b196",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/12-combined-stretch-18.ax.txt",
+      "bytes": 5599,
+      "sha256": "13b2a1ffa7fe92e491fec12be9e84e14d548841c1fb59f22b09a8894441ccbd3",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/13-combined-stretch-undo.ax.txt",
+      "bytes": 5581,
+      "sha256": "5b8939f4de531c21218397225a25256f64b480b593e5d02b60634eb1e4c60614",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/14-combined-restored-save.ax.txt",
+      "bytes": 5563,
+      "sha256": "c2138f61ed690e8c9ba6fb76f7a1f2d244e5dac7835cae244acb6ed92b6ad450",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/15-combined-tab-reopened.ax.txt",
+      "bytes": 4834,
+      "sha256": "ba94da470ef450226c43f92245a4bef62608e45154a5bba3d8030023e4f28a2e",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/16-combined-fresh-process-reopened.ax.txt",
+      "bytes": 4695,
+      "sha256": "1a2c737623b0bd3126b4d46dac144f9fbef49892e86041a13b66f7d2e14d2070",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/17-cage-rim-25-209.ax.txt",
+      "bytes": 4812,
+      "sha256": "8f44b6ccb7f03a92310773f5983d7b9482320db46e5ce13cf1feda74a2c03153",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/18-cage-rim-zero-209.ax.txt",
+      "bytes": 4812,
+      "sha256": "cb4bf19dccc90b591b930b8bb9debdf9d90a853c0214fe634249f0705d8660f2",
+      "role": "raw-ax"
+    },
+    {
+      "path": "ax/19-cage-rim-undo-25-209.ax.txt",
+      "bytes": 4801,
+      "sha256": "81660efce17861f5f82a41da171e5be45792c3e14bd8c90fd1f6a470977210a6",
+      "role": "raw-ax"
+    },
+    {
+      "path": "captures/01-open-paper-fit.jpg",
+      "bytes": 427432,
+      "sha256": "4f426c07c64b90cb8f89e2fdfe3c60f3a3627fdd7a9dabc4c9009bdd986a5783",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/02-nmr-proton-161.jpg",
+      "bytes": 360768,
+      "sha256": "5a980464b9799f2bb85e992591b303b44387a426185f0dce846be869b8ea5142",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/03-nmr-carbon-ppm-161.jpg",
+      "bytes": 367098,
+      "sha256": "aa0c6dedefe7038e4ad4399c0e62781d1ba9d340cf2f340deeeca04cfe7da332",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/04-nmr-carbonyl-selected-both-161.jpg",
+      "bytes": 355457,
+      "sha256": "12b68d495cf3fee55637e62fe97cae99a70b9647494ef23e9971d4d7ee387741",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/05-nmr-carbon-labels-off-161.jpg",
+      "bytes": 353323,
+      "sha256": "35124103736988cf70ce41b893d2ab963eab04ae680567d5f97eed943a2c114a",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/06-nmr-palette-moved-resized-161.jpg",
+      "bytes": 365260,
+      "sha256": "9124bae82744eebcc78f886ad814c28154bb3ad1ea06f0283e8eb9c9eaebb8d5",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/07-nmr-carbon-both-252.jpg",
+      "bytes": 372066,
+      "sha256": "04f4331ba44de218bc6a28a3846e2ae3e366be76cb23c11c9b63e041cdfa29a6",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/08-combined-cage-zero-61.jpg",
+      "bytes": 450306,
+      "sha256": "2a51a2058570d9ea923005366883e91b42d0d2bb51ae67e1b017ab876df71334",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/09-combined-cage-undo-25.jpg",
+      "bytes": 446426,
+      "sha256": "23c20e735bb7def1eb2f82a2e4ae6760c0b8310ce8ab23cc8a59730e320a6546",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/10-combined-cage-redo-zero.jpg",
+      "bytes": 445314,
+      "sha256": "3e7e91b906648c969b5710330a88d4f46ca21caef4d84ec0f3217d4ab6520fb4",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/11-combined-stretch-before.jpg",
+      "bytes": 442332,
+      "sha256": "52d0ceaf0b8dab410ba40a67aa56b7dc76d99515c8fc5b94a014d6a430f9d9e3",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/12-combined-stretch-18.jpg",
+      "bytes": 449621,
+      "sha256": "e06c13ebbe348c1b2c53a190359361db9dbd921362a3e1867260b32bfcc28fb6",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/13-combined-stretch-undo.jpg",
+      "bytes": 441559,
+      "sha256": "b1b68516b9f07af11906bfbbeb6029ba57c505fd57fca47d6cbefa57339f6469",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/14-combined-restored-save.jpg",
+      "bytes": 441341,
+      "sha256": "1fee7a83b0bef2f679bfa1a3904b0df7a618497c73d56527decdf93b7f43011b",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/15-combined-tab-reopened.jpg",
+      "bytes": 423103,
+      "sha256": "a2cc5d865cf87cdccb0acd7ec0ded7e5600e70a4e7892c4a1674929af4aa28f0",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/16-combined-fresh-process-reopened.jpg",
+      "bytes": 424586,
+      "sha256": "64c0b2a88c90b6f3e6d470989380264de7c58316c267e7057ceae1ec2be24009",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/17-cage-rim-25-209.jpg",
+      "bytes": 461244,
+      "sha256": "4eb485ce2714ff04c3d7db2dd92b1ff40fa6d30bffb8d06d9c30ed6bda28b122",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/18-cage-rim-zero-209.jpg",
+      "bytes": 446715,
+      "sha256": "00e25935ce98a0c9f943a76c5d662931c74906739c96fcb12aeebf77059e8106",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "captures/19-cage-rim-undo-25-209.jpg",
+      "bytes": 461630,
+      "sha256": "2fa6cd0b1d3c894f216a651a81c229c9493f1bd647f01452c0a370ee2afc0a84",
+      "role": "raw-jpeg"
+    },
+    {
+      "path": "metadata/artifact-correlation.json",
+      "bytes": 721,
+      "sha256": "2684802f29e886b639c75ddb949422fe27f4942b627581a6fe304bf01cc0461c",
+      "role": "qualified-metadata"
+    },
+    {
+      "path": "metadata/build-basis.json",
+      "bytes": 1321,
+      "sha256": "ae5c2774ef5960aaa63b1c9bf6282b74980b3bd34bf2fb6e6e4900403b1533a7",
+      "role": "qualified-metadata"
+    },
+    {
+      "path": "metadata/checks-basis.json",
+      "bytes": 1592,
+      "sha256": "2f9eaca48d1038a752e523cd1ea13e74a0b2823a649066afdc9e459e45f5833d",
+      "role": "qualified-metadata"
+    },
+    {
+      "path": "metadata/native-correlation.json",
+      "bytes": 2717,
+      "sha256": "5398b2ac5de560a4a23ff8f4199c008315b87ca116bdf781b5b40134b4d5f5b8",
+      "role": "qualified-metadata"
+    },
+    {
+      "path": "metadata/normalization-basis.json",
+      "bytes": 1944,
+      "sha256": "56a5007f77c0cde6becc7f6fdc9452864ee5dc43de0859e9f326fd805d909d47",
+      "role": "qualified-metadata"
+    },
+    {
+      "path": "metadata/root-artifact-basis.json",
+      "bytes": 2338,
+      "sha256": "3488697cff18dc7fc63943f8795198644b9f4106f2a676d7de03dca130e51811",
+      "role": "qualified-metadata"
+    },
+    {
+      "path": "metadata/root-native-basis.json",
+      "bytes": 5189,
+      "sha256": "b356579900e1c796df6ce414942060251e45cf250d9bc71b961170a34e8f1eb7",
+      "role": "qualified-metadata"
+    },
+    {
+      "path": "native/NATIVE-drawing-fresh-reopened.rsk",
+      "bytes": 545014,
+      "sha256": "f7f426d1381019f5cfe8703ed9a62934d2fb057a25809b733479bc133ca39c26",
+      "role": "native-reopened"
+    },
+    {
+      "path": "native/NATIVE-drawing-restored.rsk",
+      "bytes": 545014,
+      "sha256": "f7f426d1381019f5cfe8703ed9a62934d2fb057a25809b733479bc133ca39c26",
+      "role": "native-restored"
+    },
+    {
+      "path": "native/NATIVE-drawing-stretch-18.rsk",
+      "bytes": 545032,
+      "sha256": "78d3717fb490a92e62f3846f3550e77d7a470e553225981ec99e0ae369b498d2",
+      "role": "native-stretch"
+    },
+    {
+      "path": "records/ci-source-terminal-20261011-v1.json",
+      "bytes": 7715,
+      "sha256": "6c515abb8074a6ed3643ce48fdd59813b4f24b4813c9ec7ff443af41d298680c",
+      "role": "raw-json"
+    },
+    {
+      "path": "records/original-native-check.stderr.txt",
+      "bytes": 1002,
+      "sha256": "8b7fef24a896e7c54d6b26870b794faafc8ba1619b6d2ce08360e7009620172b",
+      "role": "raw-console"
+    }
+  ],
+  "correlation": {
+    "artifact": "metadata/artifact-correlation.json",
+    "native": "metadata/native-correlation.json"
+  }
+}

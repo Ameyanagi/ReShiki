@@ -21,6 +21,11 @@ pub(super) struct Groups {
 }
 struct Group {
     kind: String,
+    label: Option<String>,
+    connection: Option<String>,
+    subtype: Option<String>,
+    head_bonds: Vec<usize>,
+    multiplier: Option<u32>,
     atoms: Vec<usize>,
     atom_set: HashSet<usize>,
     bonds: Vec<usize>,
@@ -65,6 +70,11 @@ impl Group {
         }
         Ok(Self {
             kind: kind.into(),
+            label: None,
+            connection: None,
+            subtype: None,
+            head_bonds: Vec::new(),
+            multiplier: None,
             atoms: Vec::new(),
             atom_set: HashSet::new(),
             bonds: Vec::new(),
@@ -111,6 +121,102 @@ impl Groups {
     // storage narrows signed charges and H counts to eight bits; retain that
     // defined conversion, including negative and overflowing extension values.
     pub(super) fn apply(&self, p: &mut Parsed) -> Result<()> {
+        for group in self
+            .entries
+            .values()
+            .filter(|g| !matches!(g.kind.as_str(), "DAT" | "SUP"))
+        {
+            let usage = match group.kind.as_str() {
+                "SRU" => "SRU",
+                "MON" => "Monomer",
+                "MER" => "Mer",
+                "COP" => match group.subtype.as_deref() {
+                    Some("ALT") => "CopolymerAlternating",
+                    Some("RAN") => "CopolymerRandom",
+                    Some("BLO") => "CopolymerBlock",
+                    _ => "Copolymer",
+                },
+                "CRO" => "Crosslink",
+                "GRA" => "Graft",
+                "MOD" => "Modification",
+                "MUL" => "MultipleGroup",
+                "MIX" => "MixtureUnordered",
+                "FOR" => "MixtureOrdered",
+                "COM" => "Component",
+                "GEN" => "Generic",
+                _ => return Err(ReadError::Unsupported("unretained substance-group type")),
+            };
+            if group.atoms.is_empty() {
+                return Err(ReadError::Unsupported(
+                    "polymer substance group without member atoms",
+                ));
+            }
+            let label = group.label.clone().unwrap_or_else(|| {
+                group
+                    .multiplier
+                    .map_or_else(|| "n".into(), |n| n.to_string())
+            });
+            let count = if let Some(n) = group.multiplier {
+                crate::generic::RepeatCount::parse(&n.to_string()).map_err(ReadError::Chemistry)?
+            } else {
+                crate::generic::RepeatCount::parse(&label).map_err(ReadError::Chemistry)?
+            };
+            let pattern = match group.connection.as_deref() {
+                Some("HH") => crate::generic::RepeatPattern::HeadToHead,
+                Some("EU") => crate::generic::RepeatPattern::EitherUnknown,
+                Some("HT") => crate::generic::RepeatPattern::HeadToTail,
+                _ => crate::generic::RepeatPattern::EitherUnknown,
+            };
+            let actual: HashSet<_> = p
+                .graph
+                .bonds
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| group.atom_set.contains(&b.a) != group.atom_set.contains(&b.b))
+                .map(|(i, _)| i)
+                .collect();
+            if actual != group.bond_set {
+                return Err(ReadError::Unsupported(
+                    "polymer crossing-bond list does not match its atom membership",
+                ));
+            }
+            let mut ordered = group.head_bonds.clone();
+            for &id in &group.bonds {
+                if !ordered.contains(&id) {
+                    ordered.push(id);
+                }
+            }
+            let mut crossings = Vec::new();
+            for id in ordered {
+                let b = p.graph.bonds.get(id).ok_or(ReadError::Limit)?;
+                let (inside, outside) = if group.atom_set.contains(&b.a) {
+                    (b.a, b.b)
+                } else {
+                    (b.b, b.a)
+                };
+                crossings.push(crate::generic::Crossing {
+                    inside: inside as u64 + 1,
+                    outside: outside as u64 + 1,
+                });
+            }
+            p.generic.repeats.push(crate::generic::RepeatUnit {
+                bracket: None,
+                bracket_objects: Vec::new(),
+                members: group.atoms.iter().map(|&i| i as u64 + 1).collect(),
+                crossings,
+                crossing_brackets: Vec::new(),
+                head_count: if group.head_bonds.is_empty() {
+                    None
+                } else {
+                    Some(group.head_bonds.len())
+                },
+                usage: usage.into(),
+                pattern,
+                count,
+                label,
+                flip: "Unspecified".into(),
+            });
+        }
         let mut aromatic = vec![false; p.graph.atoms.len()];
         for bond in &p.graph.bonds {
             if bond.aromatic || bond.order == 4 {

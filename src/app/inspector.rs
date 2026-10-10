@@ -34,6 +34,7 @@ pub enum FigureFormat {
     #[default]
     Pdf,
     Svg,
+    SvgOffice,
     Png,
     #[cfg(windows)]
     Emf,
@@ -42,6 +43,7 @@ impl FigureFormat {
     /// Menu order: vector formats, then raster.
     const ALL: &'static [Self] = &[
         Self::Svg,
+        Self::SvgOffice,
         Self::Pdf,
         #[cfg(windows)]
         Self::Emf,
@@ -57,6 +59,7 @@ impl FigureFormat {
         match self {
             Self::Pdf => "pdf",
             Self::Svg => "svg",
+            Self::SvgOffice => "svg-office",
             Self::Png => "png",
             #[cfg(windows)]
             Self::Emf => "emf",
@@ -66,6 +69,7 @@ impl FigureFormat {
         match self {
             Self::Pdf => "Vector figure at its physical publication size.",
             Self::Svg => "Editable vector artwork for layout and illustration.",
+            Self::SvgOffice => "Physical-size picture for Microsoft Office. Text becomes outlines.",
             Self::Png => {
                 "Up to 1200 dpi. Large drawings use a lower resolution; physical size is preserved."
             }
@@ -81,6 +85,7 @@ impl std::fmt::Display for FigureFormat {
         f.write_str(match self {
             Self::Pdf => "PDF",
             Self::Svg => "SVG",
+            Self::SvgOffice => "SVG · Office picture",
             Self::Png => "PNG",
             #[cfg(windows)]
             Self::Emf => "EMF for Office",
@@ -1043,7 +1048,14 @@ impl App {
                             command("Behind", Message::BondDepth(false)).width(Length::Fill)
                         ]
                         .spacing(6),
-                        command("Reverse bonds", Message::ReverseBonds)
+                        command(
+                            if bonds.iter().all(|b| b.order == 5 && b.projection) {
+                                "Reverse projection tip"
+                            } else {
+                                "Reverse bonds"
+                            },
+                            Message::ReverseBonds
+                        )
                     ]
                     .spacing(6),
                 ),
@@ -1394,11 +1406,11 @@ impl App {
             text(figure.description()).size(12).style(muted_text),
             reshiki::accessibility::button(
                 "export-figure",
-                format!("Export {} figure", figure.code().to_uppercase()),
+                format!("Export {figure} figure"),
                 text(if self.figure_exporting {
                     "Exporting…".into()
                 } else {
-                    format!("Export {}…", figure.code().to_uppercase())
+                    format!("Export {figure}…")
                 })
                 .size(13)
             )

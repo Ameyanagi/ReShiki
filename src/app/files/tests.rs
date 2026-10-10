@@ -155,8 +155,10 @@ fn microsoft_365_save_waits_for_receipt_and_failure_cancels_close_without_cleari
     let (mut app, _) = App::new();
     let path = PathBuf::from("recovery/drawing.rsk");
     app.tab.path = Some(path.clone());
-    app.office_path = Some(path);
-    app.office_host = "Microsoft 365";
+    app.tab.office = Some(super::super::office::Binding::standalone(
+        path,
+        super::super::office::Host::Microsoft365,
+    ));
     app.tab.doc.add_atom("O", Point::default());
     let snapshot = app.tab.doc.clone();
     let saved_before = app.tab.saved.clone();

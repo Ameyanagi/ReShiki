@@ -23,9 +23,11 @@ use crate::document::{Document, History};
 /// stereo indicators and CIP labels, and atom text styles, marks, label display,
 /// CIP labels and label hydrogens are display-only. Aromatic bonds and matching
 /// projection bonds also ignore their display and direction. Everything else
-/// counts, including atom positions, so any atom move is a chemistry change.
+/// counts, including atom positions and authoritative generic definitions, so
+/// any atom move or generic choice/repeat edit is a chemistry change.
 pub fn chemistry_changed(before: &Document, after: &Document) -> bool {
-    before.bonds.len() != after.bonds.len()
+    before.generic != after.generic
+        || before.bonds.len() != after.bonds.len()
         || before.bonds.iter().zip(&after.bonds).any(|(a, b)| {
             let mut a = a.clone();
             let mut b = b.clone();
@@ -149,6 +151,54 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
         }
         doc.reconcile_molecule_groups();
     }
+    Ok(Reconciled { before })
+}
+
+/// Consumed, immutable model proof. This is not constructible from a Document.
+pub struct PreparedInsertion {
+    data: crate::generic::PreparedData,
+}
+impl PreparedInsertion {
+    pub fn count(&self) -> usize {
+        self.data.count
+    }
+    pub fn bounds(&self) -> (crate::document::Point, crate::document::Point) {
+        self.data.bounds
+    }
+}
+/// Consume the one-shot transport before a host creates its output tab.
+pub fn take_expansion(
+    prepared: crate::generic::PreparedExpansion,
+) -> Result<PreparedInsertion, Rejection> {
+    prepared
+        .take()
+        .map(|data| PreparedInsertion { data })
+        .map_err(Rejection::Invalid)
+}
+/// Install the exact measured native result into a fresh empty drawing. Ordinary
+/// edits still call reconcile. This opaque proof already paid validation and
+/// preservation work; it must not call identities or endpoint/name repair again.
+pub fn install_expansion(
+    doc: &mut Document,
+    before: Document,
+    prepared: PreparedInsertion,
+) -> Result<Reconciled, Rejection> {
+    if *doc != before
+        || before.object_ids().next().is_some()
+        || !before.bonds.is_empty()
+        || !before.groups.is_empty()
+        || !before.molecule_names.is_empty()
+        || !before.depth_appearance.is_empty()
+        || !before.abbreviations.is_empty()
+        || !before.reactions.is_empty()
+        || !before.ring_fills.is_empty()
+        || !before.generic.is_empty()
+    {
+        return Err(Rejection::Invalid(
+            "Prepared expansion requires a fresh empty drawing".into(),
+        ));
+    }
+    *doc = prepared.data.document;
     Ok(Reconciled { before })
 }
 

@@ -1,0 +1,83 @@
+{
+  "when_utc": "2026-10-09T16:31:01.742810+00:00",
+  "base": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "branch": "fix/office-svg-placement",
+  "scope": "Original full workspace checks precede two display-label expression changes; final labels verified by live AX test/default build/fmt/focused production lint. No exporter/schema change after original checks.",
+  "checks": [
+    {
+      "check": "fresh initial default production build",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-build-20261010/default-build.stderr.log",
+      "exit": 0,
+      "sha256": "d5ceaf3b2dd98dc88741352e173c714ad71fd9230ad33917be57ad6abf8639d5"
+    },
+    {
+      "check": "focused IO export tests8 active/1 intentionally ignored",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-build-20261010/io-export-tests.log",
+      "exit": 0,
+      "sha256": "07cf5cb6df1b6629e492a43da29400a0db47caaf501f9f4775da772aef4d7a74"
+    },
+    {
+      "check": "focused app snapshot tests3 active",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-build-20261010/app-figure-export-tests.log",
+      "exit": 0,
+      "sha256": "0d2142aadfb8712f1e5133775fadf5a984c5b3fe1dd50b3bc4f3aedc11d9c98d"
+    },
+    {
+      "check": "initial menu test1 active",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-build-20261010/app-figure-menu-test.log",
+      "exit": 0,
+      "sha256": "881f2dcb46a1bcd5577729b87a0776a9a4a7d71b3a30a2d6bc2c671160c7dd8d"
+    },
+    {
+      "check": "workspace fmt",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-build-20261010/fmt.log",
+      "exit": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "locked all-targets/all-features strictClippy before label-only correction",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-build-20261010/clippy-all-targets-all-features.log",
+      "exit": 0,
+      "sha256": "0424883970c2a58526fa0c024e4391ffe0addb5cd8ced618780784a1a9693bea"
+    },
+    {
+      "check": "first all-targets/all-features check interrupted; not pass",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-build-20261010/check-all-targets-all-features.log",
+      "exit": 143,
+      "sha256": "e196b3573b0cb5a589c9684614bced32b20226e9d20f084444ed51f278f0be7c"
+    },
+    {
+      "check": "locked all-targets/all-features check incremental0 retry before label-only correction",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-build-20261010/check-all-targets-all-features-inc0-retry.log",
+      "exit": 0,
+      "sha256": "7746857a15cbce3aa18ff0c9ca51e4189b4d6ccea50d5d922c20f0ecbf7a572e"
+    },
+    {
+      "check": "final live-widget menu AX regression1 active",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-label-final-20261010/app-figure-menu-ax-test.log",
+      "exit": 0,
+      "sha256": "66e90f9e9d26e794c2122f4d81864ce9086eceb558fef646f63bd2f54252536d"
+    },
+    {
+      "check": "final workspace fmt",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-label-final-20261010/fmt.log",
+      "exit": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "final fresh default production build",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-label-final-20261010/default-build.stderr.log",
+      "exit": 0,
+      "sha256": "a94f1deb53fa19a9775db3659f7050380afdfe0989e17b849db275f42607083c"
+    },
+    {
+      "check": "final focused production strictClippy",
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/office-svg-label-final-20261010/clippy-production-labels.log",
+      "exit": 0,
+      "sha256": "a97989eecd065a19a63a3100ef02615ce1fc69585d845fb30f8497c22311de42"
+    }
+  ],
+  "note": "Firstcheck owned processes interrupted after no observed progress. The inc0 retry completed; no claim of a proven incremental/compiler root cause. Initial sample symbolization interrupted, no complete stack trace claimed.",
+  "head": "3d261b32e9baa73b6d2cb133de2163fa3699569a",
+  "clean_worktree": true
+}

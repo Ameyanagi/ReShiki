@@ -237,12 +237,17 @@ impl App {
     pub(super) fn commit_exit(&mut self) {
         self.exit.handoff = false;
         self.exit.committed = true;
+        self.each_tab(Self::detach_office);
+        self.office.closing.clear();
         self.tabs.deferred_results.clear();
     }
 
     /// Removes a closed tab's draft; a write still running for it finishes
     /// first, and its result, which finds no tab, starts the removal.
-    pub(super) fn retire(&mut self, tab: DocumentTab) -> Task<Message> {
+    pub(super) fn retire(&mut self, mut tab: DocumentTab) -> Task<Message> {
+        if let Some(binding) = tab.office.take() {
+            binding.finish();
+        }
         self.retire_assistant(tab.id);
         let Some(recovery) = tab.recovery else {
             return Task::none();

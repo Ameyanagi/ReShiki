@@ -1,0 +1,110 @@
+{
+  "record_kind": "AUTHORED_SUMMARY_OF_FROZEN_ACTUAL_RECORDS",
+  "original_record_sha256": "7cb2dbeac8b199e1426efb96795efb5c4adf255ca9a20207e6074073d6a5dece",
+  "original_record_status": "ROOT_NATIVE_OBSERVATIONS_COMPLETED_EXACT_SERIALIZATION_REFERENCE_AUDIT_REVIEWED",
+  "qualification": "Authored compact derivation; not an original log or signed attestation.",
+  "source_commit": "29157b3c66c70d627ea3828f305faa0d51a65e9f",
+  "source_tree": "2727374049423cd44cb1a28d716cbadd0cba45ec",
+  "executable_sha256": "1713db30b834bf6f0416973df388245e1b53ce9e0e4bd2d35c938ac4a70e04be",
+  "GUI_operator": "ROOT via cua_repl only",
+  "utc": "2026-10-10T18:01:10.087501+00:00",
+  "NMR": {
+    "proton_sites": "3/3",
+    "carbon_sites": "4/4",
+    "label_modes_checked": ["atom number", "ppm", "both", "off/on"],
+    "carbon_ppm": [14.2, 61.05, 170.7, 20.9],
+    "marker_selection": "carbonyl #4 selected without document mutation",
+    "floating_controls": [
+      "move",
+      "resize",
+      "collapse",
+      "plot show/hide",
+      "details show/hide",
+      "dock/undock",
+      "internal wheel scroll"
+    ],
+    "camera": ["161%", "252%"],
+    "unchanged_document_history_on_NMR_UI": true,
+    "no_J_prediction": true
+  },
+  "opacity": {
+    "combined": "60/90 cage selected; 25 to0 Undo25 Redo0 Undo25; retained ethyl acetate NMR report/labels and raw EMF",
+    "standalone_same_source_app": "original source C60 60/90 at209%,25 to0 Undo25, complete exposed outer rim visually solid",
+    "separate_views": true
+  },
+  "stretch": {
+    "combined_selected": "methanol two atoms/one bond with LP-to-C cubic arrow",
+    "operation": "fixed reference start carbon;14.4 to18pt; undo restores14.4",
+    "saved_paths": ["native/NATIVE-drawing-stretch-18.rsk", "native/NATIVE-drawing-restored.rsk"],
+    "other_component_NMR_retained": true
+  },
+  "round_trip": {
+    "tab_close_reopen": "empty Undo/Redo, no NMR palette or prediction labels; drawing visible68/96+EMF",
+    "normal_quit_old_pid": 53185,
+    "fresh_relaunch_new_pid": 60594,
+    "fresh_process_reopen": "empty Undo/Redo, no NMR palette/labels, drawing68/96",
+    "second_save_byte_equals_restored": true,
+    "native_sha256": "f7f426d1381019f5cfe8703ed9a62934d2fb057a25809b733479bc133ca39c26",
+    "native_bytes": 545014
+  },
+  "fresh_process_save_path": "native/NATIVE-drawing-fresh-reopened.rsk",
+  "capture_paths": [
+    "captures/01-open-paper-fit.jpg",
+    "captures/02-nmr-proton-161.jpg",
+    "captures/03-nmr-carbon-ppm-161.jpg",
+    "captures/04-nmr-carbonyl-selected-both-161.jpg",
+    "captures/05-nmr-carbon-labels-off-161.jpg",
+    "captures/06-nmr-palette-moved-resized-161.jpg",
+    "captures/07-nmr-carbon-both-252.jpg",
+    "captures/08-combined-cage-zero-61.jpg",
+    "captures/09-combined-cage-undo-25.jpg",
+    "captures/10-combined-cage-redo-zero.jpg",
+    "captures/11-combined-stretch-before.jpg",
+    "captures/12-combined-stretch-18.jpg",
+    "captures/13-combined-stretch-undo.jpg",
+    "captures/14-combined-restored-save.jpg",
+    "captures/15-combined-tab-reopened.jpg",
+    "captures/16-combined-fresh-process-reopened.jpg",
+    "captures/17-cage-rim-25-209.jpg",
+    "captures/18-cage-rim-zero-209.jpg",
+    "captures/19-cage-rim-undo-25-209.jpg"
+  ],
+  "ax_paths": [
+    "ax/01-open-paper-fit.ax.txt",
+    "ax/02-nmr-proton-161.ax.txt",
+    "ax/03-nmr-carbon-ppm-161.ax.txt",
+    "ax/04-nmr-carbonyl-selected-both-161.ax.txt",
+    "ax/05-nmr-carbon-labels-off-161.ax.txt",
+    "ax/06-nmr-palette-moved-resized-161.ax.txt",
+    "ax/07-nmr-carbon-both-252.ax.txt",
+    "ax/08-combined-cage-zero-61.ax.txt",
+    "ax/09-combined-cage-undo-25.ax.txt",
+    "ax/10-combined-cage-redo-zero.ax.txt",
+    "ax/11-combined-stretch-before.ax.txt",
+    "ax/12-combined-stretch-18.ax.txt",
+    "ax/13-combined-stretch-undo.ax.txt",
+    "ax/14-combined-restored-save.ax.txt",
+    "ax/15-combined-tab-reopened.ax.txt",
+    "ax/16-combined-fresh-process-reopened.ax.txt",
+    "ax/17-cage-rim-25-209.ax.txt",
+    "ax/18-cage-rim-zero-209.ax.txt",
+    "ax/19-cage-rim-undo-25-209.ax.txt"
+  ],
+  "camera_scope": {
+    "combined_views": [
+      "53% (open paper fit and fresh process reopen)",
+      "61% (opacity and Stretch)",
+      "161% / 252% (NMR)"
+    ],
+    "standalone_original_c60_same_source_app": "209% (captures 17, 18, 19)"
+  },
+  "AX_scope": "Captures 01 and 02 have 113-byte early state records; remaining AX copies contain larger trees. No AX replay is performed.",
+  "limitations": [
+    "Raw authored compound fixture; source graph IDs/translations explicit. Not a ChemDraw comparison",
+    "Standalone rim close-up is separate tab in same qualified combined app; combined opacity editing and round-trip also tested",
+    "Shared app userdata recovery banner present and untouched; no isolated-userdata claim",
+    "Horizontal wheel in native automation did not pan camera; no horizontal-pan PASS claimed",
+    "First path paste timed out; native setValue then file Open used; stale AX clicks failed/reselected without source mutation",
+    "Original exact-offset checker failure retained; successor admits only source-derived binary32 endpoint/control/anchor normalization, reviewed separately"
+  ]
+}

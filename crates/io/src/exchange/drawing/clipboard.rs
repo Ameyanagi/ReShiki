@@ -21,7 +21,14 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
             atom.display.hide_charge = false;
             charges += 1;
         }
-        if atom.display.variable.is_some() {
+        if atom.display.variable.is_some()
+            && !source
+                .generic
+                .alternatives
+                .iter()
+                .any(|s| s.atom == atom.id)
+            && !source.generic.links.iter().any(|s| s.atom == atom.id)
+        {
             variables += 1;
         }
     }
@@ -32,6 +39,7 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
         }
         if bond.projection
             && bond.display != "plain"
+            && bond.order != 5
             && !haworth.contains(&i)
             && !(bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge"))
             && !(bond.order == 2 && bond.display == "bold")
@@ -53,6 +61,13 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
         .collect();
     if opacity {
         notices.push("Editable CDX copy omits rear opacity; native copy and SVG/PNG retain it. Chemical structure and XYZ are unchanged.".into());
+    }
+    if source
+        .bonds
+        .iter()
+        .any(|bond| bond.order == 5 && bond.projection)
+    {
+        notices.push("Editable CDX retains donor→metal direction and projection attributes; ChemDraw 26 redraws dative arrows and removes wedge/hash paint when saved".into());
     }
     if charges != 0 {
         notices.push(format!("Editable CDX copy shows {charges} hidden charge label(s); chemical charges are unchanged"));

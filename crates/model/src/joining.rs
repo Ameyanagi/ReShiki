@@ -7,6 +7,44 @@ use crate::{
 };
 use std::collections::{HashMap, HashSet};
 
+mod atom_merge;
+pub use atom_merge::{merge_atoms, merge_atoms_at};
+
+/// Source IDs that Move & attach will actually carry, before pruning data.
+fn moving_ids(doc: &Document, selected: &[u64]) -> Vec<u64> {
+    // Moving a selected part of a molecule must never cut its external bonds.
+    let mut moving: HashSet<_> = doc.expand_integral_groups(selected).into_iter().collect();
+    loop {
+        let previous = moving.len();
+        moving.extend(crate::attachments::selection(
+            doc,
+            &moving.iter().copied().collect::<Vec<_>>(),
+        ));
+        for bond in &doc.bonds {
+            if moving.contains(&bond.a) || moving.contains(&bond.b) {
+                moving.insert(bond.a);
+                moving.insert(bond.b);
+            }
+        }
+        moving
+            .extend(doc.expand_abbreviation_selection(&moving.iter().copied().collect::<Vec<_>>()));
+        if previous == moving.len() {
+            break;
+        }
+    }
+    doc.all_ids()
+        .into_iter()
+        .filter(|id| moving.contains(id))
+        .collect()
+}
+
+/// Read-only admission for routes that prepare a fragment. Direct atom merge
+/// and in-place coordination deliberately do not expand integral groups.
+pub fn source_intersects_generic(doc: &Document, selected: &[u64]) -> bool {
+    let moving = moving_ids(doc, selected);
+    crate::generic::intersects(doc, &moving) || crate::generic::component_intersects(doc, &moving)
+}
+
 #[derive(Debug, Clone)]
 pub struct Prepared {
     pub original: Document,
@@ -16,43 +54,30 @@ pub struct Prepared {
 }
 impl Prepared {
     pub fn new(doc: &Document, selected: &[u64]) -> Result<Self, String> {
+        Self::with_mode(doc, selected, Connection::Connect)
+    }
+
+    pub fn with_mode(doc: &Document, selected: &[u64], mode: Connection) -> Result<Self, String> {
         doc.validate()?;
         let all: HashSet<_> = doc.object_ids().collect();
         if selected.is_empty() || selected.iter().any(|id| !all.contains(id)) {
             return Err("Select the fragment you want to move and attach.".into());
         }
-        // Moving a selected part of a molecule must never cut its external bonds.
-        let mut moving: HashSet<_> = doc.expand_integral_groups(selected).into_iter().collect();
-        loop {
-            let previous = moving.len();
-            moving.extend(crate::attachments::selection(
-                doc,
-                &moving.iter().copied().collect::<Vec<_>>(),
-            ));
-            for bond in &doc.bonds {
-                if moving.contains(&bond.a) || moving.contains(&bond.b) {
-                    moving.insert(bond.a);
-                    moving.insert(bond.b);
-                }
-            }
-            moving.extend(
-                doc.expand_abbreviation_selection(&moving.iter().copied().collect::<Vec<_>>()),
-            );
-            if previous == moving.len() {
-                break;
-            }
+        let moving = moving_ids(doc, selected);
+        // Selection and deletion must not prune unresolved definitions in the moving fragment.
+        if crate::generic::intersects(doc, &moving)
+            || crate::generic::component_intersects(doc, &moving)
+        {
+            return Err(crate::generic::JOIN_NOTICE.into());
         }
-        let moving: Vec<_> = doc
-            .all_ids()
-            .into_iter()
-            .filter(|id| moving.contains(id))
-            .collect();
         let fragment = editing::selection(doc, &moving);
         if fragment.atoms.is_empty() {
             return Err("Select a molecule or atom to move and attach.".into());
         }
         let mut base = doc.clone();
-        base.delete(&moving);
+        if mode != Connection::Coordinate {
+            base.delete(&moving);
+        }
         if base.atoms.is_empty() {
             return Err("Leave a separate molecule or atom available as the destination.".into());
         }
@@ -76,10 +101,75 @@ impl Prepared {
             self.fragment
                 .atoms
                 .iter()
-                .find(|a| self.fragment.atom_visible(a.id))
+                .find(|a| {
+                    self.fragment.atom_visible(a.id)
+                        && (mode != Connection::Coordinate
+                            || matches!(a.element.as_str(), "N" | "O" | "S" | "P"))
+                })
                 .map(|a| Anchor::Atom(a.id))
                 .unwrap_or(Anchor::Auto)
         }
+    }
+
+    /// Generic-only preflight for an actual prepared placement. It reads the
+    /// same original/fragment and hit target as `place`, without posing a copy.
+    /// Invalid anchors or absent/mismatched targets keep their ordinary errors.
+    pub fn generic_rejection(
+        &self,
+        point: Point,
+        radius: f32,
+        anchor: Anchor,
+        mode: Connection,
+    ) -> bool {
+        if !anchor.valid(&self.fragment)
+            || anchor == Anchor::Auto
+            || !point.x.is_finite()
+            || !point.y.is_finite()
+            || !radius.is_finite()
+            || radius <= 0.
+        {
+            return false;
+        }
+        if crate::generic::intersects(&self.original, &self.moving)
+            || crate::generic::component_intersects(&self.original, &self.moving)
+            || crate::generic::intersects(&self.fragment, &self.fragment.all_ids())
+        {
+            return true;
+        }
+        if mode == Connection::Coordinate {
+            let Anchor::Atom(donor) = anchor else {
+                return false;
+            };
+            let Some(metal) = self.original.nearest(point, radius) else {
+                return false;
+            };
+            return crate::generic::intersects(&self.original, &[donor, metal])
+                || crate::generic::component_intersects(&self.original, &[donor, metal]);
+        }
+        let target = self.base.nearest(point, radius);
+        let bond = target
+            .is_none()
+            .then(|| editing::nearest_bond(&self.base, point, radius))
+            .flatten()
+            .and_then(|index| self.base.bonds.get(index));
+        match mode {
+            Connection::Connect | Connection::ShareAtom
+                if target.is_none() || !matches!(anchor, Anchor::Atom(_)) =>
+            {
+                return false;
+            }
+            Connection::FuseBond if bond.is_none() || !matches!(anchor, Anchor::Bond(..)) => {
+                return false;
+            }
+            Connection::Auto => return false,
+            _ => {}
+        }
+        let targets: Vec<_> = target
+            .into_iter()
+            .chain(bond.into_iter().flat_map(|b| [b.a, b.b]))
+            .collect();
+        crate::generic::intersects(&self.base, &targets)
+            || crate::generic::component_intersects(&self.base, &targets)
     }
 
     pub fn place(
@@ -92,6 +182,27 @@ impl Prepared {
     ) -> Result<(Document, Vec<u64>), String> {
         if !anchor.valid(&self.fragment) || anchor == Anchor::Auto {
             return Err("Choose an exact source atom or bond in the fragment preview.".into());
+        }
+        if !point.x.is_finite() || !point.y.is_finite() || !radius.is_finite() || radius <= 0. {
+            return Err("Invalid connection target geometry.".into());
+        }
+        // Prepared is public. Recheck the unpruned original dependencies and
+        // the current fragment before either the pose or the Coordinate route.
+        if self.generic_rejection(point, radius, anchor, mode) {
+            return Err(crate::generic::JOIN_NOTICE.into());
+        }
+        if mode == Connection::Coordinate {
+            let Anchor::Atom(donor) = anchor else {
+                return Err("Choose a donor atom in the preview.".into());
+            };
+            let metal = self
+                .original
+                .nearest(point, radius)
+                .ok_or("Point to a metal atom in the drawing.")?;
+            return Ok((
+                templates::coordinate_atoms(&self.original, donor, metal)?,
+                vec![donor, metal],
+            ));
         }
         let target = self.base.nearest(point, radius);
         let bond = target
@@ -120,6 +231,11 @@ impl Prepared {
             .into_iter()
             .chain(bond.into_iter().flat_map(|b| [b.a, b.b]))
             .collect();
+        if crate::generic::intersects(&self.base, &target_ids)
+            || crate::generic::component_intersects(&self.base, &target_ids)
+        {
+            return Err(crate::generic::JOIN_NOTICE.into());
+        }
         if source_ids
             .iter()
             .any(|id| self.fragment.abbreviation(*id).is_some())
@@ -157,6 +273,11 @@ impl Prepared {
             .filter(|(_, new)| host.contains(new))
             .collect();
         let original_id = |id: u64| restore.get(&id).copied().unwrap_or(id);
+        let endpoint_atoms = placed.atoms.clone();
+        let endpoint_mapping: HashMap<_, _> = endpoint_atoms
+            .iter()
+            .map(|atom| (atom.id, original_id(atom.id)))
+            .collect();
         // Restore IDs of moved objects simultaneously. Only shared atoms disappear;
         // destination IDs, labels, remote stereo and unrelated objects retain identity.
         for a in &mut placed.atoms {
@@ -191,6 +312,27 @@ impl Prepared {
         for g in &mut placed.graphics {
             g.id = original_id(g.id);
         }
+        crate::arrow_anchors::remap_for_join(&mut placed, &endpoint_atoms, &endpoint_mapping);
+        // Preparation deletes moving atoms only from a detached preview base.
+        // An unselected arrow still belongs to the original document and must
+        // follow the moved/shared target rather than lose its attachment.
+        for arrow in &mut placed.arrows {
+            if !self.moving.contains(&arrow.id)
+                && let Some(original) = self.original.arrows.iter().find(|a| a.id == arrow.id)
+            {
+                arrow.start_anchor = original.start_anchor.clone();
+                arrow.end_anchor = original.end_anchor.clone();
+            }
+        }
+        let joined_mapping: HashMap<_, _> = self
+            .original
+            .atoms
+            .iter()
+            .map(|atom| (atom.id, merged.get(&atom.id).copied().unwrap_or(atom.id)))
+            .collect();
+        // Shared attachment sites cannot carry positioned marks. Other moved
+        // marks retain their original host identity after temporary-ID restore.
+        crate::arrow_anchors::remap_for_join(&mut placed, &self.original.atoms, &joined_mapping);
         for g in &mut placed.abbreviations {
             g.anchor = original_id(g.anchor);
             for member in &mut g.members {
@@ -221,7 +363,13 @@ impl Prepared {
             }
         }
         crate::reactions::reconcile(&mut placed)?;
+        crate::arrow_anchors::reconcile(&mut placed);
         placed.validate()?;
         Ok((placed, ids.into_iter().map(original_id).collect()))
     }
 }
+
+#[cfg(test)]
+mod endpoint_tests;
+#[cfg(test)]
+mod generic_tests;

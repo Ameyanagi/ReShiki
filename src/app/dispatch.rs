@@ -34,7 +34,10 @@ impl App {
             | Message::Tab(..)
             | Message::Autosaved(..)
             | Message::FilePrepared(..)
+            | Message::OfficePrepared(..)
             | Message::Saved(..) => {}
+            #[cfg(any(windows, target_os = "linux"))]
+            Message::Desktop(_) => {}
             Message::KeyboardDrawing(action) => return Some(self.keyboard_drawing_action(action)),
             Message::Optimization(action) => return Some(self.optimization_action(action)),
             Message::DepthAppearance(action) => return Some(self.depth_appearance_action(action)),
@@ -49,6 +52,7 @@ impl App {
             Message::Shortcut(action) => return Some(self.shortcut_action(action)),
             Message::AromaticDisplay => return Some(self.request_aromatic_display()),
             Message::Abbreviations(action) => return Some(self.abbreviation_action(action)),
+            Message::Generic(action) => return Some(self.generic_action(action)),
             Message::Labels(action) => self.label_action(action),
             Message::InspectorScroll(y) => self.scroll_templates(y),
             Message::TemplateNavigate(forward) => return Some(self.navigate_templates(forward)),

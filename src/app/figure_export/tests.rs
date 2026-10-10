@@ -24,6 +24,20 @@ fn switched_and_closed_tabs_keep_export_completions_off_the_front_tab() {
     }
 }
 
+#[test]
+fn office_svg_uses_figure_snapshot_without_changing_selection_or_document() {
+    let (mut app, _) = App::new();
+    let a = app.tab.doc.add_atom("C", Default::default());
+    app.tab.selected = vec![a];
+    let snapshot = app.tab.doc.clone();
+    let _task = app.update(Message::Export("svg-office"));
+    assert!(app.figure_exporting);
+    assert!(!app.tab.busy);
+    assert_eq!(app.status, "Preparing SVG · Office picture export…");
+    assert_eq!(app.tab.doc, snapshot);
+    assert_eq!(app.tab.selected, vec![a]);
+}
+
 #[cfg(windows)]
 #[test]
 fn emf_uses_figure_snapshot_without_changing_selection_or_document() {

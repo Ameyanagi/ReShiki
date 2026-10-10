@@ -119,10 +119,26 @@ impl App {
     }
     pub(super) fn reverse_selected_bonds(&mut self) {
         let before = self.tab.doc.clone();
-        self.tab.doc.invalidate_chemistry(&self.tab.selected);
+        let affected: Vec<_> = self
+            .tab
+            .doc
+            .bonds
+            .iter()
+            .filter(|b| {
+                self.tab.selected.contains(&b.a)
+                    && self.tab.selected.contains(&b.b)
+                    && !(b.order == 5 && b.projection)
+            })
+            .flat_map(|b| [b.a, b.b])
+            .collect();
+        self.tab.doc.invalidate_chemistry(&affected);
         for b in &mut self.tab.doc.bonds {
             if self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b) {
-                b.reverse();
+                if b.order == 5 && b.projection {
+                    b.reverse_projection();
+                } else {
+                    b.reverse();
+                }
             }
         }
         self.changed(before);

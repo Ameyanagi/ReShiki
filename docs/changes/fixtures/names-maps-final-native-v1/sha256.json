@@ -1,0 +1,101 @@
+{
+  "kind": "Literal original copy hashes; paths relative to this packet",
+  "raw_files": {
+    "captures/02-plus-lactic-inserted.jpg": {
+      "sha256": "a32e89515274db0696d969db4cfc856381533dfeda6fd466475407626ab22db4",
+      "bytes": 331033
+    },
+    "captures/02-plus-lactic-inserted.ax.txt": {
+      "sha256": "4fb0511bf48a0699578275cb02359adbe02ec90c5dc6f6d0f4a15d8ec80df56a",
+      "bytes": 4976
+    },
+    "captures/06-chemical-name-hidden.jpg": {
+      "sha256": "fab553c200311463c06d52a35d942698f0c1b4d555e4e54a7d26b40294a3659f",
+      "bytes": 287452
+    },
+    "captures/06-chemical-name-hidden.ax.txt": {
+      "sha256": "77fe1a6820a609c8d0aefda0c2675ad2893887658697a44fc413eaf15955e1b4",
+      "bytes": 4879
+    },
+    "captures/07-local-generated-name.jpg": {
+      "sha256": "1519f925f0f29e95ad5a38cbdf543540f8e02fe1ab92058103dba4b1a55aa301",
+      "bytes": 346801
+    },
+    "captures/07-local-generated-name.ax.txt": {
+      "sha256": "77fe1a6820a609c8d0aefda0c2675ad2893887658697a44fc413eaf15955e1b4",
+      "bytes": 4879
+    },
+    "captures/08-fresh-process-generated-name.jpg": {
+      "sha256": "54ab83cbafb1616263ea2fcab1bd94503c590a0d2ba7d2d854f16a0a209c8a95",
+      "bytes": 382534
+    },
+    "captures/08-fresh-process-generated-name.ax.txt": {
+      "sha256": "2d188ec86995b507c7953521b6586b9943f23ec6a6617eb02cbb6d6251d85365",
+      "bytes": 4609
+    },
+    "captures/10-reactant-map-27.jpg": {
+      "sha256": "431ef8734985ba19bd3cac5d0082a1a34119ebc9bc0cde6ffe7592f100283a9d",
+      "bytes": 346330
+    },
+    "captures/10-reactant-map-27.ax.txt": {
+      "sha256": "83a00b1b5a39a9518575c0eb3ae6491ced6ac704fb78c6d451f91f5b4d14bd5f",
+      "bytes": 4247
+    },
+    "captures/11-reactant-map-undo.jpg": {
+      "sha256": "8d13a8bb3752a2b77491baf0338b8a4ec82dd59efbc8757e307c1c540e2aa83b",
+      "bytes": 345545
+    },
+    "captures/11-reactant-map-undo.ax.txt": {
+      "sha256": "33ca454119695babf19729ea2b67c20c8d0d4e08d88903cdaa33931cea5aab69",
+      "bytes": 4253
+    },
+    "plus-lactic-final.rsk": {
+      "sha256": "93de1c1af124f6e2a881b65050e97876beb4bcdfa7bd0cfb666f3ad672013a87",
+      "bytes": 4320
+    },
+    "plus-lactic-generated-final.rsk": {
+      "sha256": "9ee17d469528cb8ae238f7243e8ac0c0e34aaa8ec4597854941969585b0a67b1",
+      "bytes": 4343
+    },
+    "reaction-map-labels-final.rsk": {
+      "sha256": "81665fa6645545a524386ae515dd4c03e1cce290a18bcf6ce8711a3deba0c0e0",
+      "bytes": 4782
+    },
+    "reaction-map-manual27-final.rsk": {
+      "sha256": "09a4b4721850fcaf4c9624eb1f9e9dc476f89884d3e1b3fb8fb36c67883dbf7b",
+      "bytes": 4783
+    },
+    "reaction-map-undo-final.rsk": {
+      "sha256": "81665fa6645545a524386ae515dd4c03e1cce290a18bcf6ce8711a3deba0c0e0",
+      "bytes": 4782
+    },
+    "raw/root-native-graph-check-v1.json.raw": {
+      "sha256": "6e41594d99b9e185f57fb9a215030df4c08d116838b2b53a0892c94277197a60",
+      "bytes": 974
+    },
+    "raw/root-map-edit-undo-check-v1.json.raw": {
+      "sha256": "6ca981703d7254eed8fd74511d6aa7bd10218ff8fd0b9c1ee987b372f6951b22",
+      "bytes": 747
+    },
+    "raw/fresh-process-reopen-preimage-v1.json.raw": {
+      "sha256": "67d37c029aa610108ce83b0e53ada5d16a6d19fc8c2c80b3acd57838de8c60f5",
+      "bytes": 342
+    },
+    "raw/bundle-review.json.raw": {
+      "sha256": "96940e93125cffe00d93d2e8a12c4bd9226b9eefdbe6107e1e4bde6f4cbd4e53",
+      "bytes": 10538
+    },
+    "raw/root-prelaunch-verification-v1.json.raw": {
+      "sha256": "3be2b68dd01448ff3ebfbe2481790d7795e9a7be149aa75c02c173fa5448f344",
+      "bytes": 500
+    },
+    "raw/root-native-acceptance-final-v1.json.raw": {
+      "sha256": "b3c522606945e47844afb9d61417beedd0b3037c9d8e7898e9efed0d4d00d934",
+      "bytes": 8469
+    },
+    "raw/root-normal-hooks-success-v1.json.raw": {
+      "sha256": "cbf68fef64c4397fb54aab65acfe16ca68607e4be2be80754ab9ad127d5136cb",
+      "bytes": 764
+    }
+  }
+}

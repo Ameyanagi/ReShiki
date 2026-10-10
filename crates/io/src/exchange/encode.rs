@@ -206,6 +206,29 @@ fn encode_value(p: &Property, value: &str, element: &str) -> Result<Vec<u8>> {
             }
             Ok(data)
         }
+        "CDXElementList" => {
+            let (value, excluded) = if let Some(v) = value.strip_prefix("NOT ") {
+                (v, true)
+            } else {
+                (value, false)
+            };
+            let numbers = value.split_whitespace().collect::<Vec<_>>();
+            let count = i16::try_from(numbers.len())
+                .ok()
+                .filter(|n| *n > 0)
+                .ok_or("Invalid element-list count")?;
+            let mut data = (if excluded { -count } else { count })
+                .to_le_bytes()
+                .to_vec();
+            for n in numbers {
+                let n = integer::<u16>(n)?;
+                if !(1..=118).contains(&n) {
+                    return Err("Invalid element-list atomic number".into());
+                }
+                append(&mut data, &n.to_le_bytes())?;
+            }
+            Ok(data)
+        }
         "INT16ListWithCounts" => {
             let numbers = value.split_whitespace().collect::<Vec<_>>();
             let mut data = word(numbers.len())?.to_vec();

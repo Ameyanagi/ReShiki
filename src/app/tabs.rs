@@ -191,6 +191,11 @@ impl App {
     /// Starts the front tab over as a new drawing. Late results for its old
     /// drawing meet a new epoch and revision.
     pub(super) fn reset_tab(&mut self) {
+        // An Office tab still owns its host session and any pending writes.
+        // Replacing its drawing must instead use a separate ordinary tab.
+        if self.tab.office.is_some() {
+            self.add_tab();
+        }
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
         self.retire_assistant(self.tab.id);
@@ -344,6 +349,16 @@ impl App {
             }
             Action::Close(id) => {
                 let id = id.unwrap_or(self.tab.id);
+                if self.file_io.saving
+                    && self.file_io.saving_tab == Some(id)
+                    && self.strip().any(|tab| tab.id == id && tab.office.is_some())
+                {
+                    if !self.office.closing.contains(&id) {
+                        self.office.closing.push(id);
+                    }
+                    self.status = "Closing the Office tab after its save finishes…".into();
+                    return Task::none();
+                }
                 if let Some(index) = self.tabs.background.iter().position(|tab| tab.id == id)
                     && !self
                         .tabs
@@ -601,7 +616,10 @@ impl App {
             hint.push_str(&format!(
                 " · {} updates {}",
                 super::shortcuts::label(&Message::Save).unwrap_or_default(),
-                self.office_host,
+                self.tab
+                    .office
+                    .as_ref()
+                    .map_or("Office", |binding| binding.host.label()),
             ));
         }
         hover_hint(body, hint, tooltip::Position::Bottom).into()
