@@ -1,0 +1,84 @@
+{
+  "scope": "read-only old/new native document, raw screenshot, and painting source comparison; no GUI, Cargo, painting edits or publication",
+  "historical_producer_source": "8fbf166cb9daad908d743cce71e6c6d73a819a47",
+  "historical_signed_executable_sha256": "77654ac99707cf6e1fc46a4ccc1bd3e10db97d802827873864a4a6973c2f2611",
+  "current_signed_executable_sha256": "0dd54d1ab7749e7bbb5ace90146a6af41486903353d72e280156f1542bb78ed1",
+  "historical_native": {
+    "path": "tests/fixtures/coordination/co-en3-desktop-assembled.rsk",
+    "sha256": "a5b68d3561d94899d8838dcf670c193c3982c34aeb62434a2d5638c18f7126b2"
+  },
+  "current_native": {
+    "path": "native-after/co-en3-cmd-j-native.rsk",
+    "sha256": "ad6ea1986402e22a16e77514416278c02ef0ec5eb84f2236e5e93fa5214c3541"
+  },
+  "historical_raw_image": {
+    "path": "docs/images/coordination/co-en3-assembled-reopened.jpg",
+    "sha256": "c2cecc169841c004390a7aec9bc6cf49e0bffedd421e9f0a13e1dc99b7ba801b"
+  },
+  "current_raw_image": {
+    "path": "native-after/co-en3-cmd-j-fresh-process-reopened.jpg",
+    "sha256": "6cd9b806d7e2c5b75e4f01a20826a0478618f3d484e533f10c33307de96ebe53"
+  },
+  "all_atom_records_equal": true,
+  "original_nine_bonds_equal_without_unpersisted_id": true,
+  "directed_contact_set_equal": true,
+  "all_six_contacts_plain": true,
+  "historical_contact_append_order": [
+    13,
+    10,
+    2,
+    5,
+    6,
+    9
+  ],
+  "current_contact_append_order": [
+    5,
+    2,
+    13,
+    10,
+    9,
+    6
+  ],
+  "painting_source_parity": {
+    "crates/model/src/scene.rs": {
+      "historical_sha256": "30307fa0a43ec44a261e8cd0f26ce798f3e8b923330340574df25d232866de27",
+      "current_sha256": "30307fa0a43ec44a261e8cd0f26ce798f3e8b923330340574df25d232866de27",
+      "equal": true
+    },
+    "crates/model/src/style.rs": {
+      "historical_sha256": "cfea1b030448edf65c58196bb072863a2a077b1649c73981b769719b6a832cb7",
+      "current_sha256": "cfea1b030448edf65c58196bb072863a2a077b1649c73981b769719b6a832cb7",
+      "equal": true
+    },
+    "crates/model/src/bond_joins.rs": {
+      "historical_sha256": "9298022a0da33c70ab4a45fc0fe4cf3c273ee7ffa9e6448ae02f4a822c730f1a",
+      "current_sha256": "9298022a0da33c70ab4a45fc0fe4cf3c273ee7ffa9e6448ae02f4a822c730f1a",
+      "equal": true
+    },
+    "crates/model/src/atom_labels.rs": {
+      "historical_sha256": "3439760993f98a6fd41d932e506c4a16acd74444cd90c5a0a09696e76e518c9b",
+      "current_sha256": "3439760993f98a6fd41d932e506c4a16acd74444cd90c5a0a09696e76e518c9b",
+      "equal": true
+    },
+    "src/canvas/render.rs": {
+      "historical_sha256": "bababe76dbabfae8e4f1725ac25ad47d3c4d1eca206591c56bb1f4f629067b63",
+      "current_sha256": "bababe76dbabfae8e4f1725ac25ad47d3c4d1eca206591c56bb1f4f629067b63",
+      "equal": true
+    },
+    "src/canvas/text_cache.rs": {
+      "historical_sha256": "66525371a18f3b80706576674a7d4110424d7efd7501d649a9e03e508427ae8d",
+      "current_sha256": "66525371a18f3b80706576674a7d4110424d7efd7501d649a9e03e508427ae8d",
+      "equal": true
+    }
+  },
+  "observed": "Both untouched whole-window reopened screenshots show the same missing upper-right N2-to-Co1 arrow and five visible dative arrows, while both native graphs contain all six directed contacts. Window title/framing differ; neither screenshot is modified.",
+  "diagnosis": "Pre-existing drawing visibility limitation in this fixed-coordinate fixture, not introduced by the CtrlJ route. Likely charge/label clipping: scene.rs includes Co charge in label ink boxes, trims both bond ends against padded boxes, and omits a bond and its arrowhead when trimmed length <= 0.1. Exact per-glyph clipping geometry was not measured, so that causal detail remains an inference.",
+  "source_lines": {
+    "charge": "crates/model/src/scene.rs:433",
+    "ink_boxes": "crates/model/src/scene.rs:533",
+    "clip": "crates/model/src/scene.rs:654",
+    "omit_collapsed_bond": "crates/model/src/scene.rs:1113",
+    "dative_head": "crates/model/src/scene.rs:1186"
+  },
+  "publication_limit": "Report six graph-confirmed contacts and five visible arrows in this view; do not claim all six arrows visibly verified or alter painting/fixture/evidence in this follow-up."
+}

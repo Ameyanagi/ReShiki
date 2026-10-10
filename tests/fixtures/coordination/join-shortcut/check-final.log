@@ -1,0 +1,15 @@
+    Checking reshiki-process-heap v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/crates/process-heap)
+    Checking reshiki-depict-math v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/crates/depict-math)
+    Checking reshiki-geometry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/native/geometry)
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination)
+    Checking reshiki-macos v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/native/macos)
+    Checking reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/crates/chemistry)
+    Checking reshiki-linux v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/native/linux)
+    Checking reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/crates/model)
+    Checking reshiki-io v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/crates/io)
+    Checking reshiki-windows v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/native/windows)
+    Checking reshiki-agent v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/crates/agent)
+    Checking reshiki-mcp v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination/crates/mcp)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5m 06s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`

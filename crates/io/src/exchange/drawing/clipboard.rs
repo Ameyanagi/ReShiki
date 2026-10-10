@@ -26,6 +26,7 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
         }
         if bond.projection
             && bond.display != "plain"
+            && bond.order != 5
             && !haworth.contains(&i)
             && !(bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge"))
             && !(bond.order == 2 && bond.display == "bold")
@@ -43,6 +44,13 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
         }
     }
     let mut notices = Vec::new();
+    if source
+        .bonds
+        .iter()
+        .any(|bond| bond.order == 5 && bond.projection)
+    {
+        notices.push("Editable CDX retains donor→metal direction and projection attributes; ChemDraw 26 redraws dative arrows and removes wedge/hash paint when saved".into());
+    }
     if charges != 0 {
         notices.push(format!("Editable CDX copy shows {charges} hidden charge label(s); chemical charges are unchanged"));
     }

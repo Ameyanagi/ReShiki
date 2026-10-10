@@ -202,11 +202,14 @@ fn write_impl(
         // Bold double bonds have an ordinary two-rail CDXML representation;
         // unlike a bold single bond, it cannot imply tetrahedral stereo.
         let bold_double = bond.order == 2 && bond.display == "bold";
+        // Dative projection is an explicit drawing display; B/E still records donor→metal.
+        let coordination_projection = bond.order == 5;
         bond.projection
             && bond.display != "plain"
             && !haworth.contains(&i)
             && !aromatic_bold
             && !bold_double
+            && !coordination_projection
     }) {
         return Err(invalid(
             "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",

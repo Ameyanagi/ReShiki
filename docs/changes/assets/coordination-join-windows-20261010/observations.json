@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "review_status": "Native Windows evidence reviewed; under review in PR #283.",
+  "pr": 283,
+  "head": "44d198c4e6791a15017af7ac6d356c245b7073ca",
+  "run": 38002254770,
+  "attempt": 1,
+  "job": 114062843997,
+  "candidate_executable_sha256": "752743a45e6afda49de4661d68bfcf07b7ef736c4aa3a3829d799171dae6a894",
+  "candidate_build": "GitHub windows-2022 x64 MSVC release; Rust1.99.0; no optional features; static CRT; unsigned",
+  "baseline_executable_sha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+  "baseline_recorded_source": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "baseline_build": "historical Windows x64 MSVC dev build, Rust1.99.0",
+  "baseline_source_limit": "Historical build/source ledger and retained success log, plus current live executable path/hash. The original complete compiler-input manifest is not reconstructed; later source staging is not original baseline compiler input.",
+  "baseline_pid": 6988,
+  "candidate_save_pid": 12908,
+  "candidate_reopen_pid": 8980,
+  "session_id": 2,
+  "native_actions_reported_by_root": [
+    "Baseline: select N5 and Co1, actual Windows On-Screen Keyboard Ctrl+J gives No compatible attachment; clean input and Undo disabled.",
+    "Candidate: select N5 and Co1, actual OSK Ctrl+J adds the first contact; one Undo removes it and Redo restores it.",
+    "Candidate: select N2 and Co1, actual OSK Ctrl+J closes the existing NCCN chelate; one Undo removes this second contact and Redo restores it.",
+    "Native Save As produces co-en-windows-chelate-after.rsk with 13 atoms/11 bonds.",
+    "Clean close and fresh Explorer launch/Open restores 13 atoms/11 bonds with Undo and Redo disabled; file is not resaved."
+  ],
+  "input_delivery": "After restoring OSK, focus the ReShiki title, click Ctrl until blue, then J. Root controlled the native UI.",
+  "excluded_attempts": [
+    "Direct RDP Ctrl/Super+J arrived as unmodified J; the cause was not measured, and these attempts are excluded.",
+    "Initial OSK focus no-ops are excluded."
+  ],
+  "incidental_move": "One misdirected rectangle moved N10 and was immediately undone; saved stored x/y values match the original exactly.",
+  "native_display": {
+    "raw_capture_pixels": [2556, 1712],
+    "zoom_percent": 195,
+    "style": "JACS / ACS",
+    "font": "Arial",
+    "font_pt": 10,
+    "keyboard_drawing": "off (F8 off)",
+    "theme": "light",
+    "recovery_drafts": "no recovery data was altered"
+  },
+  "graph_scope": {
+    "windows_contacts": [5, 2],
+    "metal": 1,
+    "windows_atom_count": 13,
+    "windows_bond_count": 11,
+    "windows_visible_arrows": 1,
+    "macOS_contacts": 6,
+    "limit": "This Windows run verifies two graph contacts only; the six-contact workflow remains the separate macOS record. Upper N2 contact arrow has the pre-existing visibility limitation; the rendering cause is unproven."
+  },
+  "coordinate_scope": "Original and saved native JSON store x/y only. All original stored coordinates and every atom field except the six derived carbon label_h caches are exact; no z/XYZ conversion is claimed.",
+  "verification_scope": "The portable verifier checks byte identity, JSON/schema/chemistry/coordinates/bonds and source/process bindings. It does not replay GUI shortcuts, infer input delivery from screenshots or automate Undo/Redo."
+}

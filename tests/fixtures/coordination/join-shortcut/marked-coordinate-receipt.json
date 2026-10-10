@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--no-default-features",
+    "--bin",
+    "reshiki",
+    "app::keyboard_drawing::tests::marked_coordination_is_explicit_and_preserves_ordinary_connect_checks",
+    "--",
+    "--exact"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/coordination",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "started_unix": 1791581685.089362,
+  "elapsed_seconds": 6.732116937637329,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/marked-coordinate.log",
+  "log_bytes": 649,
+  "log_sha256": "78693f99c6117713876a3dc70e3521c7de2424f8b0d807edb7340c4502a59774"
+}

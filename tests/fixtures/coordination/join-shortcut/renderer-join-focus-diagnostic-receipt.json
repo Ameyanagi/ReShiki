@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--no-default-features",
+    "--bin",
+    "reshiki",
+    "app::shortcut_focus_tests::join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur",
+    "--",
+    "--exact",
+    "--ignored"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/coordination",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "started_unix": 1791581793.217689,
+  "elapsed_seconds": 45.38925075531006,
+  "exit_code": 101,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-focus-diagnostic.log",
+  "log_bytes": 1382,
+  "log_sha256": "0e89c6f4894eb16bf6f5fa5a159311226fd66d3a61e29dadfe0c385a0d184097"
+}

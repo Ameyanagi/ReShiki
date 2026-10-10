@@ -22,12 +22,12 @@ fn delta(a: Point, b: Point) -> Point {
     Point::new(b.x - a.x, b.y - a.y)
 }
 fn thickness(bond: &crate::document::Bond, style: &DrawingStyle) -> f32 {
-    let width =
-        if ["bold", "wedge", "hollow_wedge", "hashed", "hash"].contains(&bond.display.as_str()) {
-            style.world(style.bold_width_pt)
-        } else {
-            style.line_width()
-        };
+    let display = bond.display.strip_suffix("_end").unwrap_or(&bond.display);
+    let width = if ["bold", "wedge", "hollow_wedge", "hashed", "hash"].contains(&display) {
+        style.world(style.bold_width_pt)
+    } else {
+        style.line_width()
+    };
     let lines = match bond.order {
         2 | 4 | 7 => 1.,
         3 => 2.,

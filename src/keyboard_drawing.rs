@@ -486,6 +486,13 @@ pub fn connect_atoms(source: &Document, a: u64, b: u64) -> Result<Document, Stri
     {
         return Err("These atoms already have a bond".into());
     }
+    if [a, b]
+        .iter()
+        .filter_map(|id| source.atom(*id))
+        .any(templates::coordination_metal)
+    {
+        return Err("Ordinary Connect adds a covalent bond. Mark the donor and use Coordinate } for a donor→metal contact with retained hydrogens and charge.".into());
+    }
     for id in [a, b] {
         let atom = source
             .atom(id)

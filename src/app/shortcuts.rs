@@ -359,6 +359,28 @@ impl App {
             templates::{Anchor, Connection},
         };
         if let [source, target] = self.tab.selected.as_slice() {
+            let source_metal = self
+                .tab
+                .doc
+                .atom(*source)
+                .is_some_and(reshiki::templates::coordination_metal);
+            let target_metal = self
+                .tab
+                .doc
+                .atom(*target)
+                .is_some_and(reshiki::templates::coordination_metal);
+            if source_metal || target_metal {
+                // A donor and metal remain distinct, even inside one molecule.
+                // Validate this pair before fragment preparation can remove an
+                // already-connected metal or attempt destructive atom sharing.
+                let (donor, metal) = if source_metal {
+                    (*target, *source)
+                } else {
+                    (*source, *target)
+                };
+                return reshiki::templates::coordinate_atoms(&self.tab.doc, donor, metal)
+                    .map(|doc| (doc, vec![donor, metal]));
+            }
             let prepared = Prepared::new(&self.tab.doc, &[*source])?;
             let point = prepared
                 .base
@@ -752,3 +774,6 @@ mod tests;
 
 #[cfg(test)]
 mod compatibility_tests;
+
+#[cfg(test)]
+mod coordination_tests;

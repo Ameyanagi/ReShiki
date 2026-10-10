@@ -16,6 +16,10 @@ pub struct Prepared {
 }
 impl Prepared {
     pub fn new(doc: &Document, selected: &[u64]) -> Result<Self, String> {
+        Self::with_mode(doc, selected, Connection::Connect)
+    }
+
+    pub fn with_mode(doc: &Document, selected: &[u64], mode: Connection) -> Result<Self, String> {
         doc.validate()?;
         let all: HashSet<_> = doc.object_ids().collect();
         if selected.is_empty() || selected.iter().any(|id| !all.contains(id)) {
@@ -52,7 +56,9 @@ impl Prepared {
             return Err("Select a molecule or atom to move and attach.".into());
         }
         let mut base = doc.clone();
-        base.delete(&moving);
+        if mode != Connection::Coordinate {
+            base.delete(&moving);
+        }
         if base.atoms.is_empty() {
             return Err("Leave a separate molecule or atom available as the destination.".into());
         }
@@ -76,7 +82,11 @@ impl Prepared {
             self.fragment
                 .atoms
                 .iter()
-                .find(|a| self.fragment.atom_visible(a.id))
+                .find(|a| {
+                    self.fragment.atom_visible(a.id)
+                        && (mode != Connection::Coordinate
+                            || matches!(a.element.as_str(), "N" | "O" | "S" | "P"))
+                })
                 .map(|a| Anchor::Atom(a.id))
                 .unwrap_or(Anchor::Auto)
         }
@@ -92,6 +102,22 @@ impl Prepared {
     ) -> Result<(Document, Vec<u64>), String> {
         if !anchor.valid(&self.fragment) || anchor == Anchor::Auto {
             return Err("Choose an exact source atom or bond in the fragment preview.".into());
+        }
+        if !point.x.is_finite() || !point.y.is_finite() || !radius.is_finite() || radius <= 0. {
+            return Err("Invalid connection target geometry.".into());
+        }
+        if mode == Connection::Coordinate {
+            let Anchor::Atom(donor) = anchor else {
+                return Err("Choose a donor atom in the preview.".into());
+            };
+            let metal = self
+                .original
+                .nearest(point, radius)
+                .ok_or("Point to a metal atom in the drawing.")?;
+            return Ok((
+                templates::coordinate_atoms(&self.original, donor, metal)?,
+                vec![donor, metal],
+            ));
         }
         let target = self.base.nearest(point, radius);
         let bond = target

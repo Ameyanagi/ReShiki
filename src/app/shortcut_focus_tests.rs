@@ -1430,3 +1430,136 @@ async fn optimization_chord_stays_in_real_focused_fields_and_routes_after_blur()
         assert!(!app.tab.history.can_undo() && !app.tab.history.can_redo());
     }
 }
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur() {
+    use reshiki::document::Document;
+
+    for panel in ["numeric", "sidebar labels"] {
+        let mut ui = Ui::new().await;
+        ui.viewport = Rectangle::with_size(Size::new(1280., 1800.));
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = Document::from_json(include_bytes!(
+            "../../tests/fixtures/coordination/co-en3-before.rsk"
+        ))
+        .unwrap();
+        app.tab.saved = app.tab.doc.clone();
+        app.tab.selected = vec![1, 5];
+        app.inspector_open = true;
+        let field = if panel == "numeric" {
+            app.inspector_tab = InspectorTab::Properties;
+            let _ = app.update(Message::Canvas(crate::canvas::Edit::BeginTransform(
+                crate::canvas::TransformField::Rotation,
+            )));
+            ui.input(&app, "transform-rotation").0
+        } else {
+            app.inspector_tab = InspectorTab::Labels;
+            app.tab.labels.seed = "join-focus-seed".into();
+            ui.input_text(&app, "join-focus-seed").0
+        };
+        assert!(
+            ui.viewport.contains(field.center()),
+            "{panel}: field bounds {field:?}"
+        );
+        ui.click(&mut app, field.center());
+        let focused = if panel == "numeric" {
+            ui.input(&app, "transform-rotation").1
+        } else {
+            ui.input_text(&app, "join-focus-seed").1
+        };
+        assert!(focused, "{panel}: field did not acquire focus at {field:?}");
+        let original = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let chord = || {
+            press(
+                Key::Character("j".into()),
+                Code::KeyJ,
+                Modifiers::COMMAND,
+                Some("j"),
+            )
+        };
+        let (status, messages) = ui.event(&app, chord(), mouse::Cursor::Unavailable);
+        apply(&mut app, messages.clone());
+        assert_eq!(
+            app.tab.doc.bonds.len(),
+            original.bonds.len(),
+            "{panel}: focused field must not add a contact through {messages:?}"
+        );
+        assert_eq!(app.tab.doc, original);
+        assert_eq!(
+            status,
+            iced::event::Status::Captured,
+            "{panel}: {messages:?}"
+        );
+        assert!(messages.is_empty(), "{panel}: {messages:?}");
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.tab.history.can_undo());
+
+        let (_, messages) = ui.event(
+            &app,
+            press(
+                Key::Named(Named::Escape),
+                Code::Escape,
+                Modifiers::empty(),
+                None,
+            ),
+            mouse::Cursor::Unavailable,
+        );
+        apply(&mut app, messages);
+        let focused = if panel == "numeric" {
+            ui.input(&app, "transform-rotation").1
+        } else {
+            ui.input_text(&app, &app.tab.labels.seed).1
+        };
+        assert!(!focused, "{panel}: Escape releases the real field focus");
+
+        // Widget dispatch must leave this chord to the app's ignored-key route.
+        // Alternate selection order and close each chelate within one component.
+        for (index, donor) in [5, 2, 6, 9, 10, 13].into_iter().enumerate() {
+            app.tab.selected = if index % 2 == 0 {
+                vec![1, donor]
+            } else {
+                vec![donor, 1]
+            };
+            let (status, messages) = ui.event(&app, chord(), mouse::Cursor::Unavailable);
+            assert_eq!(
+                status,
+                iced::event::Status::Ignored,
+                "{panel}: {messages:?}"
+            );
+            assert!(matches!(
+                messages.as_slice(),
+                [Message::Shortcut(shortcuts::Action::Join)]
+            ));
+            apply(&mut app, messages);
+            assert!(!app.error, "{panel}: {}", app.status);
+            assert_eq!(app.tab.doc.atoms, original.atoms);
+            assert_eq!(&app.tab.doc.bonds[..9], original.bonds.as_slice());
+            assert_eq!(app.tab.doc.bonds.len(), 10 + index);
+            let contact = app.tab.doc.bonds.last().unwrap();
+            assert_eq!((contact.a, contact.b, contact.order), (donor, 1, 5));
+        }
+        let completed = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let (_, messages) = ui.event(&app, chord(), mouse::Cursor::Unavailable);
+        apply(&mut app, messages);
+        assert_eq!(app.tab.doc, completed);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.history.undo_frames().len(), 6);
+        for modifiers in [Modifiers::COMMAND, Modifiers::COMMAND | Modifiers::SHIFT] {
+            let (_, messages) = ui.event(
+                &app,
+                press(Key::Character("z".into()), Code::KeyZ, modifiers, Some("z")),
+                mouse::Cursor::Unavailable,
+            );
+            apply(&mut app, messages);
+            assert_eq!(
+                app.tab.doc.bonds.len(),
+                if modifiers.shift() { 15 } else { 14 }
+            );
+        }
+        assert_eq!(app.tab.doc, completed);
+    }
+}

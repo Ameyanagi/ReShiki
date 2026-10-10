@@ -165,6 +165,8 @@ Enter edits an existing selected abbreviation or contracts a multi-atom
 selection. With hotspot drawing on, the active atom takes priority over the
 selection.
 
+For a coordination contact, mark a donor N/O/S/P with **[**, navigate to a transition metal and use **Coordinate }** or **}**. This adds a directed dative contact without moving atoms; **]** keeps its ordinary covalent checks. See [coordination contacts](fragment-joining.md#coordination-contacts-in-place) for scope and projection styling.
+
 To close an open chain, navigate to one endpoint and press **[**, then navigate
 to the other endpoint and press **]**. This adds a single bond and clears the
 mark. Self-connections, duplicate bonds, and rejected valence changes leave the

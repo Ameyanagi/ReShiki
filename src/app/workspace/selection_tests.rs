@@ -51,7 +51,10 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     let (mut app, _) = App::new();
     app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(labels, ["3D optimize…", "Mark [", "Connect ]"]);
+    assert_eq!(
+        labels,
+        ["3D optimize…", "Mark [", "Connect ]", "Coordinate }"]
+    );
     assert!(app.context_commands().iter().all(|command| !matches!(
         command.message,
         Message::Copy(_) | Message::CopyImage | Message::CopyAs(_) | Message::Paste
@@ -70,6 +73,7 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
             "3D optimize…",
             "Keyboard drawing",
             "Move & attach…",
+            "Coordinate…",
             "Group"
         ]
     );
@@ -81,11 +85,12 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
             "3D optimize…",
             "Keyboard drawing",
             "Move & attach…",
+            "Coordinate…",
             "Group",
             "Ungroup"
         ]
     );
-    assert!(!app.context_commands()[3].enabled);
+    assert!(!app.context_commands()[4].enabled);
 }
 
 #[test]

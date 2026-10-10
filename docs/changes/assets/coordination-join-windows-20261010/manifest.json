@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "files": {
+    "baseline-live-process.txt": {
+      "bytes": 334,
+      "sha256": "3072948d9c8f189fdc7619eeb5f0f893664e1ae8e478ba02d7c6eac2fbb20c82"
+    },
+    "baseline-windows-ctrl-j-rejection-visible.jpg": {
+      "bytes": 322977,
+      "sha256": "7d494db760ae2e5526f625c0a739a60ee4245f009f9ee32c5ce799917a5e78de"
+    },
+    "candidate-chelate-single-undo.jpg": {
+      "bytes": 316391,
+      "sha256": "77b52b903b945f609e3f9b65926ccb524f1fd130305ad5af2af9814bceb16737"
+    },
+    "candidate-first-contact-redo.jpg": {
+      "bytes": 330797,
+      "sha256": "2bfcdbc5f79765fd8324838fd55a6cc63b76425c81249938f8a959a03d5e8fa4"
+    },
+    "candidate-first-contact-single-undo.jpg": {
+      "bytes": 314704,
+      "sha256": "2c14603ca26d2ac7aebf96a3939b7161f47d1c35d2624d9080969441f15fa3c9"
+    },
+    "candidate-live-process.txt": {
+      "bytes": 506,
+      "sha256": "d0db2a10903d8b588e25e3095a0421dfe9dc3f81cdc074731223cd31df4ee807"
+    },
+    "candidate-selected-before-native-shortcut.jpg": {
+      "bytes": 315857,
+      "sha256": "de2da14ab5ab68f39da3af6620d8e8b36e476494476077bd79f9550690167846"
+    },
+    "candidate-windows-chelate-fresh-reopen-final.jpg": {
+      "bytes": 321198,
+      "sha256": "ea9fe13558feab4123488c0b82221f356b16189f4940346c898409a9734720b0"
+    },
+    "candidate-windows-chelate-saved.jpg": {
+      "bytes": 323068,
+      "sha256": "446dc0f876d28318284afcfc6dbb7b413df27c481368f99e07abef080260ec8f"
+    },
+    "candidate-windows-first-ctrl-j-attached.jpg": {
+      "bytes": 333729,
+      "sha256": "df5055e07dee563938bfd3f55581849bff14aeaa2574c921cdcb07a727fd99ee"
+    },
+    "co-en-windows-chelate-after.rsk": {
+      "bytes": 7208,
+      "sha256": "d97663421707af458b258e1d37dcc0a5ab1b3ebcfb830d973ef87f43fefe4d56"
+    },
+    "co-en3-before.rsk": {
+      "bytes": 6722,
+      "sha256": "0f6f575a908de66b33e0117386c66b288f8bbcb6348b543a50cde96e548f42d4"
+    },
+    "fresh-reopen-process.txt": {
+      "bytes": 690,
+      "sha256": "0ea0cda8f26cb082a7e4c33e5bc87cc0aa375f1e5e6dca34a822ef44ec973ca0"
+    },
+    "observations.json": {
+      "bytes": 3323,
+      "sha256": "f30dd274f184e45c1ba7995f3c1385b08706606855e1b368837c05b932be9cc9"
+    },
+    "root-artifact-source-audit.txt": {
+      "bytes": 5954,
+      "sha256": "1749e612a58379591631974854aaeac06a826cef30ab1675bc956a55d28a1fc8"
+    },
+    "verify.py": {
+      "bytes": 9186,
+      "sha256": "77413bdce928edbc68f7c0c7355625d9706e1fd4089929b84f5d28c58dbfbe51"
+    },
+    "windows-build-receipt.txt": {
+      "bytes": 7194,
+      "sha256": "e902e1fb526dc65b7d2d7ac8017b004fd1d8b1a9d92849da53e0b6c424991c43"
+    }
+  },
+  "raw_JPEG_count": 8,
+  "copies": "Raw screenshots, original/saved RSK, live SSH JSON and original CI build/audit JSON .txt copies are byte-identical. observations.json and verify.py are authored package files.",
+  "raw_JSON_extension": "Original compact producer/process JSON is retained with .txt extension to preserve exact raw bytes."
+}

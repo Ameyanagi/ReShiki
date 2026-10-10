@@ -1,6 +1,8 @@
 //! Built-in molecules and attachment geometry, shared by preview and placement.
 mod aromatic;
 #[cfg(test)]
+mod coordination_tests;
+#[cfg(test)]
 mod placement_parity_tests;
 use crate::document::{Atom, Document, Point};
 use crate::editing;
@@ -97,6 +99,8 @@ pub enum Connection {
     Connect,
     ShareAtom,
     FuseBond,
+    /// Directed donor-to-metal connection between existing atoms, without movement.
+    Coordinate,
 }
 impl std::fmt::Display for Connection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -105,6 +109,7 @@ impl std::fmt::Display for Connection {
             Self::Connect => "Connect with a bond",
             Self::ShareAtom => "Share an atom",
             Self::FuseBond => "Fuse along a bond",
+            Self::Coordinate => "Coordinate in place (donor → metal)",
         })
     }
 }
@@ -120,6 +125,9 @@ impl Connection {
             }
             Self::FuseBond => {
                 "Choose one bond in each structure. Their two atoms become a shared edge. Drag to choose the side."
+            }
+            Self::Coordinate => {
+                "Choose an existing donor atom, then a metal atom. A directed dative contact joins them without moving either atom."
             }
         }
     }
@@ -149,6 +157,11 @@ fn place_with_mode_scaled(
 ) -> Result<(Document, Vec<u64>), &'static str> {
     let (part, free_scale) = source;
     check_connect_inputs(doc, part, point, direction, radius, anchor)?;
+    if mode == Connection::Coordinate {
+        return Err(
+            "Coordinate in place requires existing atoms; select a donor in the drawing first.",
+        );
+    }
     let target = doc.nearest(point, radius);
     let bond = target.is_none() && editing::nearest_bond(doc, point, radius).is_some();
     if mode == Connection::Auto || (target.is_none() && !bond) {
@@ -170,6 +183,11 @@ fn place_with_mode_scaled(
     let id = target.ok_or("Choose a drawing atom to connect.")?;
     let target = doc.atom(id).ok_or("The drawing atom is unavailable.")?;
     if !eligible(doc, target) {
+        if coordination_metal(target) {
+            return Err(
+                "Connect with a bond adds a covalent bond. For a donor→metal contact, choose Coordinate in place to retain donor hydrogens and metal charge.",
+            );
+        }
         return Err(
             "This atom has no available valence, or needs its abbreviation/stereochemistry expanded first.",
         );
@@ -1085,4 +1103,137 @@ impl Attachment<'_> {
         }
         Ok(())
     }
+}
+
+/// Connect an existing lone-pair donor to a transition metal without changing
+/// either atom's identity, position, charge, hydrogen metadata or covalent bonds.
+/// This explicit drawing operation does not infer metal geometry or complex stereo.
+pub fn coordinate_atoms(source: &Document, donor: u64, metal: u64) -> Result<Document, String> {
+    source.validate()?;
+    if donor == metal {
+        return Err("Choose a donor and a different metal atom.".into());
+    }
+    let d = source.atom(donor).ok_or("The donor atom is unavailable.")?;
+    let m = source.atom(metal).ok_or("The metal atom is unavailable.")?;
+    for a in [d, m] {
+        if !a.centroid.is_empty() || a.attachment.is_some() {
+            return Err("Coordination in place requires single chemical atoms; centroids and multi-center/variable attachment points are unsupported here.".into());
+        }
+        if source
+            .abbreviations
+            .iter()
+            .any(|g| g.members.contains(&a.id))
+        {
+            return Err("Expand the abbreviation before using its atoms for coordination.".into());
+        }
+        if a.stereo.is_some() || a.radical_electrons != 0 {
+            return Err(
+                "Coordination endpoints with atom stereochemistry or radicals are unsupported."
+                    .into(),
+            );
+        }
+    }
+    // These checks bound the supported lone-pair donor domain without changing
+    // the existing capacity table used for ordinary covalent attachment.
+    let limit = match (d.element.as_str(), d.charge) {
+        ("N" | "P", 0) => 6,
+        ("N" | "P", -1) | ("O" | "S", 0) => 4,
+        ("O" | "S", -1) => 2,
+        _ => {
+            return Err(
+                "Choose a neutral or −1 charged N, O, S or P donor. This endpoint is unsupported."
+                    .into(),
+            );
+        }
+    };
+    if valence(source, donor).saturating_add(d.explicit_h.saturating_mul(2)) > limit {
+        return Err("The donor has no supported lone pair at its current covalent valence.".into());
+    }
+    if !coordination_metal(m) {
+        return Err("Choose a supported transition-metal acceptor (Sc–Zn, Y–Cd or Hf–Hg).".into());
+    }
+    if let Some(bond) = source
+        .bonds
+        .iter()
+        .find(|b| (b.a == donor && b.b == metal) || (b.a == metal && b.b == donor))
+    {
+        return if bond.order == 5 && bond.a == donor {
+            Ok(source.clone())
+        } else {
+            Err("These atoms already have a different bond; remove it explicitly before coordinating.".into())
+        };
+    }
+    if source
+        .bonds
+        .iter()
+        .filter(|b| b.a == metal || b.b == metal)
+        .count()
+        >= 12
+    {
+        return Err("Coordination drawing supports at most 12 contacts at a metal atom.".into());
+    }
+    if d.position.distance(m.position) < 0.001 {
+        return Err("The donor and metal overlap; separate them before connecting.".into());
+    }
+    let mut candidate = source.clone();
+    // Existing directed order 5 consumes no donor covalent valence. Do not use
+    // invalidate_chemistry here: donor H/stereo and remote chemistry must survive.
+    crate::atom_labels::clear_computed(&mut candidate);
+    candidate.bonds.push(crate::document::Bond {
+        a: donor,
+        b: metal,
+        order: 5,
+        display: "plain".into(),
+        highlight: None,
+        ring_arc: false,
+        projection: false,
+        stereo_authoritative: false,
+        z_order: 0,
+        indicator: Default::default(),
+        cip_label: None,
+        stereo: None,
+        stereo_atoms: vec![],
+        double_position: Default::default(),
+        secondary_display: None,
+        color: Default::default(),
+    });
+    candidate.reconcile_molecule_groups();
+    crate::reactions::reconcile(&mut candidate)?;
+    candidate.validate()?;
+    Ok(candidate)
+}
+
+/// Supported acceptor elements for the explicit coordination drawing workflow.
+pub fn coordination_metal(atom: &Atom) -> bool {
+    matches!(
+        atom.element.as_str(),
+        "Sc" | "Ti"
+            | "V"
+            | "Cr"
+            | "Mn"
+            | "Fe"
+            | "Co"
+            | "Ni"
+            | "Cu"
+            | "Zn"
+            | "Y"
+            | "Zr"
+            | "Nb"
+            | "Mo"
+            | "Tc"
+            | "Ru"
+            | "Rh"
+            | "Pd"
+            | "Ag"
+            | "Cd"
+            | "Hf"
+            | "Ta"
+            | "W"
+            | "Re"
+            | "Os"
+            | "Ir"
+            | "Pt"
+            | "Au"
+            | "Hg"
+    )
 }

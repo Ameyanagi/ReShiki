@@ -1,0 +1,124 @@
+{
+  "status": "local focused tests/checks/default build/package PASS; root native GUI pending; no commit/push/publication",
+  "base_head": "39b25cd4cdf58d1628e75449181b11877509d198",
+  "patch_sha256": "25679b74a8e4ee135bc36eb318d40229e3dd967a8788006273f37dc23a81ac66",
+  "source_manifest_sha256": "43b53c401f21bcda8642a31df546b30219130bad935f61c7343d12533aa9658f",
+  "full_source_entries_rechecked": 1067,
+  "all_source_bytes_unchanged_since_revised_freeze": true,
+  "checks": [
+    {
+      "name": "focused-new-final",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/focused-new-final-receipt.json",
+      "receipt_sha256": "a40c2d589aeb96e76b2ed9c7a7e6a6970f4a7b7920e36c4c60d11d4e652848bf",
+      "log_sha256": "52e38b33f5082757bbf87c64dafb8ca5d43344b1c1ad3d102f00d68e8ef6950d",
+      "exit_code": 0
+    },
+    {
+      "name": "ordinary-share",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/ordinary-share-receipt.json",
+      "receipt_sha256": "e0b1ef3e6a45ab8ffd4834b6124395e7e1abeb897a1e72f579a81f2a76c57809",
+      "log_sha256": "e8b49817712c1540c966394b0d601b7cb3e34f0a7baa519e80dd808abc52875d",
+      "exit_code": 0
+    },
+    {
+      "name": "joining-existing",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/joining-existing-receipt.json",
+      "receipt_sha256": "cfc9d03175995f694740257849d6b09109b6633cd3c2d14f9c065b88ad7ca636",
+      "log_sha256": "bedd84ea3d2505b15bb53959ea45b23d118d4dd1b24efb14dd96aa9a8ab72f26",
+      "exit_code": 0
+    },
+    {
+      "name": "marked-coordinate",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/marked-coordinate-receipt.json",
+      "receipt_sha256": "1113847c55ef30b4f1e690e9c1750fa00a9b2e4ca89ed45e7b7db3fd79b330a6",
+      "log_sha256": "78693f99c6117713876a3dc70e3521c7de2424f8b0d807edb7340c4502a59774",
+      "exit_code": 0
+    },
+    {
+      "name": "renderer-join-fixed",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-fixed-receipt.json",
+      "receipt_sha256": "4c5f8026179fa0f3a2ba461883d64bc3d3b64896d1d54ecd4fb53c60a309db49",
+      "log_sha256": "6b64a230bc56445ab417df7fdfe30c44921ece64fddf919836e471ef25c0529b",
+      "exit_code": 0
+    },
+    {
+      "name": "clippy",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/clippy-receipt.json",
+      "receipt_sha256": "0731841150e221fd323529fbe49a0368a5ddb231b4aacdd9fd77db2037a89002",
+      "log_sha256": "d345a2aa438f559b1ee7b1614d0c1d0ca62e646d2f70dbc2f8b462795aa4f621",
+      "exit_code": 0
+    },
+    {
+      "name": "check-final",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/check-final-receipt.json",
+      "receipt_sha256": "9cf2be617ef97f25be925c60985653ef11cb962f2d236d3e03c8309a1a72a98b",
+      "log_sha256": "712de67201125fc55c1e00735318a16d85011e46fea7b4a3514992d7c79f5168",
+      "exit_code": 0
+    },
+    {
+      "name": "fmt",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/fmt-receipt.json",
+      "receipt_sha256": "7751c27616ed18cf889bbf6284dae77deeab9d3d2dec72d97a97b08949905141",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0
+    },
+    {
+      "name": "build",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/build-receipt.json",
+      "receipt_sha256": "5e33674d1c16d433a916e318250b7f3cb5c0f711655ee5f1af86eb03cc23b20d",
+      "log_sha256": "cbe0753de76886175d182f91d66b1c4bc873d45fe9b2bc2fa8d5f40b0c93825f",
+      "exit_code": 0
+    },
+    {
+      "name": "package",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/package-receipt.json",
+      "receipt_sha256": "805e90b670abbf3f61ba38d3552b25411e46fb4476f7c210eb36e66465157b30",
+      "log_sha256": "063483da639b3d9a2d3033245e01bcde145c2d4e64952008ec0a001f2fa7a524",
+      "exit_code": 0
+    }
+  ],
+  "preserved_failed_or_stopped_attempts": [
+    {
+      "name": "renderer-join",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-receipt.json",
+      "receipt_sha256": "317bbfde040cfe7eeda3e0646b7477114b941bf47483b122087188ec3263697d",
+      "exit_code": 101,
+      "log_sha256": "95c644deab088e806e37c5b2dbbe62efe215b1e626c9b0d376a785fd8c99c43d"
+    },
+    {
+      "name": "renderer-join-focus-diagnostic",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-focus-diagnostic-receipt.json",
+      "receipt_sha256": "135cf9558f0bb113bc10a2e26db53d2992b80a5ff6f0b4efe1760b8bc075384f",
+      "exit_code": 101,
+      "log_sha256": "0e89c6f4894eb16bf6f5fa5a159311226fd66d3a61e29dadfe0c385a0d184097"
+    },
+    {
+      "name": "renderer-join-mutation-before",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-mutation-before-receipt.json",
+      "receipt_sha256": "258a92b402c4e9709009392ddc607b5cabc29087e10100e310e680813662b326",
+      "exit_code": 101,
+      "log_sha256": "42f89d776ed67aaa97964e3a79275df447c9c3096773e41d8fc5eccf86ee0faf"
+    },
+    {
+      "name": "check",
+      "receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/check-receipt.json",
+      "receipt_sha256": "f77563ca5fdbf3e308bd44a3aa0a263ecf2d2714339d20ea289e2885514de754",
+      "exit_code": -15,
+      "log_sha256": "256920d31a6e3c8c7b7c6e25b6976dd361363b398cfdd33869c4affe88178eb2"
+    }
+  ],
+  "unique_behavior_tests": 15,
+  "renderer_coverage": "real numeric/sidebar field focus; no graph or history mutation while focused; Escape blur; six contacts/either selection order; duplicate; primary-Z/Shift-primary-Z Undo/Redo",
+  "bundle_receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/bundle-provenance.json",
+  "bundle_receipt_sha256": "9b754e183c6a1f366a5abcc89962e955d892916fded21727eff4044889131e38",
+  "signed_executable_sha256": "0dd54d1ab7749e7bbb5ace90146a6af41486903353d72e280156f1542bb78ed1",
+  "raw_executable_sha256": "fe910018b497aa702050c7357abab111d020738088b99e548bb95715bfa9dea6",
+  "all_own_artifacts_fresh_false": true,
+  "own_compiler_artifacts": 15,
+  "default_app_input_hashes": 532,
+  "old_signed_before_preserved_sha256": "77654ac99707cf6e1fc46a4ccc1bd3e10db97d802827873864a4a6973c2f2611",
+  "original_fixture_preserved_sha256": "0f6f575a908de66b33e0117386c66b288f8bbcb6348b543a50cde96e548f42d4",
+  "lease": "READY TO RETURN to root; Cargo/build/package sessions completed",
+  "native_actions_by_worker": false,
+  "git_status": " M docs/changes-unreleased.md\n M docs/fragment-joining.md\n M src/app/file_shortcuts.rs\n M src/app/shortcut_focus_tests.rs\n M src/app/shortcuts.rs\n?? src/app/shortcuts/coordination_tests.rs\n"
+}

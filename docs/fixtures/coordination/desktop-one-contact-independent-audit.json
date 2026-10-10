@@ -1,0 +1,57 @@
+{
+  "source_commit": "8fbf166cb9daad908d743cce71e6c6d73a819a47",
+  "baseline_SHA256": "0f6f575a908de66b33e0117386c66b288f8bbcb6348b543a50cde96e548f42d4",
+  "one_contact_SHA256": "a9b26d3f4eef4e2741ca9eb25b7f687cbcd4c8c59502979f50360b9efdcbb9d5",
+  "atoms": 13,
+  "baseline_bonds": 9,
+  "saved_bonds": 10,
+  "atomIDs_XYZ_and_all_nonderived_atom_fields_exact": true,
+  "original_covalent_bond_records_exact": true,
+  "added_bond": {
+    "z_order": 0,
+    "a": 10,
+    "b": 1,
+    "order": 5,
+    "display": "plain",
+    "stereo": null,
+    "stereo_atoms": [],
+    "double_position": "auto",
+    "color": [0, 0, 0]
+  },
+  "all_XYZ_finite": true,
+  "Co1_charge": 3,
+  "six_N_label_h": 2,
+  "derived_carbon_label_h_changes": [
+    {
+      "id": 3,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 4,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 7,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 8,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 11,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 12,
+      "before": 0,
+      "after": 2
+    }
+  ],
+  "method": "Read-only native JSON comparison; no GUI, solver, Cargo, compiler or source mutation."
+}

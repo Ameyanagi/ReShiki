@@ -1,0 +1,452 @@
+name: Windows review application
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+concurrency:
+  group: windows-review-app-${{ github.event.number }}
+  cancel-in-progress: false
+jobs:
+  windows-review-app:
+    # Review artifacts only for these existing, same-repository PRs.
+    # Existing Checks jobs continue to test their normal merge ref.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      ((github.event.number == 283 && github.event.pull_request.head.ref == 'fix/coordination-attachment') ||
+       (github.event.number == 284 && github.event.pull_request.head.ref == 'fix/chemdraw-binary-paste') ||
+       (github.event.number == 290 && github.event.pull_request.head.ref == 'fix/office-svg-placement'))
+    runs-on: windows-2022
+    timeout-minutes: 100
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      REVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
+      CARGO_BUILD_JOBS: "4"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      RUSTUP_TOOLCHAIN: "1.99.0"
+      # Match Release builds: no redistributable Windows CRT requirement.
+      RUSTFLAGS: "-C target-feature=+crt-static"
+      # Preserve Git blob bytes on Windows, including LF source files.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: core.autocrlf
+      GIT_CONFIG_VALUE_0: "false"
+    steps:
+      - name: Set runner-local build and evidence paths
+        run: |
+          "REVIEW_OUTPUT=$(Join-Path $env:RUNNER_TEMP 'reshiki-windows-review')" >> $env:GITHUB_ENV
+          "CARGO_TARGET_DIR=$(Join-Path $env:RUNNER_TEMP 'reshiki-windows-review-target')" >> $env:GITHUB_ENV
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.3"
+          python-version: cpython-3.12-windows-x86_64-none
+          enable-cache: false
+      - name: Install the pinned native Rust toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal --target x86_64-pc-windows-msvc
+      - name: Select the native x64 Windows compiler
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: x64
+      # No target cache: every checkout crate must report fresh=false.
+      - name: Build and qualify the exact PR-head full application
+        run: |
+          $driver = Join-Path $env:RUNNER_TEMP 'reshiki-windows-review-driver.py'
+          $source = @'
+          """Build one exact PR-head Windows app; never enter the GUI launch path."""
+
+          import hashlib
+          import json
+          import os
+          import platform
+          import re
+          import shutil
+          import subprocess
+          import sys
+          import time
+          from pathlib import Path
+
+          TARGET = "x86_64-pc-windows-msvc"
+          BRANCHES = {
+              283: "fix/coordination-attachment",
+              284: "fix/chemdraw-binary-paste",
+              290: "fix/office-svg-placement",
+          }
+
+
+          def require(condition, message):
+              if not condition:
+                  raise ValueError(message)
+
+
+          def sha256(path):
+              with path.open("rb") as stream:
+                  return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+          def save_json(path, value):
+              path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+          def command(argv, root):
+              return subprocess.check_output(argv, cwd=root, text=True, encoding="utf-8").strip()
+
+
+          def validate_event(event, repository, requested_head):
+              pr = event["pull_request"]
+              require(event["number"] in BRANCHES, "Unapproved pull request")
+              require(pr["head"]["ref"] == BRANCHES[event["number"]], "Unexpected head branch")
+              require(pr["head"]["repo"]["full_name"] == repository, "Forks are not approved")
+              require(pr["base"]["ref"] == "main", "Unexpected base branch")
+              require(pr["head"]["sha"] == requested_head, "Event/head disagreement")
+              require(re.fullmatch(r"[0-9a-f]{40}", requested_head), "Invalid head SHA")
+
+
+          def source_inventory(root):
+              """Hash all tracked bytes and independently compare them with Git blob IDs."""
+              object_format = command(["git", "rev-parse", "--show-object-format"], root)
+              require(object_format in {"sha1", "sha256"}, "Unsupported Git object format")
+              staged = subprocess.check_output(["git", "ls-files", "--stage", "-z"], cwd=root)
+              result = {}
+              for entry in staged.split(b"\0"):
+                  if not entry:
+                      continue
+                  fields, filename = entry.split(b"\t", 1)
+                  mode, blob, stage = fields.decode("ascii").split()
+                  name = filename.decode("utf-8")
+                  path = root / name
+                  require(stage == "0" and mode in {"100644", "100755"}, "Unsupported Git entry")
+                  require(not path.is_symlink(), f"Unexpected symlink: {name}")
+                  require(path.resolve().is_relative_to(root), f"Escaping source path: {name}")
+                  data = path.read_bytes()
+                  git_bytes = b"blob " + str(len(data)).encode("ascii") + b"\0" + data
+                  require(hashlib.new(object_format, git_bytes).hexdigest() == blob, f"Dirty bytes: {name}")
+                  result[name] = {
+                      "git_mode": mode,
+                      "git_blob": blob,
+                      "sha256": hashlib.sha256(data).hexdigest(),
+                      "bytes": len(data),
+                  }
+              require(result, "Empty source inventory")
+              return result
+
+
+          def own_artifacts(messages, root):
+              artifacts = [item for item in messages if item.get("reason") == "compiler-artifact"]
+              own = [item for item in artifacts if Path(item["manifest_path"]).resolve().is_relative_to(root)]
+              require(own, "No compiled checkout crates")
+              require(all(not item["fresh"] for item in own), "Cached checkout crate was reused")
+              apps = [
+                  item
+                  for item in own
+                  if item["target"]["name"] == "reshiki" and item["target"]["kind"] == ["bin"]
+              ]
+              require(len(apps) == 1, "Expected one full reshiki binary")
+              app = apps[0]
+              require(app["features"] == [], "Unexpected optional application features")
+              require(app["executable"], "Missing full application executable")
+              require(app["profile"]["test"] is False, "Test executable is not a GUI application")
+              require(app["profile"]["debug_assertions"] is False, "Expected the release profile")
+              require(
+                  any(item == {"reason": "build-finished", "success": True} for item in messages),
+                  "Cargo did not report build success",
+              )
+              return own, Path(app["executable"]).resolve()
+
+
+          def main():
+              root = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+              output = Path(os.environ["REVIEW_OUTPUT"]).resolve()
+              evidence = output / "evidence"
+              evidence.mkdir(parents=True)
+              shutil.copy2(__file__, evidence / "review-driver.py")
+              require(platform.system() == "Windows", "Native Windows runner required")
+              requested_head = os.environ["REVIEW_HEAD"]
+              event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+              validate_event(event, os.environ["GITHUB_REPOSITORY"], requested_head)
+              require(
+                  command(["git", "rev-parse", "HEAD"], root) == requested_head, "Checkout is not PR head"
+              )
+              require(
+                  not command(["git", "status", "--porcelain", "--untracked-files=no"], root),
+                  "Checkout has tracked changes",
+              )
+              before = source_inventory(root)
+              save_json(evidence / "tracked-source-sha256.json", before)
+              # Refresh only this checkout after any caches; contents are rechecked below.
+              refreshed = []
+              for name in before:
+                  path = root / name
+                  if path.suffix == ".rs" or path.name == "Cargo.toml":
+                      os.utime(path, None)
+                      refreshed.append(name)
+              require(source_inventory(root) == before, "Source changed during mtime refresh")
+              save_json(evidence / "source-refresh.json", {"paths": refreshed, "byte_equality": True})
+              (evidence / "rustc-vV.txt").write_text(command(["rustc", "-vV"], root) + "\n")
+              (evidence / "cargo-version.txt").write_text(command(["cargo", "-V"], root) + "\n")
+              rustc = (evidence / "rustc-vV.txt").read_text()
+              require(
+                  "release: 1.99.0\n" in rustc and f"host: {TARGET}\n" in rustc,
+                  "Unexpected Rust toolchain/host",
+              )
+              compilers = {}
+              for name in ["cl.exe", "link.exe", "dumpbin.exe"]:
+                  path = Path(shutil.which(name) or "").resolve()
+                  require(path.is_file(), f"Missing MSVC tool: {name}")
+                  compilers[name] = {"path": str(path), "sha256": sha256(path), "bytes": path.stat().st_size}
+              for name in ["rustc", "cargo"]:
+                  path = Path(command(["rustup", "which", name], root)).resolve()
+                  compilers[name] = {"path": str(path), "sha256": sha256(path), "bytes": path.stat().st_size}
+              with (evidence / "msvc-version.txt").open("wb") as log:
+                  subprocess.run(
+                      [str(compilers["cl.exe"]["path"]), "/Bv"],
+                      cwd=root,
+                      stdout=log,
+                      stderr=subprocess.STDOUT,
+                      check=False,
+                      timeout=30,
+                  )
+              metadata_command = [
+                  "cargo",
+                  "metadata",
+                  "--locked",
+                  "--format-version",
+                  "1",
+                  "--filter-platform",
+                  TARGET,
+              ]
+              metadata = json.loads(command(metadata_command, root))
+              save_json(evidence / "cargo-metadata.json", metadata)
+              packages = []
+              for package in metadata["packages"]:
+                  manifest = Path(package["manifest_path"])
+                  item = {key: package[key] for key in ["id", "name", "version", "source"]}
+                  item["manifest_sha256"] = sha256(manifest)
+                  checksum = manifest.parent / ".cargo-checksum.json"
+                  if checksum.is_file():
+                      item["cargo_checksum_sha256"] = sha256(checksum)
+                      item["registry_package_checksum"] = json.loads(checksum.read_text())["package"]
+                  packages.append(item)
+              save_json(evidence / "dependency-inventory.json", packages)
+              argv = [
+                  "cargo",
+                  "build",
+                  "--release",
+                  "--locked",
+                  "--no-default-features",
+                  "--bin",
+                  "reshiki",
+                  "--target",
+                  TARGET,
+                  "--jobs",
+                  "4",
+                  "--message-format=json-render-diagnostics",
+              ]
+              environment_keys = [
+                  "RUSTFLAGS",
+                  "CARGO_INCREMENTAL",
+                  "CARGO_BUILD_JOBS",
+                  "CARGO_TARGET_DIR",
+                  "CARGO_PROFILE_RELEASE_DEBUG",
+                  "VCToolsVersion",
+                  "WindowsSDKVersion",
+                  "VSCMD_VER",
+                  "VSCMD_ARG_TGT_ARCH",
+                  "VSCMD_ARG_HOST_ARCH",
+              ]
+              save_json(
+                  evidence / "build-command.json",
+                  {
+                      "argv": argv,
+                      "cwd": str(root),
+                      "metadata_argv": metadata_command,
+                      "environment": {key: os.environ.get(key) for key in environment_keys},
+                      "compilers": compilers,
+                  },
+              )
+              started = time.monotonic()
+              with (
+                  (evidence / "compiler.jsonl").open("wb") as stdout,
+                  (evidence / "build-stderr.log").open("wb") as stderr,
+              ):
+                  result = subprocess.run(
+                      argv, cwd=root, stdout=stdout, stderr=stderr, check=False, timeout=75 * 60
+                  )
+              save_json(
+                  evidence / "build-result.json",
+                  {"exit_code": result.returncode, "seconds": time.monotonic() - started},
+              )
+              require(result.returncode == 0, "Full app build failed; evidence retained")
+              messages = [json.loads(line) for line in (evidence / "compiler.jsonl").read_text().splitlines()]
+              own, executable = own_artifacts(messages, root)
+              build_root = Path(os.environ["CARGO_TARGET_DIR"]).resolve() / TARGET / "release"
+              require(executable == build_root / "reshiki.exe", "Unexpected binary output path")
+              require(executable.is_file(), "Compiled application is missing")
+              sys.path.insert(0, str(root / "scripts"))
+              from build_inchi_helper import INCHI_VERSION
+              from build_release import verify_binary, verify_geometry_dependencies, verify_inchi_worker
+              from license_notices import write_notices
+
+              verify_binary(executable, "windows", "x64")
+              imports = command(["dumpbin.exe", "/DEPENDENTS", str(executable)], root)
+              (evidence / "pe-dependents.txt").write_text(imports + "\n", encoding="utf-8")
+              require(re.search(r"(?im)^\s+[\w.-]+\.dll\s*$", imports), "No PE import list reported")
+              verify_geometry_dependencies(executable)
+              # This exact argument enters before graphics, OLE registration and Tokio.
+              # Self-process smoke needs no separate helper or existing guest executable.
+              depfiles = []
+              for path in sorted(build_root.rglob("*.d")):
+                  depfiles.append(
+                      {
+                          "path": str(path.relative_to(build_root)),
+                          "sha256": sha256(path),
+                          "contents": path.read_text(encoding="utf-8"),
+                      }
+                  )
+              require(depfiles, "Missing compiler dependency files")
+              save_json(evidence / "depfiles.json", depfiles)
+              after = source_inventory(root)
+              require(after == before, "Tracked source bytes changed during build")
+              require(
+                  command(["git", "rev-parse", "HEAD"], root) == requested_head, "Head changed during build"
+              )
+              require(
+                  not command(["git", "status", "--porcelain", "--untracked-files=no"], root),
+                  "Tracked checkout changed during build",
+              )
+              portable = output / "app"
+              portable.mkdir()
+              copied = portable / "reshiki.exe"
+              shutil.copy2(executable, copied)
+              require(sha256(copied) == sha256(executable), "Copied binary hash mismatch")
+              verify_inchi_worker(copied, INCHI_VERSION)
+              save_json(
+                  evidence / "worker-smoke.json",
+                  {
+                      "argv": [str(copied), "--inchi-worker"],
+                      "timeout_seconds": 15,
+                      "result": "relocated app methane graph/protocol validated",
+                      "version": INCHI_VERSION,
+                      "gui_launched": False,
+                  },
+              )
+              write_notices(root, portable / "Licenses", metadata)
+              (portable / "README.txt").write_text(
+                  "Unsigned Windows x64 PR review build, not a release or installer.\n"
+                  "Keep reshiki.exe, build-receipt.json and Licenses together.\n"
+                  "Before transfer, verify the receipt/EXE hashes and freshly measured space.\n"
+                  "No guest transfer if the final free space would be below 150 MiB.\n",
+                  encoding="utf-8",
+              )
+              receipt = {
+                  "schema": 1,
+                  "qualified": True,
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "pr": event["number"],
+                  "head_sha": requested_head,
+                  "git_tree": command(["git", "rev-parse", "HEAD^{tree}"], root),
+                  "workflow_sha": os.environ["GITHUB_WORKFLOW_SHA"],
+                  "event_merge_sha": os.environ["GITHUB_SHA"],
+                  "run_id": os.environ["GITHUB_RUN_ID"],
+                  "attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                  "run_url": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+                  "runner": {key: os.environ.get(key) for key in ["ImageOS", "ImageVersion", "RUNNER_ARCH"]},
+                  "target": TARGET,
+                  "profile": "release",
+                  "optional_features": [],
+                  "signed": False,
+                  "exe": {"sha256": sha256(copied), "bytes": copied.stat().st_size},
+                  "tracked_source_count": len(before),
+                  "source_bytes_unchanged": True,
+                  "source_inventory_sha256": sha256(evidence / "tracked-source-sha256.json"),
+                  "cargo_lock_sha256": sha256(root / "Cargo.lock"),
+                  "own_compiler_artifacts": [
+                      {
+                          "package_id": item["package_id"],
+                          "target": item["target"]["name"],
+                          "kind": item["target"]["kind"],
+                          "fresh": item["fresh"],
+                      }
+                      for item in own
+                  ],
+                  "evidence_files": {
+                      path.name: {"sha256": sha256(path), "bytes": path.stat().st_size}
+                      for path in sorted(evidence.iterdir())
+                      if path.is_file()
+                  },
+                  "portable_companions": {
+                      str(path.relative_to(portable)): {"sha256": sha256(path), "bytes": path.stat().st_size}
+                      for path in sorted(portable.rglob("*"))
+                      if path.is_file() and path != copied
+                  },
+              }
+              save_json(portable / "build-receipt.json", receipt)
+              payload_bytes = sum(path.stat().st_size for path in portable.rglob("*") if path.is_file())
+              save_json(
+                  output / "transfer-size.json",
+                  {
+                      "portable_app_bytes": payload_bytes,
+                      "exe_bytes": copied.stat().st_size,
+                      "guest_minimum_remaining_bytes": 150 * 1024 * 1024,
+                      "space_check": "fresh guest free bytes minus portable_app_bytes must be at least the minimum",
+                      "guest_transfer_authorized": False,
+                  },
+              )
+              print(
+                  json.dumps(
+                      {
+                          "head": requested_head,
+                          "exe_sha256": sha256(copied),
+                          "portable_app_bytes": payload_bytes,
+                      }
+                  )
+              )
+
+
+          if __name__ == "__main__":
+              main()
+          '@
+          [IO.File]::WriteAllText($driver, $source, [Text.UTF8Encoding]::new($false))
+          uv run --no-project --python 3.12 python $driver
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve the qualified application and build proof
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-review-pr${{ github.event.number }}-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.REVIEW_OUTPUT }}/
+          retention-days: 14
+          if-no-files-found: error
+          compression-level: 6
+      - name: Record the immutable artifact and transfer size
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: |
+          $receipt = Join-Path $env:REVIEW_OUTPUT 'app/build-receipt.json'
+          $receiptHash = (Get-FileHash -LiteralPath $receipt -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = Get-Content -LiteralPath (Join-Path $env:REVIEW_OUTPUT 'transfer-size.json') -Raw | ConvertFrom-Json
+          @(
+            "PR head: $env:REVIEW_HEAD"
+            "Build receipt SHA-256: $receiptHash"
+            "Artifact ID: $env:ARTIFACT_ID"
+            "Artifact: $env:ARTIFACT_URL"
+            "Artifact digest: $env:ARTIFACT_DIGEST"
+            "Portable app bytes: $($size.portable_app_bytes)"
+            'Guest transfer is not performed; a fresh 150 MiB remaining-space guard is required.'
+          ) >> $env:GITHUB_STEP_SUMMARY
+      - name: Preserve failed build diagnostics without publishing a candidate
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-review-diagnostics-pr${{ github.event.number }}-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.REVIEW_OUTPUT }}/evidence/
+          retention-days: 14
+          if-no-files-found: ignore

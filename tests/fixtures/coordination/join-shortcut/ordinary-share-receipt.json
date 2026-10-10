@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--no-default-features",
+    "--bin",
+    "reshiki",
+    "app::shortcuts::compatibility_tests::join_merges_sites_instead_of_adding_an_extra_bond_and_undo_restores_all",
+    "--",
+    "--exact"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/coordination",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "started_unix": 1791581662.583779,
+  "elapsed_seconds": 7.48038387298584,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/ordinary-share.log",
+  "log_bytes": 658,
+  "log_sha256": "e8b49817712c1540c966394b0d601b7cb3e34f0a7baa519e80dd808abc52875d"
+}

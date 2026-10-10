@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/Users/ryuichi/dev/ReShiki/.venv/bin/python",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/package_verified.py"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/coordination",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "started_unix": 1791582907.2883022,
+  "elapsed_seconds": 5.925323009490967,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/package.log",
+  "log_bytes": 666,
+  "log_sha256": "063483da639b3d9a2d3033245e01bcde145c2d4e64952008ec0a001f2fa7a524"
+}

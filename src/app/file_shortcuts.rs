@@ -357,8 +357,9 @@ struct Fields {
 }
 
 impl Fields {
-    /// Enter that a field applied leaves it. Unhandled Undo, Redo, arrow and
-    /// optimization keys stay in a focused field instead of changing the drawing.
+    /// Enter that a field applied leaves it. Unhandled Undo, Redo, arrow,
+    /// optimization and joining keys stay in a focused field instead of
+    /// changing the drawing.
     fn after(event: &Event, captured: bool) -> Option<Self> {
         let Event::Keyboard(keyboard::Event::KeyPressed {
             key,
@@ -390,6 +391,7 @@ impl Fields {
                     Message::Undo
                         | Message::Redo
                         | Message::Optimization(super::optimization::Action::Begin)
+                        | Message::Shortcut(super::shortcuts::Action::Join)
                 )
             ))
             .then(Self::default)

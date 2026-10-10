@@ -435,6 +435,11 @@ impl App {
                     Message::Join(super::joining::Action::Begin),
                     true,
                 ));
+                entries.push(command(
+                    "Coordinate in place…",
+                    Message::Join(super::joining::Action::BeginCoordination),
+                    true,
+                ));
             }
             if self.can_group() {
                 entries.push(command("Group", Message::Group, true));

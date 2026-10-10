@@ -979,7 +979,14 @@ impl App {
                             command("Behind", Message::BondDepth(false)).width(Length::Fill)
                         ]
                         .spacing(6),
-                        command("Reverse bonds", Message::ReverseBonds)
+                        command(
+                            if bonds.iter().all(|b| b.order == 5 && b.projection) {
+                                "Reverse projection tip"
+                            } else {
+                                "Reverse bonds"
+                            },
+                            Message::ReverseBonds
+                        )
                     ]
                     .spacing(6),
                 ),
