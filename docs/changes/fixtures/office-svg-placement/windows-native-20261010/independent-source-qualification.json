@@ -1,0 +1,155 @@
+{
+  "source_record_sha256": "d88f88433897f1d59aa3842703b91c7948b394c04cfb9fe26ff2690c8ff9d920",
+  "source_record_role": "root-independent-source-artifact-audit.json",
+  "derivation": "Selected facts and path normalization; original private record remains byte-exact.",
+  "facts": {
+    "utc": "2026-10-09T23:26:49.640011+00:00",
+    "result": "PASS",
+    "head": "b09bf5ed5d57f298988b7528dd9f776b0169e025",
+    "run": 38002305196,
+    "job": 114063001049,
+    "exact_Git_source_files": 2609,
+    "own_fresh_compiler_artifacts": 15,
+    "actual_depfile_source_paths": 564,
+    "all_archive_and_extracted_bytes_match": true,
+    "own_compiler_audit": [
+      {
+        "name": "zune_jpeg",
+        "kind": ["lib"],
+        "source": "vendor/zune-jpeg/src/lib.rs",
+        "manifest": "vendor/zune-jpeg/Cargo.toml",
+        "depfile": "deps\\zune_jpeg-33721a3a075c0b73.d",
+        "depfile_sha256": "2a6e4f617603f2a8e65463ca8b5501221f9ff051b0e242ec9f921cb71eaa542f",
+        "fresh": false
+      },
+      {
+        "name": "usvg",
+        "kind": ["lib"],
+        "source": "vendor/usvg/src/lib.rs",
+        "manifest": "vendor/usvg/Cargo.toml",
+        "depfile": "deps\\usvg-a1db6b4601e6a449.d",
+        "depfile_sha256": "7d81eb3570c7f657563e9be1cf1d3eac75d83e7852ab4b4a1ec532061c94ab0e",
+        "fresh": false
+      },
+      {
+        "name": "reshiki_depict_math",
+        "kind": ["lib"],
+        "source": "crates/depict-math/src/lib.rs",
+        "manifest": "crates/depict-math/Cargo.toml",
+        "depfile": "deps\\reshiki_depict_math-123e0ff2b131a315.d",
+        "depfile_sha256": "19a70623c6910c1d505664731c7a2273eb746f763b2e04b392189369fa98a359",
+        "fresh": false
+      },
+      {
+        "name": "reshiki_process_heap",
+        "kind": ["lib"],
+        "source": "crates/process-heap/src/lib.rs",
+        "manifest": "crates/process-heap/Cargo.toml",
+        "depfile": "deps\\reshiki_process_heap-bde16512bed752dd.d",
+        "depfile_sha256": "b8d9d1d8d616b36a92f00a569ade20ee1b2f993b2ba7f37221e04e32e9a44e3f",
+        "fresh": false
+      },
+      {
+        "name": "reshiki_windows",
+        "kind": ["lib"],
+        "source": "native/windows/src/lib.rs",
+        "manifest": "native/windows/Cargo.toml",
+        "depfile": "deps\\reshiki_windows-0e0815d87c903182.d",
+        "depfile_sha256": "3e1c82ad0d1fcf3552524930dedf323820c7b0d6b4694211759b716087c73398",
+        "fresh": false
+      },
+      {
+        "name": "svg2pdf",
+        "kind": ["lib"],
+        "source": "vendor/svg2pdf/src/lib.rs",
+        "manifest": "vendor/svg2pdf/Cargo.toml",
+        "depfile": "deps\\svg2pdf-30766fb49964efe7.d",
+        "depfile_sha256": "5f08455ef9bbfadeba8b96bfa5afd3e04d466c4bc900201af40adac2e080bb03",
+        "fresh": false
+      },
+      {
+        "name": "reshiki_chemistry",
+        "kind": ["lib"],
+        "source": "crates/chemistry/src/lib.rs",
+        "manifest": "crates/chemistry/Cargo.toml",
+        "depfile": "deps\\reshiki_chemistry-a096f5ca7170d296.d",
+        "depfile_sha256": "55b5fa4f38b21c8a8b149c9b219f49344c8147aba6ca7cde1c5e9add8e352b0b",
+        "fresh": false
+      },
+      {
+        "name": "reshiki_geometry",
+        "kind": ["lib"],
+        "source": "native/geometry/src/lib.rs",
+        "manifest": "native/geometry/Cargo.toml",
+        "depfile": "deps\\reshiki_geometry-ea0afb96a31395a3.d",
+        "depfile_sha256": "0a78e318a3ff9459719ce93ccc1e2e8a0b5925653f42957e6e6664fd45c642e0",
+        "fresh": false
+      },
+      {
+        "name": "reshiki_model",
+        "kind": ["lib"],
+        "source": "crates/model/src/lib.rs",
+        "manifest": "crates/model/Cargo.toml",
+        "depfile": "deps\\reshiki_model-831a59d200576f1a.d",
+        "depfile_sha256": "21c33f4d92e98e4fd8228d51875149c678e50909b0ef470f7e926bf853a600cd",
+        "fresh": false
+      },
+      {
+        "name": "reshiki_agent",
+        "kind": ["lib"],
+        "source": "crates/agent/src/lib.rs",
+        "manifest": "crates/agent/Cargo.toml",
+        "depfile": "deps\\reshiki_agent-1415c8c83a1203c7.d",
+        "depfile_sha256": "94ad3541f790b90d53bcb2b0f0a14c45b0fcfbcefaeee0547b84bf49845be70f",
+        "fresh": false
+      },
+      {
+        "name": "build-script-build",
+        "kind": ["custom-build"],
+        "source": "build.rs",
+        "manifest": "Cargo.toml",
+        "depfile": "reshiki.d",
+        "depfile_sha256": "23dfb2947d8f02216d084d77ef4c71da37cd8a4d2a25fd054fbbc75746cd52c1",
+        "fresh": false
+      },
+      {
+        "name": "reshiki_io",
+        "kind": ["lib"],
+        "source": "crates/io/src/lib.rs",
+        "manifest": "crates/io/Cargo.toml",
+        "depfile": "deps\\reshiki_io-a89aa99a8ccc9231.d",
+        "depfile_sha256": "9c85c50c4952a7245634fe052cb710b9fe6902836e08a5e8042fe1205cc26494",
+        "fresh": false
+      },
+      {
+        "name": "reshiki_mcp",
+        "kind": ["lib"],
+        "source": "crates/mcp/src/lib.rs",
+        "manifest": "crates/mcp/Cargo.toml",
+        "depfile": "deps\\reshiki_mcp-28fb8079ad8ccb31.d",
+        "depfile_sha256": "6175894f4e0282317463e71f78b207720bd51071e2e6e2c162361b882a5495e8",
+        "fresh": false
+      },
+      {
+        "name": "reshiki",
+        "kind": ["lib"],
+        "source": "src/lib.rs",
+        "manifest": "Cargo.toml",
+        "depfile": "deps\\reshiki-50283eb2afab2f3e.d",
+        "depfile_sha256": "1ffb5356123fce710532982baa408d09a24dbb2d8ecc229ebe0d59dc91cc3855",
+        "fresh": false
+      },
+      {
+        "name": "reshiki",
+        "kind": ["bin"],
+        "source": "src/main.rs",
+        "manifest": "Cargo.toml",
+        "depfile": "reshiki.d",
+        "depfile_sha256": "23dfb2947d8f02216d084d77ef4c71da37cd8a4d2a25fd054fbbc75746cd52c1",
+        "fresh": false
+      }
+    ],
+    "exe_sha256": "35736c95d4b2db9c264e5b03e36d24cfe70527ce185dc9fc1b170773f4ba1710",
+    "build_script_depfile_note": "Custom-build output lies outside target-specific release; its build.rs source is covered by final executable depfile."
+  }
+}

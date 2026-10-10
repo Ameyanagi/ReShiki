@@ -16,6 +16,7 @@
     "website/src/content/docs/developer/**",
     "bun.lock",
     "uv.lock",
-    "Cargo.lock"
+    "Cargo.lock",
+    "docs/changes/fixtures/office-svg-placement/final-candidate-export-receipt.json"
   ]
 }

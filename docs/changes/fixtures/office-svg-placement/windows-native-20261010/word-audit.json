@@ -1,0 +1,138 @@
+{
+  "source_record_sha256": "d6cc400ceeaa9027adc352308a2c6a07427fa96a54c8e2bca4575bd43eb0b9c3",
+  "source_record_role": "audit.json",
+  "derivation": "Selected facts and path normalization; original private record remains byte-exact.",
+  "facts": {
+    "pictures": [
+      {
+        "document_picture_index": 1,
+        "kind": "ordinary",
+        "placement": "inline in paragraph 1",
+        "source_file": "windows-single-ordinary-v1.svg",
+        "source_sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+        "source_size_pt": [87.59132, 28.906628],
+        "svg_member": "word/media/image2.svg",
+        "svg_relation_id": "rId5",
+        "svg_bytes": 834,
+        "svg_sha256": "1ace60bf34ec12a61ac35f00fcfeb27277a027cc2e0d16234a618eb040748c88",
+        "byte_identical_to_exported_source": false,
+        "byte_identical_to_same_kind_saved_powerpoint_payload": true,
+        "paths": 1,
+        "text_nodes": 3,
+        "source_dominant_baseline_count": 3,
+        "stored_dominant_baseline_count": 0,
+        "extent_emu": [1114425, 371475],
+        "extent_mm": [30.95625, 10.31875],
+        "extent_pt": [87.75, 29.25],
+        "extent_percent_difference_from_authored": [0.18115950301924588, 1.187865980079028],
+        "inner_picture_offset_emu": [0, 0],
+        "inline_effect_extent_emu": {
+          "l": "0",
+          "t": "0",
+          "r": "9525",
+          "b": "9525"
+        },
+        "raster_fallback": {
+          "member": "word/media/image1.png",
+          "relation_id": "rId4",
+          "bytes": 1762,
+          "sha256": "52fbd0b22ff5c447612eeea04579f34571fec9d1c5b1f00f23f9bf5278ffa558",
+          "width": 234,
+          "height": 78,
+          "physical_pixels_per_meter": {
+            "x": 7559,
+            "y": 7559,
+            "unit": 1
+          },
+          "bits": 8,
+          "color_type": 6,
+          "interlace": 0,
+          "dpi": [191.99859999999998, 191.99859999999998]
+        },
+        "crop": null
+      },
+      {
+        "document_picture_index": 2,
+        "kind": "office",
+        "placement": "inline in paragraph 2",
+        "source_file": "windows-single-office-v1.svg",
+        "source_sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d",
+        "source_size_pt": [87.59132, 28.906626],
+        "svg_member": "word/media/image4.svg",
+        "svg_relation_id": "rId7",
+        "svg_bytes": 5841,
+        "svg_sha256": "962ff88cb0defb631e993ca9efda2bc09f9ccea4506d842dbf0be333e5c1fcdb",
+        "byte_identical_to_exported_source": false,
+        "byte_identical_to_same_kind_saved_powerpoint_payload": true,
+        "paths": 5,
+        "text_nodes": 0,
+        "source_dominant_baseline_count": 0,
+        "stored_dominant_baseline_count": 0,
+        "extent_emu": [1114425, 371475],
+        "extent_mm": [30.95625, 10.31875],
+        "extent_pt": [87.75, 29.25],
+        "extent_percent_difference_from_authored": [0.18115950301924588, 1.1878729810943733],
+        "inner_picture_offset_emu": [0, 0],
+        "inline_effect_extent_emu": {
+          "l": "0",
+          "t": "0",
+          "r": "9525",
+          "b": "9525"
+        },
+        "raster_fallback": {
+          "member": "word/media/image3.png",
+          "relation_id": "rId6",
+          "bytes": 2345,
+          "sha256": "1606d012f3833b16adc7b7f58cd344c885b2f24d10e89da148beeb0d15e8884b",
+          "width": 234,
+          "height": 78,
+          "physical_pixels_per_meter": {
+            "x": 7559,
+            "y": 7559,
+            "unit": 1
+          },
+          "bits": 8,
+          "color_type": 6,
+          "interlace": 0,
+          "dpi": [191.99859999999998, 191.99859999999998]
+        },
+        "crop": null,
+        "geometry_bridge": {
+          "path_count": 5,
+          "segments_per_path": [5, 10, 24, 90, 32],
+          "maximum_transformed_control_coordinate_delta_svg_units": 0.0003671726093017469,
+          "tolerance_svg_units": 0.001,
+          "note": "Q segments converted mathematically to C before comparison; Office rounded coordinates. This is bounded vector geometry agreement, not byte identity or pixel-render equivalence."
+        }
+      }
+    ],
+    "media_members": [
+      "word/media/image1.png",
+      "word/media/image2.svg",
+      "word/media/image3.png",
+      "word/media/image4.svg"
+    ],
+    "observed_utc": "2026-10-10T10:31:57.699341+00:00",
+    "docx": {
+      "path": "windows-office-svg-comparison-v1.docx",
+      "bytes": 26301,
+      "sha256": "c971f206a4dca4b64a62dcc826112ec0954e4a5e033d51ff457dcbba51d09204"
+    },
+    "source_geometry_helper_sha256": "570273575982057ade7d457b1d2b9f71caf577790bb3becd1523a320bfe2ad5d",
+    "negative_controls": [
+      {
+        "control": "wrong Office vector relationship",
+        "result": "rejected"
+      },
+      {
+        "control": "changed inline width",
+        "result": "rejected"
+      },
+      {
+        "control": "wrong Office raster fallback relationship",
+        "result": "rejected"
+      }
+    ],
+    "scope": "Owned saved DOCX, relationships, bounded vector geometry and fallback metadata. Root supplied native Word initial/saved/fresh-document-reopen visual evidence at200%; same process, not fresh-process acceptance. No Word manipulation or raster visual-equivalence claim."
+  }
+}

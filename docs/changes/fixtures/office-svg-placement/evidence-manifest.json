@@ -1,0 +1,270 @@
+{
+  "format": 1,
+  "files": {
+    "docs/images/office-svg-placement/powerpoint-baseline-inserted-400.jpg": {
+      "sha256": "819693711fb83f4cb9d3b990bb73fbe779dcda4e2ae744de0fb5987efee29282",
+      "bytes": 287646,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/images/office-svg-placement/powerpoint-candidate-inserted-400.jpg": {
+      "sha256": "3916d50d04dfac5208d89bfeb3156b550f254a339db9582634fae70757f94246",
+      "bytes": 289991,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/images/office-svg-placement/powerpoint-baseline-reopened-400.jpg": {
+      "sha256": "cf9c77ac2898cdd973f1dd28ffdff9810a9c73970e0c98d388efbdb90de45820",
+      "bytes": 286942,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/images/office-svg-placement/powerpoint-candidate-reopened-400.jpg": {
+      "sha256": "c3d6c5173930db72c9bf6991e97e28c5a1999c633e1492e2f183f41d9b0c1f3b",
+      "bytes": 276758,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/images/office-svg-placement/word-baseline-inserted-400.jpg": {
+      "sha256": "1178c84c12509a47851bbb231ae251acae58809f7d2a6747ed95d112e151afce",
+      "bytes": 188435,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/images/office-svg-placement/word-candidate-inserted-400.jpg": {
+      "sha256": "9b489f93d0305190e4ccb0c39d37d1b63d3a8e01b5bacc11372d14c94104e1b4",
+      "bytes": 196636,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/images/office-svg-placement/word-baseline-reopened-400.jpg": {
+      "sha256": "2589c3abf6dea282bdd87eed6db044174a8b73df7fcef2f3ad541fb89d02b6d7",
+      "bytes": 187178,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/images/office-svg-placement/word-candidate-reopened-400.jpg": {
+      "sha256": "f1a4cbc69a2ef701809ec5f6322fb6ba7de2199926f2bf15c01e271db1b9536a",
+      "bytes": 189499,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/images/office-svg-placement/final-candidate-figure-menu.jpg": {
+      "sha256": "98086076dfd4c95223ecc013ceaf1a2f6501fd58f6972783d5b09cd9411379c8",
+      "bytes": 325514,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/images/office-svg-placement/final-candidate-single-exported.jpg": {
+      "sha256": "a76d2e3062159e216df4affe4182fd8cfd6e75a359acbccf739f21bf310ccf96",
+      "bytes": 342976,
+      "role": "original actual desktop capture, unmodified"
+    },
+    "docs/changes/fixtures/office-svg-placement/single-baseline-after-export.rsk": {
+      "sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+      "bytes": 9811,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/single-candidate-after-export.rsk": {
+      "sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+      "bytes": 9811,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/single-final-after-export.rsk": {
+      "sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+      "bytes": 9811,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/single-baseline-ordinary.svg": {
+      "sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+      "bytes": 1180,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/single-candidate-ordinary.svg": {
+      "sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+      "bytes": 1180,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/single-final-ordinary.svg": {
+      "sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+      "bytes": 1180,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/single-candidate-office.svg": {
+      "sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d",
+      "bytes": 5703,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/single-final-office.svg": {
+      "sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d",
+      "bytes": 5703,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/word-baseline-ordinary.docx": {
+      "sha256": "2b62b721214d4aad5d8a614c30e5a9e6eb7979709f61907e7574b2db9ec3d0a3",
+      "bytes": 18685,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/word-candidate-office.docx": {
+      "sha256": "77ac452871df100126147def13fb880311d4fca5f8ed8e1e216b8ad57f8e306c",
+      "bytes": 24234,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/powerpoint-baseline-ordinary.pptx": {
+      "sha256": "b417dc43c455e7656124032868368010b130f4741081208827b17080151869f9",
+      "bytes": 33855,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/powerpoint-candidate-office.pptx": {
+      "sha256": "bc5443c9f3702d7cc7ca4dc12f4d9e04a8f1721e8f41ee474e4922576e0c76c0",
+      "bytes": 38799,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/baseline-export-receipt.json": {
+      "sha256": "5dd843ebe26fa2526b5dd5f7aeb54d1287c5ce38829bd6b5eea0447f0f8ee5c6",
+      "bytes": 2049,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/word-baseline-receipt.json": {
+      "sha256": "0b1d2de115105bc5d351b0dcb8b000dc06a73393ae294bbf41b5515051d280e0",
+      "bytes": 1874,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/powerpoint-baseline-receipt.json": {
+      "sha256": "68c8d33a29b52b8479171c5ccd5d4fcc8d0b153b8b4af749e5171d3b35a715e6",
+      "bytes": 3259,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/word-candidate-receipt.json": {
+      "sha256": "656c40d5f0fb17daa0a09505e310600b0ee361df779c12535dd146ed35f7e817",
+      "bytes": 2242,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/powerpoint-candidate-receipt.json": {
+      "sha256": "2ff8928335120ed0175ba710b956fd3e02a3e998b88572589af045656b26006b",
+      "bytes": 2343,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-candidate-export-receipt.json": {
+      "sha256": "327d3777f9e87f6cbecb8db8d5f5706f6aa6694490c7c96dc9a8b91f03e4dc8c",
+      "bytes": 4001,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/candidate-running-app-proof.json": {
+      "sha256": "0b5b7c9d9442f8e004288708ba1d29bcc70ed03cd822b47295b92d6a53dadebd",
+      "bytes": 422,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-candidate-figure-menu-ax.txt": {
+      "sha256": "c2c8b5d4a055f59713f8d4ba5c3a3033e07091ccb1052feefc2e0b7dc7bcf24d",
+      "bytes": 730,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-candidate-single-exported-ax.txt": {
+      "sha256": "deaa28d879cd844864d70c3b910f2f02fed8186f3e03a12c516a185f75feb20c",
+      "bytes": 4534,
+      "role": "original controlled input/export/Office container or actual GUI receipt"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-bundle-provenance.json": {
+      "sha256": "473a565f593282ebc73f99014a4d6f6a3454fb76b359fd1ce6b522853bd3f751",
+      "bytes": 1470,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-default-build-source-provenance.json": {
+      "sha256": "ae9383494e848a9a52d2ba7fa7fb46a81d095d46e7afc6d1a1e5b4796f466ed7",
+      "bytes": 62458,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-source-mtime-receipt.json": {
+      "sha256": "4f56f256829adc6a68e6f2cb5b1051bbc767244924c4885f1397ea38c7d825c4",
+      "bytes": 116532,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-default-build.stderr.log": {
+      "sha256": "d5ceaf3b2dd98dc88741352e173c714ad71fd9230ad33917be57ad6abf8639d5",
+      "bytes": 2176,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-io-export-tests.log": {
+      "sha256": "07cf5cb6df1b6629e492a43da29400a0db47caaf501f9f4775da772aef4d7a74",
+      "bytes": 2102,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-app-figure-export-tests.log": {
+      "sha256": "0d2142aadfb8712f1e5133775fadf5a984c5b3fe1dd50b3bc4f3aedc11d9c98d",
+      "bytes": 1727,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-app-figure-menu-test.log": {
+      "sha256": "881f2dcb46a1bcd5577729b87a0776a9a4a7d71b3a30a2d6bc2c671160c7dd8d",
+      "bytes": 645,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-fmt.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-clippy-all-targets-all-features.log": {
+      "sha256": "0424883970c2a58526fa0c024e4391ffe0addb5cd8ced618780784a1a9693bea",
+      "bytes": 2176,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-check-all-targets-all-features.log": {
+      "sha256": "e196b3573b0cb5a589c9684614bced32b20226e9d20f084444ed51f278f0be7c",
+      "bytes": 1082,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-check-all-targets-all-features-inc0-retry.log": {
+      "sha256": "7746857a15cbce3aa18ff0c9ca51e4189b4d6ccea50d5d922c20f0ecbf7a572e",
+      "bytes": 2176,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-check-interruption-receipt.json": {
+      "sha256": "19624869d3a5d3ce9a1b9d758983af04546fb1ab1b3850ac3594a6d69d3b4685",
+      "bytes": 905,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/initial-check-stall-sample-command.log": {
+      "sha256": "213accd091ed3595aa305de3da7baf289470e4fd8d7e5ce49f4a2d9d784aa5ba",
+      "bytes": 125,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-bundle-provenance.json": {
+      "sha256": "1cd87aaa42b00e06e938b3df86b177ddbe94ea4e180d6bffc7ccc51f5c93ee3c",
+      "bytes": 1414,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-default-build-source-provenance.json": {
+      "sha256": "aeada75c0edfb3102f8ace9b04943aed4ce1c09fddd3b2a6ac8fa22e530b0487",
+      "bytes": 60681,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-source-proof.json": {
+      "sha256": "f4ad0c325688fa63e1c45d3a73628b744a7313684f305f4cf87123949e400d75",
+      "bytes": 115119,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-validation-receipt.json": {
+      "sha256": "5113893358f48df117c9bed53148bce597687755539dd90d029b867f8fb74184",
+      "bytes": 4569,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-commit-and-lease-return.json": {
+      "sha256": "c5720e798e0ce701042ce35ef0762ffb0a173c677ede96336e7a283515043da3",
+      "bytes": 471,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-default-build.stderr.log": {
+      "sha256": "a94f1deb53fa19a9775db3659f7050380afdfe0989e17b849db275f42607083c",
+      "bytes": 404,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-app-figure-menu-ax-test.log": {
+      "sha256": "66e90f9e9d26e794c2122f4d81864ce9086eceb558fef646f63bd2f54252536d",
+      "bytes": 736,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-fmt.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    },
+    "docs/changes/fixtures/office-svg-placement/final-clippy-production-labels.log": {
+      "sha256": "a97989eecd065a19a63a3100ef02615ce1fc69585d845fb30f8497c22311de42",
+      "bytes": 1059,
+      "role": "immutable source/build/test record; initial and final scopes distinguished"
+    }
+  }
+}

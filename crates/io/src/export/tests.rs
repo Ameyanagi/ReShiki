@@ -98,49 +98,69 @@ fn clipboard_is_transparent_and_files_keep_canvas_background() {
     }
 }
 #[test]
-fn office_clipboard_svg_outlines_text_without_moving_or_resizing_it() {
+fn office_svg_files_and_clipboard_outline_text_without_moving_or_resizing_it() {
     let doc: Document = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/ui-drawn-ethanol.reshiki"
     ))
     .unwrap();
-    let svg = String::from_utf8(clipboard_svg(&doc).unwrap()).unwrap();
-    let xml = roxmltree::Document::parse(&svg).unwrap();
-    assert!(
-        xml.root_element()
-            .attribute("width")
-            .unwrap()
-            .ends_with("pt")
-    );
-    assert!(!xml.descendants().any(|node| node.has_tag_name("text")));
-    let mut options = resvg::usvg::Options::default();
-    options.fontdb_mut().load_system_fonts();
-    let original = resvg::usvg::Tree::from_str(&scene::svg(&doc), &options).unwrap();
-    // The receiving computer need not have the original fonts installed.
-    let restored = resvg::usvg::Tree::from_str(&svg, &Default::default()).unwrap();
-    assert!((original.size().width() - restored.size().width()).abs() < 0.001);
-    assert!((original.size().height() - restored.size().height()).abs() < 0.001);
-    let render = |tree: &resvg::usvg::Tree| {
-        let mut pixels = resvg::tiny_skia::Pixmap::new(
-            (original.size().width() * 3.).ceil() as u32,
-            (original.size().height() * 3.).ceil() as u32,
-        )
-        .unwrap();
-        resvg::render(
-            tree,
-            resvg::tiny_skia::Transform::from_scale(3., 3.),
-            &mut pixels.as_mut(),
+    for theme in crate::canvas_theme::CanvasTheme::ALL {
+        let mut doc = doc.clone();
+        doc.canvas_theme = theme;
+        assert_eq!(
+            drawing(&doc, "svg").unwrap(),
+            scene::svg_with_background(&doc).into_bytes()
         );
-        pixels
-    };
-    let expected = render(&original);
-    let actual = render(&restored);
-    let difference: u64 = expected
-        .data()
-        .iter()
-        .zip(actual.data())
-        .map(|(a, b)| u64::from(a.abs_diff(*b)))
-        .sum();
-    assert!(difference < expected.data().len() as u64 / 100);
+        for clipboard in [false, true] {
+            let source = if clipboard {
+                scene::svg(&doc)
+            } else {
+                scene::svg_with_background(&doc)
+            };
+            let bytes = if clipboard {
+                clipboard_svg(&doc).unwrap()
+            } else {
+                drawing(&doc, "svg-office").unwrap()
+            };
+            let svg = String::from_utf8(bytes).unwrap();
+            let xml = roxmltree::Document::parse(&svg).unwrap();
+            assert!(
+                xml.root_element()
+                    .attribute("width")
+                    .unwrap()
+                    .ends_with("pt")
+            );
+            assert!(!xml.descendants().any(|node| node.has_tag_name("text")));
+            let mut options = resvg::usvg::Options::default();
+            options.fontdb_mut().load_system_fonts();
+            let original = resvg::usvg::Tree::from_str(&source, &options).unwrap();
+            // The receiving computer need not have the original fonts installed.
+            let restored = resvg::usvg::Tree::from_str(&svg, &Default::default()).unwrap();
+            assert!((original.size().width() - restored.size().width()).abs() < 0.001);
+            assert!((original.size().height() - restored.size().height()).abs() < 0.001);
+            let render = |tree: &resvg::usvg::Tree| {
+                let mut pixels = resvg::tiny_skia::Pixmap::new(
+                    (original.size().width() * 3.).ceil() as u32,
+                    (original.size().height() * 3.).ceil() as u32,
+                )
+                .unwrap();
+                resvg::render(
+                    tree,
+                    resvg::tiny_skia::Transform::from_scale(3., 3.),
+                    &mut pixels.as_mut(),
+                );
+                pixels
+            };
+            let expected = render(&original);
+            let actual = render(&restored);
+            let difference: u64 = expected
+                .data()
+                .iter()
+                .zip(actual.data())
+                .map(|(a, b)| u64::from(a.abs_diff(*b)))
+                .sum();
+            assert!(difference < expected.data().len() as u64 / 100);
+        }
+    }
 }
 
 #[test]

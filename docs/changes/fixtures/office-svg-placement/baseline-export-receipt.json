@@ -1,0 +1,40 @@
+{
+  "captured_at_utc": "2026-10-09T15:34:10.236577+00:00",
+  "method": "Actual CUA FileOpen source \u2192 Figure SVG menu \u2192 native Save dialog \u2192 completion status \u2192 native SaveAs",
+  "app": "historical preserved ReShiki Baseline.app",
+  "signed_executable_sha256": "493a0cb49f79f76ae2ee0716a690c20ce3981f15f701c0a9651552addaa8bf95",
+  "source_checkpoint_compiler_correlation": "unverified; separately declared source base51fa lacks Office SVG option",
+  "input": "../cdx-silicon-single-desktop.rsk",
+  "input_sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+  "native_after_export_raw_equal": true,
+  "drawing": {
+    "formula": "C4H12OSi",
+    "atoms": 6,
+    "bonds": 5,
+    "canonical_smiles": "CO[Si](C)(C)C",
+    "font": "Arial10",
+    "style": "Imported/Custom",
+    "theme": "light",
+    "zoom_display_percent": 233,
+    "F8": false,
+    "selection": "none",
+    "undo_redo": "disabled"
+  },
+  "svg": {
+    "file": "single-baseline-ordinary.svg",
+    "sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+    "width_pt": 87.59132,
+    "height_pt": 28.906628,
+    "viewBox": "206.35414 264.03525 255.47469 84.311005",
+    "text_nodes": 3
+  },
+  "automation_correction": "A helper used prefix control-ID matching and reopened Figure format instead of Export. Corrected to exact ID match; no source edit or product export failure inferred. Actual corrected export completed.",
+  "recovery_banner": "Dismissed RAM-only using observed footer before evidence capture",
+  "raw_files": {
+    "baseline-figure-menu.jpg": "bdd9a9eb1730bb8ba1937b4ea8c0c51ab802785ac09216f68c0a65e36a481c60",
+    "baseline-single-exported.jpg": "fade690e10ece88cfd23c2edbb7af391c13abfa6f9f69d8d6d7b2fac72511b96",
+    "single-baseline-after-export.rsk": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+    "single-baseline-ordinary.svg": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01"
+  },
+  "Office_GUI_result": "Pending actual native Word/PowerPoint insertion"
+}

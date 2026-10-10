@@ -1,0 +1,13 @@
+{
+  "timestamp_utc": "2026-10-09T16:13:27.783101+00:00",
+  "reason": "Four compiler reference targets made no CPU progress for >6minutes; preserving failure and bounded retry with incremental disabled, no cache/source deletion",
+  "owned_verified_processes": [
+    "51340 66025 51340 Ss   09:22   0:00.82 /Users/ryuichi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/cargo",
+    "52796 51340 51340 S    07:38   0:01.72 /Users/ryuichi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/rustc",
+    "52797 51340 51340 S    07:38   0:01.64 /Users/ryuichi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/rustc",
+    "52798 51340 51340 S    07:38   0:01.71 /Users/ryuichi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/rustc",
+    "52845 51340 51340 S    07:28   0:01.09 /Users/ryuichi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/rustc"
+  ],
+  "signal": "SIGTERM",
+  "check_success": false
+}

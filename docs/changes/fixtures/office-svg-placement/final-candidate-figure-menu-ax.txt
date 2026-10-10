@@ -1,0 +1,13 @@
+Window: "single-baseline-after-export.rsk — ReShiki", App: ReShiki.
+0 standard window single-baseline-after-export.rsk — ReShiki, Secondary Actions: Raise
+	1 container
+		2 toggle button (settable, boolean) SVG, Value: off, ID: figure-format-svg
+		3 toggle button (settable, boolean) SVG · Office picture, Value: off, ID: figure-format-svg-office
+		4 toggle button (settable, boolean) PDF, Value: on, ID: figure-format-pdf
+		5 toggle button (settable, boolean) PNG, Value: off, ID: figure-format-png
+	6 close button
+	7 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	8 minimize button
+	9 text single-baseline-after-export.rsk — ReShiki
+10 menu bar
+	11 ReShiki

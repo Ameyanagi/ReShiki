@@ -1,0 +1,163 @@
+{
+  "source_record_sha256": "2eb2e8674f6e946e909ff23db156fdb495b794510aa1f310be82d2ed2dd2f35d",
+  "source_record_role": "build-receipt.json",
+  "derivation": "Selected facts and path normalization; original private record remains byte-exact.",
+  "facts": {
+    "head_sha": "b09bf5ed5d57f298988b7528dd9f776b0169e025",
+    "git_tree": "03b3cddf2a941b27aba9a9911e494641bf2e3c4d",
+    "run_id": "38002305196",
+    "attempt": "1",
+    "run_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/38002305196",
+    "profile": "release",
+    "target": "x86_64-pc-windows-msvc",
+    "signed": false,
+    "optional_features": [],
+    "source_bytes_unchanged": true,
+    "tracked_source_count": 2609,
+    "source_inventory_sha256": "01ad496eae10164154f913969e3108d47ed8c627b8c77aba7057e3ccfc269169",
+    "cargo_lock_sha256": "ceb8cb65b6d2ca9be22755fdd673558e15e896dd919e4d1170ecf62677054f07",
+    "exe": {
+      "bytes": 55295488,
+      "sha256": "35736c95d4b2db9c264e5b03e36d24cfe70527ce185dc9fc1b170773f4ba1710"
+    },
+    "evidence_files": {
+      "build-command.json": {
+        "bytes": 2231,
+        "sha256": "7271019f49aa253f481525b53e8a989c8acc6761068921cd9dfce762b52cd0ad"
+      },
+      "build-result.json": {
+        "bytes": 47,
+        "sha256": "b1dfcb49bbb6dec205cc4869add9cb0c295ae0c5590d2e7087d961e18ef44c74"
+      },
+      "build-stderr.log": {
+        "bytes": 13233,
+        "sha256": "e376787f92efe3e13207bafe6e3cba910cbdcc9ba0c0ad43e44877e50bb5e5d7"
+      },
+      "cargo-metadata.json": {
+        "bytes": 3446049,
+        "sha256": "8c2c24f27e33d19b33787fd1f46e23913b31a650409de19fa96d20a50aa98ad9"
+      },
+      "cargo-version.txt": {
+        "bytes": 37,
+        "sha256": "b871c86bb07dd7f9f441fcaada9d078da35d4cfd779b90f3dc63cccbbf72d337"
+      },
+      "compiler.jsonl": {
+        "bytes": 434496,
+        "sha256": "4c22128c3a383e52324758007b1ed36daa40cde850568e9601304bb9f875434f"
+      },
+      "dependency-inventory.json": {
+        "bytes": 127258,
+        "sha256": "28070bfb64131d3e535146f20d33445fdb6a796dd1d5257d0bfc4fcfd823bf7f"
+      },
+      "depfiles.json": {
+        "bytes": 3569205,
+        "sha256": "b448fc57578d17cc646ceb4ae938e9a84c4cb6cf0ef6eb651967243678f68d5f"
+      },
+      "msvc-version.txt": {
+        "bytes": 1312,
+        "sha256": "bdccc90b04c30f192131e2b66eff925da98fbec6c925d45e72cea9c45c4feffb"
+      },
+      "pe-dependents.txt": {
+        "bytes": 920,
+        "sha256": "c7b05b0c39b29ab04123fe9b82faec6fbd34b1b236314d82c18063e0a0ac6d66"
+      },
+      "review-driver.py": {
+        "bytes": 14551,
+        "sha256": "e1e199608bf63d8e9d52c65824437e2d866d71900ccd37c1cb76a68a0fe868e6"
+      },
+      "rustc-vV.txt": {
+        "bytes": 201,
+        "sha256": "10d838f8896732d1aee793e4694fa2678274fb4e37780fe8209bafe88cd3316d"
+      },
+      "source-refresh.json": {
+        "bytes": 42687,
+        "sha256": "1e984c553945839c4c061f9793a73c2708ec80b0ed16852d0c1e7015b957405c"
+      },
+      "tracked-source-sha256.json": {
+        "bytes": 635961,
+        "sha256": "01ad496eae10164154f913969e3108d47ed8c627b8c77aba7057e3ccfc269169"
+      },
+      "worker-smoke.json": {
+        "bytes": 248,
+        "sha256": "96f3e4b5222f521e1d8c4591c80e7b31af30b7083026a1be76259d842e66a9e1"
+      }
+    },
+    "own_compiler_artifacts": [
+      {
+        "target": "zune_jpeg",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "usvg",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki_depict_math",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki_process_heap",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki_windows",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "svg2pdf",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki_chemistry",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki_geometry",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki_model",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki_agent",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "build-script-build",
+        "kind": ["custom-build"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki_io",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki_mcp",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki",
+        "kind": ["lib"],
+        "fresh": false
+      },
+      {
+        "target": "reshiki",
+        "kind": ["bin"],
+        "fresh": false
+      }
+    ]
+  }
+}
