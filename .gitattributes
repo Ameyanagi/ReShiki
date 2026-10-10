@@ -1,1 +1,5 @@
 * text=auto eol=lf
+
+# Preserve the exact native ChemDraw CRLF reference files.
+docs/changes/fixtures/join-atom-merge/chemdraw-26.1/join-three-arms-chemdraw-native-before-v2.cdxml -text whitespace=cr-at-eol
+docs/changes/fixtures/join-atom-merge/chemdraw-26.1/join-three-arms-chemdraw-native-after-v2.cdxml -text whitespace=cr-at-eol

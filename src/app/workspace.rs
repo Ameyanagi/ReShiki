@@ -897,6 +897,7 @@ impl App {
         if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.tab.selected.is_empty() {
             return commands;
         }
+        commands.extend(self.selected_join_commands());
         commands.extend([
             RowCommand {
                 label: "Move & attach…",

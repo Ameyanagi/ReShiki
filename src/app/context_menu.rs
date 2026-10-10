@@ -223,6 +223,13 @@ impl App {
         let command = Entry::command;
         let submenu = Entry::page;
         let mut entries = vec![];
+        if atoms {
+            entries.extend(
+                self.selected_join_commands()
+                    .into_iter()
+                    .map(|c| command(c.menu, c.message, c.enabled)),
+            );
+        }
         if atoms && self.atom_text_target().is_some() {
             entries.push(command(
                 "Edit atom label…",

@@ -28,7 +28,7 @@ pub fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
 }
 
 /// Ink extents for persistent label backgrounds, excluding font line padding.
-pub(crate) fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
+pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
     label_ink_boxes(&atom_label(a, doc))
         .into_iter()
         .reduce(|(lo, hi), (a, b)| {

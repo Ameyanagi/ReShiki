@@ -1,0 +1,76 @@
+{
+  "schema": "reshiki.join.macos-native-public-evidence.v2",
+  "scope": "One actual default-feature macOS ARM64 native fixture; same-process fresh-document reopen, not fresh process.",
+  "original_count": 7,
+  "authored_summary_count": 1,
+  "input": {
+    "path": "tests/fixtures/join-three-atoms-before.rsk",
+    "bytes": 2668,
+    "sha256": "44807c91c4be874d6b8748576b15a988da62da1e1a9512d75c0b0623ced700aa"
+  },
+  "files": [
+    {
+      "path": "docs/images/join-atom-merge/macos-join-three-arms-before-v2.jpg",
+      "kind": "byte-exact original native JPEG",
+      "source_basename": "join-three-arms-before-v2.jpg",
+      "bytes": 320479,
+      "sha256": "04e6e62b302af79918c64176b7b244ad8bae763d6517b5f9a5e16342273f7b26",
+      "dimensions": [2560, 1704]
+    },
+    {
+      "path": "docs/images/join-atom-merge/macos-join-three-central-selected-v2.jpg",
+      "kind": "byte-exact original native JPEG",
+      "source_basename": "join-three-central-selected-v2.jpg",
+      "bytes": 312434,
+      "sha256": "e046687acd7c311b1cd78f9b516bd33cbaf9bd927389e4e2986ed4e9beee4513",
+      "dimensions": [2560, 1704]
+    },
+    {
+      "path": "docs/images/join-atom-merge/macos-join-three-arms-after-v2.jpg",
+      "kind": "byte-exact original native JPEG",
+      "source_basename": "join-three-arms-after-v2.jpg",
+      "bytes": 319405,
+      "sha256": "bae0fe8ef3ef4261ab0c50902f71678174cb48a7d58d31bb3c67cb2df46ed4a6",
+      "dimensions": [2560, 1704]
+    },
+    {
+      "path": "docs/images/join-atom-merge/macos-join-one-undo-v2.jpg",
+      "kind": "byte-exact original native JPEG",
+      "source_basename": "join-one-undo-v2.jpg",
+      "bytes": 323269,
+      "sha256": "7f80ee22d3c72ed84b0185fa6ce2fc620695a796e45a547d5c129f62bff3fabd",
+      "dimensions": [2560, 1704]
+    },
+    {
+      "path": "docs/images/join-atom-merge/macos-join-redo-v2.jpg",
+      "kind": "byte-exact original native JPEG",
+      "source_basename": "join-redo-v2.jpg",
+      "bytes": 316980,
+      "sha256": "5c727907d6bc2ccb643e552b034fddf8503a936f317b7ee9f4bfd272d52ec37f",
+      "dimensions": [2560, 1704]
+    },
+    {
+      "path": "docs/images/join-atom-merge/macos-join-fresh-document-reopened-v2.jpg",
+      "kind": "byte-exact original native JPEG",
+      "source_basename": "join-fresh-document-reopened-v2.jpg",
+      "bytes": 314585,
+      "sha256": "6f4df1274dfcb50c5a64833ee2238ee1dcaea72565b6b2ae03cad8fec835e2d0",
+      "dimensions": [2560, 1704]
+    },
+    {
+      "path": "docs/changes/fixtures/join-atom-merge/macos-native-v2/join-three-arms-native-after-v2.rsk",
+      "kind": "byte-exact native saved RSK",
+      "source_basename": "join-three-arms-native-after-v2.rsk",
+      "bytes": 2530,
+      "sha256": "d73c9cd8408b89312522d0b6691fbffe4e17ce6a576a49187d7cdd01fa2f1e73",
+      "rsk_version": 19
+    },
+    {
+      "path": "docs/changes/fixtures/join-atom-merge/macos-native-v2/README.md",
+      "kind": "authored evidence summary",
+      "bytes": 5372,
+      "sha256": "28369557369896301231ad8f656600168dfe2be04071acb8b4a4528ccd7bd378"
+    }
+  ],
+  "self_inventory_note": "This inventory does not hash itself; the private proposal-ready receipt pins the complete package."
+}
