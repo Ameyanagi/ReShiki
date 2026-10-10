@@ -1,0 +1,101 @@
+{
+  "source_record_sha256": "3bea2435af76378f7e296b18ea5c4c211f936e38c26d72cd25a3fac0b9030f19",
+  "source_record_role": "audit.json",
+  "derivation": "Selected facts and path normalization; original private record remains byte-exact.",
+  "facts": {
+    "slides": [
+      {
+        "slide_index": 1,
+        "kind": "ordinary",
+        "slide_member": "ppt/slides/slide1.xml",
+        "svg_relation_id": "rId2",
+        "embedded_svg_member": "ppt/media/image1.svg",
+        "source_file": "windows-single-ordinary-v1.svg",
+        "source_bytes": 1180,
+        "source_sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+        "embedded_bytes": 834,
+        "embedded_sha256": "1ace60bf34ec12a61ac35f00fcfeb27277a027cc2e0d16234a618eb040748c88",
+        "embedded_byte_identical_to_source": false,
+        "source_size_pt": [87.59132, 28.906628],
+        "embedded_svg_root_attributes": {
+          "width": "116.788",
+          "height": "38.5422",
+          "viewBox": "206.354 264.035 255.475 84.311",
+          "overflow": "hidden"
+        },
+        "extent_emu": [1114425, 371475],
+        "offset_emu": [5538787, 3243262],
+        "extent_mm": [30.95625, 10.31875],
+        "extent_pt": [87.75, 29.25],
+        "extent_css_pixel_equivalent_96dpi": [117.0, 39.0],
+        "extent_percent_difference_from_authored": [0.18115950301924588, 1.187865980079028],
+        "source_text_nodes": 3,
+        "embedded_text_nodes": 3,
+        "source_dominant_baseline_count": 3,
+        "embedded_dominant_baseline_count": 0,
+        "embedded_paths": 1,
+        "raster_fallback": null,
+        "crop": null,
+        "slide_layout_type": "blank"
+      },
+      {
+        "slide_index": 2,
+        "kind": "office",
+        "slide_member": "ppt/slides/slide2.xml",
+        "svg_relation_id": "rId2",
+        "embedded_svg_member": "ppt/media/image2.svg",
+        "source_file": "windows-single-office-v1.svg",
+        "source_bytes": 5703,
+        "source_sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d",
+        "embedded_bytes": 5841,
+        "embedded_sha256": "962ff88cb0defb631e993ca9efda2bc09f9ccea4506d842dbf0be333e5c1fcdb",
+        "embedded_byte_identical_to_source": false,
+        "source_size_pt": [87.59132, 28.906626],
+        "embedded_svg_root_attributes": {
+          "width": "116.788",
+          "height": "38.5422",
+          "viewBox": "0 0 116.788 38.5422",
+          "overflow": "hidden"
+        },
+        "extent_emu": [1114425, 371475],
+        "offset_emu": [5538787, 3243262],
+        "extent_mm": [30.95625, 10.31875],
+        "extent_pt": [87.75, 29.25],
+        "extent_css_pixel_equivalent_96dpi": [117.0, 39.0],
+        "extent_percent_difference_from_authored": [0.18115950301924588, 1.1878729810943733],
+        "source_text_nodes": 0,
+        "embedded_text_nodes": 0,
+        "source_dominant_baseline_count": 0,
+        "embedded_dominant_baseline_count": 0,
+        "embedded_paths": 5,
+        "raster_fallback": null,
+        "crop": null,
+        "geometry_bridge": {
+          "path_count": 5,
+          "segments_per_path": [5, 10, 24, 90, 32],
+          "maximum_transformed_control_coordinate_delta_svg_units": 0.0003671726093017469,
+          "tolerance_svg_units": 0.001,
+          "note": "Q segments converted mathematically to C before comparison; Office rounded coordinates. This is bounded vector geometry agreement, not byte identity or pixel-render equivalence."
+        },
+        "slide_layout_type": "blank"
+      }
+    ],
+    "media_members": ["ppt/media/image1.svg", "ppt/media/image2.svg"],
+    "presentation_slide_size_emu": {
+      "cx": "12192000",
+      "cy": "6858000"
+    },
+    "no_raster_media": true,
+    "observed_utc": "2026-10-10T10:22:03.698839+00:00",
+    "pptx": {
+      "path": "windows-office-svg-comparison-v1.pptx",
+      "bytes": 42120,
+      "sha256": "709a60d363f171669a0315ce36668bf1044cc25d6adb386355607cd5bd940d2b"
+    },
+    "negative_controls": [
+      "altered Office path coordinate rejected",
+      "missing vector path group rejected"
+    ],
+    "scope": "Read-only owned PPTX/container and vector data audit. Visual acceptance is supplied separately by Root actual native captures; no intercepted clipboard, raster rendering, fresh process reopen or Word acceptance claim."
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "native_producer_source": "b09bf5ed5d57f298988b7528dd9f776b0169e025",
+  "qualified_executable_sha256": "35736c95d4b2db9c264e5b03e36d24cfe70527ce185dc9fc1b170773f4ba1710",
+  "qualified_executable_signed": false,
+  "native_process": {
+    "pid": 11016,
+    "creation_record": "/Date(1791625933896)/",
+    "observed_utc": "2026-10-10T09:53:12.9708653Z",
+    "executable_location": "owned-pr290-candidate/reshiki.exe"
+  },
+  "native_input": {
+    "path": "windows-native-input.rsk",
+    "bytes": 9811,
+    "sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+    "role": "Existing controlled native input opened on Windows; no new native Save or graph edit is claimed."
+  },
+  "immutable_source_records": {
+    "process-proof-v1.json": "28f39b7f24407b919341b0dc3cfbd4a7b85383926fb866c575690e55e470a8da",
+    "bounded-transfer-plan-v1.json": "5e31d97a2d6f9ee3b8ed6e92ee1ae2f244fe2e92df84cdc2429eec2e7d6c2479",
+    "bounded-transfer-verified-v1.json": "3025c382e74d17aafd47937d81388fe121c599d54ef7ff41a7e530f412a06d5a"
+  },
+  "screenshots_producer": "Root actual native Windows desktop operations; original captures copied without retouching.",
+  "platform": "Windows x86_64, qualified release-profile CI application, Microsoft Word and PowerPoint",
+  "capture_conditions": {
+    "native": {
+      "zoom_percent": 232,
+      "font": "Arial10",
+      "style": "Custom / Imported style",
+      "keyboard_drawing": "off",
+      "canvas": "light"
+    },
+    "powerpoint": {
+      "view_zoom_percent": 400,
+      "ordinary_slide": 1,
+      "office_slide": 2,
+      "picture_resize": false,
+      "reopen": "own saved document closed and exact path opened again in same PowerPoint process"
+    },
+    "word": {
+      "view_zoom_percent": 200,
+      "ordinary_paragraph": 1,
+      "office_paragraph": 2,
+      "picture_resize": false,
+      "reopen": "own saved document closed and exact path opened again in same Word process"
+    }
+  },
+  "limits": [
+    "Office rewrites both SVG payloads; no source byte-storage equivalence.",
+    "Equal ordinary/Office saved extents differ from authored point dimensions.",
+    "Word also stores separate PNG fallbacks; runtime fallback selection was not measured.",
+    "No fresh-process, clipboard-interception or generic artwork-fidelity claim.",
+    "No unrelated/private document or proprietary application binary included.",
+    "Future documentation publication head and CI are separate from native producerb09bf5ed."
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "source_record_sha256": "3bb5d60b768d6021e8a0eae0e66e785e959bf760c3ca8b9fafadafce70095ee6",
+  "source_record_role": "qualification.json",
+  "derivation": "Selected facts and path normalization; original private record remains byte-exact.",
+  "facts": {
+    "head": "b09bf5ed5d57f298988b7528dd9f776b0169e025",
+    "run": 38002305196,
+    "job": 114063001049,
+    "job_conclusion": "success",
+    "attempt": 1,
+    "artifact": {
+      "archive_download_url": "https://api.github.com/repos/Ameyanagi/ReShiki/actions/artifacts/11650510951/zip",
+      "created_at": "2026-10-09T23:18:00Z",
+      "digest": "sha256:9692e975f54915b6f721c81a57dee2bfff01b509f76b6c827c66ef10e90d7d02",
+      "expired": false,
+      "expires_at": "2026-10-23T23:17:57Z",
+      "id": 11650510951,
+      "name": "windows-review-pr290-b09bf5ed5d57f298988b7528dd9f776b0169e025-38002305196-1",
+      "node_id": "MDg6QXJ0aWZhY3QxMTY1MDUxMDk1MQ==",
+      "size_in_bytes": 22338525,
+      "updated_at": "2026-10-09T23:18:00Z",
+      "url": "https://api.github.com/repos/Ameyanagi/ReShiki/actions/artifacts/11650510951",
+      "workflow_run": {
+        "head_branch": "fix/office-svg-placement",
+        "head_repository_id": 1373582807,
+        "head_sha": "b09bf5ed5d57f298988b7528dd9f776b0169e025",
+        "id": 38002305196,
+        "repository_id": 1373582807
+      }
+    },
+    "archive_sha256": "9692e975f54915b6f721c81a57dee2bfff01b509f76b6c827c66ef10e90d7d02",
+    "build_receipt_sha256": "2eb2e8674f6e946e909ff23db156fdb495b794510aa1f310be82d2ed2dd2f35d",
+    "exe_bytes": 55295488,
+    "exe_sha256": "35736c95d4b2db9c264e5b03e36d24cfe70527ce185dc9fc1b170773f4ba1710",
+    "source_inventory_count": 2609,
+    "all_inventory_bytes_match_exact_git_objects": true,
+    "pe_architecture": "x64"
+  }
+}
