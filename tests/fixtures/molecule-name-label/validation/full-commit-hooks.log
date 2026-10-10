@@ -1,0 +1,125 @@
+╭───────────────────────────────────────╮
+│ lefthook  v2.1.10   hook:  [1mpre-commit[m │
+╰───────────────────────────────────────╯
+┃  cargo-check ❯ 
+    Checking reshiki-process-heap v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/process-heap)
+    Checking reshiki-depict-math v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/depict-math)
+    Checking reshiki-geometry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/native/geometry)
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label)
+    Checking reshiki-macos v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/native/macos)
+    Checking reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/chemistry)
+    Checking opsin v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/opsin)
+    Checking reshiki-process v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/native/process)
+    Checking reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/model)
+    Checking reshiki-io v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/io)
+    Checking reshiki-agent v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/agent)
+    Checking reshiki-mcp v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/mcp)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6m 12s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+
+┃  cargo-clippy ❯ 
+    Checking reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/chemistry)
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label)
+    Checking reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/model)
+    Checking reshiki-io v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/io)
+    Checking reshiki-agent v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/agent)
+    Checking reshiki-mcp v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/mcp)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6m 08s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+
+┃  cargo-fmt ❯ 
+
+┃  oxfmt ❯ 
+Checking formatting...
+
+All matched files use the correct format.
+Finished in 116ms on 2 files using 10 threads.
+
+┃  oxlint ❯ 
+$ bun run --bun oxlint --deny-warnings website integrations/office
+
+│  ruff (skip) no matching staged files
+│  ruff-format (skip) no matching staged files
+│  ty (skip) no matching staged files
+[38;2;56;56;56m  ────────────────────────────────────[m
+summary: (done in 745.12 seconds)
+✓ cargo-check (372.47 seconds)
+✓ cargo-clippy (368.68 seconds)
+✓ cargo-fmt (3.58 seconds)
+✓ oxfmt (0.19 seconds)
+✓ oxlint (0.15 seconds)
+[feat/molecule-name-label 4bc7fafe] Add compact name import and linked molecule captions
+ 91 files changed, 16246 insertions(+), 90 deletions(-)
+ create mode 100644 crates/model/src/molecule_names.rs
+ create mode 100644 crates/model/src/molecule_names/tests.rs
+ create mode 100644 docs/changes/molecule-name-label.md
+ create mode 100644 docs/images/molecule-name-label/before-current-import.jpg
+ create mode 100644 docs/images/molecule-name-label/before-current-name-panel.jpg
+ create mode 100644 docs/images/molecule-name-label/caption-off.jpg
+ create mode 100644 docs/images/molecule-name-label/chemical-name-generated.jpg
+ create mode 100644 docs/images/molecule-name-label/chemical-name-hidden.jpg
+ create mode 100644 docs/images/molecule-name-label/chemical-name-menu.jpg
+ create mode 100644 docs/images/molecule-name-label/direct-insert-after.jpg
+ create mode 100644 docs/images/molecule-name-label/direct-insert-redo.jpg
+ create mode 100644 docs/images/molecule-name-label/direct-insert-undo.jpg
+ create mode 100644 docs/images/molecule-name-label/name-entry.jpg
+ create mode 100644 docs/images/molecule-name-label/native-reopened.jpg
+ create mode 100644 docs/images/molecule-name-label/optional-preview.jpg
+ create mode 100644 docs/images/molecule-name-label/unsupported-name.jpg
+ create mode 100644 src/app/naming/import_dock.rs
+ create mode 100644 src/app/naming/import_dock/tests.rs
+ create mode 100644 src/app/naming/molecule_label.rs
+ create mode 100644 src/app/naming/molecule_label/tests.rs
+ create mode 100644 tests/fixtures/molecule-name-label/README.md
+ create mode 100644 tests/fixtures/molecule-name-label/artifact-index.json
+ create mode 100644 tests/fixtures/molecule-name-label/caption-off-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/chemical-name-generated-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/chemical-name-hidden-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/chemical-name-menu-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/direct-insert-after-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/direct-insert-redo-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/direct-insert-undo-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/ethanol-direct-import.rsk
+ create mode 100644 tests/fixtures/molecule-name-label/ethanol-generated-caption.rsk
+ create mode 100644 tests/fixtures/molecule-name-label/ethanol-structure-only.rsk
+ create mode 100644 tests/fixtures/molecule-name-label/name-entry-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/native-acceptance-v1.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/native-reopened-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/optional-preview-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/runtime-source-bridge.json
+ create mode 100644 tests/fixtures/molecule-name-label/unsupported-name-ax.txt
+ create mode 100644 tests/fixtures/molecule-name-label/validation/app-context1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/app-context1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/app-import1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/app-import1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/app-naming1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/app-naming1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/app-naming2-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/app-naming2.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/build1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/build1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/build2-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/build2.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/bundle-provenance.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/canvas1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/canvas1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/clippy1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/clippy1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/default-app-v2.d
+ create mode 100644 tests/fixtures/molecule-name-label/validation/fmt1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/fmt1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/frozen-source-v2.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/model1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/model1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/model2-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/model2.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/package1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/package1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/package2-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/package2.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/renderer1-receipt.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/renderer1.log
+ create mode 100644 tests/fixtures/molecule-name-label/validation/root-focused-verification-v1.json.raw
+ create mode 100644 tests/fixtures/molecule-name-label/validation/validation-final.json.raw

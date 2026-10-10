@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/Users/ryuichi/.local/bin/python3.14",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package.py"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "naming_helper": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+  "started_unix": 1791619095.7178519,
+  "elapsed_seconds": 9.544914245605469,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package2.log",
+  "log_bytes": 808,
+  "log_sha256": "3588f3ed57d9cbc170dfe09e6943573a3374097db526325cdd4a36c59832fe74"
+}

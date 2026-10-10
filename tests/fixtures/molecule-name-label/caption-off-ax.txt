@@ -1,0 +1,2 @@
+There has been no change in the accessibility tree for Window: "Untitled • — ReShiki".
+The focused UI element is 121 text field (settable) Chemical name, Value: ethanol, ID: import-name

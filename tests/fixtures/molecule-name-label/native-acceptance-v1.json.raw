@@ -1,0 +1,166 @@
+{
+  "created_utc": "2026-10-10T08:11:35.409733+00:00",
+  "operator": "/root",
+  "app_bundle": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Compact Name Import Verified.app",
+  "signed_executable_sha256": "ed4e1cfe393e9e192f300928a22556fe215cb25e86dbefcca9f42f06e1af9a0f",
+  "frozen_source_receipt_sha256": "af7693db982d627174c747ed6ce596a1c89eea8fe9e84fa4528a3ec2df68b7fd",
+  "native_checks": [
+    {
+      "name": "Direct Import dock insertion with closed preview and details",
+      "result": "PASS",
+      "steps": "Import > Name > ethanol > Insert. 3 atoms, 2 bonds, one linked ethanol caption."
+    },
+    {
+      "name": "One Undo and one Redo",
+      "result": "PASS",
+      "steps": "One Undo removes graph and caption; one Redo restores both."
+    },
+    {
+      "name": "Right-click Hide and Show chemical name",
+      "result": "PASS",
+      "steps": "O right-click Hide removes caption; Show locally generates ethan-1-ol. Saved graph identical, one caption/link only."
+    },
+    {
+      "name": "Optional preview",
+      "result": "PASS",
+      "steps": "Preview opens graph and editable SMILES, Hide preview collapses without document mutation."
+    },
+    {
+      "name": "Unsupported name",
+      "result": "PASS",
+      "steps": "not-a-chemical-name > Insert shows concise error; saved atoms and bonds remain unchanged."
+    },
+    {
+      "name": "Caption-off direct insert",
+      "result": "PASS",
+      "steps": "New tab > ethanol > Add name below off > Insert; actual native save has 3 atoms, 2 bonds, zero captions or links."
+    },
+    {
+      "name": "Native reopen",
+      "result": "PASS",
+      "steps": "Open saved ethanol-direct-import.rsk through native file picker into fresh tab; graph and ethanol caption visible, Undo/Redo disabled."
+    }
+  ],
+  "saved_documents": {
+    "ethanol-direct-import.rsk": {
+      "atoms": 3,
+      "bonds": 2,
+      "annotations": 1,
+      "linked_names": 1
+    },
+    "ethanol-generated-caption.rsk": {
+      "atoms": 3,
+      "bonds": 2,
+      "annotations": 1,
+      "linked_names": 1
+    },
+    "ethanol-structure-only.rsk": {
+      "atoms": 3,
+      "bonds": 2,
+      "annotations": 0,
+      "linked_names": 0
+    }
+  },
+  "artifacts": {
+    "caption-off-ax.txt": {
+      "bytes": 189,
+      "sha256": "456d1b7191ea0ee77e37d69202a8ec7faa3cce7f3cb51e9c33bd1e9e26fc1e59"
+    },
+    "caption-off.jpg": {
+      "bytes": 276445,
+      "sha256": "a1a18733acdd503972fe41fd167f61a5d79b94df80fa66334d091121571d3dc8"
+    },
+    "chemical-name-generated-ax.txt": {
+      "bytes": 107,
+      "sha256": "9e5630eecc5ee592f340d5f4ddcef9be3ad9a4c93781e1bf6685c546770d60a6"
+    },
+    "chemical-name-generated.jpg": {
+      "bytes": 289583,
+      "sha256": "7419bd0cf810d027c6ba04f53d90dcb8fb62f430a4d0127e494cb5ca22dd5946"
+    },
+    "chemical-name-hidden-ax.txt": {
+      "bytes": 4612,
+      "sha256": "49ad462d3e2b20703d77fa65a9c0ec54b69fb6d156eaf6029d87381ceb6e7342"
+    },
+    "chemical-name-hidden.jpg": {
+      "bytes": 272923,
+      "sha256": "d66d4e2bc408ff085873fd43687e502dee3f828e29374fc090503af12067d80e"
+    },
+    "chemical-name-menu-ax.txt": {
+      "bytes": 822,
+      "sha256": "8bdfb3fe8073c649b7276ecb5baacf5af4b7d211a08acb57d8193fd72359f72a"
+    },
+    "chemical-name-menu.jpg": {
+      "bytes": 311010,
+      "sha256": "4270ba59059b9ff4e75f8ae5571d18116bbe16f821fad5cd5f817dad140f8582"
+    },
+    "direct-insert-after-ax.txt": {
+      "bytes": 4471,
+      "sha256": "bff5df16106ce9c43acbb6c5c775c33d6fcfc8b3e7b02785387e28795425a5d7"
+    },
+    "direct-insert-after.jpg": {
+      "bytes": 291339,
+      "sha256": "57abb289b62fecb095a339ab278ed104c9ebe29fd350c84155afb5b1b5838ef4"
+    },
+    "direct-insert-redo-ax.txt": {
+      "bytes": 4558,
+      "sha256": "03ca02736c951d3b0a31299c82fc4fb2dc674d4e64ae0c1fb70ba1a7a6882bc8"
+    },
+    "direct-insert-redo.jpg": {
+      "bytes": 275967,
+      "sha256": "2b9f4bffea54d0c60b3016b885e3feb87f69bcf12994ed665db584002c546731"
+    },
+    "direct-insert-undo-ax.txt": {
+      "bytes": 4581,
+      "sha256": "776a139b5c38c6d86534f02d8931fa97e58929088c6dcc1957dd102484d6c63a"
+    },
+    "direct-insert-undo.jpg": {
+      "bytes": 251496,
+      "sha256": "93349c6677bdec9ff1fe9013f71cde3acaede8f041e57e3db1c832fc01a8087a"
+    },
+    "ethanol-direct-import.rsk": {
+      "bytes": 2435,
+      "sha256": "fec3e54c004041199e6e744807d3d78cf1f931970822e869c1d788a3a6fc29d7"
+    },
+    "ethanol-generated-caption.rsk": {
+      "bytes": 2443,
+      "sha256": "72307195991aa75120124d849998e4c1393e15cee6dfe60339befb035097d903"
+    },
+    "ethanol-structure-only.rsk": {
+      "bytes": 1681,
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c"
+    },
+    "name-entry-ax.txt": {
+      "bytes": 4627,
+      "sha256": "fc38940002b6b79e29b73a971ed5532127003216b6feb3329e4de5b542240485"
+    },
+    "name-entry.jpg": {
+      "bytes": 245670,
+      "sha256": "b3b96db9abcd37beb8744637e88f727f0779b367a411309bfee900b6f03848a8"
+    },
+    "native-reopened-ax.txt": {
+      "bytes": 4657,
+      "sha256": "fc762ade6e2b32dedd374ac440cff9324c72c605392885f29c380ed54861a304"
+    },
+    "native-reopened.jpg": {
+      "bytes": 283392,
+      "sha256": "d4036be2f7faaabca1d08004611abac1257784421997073fc0f391d81ee38a03"
+    },
+    "optional-preview-ax.txt": {
+      "bytes": 4736,
+      "sha256": "0c4390312006356e86ebba8cb9f39bd7318a9b011acd27be0fe8ccadc7ca1417"
+    },
+    "optional-preview.jpg": {
+      "bytes": 298607,
+      "sha256": "72313365b1fb884aeaae3c62be8deac46edf08a4161d72c55fff3cb0d0e9db6a"
+    },
+    "unsupported-name-ax.txt": {
+      "bytes": 217,
+      "sha256": "f2041ea90728cde836f95b34938f58d8987d467f7d1d2ed98024e6a9a9199ea9"
+    },
+    "unsupported-name.jpg": {
+      "bytes": 300747,
+      "sha256": "543de98528a91f88e90d14bb1ef40b6a452acf1b13e89a1288b1b1a621cfa399"
+    }
+  }
+}

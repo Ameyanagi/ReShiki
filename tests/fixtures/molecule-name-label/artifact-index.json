@@ -1,0 +1,447 @@
+{
+  "purpose": "Exact-byte provenance for new compact Import/name-caption review assets. .json.raw receipts retain original hashes; historical earlier feature assets are untouched.",
+  "native_acceptance_sha256": "1333368130459d3ff76cef6ae09fe91f92a57fdb7158ef46cc0e947b3de926a4",
+  "items": [
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/caption-off-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/caption-off-ax.txt",
+      "sha256": "456d1b7191ea0ee77e37d69202a8ec7faa3cce7f3cb51e9c33bd1e9e26fc1e59",
+      "bytes": 189,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/caption-off.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/caption-off.jpg",
+      "sha256": "a1a18733acdd503972fe41fd167f61a5d79b94df80fa66334d091121571d3dc8",
+      "bytes": 276445,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/chemical-name-generated-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/chemical-name-generated-ax.txt",
+      "sha256": "9e5630eecc5ee592f340d5f4ddcef9be3ad9a4c93781e1bf6685c546770d60a6",
+      "bytes": 107,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/chemical-name-generated.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/chemical-name-generated.jpg",
+      "sha256": "7419bd0cf810d027c6ba04f53d90dcb8fb62f430a4d0127e494cb5ca22dd5946",
+      "bytes": 289583,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/chemical-name-hidden-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/chemical-name-hidden-ax.txt",
+      "sha256": "49ad462d3e2b20703d77fa65a9c0ec54b69fb6d156eaf6029d87381ceb6e7342",
+      "bytes": 4612,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/chemical-name-hidden.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/chemical-name-hidden.jpg",
+      "sha256": "d66d4e2bc408ff085873fd43687e502dee3f828e29374fc090503af12067d80e",
+      "bytes": 272923,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/chemical-name-menu-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/chemical-name-menu-ax.txt",
+      "sha256": "8bdfb3fe8073c649b7276ecb5baacf5af4b7d211a08acb57d8193fd72359f72a",
+      "bytes": 822,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/chemical-name-menu.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/chemical-name-menu.jpg",
+      "sha256": "4270ba59059b9ff4e75f8ae5571d18116bbe16f821fad5cd5f817dad140f8582",
+      "bytes": 311010,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/direct-insert-after-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/direct-insert-after-ax.txt",
+      "sha256": "bff5df16106ce9c43acbb6c5c775c33d6fcfc8b3e7b02785387e28795425a5d7",
+      "bytes": 4471,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/direct-insert-after.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/direct-insert-after.jpg",
+      "sha256": "57abb289b62fecb095a339ab278ed104c9ebe29fd350c84155afb5b1b5838ef4",
+      "bytes": 291339,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/direct-insert-redo-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/direct-insert-redo-ax.txt",
+      "sha256": "03ca02736c951d3b0a31299c82fc4fb2dc674d4e64ae0c1fb70ba1a7a6882bc8",
+      "bytes": 4558,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/direct-insert-redo.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/direct-insert-redo.jpg",
+      "sha256": "2b9f4bffea54d0c60b3016b885e3feb87f69bcf12994ed665db584002c546731",
+      "bytes": 275967,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/direct-insert-undo-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/direct-insert-undo-ax.txt",
+      "sha256": "776a139b5c38c6d86534f02d8931fa97e58929088c6dcc1957dd102484d6c63a",
+      "bytes": 4581,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/direct-insert-undo.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/direct-insert-undo.jpg",
+      "sha256": "93349c6677bdec9ff1fe9013f71cde3acaede8f041e57e3db1c832fc01a8087a",
+      "bytes": 251496,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/ethanol-direct-import.rsk",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/ethanol-direct-import.rsk",
+      "sha256": "fec3e54c004041199e6e744807d3d78cf1f931970822e869c1d788a3a6fc29d7",
+      "bytes": 2435,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/ethanol-generated-caption.rsk",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/ethanol-generated-caption.rsk",
+      "sha256": "72307195991aa75120124d849998e4c1393e15cee6dfe60339befb035097d903",
+      "bytes": 2443,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/ethanol-structure-only.rsk",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/ethanol-structure-only.rsk",
+      "sha256": "7c5087f6e96abaedc71261ce0e174d089ddaa78648a500c36897ad6695bb899c",
+      "bytes": 1681,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/name-entry-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/name-entry-ax.txt",
+      "sha256": "fc38940002b6b79e29b73a971ed5532127003216b6feb3329e4de5b542240485",
+      "bytes": 4627,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/name-entry.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/name-entry.jpg",
+      "sha256": "b3b96db9abcd37beb8744637e88f727f0779b367a411309bfee900b6f03848a8",
+      "bytes": 245670,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/native-reopened-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/native-reopened-ax.txt",
+      "sha256": "fc762ade6e2b32dedd374ac440cff9324c72c605392885f29c380ed54861a304",
+      "bytes": 4657,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/native-reopened.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/native-reopened.jpg",
+      "sha256": "d4036be2f7faaabca1d08004611abac1257784421997073fc0f391d81ee38a03",
+      "bytes": 283392,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/optional-preview-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/optional-preview-ax.txt",
+      "sha256": "0c4390312006356e86ebba8cb9f39bd7318a9b011acd27be0fe8ccadc7ca1417",
+      "bytes": 4736,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/optional-preview.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/optional-preview.jpg",
+      "sha256": "72313365b1fb884aeaae3c62be8deac46edf08a4161d72c55fff3cb0d0e9db6a",
+      "bytes": 298607,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/unsupported-name-ax.txt",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/unsupported-name-ax.txt",
+      "sha256": "f2041ea90728cde836f95b34938f58d8987d467f7d1d2ed98024e6a9a9199ea9",
+      "bytes": 217,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/unsupported-name.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/unsupported-name.jpg",
+      "sha256": "543de98528a91f88e90d14bb1ef40b6a452acf1b13e89a1288b1b1a621cfa399",
+      "bytes": 300747,
+      "purpose": "ROOT native acceptance; exact bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/native-acceptance-v1.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/native-import-dock-20261010-v1/native-acceptance-v1.json",
+      "sha256": "1333368130459d3ff76cef6ae09fe91f92a57fdb7158ef46cc0e947b3de926a4",
+      "bytes": 5844,
+      "purpose": "Original ROOT receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/before-current-import.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki/.coordination/name-import-ui-concepts-20261010-v1/current-import.jpg",
+      "sha256": "699ae025176a7d48649d94108baeac6edbc8440dc2ba661f0488ee0d7d724ce4",
+      "bytes": 328106,
+      "purpose": "ROOT actual baseline desktop capture; no concept artwork"
+    },
+    {
+      "repository_path": "docs/images/molecule-name-label/before-current-name-panel.jpg",
+      "origin": "/Users/ryuichi/dev/ReShiki/.coordination/name-import-ui-concepts-20261010-v1/current-name-panel.jpg",
+      "sha256": "df78c8bf9d04e4163152f361b5af04908f2c0edc0fff195c366134be58ca251d",
+      "bytes": 472253,
+      "purpose": "ROOT actual baseline desktop capture; no concept artwork"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/model2.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/model2.log",
+      "sha256": "54d8524b7cbf85cf5626388c0f0096eb2d3e9d4623f7e99143d0146f5cb65486",
+      "bytes": 1631,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/model2-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/model2-receipt.json",
+      "sha256": "530dda4de10f500a1ad91c4d7d46ad2f481c744c9cb8c2a6f854cc6606b52a80",
+      "bytes": 721,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/build2.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/build2.log",
+      "sha256": "5d64898bd3163f0a9fb72b60a9b9b92679577b9aa595027fad2e0af839f17bd7",
+      "bytes": 362779,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/build2-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/build2-receipt.json",
+      "sha256": "eae4c78c6bcbeeae9607a120cd370351c75593d53c04bdbcb988119877885320",
+      "bytes": 735,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/package2.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package2.log",
+      "sha256": "3588f3ed57d9cbc170dfe09e6943573a3374097db526325cdd4a36c59832fe74",
+      "bytes": 808,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/package2-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package2-receipt.json",
+      "sha256": "de9422fb39f32cd3bfb50113a3c7a54bbb6fb2abc25c38e9fbbf12a3e3646c18",
+      "bytes": 738,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/app-naming2.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-naming2.log",
+      "sha256": "efb9a203a740f9084bbb8837c06ee963ad4c3e875b32b6b7cc258f09381efc7a",
+      "bytes": 3188,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/app-naming2-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-naming2-receipt.json",
+      "sha256": "294540347b5208e635f2f41208ab27f502e2eed4de4f676974dd2474c909439d",
+      "bytes": 1019,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/app-context1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-context1.log",
+      "sha256": "86a9f1560a91946bd07683c72ba2a88cc5aed2dbde4076a25dda5cd5561e1903",
+      "bytes": 3151,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/app-context1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-context1-receipt.json",
+      "sha256": "61ceddf358ad5574967eb7fd64fcd4d5f8759670ef39fd2b1bb8f32d2ba742e0",
+      "bytes": 1025,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/app-import1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-import1.log",
+      "sha256": "e12b6f7a063503eceb5c9b97a582e33a61d88f7e4357f99cbfd208959301489e",
+      "bytes": 1473,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/app-import1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-import1-receipt.json",
+      "sha256": "06cd930fcb82a8075a1a1bf097815c5819afb599ea62ae98e4b23f1ac06135d0",
+      "bytes": 1017,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/renderer1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/renderer1.log",
+      "sha256": "b1af9ea0bd968bdc1b81a368804feea4a7a6a46e3ade474118a12a1c64b62c99",
+      "bytes": 649,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/renderer1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/renderer1-receipt.json",
+      "sha256": "e2d5e1b9f50517bcae1513e9564f3f6c75eb6ee0766b3e398bc1241fcd4e0fe2",
+      "bytes": 1133,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/canvas1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/canvas1.log",
+      "sha256": "f59c36e1243278e4307e1b7df20524a9f286ae1e60f3f4d00e4ff1336345f284",
+      "bytes": 641,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/canvas1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/canvas1-receipt.json",
+      "sha256": "b7c387f02ffda149cb198ef379910bbd005ef553b552f4cdd4971b41ca4301cd",
+      "bytes": 1108,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/clippy1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/clippy1.log",
+      "sha256": "1c3af8d3db4142c0fe04c71a6b9de75ebeb164b19c5d3e67d901f5596b0ba097",
+      "bytes": 2371,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/clippy1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/clippy1-receipt.json",
+      "sha256": "02aeaf0b8e62d39a892a09a0e38d7cb8f85bac1007e88f479c1b2d56a5eb7258",
+      "bytes": 1021,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/fmt1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/fmt1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/fmt1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/fmt1-receipt.json",
+      "sha256": "79872fc964c383f33cafc877147bb28eefe132c0fd6a823b13446203ed5f0f7e",
+      "bytes": 903,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/build1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/build1.log",
+      "sha256": "bef0d02a631d7033475cca670925645fa285a0035c2335f5ea40d334aed15ca2",
+      "bytes": 363431,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/build1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/build1-receipt.json",
+      "sha256": "a2b32313d2acabeea99d65be49f2be2378bbdee31a485c276950fe1987d827b7",
+      "bytes": 738,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/model1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/model1.log",
+      "sha256": "c7fe51b2ea96d18b2d38b670c8399571644edf91e4f7995aeab962637c4b9487",
+      "bytes": 1233,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/model1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/model1-receipt.json",
+      "sha256": "c74a3bd5c6afa545a14f0ba3d3df65892eba5fe950747e056bb56913fb882d6c",
+      "bytes": 722,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/package1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package1.log",
+      "sha256": "60add959412645a2040d0dafcf38a8232c5a199ea241469f9a19359c433342c6",
+      "bytes": 400,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/package1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/package1-receipt.json",
+      "sha256": "2bc14103ba2a884f7b01762c9631a83e1baf2dd59148488735660fc4d9ecf4b0",
+      "bytes": 708,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/app-naming1.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-naming1.log",
+      "sha256": "4a6a6439227c66989ef7580ce7d3c85715d249021e00edd46a7501cb3dc375af",
+      "bytes": 8465,
+      "purpose": "Raw command output; includes failed attempts where named"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/app-naming1-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/app-naming1-receipt.json",
+      "sha256": "18f69608adc248cb6ae93d21dd6445b8ae2b6ae63e1033f80e8e5352d86fe0b6",
+      "bytes": 746,
+      "purpose": "Original command receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/frozen-source-v2.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/frozen-source-v2.json",
+      "sha256": "af7693db982d627174c747ed6ce596a1c89eea8fe9e84fa4528a3ec2df68b7fd",
+      "bytes": 453182,
+      "purpose": "Original source/build validation receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/bundle-provenance.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/bundle-provenance.json",
+      "sha256": "709963cd369f05539c5c0e30d7c00fa4a6d13d14413d35a568d9f055a8873ff5",
+      "bytes": 76260,
+      "purpose": "Original source/build validation receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/validation-final.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/validation-final.json",
+      "sha256": "48ee57890b04d9d728e53d12ebedd5af095c8b39b45d1f9a3cc3c0c68ff972a1",
+      "bytes": 10907,
+      "purpose": "Original source/build validation receipt; raw suffix preserves hash"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/default-app-v2.d",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/default-app-v2.d",
+      "sha256": "43e40a9ed6d1ef2de01d03081a16060f82e052d29e782bcf995247f86932ffb7",
+      "bytes": 57775,
+      "purpose": "Original source-qualified native executable depfile"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/root-focused-verification-v1.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/root-focused-verification-v1.json",
+      "sha256": "b96644b5da4d913c07f47f546f866fab5c6f0c14c38477bfb13c4672dc56bad3",
+      "bytes": 2412,
+      "purpose": "ROOT independent named-pass/log hash verification; original bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/full-commit-hooks.log",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/commit1.log",
+      "sha256": "0149687802855137e8a8b56a3bdf75516c83a567d97525bbb057d79799e739fb",
+      "bytes": 9350,
+      "purpose": "Normal full all-feature pre-commit hooks; original log/receipt bytes"
+    },
+    {
+      "repository_path": "tests/fixtures/molecule-name-label/validation/full-commit-hooks-receipt.json.raw",
+      "origin": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/molecule-name-label/sol-validation-20261010T075032Z/commit1-receipt.json",
+      "sha256": "3c2611a88383cde3080207438ea69d3e5f43d59f2ff76f3f4a9e940c3a2c1804",
+      "bytes": 940,
+      "purpose": "Normal full all-feature pre-commit hooks; original log/receipt bytes"
+    }
+  ]
+}

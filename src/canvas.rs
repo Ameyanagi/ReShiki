@@ -109,6 +109,9 @@ pub enum Edit {
     ContextMenu {
         position: Point,
         selected: Vec<u64>,
+        /// The exact secondary-click hit before logical groups or the current
+        /// selection expand it. Object-specific commands must use this target.
+        hit: Vec<u64>,
     },
     EraseStart(World),
     EraseTo(World, World),

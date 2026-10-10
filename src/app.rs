@@ -874,6 +874,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
             a == b
         })
         && a.annotations == b.annotations
+        && a.molecule_names == b.molecule_names
         && a.arrows == b.arrows
         && a.graphics == b.graphics
         && a.groups == b.groups
