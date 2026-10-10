@@ -75,6 +75,9 @@ impl App {
     }
 
     fn labels_gate(&mut self, message: Message) -> Gate {
+        if let Message::Mapping(action @ super::reaction_mapping::Action::Ready(..)) = message {
+            return Break(self.mapping_action(action));
+        }
         if let Message::LabelsReady(key, result) = message {
             self.labels_ready(key, result);
             return Break(Task::none());

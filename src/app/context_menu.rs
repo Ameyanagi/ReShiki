@@ -237,6 +237,29 @@ impl App {
                 .iter()
                 .filter(|id| self.tab.doc.atom(**id).is_some())
                 .count()
+                == 1
+        {
+            entries.push(command(
+                "Edit atom map…",
+                Message::Mapping(super::reaction_mapping::Action::Open),
+                true,
+            ));
+            entries.push(command(
+                "Clear atom map",
+                Message::Mapping(super::reaction_mapping::Action::Clear),
+                self.tab
+                    .selected
+                    .iter()
+                    .any(|id| self.tab.doc.atom(*id).is_some_and(|a| a.map_num != 0)),
+            ));
+        }
+        if atoms
+            && self
+                .tab
+                .selected
+                .iter()
+                .filter(|id| self.tab.doc.atom(**id).is_some())
+                .count()
                 > 1
         {
             entries.push(command(

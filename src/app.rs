@@ -62,6 +62,7 @@ mod performance;
 mod pictures;
 mod popover;
 mod printing;
+mod reaction_mapping;
 mod reactions;
 mod ring_edits;
 #[cfg(test)]
@@ -121,6 +122,7 @@ pub enum Message {
     NumericTransform(numeric_transforms::Action),
     Updates(updates::Action),
     Reaction(reactions::Action),
+    Mapping(reaction_mapping::Action),
     DrawingStyle(document_styles::Action),
     DepthAppearance(depth_appearance::Action),
     InlineText(inline_text::Action),
