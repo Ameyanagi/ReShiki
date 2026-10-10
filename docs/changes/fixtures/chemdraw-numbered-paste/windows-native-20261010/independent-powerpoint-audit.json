@@ -1,0 +1,379 @@
+{
+  "status": "PASS",
+  "candidate_source": "127d1a6247d390d33d420f2168f4a657d2659f7b",
+  "candidate_exe_sha256": "3e56439b55cd3c7dc047f431bb56f60407d17bc56fae0e1cb76641f1ee2e6fb9",
+  "actual_before_source": "44d198c4e6791a15017af7ac6d356c245b7073ca",
+  "historical_reference_base": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "powerpoint": {
+    "path": "windows-si-powerpoint-v1.pptx",
+    "bytes": 39277,
+    "sha256": "98c78dfa5a3856052ec6158000c6b32687c6042c435e8be475b93bc4c443433b"
+  },
+  "presentation_object": {
+    "slides": 1,
+    "logical_ole_objects": 1,
+    "progId": "ChemDraw_x64.Document.6.0",
+    "name": "CS ChemDraw 64-bit Drawing",
+    "relationship": {
+      "Id": "rId2",
+      "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject",
+      "Target": "../embeddings/oleObject1.bin"
+    },
+    "member": "ppt/embeddings/oleObject1.bin",
+    "bytes": 11264,
+    "sha256": "65b5a68c52d103c4a55a48aefbc5bfe03df6d1c094680d8077d735e30b96559c",
+    "compound_clsid": "41BA6D21-A02E-11CE-8FD9-0020AFD1F20C",
+    "streams": [
+      {
+        "name": ["\u0001CompObj"],
+        "bytes": 137,
+        "sha256": "0340c86a53a6b52fe9286c16cda7483e29ec9e3c9f6f1b93e5a816f40328c62b"
+      },
+      {
+        "name": ["\u0001Ole"],
+        "bytes": 20,
+        "sha256": "c36c8a4b7dee703b9ce6e288032033b718feef01ca283cfaa4332a8334b2adf3"
+      },
+      {
+        "name": ["\u0002OlePres000"],
+        "bytes": 5274,
+        "sha256": "54b2180e869328ab7536b2d19507730fdc503814bfb5b0e2b778a4f2af91f376"
+      },
+      {
+        "name": ["CONTENTS"],
+        "bytes": 1733,
+        "sha256": "d13b8b1932511d5a98bd507e353be238f18a399c008ab5967953ad99172c2bb8"
+      }
+    ],
+    "offset_emu": {
+      "x": "5567363",
+      "y": "3279775"
+    },
+    "extent_emu": {
+      "cx": "4547308",
+      "cy": "1276799"
+    }
+  },
+  "embedded_original_cdx": {
+    "path": "powerpoint-ole-CONTENTS.cdx",
+    "bytes": 1733,
+    "sha256": "d13b8b1932511d5a98bd507e353be238f18a399c008ab5967953ad99172c2bb8"
+  },
+  "embedded_creation_program": "ChemDraw 26.1.0.6327",
+  "preview": {
+    "member": "ppt/media/image1.emf",
+    "bytes": 4540,
+    "sha256": "ccb920cb339e46d3efc395671a658cfc39b0dcfc480ef8fdf861d78bf24a9a2c",
+    "scope": "Recorded only; no preview fidelity assessment performed."
+  },
+  "numbered_property": {
+    "tag": 1099,
+    "offset": 1406,
+    "payload_offset": 1410,
+    "length": 1,
+    "hex": "01"
+  },
+  "node_type_property": {
+    "tag": 1024,
+    "offset": 1400,
+    "payload_offset": 1404,
+    "length": 2,
+    "hex": "0c00"
+  },
+  "property_context": {
+    "code": 32772,
+    "id": 15,
+    "ancestors": [
+      {
+        "code": 32768,
+        "id": 0
+      },
+      {
+        "code": 32769,
+        "id": 39
+      },
+      {
+        "code": 32771,
+        "id": 2
+      },
+      {
+        "code": 32772,
+        "id": 5
+      },
+      {
+        "code": 32771,
+        "id": 40
+      }
+    ]
+  },
+  "all_node_bond_and_text_attributes_equal_direct_windows_cdx": true,
+  "all_label_text_equal_direct_windows_cdx": true,
+  "embedded_cdx_byte_equal_direct_windows_cdx": false,
+  "historical_codec_diagnostics": {
+    "51fa0991da2507bb00b27c1b420e807468de6423": "Unsupported binary drawing property 0x044b",
+    "44d198c4e6791a15017af7ac6d356c245b7073ca": "Unsupported binary drawing property 0x044b"
+  },
+  "saved_native": {
+    "path": "windows-si-powerpoint-paste-after-v1.rsk",
+    "bytes": 11031,
+    "sha256": "30fd5d77ea94b88ae05ec1a36e6e1b050de7d1f2c75f2b506de2b06ac4bf628d"
+  },
+  "saved_native_byte_and_whole_json_equal_direct_chemdraw_paste": true,
+  "native_graph_abbreviation_label_settings_match_analyzed_mac_reference": true,
+  "clipboard_translation_world": {
+    "x": -276.416687,
+    "y": -289.54166
+  },
+  "maximum_geometry_residual_world": 1.2999999967178155e-5,
+  "identity": {
+    "formula": "C4H12OSi",
+    "canonical_SMILES": "CO[Si](C)(C)C",
+    "method": "Full typed graph equals the previously independently analyzed Mac reference. Saved/reopened PowerPoint-route screenshots also visibly display this formula and SMILES. No new identifier engine was run in this read-only audit."
+  },
+  "negative_controls": [
+    {
+      "name": "zero external number",
+      "rejected": true,
+      "diagnostic": "ExternalConnectionNum must be a positive signed byte"
+    },
+    {
+      "name": "negative signed external number",
+      "rejected": true,
+      "diagnostic": "ExternalConnectionNum must be a positive signed byte"
+    },
+    {
+      "name": "wrong node applicability",
+      "rejected": true,
+      "diagnostic": "ExternalConnectionNum requires an external connection point"
+    },
+    {
+      "name": "unknown property fail closed",
+      "rejected": true,
+      "diagnostic": "Unsupported binary drawing property 0x7777"
+    },
+    {
+      "name": "native bond order",
+      "rejected": true,
+      "diagnostic": ""
+    },
+    {
+      "name": "native formal charge",
+      "rejected": true,
+      "diagnostic": ""
+    },
+    {
+      "name": "native abbreviation anchor",
+      "rejected": true,
+      "diagnostic": ""
+    },
+    {
+      "name": "native relative geometry",
+      "rejected": true,
+      "diagnostic": ""
+    }
+  ],
+  "ten_relevant_old_reader_transport_paths_equal_base": [
+    {
+      "path": "crates/io/src/exchange/mod.rs",
+      "base_sha256": "ecd6856b15cd997884ceaab55a7b420f5535d2607980a3542cf9ca5c40fa202f",
+      "old_co_sha256": "ecd6856b15cd997884ceaab55a7b420f5535d2607980a3542cf9ca5c40fa202f",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/exchange/decode.rs",
+      "base_sha256": "eec2ad590014fcda30f30fea79d9b41c75a9afdce1f5372ee539e50633895b11",
+      "old_co_sha256": "eec2ad590014fcda30f30fea79d9b41c75a9afdce1f5372ee539e50633895b11",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/exchange/schema.rs",
+      "base_sha256": "84fa262b2103db8fff8ff7e09733737672e06fe9e63816702ab446ac721e4709",
+      "old_co_sha256": "84fa262b2103db8fff8ff7e09733737672e06fe9e63816702ab446ac721e4709",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/exchange/values.rs",
+      "base_sha256": "e031fbaa3aeed2909dbff908ae7e6e39887e2b59180e2466cf3d9dd58742b510",
+      "old_co_sha256": "e031fbaa3aeed2909dbff908ae7e6e39887e2b59180e2466cf3d9dd58742b510",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/chemistry/cdxml/abbreviations.rs",
+      "base_sha256": "88ace659ba73458920d5382414a8d2a16c47571b4357a88aebe5603d721b5d3f",
+      "old_co_sha256": "88ace659ba73458920d5382414a8d2a16c47571b4357a88aebe5603d721b5d3f",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/chemistry/cdxml/attachments.rs",
+      "base_sha256": "002277a4b98657502f1d1811f9ed906135c433a838f4b41d38ab23e12d02e8fd",
+      "old_co_sha256": "002277a4b98657502f1d1811f9ed906135c433a838f4b41d38ab23e12d02e8fd",
+      "equal": true
+    },
+    {
+      "path": "crates/io/src/chemistry/cdxml/preparation.rs",
+      "base_sha256": "8981f4e9b71d7a9a06225a2ba210342475e2ad8dcc7808dc2f9e61e7203030e7",
+      "old_co_sha256": "8981f4e9b71d7a9a06225a2ba210342475e2ad8dcc7808dc2f9e61e7203030e7",
+      "equal": true
+    },
+    {
+      "path": "src/clipboard.rs",
+      "base_sha256": "49a9a14d15a5d63eb33cfa754d0b73fcc9f36bb8dadb06147967b9647b86f2a3",
+      "old_co_sha256": "49a9a14d15a5d63eb33cfa754d0b73fcc9f36bb8dadb06147967b9647b86f2a3",
+      "equal": true
+    },
+    {
+      "path": "src/app/clipboard.rs",
+      "base_sha256": "e1413d6e93c20bc45c370445cbfd3241990262aeb6281ce9696e951a69a9be0e",
+      "old_co_sha256": "e1413d6e93c20bc45c370445cbfd3241990262aeb6281ce9696e951a69a9be0e",
+      "equal": true
+    },
+    {
+      "path": "native/windows/src/clipboard.rs",
+      "base_sha256": "81d63ab5415e40d271a4c9f1ccf322444a914f35631afafca953179386017beb",
+      "old_co_sha256": "81d63ab5415e40d271a4c9f1ccf322444a914f35631afafca953179386017beb",
+      "equal": true
+    }
+  ],
+  "read_only_process_file_proof": {
+    "path": "private-record/fresh-proof-normalized.json",
+    "bytes": 1554,
+    "sha256": "ad38476b99096af707b47a1689e59480b353858bc21646343042c1a78eaccbfe"
+  },
+  "observed_process_at": "2026-10-10T09:19:26.3824230Z",
+  "processes": [
+    {
+      "pid": 8980,
+      "session": 2,
+      "creation_utc": "2026-10-09T23:53:02.6776470Z",
+      "path": "owned-runtime/baseline/reshiki.exe",
+      "sha256": "752743a45e6afda49de4661d68bfcf07b7ef736c4aa3a3829d799171dae6a894"
+    },
+    {
+      "pid": 13696,
+      "session": 2,
+      "creation_utc": "2026-10-10T09:03:48.0920060Z",
+      "path": "owned-runtime/candidate/reshiki.exe",
+      "sha256": "3e56439b55cd3c7dc047f431bb56f60407d17bc56fae0e1cb76641f1ee2e6fb9"
+    }
+  ],
+  "raw_captures": [
+    {
+      "path": "private-record/windows-si-powerpoint-ole-menu-v1.jpg",
+      "bytes": 340666,
+      "sha256": "352221a1acb66d4247fcc0cbb327d1e792f21f8c1dd932bfed1b22496b4f9d84"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-before.jpg",
+      "bytes": 255964,
+      "sha256": "dc7b3c783efa19fea0b6ca7d86ebcd5c5f71a002cef0e625dc59cbc878d53424"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-after.jpg",
+      "bytes": 296620,
+      "sha256": "ed20b33cc631fbc4c0b97a99430bb71c0149d83dd247997496a39db0beff4ea8"
+    },
+    {
+      "path": "private-record/windows-si-powerpoint-paste-undo-v1.jpg",
+      "bytes": 246745,
+      "sha256": "bec7aa96e63ad1e2cd30a6b6f96551450694bce6e8396bfde21e123ce1e1b54b"
+    },
+    {
+      "path": "private-record/windows-si-powerpoint-paste-saved-v1.jpg",
+      "bytes": 288792,
+      "sha256": "2ddddea868c223d6bf3377324515fa9575c38c9ac5c9cd261bec3ef29237f496"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-reopened.jpg",
+      "bytes": 299172,
+      "sha256": "ecf6c42a36c601905084b93050ba56bd5f5cb3b357379e22b31d0b4aceb91307"
+    }
+  ],
+  "independent_visual_readback": [
+    "PowerPoint context menu identifies CS ChemDraw 64-bit Drawing; local saved presentation, AutoSave off.",
+    "Baseline paste-before image shows exact0x044b error footer, blank100%, F8 off.",
+    "Candidate paste-after image shows Editable drawing pasted, selected6atoms5bonds, contractedSiMe3,100%, F8 off.",
+    "Single Undo image shows blank canvas, Undo disabled, Redo enabled,100%.",
+    "Saved image shows clean windows-si-powerpoint-paste-after-v1.rsk title, contractedSiMe3,6/5,C4H12OSi and canonicalCO[Si](C)(C)C,100%.",
+    "Reopened image shows clean same filename, Undo/Redo disabled, same6/5 and completed formula/SMILES;232% autofit, F8 off."
+  ],
+  "root_reported_native_protocol": "Native PowerPoint object Copy; baseline Paste rejects; candidate fresh blank Paste succeeds; one Undo blank and Redo restored; Save, close own tab, Open exact result in fresh tab within same PID13696.",
+  "limits": [
+    "Controlled original single silicon fixture, not an original private failing PowerPoint file.",
+    "Embedded saved OLE CONTENTS audited; actual clipboard payload was not intercepted or inferred byte-identical.",
+    "ChemDraw OLE choice/fallback represent one logical object, not two independent structures.",
+    "Reopen was a fresh document in the same process, not a fresh-process restart.",
+    "Direct ChemDraw route F8 on; PowerPoint route F8 off. Paste100% and reopen232% are disclosed.",
+    "Windows two/sparse numbered attachments and other producers are not desktop-accepted here.",
+    "Existing old Co source includes dative-related changes; exact relevant reader/transport source parity is established, not whole-application equivalence with51fa.",
+    "Earlier unsuccessful direct OSK transport attempt before-v1 is excluded as error evidence.",
+    "No source edits, Git mutations, Cargo/builds, executable/GUI launches, clipboard API access, guest writes or publication."
+  ],
+  "_provenance": {
+    "original_record": "audit.json",
+    "original_sha256": "d2c02baf87ab71ddcfa703169b70ecd012eccb16f45e8627b839999c4a9f2a0f",
+    "representation": "Derived JSON, not a byte-original receipt. Only path strings were normalized; values and conclusions are retained.",
+    "normalization_mapping": [
+      {
+        "pointer": "/powerpoint/path",
+        "original_basename": "windows-si-powerpoint-v1.pptx",
+        "public_value": "windows-si-powerpoint-v1.pptx"
+      },
+      {
+        "pointer": "/embedded_original_cdx/path",
+        "original_basename": "powerpoint-ole-CONTENTS.cdx",
+        "public_value": "powerpoint-ole-CONTENTS.cdx"
+      },
+      {
+        "pointer": "/saved_native/path",
+        "original_basename": "windows-si-powerpoint-paste-after-v1.rsk",
+        "public_value": "windows-si-powerpoint-paste-after-v1.rsk"
+      },
+      {
+        "pointer": "/read_only_process_file_proof/path",
+        "original_basename": "fresh-proof-normalized.json",
+        "public_value": "private-record/fresh-proof-normalized.json"
+      },
+      {
+        "pointer": "/processes/0/path",
+        "original_basename": "reshiki.exe",
+        "public_value": "owned-runtime/baseline/reshiki.exe"
+      },
+      {
+        "pointer": "/processes/1/path",
+        "original_basename": "reshiki.exe",
+        "public_value": "owned-runtime/candidate/reshiki.exe"
+      },
+      {
+        "pointer": "/raw_captures/0/path",
+        "original_basename": "windows-si-powerpoint-ole-menu-v1.jpg",
+        "public_value": "private-record/windows-si-powerpoint-ole-menu-v1.jpg"
+      },
+      {
+        "pointer": "/raw_captures/1/path",
+        "original_basename": "windows-si-powerpoint-paste-before-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-before.jpg"
+      },
+      {
+        "pointer": "/raw_captures/2/path",
+        "original_basename": "windows-si-powerpoint-paste-after-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-after.jpg"
+      },
+      {
+        "pointer": "/raw_captures/3/path",
+        "original_basename": "windows-si-powerpoint-paste-undo-v1.jpg",
+        "public_value": "private-record/windows-si-powerpoint-paste-undo-v1.jpg"
+      },
+      {
+        "pointer": "/raw_captures/4/path",
+        "original_basename": "windows-si-powerpoint-paste-saved-v1.jpg",
+        "public_value": "private-record/windows-si-powerpoint-paste-saved-v1.jpg"
+      },
+      {
+        "pointer": "/raw_captures/5/path",
+        "original_basename": "windows-si-powerpoint-paste-reopened-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-reopened.jpg"
+      }
+    ],
+    "original_storage": "Immutable private acceptance/audit record; full original-to-public mapping is retained for maintainer review."
+  }
+}

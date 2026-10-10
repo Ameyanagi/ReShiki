@@ -475,11 +475,16 @@ async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
         "Unserialized golden inputs"
     );
     for (name, expected) in &header.source_sha256 {
-        let bytes = if name == "assets/templates.json" {
-            // Captured requests contain the complete historical template input.
-            // Preserve its exact source bytes separately as the live library grows.
+        // Hash the original capture sources as the live template library and CDX
+        // codec evolve. Expected source hashes and worker responses stay pinned.
+        let snapshot = match name.as_str() {
+            "assets/templates.json" => Some("aromatic-template-inputs.json.gz"),
+            "reference/engine/cdx_exchange.py" => Some("aromatic-cdx-exchange-source.py.gz"),
+            _ => None,
+        };
+        let bytes = if let Some(snapshot) = snapshot {
             let mut bytes = Vec::new();
-            fixture::open("aromatic-template-inputs.json.gz")?.read_to_end(&mut bytes)?;
+            fixture::open(snapshot)?.read_to_end(&mut bytes)?;
             bytes
         } else {
             std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(name))?

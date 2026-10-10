@@ -2,7 +2,10 @@
 //! reference/engine/abbreviations_exchange.py::flatten. All edits are to a detached tree.
 use super::{Error, Result, tree::Tree};
 use serde::Serialize;
-use std::{borrow::Cow, collections::HashMap};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
 
 #[cfg(test)]
 mod tests;
@@ -223,7 +226,20 @@ pub(super) fn flatten_tree(mut tree: Tree) -> Result<Flattened> {
 fn chemical_count(tree: &Tree, nodes: &[usize]) -> Result<(usize, usize)> {
     let mut counts = (0usize, 0usize);
     for &node in nodes {
-        match tree.node(node)?.tag.as_str() {
+        let element = tree.node(node)?;
+        if let Some(number) = element.attr("ExternalConnectionNum") {
+            if element.tag != "n" || element.attr("NodeType") != Some("ExternalConnectionPoint") {
+                return Err(invalid(
+                    "ExternalConnectionNum requires an external connection point",
+                ));
+            }
+            if !number.trim().parse::<i8>().is_ok_and(|number| number > 0) {
+                return Err(invalid(
+                    "ExternalConnectionNum must be a positive signed byte",
+                ));
+            }
+        }
+        match element.tag.as_str() {
             "n" => counts.0 += 1,
             "b" => counts.1 += 1,
             _ => (),
@@ -360,6 +376,7 @@ fn definition_atoms(tree: &Tree, outer: usize, inner: usize) -> Result<Definitio
     let mut nodes = Vec::new();
     let mut by_id = HashMap::new();
     let mut connections = Vec::new();
+    let mut numbers = HashSet::new();
     for node in tree.children(inner, "n")? {
         let element = tree.node(node)?;
         let id = element.attr("id").map(str::to_owned);
@@ -368,12 +385,32 @@ fn definition_atoms(tree: &Tree, outer: usize, inner: usize) -> Result<Definitio
         }
         if element.attr("NodeType") == Some("ExternalConnectionPoint") {
             connections.push(node);
+            if let Some(number) = element.attr("ExternalConnectionNum") {
+                let number = number
+                    .trim()
+                    .parse::<i8>()
+                    .map_err(|_| invalid("Invalid external connection number"))?;
+                if !numbers.insert(number) {
+                    return Err(invalid(
+                        "Duplicate external connection numbers in abbreviation",
+                    ));
+                }
+            }
         }
         nodes.push((id, node));
     }
     if connections.len() > 1 && tree.node(outer)?.attr("BondOrdering").is_none() {
         return Err(invalid(
             "Multiple abbreviation attachments are not supported yet",
+        ));
+    }
+    if connections.len() > 1
+        && !numbers.is_empty()
+        && (numbers.len() != connections.len()
+            || tree.node(inner)?.attr("ConnectionOrder").is_none())
+    {
+        return Err(invalid(
+            "Numbered abbreviation attachments need complete numbers and explicit ConnectionOrder",
         ));
     }
     Ok(DefinitionAtoms {

@@ -1,0 +1,278 @@
+{
+  "source_commit": "500ac6cf7c55061013aaac231a6c0cadefbf80e4",
+  "exe_sha256": "0c4770e12cb85bd6b86e461e149d4e67e5c3c6d743340868fdc2df1db323e4ae",
+  "source_files_reverified": 1044,
+  "fixtures": [
+    {
+      "name": "single",
+      "native_file_sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+      "analysis_identical": true,
+      "analysis": {
+        "acceptors": 1,
+        "donors": 0,
+        "exact_mass": 104.065741534,
+        "formula": "C4H12OSi",
+        "inchi": "InChI=1S/C4H12OSi/c1-5-6(2,3)4/h1-4H3",
+        "inchikey": "POPACFLNWGUDSR-UHFFFAOYSA-N",
+        "logp": 1.4677,
+        "mass": 104.225,
+        "rings": 0,
+        "smiles": "CO[Si](C)(C)C",
+        "tpsa": 9.23,
+        "unpaired_electrons": 0
+      },
+      "exports": {
+        "cdxml": {
+          "native_export_sha256": "206a758de8f592d718d6e33d254825f4b393f7ec30ac59d8643e0db1e63e8d7b",
+          "original_import_export_sha256": "206a758de8f592d718d6e33d254825f4b393f7ec30ac59d8643e0db1e63e8d7b",
+          "bytes_identical": true
+        },
+        "svg": {
+          "native_export_sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+          "original_import_export_sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+          "bytes_identical": true
+        }
+      },
+      "native_file": "docs/changes/fixtures/chemdraw-numbered-paste/single-desktop.rsk",
+      "atoms": 6,
+      "bonds": 5,
+      "silicon_degree": 4,
+      "oxygen_degrees": [2],
+      "all_bond_orders": 1,
+      "all_charges": 0,
+      "no_placeholder_atoms": true,
+      "abbreviation": {
+        "label_style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [0, 0, 0],
+          "script": "normal",
+          "formula": false
+        },
+        "label_color_override": true,
+        "label": "SiMe3",
+        "reverse_label": "",
+        "anchor": 3,
+        "members": [3, 4, 5, 6],
+        "alignment": "left"
+      },
+      "drawing_style": {
+        "name": "Imported style",
+        "font_family": "Arial",
+        "bond_length_world": 87.5,
+        "bond_length_pt": 30.0,
+        "font_size_pt": 10.0,
+        "line_width_pt": 1.0,
+        "bold_width_pt": 4.0,
+        "margin_width_pt": 2.0,
+        "hash_spacing_pt": 2.699997,
+        "bond_spacing_ratio": 0.12,
+        "png_dpi": 1200
+      },
+      "source_numbering": [1],
+      "geometry_comparison": "Byte-identical exported CDXML coordinates and SVG to original native-CDX import. Export normalization reindexes objects; native atom IDs are not source port IDs.",
+      "producer_input_sha256": "95f3b9936c89de6bf09b244d85c92ea5510ca2811cfc08e7b43eaa6415bcc33c"
+    },
+    {
+      "name": "two",
+      "native_file_sha256": "f21868872e30e7fcc940867b6852f0cadfe49563a736f27ae78969cf21d0b75f",
+      "analysis_identical": true,
+      "analysis": {
+        "acceptors": 2,
+        "donors": 0,
+        "exact_mass": 120.06065615399999,
+        "formula": "C4H12O2Si",
+        "inchi": "InChI=1S/C4H12O2Si/c1-5-7(3,4)6-2/h1-4H3",
+        "inchikey": "JJQZDUKDJDQPMQ-UHFFFAOYSA-N",
+        "logp": 0.981,
+        "mass": 120.22399999999999,
+        "rings": 0,
+        "smiles": "CO[Si](C)(C)OC",
+        "tpsa": 18.46,
+        "unpaired_electrons": 0
+      },
+      "exports": {
+        "cdxml": {
+          "native_export_sha256": "b8770ac2c2487653459bf3b63f38232e510a63687043d6acbf7fc35879935acf",
+          "original_import_export_sha256": "b8770ac2c2487653459bf3b63f38232e510a63687043d6acbf7fc35879935acf",
+          "bytes_identical": true
+        },
+        "svg": {
+          "native_export_sha256": "0414102eaecb0e7bb2e2e926465a9769a100b393246265c6917fed76616258f2",
+          "original_import_export_sha256": "0414102eaecb0e7bb2e2e926465a9769a100b393246265c6917fed76616258f2",
+          "bytes_identical": true
+        }
+      },
+      "native_file": "docs/changes/fixtures/chemdraw-numbered-paste/two-desktop.rsk",
+      "atoms": 7,
+      "bonds": 6,
+      "silicon_degree": 4,
+      "oxygen_degrees": [2, 2],
+      "all_bond_orders": 1,
+      "all_charges": 0,
+      "no_placeholder_atoms": true,
+      "abbreviation": {
+        "label_style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [0, 0, 0],
+          "script": "normal",
+          "formula": false
+        },
+        "label_color_override": true,
+        "label": "SiMe2",
+        "reverse_label": "",
+        "anchor": 5,
+        "members": [5, 6, 7]
+      },
+      "drawing_style": {
+        "name": "Imported style",
+        "font_family": "Arial",
+        "bond_length_world": 87.5,
+        "bond_length_pt": 30.0,
+        "font_size_pt": 10.0,
+        "line_width_pt": 1.0,
+        "bold_width_pt": 4.0,
+        "margin_width_pt": 2.0,
+        "hash_spacing_pt": 2.699997,
+        "bond_spacing_ratio": 0.12,
+        "png_dpi": 1200
+      },
+      "source_numbering": [2, 1],
+      "geometry_comparison": "Byte-identical exported CDXML coordinates and SVG to original native-CDX import. Export normalization reindexes objects; native atom IDs are not source port IDs.",
+      "producer_input_sha256": "c7184834fc14c742fe294290a63dc6e8c707954c1d608184409ae366e296dafa"
+    },
+    {
+      "name": "sparse",
+      "native_file_sha256": "f21868872e30e7fcc940867b6852f0cadfe49563a736f27ae78969cf21d0b75f",
+      "analysis_identical": true,
+      "analysis": {
+        "acceptors": 2,
+        "donors": 0,
+        "exact_mass": 120.06065615399999,
+        "formula": "C4H12O2Si",
+        "inchi": "InChI=1S/C4H12O2Si/c1-5-7(3,4)6-2/h1-4H3",
+        "inchikey": "JJQZDUKDJDQPMQ-UHFFFAOYSA-N",
+        "logp": 0.981,
+        "mass": 120.22399999999999,
+        "rings": 0,
+        "smiles": "CO[Si](C)(C)OC",
+        "tpsa": 18.46,
+        "unpaired_electrons": 0
+      },
+      "exports": {
+        "cdxml": {
+          "native_export_sha256": "b8770ac2c2487653459bf3b63f38232e510a63687043d6acbf7fc35879935acf",
+          "original_import_export_sha256": "b8770ac2c2487653459bf3b63f38232e510a63687043d6acbf7fc35879935acf",
+          "bytes_identical": true
+        },
+        "svg": {
+          "native_export_sha256": "0414102eaecb0e7bb2e2e926465a9769a100b393246265c6917fed76616258f2",
+          "original_import_export_sha256": "0414102eaecb0e7bb2e2e926465a9769a100b393246265c6917fed76616258f2",
+          "bytes_identical": true
+        }
+      },
+      "native_file": "docs/changes/fixtures/chemdraw-numbered-paste/sparse-desktop.rsk",
+      "atoms": 7,
+      "bonds": 6,
+      "silicon_degree": 4,
+      "oxygen_degrees": [2, 2],
+      "all_bond_orders": 1,
+      "all_charges": 0,
+      "no_placeholder_atoms": true,
+      "abbreviation": {
+        "label_style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [0, 0, 0],
+          "script": "normal",
+          "formula": false
+        },
+        "label_color_override": true,
+        "label": "SiMe2",
+        "reverse_label": "",
+        "anchor": 5,
+        "members": [5, 6, 7]
+      },
+      "drawing_style": {
+        "name": "Imported style",
+        "font_family": "Arial",
+        "bond_length_world": 87.5,
+        "bond_length_pt": 30.0,
+        "font_size_pt": 10.0,
+        "line_width_pt": 1.0,
+        "bold_width_pt": 4.0,
+        "margin_width_pt": 2.0,
+        "hash_spacing_pt": 2.699997,
+        "bond_spacing_ratio": 0.12,
+        "png_dpi": 1200
+      },
+      "source_numbering": [3, 1],
+      "geometry_comparison": "Byte-identical exported CDXML coordinates and SVG to original native-CDX import. Export normalization reindexes objects; native atom IDs are not source port IDs.",
+      "producer_input_sha256": "d04b569a438a448850f9ec37f96f27b78a1b43b18f592160ba9ee6d577323d79"
+    }
+  ],
+  "date": "2026-10-09",
+  "platform": "macOS 26.5.1 (25F80), arm64",
+  "base_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "license": "MIT OR Apache-2.0",
+  "scope": "Actual macOS File Open/native save/reopen acceptance. Windows PowerPoint/ChemDraw clipboard GUI remains unverified.",
+  "native_schema_version": 19,
+  "baseline_exe_sha256": "493a0cb49f79f76ae2ee0716a690c20ce3981f15f701c0a9651552addaa8bf95",
+  "images": [
+    {
+      "file": "docs/images/chemdraw-numbered-paste/before-unsupported-property.jpg",
+      "bytes": 257217,
+      "sha256": "7a4448e7f3f8911290485404957a7decefabf766f78daa8225d4327eb9a28321",
+      "raw_capture_basename": "chemdraw-silicon-044b-error-clean.jpg",
+      "conditions": "Same native single.cdx via File Open; blank error at 100%, JACS/ACS, Arial 10; F8 off. Full error footer.",
+      "modified": false
+    },
+    {
+      "file": "docs/images/chemdraw-numbered-paste/single-import.jpg",
+      "bytes": 313783,
+      "sha256": "e3f181a6aff3afe5620fb1c728015a144be88f3f2b9c2406e85d5dfcf941561b",
+      "raw_capture_basename": "chemdraw-silicon-044b-import-success.jpg",
+      "conditions": "Same native single.cdx via File Open; Imported style/Custom, Arial 10, fit 233%, F8 off; recovery banner dismissed in memory.",
+      "modified": false
+    },
+    {
+      "file": "docs/images/chemdraw-numbered-paste/two-import.jpg",
+      "bytes": 319424,
+      "sha256": "a1c21ad72463cdc6964552d95210642228935ff9c0904064e534b539d54caf60",
+      "raw_capture_basename": "chemdraw-silicon-two-044b-import-success.jpg",
+      "conditions": "Fresh blank tab, native two.cdx File Open; Imported style/Custom, Arial 10, fit 182%, F8 off.",
+      "modified": false
+    },
+    {
+      "file": "docs/images/chemdraw-numbered-paste/sparse-import.jpg",
+      "bytes": 323458,
+      "sha256": "f23f1917ffc7981aba86592443ff8c6afd735c61d2666358a3e8e61565185b3b",
+      "raw_capture_basename": "chemdraw-silicon-sparse-044b-import-success.jpg",
+      "conditions": "Fresh blank tab, native sparse.cdx File Open; Imported style/Custom, Arial 10, fit 182%, F8 off.",
+      "modified": false
+    },
+    {
+      "file": "docs/images/chemdraw-numbered-paste/native-reopened.jpg",
+      "bytes": 326980,
+      "sha256": "80b1eea1d894b83f34cb0cf88abc72908e29ed4df4efdd599f803539cf0b8dbb",
+      "raw_capture_basename": "chemdraw-silicon-native-reopened.jpg",
+      "conditions": "Fresh process, single-desktop.rsk File Open; Imported style/Custom, Arial 10, 233%, F8 off; recovery banner visible; Undo/Redo disabled; file not resaved.",
+      "modified": false
+    }
+  ],
+  "two_and_sparse_native_bytes_identical": true,
+  "gui_actions": {
+    "single_undo_redo": "One header Undo removed the imported drawing (no Undo, Redo enabled); one Redo restored 6 atoms/5 bonds before native Save. Observed by root through CUA.",
+    "reopen": "Single native file opened in a fresh process; 6 atoms/5 bonds, SiMe3 and formula/SMILES retained; Undo/Redo disabled. No new save; native bytes unchanged. Observed by root through CUA."
+  }
+}

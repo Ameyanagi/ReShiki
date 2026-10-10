@@ -67,6 +67,9 @@ impl Encoder {
             return Err("Drawing object limit exceeded".into());
         }
         let name = el.tag_name().name();
+        if let Some(number) = el.attribute("ExternalConnectionNum") {
+            external_connection_number(name, el.attribute("NodeType"), number)?;
+        }
         let code = OBJECTS
             .iter()
             .find(|(_, n)| *n == name)

@@ -4,10 +4,11 @@ import base64
 import struct
 import unittest
 import xml.etree.ElementTree as ET
+from unittest.mock import patch
 
 from reference_presentation import compare
 
-from engine.cdx_exchange import to_cdx
+from engine.cdx_exchange import PROPERTIES, to_cdx
 
 
 class ReferencePresentationTests(unittest.TestCase):
@@ -57,7 +58,14 @@ class ReferencePresentationTests(unittest.TestCase):
 
     def test_only_captured_arrow_tag_and_fill_codes_are_adjusted(self):
         text = '<CDXML><page id="1"><arrow id="2" Head3D="30 0 0" Tail3D="0 0 0" FillType="None"/><graphic id="3" GraphicType="Rectangle" FillType="Solid" BoundingBox="1 2 3 4"/></page></CDXML>'
-        legacy = to_cdx(text)
+        # Fixed 51fa0991 writer output for this XML: arrow 0x8027 and
+        # FillType None=0 / Solid=1. Do not regenerate it with today's codec.
+        legacy = bytes.fromhex(
+            "566a4344303130300403020100000000000000000000008000000000018001000000"
+            "27800200000007020c0000001e00000000000000000008020c000000000000000000"
+            "00000000370a020000000000078003000000000a02000300370a0200010004021000"
+            "000002000000010000000400000003000000000000000000"
+        )
         # Independently patch the historical binary writer's exact codes;
         # neither the current Rust encoder nor the corrected decoder writes it.
         actual = legacy.replace(struct.pack("<HI", 0x8027, 2), struct.pack("<HI", 0x8021, 2))
@@ -67,15 +75,20 @@ class ReferencePresentationTests(unittest.TestCase):
         def encoded(data):
             return base64.b64encode(data).decode()
 
-        compare(encoded(actual), encoded(legacy), "cdx")
-        for changed in (
-            actual.replace(struct.pack("<HHh", 0xA37, 2, 2), struct.pack("<HHh", 0xA37, 2, 4)),
-            actual.replace(struct.pack("<HI", 0x8021, 2), struct.pack("<HI", 0x8021, 4)),
-            to_cdx(text.replace('Head3D="30 0 0"', 'Head3D="31 0 0"')),
-            to_cdx(text.replace('FillType="None"', 'FillType="Solid"')),
-        ):
-            with self.subTest(binary=changed), self.assertRaises(ValueError):
-                compare(encoded(changed), encoded(legacy), "cdx")
+        # compare() deliberately reads its expected bytes with the historical
+        # mapping, while current_cdx() temporarily installs the corrected one.
+        # Scope the old decoder table to this legacy test and restore it after.
+        historical_fill = ("FillType", "INT16", {"None": 0, "Solid": 1, "Shaded": 2})
+        with patch.dict(PROPERTIES, {0xA37: historical_fill}):
+            compare(encoded(actual), encoded(legacy), "cdx")
+            for changed in (
+                actual.replace(struct.pack("<HHh", 0xA37, 2, 2), struct.pack("<HHh", 0xA37, 2, 4)),
+                actual.replace(struct.pack("<HI", 0x8021, 2), struct.pack("<HI", 0x8021, 4)),
+                to_cdx(text.replace('Head3D="30 0 0"', 'Head3D="31 0 0"')),
+                to_cdx(text.replace('FillType="None"', 'FillType="Solid"')),
+            ):
+                with self.subTest(binary=changed), self.assertRaises(ValueError):
+                    compare(encoded(changed), encoded(legacy), "cdx")
 
 
 if __name__ == "__main__":

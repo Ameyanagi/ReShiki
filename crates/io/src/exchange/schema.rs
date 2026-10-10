@@ -1941,6 +1941,12 @@ pub(super) const PROPERTIES: &[Property] = &[
         variants: &[],
     },
     Property {
+        code: 0x044b,
+        name: "ExternalConnectionNum",
+        kind: "INT8",
+        variants: &[],
+    },
+    Property {
         code: 0x0a39,
         name: "Closed",
         kind: "CDXBooleanImplied",

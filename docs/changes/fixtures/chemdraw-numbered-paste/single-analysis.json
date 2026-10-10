@@ -1,0 +1,14 @@
+{
+  "acceptors": 1,
+  "donors": 0,
+  "exact_mass": 104.065741534,
+  "formula": "C4H12OSi",
+  "inchi": "InChI=1S/C4H12OSi/c1-5-6(2,3)4/h1-4H3",
+  "inchikey": "POPACFLNWGUDSR-UHFFFAOYSA-N",
+  "logp": 1.4677,
+  "mass": 104.225,
+  "rings": 0,
+  "smiles": "CO[Si](C)(C)C",
+  "tpsa": 9.23,
+  "unpaired_electrons": 0
+}
