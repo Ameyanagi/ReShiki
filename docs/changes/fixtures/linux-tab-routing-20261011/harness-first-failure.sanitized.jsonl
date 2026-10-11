@@ -1,0 +1,3 @@
+{"case": "pristine-start", "utc": "2026-10-11T09:36:18.982494+00:00", "windows": [{"window_id": 4194306, "title": "Untitled \u2014 ReShiki"}], "owned_processes": [{"pid": 1047664, "exit": null}], "host_pid": 1047664}
+{"case": "failure", "utc": "2026-10-11T09:36:24.984972+00:00", "windows": [{"window_id": 4194306, "title": "Untitled \u2014 ReShiki"}, {"window_id": 8388610, "title": "Untitled \u2014 ReShiki"}], "owned_processes": [{"pid": 1047664, "exit": null}, {"pid": 1047715, "exit": null}], "error": "TimeoutExpired(['<TASK_ROOT>/app/reshiki', '<TASK_ROOT>/fixtures/A-current.rsk'], 6)"}
+{"FINAL": "FAIL", "failure": "TimeoutExpired(['<TASK_ROOT>/app/reshiki', '<TASK_ROOT>/fixtures/A-current.rsk'], 6)", "all_owned_children_exited": true}
