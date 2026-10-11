@@ -420,3 +420,6 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod result_tests;

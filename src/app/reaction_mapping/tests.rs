@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::tabs::{Action as Tabs, tests::Front};
 use reshiki::{
     document::{Arrow, Point},
     reactions::{self, Role},
@@ -22,6 +23,144 @@ fn app() -> App {
     app.tab.saved = app.tab.doc.clone();
     app
 }
+
+fn pending_proposal(app: &mut App) -> (u64, u64, Arc<Proposal>) {
+    let proposal = Arc::new(mapping::propose(&app.tab.doc, 3, Budget::default()).unwrap());
+    app.tab.mapping.serial = app.tab.mapping.serial.wrapping_add(1);
+    let (epoch, serial) = (app.tab.file_epoch, app.tab.mapping.serial);
+    app.tab.mapping.pending = Some((epoch, serial));
+    (epoch, serial, proposal)
+}
+
+#[test]
+fn completion_routes_only_to_originating_tab() {
+    let mut app = app();
+    let id = app.tab.id;
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    let front = Front::new(&mut app);
+    let _ = app.update(Message::Tab(
+        id,
+        Box::new(Message::Mapping(Action::Ready(
+            epoch,
+            serial,
+            Ok(proposal.clone()),
+        ))),
+    ));
+    front.assert_unchanged(&app);
+    assert!(app.tab.mapping.pending.is_none());
+    assert!(app.tab.mapping.proposal.is_none());
+    let _ = app.update(Message::Tabs(Tabs::Select(id)));
+    assert!(app.tab.mapping.pending.is_none());
+    assert!(Arc::ptr_eq(
+        app.tab.mapping.proposal.as_ref().unwrap(),
+        &proposal,
+    ));
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+    assert_eq!(app.status, "Atom-map proposal ready to review");
+    assert!(!app.error);
+}
+
+#[test]
+fn completion_for_a_closed_originating_tab_is_dropped() {
+    let mut app = app();
+    let id = app.tab.id;
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    app.add_tab();
+    let _ = app.update(Message::Tabs(Tabs::Close(Some(id))));
+    assert!(app.tab_index(id).is_none());
+    let front = Front::new(&mut app);
+    app.tab.mapping.pending = Some((epoch, serial));
+    let count = app.strip().count();
+    let _ = app.update(Message::Tab(
+        id,
+        Box::new(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal)))),
+    ));
+    front.assert_unchanged(&app);
+    assert!(app.tab_index(id).is_none());
+    assert_eq!(app.strip().count(), count);
+    assert_eq!(app.tab.mapping.pending, Some((epoch, serial)));
+    assert!(app.tab.mapping.proposal.is_none());
+    assert!(
+        app.tabs
+            .background
+            .iter()
+            .all(|tab| { tab.mapping.pending.is_none() && tab.mapping.proposal.is_none() })
+    );
+}
+
+#[test]
+fn completion_for_a_replaced_drawing_preserves_its_new_request() {
+    let mut app = app();
+    let id = app.tab.id;
+    let before = app.tab.doc.clone();
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    app.reset_tab();
+    assert_eq!(app.tab.id, id);
+    assert_ne!(app.tab.file_epoch, epoch);
+    // Reload the same drawing so proposal freshness cannot mask an epoch error.
+    app.tab.doc = before.clone();
+    app.tab.saved = before.clone();
+    let (replacement_epoch, replacement_serial, _) = pending_proposal(&mut app);
+    assert_eq!(replacement_serial, serial);
+    let revision = app.tab.revision;
+    app.status = "Replacement mapping request".into();
+    let front = Front::new(&mut app);
+    let _ = app.update(Message::Tab(
+        id,
+        Box::new(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal)))),
+    ));
+    front.assert_unchanged(&app);
+    assert!(app.tab.mapping.pending.is_none());
+    assert!(app.tab.mapping.proposal.is_none());
+    let _ = app.update(Message::Tabs(Tabs::Select(id)));
+    assert_eq!(
+        app.tab.mapping.pending,
+        Some((replacement_epoch, replacement_serial)),
+    );
+    assert!(app.tab.mapping.proposal.is_none());
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+    assert_eq!(app.status, "Replacement mapping request");
+}
+
+#[test]
+fn completion_is_installed_before_the_atom_text_modal_gate() {
+    use crate::app::atom_text::Action as AtomText;
+    let mut app = app();
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    let _ = app.update(Message::AtomText(AtomText::Begin(Some(1))));
+    let _ = app.update(Message::AtomText(AtomText::Input("N".into())));
+    assert!(app.tab.atom_text.is_some());
+    let _ = app.update(Message::Mapping(Action::Ready(
+        epoch,
+        serial,
+        Ok(proposal.clone()),
+    )));
+    assert!(app.tab.mapping.pending.is_none());
+    assert!(Arc::ptr_eq(
+        app.tab.mapping.proposal.as_ref().unwrap(),
+        &proposal,
+    ));
+    assert!(app.tab.atom_text.is_some());
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+    assert_eq!(app.status, "Atom-map proposal ready to review");
+    assert!(!app.error);
+    let _ = app.update(Message::AtomText(AtomText::Apply));
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(app.tab.doc.atom(1).unwrap().element, "N");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
 #[test]
 fn manual_pair_label_moves_and_proposal_acceptance_are_single_undo_steps() {
     let mut app = app();

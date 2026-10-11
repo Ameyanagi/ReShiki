@@ -537,6 +537,16 @@ impl App {
         })
     }
 
+    #[cfg(test)]
+    pub(super) fn optimization_key_for_test(&self) -> Option<Key> {
+        self.tab
+            .optimization
+            .as_ref()?
+            .flight
+            .as_ref()
+            .map(|flight| flight.key)
+    }
+
     pub(super) fn optimization_gate(&mut self, message: &Message) -> Option<Task<Message>> {
         self.tab.optimization.as_ref()?;
         if matches!(message, Message::Inspector(InspectorTab::Properties)) {
