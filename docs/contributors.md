@@ -4,6 +4,9 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — bounded Windows OLE clipboard acquisition and native
+contention regression coverage in [PR #305](https://github.com/Ameyanagi/ReShiki/pull/305).
+
 Coordination/Join, generic structures, adaptive chemistry, Assistant and
 Windows/Office integration (merged, unreleased):
 @Ameyanagi in [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300), including
