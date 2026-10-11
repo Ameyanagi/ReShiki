@@ -44,6 +44,31 @@ impl Drop for ChildGuard {
     }
 }
 
+/// Another test thread can spawn while a claim is held. A pre-exec child
+/// temporarily shares the flock's open-file description even with CLOEXEC;
+/// closing the parent's File need not immediately close the last reference.
+/// This finite poll tolerates that window, not errors or persistent leaks.
+fn reacquire_after_drop(mut acquire: impl FnMut() -> io::Result<Option<Election>>) -> Election {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "Dropped election was not released within two seconds"
+        );
+        match acquire().expect("Reacquiring a dropped election must not fail") {
+            Some(election) => return election,
+            None => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                assert!(
+                    !remaining.is_zero(),
+                    "Dropped election was not released within two seconds"
+                );
+                thread::sleep(remaining.min(Duration::from_millis(10)));
+            }
+        }
+    }
+}
+
 #[test]
 fn private_runtime_rejects_owner_mode_and_symlink_surprises() {
     let fixture = Fixture::new();
@@ -79,7 +104,11 @@ fn flock_election_and_stale_socket_cleanup_keep_live_unknown_endpoints() {
     let listener = fixture.endpoint.listen(&election).unwrap();
     assert_eq!(std::fs::metadata(&path).unwrap().mode() & 0o777, 0o600);
     drop(election);
-    let successor = fixture.endpoint.elect().unwrap().unwrap();
+    let successor = reacquire_after_drop(|| fixture.endpoint.elect());
+    assert!(
+        fixture.endpoint.elect().unwrap().is_none(),
+        "Successor still excludes another host"
+    );
     assert_eq!(
         fixture.endpoint.listen(&successor).err().unwrap().kind(),
         io::ErrorKind::AlreadyExists
@@ -100,20 +129,43 @@ fn write_claim_is_shared_across_private_fallbacks_and_canonical_aliases() {
     let fixture = Fixture::new();
     let path = fixture.path.join("host.rsk");
     std::fs::write(&path, b"owned").unwrap();
+    let dotted = fixture.path.join(".").join("host.rsk");
+    let alias = fixture.path.join("host-alias.rsk");
+    symlink(&path, &alias).unwrap();
     let claim = fixture.endpoint.write_claim(&path).unwrap().unwrap();
     let private = fixture.endpoint.private(random_token().unwrap()).unwrap();
+    for endpoint in [&fixture.endpoint, &private] {
+        for candidate in [&path, &dotted, &alias] {
+            assert!(
+                endpoint.write_claim(candidate).unwrap().is_none(),
+                "Held writer excludes private and canonical aliases"
+            );
+        }
+    }
+    let launch = private
+        .claim(&path)
+        .unwrap()
+        .expect("launch and writer roles are separate");
     assert!(
-        private
-            .write_claim(&fixture.path.join(".").join("host.rsk"))
-            .unwrap()
-            .is_none()
-    );
-    assert!(
-        private.claim(&path).unwrap().is_some(),
-        "launch and writer roles are separate"
+        fixture.endpoint.claim(&alias).unwrap().is_none(),
+        "Launch claims also share the canonical source identity"
     );
     drop(claim);
-    assert!(private.write_claim(&path).unwrap().is_some());
+    let successor = reacquire_after_drop(|| private.write_claim(&alias));
+    for endpoint in [&fixture.endpoint, &private] {
+        for candidate in [&path, &dotted, &alias] {
+            assert!(
+                endpoint.write_claim(candidate).unwrap().is_none(),
+                "Successor writer retains exclusion across aliases"
+            );
+        }
+    }
+    assert!(
+        fixture.endpoint.claim(&path).unwrap().is_none(),
+        "Releasing the writer does not release the launch claim"
+    );
+    drop(successor);
+    drop(launch);
 }
 
 #[test]
