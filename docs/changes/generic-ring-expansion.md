@@ -1,7 +1,7 @@
 # Ring expansion placement and unique chemical products
 
 Contribution: @Ameyanagi, project creator and maintainer. Native macOS review
-passes; exact-head CI is pending. This change is unreleased.
+passes; CI is recorded in the pull request. This change is unreleased.
 
 ## Problem and correction
 
