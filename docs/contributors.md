@@ -4,16 +4,20 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
-Under review: @Ameyanagi — bounded Windows OLE clipboard acquisition and native
+Merged, unreleased: @Ameyanagi — bounded Windows OLE clipboard acquisition and native
 contention regression coverage in [PR #305](https://github.com/Ameyanagi/ReShiki/pull/305).
+Included in [published Nightly 0.11.0-nightly.20261011.38123945065.1](https://github.com/Ameyanagi/ReShiki/releases/tag/nightly-0.11.0-nightly.20261011.38123945065.1),
+with [passing CI and Windows portable checks](changes/windows-ole-clipboard-retry.md);
+[Scoped GUI checks at 96 DPI / 100% scale](changes/nightly-windows-20261011.md) also pass; fresh Office and high or mixed DPI acceptance remain pending.
 
 Coordination/Join, generic structures, adaptive chemistry, Assistant and
 Windows/Office integration (merged, unreleased):
 @Ameyanagi in [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300), including
 the adaptive/Assistant source from [PR #299](https://github.com/Ameyanagi/ReShiki/pull/299).
 The source-pinned Windows review-build route in [PR #301](https://github.com/Ameyanagi/ReShiki/pull/301)
-is merged; current combined native Windows acceptance, including measured display
-scale above 100%, remains pending.
+is merged. The [published Windows Nightly review](changes/nightly-windows-20261011.md)
+passes scoped arc, tab, ethanol naming and floating NMR interactions at 100% scale;
+fresh Office and high or mixed DPI acceptance remain pending.
 [Combined native review](changes/coordination-join-integration.md) records the
 supported behavior and deferred Join/Co(en)3 accuracy work; issue #246 remains open.
 
@@ -26,7 +30,9 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
-Nightly naming-helper configuration and regression coverage for all six release targets: @Ameyanagi in [PR #304](https://github.com/Ameyanagi/ReShiki/pull/304).
+Nightly naming-helper configuration and regression coverage for all six release targets (merged, unreleased): @Ameyanagi in [PR #304](https://github.com/Ameyanagi/ReShiki/pull/304).
+
+Published Windows Nightly verification, actual screenshots and route/DPI receipts: @Ameyanagi in [PR #306](https://github.com/Ameyanagi/ReShiki/pull/306); [review and repeat steps](changes/nightly-windows-20261011.md).
 
 Merged, unreleased: @Ameyanagi — checked numbered ChemDraw attachment import and original silicon fixtures for [issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) in [PR #284](https://github.com/Ameyanagi/ReShiki/pull/284), with [Mac File Open/native save/reopen and controlled Windows ChemDraw/PowerPoint clipboard evidence](changes/chemdraw-numbered-paste.md).
 
@@ -42,7 +48,7 @@ Independent mechanism-arrow curvature (merged, unreleased): @Ameyanagi in [PR #2
 
 Connected pen paths and node/tangent editing (merged, unreleased): @Ameyanagi in [PR #288](https://github.com/Ameyanagi/ReShiki/pull/288) for [issue #67](https://github.com/Ameyanagi/ReShiki/issues/67), with [matched desktop evidence](changes/tunable-pen-lines.md).
 
-Optional mechanism-arrow target attachments (merged, unreleased): @Ameyanagi for [issue #92](https://github.com/Ameyanagi/ReShiki/issues/92), with [matched desktop evidence and native readbacks](changes/mechanism-attachments.md). [PR #286](https://github.com/Ameyanagi/ReShiki/pull/286); [combined macOS native review](changes/drawing-tools-integration.md) passes, while current combined Windows native acceptance remains pending.
+Optional mechanism-arrow target attachments (merged, unreleased): @Ameyanagi for [issue #92](https://github.com/Ameyanagi/ReShiki/issues/92), with [matched desktop evidence and native readbacks](changes/mechanism-attachments.md). [PR #286](https://github.com/Ameyanagi/ReShiki/pull/286); [combined macOS native review](changes/drawing-tools-integration.md) passes, while Windows acceptance for this attached-arrow case remains pending.
 
 Exact reference alignment, shared-pivot copies and branch-only bond stretching:
 @Ameyanagi in [PR #278](https://github.com/Ameyanagi/ReShiki/pull/278), merged, unreleased;
@@ -61,7 +67,7 @@ merged, unreleased; original review in [PR #277](https://github.com/Ameyanagi/Re
 
 Offline atom-linked HOSE NMR prediction, compact palette that preserves drawing space, measured-data provenance and native desktop validation (merged, unreleased): @Ameyanagi in [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272).
 
-The drawing and NMR contributions above were merged, unreleased, in [Integration PR #297](https://github.com/Ameyanagi/ReShiki/pull/297). Its [combined macOS native results](changes/drawing-tools-integration.md) cover the floating NMR report, exposed cage rim, attached cubic-arrow Stretch and save/fresh-process reopen. Original branch evidence remains historical; current combined Windows native acceptance remains pending.
+The drawing and NMR contributions above were merged, unreleased, in [Integration PR #297](https://github.com/Ameyanagi/ReShiki/pull/297). Its [combined macOS native results](changes/drawing-tools-integration.md) cover the floating NMR report, exposed cage rim, attached cubic-arrow Stretch and save/fresh-process reopen. Original branch evidence remains historical. [Windows Nightly ethanol floating NMR controls](changes/nightly-windows-20261011.md) pass at 100% scale; the combined cage/attached-arrow/EMF scenario was not repeated on Windows.
 
 Local Rust chemical naming and editor integration (merged, unreleased): @Ameyanagi. The separate parser is introduced in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291); the [guide and native review](chemical-naming-rust.md) describe the bounded app workflow.
 
@@ -99,9 +105,9 @@ issue #246 stays open.
 
 Office SVG picture export (merged, unreleased, [PR #290](https://github.com/Ameyanagi/ReShiki/pull/290)): @Ameyanagi. [Review and evidence](changes/office-svg-placement.md).
 
-Merged, unreleased: Windows window fitting by @Ameyanagi in [PR #273](https://github.com/Ameyanagi/ReShiki/pull/273). Combined native Windows interaction acceptance, including measured display scale above 100%, remains pending.
+Merged, unreleased: Windows window fitting by @Ameyanagi in [PR #273](https://github.com/Ameyanagi/ReShiki/pull/273). The [published Nightly window](changes/nightly-windows-20261011.md) fits the measured work area at 96 DPI / 100% scale; high and mixed DPI remain pending.
 
-Merged, unreleased: Windows/Linux document-tab launches with per-document Office sessions by @Ameyanagi, originating in closed [PR #274](https://github.com/Ameyanagi/ReShiki/pull/274) and integrated through [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300). Native desktop and Office save-back acceptance remain pending.
+Merged, unreleased: Windows/Linux document-tab launches with per-document Office sessions by @Ameyanagi, originating in closed [PR #274](https://github.com/Ameyanagi/ReShiki/pull/274) and integrated through [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300). [Windows new-file, duplicate-file and no-argument launches](changes/nightly-windows-20261011.md) pass at 100% scale. Linux desktop, file-manager association and Office save-back acceptance remain pending.
 
 Coordination attachment, in-place chelate closure and endpoint-independent dative
 projection (merged, unreleased; [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)):
