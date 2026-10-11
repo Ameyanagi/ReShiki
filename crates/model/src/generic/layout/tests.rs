@@ -293,13 +293,14 @@ fn generated_branched_repeat_keeps_branches_and_fixed_neighboring_components() {
     }
     source.atom_mut(fixed).unwrap().stereo = Some(crate::document::AtomStereo {
         winding: "cw".into(),
-        neighbors: ends,
+        neighbors: ends.clone(),
     });
     source.groups.push(crate::grouping::Group {
         id: source.next_id(),
-        members: vec![fixed],
+        members: std::iter::once(fixed).chain(ends).collect(),
         integral: false,
     });
+    source.validate().unwrap();
     let before = source.clone();
     let products = drawings(&source);
     for (i, product) in products.iter().enumerate() {
@@ -1189,8 +1190,10 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
     }
     // Saved H caches are drawing state, not chemical authority. They may be
     // larger than fresh valence H, and both immediate/reopened ink must fit.
-    let mut stale_cache = chain(&["C", "*"]);
-    stale_cache = atom_text::apply(&stale_cache, 2, "[Cl,Br]", Mode::Auto).unwrap();
+    // A one-copy link retains the cache; a two-copy link changes chemistry and
+    // correctly clears it. Element alternatives would clear both saved caches.
+    let mut stale_cache =
+        atom_text::apply(&chain(&["C", "C", "C"]), 2, "[CH2]1-2", Mode::Auto).unwrap();
     let oxygen = stale_cache.add_atom("O", Point::new(-200., 80.));
     let a = stale_cache.atom_mut(oxygen).unwrap();
     a.label_h = 123_456_789;
@@ -1202,14 +1205,17 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
     stale_cache.validate().unwrap();
     let original = stale_cache.clone();
     let prepared = generic::prepare_expansion(&stale_cache, Limits::default()).unwrap();
+    assert_eq!(prepared.count(), 2);
     let bounds = prepared.bounds();
     let output = prepared.take().unwrap().document;
-    assert!(
+    assert_eq!(
         output
             .atoms
             .iter()
             .filter(|a| a.element == "O")
-            .all(|a| a.label_h == 123_456_789)
+            .map(|a| a.label_h)
+            .collect::<Vec<_>>(),
+        vec![123_456_789, 0]
     );
     union_actual_ink_contained(&output, bounds);
     let reopened = Document::from_native_file(&output.file_json().unwrap()).unwrap();
@@ -1247,9 +1253,16 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
         underline: true,
         ..Default::default()
     };
+    // Cl and N outrank the implicit H at their respective alkene ends.
+    // Both carriers lie on the same side of C=C: this is independently Z.
     let mut alkene = Vec::new();
-    for (i, element) in ["Cl", "C", "C", "N"].into_iter().enumerate() {
-        alkene.push(future_cip.add_atom(element, Point::new(-360. + i as f32 * 42., -160.)));
+    for (element, x, y) in [
+        ("Cl", -360., -118.),
+        ("C", -318., -160.),
+        ("C", -276., -160.),
+        ("N", -234., -118.),
+    ] {
+        alkene.push(future_cip.add_atom(element, Point::new(x, y)));
     }
     future_cip.add_bond(alkene[0], alkene[1], 1, "plain");
     future_cip.add_bond(alkene[1], alkene[2], 2, "plain");
@@ -1259,7 +1272,8 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
         .iter_mut()
         .find(|b| b.a == alkene[1] && b.b == alkene[2])
         .unwrap();
-    double.stereo = Some("Z".into());
+    // Native stereo tags are lowercase; uppercase Z is a derived CIP label.
+    double.stereo = Some("z".into());
     double.stereo_authoritative = true;
     double.stereo_atoms = vec![alkene[0], alkene[3]];
     double.indicator.show = Some(true);
@@ -1279,9 +1293,18 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
     assert!(output.bonds.iter().all(|b| b.cip_label.is_none()));
     let fresh =
         crate::atom_labels::refresh::Refresh::calculate(&output, &Default::default()).unwrap();
+    assert!(fresh.notice.is_none(), "{:?}", fresh.notice);
     fresh.apply(&mut output);
     assert!(output.atoms.iter().any(|a| a.cip_label.is_some()));
-    assert!(output.bonds.iter().any(|b| b.cip_label.is_some()));
+    assert_eq!(
+        output
+            .bonds
+            .iter()
+            .filter(|b| b.order == 2)
+            .map(|b| b.cip_label.as_deref())
+            .collect::<Vec<_>>(),
+        vec![Some("Z"), Some("Z")]
+    );
     union_actual_ink_contained(&output, bounds);
     let reopened = Document::from_native_file(&output.file_json().unwrap()).unwrap();
     union_actual_ink_contained(&reopened, bounds);
@@ -1297,5 +1320,183 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
     );
     assert!(crate::transaction::take_expansion(poisoned).is_err());
     assert_eq!(doc.molecule_names.len(), 3);
+    assert_eq!(source, before);
+}
+
+#[test]
+fn native_variable_arene_six_drawings_fit_default_work_and_measured_ink() {
+    // Exact ROOT native save of the failed source, not a manufactured CDXML
+    // roundtrip: a129c109a464b9a1414cce4d09aded6ac6290848e0cfec84c92f67dd520f7be2.
+    let source = Document::from_native_file(include_bytes!(
+        "../../../../../tests/fixtures/generic-structures/variable-arene-native-refused-v26.rsk"
+    ))
+    .unwrap();
+    assert_eq!((source.atoms.len(), source.bonds.len()), (9, 8));
+    let variable = source.atom(7).unwrap();
+    assert_eq!(
+        variable.attachment,
+        Some(crate::attachments::Kind::Variable)
+    );
+    assert_eq!(variable.centroid, vec![1, 2, 3, 4, 5, 6]);
+    assert!(
+        source
+            .atoms
+            .iter()
+            .all(|a| a.display.stereo.show == Some(false))
+    );
+    let before = source.clone();
+    let input = generic::prepare_expansion_input(&source, &[], Limits::default()).unwrap();
+    let prepared = generic::expand_prepared(input).unwrap();
+    assert_eq!(prepared.count(), 6);
+    let bounds = prepared.bounds();
+    let output = prepared.take().unwrap().document;
+    assert_eq!((output.atoms.len(), output.bonds.len()), (48, 48));
+    assert_eq!(output.generic, Default::default());
+    assert!(
+        output
+            .atoms
+            .iter()
+            .all(|a| a.attachment.is_none() && a.centroid.is_empty())
+    );
+    let mut tile_bounds = Vec::new();
+    for (choice, atoms) in output.atoms.as_chunks::<8>().0.iter().enumerate() {
+        let ids: HashSet<_> = atoms.iter().map(|a| a.id).collect();
+        let part = Document {
+            atoms: atoms.to_vec(),
+            bonds: output
+                .bonds
+                .iter()
+                .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
+                .cloned()
+                .collect(),
+            ..Default::default()
+        };
+        assert_eq!(part.bonds.len(), 8);
+        assert_eq!(formula(&part), "C7H8O");
+        assert!(part.atoms.iter().all(|a| a.isotope == 0 && a.charge == 0));
+        let oxygen = part.atoms.get(6).unwrap();
+        let methyl = part.atoms.get(7).unwrap();
+        let selected = part.atoms.get(choice).unwrap();
+        assert_eq!(oxygen.element, "O");
+        let attached: HashSet<_> = neighbors(&part, oxygen.id).into_iter().collect();
+        assert_eq!(attached, HashSet::from([selected.id, methyl.id]));
+        for (i, a) in part.atoms.iter().take(6).enumerate() {
+            let b = part.atoms.get((i + 1) % 6).unwrap();
+            let bond = part
+                .bonds
+                .iter()
+                .find(|bond| {
+                    (bond.a == a.id && bond.b == b.id) || (bond.a == b.id && bond.b == a.id)
+                })
+                .unwrap();
+            assert_eq!(bond.order, if i % 2 == 0 { 2 } else { 1 });
+        }
+        let shown = preview(&part);
+        let boxes = saved_and_refreshed_boxes(&part, &shown).unwrap();
+        let tile = measured_bounds(&part, &boxes).unwrap();
+        contained(bounds, tile);
+        tile_bounds.push(tile);
+        legible(&part);
+    }
+    for (i, (lo, hi)) in tile_bounds.iter().enumerate() {
+        for (zl, zh) in tile_bounds.iter().skip(i + 1) {
+            assert!(hi.x <= zl.x || zh.x <= lo.x || hi.y <= zl.y || zh.y <= lo.y);
+        }
+    }
+    union_actual_ink_contained(&output, bounds);
+    let reopened = Document::from_native_file(&output.file_json().unwrap()).unwrap();
+    assert_eq!(reopened, output.current());
+    union_actual_ink_contained(&reopened, bounds);
+    assert_eq!(source, before);
+}
+
+#[test]
+fn ink_precharge_skips_disabled_glyphs_but_pays_owned_styles_and_enabled_paths() {
+    let mut source = chain(&["C", "O"]);
+    source.atom_mut(1).unwrap().text_style = Some(Default::default());
+    let spent = |doc: &Document| {
+        let mut work = Work::new(usize::MAX);
+        charge_ink_work(doc, &mut work).unwrap();
+        usize::MAX - work.remaining
+    };
+    let baseline = spent(&source);
+    let mut hidden = source.clone();
+    let carbon = hidden.atom_mut(1).unwrap();
+    carbon.text_style.as_mut().unwrap().family = "x".repeat(64);
+    carbon.display.mapping.style.family = "x".repeat(64);
+    carbon.display.stereo.style.family = "x".repeat(64);
+    hidden.bonds.first_mut().unwrap().indicator.style.family = "x".repeat(64);
+    hidden.validate().unwrap();
+    assert_eq!(atom_bounds(hidden.atom(1).unwrap(), &hidden).unwrap(), None);
+    assert_eq!(spent(&hidden), baseline);
+    // Hidden text is still owned native state. Presentation inspection pays its
+    // storage/copies even when the glyph path never reads that font family.
+    let owned = |doc: &Document| {
+        let mut work = Work::new(usize::MAX);
+        Presentation::inspect(doc, &mut work).unwrap().copy
+    };
+    assert!(owned(&hidden) > owned(&source));
+    let mut shown_carbon = hidden.clone();
+    shown_carbon.atom_mut(1).unwrap().display.carbons = Some(crate::atom_labels::Carbons::All);
+    let mut shown_map = hidden.clone();
+    shown_map.atom_mut(1).unwrap().map_num = 17;
+    shown_map.atom_mut(1).unwrap().display.mapping.show = Some(true);
+    let mut shown_atom_cip = hidden.clone();
+    shown_atom_cip.atom_mut(1).unwrap().display.stereo.show = Some(true);
+    let mut shown_bond_cip = hidden.clone();
+    shown_bond_cip.bonds.first_mut().unwrap().indicator.show = Some(true);
+    let mut shown_global_cip = hidden.clone();
+    shown_global_cip.atom_labels.stereo = true;
+    for shown in [
+        shown_carbon,
+        shown_map,
+        shown_atom_cip,
+        shown_bond_cip,
+        shown_global_cip,
+    ] {
+        let before = shown.clone();
+        assert!(spent(&shown) > baseline);
+        let mut work = Work::new(baseline);
+        assert!(
+            charge_ink_work(&shown, &mut work)
+                .unwrap_err()
+                .contains("work limit")
+        );
+        assert_eq!(shown, before);
+    }
+}
+
+#[test]
+fn materialized_visible_element_is_charged_before_label_measurement() {
+    let source = atom_text::apply(&chain(&["C", "C"]), 2, "[C,N]", Mode::Auto).unwrap();
+    let before = source.clone();
+    let products = generic::expand(&source, Limits::default()).unwrap();
+    let carbon = products
+        .iter()
+        .find(|d| d.atom(2).unwrap().element == "C")
+        .unwrap();
+    let nitrogen = products
+        .iter()
+        .find(|d| d.atom(2).unwrap().element == "N")
+        .unwrap();
+    assert_eq!(atom_bounds(carbon.atom(2).unwrap(), carbon).unwrap(), None);
+    assert!(
+        atom_bounds(nitrogen.atom(2).unwrap(), nitrogen)
+            .unwrap()
+            .is_some()
+    );
+    let mut work = Work::new(usize::MAX);
+    charge_ink_work(carbon, &mut work).unwrap();
+    let hidden_cost = usize::MAX - work.remaining;
+    let mut limited = Work::new(hidden_cost);
+    assert!(
+        charge_ink_work(nitrogen, &mut limited)
+            .unwrap_err()
+            .contains("work limit")
+    );
+    let prepared = generic::prepare_expansion(&source, Limits::default()).unwrap();
+    let bounds = prepared.bounds();
+    let output = prepared.take().unwrap().document;
+    union_actual_ink_contained(&output, bounds);
     assert_eq!(source, before);
 }

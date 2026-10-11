@@ -886,7 +886,11 @@ fn assemble_expansion(
             row_height = 0.;
         }
         let (lo, _hi) = tile.bounds;
-        let mut shift = Point::new(x - lo.x, y - lo.y);
+        // Start with the same one-world-unit guard used by retries below.
+        // Exact-boundary translation can round the actual f32 ink just outside
+        // the grid and waste a fully prepaid attempt. Measurement still checks
+        // the translated tile; this inset does not replace its certificate.
+        let mut shift = Point::new(x - lo.x + 1., y - lo.y + 1.);
         let mut accepted = None;
         // Supplementary cap: all attempts still debit the SAME Work before
         // baseline deepclone and scene/normalization/glyph calculation.
