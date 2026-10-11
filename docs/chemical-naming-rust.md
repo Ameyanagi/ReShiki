@@ -1,7 +1,7 @@
 # Local chemical naming
 
 The local naming workflow is merged, unreleased, through [PR #298](https://github.com/Ameyanagi/ReShiki/pull/298) and is not included in ReShiki 0.11.0. Its Rust
-backend is introduced separately in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291). The offline alias follow-up below is under review.
+backend is introduced separately in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291). The offline alias follow-up below is under review in [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309).
 
 Open **Import → Name** to turn a supported chemical name into an editable
 structure. Right-click a molecule and choose **Show chemical name** to place a

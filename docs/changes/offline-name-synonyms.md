@@ -4,7 +4,8 @@ Issue [#50](https://github.com/Ameyanagi/ReShiki/issues/50) already has local
 Rust name-to-structure and verified structure-to-systematic-name workflows.
 Their ordinary results carried no common-name or synonym list. This follow-up
 adds a finite, provenance-backed alias catalog without a naming service or a
-new runtime dependency. This contribution is under review and unreleased.
+new runtime dependency. [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309)
+is under review and unreleased.
 Focused tests and the qualified macOS native workflow below passed; publication
 and its exact-head CI remain separate checks.
 
@@ -110,6 +111,25 @@ before this documentation update. Only the Details control and its tests differ
 from v2; the chemistry, catalog and identity code are unchanged. All 19 owned
 compiler artifacts were rebuilt, and source/index guards passed. No schema,
 parser-resource, reverse-grammar, process-limit or runtime prerequisite changed.
+
+### Integration base and remaining qualification
+
+PR #309 is based on main
+`1cde4b4ec32a3da96df0054bc05eb1a5e471b6e4`, after the independently validated
+fixed hydrogen-label transform correction in merged, unreleased
+[PR #308](https://github.com/Ameyanagi/ReShiki/pull/308). Relative to the original
+runtime base `3a39aea7`, upstream adds Linux documentation and that three-file
+model correction. All 19 non-documentation naming, data, license and workflow
+paths in the frozen implementation remain byte-identical. The captures above
+qualify the identified pre-rebase v2/v3 producers, not a new desktop build of
+the rebased PR #309 head.
+
+Configured source-commit hooks passed in 134.38 seconds at
+`ed6b252c4ac56fd903d7c239e536b8ce183649f9`, including all-feature Cargo check
+and Clippy, Rust formatting, Oxfmt and Oxlint. The branch was then rebased
+without edits to its naming implementation; those hook results retain their
+pre-rebase qualification. Exact publication-head CI remains pending. This
+follow-up claims no new export or native Windows naming acceptance.
 
 ### Scoped checks
 
