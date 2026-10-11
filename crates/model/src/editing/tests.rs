@@ -1,6 +1,259 @@
 use super::*;
 
 #[test]
+fn fixed_hydrogen_positions_follow_reflections_and_rotations() {
+    use crate::atom_labels::HydrogenPosition::{self as H, Above, Auto, Below, Left, Right};
+    for (operation, expected) in [
+        (Transform::FlipVertical, [Auto, Left, Right, Below, Above]),
+        (Transform::FlipHorizontal, [Auto, Right, Left, Above, Below]),
+        (Transform::Rotate(90.), [Auto, Above, Below, Right, Left]),
+        (Transform::Rotate(-90.), [Auto, Below, Above, Left, Right]),
+        (Transform::Rotate(180.), [Auto, Right, Left, Below, Above]),
+        (Transform::Rotate(30.), [Auto, Left, Right, Above, Below]),
+        (Transform::Rotate(60.), [Auto, Above, Below, Right, Left]),
+    ] {
+        let mut doc = Document::default();
+        let ids: Vec<_> = H::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(i, position)| {
+                let id = doc.add_atom("O", Point::new(i as f32 * 42., 0.));
+                doc.atom_mut(id).unwrap().display.hydrogen_position = position;
+                id
+            })
+            .collect();
+        let outside = doc.add_atom("N", Point::new(300., 100.));
+        doc.atom_mut(outside).unwrap().display.hydrogen_position = Below;
+        let outside_before = doc.atom(outside).unwrap().clone();
+        transform(&mut doc, &ids, operation);
+        assert_eq!(doc.atom(outside).unwrap(), &outside_before);
+        for (&id, expected) in ids.iter().zip(expected) {
+            assert_eq!(
+                doc.atom(id).unwrap().display.hydrogen_position,
+                expected,
+                "{operation:?}, atom {id}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fixed_hydrogen_positions_rotate_with_selection_handles() {
+    use crate::atom_labels::HydrogenPosition::{Auto, Below, Right};
+    let mut doc = Document::default();
+    let oxygen = doc.add_atom("O", Point::new(30., 20.));
+    doc.atom_mut(oxygen).unwrap().display.hydrogen_position = Right;
+    let automatic = doc.add_atom("N", Point::new(10., 40.));
+    let outside = doc.add_atom("O", Point::new(100., 100.));
+    doc.atom_mut(outside).unwrap().display.hydrogen_position = Right;
+    let before = doc.clone();
+    transform_about(
+        &mut doc,
+        &[oxygen, automatic],
+        Point::new(10., 20.),
+        2.,
+        90.,
+    );
+    assert_eq!(doc.atom(oxygen).unwrap().display.hydrogen_position, Below);
+    assert_eq!(doc.atom(automatic).unwrap().display.hydrogen_position, Auto);
+    assert!(
+        doc.atom(oxygen)
+            .unwrap()
+            .position
+            .distance(Point::new(10., 60.))
+            < 0.00001
+    );
+    assert!(
+        doc.atom(automatic)
+            .unwrap()
+            .position
+            .distance(Point::new(-30., 20.))
+            < 0.00001
+    );
+    assert_eq!(doc.atom(outside), before.atom(outside));
+}
+
+#[test]
+fn fixed_hydrogen_positions_survive_translation_and_positive_scaling() {
+    use crate::atom_labels::HydrogenPosition as H;
+    let mut doc = Document::default();
+    for (i, position) in H::ALL.into_iter().enumerate() {
+        let id = doc.add_atom("O", Point::new(i as f32 * 42., 30.));
+        doc.atom_mut(id).unwrap().display.hydrogen_position = position;
+    }
+    let ids = doc.all_ids();
+    doc.translate(&ids, -200., 100.);
+    transform_about(&mut doc, &ids, Point::default(), 0.5, 0.);
+    scale_axes_about(&mut doc, &ids, Point::default(), 2., 3.);
+    for (atom, expected) in doc.atoms.iter().zip(H::ALL) {
+        assert_eq!(atom.display.hydrogen_position, expected);
+    }
+}
+
+#[test]
+fn fixed_hydrogen_positions_rotate_in_pinned_copies_without_changing_the_source() {
+    use crate::atom_labels::HydrogenPosition::{Below, Right};
+    let mut doc = Document::default();
+    let oxygen = doc.add_atom("O", Point::new(30., 20.));
+    let carbon = doc.add_atom("C", Point::new(0., 20.));
+    doc.add_bond(oxygen, carbon, 1, "plain");
+    doc.atom_mut(oxygen).unwrap().display.hydrogen_position = Right;
+    let before = doc.clone();
+    let (copied, ids) =
+        reference::rotate(&doc, &[oxygen, carbon], Point::new(10., 20.), 90., true).unwrap();
+    assert_eq!(doc, before);
+    for original in &before.atoms {
+        assert_eq!(copied.atom(original.id), Some(original));
+    }
+    let rotated = copied
+        .atoms
+        .iter()
+        .find(|a| ids.contains(&a.id) && a.element == "O")
+        .unwrap();
+    assert_eq!(rotated.display.hydrogen_position, Below);
+    assert!(rotated.position.distance(Point::new(10., 40.)) < 0.00001);
+}
+
+#[test]
+fn fixed_hydrogen_positions_keep_reflected_porphine_labels_inward() {
+    use crate::atom_labels::HydrogenPosition::{Above, Below};
+    let before = Document::from_native_file(include_bytes!(
+        "../../../../docs/changes/fixtures/porphine-core/porphine-placed-desktop.rsk"
+    ))
+    .unwrap();
+    let mut doc = before.clone();
+    let ids = doc.all_ids();
+    let pivot = center(&doc, &ids);
+    transform(&mut doc, &ids, Transform::FlipVertical);
+    assert_eq!(doc.atom(21).unwrap().display.hydrogen_position, Above);
+    assert_eq!(doc.atom(23).unwrap().display.hydrogen_position, Below);
+    assert_eq!(doc.bonds, before.bonds);
+    for original in &before.atoms {
+        let atom = doc.atom(original.id).unwrap();
+        assert!((atom.position.x - original.position.x).abs() < 0.00003);
+        assert!((atom.position.y - (2. * pivot.y - original.position.y)).abs() < 0.00003);
+        let mut restored = atom.clone();
+        restored.position = original.position;
+        restored.display.hydrogen_position = original.display.hydrogen_position;
+        assert_eq!(
+            &restored, original,
+            "Only coordinates and label direction may change"
+        );
+    }
+    let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened, doc.current());
+}
+
+fn hydrogen_ink_extent(doc: &Document, atom: u64, direction: Point) -> f32 {
+    let atom = doc.atom(atom).unwrap();
+    crate::scene::atom_label_ink_boxes(atom, doc)
+        .into_iter()
+        .flat_map(|(lo, hi)| [lo, hi, Point::new(lo.x, hi.y), Point::new(hi.x, lo.y)])
+        .map(|p| (p.x - atom.position.x) * direction.x + (p.y - atom.position.y) * direction.y)
+        .fold(0., f32::max)
+}
+
+fn fixed_hydrogen_arrow_fixture(overlap: bool) -> (Document, u64, f32) {
+    use crate::{
+        arrow_anchors::{Anchor, Target},
+        arrows::{ArrowStyle, Preset},
+        atom_labels::HydrogenPosition::{Above, Below},
+        document::Arrow,
+    };
+    let mut doc = Document::default();
+    let oxygen = doc.add_atom("O", Point::default());
+    let atom = doc.atom_mut(oxygen).unwrap();
+    atom.no_implicit = true;
+    atom.explicit_h = 1;
+    atom.label_h = 1;
+    atom.display.hydrogens = Some(true);
+    atom.display.hydrogen_position = Above;
+    let style = ArrowStyle::preset(Preset::Curved);
+    let pen = crate::style::DEFAULT.world(style.width_pt) * 0.5;
+    let up = Point::new(0., -1.);
+    let down = Point::new(0., 1.);
+    let mut final_label = doc.clone();
+    final_label
+        .atom_mut(oxygen)
+        .unwrap()
+        .display
+        .hydrogen_position = Below;
+    let distance =
+        hydrogen_ink_extent(&doc, oxygen, down).max(hydrogen_ink_extent(&final_label, oxygen, up))
+            + pen
+            + 1.;
+    assert!(distance < hydrogen_ink_extent(&doc, oxygen, up) + pen);
+    let start = Point::new(0., if overlap { 0. } else { distance });
+    let mut arrow = Arrow::new(
+        doc.next_id(),
+        start,
+        Point::new(100., 80.),
+        Preset::Curved,
+        style,
+    );
+    arrow.start_anchor = Some(Anchor {
+        target: Target::Atom { atom: oxygen },
+        offset: start,
+        direction: down,
+        gap: 0.,
+    });
+    arrow.cubic = Some([start.offset(20., 10.), Point::new(80., 70.)]);
+    doc.arrows.push(arrow);
+    (doc, oxygen, pen)
+}
+
+#[test]
+fn fixed_hydrogen_positions_precede_attached_arrow_clearance() {
+    for mode in 0..3 {
+        let (mut doc, oxygen, _) = fixed_hydrogen_arrow_fixture(false);
+        let ids = doc.all_ids();
+        let before = doc.arrows[0].clone();
+        let pivot = if mode == 0 {
+            rotation_center(&doc, &ids).unwrap()
+        } else {
+            Point::default()
+        };
+        let expected = |p: Point| Point::new(2. * pivot.x - p.x, 2. * pivot.y - p.y);
+        match mode {
+            0 => transform(&mut doc, &ids, Transform::Rotate(180.)),
+            1 => transform_about(&mut doc, &ids, pivot, 1., 180.),
+            _ => doc = reference::rotate(&doc, &ids, pivot, 180., false).unwrap().0,
+        }
+        assert_eq!(
+            doc.atom(oxygen).unwrap().display.hydrogen_position,
+            crate::atom_labels::HydrogenPosition::Below
+        );
+        assert!(
+            doc.arrows[0].start.distance(expected(before.start)) < 0.0001,
+            "Already clear endpoint must not grow against the old H direction: mode {mode}"
+        );
+        assert!(
+            doc.arrows[0].cubic.unwrap()[0].distance(expected(before.cubic.unwrap()[0])) < 0.0001
+        );
+        let once = doc.clone();
+        crate::arrow_anchors::reconcile(&mut doc);
+        assert_eq!(doc, once);
+    }
+}
+
+#[test]
+fn fixed_hydrogen_positions_still_clear_overlapping_attached_arrows() {
+    let (mut doc, oxygen, pen) = fixed_hydrogen_arrow_fixture(true);
+    let ids = doc.all_ids();
+    transform_about(&mut doc, &ids, Point::default(), 1., 180.);
+    let arrow = &doc.arrows[0];
+    let anchor = arrow.start_anchor.as_ref().unwrap();
+    let center = doc.atom(oxygen).unwrap().position;
+    let projection = (arrow.start.x - center.x) * anchor.direction.x
+        + (arrow.start.y - center.y) * anchor.direction.y;
+    assert!(projection >= hydrogen_ink_extent(&doc, oxygen, anchor.direction) + pen);
+    assert!(projection > 0.);
+    let once = doc.clone();
+    crate::arrow_anchors::reconcile(&mut doc);
+    assert_eq!(doc, once);
+}
+
+#[test]
 fn vertex_attachment_keeps_substituents_outside_at_any_orientation_and_scale() {
     for degrees in (0..360).step_by(30) {
         for length in [21.0, 42.0, 63.0] {

@@ -510,6 +510,7 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         let p = vector(Point::new(p.x - center.x, p.y - center.y));
         center.offset(p.x, p.y)
     };
+    transform_hydrogen_positions(doc, ids, vector);
     map_positions(doc, ids, convert, vector);
     if matches!(
         transform,
@@ -559,6 +560,7 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         let (x, y) = (p.x * scale, p.y * scale);
         Point::new(x * c - y * s, x * s + y * c)
     };
+    transform_hydrogen_positions(doc, ids, vector);
     map_positions(
         doc,
         ids,
@@ -568,6 +570,37 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         },
         vector,
     );
+}
+
+/// Fixed appendages follow planar rotation/reflection while text stays upright.
+/// Choose the nearest supported cardinal direction; exact diagonals use X.
+/// Run before mapping positions so attached-arrow clearance sees the final ink.
+fn transform_hydrogen_positions(doc: &mut Document, ids: &[u64], vector: impl Fn(Point) -> Point) {
+    use crate::atom_labels::HydrogenPosition as H;
+    let ids: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
+    for atom in &mut doc.atoms {
+        if !ids.contains(&atom.id) {
+            continue;
+        }
+        let direction = match atom.display.hydrogen_position {
+            H::Auto => continue,
+            H::Left => Point::new(-1., 0.),
+            H::Right => Point::new(1., 0.),
+            H::Above => Point::new(0., -1.),
+            H::Below => Point::new(0., 1.),
+        };
+        let p = vector(direction);
+        if !p.x.is_finite() || !p.y.is_finite() || (p.x == 0. && p.y == 0.) {
+            continue;
+        }
+        atom.display.hydrogen_position = if p.x.abs() >= p.y.abs() {
+            if p.x < 0. { H::Left } else { H::Right }
+        } else if p.y < 0. {
+            H::Above
+        } else {
+            H::Below
+        };
+    }
 }
 
 /// Stretch the drawing in its plane without reflecting atoms or resizing text.
