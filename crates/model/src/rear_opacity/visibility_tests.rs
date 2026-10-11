@@ -117,7 +117,7 @@ fn view_visibility_cages_keep_entire_rim_and_fade_hidden_interior() {
     }
 }
 #[test]
-fn view_visibility_rotated_rim_first_failure_diagnostic() {
+fn view_visibility_17_degree_rotation_keeps_atom_41_on_rim() {
     let mut doc = cage(include_str!(
         "../../../../tests/fixtures/projected-double-bonds/c60.rsk"
     ));
@@ -125,15 +125,25 @@ fn view_visibility_rotated_rim_first_failure_diagnostic() {
     let atom = doc.atom(41).unwrap();
     let visibility = visibility::Visibility::new(&doc);
     let (triangles, ink) = visibility.raw_atom_hits(atom.position, atom.depth, &[41]);
-    println!(
-        "Raw 17-degree atom41: triangle faces={triangles:?}, ink owners={ink:?}, rim={}, finalalpha={}",
+    assert!(
+        triangles.is_empty(),
+        "Raw 17-degree atom41: triangle faces={triangles:?}"
+    );
+    assert!(
+        ink.iter().any(|owners| owners.as_slice() == [17, 27]),
+        "Raw 17-degree atom41: ink owners={ink:?}"
+    );
+    assert!(
         rim(&doc).contains(&41),
+        "Raw 17-degree atom41: rim={}",
+        rim(&doc).contains(&41)
+    );
+    assert_eq!(
+        Paint::new(&doc).atom(41),
+        1.,
+        "Raw 17-degree atom41: finalalpha={}",
         Paint::new(&doc).atom(41)
     );
-    assert!(triangles.is_empty());
-    assert!(ink.iter().any(|owners| owners.as_slice() == [17, 27]));
-    assert!(rim(&doc).contains(&41));
-    assert_eq!(Paint::new(&doc).atom(41), 1.);
 }
 #[test]
 fn view_visibility_rotations_are_live_and_opaque_output_is_exact() {
@@ -539,23 +549,21 @@ fn view_visibility_rim_backbone_and_inward_rail_have_independent_depth() {
                 }
             }
         }
-        println!(
-            "C{}: {rim_hidden_rails} exposed backbones with hidden inward rails; {visible_rails} visible inward rails",
+        assert!(
+            rim_hidden_rails > 0,
+            "Rear support exclusion accidentally exempted adjacent front faces: C{}: {rim_hidden_rails} exposed backbones with hidden inward rails; {visible_rails} visible inward rails",
             doc.atoms.len()
         );
         assert!(
-            rim_hidden_rails > 0,
-            "Rear support exclusion accidentally exempted adjacent front faces"
-        );
-        assert!(visible_rails > 0, "All face annotations self-shadowed");
-        println!(
-            "C{}: {avoided_self_shadow} exposed rails protected from their mildly warped support face",
+            visible_rails > 0,
+            "All face annotations self-shadowed: C{}: {rim_hidden_rails} exposed backbones with hidden inward rails; {visible_rails} visible inward rails",
             doc.atoms.len()
         );
         if doc.atoms.len() == 70 {
             assert!(
                 avoided_self_shadow > 0,
-                "No actual C70 support-face warp case checked"
+                "No actual C70 support-face warp case checked: C{}: {avoided_self_shadow} exposed rails protected from their mildly warped support face",
+                doc.atoms.len()
             );
         }
     }
@@ -702,12 +710,9 @@ fn view_visibility_external_foreground_clips_cap_without_hitting_rim_anchor() {
             } else {
                 (alpha * 255.).round() as u8
             };
-            println!(
-                "External cap foreground layer{layer}/alpha{alpha}: restored underlying alpha={actual}, expected={expected}"
-            );
             assert!(
                 i16::from(actual).abs_diff(i16::from(expected)) <= 1,
-                "Opaque cap restoration overrode external foreground"
+                "Opaque cap restoration overrode external foreground: layer{layer}/alpha{alpha}: restored underlying alpha={actual}, expected={expected}"
             );
             assert_eq!(
                 image.pixel(282, 512).unwrap().alpha(),
@@ -867,14 +872,9 @@ fn view_visibility_svg_raster_keeps_full_rim_stroke_and_real_hidden_alpha_on_bot
                             mix(a, b, t).offset(normal.x * width * side, normal.y * width * side);
                         let original = pixel(&reference, p, ref_lo, ref_hi, ref_size);
                         let actual = sample(p);
-                        if first == 14 && t == 0. && side == 0.2 {
-                            println!(
-                                "Rim endpoint {theme:?}/{alpha}: original={original}, actual={actual}, targetbounds={lo:?}/{hi:?}, originalbounds={ref_lo:?}/{ref_hi:?}"
-                            );
-                        }
                         assert!(
                             i16::from(actual) >= i16::from(original) - 1,
-                            "Rendered rim inner/outer/cap ink faded at {first}-{last}/{t}/{side}/{alpha}/{theme:?}: original {original}, actual {actual}"
+                            "Rendered rim inner/outer/cap ink faded at {first}-{last}/{t}/{side}/{alpha}/{theme:?}: original {original}, actual {actual}, targetbounds={lo:?}/{hi:?}, originalbounds={ref_lo:?}/{ref_hi:?}"
                         );
                         if t > 0. && t < 1. {
                             assert!(
@@ -967,12 +967,9 @@ fn view_visibility_exposed_miter_sectors_retain_opaque_compound_ink() {
                 summaries.push((positive, negative, winding));
             }
         }
-        println!(
-            "Compound ink alpha{alpha}, rim13-5 body probe{p:?}: (positive contours,negative contours,winding)={summaries:?}"
-        );
         assert!(
             summaries.iter().any(|(_, _, winding)| *winding != 0),
-            "Shared exposed miter sector disappeared"
+            "Shared exposed miter sector disappeared: compound ink alpha{alpha}, rim13-5 body probe{p:?}: (positive contours,negative contours,winding)={summaries:?}"
         );
     }
 }

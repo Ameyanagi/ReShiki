@@ -1,6 +1,18 @@
 //! Bounded Linux clipboard transport on the GUI's actual display backend.
 #![cfg(target_os = "linux")]
 #![forbid(unsafe_code)]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented,
+        clippy::indexing_slicing
+    )
+)]
 
 pub mod desktop;
 mod gui;

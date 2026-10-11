@@ -3,6 +3,18 @@
 //! cannot subtract from the operation's usage. The helper exits on exhaustion;
 //! unwinding or recovering inside an allocator would be unsound.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented,
+        clippy::indexing_slicing
+    )
+)]
 
 #[cfg(feature = "allocation-metrics")]
 pub mod allocation_metrics;

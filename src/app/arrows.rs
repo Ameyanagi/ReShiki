@@ -484,3 +484,6 @@ impl App {
         self.sync_arrows();
     }
 }
+
+#[cfg(test)]
+mod tests;

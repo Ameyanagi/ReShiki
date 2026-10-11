@@ -190,3 +190,6 @@ impl App {
         Task::none()
     }
 }
+
+#[cfg(test)]
+mod tests;

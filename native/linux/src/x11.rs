@@ -389,7 +389,11 @@ impl Clipboard {
         };
         // An event queued during this dispatch batch cannot revive an expired
         // transfer before serve() reaches its next pruning pass.
-        if self.transfers[index].timing.deadline() <= Instant::now() {
+        if self
+            .transfers
+            .get(index)
+            .is_some_and(|transfer| transfer.timing.deadline() <= Instant::now())
+        {
             self.transfers.remove(index);
             self.unwatch(window);
             return;
