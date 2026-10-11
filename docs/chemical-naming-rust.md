@@ -1,7 +1,7 @@
 # Local chemical naming
 
 The local naming workflow is merged, unreleased, through [PR #298](https://github.com/Ameyanagi/ReShiki/pull/298) and is not included in ReShiki 0.11.0. Its Rust
-backend is introduced separately in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291). The offline alias follow-up below is under review in [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309).
+backend is introduced separately in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291). The offline alias follow-up below is merged, unreleased, in [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309).
 
 Open **Import → Name** to turn a supported chemical name into an editable
 structure. Right-click a molecule and choose **Show chemical name** to place a
@@ -94,7 +94,7 @@ tested earlier build, examples, provenance and reproducible checks. The
 [compact dock and molecule-caption follow-up](changes/molecule-name-label.md)
 records the subsequent implementation and its verification status.
 
-## Curated offline aliases — under review
+## Curated offline aliases
 
 Open **Import → Name → Details** to resolve the entered name and see its
 **Curated aliases · offline**. Opening Details does not open the optional
@@ -128,7 +128,7 @@ finite catalog has no match, not that the molecule has no other names.
 
 This follow-up has no runtime API, Java, Python or external executable
 dependency. Existing bounded Rust workers and reverse-name coverage are
-unchanged. The under-review, unreleased follow-up has 59 distinct passing
+unchanged. The merged, unreleased follow-up has 59 distinct passing
 focused tests: 26 library tests on v2 with unchanged v3 library source, plus
 28 app tests and five explicit renderer tests on v3. Qualified macOS native
 checks passed for alias copying, direct captioned insertion without Preview,
