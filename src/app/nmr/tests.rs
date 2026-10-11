@@ -1,5 +1,187 @@
 use super::*;
 use reshiki::document::Point;
+
+#[test]
+fn nmr_surfaces_keep_the_platform_shadow_policy_and_theme() {
+    for theme in [Theme::Light, Theme::Dark] {
+        let style = surface(&theme);
+        let dark = crate::appearance::is_dark(&theme);
+        assert_eq!(
+            style.shadow,
+            if cfg!(windows) {
+                Shadow::default()
+            } else {
+                Shadow {
+                    color: Color::BLACK.scale_alpha(if dark { 0.2 } else { 0.08 }),
+                    offset: Vector::new(0., 3.),
+                    blur_radius: 12.,
+                }
+            }
+        );
+        assert_eq!(style.text_color, Some(theme.palette().text));
+        assert_eq!(style.border.width, 1.);
+        assert_eq!(style.border.radius, 6.into());
+        assert_eq!(
+            style.background,
+            Some(
+                if dark {
+                    theme.extended_palette().background.base.color
+                } else {
+                    Color::WHITE
+                }
+                .into()
+            )
+        );
+        assert_eq!(table_surface(&theme).shadow, Shadow::default());
+    }
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "Opt-in Windows software renderer partial-damage check"]
+fn nmr_surfaces_partial_redraws_preserve_unchanged_pixels() {
+    use iced::advanced::{graphics::Viewport, mouse};
+    use resvg::tiny_skia::{Mask, Pixmap};
+
+    let size = Size::new(960., 680.);
+    let bounds = iced::Rectangle::with_size(size);
+    for theme in [Theme::Light, Theme::Dark] {
+        // Exercise the real shared surface through its panel, collapsed title,
+        // docked panel and open label-popup uses, including the actual overlay.
+        for mode in ["floating", "collapsed", "docked", "label popup"] {
+            let mut app = ethyl_acetate();
+            let _ = app.nmr_action(Action::Open);
+            finish_prediction(&mut app);
+            app.tab.nmr.position = Some(iced::Point::new(400., 100.));
+            app.tab.nmr.collapsed = mode == "collapsed";
+            app.tab.nmr.labels = mode == "label popup";
+            app.tab.nmr.label_menu = mode == "label popup";
+            let document = app.tab.doc.clone();
+            let camera = app.tab.camera;
+            let mut renderer = iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(
+                iced::Font::default(),
+                iced::Pixels(16.),
+            ));
+            let view = if mode == "docked" {
+                container(app.nmr_panel(false))
+                    .width(360)
+                    .height(500)
+                    .padding(20)
+                    .into()
+            } else {
+                app.with_nmr(Space::new().width(Length::Fill).height(Length::Fill).into())
+            };
+            let mut ui = iced_runtime::UserInterface::build(
+                view,
+                size,
+                iced_runtime::user_interface::Cache::new(),
+                &mut renderer,
+            );
+            let mut messages = Vec::new();
+            let _ = ui.update(
+                &[iced::Event::Window(iced::window::Event::RedrawRequested(
+                    std::time::Instant::now(),
+                ))],
+                mouse::Cursor::Unavailable,
+                &mut renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut messages,
+            );
+            let mut collect = reshiki::accessibility::Collect::new(bounds);
+            ui.operate(
+                &renderer,
+                &mut iced::advanced::widget::operation::black_box(&mut collect),
+            );
+            let expected_control = if mode == "label popup" {
+                "nmr.labels.both"
+            } else {
+                "nmr.close"
+            };
+            assert!(
+                collect
+                    .snapshot()
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == expected_control),
+                "{mode}: actual surface must be present"
+            );
+            ui.draw(
+                &mut renderer,
+                &theme,
+                &iced::advanced::renderer::Style::default(),
+                mouse::Cursor::Unavailable,
+            );
+            drop(ui);
+            let iced::Renderer::Secondary(mut renderer) = renderer else {
+                panic!("partial-redraw regression requires the software renderer");
+            };
+            // A small hover/caret damage rect inside the panel. Replaying its
+            // draw list must not repeatedly blend the shadow over retained ink
+            // or borders outside this damage, even with an open popup.
+            let damage = if mode == "docked" {
+                iced::Rectangle {
+                    x: 200.,
+                    y: 30.,
+                    width: 40.,
+                    height: 20.,
+                }
+            } else {
+                iced::Rectangle {
+                    x: 600.,
+                    y: 110.,
+                    width: 40.,
+                    height: 20.,
+                }
+            };
+            for scale in [1., 1.25, 2.] {
+                let width = (size.width * scale) as u32;
+                let height = (size.height * scale) as u32;
+                let viewport = Viewport::with_physical_size(Size::new(width, height), scale);
+                let mut pixels = Pixmap::new(width, height).unwrap();
+                let mut mask = Mask::new(width, height).unwrap();
+                renderer.draw(
+                    &mut pixels.as_mut(),
+                    &mut mask,
+                    &viewport,
+                    &[bounds],
+                    theme.palette().background,
+                );
+                let original = pixels.clone();
+                for _ in 0..16 {
+                    renderer.draw(
+                        &mut pixels.as_mut(),
+                        &mut mask,
+                        &viewport,
+                        &[damage],
+                        theme.palette().background,
+                    );
+                }
+                let physical_damage = damage * scale;
+                let changed = pixels
+                    .pixels()
+                    .iter()
+                    .zip(original.pixels())
+                    .enumerate()
+                    .filter(|(index, (actual, expected))| {
+                        let point = iced::Point::new(
+                            (*index % width as usize) as f32,
+                            (*index / width as usize) as f32,
+                        );
+                        !physical_damage.contains(point) && actual != expected
+                    })
+                    .count();
+                assert_eq!(
+                    changed, 0,
+                    "{mode}, {theme:?}, scale {scale}: pixels changed outside damage"
+                );
+            }
+            assert_eq!(app.tab.doc, document);
+            assert_eq!(app.tab.camera.center, camera.center);
+            assert_eq!(app.tab.camera.zoom, camera.zoom);
+        }
+    }
+}
+
 fn app() -> App {
     let (mut app, _) = App::new();
     let a = app.tab.doc.add_atom("C", Point::new(0., 0.));

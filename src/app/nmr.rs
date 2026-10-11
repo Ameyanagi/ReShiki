@@ -984,11 +984,11 @@ fn surface(theme: &Theme) -> container::Style {
             width: 1.,
             radius: 6.into(),
         },
-        shadow: Shadow {
+        shadow: crate::appearance::surface_shadow(Shadow {
             color: Color::BLACK.scale_alpha(if dark { 0.2 } else { 0.08 }),
             offset: Vector::new(0., 3.),
             blur_radius: 12.,
-        },
+        }),
         ..Default::default()
     }
 }
