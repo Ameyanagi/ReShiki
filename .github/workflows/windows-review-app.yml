@@ -21,7 +21,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' &&
        github.repository == 'Ameyanagi/ReShiki' &&
-       inputs.source_head == '70f949393e193bac8a0f68f03cc0371f833814c4') ||
+       inputs.source_head == 'd93e522e63cd60d20e2847dbfd536daf5cb9f984') ||
       (github.event_name == 'pull_request' &&
        github.event.pull_request.head.repo.full_name == github.repository &&
        ((github.event.number == 283 && github.event.pull_request.head.ref == 'fix/coordination-attachment') ||
@@ -84,8 +84,8 @@ jobs:
 
           TARGET = "x86_64-pc-windows-msvc"
           # This controller is committed after the separately approved source.
-          INTEGRATION_HEAD = "70f949393e193bac8a0f68f03cc0371f833814c4"
-          INTEGRATION_TREE = "eebb30fb4813f9df1975266862ab4ad635b4ee50"
+          INTEGRATION_HEAD = "d93e522e63cd60d20e2847dbfd536daf5cb9f984"
+          INTEGRATION_TREE = "bbc3841099db024d37d8d84cb56fb6cbd3d6148a"
           BRANCHES = {
               283: "fix/coordination-attachment",
               284: "fix/chemdraw-binary-paste",
