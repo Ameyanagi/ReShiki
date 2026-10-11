@@ -1,0 +1,160 @@
+{
+  "before_producer": {
+    "commit": "ce40d2386207807514d0fa9b793b2ba16ebcb62d",
+    "signed_executable_sha256": "0a036aec87ad3058f94d8d8099a7f1bb1c16547161c5652e7bbe971a0ca2b102"
+  },
+  "after_producer": {
+    "commit": "47b14dab27f7de32120d16c11d53ab563cca1dd9",
+    "tree": "756461b3da53b36df47fd2f6214b9a1a6aff69e9",
+    "source_manifest_sha256": "a6fb11911501ae429f25567267d17b1d736b3295ffdaf2632ff326492f816f66",
+    "signed_executable_sha256": "5d0d995c56353e40406e37369b70060c58200ca17d9079a926fed667936a7b28",
+    "raw_sha256": "20e3a58d4db5d8b093c1ceda9c255baee398e835a1b39583b5c291f56ff87dd1",
+    "own_artifacts": 18,
+    "included_owned_inputs": 704,
+    "included_resources": 80
+  },
+  "build": "locked ordinary default-feature debug build, normal macOS bundle, private ad-hoc identity, strict signature verified",
+  "visual_comparison": "Same 2560 × 1704 window, light theme, JACS/ACS drawing style and Arial 10 pt; Fit views have different disclosed zooms as product count changes. Images were not resized, cropped or retouched.",
+  "native_checks": {
+    "six_positions": "one clean anisole",
+    "five_positions_with_unlike_fixed_substituent": "three clean methoxytoluenes: ortho/meta/para",
+    "history": "Undo emptied each new output tab in one step; Redo restored it; source tabs remained unchanged",
+    "save_and_reopen": "both outputs saved, application quit/relaunched, files reopened with preserved geometry and disabled Undo/Redo",
+    "windows_native": "not performed for this correction"
+  },
+  "captures": [
+    {
+      "path": "docs/images/generic-ring-expansion/arene-before-six-products.jpg",
+      "sha256": "1dd2fbea815b8fbc5beda82bad087ee38581f04a9d668172faa81cbbfc7de869",
+      "bytes": 365950,
+      "displayed_zoom_percent": 118,
+      "producer": "before",
+      "capture": "unaltered native desktop JPEG",
+      "window_pixels": [2560, 1704],
+      "drawing_overlay": "F8 off"
+    },
+    {
+      "path": "docs/images/generic-ring-expansion/methoxytoluene-before-five-products.jpg",
+      "sha256": "df466e2652ac30e01d8ec56442ded36525702dd794b3f3fa4abdf79959153973",
+      "bytes": 350053,
+      "displayed_zoom_percent": 106,
+      "producer": "before",
+      "capture": "unaltered native desktop JPEG",
+      "window_pixels": [2560, 1704],
+      "drawing_overlay": "F8 off"
+    },
+    {
+      "path": "docs/images/generic-ring-expansion/arene-after-one-product.jpg",
+      "sha256": "79f6a4aa134ae3ff3b71b46377dcd4bd9e6f3682ac7d642cb72bf240ad624e04",
+      "bytes": 326897,
+      "displayed_zoom_percent": 250,
+      "producer": "after",
+      "capture": "unaltered native desktop JPEG",
+      "window_pixels": [2560, 1704],
+      "drawing_overlay": "F8 off",
+      "stage": "fresh-process reopen, Chemical abbreviations inspector"
+    },
+    {
+      "path": "docs/images/generic-ring-expansion/methoxytoluene-after-three-products.jpg",
+      "sha256": "da988b37c950b5f11cf18a3b0b5351659e838e3daad21277aafaab0daf2febe7",
+      "bytes": 334191,
+      "displayed_zoom_percent": 115,
+      "producer": "after",
+      "capture": "unaltered native desktop JPEG",
+      "window_pixels": [2560, 1704],
+      "drawing_overlay": "F8 off"
+    },
+    {
+      "path": "docs/images/generic-ring-expansion/anisole-reopened.jpg",
+      "sha256": "d4aeea1f8bbe4f24657a1ddced9ed6ad4879db1a5d2c736ae36ec70eb6b121b2",
+      "bytes": 332016,
+      "displayed_zoom_percent": 250,
+      "producer": "after",
+      "capture": "unaltered native desktop JPEG",
+      "window_pixels": [2560, 1704],
+      "drawing_overlay": "F8 off"
+    },
+    {
+      "path": "docs/images/generic-ring-expansion/methoxytoluene-reopened.jpg",
+      "sha256": "9b6b8f1f82912a115237eee36feb045993eff06e784f80ac2745a5c693e3b362",
+      "bytes": 346688,
+      "displayed_zoom_percent": 109,
+      "producer": "after",
+      "capture": "unaltered native desktop JPEG",
+      "window_pixels": [2560, 1704],
+      "drawing_overlay": "F8 off"
+    }
+  ],
+  "saved_files": [
+    {
+      "path": "docs/evidence/generic-ring-expansion/anisole-one-product-after.rsk",
+      "sha256": "36ec83eaf35ceff3659ab6fd16d15d7ac1706ec89079e91afbe626b963d25118",
+      "bytes": 12282,
+      "products": 1,
+      "atoms": 8,
+      "bonds": 8,
+      "native_format": 26
+    },
+    {
+      "path": "docs/evidence/generic-ring-expansion/methoxytoluene-three-products-after.rsk",
+      "sha256": "1b7fd3d488d2196801b1765d4f86b3db10ca5b9a194ca0d9dcc7a4fb0e566aaf",
+      "bytes": 40996,
+      "products": 3,
+      "atoms": 27,
+      "bonds": 27,
+      "native_format": 26
+    },
+    {
+      "path": "docs/evidence/generic-ring-expansion/methoxytoluene-five-products-before.rsk",
+      "sha256": "565540e0a26e25101c8887e2f14060e27ebb625bedef1d1435ed06d7091950af",
+      "bytes": 68192,
+      "products": 5,
+      "atoms": 45,
+      "bonds": 45,
+      "native_format": 26
+    }
+  ],
+  "inputs": [
+    {
+      "path": "tests/fixtures/generic-structures/variable-arene-native-refused-v26.rsk",
+      "sha256": "a129c109a464b9a1414cce4d09aded6ac6290848e0cfec84c92f67dd520f7be2"
+    },
+    {
+      "path": "tests/fixtures/generic-structures/variable-methoxytoluene-v26.rsk",
+      "sha256": "6eaa850521b62f9a0538bd3ea107b45acbdb2314b39d274166f90685a90ead82"
+    }
+  ],
+  "saved_file_geometry": {
+    "checked": "root independent JSON/vector arithmetic on each saved oxygen",
+    "connector_length_world_units": 42,
+    "connector_tolerance": 1e-5,
+    "methoxy_angle_degrees": 120,
+    "angle_tolerance_degrees": 3e-5,
+    "measurements": [
+      {
+        "file": "anisole-one-product-after.rsk",
+        "oxygen_id": 7,
+        "connector_length": 42.00000000000234,
+        "angle_degrees": 120.00000659947972
+      },
+      {
+        "file": "methoxytoluene-three-products-after.rsk",
+        "oxygen_id": 7,
+        "connector_length": 41.99999463390264,
+        "angle_degrees": 120.00001086293085
+      },
+      {
+        "file": "methoxytoluene-three-products-after.rsk",
+        "oxygen_id": 16,
+        "connector_length": 41.99999280368748,
+        "angle_degrees": 119.99997945934982
+      },
+      {
+        "file": "methoxytoluene-three-products-after.rsk",
+        "oxygen_id": 25,
+        "connector_length": 42.00000000000233,
+        "angle_degrees": 119.9999858099349
+      }
+    ]
+  }
+}

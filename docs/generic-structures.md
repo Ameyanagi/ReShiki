@@ -1,6 +1,6 @@
 # Generic structures and finite expansion
 
-This workflow is an unreleased supported subset under review. Current native desktop acceptance is pending; this guide is not a release or CI certification.
+This workflow supports a finite subset of generic structures and is unreleased. The [ring expansion review](changes/generic-ring-expansion.md) records native macOS checks and retained limitations.
 
 ReShiki records choices and repeat definitions in the drawing. **Expand Generic Structures** produces explicit finite combinations in a new tab. An indefinite polymer remains generic until you supply finite counts; it is not treated as an infinite molecule with calculated properties.
 
