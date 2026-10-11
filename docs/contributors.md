@@ -23,6 +23,8 @@ Public-download validation for 0.11.0: @Ameyanagi in [PR #187](https://github.co
 
 Windows SignPath signing and internal test-signed nightly integration: @Ameyanagi in [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270).
 
+Nightly naming-helper configuration and regression coverage for all six release targets: @Ameyanagi in [PR #304](https://github.com/Ameyanagi/ReShiki/pull/304).
+
 Merged, unreleased: @Ameyanagi — checked numbered ChemDraw attachment import and original silicon fixtures for [issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) in [PR #284](https://github.com/Ameyanagi/ReShiki/pull/284), with [Mac File Open/native save/reopen and controlled Windows ChemDraw/PowerPoint clipboard evidence](changes/chemdraw-numbered-paste.md).
 
 MOL source3D import and ordinary-H presentation (merged, unreleased): @Ameyanagi; [review and desktop evidence](changes/mol-import-3d-review.md), [PR #282](https://github.com/Ameyanagi/ReShiki/pull/282) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296).
