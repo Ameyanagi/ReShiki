@@ -35,11 +35,14 @@
 //! - `RESHIKI_PERF_RENDERER` (optional): the headless backend.
 //! - `RESHIKI_VIEW_PARITY_ONLY` (optional, development only): a case-name
 //!   prefix. Compare mode refuses it, and refuses a baseline captured with it.
+//! - `RESHIKI_NAMING_HELPER` and `RESHIKI_INCHI_HELPER` (optional): with the
+//!   naming helper set, the `feature-*` cases that need local naming are
+//!   registered too. Set them alike for capture and compare.
 //!
 //! On macOS the only headless renderer is wgpu/Metal; TinySkia is enabled
 //! only on Windows.
 use super::layout_snapshots::{
-    STATES, atom, benzene, canvas_bounds, mixed, molecule, open, pass, select_all,
+    STATES, atom, benzene, canvas_bounds, features, mixed, molecule, open, pass, select_all,
 };
 use super::{App, InspectorTab, Message, PALETTE_WIDTH};
 use crate::canvas::{Edit, Tool};
@@ -85,6 +88,7 @@ enum Probe {
 struct Case {
     name: String,
     setup: Box<dyn Fn(&mut App)>,
+    scene: Option<features::Scene>,
     sizes: &'static [(u32, u32)],
     probe: Probe,
     script: &'static [Script],
@@ -121,6 +125,7 @@ fn case(
     Case {
         name: name.into(),
         setup: Box::new(setup),
+        scene: None,
         sizes,
         probe,
         script: &[],
@@ -482,6 +487,22 @@ fn cases() -> Vec<Case> {
     cases.extend(help_cases());
     cases.extend(menu_cases());
     cases.extend(selection_cases());
+    cases.extend(feature_cases());
+    cases
+}
+
+fn feature_cases() -> Vec<Case> {
+    let naming_available = std::env::var_os("RESHIKI_NAMING_HELPER").is_some();
+    let mut cases = Vec::new();
+    for (name, scene) in features::STATES {
+        if features::needs_naming(name) && !naming_available {
+            continue;
+        }
+        cases.push(Case {
+            scene: Some(scene),
+            ..case(format!("feature-{name}"), |_| {}, BOTH, Probe::None)
+        });
+    }
     cases
 }
 
@@ -1772,9 +1793,18 @@ struct Run {
 fn run(case: &Case, size: Size, renderer: &mut Renderer) -> Run {
     let (mut app, _) = App::new();
     app.appearance.mode = crate::appearance::Mode::Light;
+    let mut tree = Tree::empty();
+    let mut scroll = None;
+    if let Some(scene) = case.scene {
+        // As `features::capture`: first-show sensors settle before the
+        // scene, so they cannot close the menus it opens.
+        features::settle_view(&mut app, renderer, &mut tree, size);
+        let driver = features::Driver::new(renderer);
+        scene(&mut app, &driver);
+        scroll = driver.scroll();
+    }
     (case.setup)(&mut app);
     // Settle exactly as `snapshot` does; the app is never updated again.
-    let mut tree = Tree::empty();
     for _ in 0..3 {
         let messages = pass(&app, renderer, &mut tree, size, None);
         if messages.is_empty() {
@@ -1784,13 +1814,22 @@ fn run(case: &Case, size: Size, renderer: &mut Renderer) -> Run {
             let _ = app.update(message);
         }
     }
+    // A feature scene's inspector scroll, at the point `features::capture` uses.
+    let mut script = case.script.to_vec();
+    if let Some(lines) = scroll {
+        script.push(Script::Wheel {
+            x: size.width - app.inspector_width() / 2.,
+            y: size.height / 2.,
+            lines,
+        });
+    }
     let driver = Driver {
         app: &app,
         size,
         sink: Sink::default(),
     };
     let mut out = String::new();
-    driver.replay_tree(renderer, &mut tree, case.script, &mut out);
+    driver.replay_tree(renderer, &mut tree, &script, &mut out);
 
     // (a) LAYOUT and (b) OP, on the manual tree.
     let frame = driver.frame(renderer, &mut tree);
@@ -1822,7 +1861,7 @@ fn run(case: &Case, size: Size, renderer: &mut Renderer) -> Run {
     }
 
     // (c) A11Y and (d) ACT, through the runtime.
-    let (cache, messages) = driver.replay_cache(renderer, case.script);
+    let (cache, messages) = driver.replay_cache(renderer, &script);
     for message in messages {
         let _ = writeln!(out, "SCRIPT,{message:?}");
     }

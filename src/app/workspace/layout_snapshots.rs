@@ -8,6 +8,8 @@ use reshiki::document::{Arrow, Document, Point as World};
 use reshiki::graphics::{Graphic, GraphicKind};
 use std::path::Path;
 
+pub(super) mod features;
+
 /// Lays out and updates the view once, optionally saving a screenshot; returns published messages.
 pub(super) fn pass(
     app: &App,
@@ -487,6 +489,30 @@ async fn ui_layout_snapshots() {
             &output,
         );
         eprintln!("{}", output.display());
+        // Surfaces added after the refactor; dark appearance at the default size.
+        let modes: &[(&str, crate::appearance::Mode)] = if width == 1280 {
+            &[
+                ("", crate::appearance::Mode::Light),
+                ("-dark", crate::appearance::Mode::Dark),
+            ]
+        } else {
+            &[("", crate::appearance::Mode::Light)]
+        };
+        for (name, scene) in features::STATES {
+            for &(suffix, mode) in modes {
+                let (mut app, _) = App::new();
+                app.appearance.mode = mode;
+                let output = directory.join(format!("{name}{suffix}-{width}.png"));
+                features::capture(
+                    &mut app,
+                    &mut renderer,
+                    Size::new(width as f32, height as f32),
+                    scene,
+                    &output,
+                );
+                eprintln!("{}", output.display());
+            }
+        }
     }
 }
 
