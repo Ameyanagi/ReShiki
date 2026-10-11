@@ -19,7 +19,7 @@ The coordination/Join, generic, adaptive chemistry, Assistant and Windows/Office
 
 - **Free-base porphine (merged, unreleased):** place a validated 21H,23H core with equal bonds and two inward N–H labels, or construct it from a supplied carbon seed using exact shared-pivot copies. Meso-phenyl bridge stretching keeps both rings rigid. [Guide](porphine-core.md) · [Desktop evidence and reusable images](changes/porphine-core.md) · [PR #287](https://github.com/Ameyanagi/ReShiki/pull/287) · @Ameyanagi.
 
-- **Fixed hydrogen-label directions (under review):** reflect or rotate selected atoms while keeping fixed hydrogen labels on the corresponding side. Porphine's N–H labels remain inward after a vertical flip, Undo/Redo and reopening the saved drawing; arbitrary rotations select the nearest cardinal side. [Matched native review and chemistry checks](changes/reflected-hydrogen-labels.md) · [PR #308](https://github.com/Ameyanagi/ReShiki/pull/308) · @Ameyanagi. [Issue #88](https://github.com/Ameyanagi/ReShiki/issues/88) remains open for reverse native clipboard exchange.
+- **Fixed hydrogen-label directions (merged, unreleased):** reflect or rotate selected atoms while keeping fixed hydrogen labels on the corresponding side. Porphine's N–H labels remain inward after a vertical flip, Undo/Redo and reopening the saved drawing; arbitrary rotations select the nearest cardinal side. [Matched native review and chemistry checks](changes/reflected-hydrogen-labels.md) · [PR #308](https://github.com/Ameyanagi/ReShiki/pull/308) · @Ameyanagi. [Issue #88](https://github.com/Ameyanagi/ReShiki/issues/88) remains open for reverse native clipboard exchange.
 
 ![Reflected porphine retains both inward N–H labels](images/reflected-hydrogen-labels/after.png)
 
@@ -37,6 +37,15 @@ Undo/Redo and reopening the saved drawing.
 - **Retained (+)-lactic acid (merged, unreleased):** accept this complete retained name as the explicit S structure after local graph/stereo verification, preserve the entered-name caption and retain strict rejection for other unsupported optical qualifiers. [Bounded correction and native evidence](changes/retained-plus-lactic-acid.md) · @Ameyanagi. No general optical-rotation-to-configuration rule is added.
 
 The local naming, caption and reaction-map contributions above were merged, unreleased, in [Integration PR #298](https://github.com/Ameyanagi/ReShiki/pull/298). Their original review images retain their identified producers.
+
+- **Curated offline chemical-name aliases (under review, unreleased):** see 40 provenance-labelled names for 30 exact chemical identities in Import → Name → Details, separate from generated systematic names. Copy an alias or choose it for the molecule's linked caption, then insert directly without Preview. The finite catalog preserves stereo, charge and isotope distinctions and adds no naming API or Java runtime. [Qualified native review and saved-file audits](changes/offline-name-synonyms.md) · [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309) · @Ameyanagi.
+
+![Direct insertion adds ethanol with the chosen ethyl alcohol linked caption](images/offline-name-synonyms/compact-caption.png)
+
+Reusable caption: Choose **ethyl alcohol** for ethanol's linked caption and
+insert the editable molecule without Preview. The generated systematic name
+remains separately identified. This image retains its pre-rebase v3 producer
+qualification in the [review](changes/offline-name-synonyms.md).
 
 - **Multi-atom Join (merged, unreleased):** merge three or more selected atoms into the first selected atom while retaining its ID and label style; surrounding atoms stay fixed. Selection/placement accuracy remains TODO. [Controls and restrictions](fragment-joining.md) · [PR #295](https://github.com/Ameyanagi/ReShiki/pull/295) · [Integration PR #300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
 

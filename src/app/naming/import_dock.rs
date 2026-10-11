@@ -76,6 +76,16 @@ impl App {
         }
         let mut document = preview.document;
         let omit_caption = caption && preview.identity != preview.record.canonical_smiles;
+        let caption_text = if let Some(index) = self.tab.naming.import_alias {
+            let Some(alias) = preview.record.synonyms.get(index) else {
+                self.tab.naming.notice =
+                    Some("The alias choice changed. Choose its name again.".into());
+                return;
+            };
+            alias.name.clone()
+        } else {
+            preview.record.title.clone()
+        };
         if caption && !omit_caption {
             let atoms = document
                 .atoms
@@ -85,7 +95,7 @@ impl App {
             if let Err(error) = reshiki::molecule_names::show(
                 &mut document,
                 &atoms,
-                preview.record.title.clone(),
+                caption_text,
                 preview.record.canonical_smiles,
                 self.tab.caption_format.clone(),
             ) {
@@ -191,6 +201,14 @@ impl App {
             .spacing(8),
         ]
         .spacing(10);
+        if let Some(index) = state.import_alias
+            && let Some(alias) = state
+                .preview
+                .as_ref()
+                .and_then(|p| p.record.synonyms.get(index))
+        {
+            content = content.push(text(format!("Name below: {}", alias.name)).size(11));
+        }
         if let Some(notice) = &state.notice {
             content = content.push(
                 text(compact_notice(notice))
@@ -234,6 +252,16 @@ impl App {
         );
         if state.details_open {
             content = content.push(text("Names are parsed locally with the Rust OPSIN backend. Ambiguous names and unsupported chemical semantics are rejected.").size(11).style(muted_text));
+            if state.preview.is_none() {
+                content = content.push(
+                    button(
+                        "import-name-resolve",
+                        "Resolve chemical name without inserting",
+                        text("Resolve name").size(12),
+                    )
+                    .on_press_maybe((idle && has_name).then_some(Message::Naming(Action::Resolve))),
+                );
+            }
             if let Some(notice) = &state.notice {
                 content = content.push(text(notice).size(11));
             }
@@ -246,7 +274,28 @@ impl App {
                 for warning in preview.record.warnings.iter().chain(&preview.warnings) {
                     content = content.push(text(warning).size(11));
                 }
+                if preview.modified {
+                    content = content.push(
+                        text("Edited preview: aliases from the original name cannot be used.")
+                            .size(11),
+                    );
+                } else {
+                    content =
+                        content.push(self.alias_controls(AliasTarget::Import, &preview.record));
+                }
             }
+            content = content.push(
+                button(
+                    "import-name-generate",
+                    "Generate selected structure name locally",
+                    text("Generate selected name").size(12),
+                )
+                .on_press_maybe(
+                    (idle && !self.tab.selected.is_empty())
+                        .then_some(Message::Naming(Action::Generate)),
+                ),
+            );
+            content = content.push(self.generated_name_controls());
         }
         content.into()
     }

@@ -1,0 +1,672 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "methanol",
+      "smiles": "CO",
+      "aliases": [
+        {
+          "name": "methanol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "alkanes.xml",
+              "token": "meth"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ol"
+            }
+          ]
+        },
+        {
+          "name": "methyl alcohol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "alkanes.xml",
+              "token": "meth"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "yl"
+            },
+            {
+              "file": "functionalTerms.xml",
+              "token": "alcohol"
+            }
+          ]
+        },
+        {
+          "name": "carbinol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleGroups.xml",
+              "token": "carbinol"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ethanol",
+      "smiles": "CCO",
+      "aliases": [
+        {
+          "name": "ethanol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "alkanes.xml",
+              "token": "eth"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ol"
+            }
+          ]
+        },
+        {
+          "name": "ethyl alcohol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "alkanes.xml",
+              "token": "eth"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "yl"
+            },
+            {
+              "file": "functionalTerms.xml",
+              "token": "alcohol"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "propan-1-ol",
+      "smiles": "CCCO",
+      "aliases": [
+        {
+          "name": "propyl alcohol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "alkanes.xml",
+              "token": "prop"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "yl"
+            },
+            {
+              "file": "functionalTerms.xml",
+              "token": "alcohol"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "propan-2-ol",
+      "smiles": "CC(O)C",
+      "aliases": [
+        {
+          "name": "isopropyl alcohol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "alkanes.xml",
+              "token": "prop"
+            },
+            {
+              "file": "inlineSuffixes.xml",
+              "token": "yl"
+            },
+            {
+              "file": "functionalTerms.xml",
+              "token": "alcohol"
+            },
+            {
+              "file": "alkanes.xml",
+              "token": "iso"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "acetone",
+      "smiles": "CC(=O)C",
+      "aliases": [
+        {
+          "name": "acetone",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "groupStemsAllowingInlineSuffixes.xml",
+              "token": "aceton"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "formic-acid",
+      "smiles": "C(=O)O",
+      "aliases": [
+        {
+          "name": "formic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "form"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "acetic-acid",
+      "smiles": "CC(=O)O",
+      "aliases": [
+        {
+          "name": "acetic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "acet"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "propionic-acid",
+      "smiles": "CCC(=O)O",
+      "aliases": [
+        {
+          "name": "propionic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "propion"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "butyric-acid",
+      "smiles": "CCCC(=O)O",
+      "aliases": [
+        {
+          "name": "butyric acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "butyr"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "isobutyric-acid",
+      "smiles": "CC(C)C(=O)O",
+      "aliases": [
+        {
+          "name": "isobutyric acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "isobutyr"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "valeric-acid",
+      "smiles": "CCCCC(=O)O",
+      "aliases": [
+        {
+          "name": "valeric acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "valer"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "isovaleric-acid",
+      "smiles": "CC(C)CC(=O)O",
+      "aliases": [
+        {
+          "name": "isovaleric acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "isovaler"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lactic-unspecified",
+      "smiles": "CC(O)C(=O)O",
+      "aliases": [
+        {
+          "name": "lactic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "lact"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lactic-s",
+      "smiles": "C[C@H](O)C(=O)O",
+      "aliases": [
+        {
+          "name": "L-lactic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "l-lact"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        },
+        {
+          "name": "(+)-lactic acid",
+          "source": "chebi422",
+          "evidence": []
+        }
+      ]
+    },
+    {
+      "id": "lactic-r",
+      "smiles": "C[C@@H](O)C(=O)O",
+      "aliases": [
+        {
+          "name": "D-lactic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "d-lact"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crotonic-acid-e",
+      "smiles": "C/C=C/C(=O)O",
+      "aliases": [
+        {
+          "name": "crotonic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "croton"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "isocrotonic-acid-z",
+      "smiles": "C/C=C\\C(=O)O",
+      "aliases": [
+        {
+          "name": "isocrotonic acid",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "carboxylicAcids.xml",
+              "token": "isocroton"
+            },
+            {
+              "file": "suffixes.xml",
+              "token": "ic acid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "benzene",
+      "smiles": "c1ccccc1",
+      "aliases": [
+        {
+          "name": "benzene",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "benzen"
+            }
+          ]
+        },
+        {
+          "name": "benzol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleCyclicGroups.xml",
+              "token": "benzol"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "toluene",
+      "smiles": "Cc1ccccc1",
+      "aliases": [
+        {
+          "name": "toluene",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "toluen"
+            }
+          ]
+        },
+        {
+          "name": "toluol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleCyclicGroups.xml",
+              "token": "toluol"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phenol",
+      "smiles": "Oc1ccccc1",
+      "aliases": [
+        {
+          "name": "phenol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleCyclicGroups.xml",
+              "token": "phenol"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "aniline",
+      "smiles": "Nc1ccccc1",
+      "aliases": [
+        {
+          "name": "aniline",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "anilin"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "catechol",
+      "smiles": "Oc1ccccc1O",
+      "aliases": [
+        {
+          "name": "catechol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "catechol"
+            }
+          ]
+        },
+        {
+          "name": "pyrocatechol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "pyrocatechol"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hydroquinone",
+      "smiles": "Oc1ccc(O)cc1",
+      "aliases": [
+        {
+          "name": "hydroquinone",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "hydroquinon"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resorcinol",
+      "smiles": "Oc1cccc(O)c1",
+      "aliases": [
+        {
+          "name": "resorcinol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "resorcinol"
+            }
+          ]
+        },
+        {
+          "name": "resorcin",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleCyclicGroups.xml",
+              "token": "resorcin"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "styrene",
+      "smiles": "C=Cc1ccccc1",
+      "aliases": [
+        {
+          "name": "styrene",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "arylGroups.xml",
+              "token": "styren"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glycerol",
+      "smiles": "OCC(O)CO",
+      "aliases": [
+        {
+          "name": "glycerol",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "groupStemsAllowingInlineSuffixes.xml",
+              "token": "glycerol"
+            }
+          ]
+        },
+        {
+          "name": "glycerin",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "groupStemsAllowingInlineSuffixes.xml",
+              "token": "glycerin"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "acrolein",
+      "smiles": "C=CC=O",
+      "aliases": [
+        {
+          "name": "acrolein",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleGroups.xml",
+              "token": "acrolein"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chloroform",
+      "smiles": "ClC(Cl)Cl",
+      "aliases": [
+        {
+          "name": "chloroform",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleGroups.xml",
+              "token": "chloroform"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glyoxal",
+      "smiles": "O=CC=O",
+      "aliases": [
+        {
+          "name": "glyoxal",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleGroups.xml",
+              "token": "glyoxal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ethanolamine",
+      "smiles": "NCCO",
+      "aliases": [
+        {
+          "name": "ethanolamine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleGroups.xml",
+              "token": "ethanolamine"
+            }
+          ]
+        },
+        {
+          "name": "monoethanolamine",
+          "source": "opsin",
+          "evidence": [
+            {
+              "file": "simpleGroups.xml",
+              "token": "monoethanolamine"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

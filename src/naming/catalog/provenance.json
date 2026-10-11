@@ -1,0 +1,70 @@
+{
+  "catalog": "ReShiki retained aliases 1",
+  "schema": 1,
+  "entry_count": 30,
+  "alias_count": 40,
+  "data_sha256": "e13c114c52d69a9aad844eca19284c12539187821b29af9a0e7b5e0a6773686a",
+  "opsin": {
+    "version": "2.9.0",
+    "commit": "b91b610af5ab07560fedb20730d7aef46bb2bca0",
+    "license": "MIT",
+    "copyright": "2017 Daniel Lowe",
+    "resource_fingerprint": "4269b61bf110f01d9fab808a13bac1aa4e29ec34800a7ff7cac5925d3774b9a4",
+    "resources": [
+      {
+        "path": "crates/opsin/resources/xml/alkanes.xml",
+        "sha256": "2b047195ac805959da5410d3b96f896abb98ec51e502714f8cb6dbed08241fb8"
+      },
+      {
+        "path": "crates/opsin/resources/xml/arylGroups.xml",
+        "sha256": "f6fff80ed347fde1d499aa7145b39387c38b8b8845992f27321123a7778a21db"
+      },
+      {
+        "path": "crates/opsin/resources/xml/carboxylicAcids.xml",
+        "sha256": "b66b6479ad98c75cbc4875e3c09cdb5a3bdce1ddd87977dbfd95fd9d9840b24f"
+      },
+      {
+        "path": "crates/opsin/resources/xml/functionalTerms.xml",
+        "sha256": "c2982e6d2e3ba12e6c1898367f86466fc5c6716f53b48f971fc55b3a2df087b3"
+      },
+      {
+        "path": "crates/opsin/resources/xml/groupStemsAllowingInlineSuffixes.xml",
+        "sha256": "573b2dbb02ea17e90f22a8f432233507d38713f368aa5f9ee4f5cd3ee7adaac1"
+      },
+      {
+        "path": "crates/opsin/resources/xml/inlineSuffixes.xml",
+        "sha256": "9d5ce3bc345dd15ed6a8be0a6b46a22007b1801c190519164f45369eb0c37a9c"
+      },
+      {
+        "path": "crates/opsin/resources/xml/simpleCyclicGroups.xml",
+        "sha256": "9d2529668f7c1e59ba3d0b2ac276b4b9f11f31467f26295362729aec608e586d"
+      },
+      {
+        "path": "crates/opsin/resources/xml/simpleGroups.xml",
+        "sha256": "c9edef1f9d068c7591e3d72038e40e186e81d693bd62452702548e04bb3d6ff5"
+      },
+      {
+        "path": "crates/opsin/resources/xml/suffixes.xml",
+        "sha256": "99a599e58c3dd6c244fa4d8f27ba4583d07ccc943d4a62b3a6cc9855e59ecd82"
+      }
+    ]
+  },
+  "chebi": {
+    "record": "CHEBI:422",
+    "url": "https://www.ebi.ac.uk/chebi/CHEBI:422",
+    "record_modified": "2024-04-18",
+    "accessed": "2026-10-11",
+    "selected_alias": "(+)-lactic acid",
+    "expected_smiles": "C[C@H](O)C(=O)O",
+    "license": "CC-BY-4.0",
+    "license_declaration": "https://www.ebi.ac.uk/chebi/about",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "legal_code_sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411"
+  },
+  "adaptations": [
+    "Finite selected OPSIN retained names and complete functional-class names; per-alias source token references remain in data.json.",
+    "Independent explicit graphs index complete names; catalog order defines stable display order.",
+    "One existing ChEBI retained (+)-lactic acid equivalence is selected; no other optical signs are inferred."
+  ],
+  "validation_status": "Authored regression tests; runtime validation pending the assigned Cargo lane."
+}
