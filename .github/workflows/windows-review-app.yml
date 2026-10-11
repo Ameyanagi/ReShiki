@@ -3,27 +3,37 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      source_head:
+        description: Full approved integration commit SHA
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: windows-review-app-${{ github.event.number }}
+  group: windows-review-app-${{ github.event.number || inputs.source_head }}
   cancel-in-progress: false
 jobs:
   windows-review-app:
     # Review artifacts only for these existing, same-repository PRs.
     # Existing Checks jobs continue to test their normal merge ref.
     if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      ((github.event.number == 283 && github.event.pull_request.head.ref == 'fix/coordination-attachment') ||
-       (github.event.number == 284 && github.event.pull_request.head.ref == 'fix/chemdraw-binary-paste') ||
-       (github.event.number == 290 && github.event.pull_request.head.ref == 'fix/office-svg-placement'))
+      (github.event_name == 'workflow_dispatch' &&
+       github.repository == 'Ameyanagi/ReShiki' &&
+       inputs.source_head == 'd93e522e63cd60d20e2847dbfd536daf5cb9f984') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       ((github.event.number == 283 && github.event.pull_request.head.ref == 'fix/coordination-attachment') ||
+        (github.event.number == 284 && github.event.pull_request.head.ref == 'fix/chemdraw-binary-paste') ||
+        (github.event.number == 290 && github.event.pull_request.head.ref == 'fix/office-svg-placement')))
     runs-on: windows-2022
     timeout-minutes: 100
     defaults:
       run:
         shell: pwsh
     env:
-      REVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
+      REVIEW_HEAD: ${{ github.event_name == 'workflow_dispatch' && inputs.source_head || github.event.pull_request.head.sha }}
       CARGO_BUILD_JOBS: "4"
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_RELEASE_DEBUG: "0"
@@ -41,7 +51,7 @@ jobs:
           "CARGO_TARGET_DIR=$(Join-Path $env:RUNNER_TEMP 'reshiki-windows-review-target')" >> $env:GITHUB_ENV
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ env.REVIEW_HEAD }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
@@ -73,6 +83,9 @@ jobs:
           from pathlib import Path
 
           TARGET = "x86_64-pc-windows-msvc"
+          # This controller is committed after the separately approved source.
+          INTEGRATION_HEAD = "d93e522e63cd60d20e2847dbfd536daf5cb9f984"
+          INTEGRATION_TREE = "bbc3841099db024d37d8d84cb56fb6cbd3d6148a"
           BRANCHES = {
               283: "fix/coordination-attachment",
               284: "fix/chemdraw-binary-paste",
@@ -99,6 +112,15 @@ jobs:
 
 
           def validate_event(event, repository, requested_head):
+              if os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch":
+                  require(repository == "Ameyanagi/ReShiki", "Unexpected repository")
+                  require(requested_head == INTEGRATION_HEAD, "Unapproved integration source")
+                  require(
+                      event.get("inputs", {}).get("source_head") == requested_head,
+                      "Dispatch/head disagreement",
+                  )
+                  require(re.fullmatch(r"[0-9a-f]{40}", requested_head), "Invalid head SHA")
+                  return
               pr = event["pull_request"]
               require(event["number"] in BRANCHES, "Unapproved pull request")
               require(pr["head"]["ref"] == BRANCHES[event["number"]], "Unexpected head branch")
@@ -177,6 +199,11 @@ jobs:
                   not command(["git", "status", "--porcelain", "--untracked-files=no"], root),
                   "Checkout has tracked changes",
               )
+              if os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch":
+                  require(
+                      command(["git", "rev-parse", "HEAD^{tree}"], root) == INTEGRATION_TREE,
+                      "Unexpected approved integration tree",
+                  )
               before = source_inventory(root)
               save_json(evidence / "tracked-source-sha256.json", before)
               # Refresh only this checkout after any caches; contents are rechecked below.
@@ -338,7 +365,7 @@ jobs:
               )
               write_notices(root, portable / "Licenses", metadata)
               (portable / "README.txt").write_text(
-                  "Unsigned Windows x64 PR review build, not a release or installer.\n"
+                  "Unsigned Windows x64 review build, not a release or installer.\n"
                   "Keep reshiki.exe, build-receipt.json and Licenses together.\n"
                   "Before transfer, verify the receipt/EXE hashes and freshly measured space.\n"
                   "No guest transfer if the final free space would be below 150 MiB.\n",
@@ -348,7 +375,8 @@ jobs:
                   "schema": 1,
                   "qualified": True,
                   "repository": os.environ["GITHUB_REPOSITORY"],
-                  "pr": event["number"],
+                  "pr": event.get("number"),
+                  "event_name": os.environ["GITHUB_EVENT_NAME"],
                   "head_sha": requested_head,
                   "git_tree": command(["git", "rev-parse", "HEAD^{tree}"], root),
                   "workflow_sha": os.environ["GITHUB_WORKFLOW_SHA"],
@@ -419,7 +447,7 @@ jobs:
         id: upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: windows-review-pr${{ github.event.number }}-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: windows-review-pr${{ github.event.number || 'integration' }}-${{ env.REVIEW_HEAD }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.REVIEW_OUTPUT }}/
           retention-days: 14
           if-no-files-found: error
@@ -446,7 +474,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: windows-review-diagnostics-pr${{ github.event.number }}-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: windows-review-diagnostics-pr${{ github.event.number || 'integration' }}-${{ env.REVIEW_HEAD }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.REVIEW_OUTPUT }}/evidence/
           retention-days: 14
           if-no-files-found: ignore
