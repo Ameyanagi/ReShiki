@@ -422,15 +422,15 @@ pub(super) fn read_embedded(picture_only: bool) -> Result<Option<EmbeddedData>> 
 }
 
 fn retry_clipboard_acquisition<T>(mut acquire: impl FnMut() -> CResult<T>) -> CResult<T> {
-    for attempt in 0..20 {
+    for _ in 1..20 {
         match acquire() {
-            Err(error) if error.code() == CLIPBOARD_BUSY && attempt < 19 => {
+            Err(error) if error.code() == CLIPBOARD_BUSY => {
                 std::thread::sleep(Duration::from_millis(25));
             }
             result => return result,
         }
     }
-    unreachable!()
+    acquire()
 }
 
 fn read_data_object(

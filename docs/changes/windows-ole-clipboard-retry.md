@@ -35,7 +35,7 @@ natively on Windows:
 The native validation used Windows 11 and the installed Rust 1.98.1 MSVC
 toolchain, based on source `50453022fb59f8f79b03996f2d4e5cb24f68654e`. The exported
 two-file implementation/test patch has SHA-256
-`552c362dd138c7e8e589e84f6c4ebfceab0bcc054fbc23ae89c5af016cbf7952`.
+`1a7f32b39e943017044512dac464b16ff085d94d2d7caf6d73896e7a26acfc61`.
 
 ```text
 cargo +1.98.1-x86_64-pc-windows-msvc test --locked --no-default-features \
@@ -45,12 +45,18 @@ cargo +1.98.1-x86_64-pc-windows-msvc test --locked --no-default-features \
 cargo +1.98.1-x86_64-pc-windows-msvc test --locked --no-default-features \
   -p reshiki-windows --lib -j2
 27 passed; 0 failed; 1 existing ignored
+
+cargo +1.98.1-x86_64-pc-windows-msvc clippy --locked --no-default-features \
+  -p reshiki-windows --all-targets -j2 -- -D warnings
+passed
 ```
 
 An initial full-suite attempt encountered clipboard contention while publishing
 the new fixture, before its read began. Fixture publication now retries only the
 busy HRESULT. The final holder cleanup and timeout revision then passed both
-commands above. Earlier diagnostics were retained; no tests were disabled or
+test commands above. The final retry helper returns its twentieth acquisition
+directly and passes the Windows crate's strict Clippy checks. Earlier diagnostics
+were retained; no tests were disabled or
 whole tests retried by the implementation.
 
 This has no intended visual output change, so a drawing screenshot comparison
