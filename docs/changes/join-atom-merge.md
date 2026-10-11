@@ -5,6 +5,12 @@ retaining its ID, element and label color/style. Connected unselected atoms stay
 in place. The merge is one Undo step and also has a **Merge selected atoms**
 command in the shared selection menus.
 
+**TODO — Join accuracy:** this is a supported subset. Reference behavior for
+endpoint selection, fragment placement and Co(en)3 coordination still needs
+work. The integration is being merged with those limitations retained;
+[issue #246](https://github.com/Ameyanagi/ReShiki/issues/246) stays open. See the
+[combined review](coordination-join-integration.md).
+
 The original limitation is confirmed in
 [baseline source at 51fa0991](https://github.com/Ameyanagi/ReShiki/blob/51fa0991da2507bb00b27c1b420e807468de6423/src/app/shortcuts.rs#L356):
 only two selected IDs or four IDs with two bonds reach a successful Join branch;

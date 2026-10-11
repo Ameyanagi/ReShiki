@@ -21,6 +21,12 @@ A group alternative needs an isolated atom or one single outside bond. Unknown f
 
 Select only the 2–300 candidate atoms. In **Properties → Labels & chemistry → Attachment points**, choose **Variable**, or use **Attachment points → Variable attachment** in the selection context menu. Draw one ordinary single bond from the new `*` handle to the substituent. Expansion removes the handle and attaches that substituent to each candidate position in turn. Independent sites form combinations. **Multi-center** means attachment to all targets and is not enumerated as a position choice.
 
+**Known layout limitation / TODO:** variable-position expansion currently keeps
+the substituent's original position. Some generated attachment bonds can cross
+the ring or have unsuitable lengths. Review and reposition those products before
+using the drawing. The [combined native review](changes/coordination-join-integration.md)
+records this defect; successful enumeration does not establish drawing quality.
+
 ## Label repetition and polymer units
 
 For one repeated atom, select an atom with exactly two ordinary single connecting bonds, press **Enter**, use **Automatic**, and enter `[CH2]1-3`. Expansion uses one, two or three CH₂ atoms at that position. Ordinary chain and ring link nodes are supported.

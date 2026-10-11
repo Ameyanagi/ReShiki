@@ -4,6 +4,13 @@
 addressing [#246](https://github.com/Ameyanagi/ReShiki/issues/246).
 Contribution: @Ameyanagi, project creator and maintainer.
 
+**TODO — Join accuracy and Co(en)3 appearance remain unfinished.** The current
+integration adds the six directed contacts, but coordination arrow proportions
+and tips still need visual correction, and Join does not yet reproduce all
+reference selection and placement behavior. Merging this supported subset does
+not resolve [issue #246](https://github.com/Ameyanagi/ReShiki/issues/246); keep it
+open. See the [combined review and outstanding work](coordination-join-integration.md).
+
 Select exactly the donor atom and the metal atom, then press **Ctrl+J** on
 Windows/Linux or **⌘J** on macOS. Join adds the existing directed coordination
 contact in place, preserving both atoms, charge, hydrogen fields and positions.

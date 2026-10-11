@@ -1,6 +1,6 @@
 //! Pins the V3000 CTAB reader's exact diagnostics, the line each one reports
-//! and which fault wins when one record holds several. Every expectation was
-//! observed on the reader before its stage split.
+//! and which fault wins when one record holds several. Baseline expectations
+//! were observed before its stage split; typed LINKNODE checks are noted below.
 use super::*;
 use crate::attachments::Kind;
 
@@ -451,8 +451,9 @@ fn bond_cfg_sets_direction_stereo_and_chirality() {
 fn trailer_blocks_and_final_checks() {
     check_ctab(
         r#"
-        // LINKNODE records are skipped only before the first block.
-        COUNTS 0 0 | LINKNODE 1 2 2 1 2 1 3 | linknode x | END CTAB => ok
+        // LINKNODE records before the first block validate references and framing.
+        COUNTS 0 0 | LINKNODE 1 2 2 1 2 1 3 | linknode x | END CTAB => Invalid MOL input at line 3: Missing LINKNODE atom
+        COUNTS 0 0 | linknode x | END CTAB => Invalid MOL input at line 3: LINKNODE requires exactly two connection pairs
         COUNTS 0 0 | BEGIN COLLECTION | END COLLECTION | LINKNODE | END CTAB => Invalid MOL input at line 5: Missing END CTAB
         COUNTS 0 0 | BEGIN COLLECTION => Invalid MOL input at line 4: Unexpected end of file
         // A zero atom count skips an atom block as an unknown block.
