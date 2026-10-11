@@ -3,7 +3,9 @@ use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use crate::canvas::{Camera, Edit, MoleculeCanvas, Tool};
 use iced::widget::{column, container, row, text};
+mod aliases;
 mod import_dock;
+pub use aliases::{AliasAction, AliasTarget};
 mod molecule_label;
 mod preview;
 use iced::{Element, Length, Task};
@@ -60,6 +62,7 @@ pub enum Action {
     DetailsOpen(bool),
     CopyName,
     Caption,
+    Alias(AliasAction),
     Finished(Ticket, Box<Result<Outcome, String>>),
 }
 
@@ -116,6 +119,7 @@ pub(super) struct State {
     add_name_below: bool,
     preview_open: bool,
     details_open: bool,
+    import_alias: Option<usize>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -134,6 +138,7 @@ impl Default for State {
             add_name_below: true,
             preview_open: false,
             details_open: false,
+            import_alias: None,
         }
     }
 }
@@ -153,6 +158,7 @@ impl State {
         self.preview = None;
         self.notice = None;
         self.acknowledged = false;
+        self.import_alias = None;
         if let Some(cancel) = self.local_cancel.take() {
             cancel.stop();
         }
@@ -160,6 +166,7 @@ impl State {
     fn set_preview(&mut self, preview: Preview) {
         self.smiles = preview.identity.clone();
         self.acknowledged = false;
+        self.import_alias = None;
         self.preview = Some(preview);
     }
 }
@@ -366,7 +373,15 @@ impl App {
                     return self.naming_action(Action::Resolve);
                 }
             }
-            Action::DetailsOpen(value) => self.tab.naming.details_open = value,
+            Action::DetailsOpen(value) => {
+                self.tab.naming.details_open = value;
+                if value
+                    && self.tab.naming.preview.is_none()
+                    && !self.tab.naming.name.trim().is_empty()
+                {
+                    return self.naming_action(Action::Resolve);
+                }
+            }
             Action::CopyName => {
                 if let Some((_, record)) = &self.tab.naming.structure
                     && let Some(name) = &record.systematic_name
@@ -374,7 +389,8 @@ impl App {
                     return iced::clipboard::write(name.clone());
                 }
             }
-            Action::Caption => self.insert_name_caption(),
+            Action::Caption => self.insert_name_caption(None),
+            Action::Alias(action) => return self.naming_alias_action(action),
         }
         Task::none()
     }
@@ -481,8 +497,8 @@ impl App {
         self.error = false;
     }
 
-    fn insert_name_caption(&mut self) {
-        if !self.naming_can_edit() {
+    fn insert_name_caption(&mut self, alias: Option<usize>) {
+        if !self.naming_can_edit() || self.tab.naming.pending.is_some() {
             return;
         }
         let Some((ticket, record)) = self.tab.naming.structure.clone() else {
@@ -503,7 +519,14 @@ impl App {
             return;
         }
         let atoms = editing::analysis_atoms(&self.tab.doc, &self.tab.selected);
-        self.place_molecule_name(&atoms, record);
+        if let Some(index) = alias {
+            let Some(alias) = record.synonyms.get(index) else {
+                return;
+            };
+            self.place_molecule_caption(&atoms, alias.name.clone(), record.canonical_smiles);
+        } else {
+            self.place_molecule_name(&atoms, record);
+        }
     }
 
     pub(super) fn naming_panel(&self) -> Element<'_, Message> {
@@ -651,32 +674,7 @@ impl App {
             )
             .on_press_maybe(idle.then_some(Message::Naming(Action::Generate))),
         );
-        if let Some((ticket, record)) = &state.structure {
-            if ticket.revision != self.tab.revision {
-                content = content.push(text("Previous name · The drawing changed. Generate the selection name again before using it.").size(12));
-            }
-            content = content.push(text(record.provenance.label()).size(12));
-            content = content.push(text("Systematic name · local rules").size(12));
-            if let Some(name) = &record.systematic_name {
-                content = content.push(text(name).size(15));
-            }
-            content = content.push(text(format!("Generated name: {}", record.title)).size(12));
-            for warning in &record.warnings {
-                content = content.push(text(warning).size(12));
-            }
-            content = content.push(
-                row![
-                    button("naming.copy-name", "Copy name", text("Copy name"))
-                        .on_press(Message::Naming(Action::CopyName)),
-                    button("naming.caption", "Insert caption", text("Insert caption"))
-                        .on_press_maybe(
-                            (ticket.revision == self.tab.revision && self.naming_can_edit())
-                                .then_some(Message::Naming(Action::Caption))
-                        ),
-                ]
-                .spacing(6),
-            );
-        }
+        content = content.push(self.generated_name_controls());
         content.into()
     }
 }

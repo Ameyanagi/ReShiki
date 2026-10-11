@@ -1,0 +1,34 @@
+Offline retained-name catalog: ReShiki retained aliases 1
+
+OPSIN-derived names, token references and chemical data in
+src/naming/catalog/data.json are selected and adapted from OPSIN 2.9.0:
+https://github.com/dan2097/opsin
+Pinned commit: b91b610af5ab07560fedb20730d7aef46bb2bca0
+Copyright 2017 Daniel Lowe. Licensed under MIT. The complete original license
+is crates/opsin/LICENSE and is included in binary distribution notices.
+
+This finite catalog expands selected retained names and cited functional-class
+rules into complete names. Some resource tokens are stems, not complete names.
+The accompanying independent authored graphs and strict parser checks validate
+those expansions. This selection does not modify the upstream resources and
+is not a complete copy of OPSIN's retained-name vocabulary.
+
+The exact (+)-lactic acid / S-lactic acid equivalence and its molecular graph
+are selected from ChEBI:422, EMBL-EBI, last modified 18 April 2024:
+https://www.ebi.ac.uk/chebi/CHEBI:422
+Accessed 11 October 2026. ChEBI attributes the (+)-lactic acid synonym to NIST.
+This is a finite local adaptation of that record, not a database download or
+a general inference from optical rotation signs to absolute configuration.
+
+ChEBI website data is licensed under Creative Commons Attribution 4.0:
+https://www.ebi.ac.uk/chebi/about
+https://creativecommons.org/licenses/by/4.0/
+The full legal code is LICENSE-CC-BY-4.0.txt in this directory. No endorsement
+by EMBL-EBI, ChEBI, NIST or OPSIN is implied. No additional restrictions are
+imposed on the separately licensed data.
+
+Original integration code, UI, tests and documentation use ReShiki's
+MIT OR Apache-2.0 terms. This does not relicense the selected third-party
+material. Source versions, per-alias token references and resource checksums
+are documented in src/naming/catalog/README.md and provenance.json.
+The application performs all matching locally, without a naming service.

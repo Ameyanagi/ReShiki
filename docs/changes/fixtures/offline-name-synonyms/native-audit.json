@@ -1,0 +1,202 @@
+{
+  "status": "PASS_SCOPED_NATIVE_ACCEPTANCE_AND_INDEPENDENT_SAVED_GRAPH_AUDITS",
+  "source_base": "3a39aea7d6d686ff626b5aed2c35fe3e292510a5",
+  "review_builds": {
+    "v2_signed_executable_sha256": "01f96ea9cf2e41cd65fc0bd28fe66d570fa7da13a6e5080628a25b6a9aff1fe7",
+    "v3_signed_executable_sha256": "d2c75542e8fdae7b52caaaf0cdbbe4ec9aa2273c0e0d2564f14aa56bea0a8738",
+    "v3_complete_source_patch_sha256": "51222a4b97f38dee80fe6761f89bfd01d73cb4bebc74cab28cfde3fea6b10aba",
+    "v3_delta_from_v2": "Only expanded-Details Resolve control and two UI regressions; library/catalog/worker source unchanged."
+  },
+  "audit_receipt_sha256": {
+    "v1": "876f3652205ce9171532687825510cf3d1b3694ef8dada2382641a7212767a07",
+    "v2": "e2ef41a8c11dcc8b9066fa723ab50432466a694f9a41a46ff55e45da185b1b4a",
+    "v3": "0a377e2c8fe64d1d3d7a2eea18bfd069497888a7c89eed44249e20a2f3b16771",
+    "v4": "5dd41fe7bcdc6ab3d06ae5717546a66e9d1676a6306c7c6995ec0dfe261b247e"
+  },
+  "ethanol_insert": {
+    "fixture": "ethanol-ethyl-alcohol-native.rsk",
+    "sha256": "752f8794243b320bf4d0a361e3c0c91d7cd5dc7acd2cdc2b325c2c3ba2ee2020",
+    "graph": {
+      "atoms": 3,
+      "bonds": 2,
+      "connected_components": 1,
+      "elements": {
+        "C": 2,
+        "O": 1
+      },
+      "edges": [
+        [1, 2, 1],
+        [1, 3, 1]
+      ],
+      "net_charge": 0,
+      "radicals": 0,
+      "isotopes": 0,
+      "atom_stereo": null,
+      "bond_stereo": null,
+      "hydrogens_by_atom": {
+        "1": 2,
+        "2": 3,
+        "3": 1
+      },
+      "independent_formula": "C2H6O"
+    },
+    "caption": {
+      "annotation_count": 1,
+      "linked_name_count": 1,
+      "annotation_id": 4,
+      "text": "ethyl alcohol",
+      "associated_atom_ids": [1, 2, 3],
+      "association_smiles": "CCO",
+      "below_atoms": true
+    },
+    "extra_objects": 0,
+    "cli_analysis": {
+      "acceptors": 1,
+      "donors": 1,
+      "exact_mass": 46.041864812,
+      "formula": "C2H6O",
+      "inchi": "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3",
+      "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
+      "logp": -0.0014000000000000123,
+      "mass": 46.069,
+      "rings": 0,
+      "smiles": "CCO",
+      "tpsa": 20.23,
+      "unpaired_electrons": 0
+    }
+  },
+  "ethanol_caption_replacement": {
+    "fixture": "ethanol-generated-alias-replacement-native.rsk",
+    "sha256": "b86cb369f4882c1319ce0c9d1aaf58e4b8b9da863626aecca2f3baccb0add80f",
+    "complete_atom_records_equal": true,
+    "complete_bond_records_equal": true,
+    "all_other_document_fields_equal": true,
+    "only_persisted_changes": [
+      {
+        "json_path": "annotations[0].text",
+        "before": "ethyl alcohol",
+        "after": "ethanol"
+      },
+      {
+        "json_path": "molecule_names[0].text",
+        "before": "ethyl alcohol",
+        "after": "ethanol"
+      }
+    ],
+    "annotation_id_retained": 4,
+    "linked_annotation_count": 1,
+    "molecule_name_association_count": 1
+  },
+  "positive_lactic_insert": {
+    "fixture": "positive-lactic-acid-native.rsk",
+    "sha256": "ec3487ba161c0abddc0823f99753973392190e53f24e7e83bf88f9e1d3fd9e3a",
+    "graph": {
+      "atoms": 6,
+      "bonds": 5,
+      "components": 1,
+      "elements": {
+        "C": 3,
+        "O": 3
+      },
+      "net_charge": 0,
+      "radicals": 0,
+      "isotopes": 0,
+      "hydrogens_by_atom": {
+        "1": 1,
+        "2": 1,
+        "3": 0,
+        "4": 0,
+        "5": 1,
+        "6": 3
+      },
+      "formula": "C3H6O3",
+      "single_tetrahedral_center": 2,
+      "absolute_configuration": "S"
+    },
+    "caption": {
+      "annotation_id": 7,
+      "text": "(+)-lactic acid",
+      "associated_atoms": [1, 2, 3, 4, 5, 6],
+      "identity_smiles": "C[C@H](O)C(=O)O",
+      "annotation_count": 1,
+      "association_count": 1
+    },
+    "cli_analysis": {
+      "acceptors": 2,
+      "donors": 2,
+      "exact_mass": 90.031694052,
+      "formula": "C3H6O3",
+      "inchi": "InChI=1S/C3H6O3/c1-2(4)3(5)6/h2,4H,1H3,(H,5,6)/t2-/m0/s1",
+      "inchikey": "JVTAAEKCZFNVCJ-REOHCLBHSA-N",
+      "logp": -0.5482,
+      "mass": 90.07799999999999,
+      "rings": 0,
+      "smiles": "C[C@H](O)C(=O)O",
+      "tpsa": 57.53,
+      "unpaired_electrons": 0
+    },
+    "stereo_check": {
+      "method": "Finite exact S-lactic connectivity and explicit native neighbor parity against C[C@H](O)C(=O)O; no reliance on cip_label or label_h display caches",
+      "reference_order_methyl_hydroxyl_carboxyl": [6, 1, 3],
+      "saved_neighbors": [1, 3, 6],
+      "permutation": [1, 2, 0],
+      "inversion_count": 2,
+      "expected_winding": "ccw",
+      "saved_winding": "ccw",
+      "explicit_center_hydrogen": 1,
+      "CIP_priorities": "hydroxyl O > carboxyl C(O,O,O) > methyl C(H,H,H) > H",
+      "scope": "Specific retained S-lactic graph, not a general CIP algorithm or inference from optical sign"
+    },
+    "reference_checker": "../../../../tests/fixtures/retained-plus-lactic-acid/verify_native.py"
+  },
+  "final_v3_ethanol_insert": {
+    "fixture": "ethanol-ethyl-alcohol-final-v3.rsk",
+    "sha256": "752f8794243b320bf4d0a361e3c0c91d7cd5dc7acd2cdc2b325c2c3ba2ee2020",
+    "byte_identical_to_v2_ethanol_fixture": true,
+    "atoms": 3,
+    "bonds": 2,
+    "caption_annotation_id": 4,
+    "caption": "ethyl alcohol",
+    "associated_atoms": [1, 2, 3],
+    "canonical_smiles": "CCO",
+    "formula": "C2H6O",
+    "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
+    "cli_exit_code": 0,
+    "cli_validation": "valid; no warnings"
+  },
+  "native_observations": {
+    "operator": "Root through computer use; separate workers audited saved JSON and CLI identity without GUI",
+    "v2": [
+      "Copy alias pasted into actual input",
+      "Direct insertion without Preview; one Undo removes graph and caption; Redo restores",
+      "Generated systematic ethan-1-ol separately from curated ethanol/ethyl alcohol",
+      "Alias caption replacement; Undo/Redo; native Save As",
+      "(+)-lactic acid insert and generated (2S)-2-hydroxypropanoic acid",
+      "Unsupported (+)-ethanol rejected without adding a history step"
+    ],
+    "v3": [
+      "Expanded Details refreshed R-lactic acid to only D-lactic acid without inserting or opening Preview",
+      "Unspecified lactic acid shows only lactic acid; pentan-1-ol explicitly has no curated aliases",
+      "Whitespace disables Resolve, Preview and Insert",
+      "Unsupported optical sign rejects; correcting input recovers without closing Details",
+      "Copy alias pasted into actual input; Use below and restoring original caption choice",
+      "Compact direct Insert; graph and caption Undo/Redo together",
+      "Native Save As; quit with process absence; new-process reopen with clean title and Undo/Redo disabled"
+    ]
+  },
+  "validation_scope": {
+    "focused_tests": {
+      "unchanged_library_source_tested_in_v2": 26,
+      "v3_app": 28,
+      "v3_opt_in_renderer": 5
+    },
+    "strict_clippy": "PASS",
+    "limitations": [
+      "Saved JSON does not contain Undo frames; history and fresh-process acceptance are native operator observations, not inferred from serialization.",
+      "The transient pending-disabled state was too brief to observe natively; source and explicit renderer tests cover it.",
+      "Native acceptance was macOS; this receipt does not establish Windows/Linux desktop acceptance or fresh export testing.",
+      "CLI graph analyses used the exact signed executable with RESHIKI_INCHI_HELPER pointing to that same executable; GUI runs used ordinary bundle configuration.",
+      "Catalog is finite: 30 exact identities and 40 aliases; comprehensive IUPAC/PIN and synonym coverage are not claimed."
+    ]
+  }
+}

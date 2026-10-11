@@ -233,7 +233,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test rendered local naming accessibility and scrolled insertion on Windows
         if: runner.os == 'Windows'
-        run: "cargo test --locked --no-default-features --bin reshiki app::naming::tests:: -- --ignored"
+        run: "cargo test --locked --no-default-features --bin reshiki app::naming:: -- --ignored"
       # Required workspace tests include independent expected-name rules, exact
       # native OPSIN reconstruction and cancellation/resource/missing-helper cases.
       - run: cargo test --workspace --locked --no-default-features

@@ -4,8 +4,11 @@ use std::collections::HashSet;
 
 mod local;
 pub use local::{Cancel, resolve_name};
+mod catalog;
 mod reverse;
 mod rules;
+pub use catalog::VERSION as ALIAS_CATALOG_VERSION;
+pub use catalog::{Alias, AliasSource, aliases_for_smiles};
 pub mod worker;
 pub use reverse::generate_name;
 
@@ -35,7 +38,9 @@ pub struct Record {
     pub systematic_name: Option<String>,
     pub smiles: String,
     pub canonical_smiles: String,
-    pub synonyms: Vec<String>,
+    /// Curated offline aliases, separate from the generated systematic name.
+    /// Every entry identifies its source and the exact matched chemical graph.
+    pub synonyms: Vec<Alias>,
     pub warnings: Vec<String>,
     pub provenance: Provenance,
 }
