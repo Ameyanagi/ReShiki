@@ -21,11 +21,20 @@ A group alternative needs an isolated atom or one single outside bond. Unknown f
 
 Select only the 2–300 candidate atoms. In **Properties → Labels & chemistry → Attachment points**, choose **Variable**, or use **Attachment points → Variable attachment** in the selection context menu. Draw one ordinary single bond from the new `*` handle to the substituent. Expansion removes the handle and attaches that substituent to each candidate position in turn. Independent sites form combinations. **Multi-center** means attachment to all targets and is not enumerated as a position choice.
 
-**Known layout limitation / TODO:** variable-position expansion currently keeps
-the substituent's original position. Some generated attachment bonds can cross
-the ring or have unsuitable lengths. Review and reposition those products before
-using the drawing. The [combined native review](changes/coordination-join-integration.md)
-records this defect; successful enumeration does not establish drawing quality.
+For a supported detachable substituent, expansion keeps the host ring fixed and
+moves the substituent rigidly outward. The new connector uses the drawing
+style's normal bond length. An ordinary C/N/O/S root with one single-bond branch
+neighbor receives a 120° attachment angle; internal substituent distances stay
+unchanged. Existing ordinary peripheral ring substituents are retained.
+
+Placement must clear the preserved host, saved/refreshed atom-label ink and the
+new connector. Ambiguous or intersecting placements reject the whole expansion
+and retain the source. This is local placement, not a redraw of an internally
+crowded fragment. Shared/bridged anchors, unsupported concave hosts and combined
+variable/link/repeat placement on the same component remain restricted.
+
+The [follow-up review](changes/generic-ring-expansion.md) records the original
+ring-crossing defect, automated checks and native acceptance status.
 
 ## Label repetition and polymer units
 
@@ -41,11 +50,27 @@ A positive integer gives one length; `1-3` gives every integer length in the ran
 
 ## Expand, undo and save
 
-Clear the selection to expand the entire drawing, or select complete molecular components with their required captions, groups and attachments. Choose **Expand Generic Structures** in the context menu or **Properties → Labels & chemistry → Chemical abbreviations**. Products retain each explicit combination; symmetry-equivalent choices are not deduplicated. Generated link/repeat components receive a new 2D layout.
+Clear the selection to expand the entire drawing, or select complete molecular components with their required captions, groups and attachments. Choose **Expand Generic Structures** in the context menu or **Properties → Labels & chemistry → Chemical abbreviations**. Generated link/repeat components receive a new 2D layout.
+
+Expansion retains one product per unique normalized chemical graph, keeping the
+first representative in stable enumeration order. Coordinates, drawing
+orientation and generated object IDs do not create a different chemical product.
+Comparison preserves elements, isotopes, charge, atom maps, stereochemistry and
+directed dative bonds. Existing restrictions on affected stereochemistry apply.
+
+| Finite variable-position example                                           | Unique products                                 |
+| -------------------------------------------------------------------------- | ----------------------------------------------- |
+| Six equivalent benzene positions for one substituent                       | One monosubstituted product.                    |
+| Five available positions on benzene with one different fixed substituent   | Three products: ortho, meta and para.           |
+| Positions not related by a label-preserving symmetry on an asymmetric ring | The distinct chemical products remain separate. |
+
+Explicit hydrogen vertices may remain distinct from an attached-hydrogen
+representation; universal equivalence across those representations is not
+promised.
 
 The source tab and its history stay unchanged. All products appear in one new-tab Undo step: Undo empties it and Redo restores it. Rejection installs no partial products. Save source and products separately; reopened files start with fresh history.
 
-Default limits are 500 products, 100,000 total output atoms and one aggregate work allowance of 5,000,000 units covering copies, chemistry, layout and display measurement. Large text, paths or pictures can exhaust it even for a small chemical expansion. Invalid valence in any combination rejects the whole request.
+Default limits remain 500 raw candidate products, a conservative 100,000-atom raw expansion bound and one aggregate work allowance of 5,000,000 units. Candidate/atom admission happens before duplicate removal: an expansion cannot exceed these caps merely because it might collapse to fewer unique products. Copies, chemistry, layout, display measurement and deduplication share the same work allowance. Large text, paths or pictures can exhaust it even for a small chemical expansion. Invalid valence or a work-limit error in any combination rejects the whole request; no partial output is installed.
 
 Expansion also rejects indefinite counts, unresolved nicknames, exclusion lists, nested/overlapping or directly adjacent units, ambiguous ladder/copolymer connections and specified affected stereochemistry. Mapped repeat atoms and generic structures in explicit reaction membership are restricted. Changed components with generated name captions, attached arrows or rear-opacity scopes require those dependencies to be resolved first; unchanged independent components and captions may be copied. Generic components require expansion before identifiers, properties, derived chemical labels, NMR prediction or joining. Independent ordinary components remain usable.
 

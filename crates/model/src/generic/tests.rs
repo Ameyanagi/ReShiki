@@ -83,8 +83,10 @@ fn variable_attachment_chooses_one_real_target() {
     let cl = source.add_atom("Cl", Point::new(42., 42.));
     source.add_bond(point, cl, 1, "plain");
     let products = expand(&source, Limits::default()).unwrap();
-    assert_eq!(products.len(), 3);
-    for (product, target) in products.iter().zip([1, 2, 3]) {
+    // Propane's terminal targets 1 and 3 both produce 1-chloropropane.
+    // Keep the first terminal representative, followed by 2-chloropropane.
+    assert_eq!(products.len(), 2);
+    for (product, target) in products.iter().zip([1, 2]) {
         assert!(product.atom(point).is_none());
         assert!(
             product

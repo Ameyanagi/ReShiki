@@ -4,6 +4,7 @@ use crate::document::{Document, Point};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 mod layout;
+mod symmetry;
 
 /// A detached concrete drawing and its positioned label/object extents. These
 /// bounds are transient layout output, never authoritative document metadata.
@@ -729,8 +730,9 @@ pub fn expand(source: &Document, limits: Limits) -> Result<Vec<Document>, String
         .collect())
 }
 
-/// Materialize every finite choice atomically, laying out only components
-/// changed by link/repeat definitions. All products share one work allowance.
+/// Materialize every finite choice atomically. Link/repeat components are
+/// depicted; a detachable variable substituent receives only a rigid exterior
+/// pose. All products share one work allowance.
 /// Changed components with generated-name, attached-arrow or depth-scope
 /// dependencies fail closed. Independent native associations are inherited
 /// exactly; this API does not freshly verify arbitrary saved name claims.
@@ -1233,7 +1235,8 @@ fn expand_with_work(
             for i in 0..count {
                 #[cfg(test)]
                 layout::entered(3);
-                let mut candidate = materialize(&product, &site, i, &fragments)?;
+                let mut candidate =
+                    materialize(&product, &site, i, &fragments, drawing, &mut work)?;
                 candidate.validate()?;
                 atoms = atoms.saturating_add(candidate.atoms.len());
                 if atoms > limits.max_total_atoms {
@@ -1260,6 +1263,7 @@ fn expand_with_work(
         .collect();
     let mut drawings = Vec::with_capacity(products.len());
     let mut hydrogens = Vec::new();
+    let mut unique = symmetry::Deduplicator::default();
     for mut product in products {
         if product
             .atoms
@@ -1279,6 +1283,9 @@ fn expand_with_work(
         layout::entered(0);
         let molecule = crate::chemistry::document::prepare(&product)
             .map_err(|e| format!("Expanded structure has invalid chemistry: {e}"))?;
+        if !unique.insert(&molecule, &mut work)? {
+            continue;
+        }
         let label_state = if drawing {
             work.charge(
                 product
@@ -1335,6 +1342,8 @@ fn materialize(
     site: &Site,
     index: usize,
     fragments: &HashMap<String, Document>,
+    drawing: bool,
+    work: &mut Work,
 ) -> Result<Document, String> {
     match site {
         Site::Alternative(s) => {
@@ -1369,6 +1378,14 @@ fn materialize(
             let contact = contacts.first().ok_or("Missing variable attachment bond")?;
             reject_affected_stereo(doc, &[*id, target, contact.a, contact.b])?;
             let mut result = doc.clone();
+            if drawing {
+                let root = if contact.a == *id {
+                    contact.b
+                } else {
+                    contact.a
+                };
+                layout::pose_variable(&mut result, *id, target, root, work)?;
+            }
             result.atoms.retain(|a| a.id != *id);
             for b in &mut result.bonds {
                 if b.a == *id {
