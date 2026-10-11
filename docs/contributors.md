@@ -34,6 +34,8 @@ Nightly naming-helper configuration and regression coverage for all six release 
 
 Published Windows Nightly verification, actual screenshots and route/DPI receipts: @Ameyanagi in [PR #306](https://github.com/Ameyanagi/ReShiki/pull/306); [review and repeat steps](changes/nightly-windows-20261011.md).
 
+Windows NMR surface shadow correction and matched native/partial-redraw regression coverage (under review): @Ameyanagi in [PR #310](https://github.com/Ameyanagi/ReShiki/pull/310); [review and reusable images](changes/windows-nmr-shadows.md).
+
 Merged, unreleased: @Ameyanagi — checked numbered ChemDraw attachment import and original silicon fixtures for [issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) in [PR #284](https://github.com/Ameyanagi/ReShiki/pull/284), with [Mac File Open/native save/reopen and controlled Windows ChemDraw/PowerPoint clipboard evidence](changes/chemdraw-numbered-paste.md).
 
 MOL source3D import and ordinary-H presentation (merged, unreleased): @Ameyanagi; [review and desktop evidence](changes/mol-import-3d-review.md), [PR #282](https://github.com/Ameyanagi/ReShiki/pull/282) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296).
