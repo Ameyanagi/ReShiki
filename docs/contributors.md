@@ -60,7 +60,7 @@ Chemically defined symmetric free-base porphine template and supplied-seed
 construction: @Ameyanagi, merged, unreleased;
 [review evidence](changes/porphine-core.md). [PR #287](https://github.com/Ameyanagi/ReShiki/pull/287).
 
-Fixed hydrogen-label reflections and rotations (under review): @Ameyanagi in
+Fixed hydrogen-label reflections and rotations (merged, unreleased): @Ameyanagi in
 [PR #308](https://github.com/Ameyanagi/ReShiki/pull/308);
 [matched native review and regression checks](changes/reflected-hydrogen-labels.md).
 
@@ -86,6 +86,12 @@ Retained `(+)-lactic acid` in the local naming dock (merged, unreleased): @Ameya
 The local naming, caption and reaction-map contributions above were merged,
 unreleased, in [Integration PR #298](https://github.com/Ameyanagi/ReShiki/pull/298).
 Their original review images retain their identified producers.
+
+Curated offline chemical-name aliases (under review, unreleased): @Ameyanagi in
+[PR #309](https://github.com/Ameyanagi/ReShiki/pull/309). The finite catalog adds
+40 provenance-labelled names for 30 exact identities, with separate systematic
+name results, Copy and linked-caption actions, without a naming API or Java
+runtime. [Qualified native review and reusable images](changes/offline-name-synonyms.md).
 
 Multi-atom Join with retained survivor identity/style and fixed surrounding
 atoms (merged, unreleased): @Ameyanagi in [PR #295](https://github.com/Ameyanagi/ReShiki/pull/295),

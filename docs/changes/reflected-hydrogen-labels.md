@@ -1,7 +1,8 @@
 # Hydrogen labels follow reflections and rotations
 
 Fixed hydrogen-label directions now follow the selected atoms when a drawing is
-reflected or rotated. This correction is under review and unreleased.
+reflected or rotated. This correction is merged, unreleased, in
+[PR #308](https://github.com/Ameyanagi/ReShiki/pull/308).
 [Porphyrin issue #88](https://github.com/Ameyanagi/ReShiki/issues/88) remains open
 pending successful native ReShiki→ChemDraw editable clipboard exchange.
 

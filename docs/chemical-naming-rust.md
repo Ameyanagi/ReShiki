@@ -1,7 +1,7 @@
 # Local chemical naming
 
-This feature is under review and is not included in ReShiki 0.11.0. Its Rust
-backend is introduced separately in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291).
+The local naming workflow is merged, unreleased, through [PR #298](https://github.com/Ameyanagi/ReShiki/pull/298) and is not included in ReShiki 0.11.0. Its Rust
+backend is introduced separately in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291). The offline alias follow-up below is under review in [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309).
 
 Open **Import → Name** to turn a supported chemical name into an editable
 structure. Right-click a molecule and choose **Show chemical name** to place a
@@ -93,3 +93,45 @@ See the [native review and fixtures](changes/rust-chemical-naming.md) for the
 tested earlier build, examples, provenance and reproducible checks. The
 [compact dock and molecule-caption follow-up](changes/molecule-name-label.md)
 records the subsequent implementation and its verification status.
+
+## Curated offline aliases — under review
+
+Open **Import → Name → Details** to resolve the entered name and see its
+**Curated aliases · offline**. Opening Details does not open the optional
+preview or insert anything. Choose **Copy** for an alias, or **Use below** to
+use that alias for the next insertion's linked caption. This explicit choice
+leaves the entered name unchanged; **Use original name below** restores the
+original input as the caption. Changing the input clears the alias choice.
+If Details remains open after editing, choose **Resolve name** to request the
+new aliases without opening Preview or inserting. Resolve is disabled while
+parsing and for empty input. Changing preview chemistry prevents using aliases
+from the original graph.
+
+To name a drawing, select one complete molecule and choose **Generate selected
+name** in the same Details area. The **Generated systematic name · local rules**
+result and its **Copy name** / **Insert caption** actions remain separate from
+the curated aliases and their **Copy** / **Insert caption** actions. Inserting
+an alias reuses the molecule's linked caption instead of making a duplicate.
+The action is one Undo step and retains the existing save/reopen, export and
+caption-detachment behavior described above. After chemistry changes, generate
+a new result before using it.
+
+The bundled catalog currently contains 40 retained or functional-class names
+for 30 identities, including `ethyl alcohol` for ethanol. Each alias displays
+its source, version, record and license. The [complete catalog and provenance](../src/naming/catalog/README.md)
+record the selected OPSIN MIT data and one ChEBI CC BY 4.0 equivalence.
+The S, R and unspecified lactic acid graphs have separate entries. Neither
+charge nor isotope variants inherit the neutral, unlabelled alias. Reaction
+map labels do not change chemical identity. An uncatalogued graph explicitly
+shows **No curated aliases available in the bundled catalog.** This means the
+finite catalog has no match, not that the molecule has no other names.
+
+This follow-up has no runtime API, Java, Python or external executable
+dependency. Existing bounded Rust workers and reverse-name coverage are
+unchanged. The under-review, unreleased follow-up has 59 distinct passing
+focused tests: 26 library tests on v2 with unchanged v3 library source, plus
+28 app tests and five explicit renderer tests on v3. Qualified macOS native
+checks passed for alias copying, direct captioned insertion without Preview,
+one-step Undo/Redo, fresh-process reopening and final v3 name refresh. The
+[follow-up review](changes/offline-name-synonyms.md) records producer-specific
+screenshots, saved graph/caption audits and the limits of that acceptance.

@@ -55,12 +55,16 @@ impl App {
             self.error = true;
             return;
         };
+        self.place_molecule_caption(atoms, text, record.canonical_smiles);
+    }
+
+    pub(super) fn place_molecule_caption(&mut self, atoms: &[u64], text: String, identity: String) {
         let before = self.tab.doc.clone();
         let result = reshiki::molecule_names::show(
             &mut self.tab.doc,
             atoms,
             text.clone(),
-            record.canonical_smiles,
+            identity,
             self.tab.caption_format.clone(),
         );
         if let Err(error) = result {

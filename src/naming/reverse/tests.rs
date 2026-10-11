@@ -37,6 +37,27 @@ async fn native_worker_then_local_opsin_verifies_supported_names() -> Result<(),
         assert_eq!(record.canonical_smiles, expected);
         assert_eq!(record.provenance, Provenance::LocalRules);
         assert_eq!(record.systematic_name.as_deref(), Some(expected_name));
+        // Source-labelled aliases supplement the generated name only after
+        // exact graph reconstruction, including the two absolute enantiomers.
+        let expected_aliases: Option<&[&str]> = match smiles {
+            "CCO" => Some(&["ethanol", "ethyl alcohol"]),
+            "C[C@H](O)C(=O)O" => Some(&["L-lactic acid", "(+)-lactic acid"]),
+            "C[C@@H](O)C(=O)O" => Some(&["D-lactic acid"]),
+            "CC(O)C(=O)O" => Some(&["lactic acid"]),
+            "C" => Some(&[]),
+            _ => None,
+        };
+        if let Some(expected) = expected_aliases {
+            assert_eq!(
+                record
+                    .synonyms
+                    .iter()
+                    .map(|alias| alias.name.as_str())
+                    .collect::<Vec<_>>(),
+                expected,
+                "Wrong retained identity for {smiles}"
+            );
+        }
     }
     Ok(())
 }

@@ -101,7 +101,7 @@ pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record
         systematic_name: Some(candidate),
         smiles: expected.clone(),
         canonical_smiles: expected,
-        synonyms: vec![],
+        synonyms: super::aliases_for_smiles(&reconstructed.smiles)?,
         warnings,
         provenance: Provenance::LocalRules,
     })

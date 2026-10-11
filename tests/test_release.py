@@ -248,11 +248,11 @@ class ReleaseTests(unittest.TestCase):
             )
             self.assertIn(
                 "BSD 3-Clause License",
-                (destination / "THIRD-PARTY-NOTICES.txt").read_text(),
+                (destination / "THIRD-PARTY-NOTICES.txt").read_text(encoding="utf-8"),
             )
             self.assertIn(
                 "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
-                (destination / "THIRD-PARTY-NOTICES.txt").read_text(),
+                (destination / "THIRD-PARTY-NOTICES.txt").read_text(encoding="utf-8"),
             )
             self.assertIn("MIT OR Apache-2.0", (destination / "LICENSE").read_text())
             self.assertIn(

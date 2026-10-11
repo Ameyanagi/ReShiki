@@ -136,7 +136,6 @@ fn certify_retained_name(name: &str, mut record: Record) -> Result<Record, Strin
         format!("The retained (+)-lactic acid name did not resolve to its verified (S) structure: {error}")
     })?;
     record.title = name.into();
-    record.synonyms = vec![PLUS_LACTIC_PARSER_NAME.into()];
     record.provenance = Provenance::OpsinRustRetainedName {
         source: "ChEBI:422",
     };
@@ -324,12 +323,13 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, String> {
         return Err("Local naming supports one connected molecule; disconnected salts and mixtures are unsupported".into());
     }
     let canonical_smiles = canonical_smiles(&smiles)?;
+    let synonyms = super::aliases_for_smiles(&canonical_smiles)?;
     Ok(Record {
         title: name.into(),
         systematic_name: None,
         smiles,
         canonical_smiles,
-        synonyms: vec![],
+        synonyms,
         warnings: vec![],
         provenance: Provenance::OpsinRust,
     })

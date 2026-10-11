@@ -440,7 +440,12 @@ fn retained_lactic_name_is_exact_and_requires_its_specific_absolute_graph() {
             if smiles == PLUS_LACTIC_GRAPH {
                 let record = certified.unwrap();
                 assert_eq!(record.title, name);
-                assert_eq!(record.synonyms, [PLUS_LACTIC_PARSER_NAME]);
+                assert!(
+                    record
+                        .synonyms
+                        .iter()
+                        .any(|alias| alias.name == "(+)-lactic acid")
+                );
                 assert_eq!(
                     record.provenance,
                     Provenance::OpsinRustRetainedName {
