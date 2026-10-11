@@ -1,4 +1,4 @@
-"""Signing policy and publication gates must fail closed for production artifacts."""
+"""Release workflow helpers, signing policy, and publication gates stay explicit."""
 
 import os
 import re
@@ -28,6 +28,46 @@ def evaluate(expression: str, **context):
     expression = expression.strip().removeprefix("${{").removesuffix("}}").strip()
     expression = expression.replace("\n", " ").replace("&&", " and ").replace("||", " or ")
     return eval(expression, {"__builtins__": {}, "always": lambda: True}, context)
+
+
+class NightlyApplicationWorkflowTests(unittest.TestCase):
+    def test_nightly_tests_use_built_helpers_for_every_release_target(self):
+        build = job(RELEASE, "build")
+        step = re.search(
+            r"^      - name: Test the nightly application and renderer regressions\n"
+            r"(.*?)(?=^      -|\Z)",
+            build,
+            re.M | re.S,
+        )[1]
+        environment = dict(re.findall(r"^          (RESHIKI_\w+): (.*)$", step, re.M))
+        targets = re.findall(r"^            target: (\S+)$", build, re.M)
+        self.assertEqual(len(targets), 6)
+        self.assertIn("--bin reshiki --target ${{ matrix.target }}", step)
+        self.assertLess(
+            build.index("name: Build and test extracted portable archive"),
+            build.index("name: Test the nightly application and renderer regressions"),
+        )
+        for target in targets:
+            windows = target.endswith("-pc-windows-msvc")
+            runner_os = "Windows" if windows else "macOS" if "-apple-" in target else "Linux"
+            workspace = "D:/a/ReShiki/ReShiki" if windows else "/workspace/ReShiki"
+            expected = f"{workspace}/target/{target}/release/reshiki" + (".exe" if windows else "")
+            for helper in ("RESHIKI_INCHI_HELPER", "RESHIKI_NAMING_HELPER"):
+                with self.subTest(target=target, helper=helper):
+                    self.assertIn(helper, environment)
+                    resolved = re.sub(
+                        r"\$\{\{(.*?)\}\}",
+                        lambda match: str(
+                            evaluate(
+                                match[1],
+                                github=SimpleNamespace(workspace=workspace),
+                                matrix=SimpleNamespace(target=target),
+                                runner=SimpleNamespace(os=runner_os),
+                            )
+                        ),
+                        environment[helper],
+                    )
+                    self.assertEqual(resolved, expected)
 
 
 class WindowsSigningWorkflowTests(unittest.TestCase):
