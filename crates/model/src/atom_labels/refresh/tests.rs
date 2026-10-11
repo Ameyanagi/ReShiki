@@ -84,8 +84,22 @@ fn unsupported_components_keep_labels_without_hiding_invalid_drawings() {
         let before = source.clone();
         let first = Refresh::calculate(&source, &Refresh::default()).unwrap();
         let cached = Refresh::calculate(&source, &first).unwrap();
-        assert!(cached.notice.is_none());
-        assert!(Arc::ptr_eq(&first.cache[&1], &cached.cache[&1]));
+        if kind == Some(crate::attachments::Kind::Variable) {
+            // Variable positions are unresolved generic chemistry, unlike a
+            // fixed multi-center point or an ordinary drawing centroid.
+            assert!(
+                cached
+                    .notice
+                    .as_deref()
+                    .is_some_and(|notice| notice.contains("Expand Generic Structures"))
+            );
+            assert!(cached.cache.is_empty());
+            assert!(cached.atoms.is_empty() && cached.bonds.is_empty());
+        } else {
+            assert!(cached.notice.is_none());
+            assert!(Arc::ptr_eq(&first.cache[&1], &cached.cache[&1]));
+        }
+        assert_eq!(first.notice, cached.notice);
         cached.apply(&mut source);
         assert_eq!(source, before, "Keep labels and attachment semantics");
         assert!(
@@ -97,6 +111,10 @@ fn unsupported_components_keep_labels_without_hiding_invalid_drawings() {
         source.atom_mut(invalid).unwrap().explicit_h = 5;
         let result = Refresh::calculate(&source, &cached).unwrap();
         assert!(result.notice.is_some(), "Independent valence errors remain");
+        assert!(
+            result.cache[&invalid].result.is_err(),
+            "The generic notice must not mask an unexamined invalid component"
+        );
 
         source.atom_mut(point).unwrap().centroid = vec![999, 1000];
         assert!(

@@ -76,5 +76,21 @@ The correction retains that malformed case, checks its missing-atom diagnostic
 and adds a framing diagnostic case. The exact focused test passes locally.
 Production parser behavior is unchanged. Required CI must pass before merge.
 
+Later CI on `d93e522e` exposed a stale chemical-label test expectation: unresolved
+variable attachments intentionally show an expansion notice and have no concrete
+label cache. The corrected test preserves that behavior, quiet caching for fixed
+centroids/multi-center points, and independent invalid-valence detection.
+
+The [Linux model run](https://github.com/Ameyanagi/ReShiki/actions/runs/38105878727/job/114371258093)
+also rendered only five arrowheads in the native six-contact Co(en)3 fixture;
+the same six-contact regressions passed on macOS. Endpoint-label clipping is
+platform-dependent, and the precise resolved-font contribution is not yet
+qualified. Under the maintainer's explicit request to leave Co(en)3 accuracy
+TODO, the original six-contact native and font/rotation regressions remain
+explicitly ignored with a reference to issue #246. They retain the original
+fixture and six-arrow assertions. The two-contact native, direction, ink
+clearance, SVG, source-preservation and font/transform tests remain active.
+The renderer is unchanged; this is a deferred failing case, not a completed fix.
+
 Reusable caption: Join adds donor-to-metal contacts in place; Co(en)3 arrow
 appearance and Join accuracy remain TODO, with issue #246 open.
