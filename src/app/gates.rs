@@ -15,6 +15,18 @@ impl App {
     pub(super) fn gate(&mut self, message: Message) -> Gate {
         let message = self.early_results_gate(message)?;
         let message = self.exit_gate(message)?;
+        #[cfg(any(windows, target_os = "linux"))]
+        if self.desktop.opening
+            && matches!(
+                message,
+                Message::Close(_)
+                    | Message::Tabs(tabs::Action::Close(_))
+                    | Message::Updates(updates::Action::Install)
+            )
+        {
+            self.status = "Finish opening the requested drawings before closing the editor".into();
+            return Break(Task::none());
+        }
         let message = self.labels_gate(message)?;
         if let Some(task) = self.optimization_gate(&message) {
             return Break(task);
@@ -25,6 +37,13 @@ impl App {
             return Break(Task::none());
         };
         let message = self.restart_gate(message)?;
+        // Join admission precedes hue/text commits and preview cancellation.
+        // Modal atom text/cleanup ownership and unrelated commands are unchanged.
+        if self.generic_join_rejection(&message) {
+            self.status = reshiki::generic::JOIN_NOTICE.into();
+            self.error = true;
+            return Break(Task::none());
+        }
         let message = self.style_menu_gate(message)?;
         let message = self.import_drag_gate(message)?;
         let message = self.atom_text_gate(message)?;

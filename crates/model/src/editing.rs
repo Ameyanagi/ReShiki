@@ -84,7 +84,8 @@ pub enum Arrange {
 /// The selected part as its own document: [`crate::attachments::selection`],
 /// then [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
-    let ids = crate::attachments::selection(doc, ids);
+    let ids = crate::generic::selection(doc, ids);
+    let ids = crate::attachments::selection(doc, &ids);
     let ids: HashSet<_> = doc
         .expand_abbreviation_selection(&ids)
         .into_iter()
@@ -108,6 +109,110 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     part.depth_appearance =
         crate::depth_appearance::selection(doc, &ids.iter().copied().collect::<Vec<_>>());
     part
+}
+
+/// Prepaid expansion-only selection. Keep complete native dependencies exactly;
+/// a partial reference/component rejects rather than invoking deletion repair.
+/// The opaque model input caller owns the allowance and source validation.
+pub(crate) fn preserved_expansion_selection(
+    doc: &Document,
+    selected: &[u64],
+) -> Result<Document, String> {
+    let chosen = crate::generic::selection(doc, selected);
+    let chosen = crate::attachments::selection(doc, &chosen);
+    let mut ids: HashSet<_> = doc
+        .expand_abbreviation_selection(&chosen)
+        .into_iter()
+        .collect();
+    let unsupported = || {
+        "Generic expansion requires complete selected components and native dependencies; the source drawing is retained".to_owned()
+    };
+    for name in &doc.molecule_names {
+        if ids.contains(&name.annotation) {
+            ids.extend(name.atoms.iter().copied());
+        }
+        if name.atoms.iter().all(|id| ids.contains(id)) {
+            ids.insert(name.annotation);
+        } else if name.atoms.iter().any(|id| ids.contains(id)) {
+            return Err(unsupported());
+        }
+    }
+    let anchor_ids = |a: &crate::arrow_anchors::Anchor| -> Vec<u64> {
+        match a.target {
+            crate::arrow_anchors::Target::Atom { atom }
+            | crate::arrow_anchors::Target::LonePair { atom, .. } => vec![atom],
+            crate::arrow_anchors::Target::Bond { a, b, .. } => vec![a, b],
+        }
+    };
+    for arrow in &doc.arrows {
+        let refs: Vec<_> = arrow
+            .start_anchor
+            .iter()
+            .chain(arrow.end_anchor.iter())
+            .flat_map(anchor_ids)
+            .collect();
+        if ids.contains(&arrow.id) || refs.iter().any(|id| ids.contains(id)) {
+            if !refs.iter().all(|id| ids.contains(id)) {
+                return Err(unsupported());
+            }
+            ids.insert(arrow.id);
+        }
+    }
+    if doc
+        .bonds
+        .iter()
+        .any(|b| ids.contains(&b.a) != ids.contains(&b.b))
+        || doc
+            .atoms
+            .iter()
+            .any(|a| ids.contains(&a.id) && a.centroid.iter().any(|id| !ids.contains(id)))
+        || doc.groups.iter().any(|g| {
+            g.members.iter().any(|id| ids.contains(id))
+                && !g.members.iter().all(|id| ids.contains(id))
+        })
+        || doc.depth_appearance.iter().any(|g| {
+            g.atoms.iter().any(|id| ids.contains(id)) && !g.atoms.iter().all(|id| ids.contains(id))
+        })
+        || doc.ring_fills.iter().any(|g| {
+            g.atoms.iter().any(|id| ids.contains(id)) && !g.atoms.iter().all(|id| ids.contains(id))
+        })
+        || doc.reactions.iter().any(|r| {
+            let refs = r.ids();
+            refs.iter().any(|id| ids.contains(id)) && !refs.iter().all(|id| ids.contains(id))
+        })
+    {
+        return Err(unsupported());
+    }
+    let mut part = doc.clone();
+    part.atoms.retain(|a| ids.contains(&a.id));
+    part.bonds
+        .retain(|b| ids.contains(&b.a) && ids.contains(&b.b));
+    part.annotations.retain(|a| ids.contains(&a.id));
+    part.arrows.retain(|a| ids.contains(&a.id));
+    part.graphics.retain(|g| ids.contains(&g.id));
+    part.groups
+        .retain(|g| g.members.iter().all(|id| ids.contains(id)));
+    part.abbreviations
+        .retain(|g| g.members.iter().all(|id| ids.contains(id)));
+    part.depth_appearance
+        .retain(|g| g.atoms.iter().all(|id| ids.contains(id)));
+    part.ring_fills
+        .retain(|g| g.atoms.iter().all(|id| ids.contains(id)));
+    part.reactions
+        .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
+    part.molecule_names
+        .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
+    part.generic.alternatives.retain(|a| ids.contains(&a.atom));
+    part.generic.links.retain(|a| ids.contains(&a.atom));
+    part.generic.repeats.retain(|r| {
+        r.members.iter().all(|id| ids.contains(id))
+            && r.crossings
+                .iter()
+                .all(|c| ids.contains(&c.inside) && ids.contains(&c.outside))
+            && r.bracket.is_none_or(|id| ids.contains(&id))
+            && r.bracket_objects.iter().all(|id| ids.contains(id))
+    });
+    Ok(part)
 }
 
 /// The atoms a chemistry analysis of `selected` covers: any selected
@@ -146,6 +251,45 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     {
         return vec![];
     }
+    let Some((part, _mapping, ids)) = mapped_append_part(doc, source, offset, AppendMode::Ordinary)
+    else {
+        return vec![];
+    };
+    extend_append_part(doc, part);
+    crate::arrow_anchors::reconcile(doc);
+    ids
+}
+/// A remapped fragment, its source-to-inserted ID map, and inserted object IDs.
+type MappedAppendPart = (Document, HashMap<u64, u64>, Vec<u64>);
+
+#[derive(Clone, Copy)]
+enum AppendMode {
+    Ordinary,
+    Preserved,
+}
+/// Internal prepared-expansion remap only. No public skip-reconcile switch.
+/// The model caller pays work, validates/proves the detached part and appends it.
+pub(crate) fn preserved_append_part(
+    doc: &Document,
+    source: &Document,
+    offset: Point,
+) -> Result<MappedAppendPart, String> {
+    if source.atom_labels != doc.atom_labels
+        || source.drawing_style != doc.drawing_style
+        || !offset.x.is_finite()
+        || !offset.y.is_finite()
+    {
+        return Err("Prepared insertion would change source drawing defaults".into());
+    }
+    mapped_append_part(doc, source, offset, AppendMode::Preserved)
+        .ok_or_else(|| "Could not remap a prepared expansion tile".into())
+}
+fn mapped_append_part(
+    doc: &Document,
+    source: &Document,
+    offset: Point,
+    mode: AppendMode,
+) -> Option<MappedAppendPart> {
     let first = doc.next_id();
     let mapping: Option<HashMap<_, _>> = source
         .all_ids()
@@ -159,26 +303,21 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
                 .map(|next| (id, next))
         })
         .collect();
-    let Some(mapping) = mapping else {
-        return vec![];
-    };
+    let mapping = mapping?;
     let mut part = source.clone();
+    part.generic.remap(&mapping)?;
     for name in &mut part.molecule_names {
-        let Some(mapped) = mapping.get(&name.annotation).copied() else {
-            return vec![];
-        };
+        let mapped = mapping.get(&name.annotation).copied()?;
         name.annotation = mapped;
         for atom in &mut name.atoms {
-            let Some(mapped) = mapping.get(atom).copied() else {
-                return vec![];
-            };
+            let mapped = mapping.get(atom).copied()?;
             *atom = mapped;
         }
     }
     part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
-        if source.atom_labels != doc.atom_labels {
+        if matches!(mode, AppendMode::Ordinary) && source.atom_labels != doc.atom_labels {
             a.display.carbons.get_or_insert(source.atom_labels.carbons);
             a.display
                 .hydrogens
@@ -192,105 +331,89 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
                 .show
                 .get_or_insert(source.atom_labels.stereo);
         }
-        let Some(mapped) = mapping.get(&a.id).copied() else {
-            return vec![];
-        };
+        let mapped = mapping.get(&a.id).copied()?;
         a.id = mapped;
         for id in &mut a.centroid {
-            let Some(mapped) = mapping.get(id).copied() else {
-                return vec![];
-            };
+            let mapped = mapping.get(id).copied()?;
             *id = mapped;
         }
         a.position = a.position.offset(offset.x, offset.y);
         if let Some(s) = &mut a.stereo {
             for id in &mut s.neighbors {
-                let Some(mapped) = mapping.get(id).copied() else {
-                    return vec![];
-                };
+                let mapped = mapping.get(id).copied()?;
                 *id = mapped;
             }
         }
     }
     for b in &mut part.bonds {
-        if source.atom_labels.stereo != doc.atom_labels.stereo {
+        if matches!(mode, AppendMode::Ordinary)
+            && source.atom_labels.stereo != doc.atom_labels.stereo
+        {
             b.indicator.show.get_or_insert(source.atom_labels.stereo);
         }
-        let Some(mapped) = mapping.get(&b.a).copied() else {
-            return vec![];
-        };
+        let mapped = mapping.get(&b.a).copied()?;
         b.a = mapped;
-        let Some(mapped) = mapping.get(&b.b).copied() else {
-            return vec![];
-        };
+        let mapped = mapping.get(&b.b).copied()?;
         b.b = mapped;
         for id in &mut b.stereo_atoms {
-            let Some(mapped) = mapping.get(id).copied() else {
-                return vec![];
-            };
+            let mapped = mapping.get(id).copied()?;
             *id = mapped;
         }
     }
     for a in &mut part.annotations {
-        let Some(mapped) = mapping.get(&a.id).copied() else {
-            return vec![];
-        };
+        let mapped = mapping.get(&a.id).copied()?;
         a.id = mapped;
         a.position = a.position.offset(offset.x, offset.y);
     }
     for a in &mut part.arrows {
-        let Some(mapped) = mapping.get(&a.id).copied() else {
-            return vec![];
-        };
+        let mapped = mapping.get(&a.id).copied()?;
         a.id = mapped;
         crate::arrow_anchors::remap(a, &mapping);
-        a.map_points(|p| p.offset(offset.x, offset.y));
+        if matches!(mode, AppendMode::Ordinary) {
+            a.map_points(|p| p.offset(offset.x, offset.y));
+        } else {
+            // A common translation preserves an absent legacy control; the
+            // ordinary transform method deliberately materializes that bend.
+            a.start = a.start.offset(offset.x, offset.y);
+            a.end = a.end.offset(offset.x, offset.y);
+            a.control = a.control.map(|p| p.offset(offset.x, offset.y));
+            a.cubic = a.cubic.map(|v| v.map(|p| p.offset(offset.x, offset.y)));
+        }
     }
     for g in &mut part.graphics {
-        let Some(mapped) = mapping.get(&g.id).copied() else {
-            return vec![];
-        };
+        let mapped = mapping.get(&g.id).copied()?;
         g.id = mapped;
         g.origin = g.origin.offset(offset.x, offset.y);
     }
     for g in &mut part.groups {
-        let Some(mapped) = mapping.get(&g.id).copied() else {
-            return vec![];
-        };
+        let mapped = mapping.get(&g.id).copied()?;
         g.id = mapped;
         for id in &mut g.members {
-            let Some(mapped) = mapping.get(id).copied() else {
-                return vec![];
-            };
+            let mapped = mapping.get(id).copied()?;
             *id = mapped;
         }
     }
     for group in &mut part.abbreviations {
-        let Some(anchor) = mapping.get(&group.anchor).copied() else {
-            return vec![];
-        };
+        let anchor = mapping.get(&group.anchor).copied()?;
         group.anchor = anchor;
         for id in &mut group.members {
-            let Some(mapped) = mapping.get(id).copied() else {
-                return vec![];
-            };
+            let mapped = mapping.get(id).copied()?;
             *id = mapped;
         }
     }
     for fill in &mut part.ring_fills {
         for id in &mut fill.atoms {
-            let Some(mapped) = mapping.get(id).copied() else {
-                return vec![];
-            };
+            let mapped = mapping.get(id).copied()?;
             *id = mapped;
         }
     }
     for reaction in &mut part.reactions {
-        if reaction.remap(&mapping).is_none() {
-            return vec![];
-        }
+        reaction.remap(&mapping)?;
     }
     let ids = part.all_ids();
+    Some((part, mapping, ids))
+}
+pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.atoms.extend(part.atoms);
     doc.bonds.extend(part.bonds);
     doc.annotations.extend(part.annotations);
@@ -302,6 +425,7 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     doc.reactions.extend(part.reactions);
     doc.ring_fills.extend(part.ring_fills);
     doc.depth_appearance.extend(part.depth_appearance);
+    doc.generic.extend(part.generic);
     if crate::rear_opacity::present(doc) {
         doc.version = doc.version.max(22);
     }
@@ -311,8 +435,6 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     if !doc.abbreviations.is_empty() {
         doc.version = doc.version.max(11);
     }
-    crate::arrow_anchors::reconcile(doc);
-    ids
 }
 
 fn point_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {

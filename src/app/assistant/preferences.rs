@@ -13,6 +13,7 @@ impl App {
         self.assistant.preferences_dirty = true;
         self.assistant.menu = None;
         if value
+            && !self.assistant.requires_apply
             && self
                 .assistant
                 .draft

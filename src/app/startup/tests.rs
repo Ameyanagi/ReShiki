@@ -32,9 +32,15 @@ fn old_single_path_and_shortcut_examples_flags_are_readable() {
 #[test]
 fn microsoft_365_edit_flag_is_separate_from_legacy_office_and_libreoffice() {
     for (flag, host) in [
-        ("--office-addin-edit", "Microsoft 365"),
-        ("--office-edit", "Office"),
-        ("--libreoffice-edit", "LibreOffice"),
+        (
+            "--office-addin-edit",
+            super::super::office::Host::Microsoft365,
+        ),
+        ("--office-edit", super::super::office::Host::Office),
+        (
+            "--libreoffice-edit",
+            super::super::office::Host::LibreOffice,
+        ),
     ] {
         let args = parse([flag, "--open", "drawing.rsk"].map(OsString::from));
         assert_eq!(args.office_host, Some(host));

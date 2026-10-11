@@ -203,6 +203,7 @@ fn reaction_completion_is_atomic_and_rejects_incomplete_labels() -> anyhow::Resu
             is_3d: false,
             attachment_points: vec![None],
             dummy_labels: vec![None],
+            generic: Default::default(),
         },
     };
     let source = reaction::Imported {

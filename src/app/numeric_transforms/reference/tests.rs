@@ -209,3 +209,122 @@ fn composed_docked_nmr_tab_switch_restores_camera_and_reset_cancels_stretch() {
     assert!(!app.tab.nmr.open);
     assert!(!app.tab.history.can_undo());
 }
+
+#[test]
+fn resetting_an_office_tab_preserves_docked_nmr_camera_and_cancels_reference_stretch() {
+    use crate::app::{InspectorTab, nmr::Action as NmrAction, office};
+    use std::path::PathBuf;
+
+    // Extend the optional Windows46 reset regression with a real stretch
+    // owner and real NMR dock actions, rather than setting their flags.
+    let drawing = fixture().tab.doc.clone();
+    let (mut app, _) = App::new();
+    let path = PathBuf::from("nmr-reference-office.rsk");
+    let lease = office::Lease::new([7; 16], || true);
+    let _ = app.update(Message::OfficePrepared(
+        office::Binding {
+            path: path.clone(),
+            host: office::Host::Office,
+            lease: Some(lease.clone()),
+        },
+        Some((
+            path.clone(),
+            Ok(crate::app::files::Prepared::Native(Box::new(drawing))),
+        )),
+    ));
+    let original = app.tab.id;
+    let epoch = app.tab.file_epoch;
+    let before = app.tab.doc.clone();
+    app.tab.doc.translate(&[3], 5., 0.);
+    app.changed(before);
+    app.tab.selected = vec![1, 2];
+    let source = app.tab.doc.clone();
+    let history = (
+        app.tab.history.undo_frames().cloned().collect::<Vec<_>>(),
+        app.tab.history.redo_frames().cloned().collect::<Vec<_>>(),
+    );
+    assert!(app.tab.history.can_undo());
+    let inspector = (app.inspector_open, app.inspector_tab);
+    let _ = app.update(Message::Nmr(NmrAction::Open));
+    let _ = app.update(Message::Nmr(NmrAction::Dock));
+    app.tab.camera.center = Point::new(73., -29.);
+    app.tab.camera.zoom = 2.5;
+    let camera = app.tab.camera;
+    act(&mut app, Action::StretchDrag);
+    assert!(app.reference_stretch_active(1, 2));
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+
+    app.reset_tab();
+
+    let destination = app.tab.id;
+    assert_ne!(destination, original);
+    assert_eq!(app.strip().count(), 2);
+    assert_eq!(app.tool, Tool::Select);
+    assert!(!app.reference_stretch_active(1, 2));
+    assert_eq!((app.inspector_open, app.inspector_tab), inspector);
+    assert!(app.tab.doc.object_ids().next().is_none());
+    assert!(app.tab.doc.generic.is_empty());
+    assert!(app.tab.office.is_none());
+    assert!(app.tab.path.is_none());
+    assert!(!app.tab.nmr.open);
+    assert_eq!(app.tab.history.frames(), 0);
+    let blank = app.tab.doc.clone();
+    let _ = app.update(Message::Canvas(Edit::StretchBond {
+        fixed: 1,
+        moving: 2,
+        length: 63.,
+    }));
+    assert_eq!(app.tab.doc, blank);
+    assert_eq!(app.tab.history.frames(), 0);
+    let parked = app
+        .tabs
+        .background
+        .iter()
+        .find(|tab| tab.id == original)
+        .unwrap();
+    assert_eq!(parked.doc, source);
+    assert_eq!(parked.file_epoch, epoch);
+    let (docked, restore_dock, _) = parked.nmr.docking_state_for_test();
+    assert!(parked.nmr.open && docked && restore_dock);
+    assert_eq!(parked.office.as_ref().unwrap().path, path);
+    assert_eq!(lease.phase(), office::Phase::Open);
+
+    let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(original)));
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+    assert_eq!(
+        (app.tab.camera.center, app.tab.camera.zoom),
+        (camera.center, camera.zoom)
+    );
+    assert_eq!(app.tab.nmr.docking_state_for_test().2, Some(inspector));
+    assert_eq!(app.tool, Tool::Select);
+    assert!(!app.reference_stretch_active(1, 2));
+    let _ = app.update(Message::Canvas(Edit::StretchBond {
+        fixed: 1,
+        moving: 2,
+        length: 63.,
+    }));
+    assert_eq!(app.tab.doc, source);
+    assert_eq!(app.tab.file_epoch, epoch);
+    assert_eq!(
+        (
+            app.tab.history.undo_frames().cloned().collect::<Vec<_>>(),
+            app.tab.history.redo_frames().cloned().collect::<Vec<_>>()
+        ),
+        history,
+    );
+    assert_eq!(app.drawing_save_target(false).0, Some(path));
+    assert_eq!(
+        app.tab
+            .office
+            .as_ref()
+            .unwrap()
+            .lease
+            .as_ref()
+            .unwrap()
+            .token,
+        lease.token
+    );
+    assert_eq!(lease.phase(), office::Phase::Open);
+}

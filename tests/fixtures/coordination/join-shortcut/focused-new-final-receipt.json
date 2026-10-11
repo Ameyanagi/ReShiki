@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--no-default-features",
+    "--bin",
+    "reshiki",
+    "app::shortcuts::coordination_tests::"
+  ],
+  "cwd": "/Users/ryuichi/dev/ReShiki-worktrees/coordination",
+  "cargo_target_dir": "/Users/ryuichi/dev/ReShiki/target",
+  "cargo_build_jobs": 4,
+  "started_unix": 1791582099.585199,
+  "elapsed_seconds": 6.900259733200073,
+  "exit_code": 0,
+  "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/focused-new-final.log",
+  "log_bytes": 1139,
+  "log_sha256": "52e38b33f5082757bbf87c64dafb8ca5d43344b1c1ad3d102f00d68e8ef6950d"
+}

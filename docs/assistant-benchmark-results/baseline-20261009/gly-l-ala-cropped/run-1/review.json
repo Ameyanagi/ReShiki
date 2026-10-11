@@ -1,0 +1,11 @@
+{
+  "changes": [],
+  "issues": [
+    "Atoms 1 (N) and 6 (H) overlap or are too close; preserve the source ligand geometry and separate these positions",
+    "Left NH valence remains ambiguous: one H and one heavy-atom bond are shown, without a charge or radical marker.",
+    "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+  ],
+  "passes": 1,
+  "summary": "The visible structure matches the source. The stacked H/N labels reproduce its spacing without visible overlap.",
+  "verified": true
+}

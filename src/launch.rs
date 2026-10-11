@@ -58,6 +58,20 @@ pub(crate) fn mode(args: impl IntoIterator<Item = OsString>) -> Launch {
     }
 }
 
+/// Inspect GUI flags without treating a native filename consumed by `--open`
+/// as a mode switch (and without converting native paths to UTF-8).
+pub(crate) fn gui_flag(args: impl IntoIterator<Item = OsString>, flag: &str) -> bool {
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        if arg == "--open" {
+            let _ = args.next();
+        } else if arg == flag {
+            return true;
+        }
+    }
+    false
+}
+
 /// The environment variable that sets the heap ceiling of `--mcp` and
 /// `--cli`.
 const HEAP_VARIABLE: &str = "RESHIKI_AGENT_HEAP_MB";

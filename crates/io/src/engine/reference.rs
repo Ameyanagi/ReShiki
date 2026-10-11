@@ -426,6 +426,7 @@ impl PythonEngine {
             state: imported.prepared.state,
         };
         let file = molfile::FileAnnotations {
+            generic: Default::default(),
             chemdraw_directions: Vec::new(),
             attachments: Vec::new(),
             is_3d: false,

@@ -1,0 +1,12 @@
+{
+  "head": "3d261b32e9baa73b6d2cb133de2163fa3699569a",
+  "branch": "fix/office-svg-placement",
+  "clean_worktree": true,
+  "compiled_inputs_match_committed_source": 533,
+  "bundle_files_match": true,
+  "signed_executable_sha256": "3d343a93e4cf5f3977252804f85eb419e809132eb9ac0a245f4d7c05d2fabbe7",
+  "all_own_cargo_rustc_clippy_processes_finished": true,
+  "released_to": "ROOT",
+  "released_utc": "2026-10-09T16:31:52.185534+00:00",
+  "gui_launched_by_worker": false
+}

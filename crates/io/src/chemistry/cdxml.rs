@@ -18,6 +18,7 @@ pub(crate) use arrows::native_hypot;
 mod association;
 mod attachments;
 pub mod bonds;
+mod generic;
 pub mod graphics;
 mod groups;
 mod labels;
@@ -35,6 +36,8 @@ mod tree;
 mod variables;
 mod xml_guard;
 
+#[cfg(test)]
+mod coordination_tests;
 #[cfg(test)]
 mod tests;
 pub(crate) use variables::drawing_variables;
@@ -129,3 +132,6 @@ pub struct Fragment {
 pub fn read(text: &str) -> Result<Parsed> {
     parse::read(text)
 }
+
+#[cfg(test)]
+mod generic_tests;

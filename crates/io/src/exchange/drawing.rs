@@ -8,6 +8,7 @@ use crate::{
 };
 use std::collections::HashMap;
 mod clipboard;
+mod generic;
 mod groups;
 mod labels;
 mod ligands;
@@ -180,7 +181,12 @@ fn write_impl(
         document
     };
     if document.bonds.iter().any(|b| b.ring_arc)
-        || (!variable_labels && document.atoms.iter().any(|a| a.display.variable.is_some()))
+        || (!variable_labels
+            && document.atoms.iter().any(|a| {
+                a.display.variable.is_some()
+                    && !document.generic.alternatives.iter().any(|s| s.atom == a.id)
+                    && !document.generic.links.iter().any(|s| s.atom == a.id)
+            }))
     {
         return Err(invalid(
             "CDXML cannot yet preserve inner ring curves or variable atom labels. Save as ReShiki (.rsk) or export SVG/PDF to keep this appearance.",
@@ -209,11 +215,14 @@ fn write_impl(
         // Bold double bonds have an ordinary two-rail CDXML representation;
         // unlike a bold single bond, it cannot imply tetrahedral stereo.
         let bold_double = bond.order == 2 && bond.display == "bold";
+        // Dative projection is an explicit drawing display; B/E still records donor→metal.
+        let coordination_projection = bond.order == 5;
         bond.projection
             && bond.display != "plain"
             && !haworth.contains(&i)
             && !aromatic_bold
             && !bold_double
+            && !coordination_projection
     }) {
         return Err(invalid(
             "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",
@@ -235,6 +244,7 @@ fn write_impl(
     w.hidden_charges()?;
     w.arrows()?;
     let middle = w.graphics()?;
+    w.generic_units()?;
     let arrow_nodes: std::collections::HashSet<_> = document
         .arrows
         .iter()

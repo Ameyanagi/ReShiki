@@ -163,6 +163,9 @@ impl Writer<'_> {
                     .retain(|(key, _)| *key != "Element");
                 continue;
             }
+            if self.generic_atom(node, a)? {
+                continue;
+            }
             if self.variable_labels
                 && let Some(label) = &a.display.variable
             {
@@ -337,8 +340,11 @@ impl Writer<'_> {
                     "bold" => "Bold",
                     "hashed" => "Hash",
                     "wedge" => "WedgeBegin",
+                    "wedge_end" => "WedgeEnd",
                     "hash" => "WedgedHashBegin",
+                    "hash_end" => "WedgedHashEnd",
                     "hollow_wedge" => "HollowWedgeBegin",
+                    "hollow_wedge_end" => "HollowWedgeEnd",
                     "wavy" => "Wavy",
                     _ => return Err(invalid("Unsupported bond display")),
                 })
@@ -383,10 +389,6 @@ impl Writer<'_> {
                 self.tree.set(n, "Order", "1")?;
                 self.tree.set(n, "Display", "Dash")?;
                 self.tree.set(n, "Display2", "DottedHydrogen")?;
-            }
-            if b.order == 5 && b.display == "dashed" {
-                self.tree.set(n, "Order", "1")?;
-                self.tree.set(n, "Display", "Dash")?;
             }
             if b.order == 7 && b.display == "dashed" {
                 self.tree.set(n, "Display2", "Dash")?;

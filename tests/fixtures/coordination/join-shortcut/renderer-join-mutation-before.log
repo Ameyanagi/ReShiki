@@ -1,0 +1,26 @@
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/coordination)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.29s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-ba50b1304e6a1bdf)
+
+running 1 test
+test app::shortcut_focus_tests::join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur ... FAILED
+
+failures:
+
+---- app::shortcut_focus_tests::join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur stdout ----
+
+thread 'app::shortcut_focus_tests::join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur' (470625622) panicked at src/app/shortcut_focus_tests.rs:1485:9:
+assertion `left == right` failed: numeric: focused field must not add a contact through [Shortcut(Join)]
+  left: 10
+ right: 9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    app::shortcut_focus_tests::join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 663 filtered out; finished in 19.08s
+
+error: test failed, to rerun pass `-p reshiki --bin reshiki`

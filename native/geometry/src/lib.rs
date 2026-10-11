@@ -9,11 +9,59 @@ use std::{collections::BTreeSet, sync::Mutex};
 /// Version of the independent force-field reference, not a runtime dependency.
 pub const RDKIT_VERSION: &str = "2026.03.6";
 pub const COSMOLKIT_VERSION: &str = "0.3.0";
-pub const MAX_ATOMS: usize = 512;
+/// Absolute structural safety ceiling, separate from machine-budget admission.
+pub const MAX_ATOMS: usize = 640;
 pub const MAX_COORDINATES: usize = 4096;
-pub const MAX_BONDS: usize = 2048;
+pub const MAX_BONDS: usize = 4096;
 pub const MAX_CONFORMERS: u32 = 32;
 pub const MAX_ITERATIONS: u32 = 10_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Capacity {
+    pub atoms: usize,
+    pub bonds: usize,
+    pub coordinates: usize,
+}
+impl Default for Capacity {
+    fn default() -> Self {
+        Self {
+            atoms: 512,
+            bonds: 2048,
+            coordinates: 4096,
+        }
+    }
+}
+impl Capacity {
+    /// Admission envelope retaining the historical 256 MiB / 512-atom anchor.
+    /// Above that anchor, pair-table growth needs substantially more headroom:
+    /// every additional original atom reserves 2 MiB, up to the validated ceiling.
+    /// Eligibility does not guarantee optimization success or measured usage.
+    pub fn for_heap(heap_bytes: usize) -> Self {
+        let reference_heap = 256 * 1024 * 1024;
+        let base = (heap_bytes / (512 * 1024)).min(512);
+        let additional =
+            (heap_bytes.saturating_sub(reference_heap) / (2 * 1024 * 1024)).min(MAX_ATOMS - 512);
+        let atoms = base.saturating_add(additional).min(MAX_ATOMS);
+        Self {
+            atoms,
+            bonds: atoms.saturating_mul(4).min(MAX_BONDS),
+            coordinates: atoms.saturating_mul(8).min(MAX_COORDINATES),
+        }
+    }
+    pub fn validate(self) -> Result<(), String> {
+        if self.atoms == 0
+            || self.atoms > MAX_ATOMS
+            || self.bonds == 0
+            || self.bonds > MAX_BONDS
+            || self.coordinates < self.atoms
+            || self.coordinates > MAX_COORDINATES
+        {
+            return Err("Geometry capacity exceeds the validated structural safety ceiling".into());
+        }
+        Ok(())
+    }
+}
 // Keep deterministic seeded sampling isolated from concurrent solver calls.
 static SOLVER_OPERATION: Mutex<()> = Mutex::new(());
 mod cage;
@@ -102,6 +150,16 @@ fn valid_coordinate(p: &[f64; 3]) -> bool {
 }
 
 impl Request {
+    pub fn validate_capacity(&self, capacity: Capacity) -> Result<(), String> {
+        capacity.validate()?;
+        if self.atoms.len() > capacity.atoms
+            || self.bonds.len() > capacity.bonds
+            || self.coordinates.len() > capacity.coordinates
+        {
+            return Err("Geometry request exceeds its machine-budget capacity".into());
+        }
+        self.validate()
+    }
     pub fn validate(&self) -> Result<(), String> {
         let n = self.atoms.len();
         if n == 0 || n > MAX_ATOMS || self.bonds.len() > MAX_BONDS {

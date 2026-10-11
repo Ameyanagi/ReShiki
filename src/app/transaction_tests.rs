@@ -697,3 +697,78 @@ fn observer_history_alignment_survives_cip_only_frames() {
     assert_eq!(app.status, SELECTED);
     assert_eq!(app.tab.selected, [a1, a2]);
 }
+
+#[test]
+fn generic_repeat_define_clear_undo_redo_invalidate_cached_properties_and_notices() {
+    let mut app = app();
+    for (index, element) in ["O", "C", "C", "N"].into_iter().enumerate() {
+        let id = app
+            .tab
+            .doc
+            .add_atom(element, Point::new(index as f32 * 42., 0.));
+        if index > 0 {
+            app.tab.doc.add_bond(id - 1, id, 1, "plain");
+        }
+    }
+    let bracket = app.tab.doc.next_id();
+    app.tab
+        .doc
+        .graphics
+        .push(reshiki::graphics::Graphic::dragged(
+            bracket,
+            reshiki::graphics::GraphicKind::Brackets,
+            Point::new(20., -20.),
+            Point::new(105., 20.),
+            Default::default(),
+            reshiki::graphics::BracketSides::Both,
+            false,
+        ));
+    let _ = app.generic_action(generic::Action::RepeatLabel("1-3".into()));
+    for (step, expected_generic) in [true, false, true, false].into_iter().enumerate() {
+        cache_properties(&mut app);
+        app.tab.doc.atoms[1].cip_label = Some("R".into());
+        app.tab.doc.bonds[1].cip_label = Some("E".into());
+        let revision = app.tab.revision;
+        match step {
+            0 => {
+                let _ = app.generic_action(generic::Action::DefineRepeat(bracket));
+            }
+            1 => {
+                let _ = app.generic_action(generic::Action::ClearRepeat(bracket));
+            }
+            2 => app.step_history(false),
+            3 => app.step_history(true),
+            _ => unreachable!(),
+        }
+        assert_eq!(reshiki::generic::present(&app.tab.doc), expected_generic);
+        assert!(
+            app.tab.analysis.is_none(),
+            "step {step} must discard cached concrete properties"
+        );
+        assert!(
+            app.tab.chemistry_notice.is_none(),
+            "step {step} must discard the old notice"
+        );
+        assert!(
+            app.tab.labels_dirty,
+            "step {step} must request a new fail-closed refresh"
+        );
+        assert!(
+            app.tab
+                .doc
+                .atoms
+                .iter()
+                .all(|atom| atom.cip_label.is_none())
+        );
+        assert!(
+            app.tab
+                .doc
+                .bonds
+                .iter()
+                .all(|bond| bond.cip_label.is_none())
+        );
+        assert_eq!(app.tab.revision, revision + 1);
+        assert!(!app.error);
+        app.tab.doc.validate().unwrap();
+    }
+}

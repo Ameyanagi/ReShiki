@@ -316,7 +316,11 @@ pub(crate) fn visible_with_degree(
     if crate::attachments::hidden(a, doc) {
         return false;
     }
-    if a.element != "C" || a.radical_electrons != 0 || a.isotope != 0 {
+    if a.element != "C"
+        || a.radical_electrons != 0
+        || a.isotope != 0
+        || doc.generic.links.iter().any(|s| s.atom == a.id)
+    {
         return true;
     }
     let degree = degree();

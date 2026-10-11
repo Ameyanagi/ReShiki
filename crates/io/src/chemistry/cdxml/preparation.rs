@@ -87,6 +87,8 @@ fn error(stage: PreparationStage, cause: PreparationCause) -> PreparationError {
 /// shares the combined molecule's scaled positions; chemistry is still raw.
 #[derive(Clone, Debug, Serialize)]
 pub struct PreparedCdxml {
+    #[serde(skip_serializing_if = "super::generic::SourceGeneric::is_empty")]
+    pub generic: super::generic::SourceGeneric,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<crate::attachments::Attachment>,
     pub molecule: Molecule,
@@ -103,16 +105,28 @@ pub struct PreparedCdxml {
     pub conformer_3d: Option<bool>,
 }
 
-fn validate(text: &str) -> Result<Tree> {
+fn validate_predicates(tree: &Tree, allow_link_counts: bool) -> Result<()> {
     use PreparationStage::Validation;
-    let tree = at(Validation, Tree::parse_import(text))?;
     let nodes = at(Validation, tree.descendants(0))?;
     // Preserve the original two scans: predicates on any n/b are checked before
     // unsupported object tags, including chemical-looking children in pictures.
     for &index in &nodes {
         let node = at(Validation, tree.node(index))?;
         if matches!(node.tag.as_str(), "n" | "b") {
+            let finite_link = allow_link_counts
+                && node.tag == "n"
+                && node
+                    .attr("LinkCountLow")
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .zip(
+                        node.attr("LinkCountHigh")
+                            .and_then(|s| s.parse::<u32>().ok()),
+                    )
+                    .is_some_and(|(min, max)| min >= 1 && max >= min && max <= 1000);
             for &(name, allowed) in super::PREDICATES {
+                if finite_link && matches!(name, "LinkCountLow" | "LinkCountHigh") {
+                    continue;
+                }
                 if node
                     .attr(name)
                     .is_some_and(|value| !allowed.contains(&value))
@@ -122,6 +136,14 @@ fn validate(text: &str) -> Result<Tree> {
             }
         }
     }
+    Ok(())
+}
+
+fn validate(text: &str) -> Result<Tree> {
+    use PreparationStage::Validation;
+    let tree = at(Validation, Tree::parse_import(text))?;
+    validate_predicates(&tree, false)?;
+    let nodes = at(Validation, tree.descendants(0))?;
     let mut pages = 0;
     at(Validation, super::schemes::validate(text))?;
     for index in nodes {
@@ -348,7 +370,11 @@ pub(crate) fn prepare_drawing(text: &str) -> Result<PreparedCdxml> {
 
 fn prepare(text: &str, check_chemistry: bool) -> Result<PreparedCdxml> {
     use PreparationStage::*;
-    let mut source = validate(text)?;
+    // Keep query error precedence before detaching generic fragment objects.
+    // Only supported finite link-count pairs pass this original-source scan.
+    validate_predicates(&at(Validation, Tree::parse_import(text))?, true)?;
+    let (text, generic) = at(Validation, super::generic::extract(text))?;
+    let mut source = validate(&text)?;
     at(Validation, super::attachments::normalize(&mut source))?;
     let molecular_root = at(Validation, source.node(0))?.tag == "CDXML";
     let flattened = at(Expansion, super::abbreviations::flatten_tree(source))?;
@@ -478,6 +504,7 @@ fn prepare(text: &str, check_chemistry: bool) -> Result<PreparedCdxml> {
         .map(|i| u64::try_from(i + 1).map_err(|_| error(Combination, PreparationCause::Limit)))
         .collect::<Result<_>>()?;
     Ok(PreparedCdxml {
+        generic,
         attachments,
         molecule: Molecule {
             rdkit_version: RDKIT_VERSION,

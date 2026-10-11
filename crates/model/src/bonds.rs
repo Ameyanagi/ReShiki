@@ -148,10 +148,12 @@ impl BondPreset {
         Self::ALL.into_iter().find(|p| {
             let (order, display, secondary) = p.parts();
             (order == bond.order
-                || bond.projection && display != "plain" && p.preserves_aromatic_order(bond))
-                && display == bond.display
+                || bond.projection && display != "plain" && p.preserves_chemistry(bond))
+                && display == bond.display.strip_suffix("_end").unwrap_or(&bond.display)
                 && secondary.unwrap_or(display)
-                    == bond.secondary_display.as_deref().unwrap_or(&bond.display)
+                    == bond.secondary_display.as_deref().unwrap_or_else(|| {
+                        bond.display.strip_suffix("_end").unwrap_or(&bond.display)
+                    })
         })
     }
     /// Wedge/line appearance on an aromatic edge depicts its ring projection,
@@ -159,23 +161,48 @@ impl BondPreset {
     pub fn preserves_aromatic_order(self, bond: &Bond) -> bool {
         bond.order == 4 && self.parts().0 == 1
     }
-    /// Styling a retained perspective bond must not erase sugar stereocenters.
+    /// Perspective paint on a directed dative edge never assigns tetrahedral
+    /// stereochemistry or exchanges its donor and acceptor.
+    pub fn preserves_coordination_order(self, bond: &Bond) -> bool {
+        bond.order == 5
+            && matches!(
+                self,
+                Self::Single
+                    | Self::Wedge
+                    | Self::HashedWedge
+                    | Self::HollowWedge
+                    | Self::Bold
+                    | Self::Hashed
+                    | Self::Dative
+                    | Self::Dashed
+            )
+    }
+    /// Styling a retained perspective bond must not erase captured stereo.
     pub fn preserves_chemistry(self, bond: &Bond) -> bool {
         self.preserves_aromatic_order(bond)
+            || self.preserves_coordination_order(bond)
             || bond.projection && bond.order == 1 && self.parts().0 == 1
     }
     pub fn apply(self, bond: &mut Bond) {
         let (order, display, secondary) = self.parts();
+        let narrow_at_acceptor = bond.order == 5 && bond.display.ends_with("_end");
         if self.preserves_chemistry(bond) {
-            if bond.order == 4 {
-                bond.projection = display != "plain";
+            if matches!(bond.order, 4 | 5) {
+                bond.projection = !matches!(display, "plain" | "dashed");
             }
         } else {
             bond.ring_arc = false;
             bond.projection = false;
             bond.order = order;
         }
-        bond.display = display.into();
+        bond.display = if bond.order == 5
+            && narrow_at_acceptor
+            && matches!(display, "wedge" | "hash" | "hollow_wedge")
+        {
+            format!("{display}_end")
+        } else {
+            display.into()
+        };
         bond.secondary_display = secondary.map(str::to_string);
     }
     /// Shared by committed bond gestures and their live canvas preview. Avoid
@@ -185,10 +212,20 @@ impl BondPreset {
             ((bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
                 && self.preserves_chemistry(bond)
         }) {
-            if bond.a != a {
+            if bond.a != a && bond.order != 5 {
                 bond.reverse();
             }
             self.apply(bond);
+            if bond.order == 5
+                && matches!(self, Self::Wedge | Self::HashedWedge | Self::HollowWedge)
+            {
+                let display = self.parts().1;
+                bond.display = if bond.b == a {
+                    format!("{display}_end")
+                } else {
+                    display.into()
+                };
+            }
             return;
         }
         let (order, display, _) = self.parts();
@@ -250,6 +287,19 @@ impl Bond {
             ]
             .as_slice(),
             0 => ["dotted"].as_slice(),
+            5 if self.projection => [
+                "plain",
+                "dashed",
+                "wedge",
+                "hash",
+                "bold",
+                "hashed",
+                "hollow_wedge",
+                "wedge_end",
+                "hash_end",
+                "hollow_wedge_end",
+            ]
+            .as_slice(),
             5 => ["plain", "dashed"].as_slice(),
             7 => ["plain", "dashed"].as_slice(),
             _ => ["plain"].as_slice(),
@@ -264,6 +314,23 @@ impl Bond {
             return Err("Unsupported bond appearance for this order".into());
         }
         Ok(())
+    }
+    /// Flip only the narrowed projection endpoint. Directed chemical a/b stays fixed.
+    pub fn reverse_projection(&mut self) -> bool {
+        if self.order != 5 || !self.projection {
+            return false;
+        }
+        self.display = match self.display.as_str() {
+            "wedge" => "wedge_end",
+            "wedge_end" => "wedge",
+            "hash" => "hash_end",
+            "hash_end" => "hash",
+            "hollow_wedge" => "hollow_wedge_end",
+            "hollow_wedge_end" => "hollow_wedge",
+            _ => return false,
+        }
+        .into();
+        true
     }
     pub fn reverse(&mut self) {
         std::mem::swap(&mut self.a, &mut self.b);

@@ -17,9 +17,13 @@ mod app;
 mod appearance;
 mod branding;
 mod canvas;
+#[cfg(any(windows, target_os = "linux"))]
+mod desktop;
 mod launch;
 #[cfg(windows)]
 mod rendering;
+#[cfg(any(windows, test))]
+mod window_fit;
 
 #[cfg(not(test))]
 #[global_allocator]
@@ -108,11 +112,11 @@ fn main() -> iced::Result {
     }
     #[cfg(windows)]
     {
-        if std::env::args().any(|arg| arg == "--graphics-info") {
+        if launch::gui_flag(std::env::args_os().skip(1), "--graphics-info") {
             println!("{}", rendering::diagnostics());
             return Ok(());
         }
-        if std::env::args().any(|arg| arg == "--ole-server") {
+        if launch::gui_flag(std::env::args_os().skip(1), "--ole-server") {
             let result = reshiki_windows::run_office_server(|bytes| {
                 let document = reshiki::document::Document::from_json(bytes)?;
                 reshiki::export::office_preview(&document)
@@ -122,9 +126,8 @@ fn main() -> iced::Result {
             }
             return Ok(());
         }
-        reshiki_windows::enable_office_embedding();
     }
-    if std::env::args().any(|arg| arg == "--engine-check") {
+    if launch::gui_flag(std::env::args_os().skip(1), "--engine-check") {
         let runtime = match tokio::runtime::Runtime::new() {
             Ok(runtime) => runtime,
             Err(error) => {
@@ -166,6 +169,13 @@ fn main() -> iced::Result {
             }
         }
     }
+    #[cfg(any(windows, target_os = "linux"))]
+    let _desktop = desktop::launch(
+        &std::env::args_os().skip(1).collect::<Vec<_>>(),
+        &app::startup::parse(std::env::args_os().skip(1)),
+    );
+    #[cfg(windows)]
+    reshiki_windows::enable_office_embedding();
     #[cfg(windows)]
     rendering::configure();
     #[cfg(target_os = "macos")]
@@ -190,7 +200,9 @@ fn main() -> iced::Result {
         .window(iced::window::Settings {
             visible: !cfg!(any(target_os = "macos", windows)),
             size: iced::Size::new(1280.0, 820.0),
-            min_size: Some(iced::Size::new(1040.0, 680.0)),
+            // Windows fits the hidden real HWND before publishing its accessible
+            // tree/showing it. A fixed logical minimum would defeat that fit.
+            min_size: (!cfg!(windows)).then_some(iced::Size::new(1040.0, 680.0)),
             icon: branding::window_icon(),
             ..Default::default()
         })

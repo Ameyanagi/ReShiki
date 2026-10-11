@@ -101,18 +101,25 @@ Each request and response has a 16-byte header followed by one JSON body:
 | 10–11 | Reserved zero bytes                         |
 | 12–15 | Little-endian unsigned JSON byte length     |
 
-The request contains `heap_bytes` and an `operation` with `Generate`, `Relax`,
-or `Evaluate`. The response retains RDKit **2026.03.6** in its `version` field
+The request contains `heap_bytes`, an optional `capacity` admission envelope,
+and an `operation` with `Generate`, `Relax`, or `Evaluate`. The response retains
+RDKit **2026.03.6** in its `version` field
 as the independent comparison reference and contains `result.Ok` geometry or
 `result.Err` text. That field is not the Rust backend version. Complete frames
-are limited to 4 MiB and cannot contain trailing bytes. The normal calculation
-deadline is 60 seconds, with a maximum of 120 seconds.
+are limited to 4 MiB and cannot contain trailing bytes. Available memory and a
+bounded throughput probe resolve the calculation deadline to 60–120 seconds and
+the allocator budget to 64–512 MiB; missing observations preserve 60 seconds
+and 256 MiB. See [calculation resource policy](chemistry-resource-policy.md).
 
 `heap_bytes` budgets Rust allocator activity during calculation, including the
 Rust geometry core. It is not a total-process memory cap: stack and operating
-system allocations are separate. Limits on original atoms (512), bonds (2,048),
-all-atom coordinates (4,096), conformers (32), iterations (10,000), frame size,
-and process deadline bound each detached calculation. Live relaxation also
+system allocations are separate. The allocator budget determines admission of
+128–640 original atoms and four times as many original bonds, subject to
+independent ceilings of 640 atoms, 4,096 bonds and 4,096 all-atom coordinates.
+Legacy requests without `capacity` retain the 512-atom / 2,048-bond envelope,
+intersected with their heap budget. Conformers (32), iterations (10,000), frame
+size, aggregate memory reservations and process deadlines also bound each
+detached calculation. Admission does not guarantee convergence. Live relaxation also
 pauses after 50 batches for unchanged physical constraints or eight batches
 without meaningful energy improvement; the preview remains editable.
 

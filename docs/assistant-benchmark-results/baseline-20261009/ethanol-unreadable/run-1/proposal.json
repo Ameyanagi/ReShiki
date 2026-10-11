@@ -1,0 +1,13 @@
+{
+  "explanation": "The image is only 11 × 5 pixels, so atom labels, connectivity and bond details are unreadable. Please upload a higher-resolution image or close-up so I can reconstruct it without guessing.",
+  "replace_ids": [],
+  "molecules": [],
+  "reactions": [],
+  "composition": {
+    "arrangement": "rows",
+    "columns": 1,
+    "width_pt": 540.0,
+    "preserve_details": true
+  },
+  "sketch": null
+}

@@ -49,10 +49,13 @@ fn attachment_and_connection_results_return_no_task() {
     };
     assert_eq!(app.assistant_action(late).units(), 0);
     let serial = app.assistant.serial;
-    let late = Action::Connected(serial.wrapping_add(1), Err("late".into()));
+    let late = Action::Connected(
+        serial.wrapping_add(1),
+        Err(codex::ConnectionError::AccountFailed),
+    );
     assert_eq!(app.assistant_action(late).units(), 0);
     assert!(!app.assistant.error);
-    let current = Action::Connected(serial, Err("offline".into()));
+    let current = Action::Connected(serial, Err(codex::ConnectionError::ModelsFailed));
     assert_eq!(app.assistant_action(current).units(), 0);
     assert!(app.assistant.error);
 }
@@ -101,5 +104,45 @@ fn poll_done_and_apply_snap_only_while_following_the_chat() {
         });
         assert_eq!(app.assistant_action(Action::Apply).units() > 0, follow);
         assert!(app.assistant.completed.is_some());
+    }
+}
+
+#[test]
+fn request_preflight_changes_replace_stale_ready_setup_state() {
+    use super::setup::Connection;
+    for (event, expected) in [
+        (
+            codex::Progress::Catalog(codex::Account {
+                connected: false,
+                models: vec![],
+            }),
+            Connection::SignInRequired,
+        ),
+        (
+            codex::Progress::ConnectionFailed(codex::ConnectionError::MissingInstallation),
+            Connection::Failed(codex::ConnectionError::MissingInstallation),
+        ),
+    ] {
+        let mut app = fresh();
+        let before = app.tab.doc.clone();
+        app.assistant.connection = Connection::Ready;
+        app.assistant.account = Some(codex::Account {
+            connected: true,
+            models: vec![],
+        });
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        app.assistant.progress = Some(rx);
+        tx.try_send(event).unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.connection, expected);
+        assert!(
+            !app.assistant
+                .account
+                .as_ref()
+                .is_some_and(|account| account.connected)
+        );
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.assistant_action(Action::Send).units(), 0);
+        assert!(app.assistant_action(Action::Connect).units() > 0);
     }
 }

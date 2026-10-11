@@ -1,0 +1,9 @@
+<?xml version="1.0"?><CDXML BondLength="14.4"><page id="1"><fragment id="2">
+<n id="3" p="0 0" Element="6"/>
+<n id="4" p="14.4 0" NodeType="AnonymousAlternativeGroup" Element="0"><t><s>[OMe,OPh]</s></t>
+  <fragment id="6"><n id="7" p="0 0" NodeType="ExternalConnectionPoint" Element="0"/><n id="8" p="14.4 0" Element="8"/><n id="9" p="28.8 0" Element="6"/><b id="10" B="7" E="8" Order="1"/><b id="11" B="8" E="9" Order="1"/></fragment>
+  <fragment id="12"><n id="13" p="0 0" NodeType="ExternalConnectionPoint" Element="0"/><n id="14" p="14.4 0" Element="8"/><n id="15" p="28.8 0" Element="6"/><n id="16" p="36 -12.5" Element="6"/><n id="17" p="50.4 -12.5" Element="6"/><n id="18" p="57.6 0" Element="6"/><n id="19" p="50.4 12.5" Element="6"/><n id="20" p="36 12.5" Element="6"/>
+    <b id="21" B="13" E="14" Order="1"/><b id="22" B="14" E="15" Order="1"/><b id="23" B="15" E="16" Order="2"/><b id="24" B="16" E="17" Order="1"/><b id="25" B="17" E="18" Order="2"/><b id="26" B="18" E="19" Order="1"/><b id="27" B="19" E="20" Order="2"/><b id="28" B="20" E="15" Order="1"/>
+  </fragment>
+</n><b id="5" B="3" E="4" Order="1"/>
+</fragment></page></CDXML>

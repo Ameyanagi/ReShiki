@@ -2,6 +2,13 @@
 
 See [ReShiki 0.11.0](changes-0.11.md) for the latest release notes.
 
+This page also carries historical evidence into the coordination/Join/generic/Office/Windows composition. The current composed source writes native format 26; its new in-memory documents still default to version 15 before serialization. Drawing and names/maps captures remain records of their identified producers and formats, including 24 and 25. They do not qualify this composition; its combined checks, native acceptance and CI remain pending.
+
+- **Join accuracy and Co(en)3 — TODO:** merge the supported Join/coordination subset while retaining unresolved selection/placement behavior and arrowhead/tip appearance. [Issue #246](https://github.com/Ameyanagi/ReShiki/issues/246) stays open. Variable-position expansion also needs a layout correction for ring-crossing attachment bonds. [Actual combined review and retained examples](changes/coordination-join-integration.md) · [Integration PR #300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
+
+- **Adaptive chemistry limits (under review):** larger 3D drawings and fused-ring imports use bounded budgets adapted to available machine resources; eligibility remains distinct from completion or convergence. [Desktop examples and native-file checks](adaptive-chemistry-limits-validation.md) · [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279) · [#245](https://github.com/Ameyanagi/ReShiki/issues/245) · [#248](https://github.com/Ameyanagi/ReShiki/issues/248) · @Ameyanagi.
+
+- **SVG pictures for Office (under review, [PR #290](https://github.com/Ameyanagi/ReShiki/pull/290)):** export outlined labels for Word and PowerPoint while preserving ordinary editable SVG. Actual Mac Office insertion and save/reopen retain complete chemical labels at the same before/after Office size; controlled Windows Word/PowerPoint insertion, save and same-process document reopen also pass at unchanged picture size. The qualified Windows app is unsigned; rewritten SVGs and stored-size differences are documented in the review. [Review and reusable images](changes/office-svg-placement.md) · @Ameyanagi.
 - **Retained Windows EMF pictures (merged, unreleased):** import spectra at their recorded physical size and retain original vectors with a portable preview. Native Windows import/save/vector export/fresh-process reopen and controlled Word/PowerPoint insert/save/fresh-process reopen checks pass; Mac portable save/resize/reopen checks pass. [Review record and reusable images](changes/emf-picture-import.md) · [PR #285](https://github.com/Ameyanagi/ReShiki/pull/285) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296) · [Issue #64](https://github.com/Ameyanagi/ReShiki/issues/64) · @Ameyanagi.
 - **MOL 3D import (merged, unreleased):** retain source XYZ for rotation and draw removable ordinary hydrogens implicitly while protecting isotopic, charged and other essential H. Native saves retain the conformation; MOL export keeps its existing stereo-safe2D policy. [Review and matched desktop evidence](changes/mol-import-3d-review.md) · [PR #282](https://github.com/Ameyanagi/ReShiki/pull/282) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296) · @Ameyanagi.
 - **Numbered ChemDraw silicon groups (merged, unreleased):** read the checked binary attachment property used by ChemDraw 26 while preserving the chemical graph and malformed-data diagnostics. Actual Mac File Open/native save/reopen passes; controlled Windows ChemDraw/PowerPoint copy-paste, Undo/Redo, native save and same-process fresh-tab reopen pass for the single silicon structure. [Review record and reusable images](changes/chemdraw-numbered-paste.md) · [PR #284](https://github.com/Ameyanagi/ReShiki/pull/284) · [Issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) · @Ameyanagi.
@@ -19,6 +26,7 @@ See [ReShiki 0.11.0](changes-0.11.md) for the latest release notes.
 
 - **Retained (+)-lactic acid (under review, unreleased):** accept this complete retained name as the explicit S structure after local graph/stereo verification, preserve the entered-name caption and retain strict rejection for other unsupported optical qualifiers. [Bounded correction and native evidence](changes/retained-plus-lactic-acid.md) · @Ameyanagi. No general optical-rotation-to-configuration rule is added.
 
+- **Coordination attachment (under review):** connect donor atoms to metals in place, including a selected donor–metal pair with Ctrl+J (⌘J on macOS), close complete chelates and choose either solid/hashed projection tip while retaining hydrogens, charge and donor→metal direction. [Guide and interchange limits](fragment-joining.md#coordination-contacts-in-place) · [Desktop examples and native-file checks](coordination-desktop-validation.md) · [Selected-pair shortcut evidence](changes/coordination-join-shortcut.md) · [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283) · [#246](https://github.com/Ameyanagi/ReShiki/issues/246) · @Ameyanagi.
 - **0.11.0 release validation:** document the tagged source, six-platform release checks, public-download checksums and macOS signing and native-worker verification. [Validation record](release-0.11.0-validation.md) · [PR #187](https://github.com/Ameyanagi/ReShiki/pull/187) · @Ameyanagi.
 - **Experimental agent API (Nightly only):** `reshiki --mcp` lets Claude Code, Claude Desktop, Codex and other MCP clients import, analyze, render, compose, edit and export drawings, and save them only into folders you grant; `reshiki --cli` converts, renders, composes and analyzes from a terminal. Not in ReShiki 0.11.0; tools and results may change. [Setup guide](https://reshiki.com/guide/agents/) · [Reference](agent-api.md) · [Privacy](privacy-policy.md#optional-agent-api-and-command-line-experimental) · [Acceptance record](agent-api-p1-validation.md) · @Ameyanagi.
 - **Windows signing integration:** verify SignPath-signed x64 and ARM64 applications and installers, and retain internal test-signed nightly artifacts using the existing nightly build. Public Windows downloads remain unsigned while the Foundation release certificate is pending. [Setup guide](signpath-setup.md) · [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270) · @Ameyanagi.
@@ -49,3 +57,25 @@ Reusable caption: Click-added lone pairs sit closer to visible atom labels and
 avoid nearby chemical ink; manual and previously saved offsets stay exact.
 
 - **Offline NMR prediction (merged, unreleased):** predict atom-linked ¹H group medians and ¹³C shifts from measured reference environments in a compact palette that preserves drawing space and zoom, with reference details, source conditions, coverage and limitations on demand. [Desktop review](nmr-visual-review.md) · [Method and data](nmr-prediction.md) · [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) · @Ameyanagi.
+
+- **Under review — Windows window fitting:** fit startup and DPI-changed editor windows inside the monitor work area while preserving the normal UI scale. Matched Windows screenshots and interaction acceptance remain pending. [Validation note](changes/windows-window-fit.md) · [PR #273](https://github.com/Ameyanagi/ReShiki/pull/273) · @Ameyanagi.
+- **Under review — Windows/Linux document tabs:** open file launches in the running editor and keep each Office edit session attached to its own document tab. Native Linux IPC tests passed; real desktop and Office save-back acceptance remain pending. [Validation note](changes/windows-linux-open-tabs.md) · [PR #274](https://github.com/Ameyanagi/ReShiki/pull/274) · @Ameyanagi.
+
+- **Assistant setup and guided image exercise — under review:** explains Codex installation, sign-in, connection recovery and image transfer, then offers a small original ethanol image whose editable draft waits for Apply. [Setup guide](assistant-setup.md) · [Native review and saved-graph proof](changes/assistant-setup-review-2026-10-09.md) · [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280) · @Ameyanagi.
+
+![Assistant explains connection readiness and image-transfer guidance before a guided example](images/assistant-setup/assistant-setup-ready.jpg)
+
+![The original ethanol image and known reference attach locally before Send](images/assistant-setup/assistant-local-example.jpg)
+
+The known ethanol exercise is a first-use example. Model generation and visual
+review do not establish chemical correctness for other images; inspect the draft
+before Apply. This entry remains unreleased while the contribution is under review.
+
+- **Assistant image benchmark — under review:** records independent graph identity, unfinished drafts and failures for eight original synthetic images. Six exact completed graphs out of eleven attempted finite-reference runs remain separate from provisional previews and the known guided exercise. [Method and measured results](assistant-benchmark.md) · [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281) · @Ameyanagi.
+
+![Provisional macrocycle preview retained after a structured-output failure; excluded from completed successes](assistant-benchmark-results/baseline-20261009/cyclic-gly4/run-2/provisional.png)
+
+The small synthetic cohort does not establish accuracy on real scans or general
+peptide/macrocycle reliability. The retained preview is unfinished even though
+its graph matches the reference. See the report for failures, missing display
+labels, uncertainty and not-run repeats.

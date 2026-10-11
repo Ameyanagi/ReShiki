@@ -51,3 +51,11 @@ crates/opsin/tests/fixtures/** -text
 # Preserve the two original local/parser test stdout records.
 tests/fixtures/retained-plus-lactic-acid/local-tests.log -text whitespace=-blank-at-eof
 tests/fixtures/retained-plus-lactic-acid/import-dock-tests.log -text whitespace=-blank-at-eof
+docs/changes/assets/coordination-join-windows-20261010/baseline-live-process.txt -text
+docs/changes/assets/coordination-join-windows-20261010/candidate-live-process.txt -text
+docs/changes/assets/coordination-join-windows-20261010/fresh-reopen-process.txt -text
+docs/changes/assets/coordination-join-windows-20261010/windows-build-receipt.txt -text
+
+# Preserve the exact native ChemDraw CRLF reference files.
+docs/changes/fixtures/join-atom-merge/chemdraw-26.1/join-three-arms-chemdraw-native-before-v2.cdxml -text whitespace=cr-at-eol
+docs/changes/fixtures/join-atom-merge/chemdraw-26.1/join-three-arms-chemdraw-native-after-v2.cdxml -text whitespace=cr-at-eol

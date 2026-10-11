@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-09",
+  "platform": "macOS 26.5.1 arm64",
+  "baseline_source_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "candidate_source_commit": "a018733f9bfc3cc08f73dbc82aadf0c261362f29",
+  "candidate_executable_SHA256": "23a492c762aedec1e8f8cf0133a48919c843776c31b01b8775fd7c0de31e0884",
+  "capture_format": "untouched application JPEG; no drawing export, cropping or retouching",
+  "style": "JACS / ACS; Arial 10 pt",
+  "geometry_pair": {
+    "input": "geometry-explicit-h-513-3d.rsk",
+    "zoom_percent": 13,
+    "keyboard_drawing": false,
+    "action": "3D optimize (Cmd+Shift+D on macOS)",
+    "notes": "baseline rejected size; candidate paused preview using existing 3D geometry; separate Redo capture after one Tilt up and before Save As"
+  },
+  "fused_pair": {
+    "input": "fused-repeat37.smi",
+    "action": "File Open",
+    "baseline_zoom_percent": 100,
+    "candidate_zoom_percent": 10,
+    "keyboard_drawing": true,
+    "notes": "blank error canvas versus successful auto-fit imported drawing; orange keyboard focus is visible in interaction pair; separate saved result has F8 off"
+  },
+  "images": [
+    {
+      "path": "docs/images/chemistry-limits/limits-513-applied-redo.jpg",
+      "bytes": 310899,
+      "SHA256": "fc859b309b0c8490cd813f592b61eac7847a692835abc69820e826304caafaaa",
+      "pixels": [2560, 1704],
+      "copy_unchanged": true
+    },
+    {
+      "path": "docs/images/chemistry-limits/limits-513-cap.jpg",
+      "bytes": 507208,
+      "SHA256": "e837f05a7d70c61991dbc083cabe4bf0649c9ea5cacfe285efaee8ad7de5f209",
+      "pixels": [2560, 1704],
+      "copy_unchanged": true
+    },
+    {
+      "path": "docs/images/chemistry-limits/limits-513-preview.jpg",
+      "bytes": 348944,
+      "SHA256": "5fe02d01f1d63e2bf9fcce7a9dbf013ac8d1d08ce99e85917aa5346d2cbd4874",
+      "pixels": [2560, 1704],
+      "copy_unchanged": true
+    },
+    {
+      "path": "docs/images/chemistry-limits/limits-fused-import-budget.jpg",
+      "bytes": 254601,
+      "SHA256": "8547621daf538247cef55c455bfa9747fc62510586dd45a81dc1b1a3043f5df2",
+      "pixels": [2560, 1704],
+      "copy_unchanged": true
+    },
+    {
+      "path": "docs/images/chemistry-limits/limits-fused-import-saved.jpg",
+      "bytes": 464614,
+      "SHA256": "3c0972a20048c71eeddf521da1a8b07a25f4cb7ae5090bf275f215eab024a295",
+      "pixels": [2560, 1704],
+      "copy_unchanged": true
+    },
+    {
+      "path": "docs/images/chemistry-limits/limits-fused-import-success.jpg",
+      "bytes": 477892,
+      "SHA256": "10801168f6d2ab8492c3fd9161f4cdd3f367a4809a55560b3d6eb33d68167734",
+      "pixels": [2560, 1704],
+      "copy_unchanged": true
+    }
+  ]
+}

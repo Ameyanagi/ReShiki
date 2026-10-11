@@ -1,0 +1,86 @@
+{
+  "format": 1,
+  "when_utc": "2026-10-09T17:34:39.466189+00:00",
+  "original_head": "6f211ea54a6562493e218548c42684b13c311590",
+  "test_workflow_commit": "15120d757880a93777f4ba73e515c3f7a8ced0f5",
+  "production_source_commit": "3d261b32e9baa73b6d2cb133de2163fa3699569a",
+  "original_linux_failure": {
+    "job_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/37964085668/job/113934527443",
+    "full_log_sha256": "7f909e00a95a88d339bb282ee55a14fed73531f663e9190ceb2528ece00408cb",
+    "cause_observed": "Headless renderer returned None; unwrap failed before menu assertions",
+    "precise_adapter_or_device_cause": "not established"
+  },
+  "correction": "Always-on menu state/order checks retained for both SVG formats; separate opt-in AX renderer test fails if invoked without renderer, explicit Windows CI step",
+  "checks": [
+    {
+      "command": "cargo test --locked --no-default-features --bin reshiki app::inspector::tests::figure_menu_lists_vector_formats_before_raster_and_closes_after_a_choice -- --exact",
+      "exit": 0,
+      "preserved_log": "always-on-menu-test.log",
+      "sha256": "a21a4246bf0fe76bc7e14ddf827bd443af2c7ef77b293faa922f946ab0b5d43e"
+    },
+    {
+      "command": "cargo test --locked --no-default-features --bin reshiki app::inspector::tests::figure_export_buttons_publish_readable_labels -- --exact --ignored",
+      "exit": 0,
+      "preserved_log": "renderer-label-test.log",
+      "sha256": "f9d6e424a77207ed783b42d15aa66f6486399a8aa63cdfd60c4974180fd67d47"
+    },
+    {
+      "command": "cargo clippy --locked --no-default-features --bin reshiki --tests -- -D warnings",
+      "exit": 0,
+      "preserved_log": "clippy-tests.log",
+      "sha256": "f2292fc4d9a260c97afca3ab33f892c9cf7135e5a3e96ef4efb0d1dd64eda820"
+    },
+    {
+      "command": "cargo fmt --all --check",
+      "exit": 0,
+      "preserved_log": "fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "source_parity": [
+    {
+      "map": "final-default-build-source-provenance.json",
+      "count": 533,
+      "current_delta": [],
+      "exact6f_git_object_source_matches": true
+    },
+    {
+      "map": "final-source-proof.json",
+      "count": 1061,
+      "current_delta": ["src/app/inspector/tests.rs"],
+      "exact6f_git_object_source_matches": true
+    }
+  ],
+  "preserved_signed_apps_unchanged": true,
+  "current_default_artifact_verifier": {
+    "status": "PASS",
+    "immutable_evidence_files": 53,
+    "source_checked": false,
+    "native": {
+      "version": 19,
+      "atoms": 6,
+      "bonds": 5,
+      "abbreviation": "SiMe3"
+    },
+    "source_svg_points": [87.59132, 28.906626],
+    "source_svg_mm": [30.900271222222223, 10.197615283333333],
+    "actual_office_extent_emu": [1104900, 368300],
+    "actual_office_mm": [30.691666666666666, 10.230555555555556],
+    "office_vs_source_percent": [-0.6750897235022868, 0.3230193658713576],
+    "negative_controls_rejected": [
+      "text accidentally retained",
+      "SVG physical width doubled",
+      "chemical bond changed",
+      "SiMe3 anchor moved to oxygen",
+      "Office extent changed by one EMU",
+      "Office picture cropped",
+      "earlier screenshots relabeled as final app"
+    ],
+    "scope": "Artifact/source provenance and recorded properties; does not replay GUI or establish Windows Office acceptance."
+  },
+  "original_verifier_guard_unchanged": true,
+  "windows_ci_validation": "new exact ignored-test invocation pending CI; no Windows GUI acceptance",
+  "sway": "Original initial-open timeout preserved; no isolated rerun, no cause proved, await new CI",
+  "cargo_lease": "returned to ROOT after checks",
+  "production_app_rebuild_sign_gui_or_push": false
+}

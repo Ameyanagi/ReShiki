@@ -1,6 +1,6 @@
 //! Connecting to Codex and loading the account and model catalog, guarded by the request serial.
 
-use super::Action;
+use super::{Action, setup::Connection};
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::assistant::codex;
@@ -14,6 +14,8 @@ impl App {
         self.assistant.cancel = Default::default();
         self.assistant.busy = true;
         self.assistant.error = false;
+        self.assistant.account = None;
+        self.assistant.connection = Connection::Checking;
         self.assistant.status = "Connecting to Codex…".into();
         self.assistant.started = Some(std::time::Instant::now());
         let serial = self.assistant.serial;
@@ -25,7 +27,7 @@ impl App {
     pub(super) fn assistant_connected(
         &mut self,
         serial: u64,
-        result: Result<codex::Account, String>,
+        result: Result<codex::Account, codex::ConnectionError>,
     ) -> Task<Message> {
         if serial != self.assistant.serial {
             return Task::none();
@@ -34,6 +36,11 @@ impl App {
         self.assistant.started = None;
         match result {
             Ok(account) => {
+                self.assistant.connection = if account.connected {
+                    Connection::Ready
+                } else {
+                    Connection::SignInRequired
+                };
                 self.assistant.error = !account.connected;
                 self.assistant.status = if account.connected {
                     "Connected to Codex".into()
@@ -43,8 +50,14 @@ impl App {
                 self.assistant.account = Some(account);
             }
             Err(error) => {
-                self.assistant.status = error;
-                self.assistant.error = true;
+                self.assistant.account = None;
+                self.assistant.connection = if error == codex::ConnectionError::Cancelled {
+                    Connection::Cancelled
+                } else {
+                    Connection::Failed(error)
+                };
+                self.assistant.status = error.to_string();
+                self.assistant.error = error != codex::ConnectionError::Cancelled;
             }
         }
         Task::none()

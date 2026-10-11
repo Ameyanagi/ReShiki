@@ -9,6 +9,7 @@ use super::{
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+mod generic;
 mod import;
 mod read;
 #[cfg(test)]
@@ -155,15 +156,16 @@ pub fn write_document(doc: &crate::document::Document) -> Result<String, Error> 
     } else {
         molecule
     };
-    write_part(
+    let output = write_part(
         &molecule,
         Options {
-            force_v3000: !endpoints.is_empty(),
+            force_v3000: !endpoints.is_empty() || !doc.generic.is_empty(),
         },
         false,
         &endpoints,
         true,
-    )
+    )?;
+    generic::restore_output(output, doc)
 }
 
 /// Reaction CTABs retain aromatic bond types instead of assigning Kekulé bonds.
@@ -518,3 +520,6 @@ fn properties(
     flush(output, "RAD", &mut radicals)?;
     flush(output, "ISO", &mut isotopes)
 }
+
+#[cfg(test)]
+mod generic_tests;

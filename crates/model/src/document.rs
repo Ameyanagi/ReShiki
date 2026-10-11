@@ -163,7 +163,7 @@ fn forward() -> String {
 }
 
 /// The newest document format this build reads. Saved files are marked with it.
-pub const VERSION: u32 = 25;
+pub const VERSION: u32 = 26;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -173,6 +173,8 @@ fn newer_version(version: u64) -> String {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Document {
+    #[serde(default, skip_serializing_if = "crate::generic::Generic::is_empty")]
+    pub generic: crate::generic::Generic,
     #[serde(
         default,
         skip_serializing_if = "crate::canvas_theme::CanvasTheme::is_light"
@@ -226,6 +228,7 @@ pub struct Document {
 impl Default for Document {
     fn default() -> Self {
         Self {
+            generic: Default::default(),
             ring_fills: vec![],
             depth_appearance: vec![],
             version: 15,
@@ -456,6 +459,7 @@ impl Document {
         crate::depth_appearance::prune(self);
         self.prune_groups();
         crate::reactions::prune(self);
+        crate::generic::prune(self);
         crate::arrow_anchors::reconcile(self);
     }
     pub fn translate(&mut self, ids: &[u64], dx: f32, dy: f32) {
@@ -504,6 +508,7 @@ impl Document {
         crate::depth_appearance::validate(self)?;
         crate::ring_fills::validate(self)?;
         crate::attachments::validate(self)?;
+        crate::generic::validate(self)?;
         self.drawing_style.validate()?;
         if let Some(theme) = &self.custom_theme {
             theme.validate()?;
@@ -552,7 +557,10 @@ impl Document {
             if a.map_num > i32::MAX as u32 {
                 return Err("Atom maps must be from 1 to 2147483647, or 0 to clear".into());
             }
-            if a.display.variable.is_some() && a.element != "*" {
+            if a.display.variable.is_some()
+                && a.element != "*"
+                && !self.generic.links.iter().any(|link| link.atom == a.id)
+            {
                 return Err("Variable labels require wildcard atoms".into());
             }
             if a.cip_label

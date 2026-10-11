@@ -1,0 +1,214 @@
+{
+  "status": "root actual macOS native graph/shortcut/save/reopen PASS; public docs and commit pending; label occlusion separate read-only investigation",
+  "verified_at": "2026-10-09T22:02:53.843234+00:00",
+  "app": "ReShiki Coordination Join Verified.app",
+  "signed_sha256": "0dd54d1ab7749e7bbb5ace90146a6af41486903353d72e280156f1542bb78ed1",
+  "first_pid": 50943,
+  "fresh_reopen_process": "53631 /Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Coordination Join Verified.app/Contents/MacOS/reshiki",
+  "source_manifest_sha256": "43b53c401f21bcda8642a31df546b30219130bad935f61c7343d12533aa9658f",
+  "all_1067_current_source_bytes_match": true,
+  "input_sha256": "0f6f575a908de66b33e0117386c66b288f8bbcb6348b543a50cde96e548f42d4",
+  "native_saved_sha256": "ad6ea1986402e22a16e77514416278c02ef0ec5eb84f2236e5e93fa5214c3541",
+  "atom_count": 13,
+  "original_bond_count": 9,
+  "result_bond_count": 15,
+  "contacts_in_actual_order": [
+    {
+      "a": 5,
+      "b": 1,
+      "order": 5,
+      "display": "plain"
+    },
+    {
+      "a": 2,
+      "b": 1,
+      "order": 5,
+      "display": "plain"
+    },
+    {
+      "a": 13,
+      "b": 1,
+      "order": 5,
+      "display": "plain"
+    },
+    {
+      "a": 10,
+      "b": 1,
+      "order": 5,
+      "display": "plain"
+    },
+    {
+      "a": 9,
+      "b": 1,
+      "order": 5,
+      "display": "plain"
+    },
+    {
+      "a": 6,
+      "b": 1,
+      "order": 5,
+      "display": "plain"
+    }
+  ],
+  "all_input_non_derived_atom_fields_preserved": true,
+  "all_original_nine_bond_fields_preserved_except_unpersisted_fixture_ids": true,
+  "derived_carbon_label_h_changes": [
+    {
+      "id": 3,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 4,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 7,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 8,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 11,
+      "before": 0,
+      "after": 2
+    },
+    {
+      "id": 12,
+      "before": 0,
+      "after": 2
+    }
+  ],
+  "native_controls": [
+    "F8 off; select exactly donor N and cobalt; primary Join CmdJ on macOS",
+    "first donor5\u21921 succeeds; duplicate unchanged; oneCmdZ removescontact withUndoDisabled;ShiftCmdZ restores",
+    "second donor2\u21921 closes same-component chelate",
+    "all six donor pairs joined; clearselectionwholeProperties13atoms15bondsC6H24CoN6+3",
+    "SaveAs private evidence; quit ownapp; fresh process native open savedfile retains13/15 withUndoDisabled"
+  ],
+  "scale": {
+    "raw_dimensions": [
+      2560,
+      1704
+    ],
+    "zoom_percent": 221,
+    "theme": "light",
+    "style": "JACS / ACS",
+    "font": "Arial10pt"
+  },
+  "desktop_limits": [
+    "literal Windows CtrlJ not run; platform mapping tested",
+    "N2\u2192Co arrow is covered in raw final view; read-only pre-existing label occlusion investigation pending",
+    "one unintended native atom move was immediately undone before further joins; native saved positions exactly match input",
+    "fresh-process reopen recenters viewport slightly; zoom same",
+    "recovery draft untouched"
+  ],
+  "capture_processing": "raw CUA JPEG bytes unmodified; no crop/resize/retouch/export",
+  "artifacts": {
+    "co-en3-cmd-j-chelate-after.ax.txt": {
+      "sha256": "ba93cb494241b89c432ea76756777ca60acd36e90d73c0d1af49d92f18faae4f",
+      "bytes": 4479
+    },
+    "co-en3-cmd-j-chelate-after.jpg": {
+      "sha256": "ecf85c233050b2c120efa7c557531428d510d58a08bdb07435f6c4d9c60d261b",
+      "bytes": 384745,
+      "dimensions": [
+        2560,
+        1704
+      ]
+    },
+    "co-en3-cmd-j-duplicate-rejected.ax.txt": {
+      "sha256": "ba93cb494241b89c432ea76756777ca60acd36e90d73c0d1af49d92f18faae4f",
+      "bytes": 4479
+    },
+    "co-en3-cmd-j-duplicate-rejected.jpg": {
+      "sha256": "992e7b5af27d92411a849030b4489c704840c2fd9fc00c0e436c312b356a2708",
+      "bytes": 383902,
+      "dimensions": [
+        2560,
+        1704
+      ]
+    },
+    "co-en3-cmd-j-fresh-process-reopened.ax.txt": {
+      "sha256": "1d1f1e6240088438743615bfb552c5be6a8e0bbb6e7acc1d810edbf701c44742",
+      "bytes": 4244
+    },
+    "co-en3-cmd-j-fresh-process-reopened.jpg": {
+      "sha256": "6cd9b806d7e2c5b75e4f01a20826a0478618f3d484e533f10c33307de96ebe53",
+      "bytes": 380983,
+      "dimensions": [
+        2560,
+        1704
+      ]
+    },
+    "co-en3-cmd-j-native.rsk": {
+      "sha256": "ad6ea1986402e22a16e77514416278c02ef0ec5eb84f2236e5e93fa5214c3541",
+      "bytes": 8182
+    },
+    "co-en3-cmd-j-one-contact-after.ax.txt": {
+      "sha256": "ba93cb494241b89c432ea76756777ca60acd36e90d73c0d1af49d92f18faae4f",
+      "bytes": 4479
+    },
+    "co-en3-cmd-j-one-contact-after.jpg": {
+      "sha256": "992e7b5af27d92411a849030b4489c704840c2fd9fc00c0e436c312b356a2708",
+      "bytes": 383902,
+      "dimensions": [
+        2560,
+        1704
+      ]
+    },
+    "co-en3-cmd-j-one-contact-redo.ax.txt": {
+      "sha256": "ba93cb494241b89c432ea76756777ca60acd36e90d73c0d1af49d92f18faae4f",
+      "bytes": 4479
+    },
+    "co-en3-cmd-j-one-contact-redo.jpg": {
+      "sha256": "a9998d256043a0fabe36cf4b0078f83cb713c6a3490073f8458a9e7cfb9b8c2d",
+      "bytes": 381643,
+      "dimensions": [
+        2560,
+        1704
+      ]
+    },
+    "co-en3-cmd-j-one-contact-undo.ax.txt": {
+      "sha256": "e06ff2545b8c11605089f3333af56958b2697bc31bac5b20acd3373743c8c555",
+      "bytes": 4409
+    },
+    "co-en3-cmd-j-one-contact-undo.jpg": {
+      "sha256": "2e8fc65246815150c0be59ae38b4954504d985d925c024f7d13af57a4feb4968",
+      "bytes": 353530,
+      "dimensions": [
+        2560,
+        1704
+      ]
+    },
+    "co-en3-cmd-j-pair-before.ax.txt": {
+      "sha256": "0710df4a1cc5440b66a1953ae5d9029d1d5223cbf8107282ee8541fbd72cc7e8",
+      "bytes": 4420
+    },
+    "co-en3-cmd-j-pair-before.jpg": {
+      "sha256": "46b1714de2b84c8ff2f46308674bf3a8286ca050d288efd4239186e1945e03f6",
+      "bytes": 353792,
+      "dimensions": [
+        2560,
+        1704
+      ]
+    },
+    "co-en3-cmd-j-six-contacts-after.ax.txt": {
+      "sha256": "88024ef50647932ff32aa39eb78fb5b8f55d04b9b22b959d505f36c149230146",
+      "bytes": 4227
+    },
+    "co-en3-cmd-j-six-contacts-after.jpg": {
+      "sha256": "df0036874f06f91e5448bdddbe99bced845cce6e6838add0bfb23a1dfd35d0ba",
+      "bytes": 384739,
+      "dimensions": [
+        2560,
+        1704
+      ]
+    }
+  }
+}

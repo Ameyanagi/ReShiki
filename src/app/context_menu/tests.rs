@@ -209,8 +209,18 @@ fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), Str
     assert!(run_item(&mut app, Page::Arrange, "Align needs 2 objects").is_err());
     assert_eq!(
         labels(&app, Page::More(2)),
-        ["3D optimize…", "Move & attach…"],
+        ["3D optimize…", "Join selected atoms / bonds"],
         "Default keyboard drawing folds the selection commands first"
+    );
+    assert_eq!(
+        labels(&app, Page::More(4)),
+        [
+            "3D optimize…",
+            "Join selected atoms / bonds",
+            "Merge selected atoms",
+            "Move & attach…"
+        ],
+        "⋯ keeps Join, Merge and Move & attach in row order"
     );
     let _ = app.update(Message::KeyboardDrawing(
         super::super::keyboard_drawing::Action::Leave,

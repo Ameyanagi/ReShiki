@@ -1,0 +1,3 @@
+<?xml version="1.0"?><CDXML BondLength="14.4"><page id="1"><fragment id="2">
+<n id="3" p="0 0" Element="6"/><n id="4" p="14.4 0" NodeType="LinkNode" Element="6" NumHydrogens="2" LinkCountLow="1" LinkCountHigh="3"><t><s>[CH2]1-3</s></t></n><n id="5" p="28.8 0" Element="6"/><b id="6" B="3" E="4" Order="1"/><b id="7" B="4" E="5" Order="1"/>
+</fragment></page></CDXML>

@@ -1,0 +1,17 @@
+{
+  "backend_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "profile": "debug",
+  "jobs": 4,
+  "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "frozen_binary_sha256": {
+    "assistant_benchmark": "ace79c515220e8f8b9b7c48ae98e884399edf1421e11315afc6d4424f69a9083",
+    "assistant_smoke": "7bccebe7d6ca35112e93945389daa93d6251f76cd8dc3dffc07277493b02510d"
+  },
+  "runner_source_sha256": "ce3c02c8f451b7961a29be191e72e07eeceaa133ba212edb8d812eba1e12b574",
+  "tracked_rust_cargo_build_source_files": 1063,
+  "tracked_source_hash_manifest_sha256": "d1e0165321f93f717e15d62903a219c866e9cd6d1c6f79f9c727945904bc19eb",
+  "assistant_backend_source_sha256": "bfab6894b4b87bba0e1fd0c7addd5c4df396711ea2b0f39f9e6f22e8cddb6a3f",
+  "freshness": "All tracked baseline Rust/Cargo/build inputs and added runner mtime-refreshed before Cargo; local workspace crates compiled from baseline source under exclusive lane. Content hashes and original depfiles retained outside Git.",
+  "worker_resolution": "No inherited InChI helper override; frozen runner dispatches current_exe geometry/InChI worker modes before Tokio, matching the application.",
+  "limitations": "Debug build timings, not optimized release-performance results. No account/credential payload retained."
+}

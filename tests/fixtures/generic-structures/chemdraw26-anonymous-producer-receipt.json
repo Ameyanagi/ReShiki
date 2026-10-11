@@ -1,0 +1,90 @@
+{
+  "created_utc": "2026-10-10T08:17:06.429331+00:00",
+  "operator": "/root",
+  "producer": "ChemDraw 26.0.0.6599",
+  "method": "Native ChemDraw blank doc; x bond hotkey; Return opens endpoint label; type [OMe,OPh]; save XML; remove incidental second bond via one Undo, Escape, Save As clean v2; Select All > Structure > Expand Generic Structure generates new doc; save actual expansion separately.",
+  "original_with_incidental_bond_preserved": "OMe-OPh-native.cdxml",
+  "clean_outer_atoms": 2,
+  "clean_outer_bonds": 1,
+  "alternative_fragments": [
+    {
+      "nodes": 3,
+      "bonds": 2,
+      "ports": [
+        {
+          "id": "16",
+          "p": "181.04 152.97",
+          "NodeType": "ExternalConnectionPoint"
+        }
+      ]
+    },
+    {
+      "nodes": 8,
+      "bonds": 8,
+      "ports": [
+        {
+          "id": "28",
+          "p": "181.04 152.97",
+          "NodeType": "ExternalConnectionPoint"
+        }
+      ]
+    }
+  ],
+  "expanded_products": [
+    {
+      "nodes": 2,
+      "bonds": 1,
+      "labels": [
+        "O",
+        "OMe"
+      ]
+    },
+    {
+      "nodes": 2,
+      "bonds": 1,
+      "labels": [
+        "O",
+        "OPh"
+      ]
+    }
+  ],
+  "scope": "Native serialized anonymous alternative definition and two-product expansion verified. Visible product abbreviations remain contracted; full expanded graph counts are not yet asserted.",
+  "artifacts": {
+    "OMe-OPh-native-ax.txt": {
+      "bytes": 788,
+      "sha256": "dc13746bafa3becebc8b11a41d903eb8307aea1fa8fd3bfd75cfc0148c136712"
+    },
+    "OMe-OPh-native-clean-v2-ax.txt": {
+      "bytes": 833,
+      "sha256": "1b25c904a1b8a80bb62ddaeef56642a42969a18f5f74e8aab1d24d1f248ee553"
+    },
+    "OMe-OPh-native-clean-v2.cdxml": {
+      "bytes": 3949,
+      "sha256": "78fc10fa5c1d236a0f81796da836146b250c31d3e8e9e3b61f5068b4de5ad98e"
+    },
+    "OMe-OPh-native-clean-v2.jpg": {
+      "bytes": 176265,
+      "sha256": "c8a1022445804c9accc592a9869b072a5c4dedb86c7891e8b6b53aedb4ad4be7"
+    },
+    "OMe-OPh-native-expanded-ax.txt": {
+      "bytes": 697,
+      "sha256": "eb6f36997a788b5672d13a04e5d9b81215df8c9e78500c86db3e2e2b25c72493"
+    },
+    "OMe-OPh-native-expanded-v1.cdxml": {
+      "bytes": 4877,
+      "sha256": "ed3cbb200d41a5b807c6fdbcb53226ed6d43d9a31370ad95ed7d2dc7916589c0"
+    },
+    "OMe-OPh-native-expanded.jpg": {
+      "bytes": 176281,
+      "sha256": "d91a59e257a42fe0d36d9a93e20020c0fd463261f7848a4fba293d81ad6efcb1"
+    },
+    "OMe-OPh-native.cdxml": {
+      "bytes": 4266,
+      "sha256": "d995e9dd48a83827121b45e535dec1eb49f76fe2a17d46c6ea54fa0f5e1fcaab"
+    },
+    "OMe-OPh-native.jpg": {
+      "bytes": 174649,
+      "sha256": "4920b535dc13c59eebca1b3342c0d701cba934f10a4e0c1871653a6880287bb1"
+    }
+  }
+}

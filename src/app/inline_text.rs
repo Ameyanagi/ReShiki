@@ -655,6 +655,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                     | super::shortcuts::Action::FixedAngles
                     | super::shortcuts::Action::Nudge(..)
                     | super::shortcuts::Action::Join
+                    | super::shortcuts::Action::MergeAtoms
                     | super::shortcuts::Action::CopyText(_)
             )
             | Message::New
@@ -703,6 +704,11 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::AromaticRing(_)
             | Message::ArrowStyle(_)
             | Message::Abbreviations(_)
+            | Message::Generic(
+                super::generic::Action::Expand
+                    | super::generic::Action::DefineRepeat(_)
+                    | super::generic::Action::ClearRepeat(_)
+            )
             | Message::Labels(_)
             | Message::Charge(_)
             | Message::ApplyIsotope

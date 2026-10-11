@@ -1,0 +1,1278 @@
+{
+  "metadata": {
+    "started_utc": "2026-10-09T08:42:26.672105+00:00",
+    "backend_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "nightly_version": "0.11.0-nightly.20261008.37859845267.1",
+    "runner_sha256": "ace79c515220e8f8b9b7c48ae98e884399edf1421e11315afc6d4424f69a9083",
+    "manifest_sha256": "ec15a8b5d9121ebe2fb8e099abfb305aa4c218c906034066cd25fcb95a02cbe4",
+    "source_manifest": {
+      "dataset_version": 1,
+      "reference_checker": "RDKit 2026.03.6",
+      "source_renderer_sha256": "7bccebe7d6ca35112e93945389daa93d6251f76cd8dc3dffc07277493b02510d",
+      "cases": [
+        {
+          "id": "ethanol",
+          "image": "ethanol.png",
+          "reference": "ethanol.reference.json",
+          "width": 177,
+          "height": 85,
+          "image_sha256": "d19437ff3bc0533695aec2a271dd3bc9f1af20def1d0346dc1106b8faa4e31ea",
+          "category": "control",
+          "source": "Original synthetic structure; independently authored reference SMILES, checked by RDKit formula/count/CIP/fragments and rendered as a ReShiki native drawing.",
+          "license": "MIT OR Apache-2.0",
+          "expected_response": "editable_draft"
+        },
+        {
+          "id": "gly-l-ala",
+          "image": "gly-l-ala.png",
+          "reference": "gly-l-ala.reference.json",
+          "width": 432,
+          "height": 220,
+          "image_sha256": "897950936a1f7f886a08432f758f87a1cca0a4d10319cffc14dcde9757a23cb8",
+          "category": "linear peptide stereo",
+          "source": "Original synthetic structure; independently authored reference SMILES, checked by RDKit formula/count/CIP/fragments and rendered as a ReShiki native drawing.",
+          "license": "MIT OR Apache-2.0",
+          "expected_response": "editable_draft"
+        },
+        {
+          "id": "cyclic-gly4",
+          "image": "cyclic-gly4.png",
+          "reference": "cyclic-gly4.reference.json",
+          "width": 356,
+          "height": 369,
+          "image_sha256": "151efcdf29e598345b1ba8cd2de0616175c9d256d15576575c3dc2063af81071",
+          "category": "cyclic peptide macrocycle",
+          "source": "Original synthetic structure; independently authored reference SMILES, checked by RDKit formula/count/CIP/fragments and rendered as a ReShiki native drawing.",
+          "license": "MIT OR Apache-2.0",
+          "expected_response": "editable_draft"
+        },
+        {
+          "id": "boc-l-ala-sodium",
+          "image": "boc-l-ala-sodium.png",
+          "reference": "boc-l-ala-sodium.reference.json",
+          "width": 390,
+          "height": 224,
+          "image_sha256": "92c504b638995e7a532424cf62978037a945fbc4815d3c08227c6d9ad74c0df1",
+          "category": "abbreviation and disconnected salt",
+          "source": "Original synthetic structure; independently authored reference SMILES, checked by RDKit formula/count/CIP/fragments and rendered as a ReShiki native drawing.",
+          "license": "MIT OR Apache-2.0",
+          "expected_response": "editable_draft"
+        },
+        {
+          "id": "gly-l-ala-low-resolution",
+          "image": "gly-l-ala-low-resolution.png",
+          "reference": "gly-l-ala.reference.json",
+          "parent": "gly-l-ala",
+          "transform": "half resolution",
+          "width": 216,
+          "height": 110,
+          "image_sha256": "db3dbeefb2ee2227d51d1c47b3c9751b1d9e736e47678075e086057bf4ce8765",
+          "category": "resolution/contrast variation",
+          "source": "Deterministic variation of an original synthetic ReShiki image. No unique complete graph is scored for cropped/unreadable cases.",
+          "license": "MIT OR Apache-2.0",
+          "expected_response": "editable_draft"
+        },
+        {
+          "id": "cyclic-gly4-low-contrast",
+          "image": "cyclic-gly4-low-contrast.png",
+          "reference": "cyclic-gly4.reference.json",
+          "parent": "cyclic-gly4",
+          "transform": "40 percent contrast",
+          "width": 356,
+          "height": 369,
+          "image_sha256": "04f132ada105e867aa8fa0cbc4e68def1e6e6b33beed7f3143534519e5da1610",
+          "category": "resolution/contrast variation",
+          "source": "Deterministic variation of an original synthetic ReShiki image. No unique complete graph is scored for cropped/unreadable cases.",
+          "license": "MIT OR Apache-2.0",
+          "expected_response": "editable_draft"
+        },
+        {
+          "id": "gly-l-ala-cropped",
+          "image": "gly-l-ala-cropped.png",
+          "reference": null,
+          "parent": "gly-l-ala",
+          "transform": "right 55 percent only; partial bonds/peptide missing",
+          "width": 238,
+          "height": 220,
+          "image_sha256": "54bef8ae792623c5e8f49fbfe3fc8b162b525babd8b6eb2f73b18edb8b91cf12",
+          "category": "ambiguous or unsupported readable graph",
+          "source": "Deterministic variation of an original synthetic ReShiki image. No unique complete graph is scored for cropped/unreadable cases.",
+          "license": "MIT OR Apache-2.0",
+          "expected_response": "clarification_or_flagged_partial"
+        },
+        {
+          "id": "ethanol-unreadable",
+          "image": "ethanol-unreadable.png",
+          "reference": null,
+          "parent": "ethanol",
+          "transform": "11 by 5 pixel image; atom labels no longer reliable",
+          "width": 11,
+          "height": 5,
+          "image_sha256": "cc253f9e700c43ef2ec8f6b3ba9af25d5471f135493bed5a2c141bd5c1b2ce56",
+          "category": "ambiguous or unsupported readable graph",
+          "source": "Deterministic variation of an original synthetic ReShiki image. No unique complete graph is scored for cropped/unreadable cases.",
+          "license": "MIT OR Apache-2.0",
+          "expected_response": "clarification_or_flagged_partial"
+        }
+      ]
+    },
+    "provider": "Codex app-server",
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh",
+    "service_tier": "default",
+    "total_budget_seconds": 1500,
+    "per_request_budget_seconds": 300,
+    "max_requests": 15,
+    "repeats": 2,
+    "synthetic_images": true,
+    "build_profile": "debug",
+    "environment": {
+      "platform": "macOS-26.5.1-arm64-arm-64bit",
+      "architecture": "arm64",
+      "python": "3.12.12"
+    },
+    "runtime": "Actual Assistant backend in headless runner; application helper dispatch, bounded allocator and blank-canvas tools. Generic fixed request; no reference data.",
+    "plan": [
+      {
+        "case": "ethanol",
+        "repeat": 1
+      },
+      {
+        "case": "gly-l-ala",
+        "repeat": 1
+      },
+      {
+        "case": "cyclic-gly4",
+        "repeat": 1
+      },
+      {
+        "case": "boc-l-ala-sodium",
+        "repeat": 1
+      },
+      {
+        "case": "gly-l-ala-low-resolution",
+        "repeat": 1
+      },
+      {
+        "case": "cyclic-gly4-low-contrast",
+        "repeat": 1
+      },
+      {
+        "case": "gly-l-ala-cropped",
+        "repeat": 1
+      },
+      {
+        "case": "ethanol-unreadable",
+        "repeat": 1
+      },
+      {
+        "case": "ethanol",
+        "repeat": 2
+      },
+      {
+        "case": "gly-l-ala",
+        "repeat": 2
+      },
+      {
+        "case": "cyclic-gly4",
+        "repeat": 2
+      },
+      {
+        "case": "boc-l-ala-sodium",
+        "repeat": 2
+      },
+      {
+        "case": "gly-l-ala-low-resolution",
+        "repeat": 2
+      },
+      {
+        "case": "cyclic-gly4-low-contrast",
+        "repeat": 2
+      },
+      {
+        "case": "gly-l-ala-cropped",
+        "repeat": 2
+      },
+      {
+        "case": "ethanol-unreadable",
+        "repeat": 2
+      }
+    ],
+    "codex_executable_sha256": "61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70",
+    "codex_version": "codex-cli 0.161.0",
+    "finished_utc": "2026-10-09T09:07:26.520823+00:00",
+    "runner_invocations": 13,
+    "inference_workflows_started": 13,
+    "availability_blocked_reason": null,
+    "elapsed_seconds": 1499.553599334322,
+    "allocation_note": "Baseline max15/1500s; one of16 total authorized workflows reserved for native guided ethanol, up to300s. Unreadable repeat2 was not run; global budget also ended before later repeats."
+  },
+  "summary": {
+    "planned": 16,
+    "attempted": 13,
+    "statuses": {
+      "completed": 7,
+      "failed": 4,
+      "clarification": 1,
+      "timeout": 1,
+      "not_run": 3
+    },
+    "finite_reference_planned": 12,
+    "finite_reference_attempted": 11,
+    "finite_reference_completed": 6,
+    "finite_reference_exact_completed": 6,
+    "finite_reference_exact_applicable": 6,
+    "finite_reference_completed_apply_validation": {
+      "accepted": 6
+    },
+    "provisional_exact": 2,
+    "finite_reference_provisional": 2,
+    "provisional_localized_metric_runs": 2,
+    "provisional_localized_error_totals": {
+      "atom_errors": 0,
+      "hydrogen_errors": 0,
+      "missing_atoms": 0,
+      "extra_atoms": 0,
+      "bond_errors": 0,
+      "missing_bonds": 0,
+      "extra_bonds": 0,
+      "stereochemistry_errors": 0,
+      "missing_fragments": 0,
+      "extra_fragments": 0,
+      "missing_abbreviation_labels": 1,
+      "extra_abbreviation_labels": 0,
+      "abbreviation_member_errors": 0
+    },
+    "completed_localized_metric_runs": 6,
+    "completed_reference_adapter_failures": 0,
+    "completed_localized_error_totals": {
+      "atom_errors": 0,
+      "hydrogen_errors": 0,
+      "missing_atoms": 0,
+      "extra_atoms": 0,
+      "bond_errors": 0,
+      "missing_bonds": 0,
+      "extra_bonds": 0,
+      "stereochemistry_errors": 0,
+      "missing_fragments": 0,
+      "extra_fragments": 0,
+      "missing_abbreviation_labels": 0,
+      "extra_abbreviation_labels": 0,
+      "abbreviation_member_errors": 0
+    },
+    "attempt_latency_seconds": {
+      "count": 13,
+      "min": 28.004278583,
+      "median": 87.737410833,
+      "max": 232.933341334
+    },
+    "token_usage": "Not exposed by this application backend; unavailable, not estimated.",
+    "repeat_variation": {
+      "ethanol": {
+        "attempted": 2,
+        "statuses": ["completed", "completed"],
+        "graph_stages": ["completed", "completed"],
+        "observed_graphs": ["CCO", "CCO"],
+        "distinct_observed_graphs": 1,
+        "repeat_variation_assessable": true
+      },
+      "gly-l-ala": {
+        "attempted": 2,
+        "statuses": ["completed", "completed"],
+        "graph_stages": ["completed", "completed"],
+        "observed_graphs": ["C[C@H](NC(=O)CN)C(=O)O", "C[C@H](NC(=O)CN)C(=O)O"],
+        "distinct_observed_graphs": 1,
+        "repeat_variation_assessable": true
+      },
+      "cyclic-gly4": {
+        "attempted": 2,
+        "statuses": ["failed", "failed"],
+        "graph_stages": [null, "provisional"],
+        "observed_graphs": ["O=C1CNC(=O)CNC(=O)CNC(=O)CN1"],
+        "distinct_observed_graphs": 1,
+        "repeat_variation_assessable": false
+      },
+      "boc-l-ala-sodium": {
+        "attempted": 2,
+        "statuses": ["completed", "failed"],
+        "graph_stages": ["completed", "provisional"],
+        "observed_graphs": [
+          "C[C@H](NC(=O)OC(C)(C)C)C(=O)[O-].[Na+]",
+          "C[C@H](NC(=O)OC(C)(C)C)C(=O)[O-].[Na+]"
+        ],
+        "distinct_observed_graphs": 1,
+        "repeat_variation_assessable": true
+      },
+      "gly-l-ala-low-resolution": {
+        "attempted": 2,
+        "statuses": ["completed", "timeout"],
+        "graph_stages": ["completed", null],
+        "observed_graphs": ["C[C@H](NC(=O)CN)C(=O)O"],
+        "distinct_observed_graphs": 1,
+        "repeat_variation_assessable": false
+      },
+      "cyclic-gly4-low-contrast": {
+        "attempted": 1,
+        "statuses": ["failed"],
+        "graph_stages": [null],
+        "observed_graphs": [],
+        "distinct_observed_graphs": 0,
+        "repeat_variation_assessable": false
+      },
+      "gly-l-ala-cropped": {
+        "attempted": 1,
+        "statuses": ["completed"],
+        "graph_stages": ["completed"],
+        "observed_graphs": [],
+        "distinct_observed_graphs": 0,
+        "repeat_variation_assessable": false
+      },
+      "ethanol-unreadable": {
+        "attempted": 1,
+        "statuses": ["clarification"],
+        "graph_stages": ["completed"],
+        "observed_graphs": [],
+        "distinct_observed_graphs": 0,
+        "repeat_variation_assessable": false
+      }
+    },
+    "limitations": [
+      "Small synthetic original cohort, not a real-scan or general chemistry accuracy estimate.",
+      "Native candidate acceptance and model visual-review completion do not prove chemical graph identity.",
+      "Provisional previews are scored separately and never counted as completed successes.",
+      "No full haptic/variable/coordination reference policy; the rhodium handoff fixture is excluded.",
+      "Strict protonation, tautomer and stereo identity; aromatic/Kekule and ordinary explicit/implicit H normalize.",
+      "Error localization uses bounded common topology matching and is descriptive, not a unique edit-distance proof."
+    ]
+  },
+  "runs": [
+    {
+      "case": "ethanol",
+      "repeat": 1,
+      "category": "control",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 2.575418875,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 46.811744083,
+      "error": null,
+      "review": {
+        "changes": [],
+        "issues": [],
+        "passes": 1,
+        "summary": "The ethanol structure matches the source: two single bonds, the terminal OH label, and the same zigzag orientation. No overlaps or clipping.",
+        "verified": true
+      },
+      "status": "completed",
+      "apply_validation": {
+        "accepted": true,
+        "error": null
+      },
+      "graph_artifact": "ethanol/run-1/drawing.rsk",
+      "graph_stage": "completed",
+      "score": {
+        "graph_identity": true,
+        "reference_smiles": "CCO",
+        "observed_smiles": "CCO",
+        "reference_atoms": 3,
+        "observed_atoms": 3,
+        "reference_bonds": 2,
+        "observed_bonds": 2,
+        "atom_errors": [],
+        "hydrogen_errors": [],
+        "missing_atoms": [],
+        "extra_atoms": [],
+        "bond_errors": [],
+        "missing_bonds": [],
+        "extra_bonds": [],
+        "stereochemistry_errors": [],
+        "reference_fragments": 1,
+        "observed_fragments": 1,
+        "missing_fragments": [],
+        "extra_fragments": [],
+        "abbreviations": {
+          "missing_display_labels": {},
+          "extra_display_labels": {},
+          "member_chemistry_errors": [],
+          "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+        },
+        "localization_search_timed_out": false,
+        "localized_metrics_available": true,
+        "reference_checker": "RDKit 2026.03.6"
+      },
+      "metric_counts": {
+        "atom_errors": 0,
+        "hydrogen_errors": 0,
+        "missing_atoms": 0,
+        "extra_atoms": 0,
+        "bond_errors": 0,
+        "missing_bonds": 0,
+        "extra_bonds": 0,
+        "stereochemistry_errors": 0,
+        "missing_fragments": 0,
+        "extra_fragments": 0,
+        "missing_abbreviation_labels": 0,
+        "extra_abbreviation_labels": 0,
+        "abbreviation_member_errors": 0
+      }
+    },
+    {
+      "case": "gly-l-ala",
+      "repeat": 1,
+      "category": "linear peptide stereo",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.7070353329999999,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 164.945320417,
+      "error": null,
+      "review": {
+        "changes": [],
+        "issues": [
+          "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+        ],
+        "passes": 1,
+        "summary": "Matches the source\u2019s atom labels, connectivity, bond orders and solid wedge. Spacing is clear, with no overlaps or clipped labels.",
+        "verified": true
+      },
+      "status": "completed",
+      "apply_validation": {
+        "accepted": true,
+        "error": null
+      },
+      "graph_artifact": "gly-l-ala/run-1/drawing.rsk",
+      "graph_stage": "completed",
+      "score": {
+        "graph_identity": true,
+        "reference_smiles": "C[C@H](NC(=O)CN)C(=O)O",
+        "observed_smiles": "C[C@H](NC(=O)CN)C(=O)O",
+        "reference_atoms": 10,
+        "observed_atoms": 10,
+        "reference_bonds": 9,
+        "observed_bonds": 9,
+        "atom_errors": [],
+        "hydrogen_errors": [],
+        "missing_atoms": [],
+        "extra_atoms": [],
+        "bond_errors": [],
+        "missing_bonds": [],
+        "extra_bonds": [],
+        "stereochemistry_errors": [],
+        "reference_fragments": 1,
+        "observed_fragments": 1,
+        "missing_fragments": [],
+        "extra_fragments": [],
+        "abbreviations": {
+          "missing_display_labels": {},
+          "extra_display_labels": {},
+          "member_chemistry_errors": [],
+          "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+        },
+        "localization_search_timed_out": false,
+        "localized_metrics_available": true,
+        "reference_checker": "RDKit 2026.03.6"
+      },
+      "metric_counts": {
+        "atom_errors": 0,
+        "hydrogen_errors": 0,
+        "missing_atoms": 0,
+        "extra_atoms": 0,
+        "bond_errors": 0,
+        "missing_bonds": 0,
+        "extra_bonds": 0,
+        "stereochemistry_errors": 0,
+        "missing_fragments": 0,
+        "extra_fragments": 0,
+        "missing_abbreviation_labels": 0,
+        "extra_abbreviation_labels": 0,
+        "abbreviation_member_errors": 0
+      }
+    },
+    {
+      "case": "cyclic-gly4",
+      "repeat": 1,
+      "category": "cyclic peptide macrocycle",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.8043641670000001,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 74.090449709,
+      "error": "Codex returned invalid structured output: expected value at line 1 column 1",
+      "review": null,
+      "status": "failed",
+      "apply_validation": null,
+      "graph_artifact": null,
+      "graph_stage": null,
+      "score": null,
+      "metric_counts": null
+    },
+    {
+      "case": "boc-l-ala-sodium",
+      "repeat": 1,
+      "category": "abbreviation and disconnected salt",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.8783176670000001,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 148.805422625,
+      "error": null,
+      "review": {
+        "changes": [],
+        "issues": [
+          "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+        ],
+        "passes": 1,
+        "summary": "The Boc and NH labels, connectivity, bond orders, solid wedge, carboxylate O\u207b, and separate Na\u207a match the source. Labels are clear and unclipped; no corrections are needed.",
+        "verified": true
+      },
+      "status": "completed",
+      "apply_validation": {
+        "accepted": true,
+        "error": null
+      },
+      "graph_artifact": "boc-l-ala-sodium/run-1/drawing.rsk",
+      "graph_stage": "completed",
+      "score": {
+        "graph_identity": true,
+        "reference_smiles": "C[C@H](NC(=O)OC(C)(C)C)C(=O)[O-].[Na+]",
+        "observed_smiles": "C[C@H](NC(=O)OC(C)(C)C)C(=O)[O-].[Na+]",
+        "reference_atoms": 14,
+        "observed_atoms": 14,
+        "reference_bonds": 12,
+        "observed_bonds": 12,
+        "atom_errors": [],
+        "hydrogen_errors": [],
+        "missing_atoms": [],
+        "extra_atoms": [],
+        "bond_errors": [],
+        "missing_bonds": [],
+        "extra_bonds": [],
+        "stereochemistry_errors": [],
+        "reference_fragments": 2,
+        "observed_fragments": 2,
+        "missing_fragments": [],
+        "extra_fragments": [],
+        "abbreviations": {
+          "missing_display_labels": {},
+          "extra_display_labels": {},
+          "member_chemistry_errors": [],
+          "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+        },
+        "localization_search_timed_out": false,
+        "localized_metrics_available": true,
+        "reference_checker": "RDKit 2026.03.6"
+      },
+      "metric_counts": {
+        "atom_errors": 0,
+        "hydrogen_errors": 0,
+        "missing_atoms": 0,
+        "extra_atoms": 0,
+        "bond_errors": 0,
+        "missing_bonds": 0,
+        "extra_bonds": 0,
+        "stereochemistry_errors": 0,
+        "missing_fragments": 0,
+        "extra_fragments": 0,
+        "missing_abbreviation_labels": 0,
+        "extra_abbreviation_labels": 0,
+        "abbreviation_member_errors": 0
+      }
+    },
+    {
+      "case": "gly-l-ala-low-resolution",
+      "repeat": 1,
+      "category": "resolution/contrast variation",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.862599167,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 169.839297917,
+      "error": null,
+      "review": {
+        "changes": [],
+        "issues": [
+          "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+        ],
+        "passes": 1,
+        "summary": "Connectivity, atom labels, carbonyl double bonds and the downward solid wedge match the source. Labels are clear and unclipped; no corrections needed.",
+        "verified": true
+      },
+      "status": "completed",
+      "apply_validation": {
+        "accepted": true,
+        "error": null
+      },
+      "graph_artifact": "gly-l-ala-low-resolution/run-1/drawing.rsk",
+      "graph_stage": "completed",
+      "score": {
+        "graph_identity": true,
+        "reference_smiles": "C[C@H](NC(=O)CN)C(=O)O",
+        "observed_smiles": "C[C@H](NC(=O)CN)C(=O)O",
+        "reference_atoms": 10,
+        "observed_atoms": 10,
+        "reference_bonds": 9,
+        "observed_bonds": 9,
+        "atom_errors": [],
+        "hydrogen_errors": [],
+        "missing_atoms": [],
+        "extra_atoms": [],
+        "bond_errors": [],
+        "missing_bonds": [],
+        "extra_bonds": [],
+        "stereochemistry_errors": [],
+        "reference_fragments": 1,
+        "observed_fragments": 1,
+        "missing_fragments": [],
+        "extra_fragments": [],
+        "abbreviations": {
+          "missing_display_labels": {},
+          "extra_display_labels": {},
+          "member_chemistry_errors": [],
+          "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+        },
+        "localization_search_timed_out": false,
+        "localized_metrics_available": true,
+        "reference_checker": "RDKit 2026.03.6"
+      },
+      "metric_counts": {
+        "atom_errors": 0,
+        "hydrogen_errors": 0,
+        "missing_atoms": 0,
+        "extra_atoms": 0,
+        "bond_errors": 0,
+        "missing_bonds": 0,
+        "extra_bonds": 0,
+        "stereochemistry_errors": 0,
+        "missing_fragments": 0,
+        "extra_fragments": 0,
+        "missing_abbreviation_labels": 0,
+        "extra_abbreviation_labels": 0,
+        "abbreviation_member_errors": 0
+      }
+    },
+    {
+      "case": "cyclic-gly4-low-contrast",
+      "repeat": 1,
+      "category": "resolution/contrast variation",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 2.19410125,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 57.868428917,
+      "error": "Codex returned invalid structured output: expected value at line 1 column 1",
+      "review": null,
+      "status": "failed",
+      "apply_validation": null,
+      "graph_artifact": null,
+      "graph_stage": null,
+      "score": null,
+      "metric_counts": null
+    },
+    {
+      "case": "gly-l-ala-cropped",
+      "repeat": 1,
+      "category": "ambiguous or unsupported readable graph",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.4767235,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 226.81533175,
+      "error": null,
+      "review": {
+        "changes": [],
+        "issues": [
+          "Atoms 1 (N) and 6 (H) overlap or are too close; preserve the source ligand geometry and separate these positions",
+          "Left NH valence remains ambiguous: one H and one heavy-atom bond are shown, without a charge or radical marker.",
+          "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+        ],
+        "passes": 1,
+        "summary": "The visible structure matches the source. The stacked H/N labels reproduce its spacing without visible overlap.",
+        "verified": true
+      },
+      "status": "completed",
+      "apply_validation": {
+        "accepted": true,
+        "error": null
+      },
+      "graph_artifact": "gly-l-ala-cropped/run-1/drawing.rsk",
+      "graph_stage": "completed",
+      "score": null,
+      "metric_counts": null,
+      "ambiguity_evidence": {
+        "explanation": "Left NH valence is ambiguous: one H and one heavy-atom bond are shown, with no charge or radical mark. Preserved literally, including the stacked label; manual chemical review required.",
+        "review_issues": [
+          "Atoms 1 (N) and 6 (H) overlap or are too close; preserve the source ligand geometry and separate these positions",
+          "Left NH valence remains ambiguous: one H and one heavy-atom bond are shown, without a charge or radical marker.",
+          "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+        ],
+        "visual_review_verified": true,
+        "empty_completed_drawing": false,
+        "policy": "No unique complete reference; inspect these messages manually. A warning or empty result is not automatically a correct clarification."
+      }
+    },
+    {
+      "case": "ethanol-unreadable",
+      "repeat": 1,
+      "category": "ambiguous or unsupported readable graph",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.5836160000000001,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 44.595378834,
+      "error": null,
+      "review": {
+        "changes": [],
+        "issues": [],
+        "passes": 0,
+        "summary": "",
+        "verified": false
+      },
+      "status": "clarification",
+      "apply_validation": {
+        "accepted": false,
+        "error": "There are no drawing objects to apply"
+      },
+      "graph_artifact": "ethanol-unreadable/run-1/drawing.rsk",
+      "graph_stage": "completed",
+      "score": null,
+      "metric_counts": null,
+      "ambiguity_evidence": {
+        "explanation": "The image is only 11 \u00d7 5 pixels, so atom labels, connectivity and bond details are unreadable. Please upload a higher-resolution image or close-up so I can reconstruct it without guessing.",
+        "review_issues": [],
+        "visual_review_verified": false,
+        "empty_completed_drawing": true,
+        "policy": "No unique complete reference; inspect these messages manually. A warning or empty result is not automatically a correct clarification."
+      }
+    },
+    {
+      "case": "ethanol",
+      "repeat": 2,
+      "category": "control",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.840485375,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 45.113456958,
+      "error": null,
+      "review": {
+        "changes": [],
+        "issues": [],
+        "passes": 1,
+        "summary": "The ethanol drawing matches the source: both single bonds, the zigzag orientation, and the OH label are preserved without overlap or clipping.",
+        "verified": true
+      },
+      "status": "completed",
+      "apply_validation": {
+        "accepted": true,
+        "error": null
+      },
+      "graph_artifact": "ethanol/run-2/drawing.rsk",
+      "graph_stage": "completed",
+      "score": {
+        "graph_identity": true,
+        "reference_smiles": "CCO",
+        "observed_smiles": "CCO",
+        "reference_atoms": 3,
+        "observed_atoms": 3,
+        "reference_bonds": 2,
+        "observed_bonds": 2,
+        "atom_errors": [],
+        "hydrogen_errors": [],
+        "missing_atoms": [],
+        "extra_atoms": [],
+        "bond_errors": [],
+        "missing_bonds": [],
+        "extra_bonds": [],
+        "stereochemistry_errors": [],
+        "reference_fragments": 1,
+        "observed_fragments": 1,
+        "missing_fragments": [],
+        "extra_fragments": [],
+        "abbreviations": {
+          "missing_display_labels": {},
+          "extra_display_labels": {},
+          "member_chemistry_errors": [],
+          "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+        },
+        "localization_search_timed_out": false,
+        "localized_metrics_available": true,
+        "reference_checker": "RDKit 2026.03.6"
+      },
+      "metric_counts": {
+        "atom_errors": 0,
+        "hydrogen_errors": 0,
+        "missing_atoms": 0,
+        "extra_atoms": 0,
+        "bond_errors": 0,
+        "missing_bonds": 0,
+        "extra_bonds": 0,
+        "stereochemistry_errors": 0,
+        "missing_fragments": 0,
+        "extra_fragments": 0,
+        "missing_abbreviation_labels": 0,
+        "extra_abbreviation_labels": 0,
+        "abbreviation_member_errors": 0
+      }
+    },
+    {
+      "case": "gly-l-ala",
+      "repeat": 2,
+      "category": "linear peptide stereo",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.7937865830000002,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 169.53073175,
+      "error": null,
+      "review": {
+        "changes": [],
+        "issues": [
+          "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+        ],
+        "passes": 1,
+        "summary": "The reconstruction matches the source\u2019s connectivity, bond orders, hydrogen labels and solid wedge. Labels are clear and unclipped; no title was added.",
+        "verified": true
+      },
+      "status": "completed",
+      "apply_validation": {
+        "accepted": true,
+        "error": null
+      },
+      "graph_artifact": "gly-l-ala/run-2/drawing.rsk",
+      "graph_stage": "completed",
+      "score": {
+        "graph_identity": true,
+        "reference_smiles": "C[C@H](NC(=O)CN)C(=O)O",
+        "observed_smiles": "C[C@H](NC(=O)CN)C(=O)O",
+        "reference_atoms": 10,
+        "observed_atoms": 10,
+        "reference_bonds": 9,
+        "observed_bonds": 9,
+        "atom_errors": [],
+        "hydrogen_errors": [],
+        "missing_atoms": [],
+        "extra_atoms": [],
+        "bond_errors": [],
+        "missing_bonds": [],
+        "extra_bonds": [],
+        "stereochemistry_errors": [],
+        "reference_fragments": 1,
+        "observed_fragments": 1,
+        "missing_fragments": [],
+        "extra_fragments": [],
+        "abbreviations": {
+          "missing_display_labels": {},
+          "extra_display_labels": {},
+          "member_chemistry_errors": [],
+          "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+        },
+        "localization_search_timed_out": false,
+        "localized_metrics_available": true,
+        "reference_checker": "RDKit 2026.03.6"
+      },
+      "metric_counts": {
+        "atom_errors": 0,
+        "hydrogen_errors": 0,
+        "missing_atoms": 0,
+        "extra_atoms": 0,
+        "bond_errors": 0,
+        "missing_bonds": 0,
+        "extra_bonds": 0,
+        "stereochemistry_errors": 0,
+        "missing_fragments": 0,
+        "extra_fragments": 0,
+        "missing_abbreviation_labels": 0,
+        "extra_abbreviation_labels": 0,
+        "abbreviation_member_errors": 0
+      }
+    },
+    {
+      "case": "cyclic-gly4",
+      "repeat": 2,
+      "category": "cyclic peptide macrocycle",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 2.130161667,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 300,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 232.933341334,
+      "error": "Codex returned invalid structured output: expected value at line 1 column 1",
+      "review": null,
+      "status": "failed",
+      "apply_validation": {
+        "accepted": true,
+        "error": null,
+        "retained_preview": true
+      },
+      "graph_artifact": "cyclic-gly4/run-2/last-preview.rsk",
+      "graph_stage": "provisional",
+      "score": {
+        "graph_identity": true,
+        "reference_smiles": "O=C1CNC(=O)CNC(=O)CNC(=O)CN1",
+        "observed_smiles": "O=C1CNC(=O)CNC(=O)CNC(=O)CN1",
+        "reference_atoms": 16,
+        "observed_atoms": 16,
+        "reference_bonds": 16,
+        "observed_bonds": 16,
+        "atom_errors": [],
+        "hydrogen_errors": [],
+        "missing_atoms": [],
+        "extra_atoms": [],
+        "bond_errors": [],
+        "missing_bonds": [],
+        "extra_bonds": [],
+        "stereochemistry_errors": [],
+        "reference_fragments": 1,
+        "observed_fragments": 1,
+        "missing_fragments": [],
+        "extra_fragments": [],
+        "abbreviations": {
+          "missing_display_labels": {},
+          "extra_display_labels": {},
+          "member_chemistry_errors": [],
+          "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+        },
+        "localization_search_timed_out": false,
+        "localized_metrics_available": true,
+        "reference_checker": "RDKit 2026.03.6"
+      },
+      "metric_counts": {
+        "atom_errors": 0,
+        "hydrogen_errors": 0,
+        "missing_atoms": 0,
+        "extra_atoms": 0,
+        "bond_errors": 0,
+        "missing_bonds": 0,
+        "extra_bonds": 0,
+        "stereochemistry_errors": 0,
+        "missing_fragments": 0,
+        "extra_fragments": 0,
+        "missing_abbreviation_labels": 0,
+        "extra_abbreviation_labels": 0,
+        "abbreviation_member_errors": 0
+      }
+    },
+    {
+      "case": "boc-l-ala-sodium",
+      "repeat": 2,
+      "category": "abbreviation and disconnected salt",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.6436754169999999,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 116,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 87.737410833,
+      "error": "Codex returned invalid structured output: expected value at line 1 column 1",
+      "review": null,
+      "status": "failed",
+      "apply_validation": {
+        "accepted": true,
+        "error": null,
+        "retained_preview": true
+      },
+      "graph_artifact": "boc-l-ala-sodium/run-2/last-preview.rsk",
+      "graph_stage": "provisional",
+      "score": {
+        "graph_identity": true,
+        "reference_smiles": "C[C@H](NC(=O)OC(C)(C)C)C(=O)[O-].[Na+]",
+        "observed_smiles": "C[C@H](NC(=O)OC(C)(C)C)C(=O)[O-].[Na+]",
+        "reference_atoms": 14,
+        "observed_atoms": 14,
+        "reference_bonds": 12,
+        "observed_bonds": 12,
+        "atom_errors": [],
+        "hydrogen_errors": [],
+        "missing_atoms": [],
+        "extra_atoms": [],
+        "bond_errors": [],
+        "missing_bonds": [],
+        "extra_bonds": [],
+        "stereochemistry_errors": [],
+        "reference_fragments": 2,
+        "observed_fragments": 2,
+        "missing_fragments": [],
+        "extra_fragments": [],
+        "abbreviations": {
+          "missing_display_labels": {
+            "Boc": 1
+          },
+          "extra_display_labels": {},
+          "member_chemistry_errors": [],
+          "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+        },
+        "localization_search_timed_out": false,
+        "localized_metrics_available": true,
+        "reference_checker": "RDKit 2026.03.6"
+      },
+      "metric_counts": {
+        "atom_errors": 0,
+        "hydrogen_errors": 0,
+        "missing_atoms": 0,
+        "extra_atoms": 0,
+        "bond_errors": 0,
+        "missing_bonds": 0,
+        "extra_bonds": 0,
+        "stereochemistry_errors": 0,
+        "missing_fragments": 0,
+        "extra_fragments": 0,
+        "missing_abbreviation_labels": 1,
+        "extra_abbreviation_labels": 0,
+        "abbreviation_member_errors": 0
+      }
+    },
+    {
+      "case": "gly-l-ala-low-resolution",
+      "repeat": 2,
+      "category": "resolution/contrast variation",
+      "configuration": {
+        "auto_apply": false,
+        "effort": "xhigh",
+        "generation_started": [
+          {
+            "effort": "xhigh",
+            "elapsed_seconds": 1.888826875,
+            "event": "started",
+            "model_label": "GPT-6.1-Sol"
+          }
+        ],
+        "model": "gpt-6.1-sol",
+        "provider": "Codex app-server",
+        "request_timeout_seconds": 28,
+        "requested_effort": "xhigh",
+        "requested_model": "gpt-6.1-sol",
+        "service_tier": "default"
+      },
+      "elapsed_seconds": 28.004278583,
+      "error": "Per-request benchmark budget exhausted",
+      "review": null,
+      "status": "timeout",
+      "apply_validation": null,
+      "graph_artifact": null,
+      "graph_stage": null,
+      "score": null,
+      "metric_counts": null
+    },
+    {
+      "case": "cyclic-gly4-low-contrast",
+      "repeat": 2,
+      "category": "resolution/contrast variation",
+      "status": "not_run",
+      "reason": "Global benchmark budget exhausted",
+      "stage": "budget",
+      "elapsed_seconds": null,
+      "apply_validation": null,
+      "graph_artifact": null,
+      "graph_stage": null,
+      "score": null,
+      "metric_counts": null
+    },
+    {
+      "case": "gly-l-ala-cropped",
+      "repeat": 2,
+      "category": "ambiguous or unsupported readable graph",
+      "status": "not_run",
+      "reason": "Global benchmark budget exhausted",
+      "stage": "budget",
+      "elapsed_seconds": null,
+      "apply_validation": null,
+      "graph_artifact": null,
+      "graph_stage": null,
+      "score": null,
+      "metric_counts": null,
+      "ambiguity_evidence": {
+        "explanation": "",
+        "review_issues": [],
+        "visual_review_verified": false,
+        "empty_completed_drawing": false,
+        "policy": "No unique complete reference; inspect these messages manually. A warning or empty result is not automatically a correct clarification."
+      }
+    },
+    {
+      "case": "ethanol-unreadable",
+      "repeat": 2,
+      "category": "ambiguous or unsupported readable graph",
+      "status": "not_run",
+      "reason": "Global benchmark budget exhausted",
+      "stage": "budget",
+      "elapsed_seconds": null,
+      "apply_validation": null,
+      "graph_artifact": null,
+      "graph_stage": null,
+      "score": null,
+      "metric_counts": null,
+      "ambiguity_evidence": {
+        "explanation": "",
+        "review_issues": [],
+        "visual_review_verified": false,
+        "empty_completed_drawing": false,
+        "policy": "No unique complete reference; inspect these messages manually. A warning or empty result is not automatically a correct clarification."
+      }
+    }
+  ]
+}

@@ -159,6 +159,9 @@ fn property(
 ) -> Result<()> {
     match key {
         "ATOMS" | "PATOMS" => {
+            if key == "PATOMS" && !matches!(g.kind.as_str(), "SUP" | "DAT") {
+                return Err(ReadError::Unsupported("polymer parent-atom membership"));
+            }
             for id in f.indices(r, p.graph.atoms.len())? {
                 let atom = b.atom(r, id)?;
                 if key == "ATOMS" {
@@ -174,7 +177,17 @@ fn property(
             }
         }
         "XBHEAD" | "XBCORR" => {
-            f.indices(r, p.graph.bonds.len())?;
+            if key == "XBCORR" {
+                return Err(ReadError::Unsupported(
+                    "polymer crossing-bond correspondence",
+                ));
+            }
+            for id in f.indices(r, p.graph.bonds.len())? {
+                let bond = b.bond(r, id)?;
+                if key == "XBHEAD" {
+                    g.head_bonds.push(bond);
+                }
+            }
         }
         "BRKXYZ" => {
             f.advance();
@@ -221,9 +234,15 @@ fn property(
             }
         }
         "PARENT" => {
+            if !matches!(g.kind.as_str(), "SUP" | "DAT") {
+                return Err(ReadError::Unsupported("nested polymer parent groups"));
+            }
             f.integer(r)?;
         }
         "COMPNO" => {
+            if !matches!(g.kind.as_str(), "SUP" | "DAT") {
+                return Err(ReadError::Unsupported("polymer component numbers"));
+            }
             let start = f.pos;
             let value = match f.integer(r) {
                 Ok(value) => value,
@@ -280,6 +299,21 @@ fn property(
                 "FIELDDATA" => {
                     value.truncate(value.floor_char_boundary(200.min(value.len())));
                     g.data.push(value);
+                }
+                "LABEL" => g.label = Some(value),
+                "CONNECT" => g.connection = Some(value),
+                "SUBTYPE" => g.subtype = Some(value),
+                "MULT" => {
+                    if g.kind != "MUL" {
+                        return Err(ReadError::Unsupported(
+                            "multiplicity on a non-multiple substance group",
+                        ));
+                    }
+                    g.multiplier = Some(
+                        value
+                            .parse::<u32>()
+                            .map_err(|_| r.invalid("Invalid group multiplicity"))?,
+                    );
                 }
                 "FIELDNAME" => g.field = Some(value),
                 "QUERYTYPE" => g.query = Some(value),

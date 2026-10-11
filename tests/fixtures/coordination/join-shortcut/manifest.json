@@ -1,0 +1,319 @@
+{
+  "format": 1,
+  "description": "Exact original bytes copied for the CtrlJ follow-up; timestamps/status fields in original receipts record their original stages. No binary executable is committed.",
+  "base_head": "39b25cd4cdf58d1628e75449181b11877509d198",
+  "license": "MIT OR Apache-2.0",
+  "author": "Ameyanagi; project creator and maintainer; under review in PR283",
+  "files": [
+    {
+      "path": "docs/images/coordination-join-shortcut/co-en3-cmd-j-one-contact-after.jpg",
+      "sha256": "992e7b5af27d92411a849030b4489c704840c2fd9fc00c0e436c312b356a2708",
+      "bytes": 383902,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-one-contact-after.jpg"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/co-en3-cmd-j-one-contact-after.ax.txt",
+      "sha256": "ba93cb494241b89c432ea76756777ca60acd36e90d73c0d1af49d92f18faae4f",
+      "bytes": 4479,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-one-contact-after.ax.txt"
+    },
+    {
+      "path": "docs/images/coordination-join-shortcut/co-en3-cmd-j-one-contact-undo.jpg",
+      "sha256": "2e8fc65246815150c0be59ae38b4954504d985d925c024f7d13af57a4feb4968",
+      "bytes": 353530,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-one-contact-undo.jpg"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/co-en3-cmd-j-one-contact-undo.ax.txt",
+      "sha256": "e06ff2545b8c11605089f3333af56958b2697bc31bac5b20acd3373743c8c555",
+      "bytes": 4409,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-one-contact-undo.ax.txt"
+    },
+    {
+      "path": "docs/images/coordination-join-shortcut/co-en3-cmd-j-one-contact-redo.jpg",
+      "sha256": "a9998d256043a0fabe36cf4b0078f83cb713c6a3490073f8458a9e7cfb9b8c2d",
+      "bytes": 381643,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-one-contact-redo.jpg"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/co-en3-cmd-j-one-contact-redo.ax.txt",
+      "sha256": "ba93cb494241b89c432ea76756777ca60acd36e90d73c0d1af49d92f18faae4f",
+      "bytes": 4479,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-one-contact-redo.ax.txt"
+    },
+    {
+      "path": "docs/images/coordination-join-shortcut/co-en3-cmd-j-chelate-after.jpg",
+      "sha256": "ecf85c233050b2c120efa7c557531428d510d58a08bdb07435f6c4d9c60d261b",
+      "bytes": 384745,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-chelate-after.jpg"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/co-en3-cmd-j-chelate-after.ax.txt",
+      "sha256": "ba93cb494241b89c432ea76756777ca60acd36e90d73c0d1af49d92f18faae4f",
+      "bytes": 4479,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-chelate-after.ax.txt"
+    },
+    {
+      "path": "docs/images/coordination-join-shortcut/co-en3-cmd-j-fresh-process-reopened.jpg",
+      "sha256": "6cd9b806d7e2c5b75e4f01a20826a0478618f3d484e533f10c33307de96ebe53",
+      "bytes": 380983,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-fresh-process-reopened.jpg"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/co-en3-cmd-j-fresh-process-reopened.ax.txt",
+      "sha256": "1d1f1e6240088438743615bfb552c5be6a8e0bbb6e7acc1d810edbf701c44742",
+      "bytes": 4244,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-fresh-process-reopened.ax.txt"
+    },
+    {
+      "path": "docs/images/coordination-join-shortcut/co-en3-cmd-j-rejected-before.jpg",
+      "sha256": "38a12fd4ef0eec8d83dbfbcdb536e208c19607896a9e8992225ddc0c250ab258",
+      "bytes": 357409,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-before/co-en3-cmd-j-rejected-before.jpg"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/co-en3-cmd-j-rejected-before.full.ax.txt",
+      "sha256": "0710df4a1cc5440b66a1953ae5d9029d1d5223cbf8107282ee8541fbd72cc7e8",
+      "bytes": 4420,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-before/co-en3-cmd-j-rejected-before.full.ax.txt"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/before-capture-provenance.json",
+      "sha256": "606b6937ca08c0314cc7f51b66bae5e8f5da7ef66c31bbdfad880ecc39c2464c",
+      "bytes": 1918,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-before/capture-provenance.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/native-verification.json",
+      "sha256": "14c0886a07f305da08628b9b867e7f60fca9c377562a0ec9c3f64f31cce50d29",
+      "bytes": 6333,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/native-verification.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/co-en3-cmd-j-native.rsk",
+      "sha256": "ad6ea1986402e22a16e77514416278c02ef0ec5eb84f2236e5e93fa5214c3541",
+      "bytes": 8182,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/native-after/co-en3-cmd-j-native.rsk"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/bundle-provenance.json",
+      "sha256": "9b754e183c6a1f366a5abcc89962e955d892916fded21727eff4044889131e38",
+      "bytes": 63485,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/bundle-provenance.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/revised-frozen-source.json",
+      "sha256": "43b53c401f21bcda8642a31df546b30219130bad935f61c7343d12533aa9658f",
+      "bytes": 114739,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/revised-frozen-source.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/validation-summary.json",
+      "sha256": "e800761878d5dec0cbec81a60a15658c72defd9a9e14093e377220f7f1722f86",
+      "bytes": 7202,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/validation-summary.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/default-build-source-refresh.json",
+      "sha256": "364ca1a64a0554e823867c64d769a2cb9f34e6256db73005ce70d5499bd27e40",
+      "bytes": 251523,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/default-build-source-refresh.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/focused-new-final.log",
+      "sha256": "52e38b33f5082757bbf87c64dafb8ca5d43344b1c1ad3d102f00d68e8ef6950d",
+      "bytes": 1139,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/focused-new-final.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/focused-new-final-receipt.json",
+      "sha256": "a40c2d589aeb96e76b2ed9c7a7e6a6970f4a7b7920e36c4c60d11d4e652848bf",
+      "bytes": 633,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/focused-new-final-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/ordinary-share.log",
+      "sha256": "e8b49817712c1540c966394b0d601b7cb3e34f0a7baa519e80dd808abc52875d",
+      "bytes": 658,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/ordinary-share.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/ordinary-share-receipt.json",
+      "sha256": "e0b1ef3e6a45ab8ffd4834b6124395e7e1abeb897a1e72f579a81f2a76c57809",
+      "bytes": 725,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/ordinary-share-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/joining-existing.log",
+      "sha256": "bedd84ea3d2505b15bb53959ea45b23d118d4dd1b24efb14dd96aa9a8ab72f26",
+      "bytes": 1190,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/joining-existing.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/joining-existing-receipt.json",
+      "sha256": "cfc9d03175995f694740257849d6b09109b6633cd3c2d14f9c065b88ad7ca636",
+      "bytes": 617,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/joining-existing-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/marked-coordinate.log",
+      "sha256": "78693f99c6117713876a3dc70e3521c7de2424f8b0d807edb7340c4502a59774",
+      "bytes": 649,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/marked-coordinate.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/marked-coordinate-receipt.json",
+      "sha256": "1113847c55ef30b4f1e690e9c1750fa00a9b2e4ca89ed45e7b7db3fd79b330a6",
+      "bytes": 720,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/marked-coordinate-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/renderer-join-fixed.log",
+      "sha256": "6b64a230bc56445ab417df7fdfe30c44921ece64fddf919836e471ef25c0529b",
+      "bytes": 729,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-fixed.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/renderer-join-fixed-receipt.json",
+      "sha256": "4c5f8026179fa0f3a2ba461883d64bc3d3b64896d1d54ecd4fb53c60a309db49",
+      "bytes": 737,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-fixed-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/clippy.log",
+      "sha256": "d345a2aa438f559b1ee7b1614d0c1d0ca62e646d2f70dbc2f8b462795aa4f621",
+      "bytes": 2274,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/clippy.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/clippy-receipt.json",
+      "sha256": "0731841150e221fd323529fbe49a0368a5ddb231b4aacdd9fd77db2037a89002",
+      "bytes": 629,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/clippy-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/check-final.log",
+      "sha256": "712de67201125fc55c1e00735318a16d85011e46fea7b4a3514992d7c79f5168",
+      "bytes": 1520,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/check-final.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/check-final-receipt.json",
+      "sha256": "9cf2be617ef97f25be925c60985653ef11cb962f2d236d3e03c8309a1a72a98b",
+      "bytes": 597,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/check-final-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/fmt.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/fmt-receipt.json",
+      "sha256": "7751c27616ed18cf889bbf6284dae77deeab9d3d2dec72d97a97b08949905141",
+      "bytes": 528,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/fmt-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/build.log",
+      "sha256": "cbe0753de76886175d182f91d66b1c4bc873d45fe9b2bc2fa8d5f40b0c93825f",
+      "bytes": 356678,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/build.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/build-receipt.json",
+      "sha256": "5e33674d1c16d433a916e318250b7f3cb5c0f711655ee5f1af86eb03cc23b20d",
+      "bytes": 598,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/build-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/package.log",
+      "sha256": "063483da639b3d9a2d3033245e01bcde145c2d4e64952008ec0a001f2fa7a524",
+      "bytes": 666,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/package.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/package-receipt.json",
+      "sha256": "805e90b670abbf3f61ba38d3552b25411e46fb4476f7c210eb36e66465157b30",
+      "bytes": 648,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/package-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/renderer-join.log",
+      "sha256": "95c644deab088e806e37c5b2dbbe62efe215b1e626c9b0d376a785fd8c99c43d",
+      "bytes": 1301,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/renderer-join-receipt.json",
+      "sha256": "317bbfde040cfe7eeda3e0646b7477114b941bf47483b122087188ec3263697d",
+      "bytes": 735,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/renderer-join-focus-diagnostic.log",
+      "sha256": "0e89c6f4894eb16bf6f5fa5a159311226fd66d3a61e29dadfe0c385a0d184097",
+      "bytes": 1382,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-focus-diagnostic.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/renderer-join-focus-diagnostic-receipt.json",
+      "sha256": "135cf9558f0bb113bc10a2e26db53d2992b80a5ff6f0b4efe1760b8bc075384f",
+      "bytes": 751,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-focus-diagnostic-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/renderer-join-mutation-before.log",
+      "sha256": "42f89d776ed67aaa97964e3a79275df447c9c3096773e41d8fc5eccf86ee0faf",
+      "bytes": 1415,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-mutation-before.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/renderer-join-mutation-before-receipt.json",
+      "sha256": "258a92b402c4e9709009392ddc607b5cabc29087e10100e310e680813662b326",
+      "bytes": 750,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/renderer-join-mutation-before-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/check.log",
+      "sha256": "256920d31a6e3c8c7b7c6e25b6976dd361363b398cfdd33869c4affe88178eb2",
+      "bytes": 54,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/check.log"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/check-receipt.json",
+      "sha256": "f77563ca5fdbf3e308bd44a3aa0a263ecf2d2714339d20ea289e2885514de754",
+      "bytes": 591,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/check-receipt.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/check-queued-stop.json",
+      "sha256": "980a1c612d3f4d783a77f9b0264f3bafba5b0c7129fd75cb87df36764cae300f",
+      "bytes": 767,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/check-queued-stop.json"
+    },
+    {
+      "path": "tests/fixtures/coordination/join-shortcut/arrow-visibility-diagnosis.json",
+      "sha256": "6787c7074fdda62e9e30a3cb9961bf0de3283b970746c4e32ec5cc83aa7e0b19",
+      "bytes": 4170,
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/arrow-visibility-diagnosis.json"
+    }
+  ],
+  "existing_reference_files": {
+    "tests/fixtures/coordination/co-en3-before.rsk": {
+      "sha256": "0f6f575a908de66b33e0117386c66b288f8bbcb6348b543a50cde96e548f42d4",
+      "bytes": 6722
+    },
+    "tests/fixtures/coordination/co-en3-desktop-assembled.rsk": {
+      "sha256": "a5b68d3561d94899d8838dcf670c193c3982c34aeb62434a2d5638c18f7126b2",
+      "bytes": 8182
+    },
+    "docs/images/coordination/co-en3-assembled-reopened.jpg": {
+      "sha256": "c2cecc169841c004390a7aec9bc6cf49e0bffedd421e9f0a13e1dc99b7ba801b",
+      "bytes": 383124
+    }
+  },
+  "copied_bytes": 3105955,
+  "jpeg_count": 6
+}

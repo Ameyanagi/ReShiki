@@ -38,7 +38,10 @@ mod files;
 mod macos_files;
 #[cfg(target_os = "macos")]
 pub(crate) use macos_files::install_document_events;
+#[cfg(any(windows, target_os = "linux"))]
+mod desktop;
 mod gates;
+mod generic;
 mod graphics;
 mod help;
 mod history;
@@ -54,6 +57,9 @@ mod naming;
 mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
+pub(crate) mod office;
+#[cfg(any(windows, target_os = "linux"))]
+pub(crate) use desktop::install_document_events as install_desktop_events;
 #[cfg(test)]
 mod ops_parity_tests;
 mod optimization;
@@ -74,7 +80,7 @@ mod shortcut_examples;
 #[cfg(test)]
 mod shortcut_focus_tests;
 mod shortcuts;
-mod startup;
+pub(crate) mod startup;
 mod tabs;
 mod template_library;
 #[cfg(test)]
@@ -128,6 +134,7 @@ pub enum Message {
     Updates(updates::Action),
     Reaction(reactions::Action),
     Mapping(reaction_mapping::Action),
+    Generic(generic::Action),
     DrawingStyle(document_styles::Action),
     DepthAppearance(depth_appearance::Action),
     InlineText(inline_text::Action),
@@ -278,6 +285,9 @@ pub enum Message {
     )]
     Opened(Option<(PathBuf, Result<Vec<u8>, String>)>),
     FilePrepared(files::Opened),
+    OfficePrepared(office::Binding, files::Opened),
+    #[cfg(any(windows, target_os = "linux"))]
+    Desktop(desktop::Action),
     #[cfg(target_os = "macos")]
     MacFiles(macos_files::Action),
     Tabs(tabs::Action),
@@ -338,6 +348,7 @@ pub struct App {
     toolbar: palettes::Memory,
     assistant: assistant::State,
     abbreviations: abbreviations::State,
+    generic: generic::State,
     tool: Tool,
     element: String,
     printing: printing::State,
@@ -357,8 +368,9 @@ pub struct App {
     status: String,
     error: bool,
     file_io: files::State,
-    office_path: Option<PathBuf>,
-    office_host: &'static str,
+    office: office::State,
+    #[cfg(any(windows, target_os = "linux"))]
+    desktop: desktop::State,
     pending: Option<Pending>,
     ring_size: u8,
     aromatic_ring: bool,
@@ -396,6 +408,7 @@ impl App {
             toolbar: palettes::Memory::default(),
             assistant: assistant::State::new(),
             abbreviations: Default::default(),
+            generic: Default::default(),
             context_menu: None,
             style_menu: None,
             tool: Tool::Select,
@@ -420,8 +433,9 @@ impl App {
             status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
             file_io: files::State::default(),
-            office_path: None,
-            office_host: "Office",
+            office: office::State::default(),
+            #[cfg(any(windows, target_os = "linux"))]
+            desktop: desktop::State::default(),
             pending: None,
             ring_size: 6,
             aromatic_ring: false,
@@ -441,6 +455,8 @@ impl App {
             startup::parse(std::env::args_os().skip(1))
         };
         let task = app.open_startup(startup);
+        #[cfg(any(windows, target_os = "linux"))]
+        let task = task.chain(Task::done(Message::Desktop(desktop::Action::Ready)));
         let update_check = app.update_action(updates::Action::Check(false));
         app.sync_keyboard_drawing();
         (app, Task::batch([task, update_check]))
@@ -484,6 +500,8 @@ impl App {
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
             accessibility::subscription(),
+            #[cfg(any(windows, target_os = "linux"))]
+            desktop::subscription(self),
             #[cfg(target_os = "macos")]
             macos_files::subscription(),
             #[cfg(target_os = "linux")]
@@ -538,7 +556,9 @@ impl App {
         self.tab.dirty()
     }
     fn office_document(&self) -> bool {
-        self.tab.path.is_some() && self.tab.path == self.office_path
+        self.tab.office.as_ref().is_some_and(|binding| {
+            self.tab.path.as_ref() == Some(&binding.path) && binding.writable()
+        })
     }
     fn changed(&mut self, before: Document) {
         if self.tab.doc != before {
@@ -564,6 +584,9 @@ impl App {
                 return;
             }
         };
+        self.commit_changed(reconciled, continuing);
+    }
+    fn commit_changed(&mut self, reconciled: reshiki::transaction::Reconciled, continuing: bool) {
         self.tab.recent_molecules.record(
             reconciled.before(),
             &self.tab.doc,
@@ -698,6 +721,15 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        #[cfg(any(windows, target_os = "linux"))]
+        if let Message::Desktop(action) = message {
+            return Task::batch([
+                self.desktop_action(action),
+                self.start_label_refresh(),
+                self.start_autosave(),
+                self.accessibility_refresh(),
+            ]);
+        }
         if let Message::Accessibility(action) = message {
             return self.accessibility_action(action);
         }
@@ -753,6 +785,7 @@ impl App {
         if self.exit.frozen() {
             return task;
         }
+        let task = Task::batch([task, self.finish_office_closes()]);
         // A failed draft removal, explicit save or library write may have
         // cancelled exit. Deliver held completions with their original tags
         // and ordinary epoch/revision guards before accepting more input.
@@ -767,6 +800,9 @@ impl App {
     }
 
     fn update_front(&mut self, message: Message, background: bool) -> Task<Message> {
+        if let Message::OfficePrepared(binding, opened) = message {
+            return self.office_prepared(binding, opened);
+        }
         #[cfg(target_os = "macos")]
         if let Message::MacFiles(action) = message {
             return self.mac_file_action(action);
@@ -893,6 +929,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.graphics == b.graphics
         && a.groups == b.groups
         && a.reactions == b.reactions
+        && a.generic == b.generic
         && a.abbreviations == b.abbreviations
         && a.ring_fills == b.ring_fills
         && a.depth_appearance == b.depth_appearance
@@ -927,8 +964,16 @@ fn export_file(contents: String, format: &'static str, details: Vec<String>) -> 
     )
 }
 async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<PathBuf>, String> {
-    let Some(path) =
-        files::save_path("Export drawing", &format!("Molecule.{format}"), format).await
+    let extension = match format {
+        "svg-office" => "svg",
+        _ => format,
+    };
+    let Some(path) = files::save_path(
+        "Export drawing",
+        &format!("Molecule.{extension}"),
+        extension,
+    )
+    .await
     else {
         return Ok(None);
     };

@@ -1,0 +1,26 @@
+name: Desktop IPC runtime
+on:
+  pull_request:
+    paths:
+      - "native/linux/src/desktop.rs"
+      - "native/linux/src/desktop/**"
+      - "src/desktop.rs"
+      - "src/desktop/**"
+      - "src/app/office.rs"
+      - "src/app/office/**"
+      - "scripts/test_linux_desktop_ipc.py"
+      - ".github/workflows/desktop-ipc.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-native-ipc:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install 1.99.0 --profile minimal --component clippy
+      - name: Record exact source and run isolated native transport/child tests
+        run: |
+          git rev-parse HEAD
+          python3 scripts/test_linux_desktop_ipc.py

@@ -42,6 +42,91 @@ pub struct Drawing {
     bond_indices: Vec<usize>,
 }
 impl Drawing {
+    pub fn with_generic(mut self, generic: &crate::generic::Generic) -> Result<Self, Error> {
+        self.document.generic = generic.clone();
+        for site in &generic.alternatives {
+            let label = format!(
+                "[{}{}]",
+                if site.excluded { "NOT " } else { "" },
+                site.choices
+                    .iter()
+                    .map(|c| match c {
+                        crate::generic::Alternative::Element { symbol, isotope } =>
+                            if symbol == "H" && *isotope == 2 {
+                                "D"
+                            } else if symbol == "H" && *isotope == 3 {
+                                "T"
+                            } else {
+                                symbol.as_str()
+                            },
+                        crate::generic::Alternative::Group { label }
+                        | crate::generic::Alternative::Unresolved { label } => label.as_str(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            let atom = self
+                .document
+                .atom_mut(site.atom)
+                .ok_or_else(|| invalid("Missing alternative atom"))?;
+            atom.element = "*".into();
+            atom.no_implicit = true;
+            atom.display.variable = Some(label);
+        }
+        for link in &generic.links {
+            let atom = self
+                .document
+                .atom_mut(link.atom)
+                .ok_or_else(|| invalid("Missing link atom"))?;
+            atom.display.variable = Some(format!("[{}]{}-{}", atom.element, link.min, link.max));
+        }
+        for index in 0..self.document.generic.repeats.len() {
+            let unit = self
+                .document
+                .generic
+                .repeats
+                .get(index)
+                .ok_or_else(|| invalid("Missing repeat unit"))?
+                .clone();
+            if unit.bracket.is_none() {
+                let points = unit
+                    .members
+                    .iter()
+                    .filter_map(|id| self.document.atom(*id).map(|a| a.position));
+                let bounds = points.fold(None, |bounds: Option<(Point, Point)>, p| {
+                    Some(match bounds {
+                        None => (p, p),
+                        Some((lo, hi)) => (
+                            Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                            Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                        ),
+                    })
+                });
+                if let Some((lo, hi)) = bounds {
+                    let id = self.document.next_id();
+                    self.document
+                        .graphics
+                        .push(crate::graphics::Graphic::dragged(
+                            id,
+                            crate::graphics::GraphicKind::Brackets,
+                            lo.offset(-14., -24.),
+                            hi.offset(14., 24.),
+                            Default::default(),
+                            crate::graphics::BracketSides::Both,
+                            false,
+                        ));
+                    self.document
+                        .generic
+                        .repeats
+                        .get_mut(index)
+                        .ok_or_else(|| invalid("Missing repeat unit"))?
+                        .bracket = Some(id);
+                }
+            }
+        }
+        self.document.validate().map_err(invalid)?;
+        Ok(self)
+    }
     pub fn with_attachments(
         mut self,
         attachments: &[crate::attachments::Attachment],

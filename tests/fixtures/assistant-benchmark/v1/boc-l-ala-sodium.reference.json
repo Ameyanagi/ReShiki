@@ -1,0 +1,17 @@
+{
+  "smiles": "CC(C)(C)OC(=O)N[C@@H](C)C(=O)[O-].[Na+]",
+  "formula": "C8H14NNaO4",
+  "heavy_atoms": 14,
+  "bonds": 12,
+  "tetrahedral_cip": [
+    "S"
+  ],
+  "fragments": 2,
+  "policy": "Exact protonation, formal charge, tautomer and specified stereochemistry; no tautomer/protonation equivalence.",
+  "abbreviations": [
+    {
+      "label": "Boc",
+      "smiles": "*C(=O)OC(C)(C)C"
+    }
+  ]
+}

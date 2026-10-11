@@ -1,0 +1,14 @@
+{
+  "reason": "premature check invocation while Clippy session was still running; stop only own queued check child and retry sequentially",
+  "runner": [
+    40532,
+    787,
+    "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Users/ryuichi/dev/ReShiki-worktrees/.coordination/coordination-join-shortcut/validation/run_command.py check cargo check --workspace --all-targets --locked --no-default-features"
+  ],
+  "terminated_child": [
+    40533,
+    40532,
+    "/Users/ryuichi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/cargo check --workspace --all-targets --locked --no-default-features"
+  ],
+  "prior_log": "    Blocking waiting for file lock on build directory\n"
+}

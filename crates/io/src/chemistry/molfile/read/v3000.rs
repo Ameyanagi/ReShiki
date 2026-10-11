@@ -158,7 +158,41 @@ fn atom_record(
     if indices.insert(id, p.graph.atoms.len()).is_some() {
         return Err(r.invalid("Duplicate atom ID"));
     }
-    let mut atom = r.symbol(r.token(&tokens, 1)?, true)?;
+    let symbol = r.token(&tokens, 1)?;
+    let list =
+        if symbol.starts_with('[') || symbol.starts_with("NOT[") || symbol.starts_with("NOT [") {
+            let text = if let Some(rest) = symbol.strip_prefix("NOT") {
+                format!("[NOT {}", rest.trim_start().trim_start_matches('['))
+            } else {
+                symbol.into()
+            };
+            crate::generic::alternative(&text).map_err(ReadError::Chemistry)?
+        } else {
+            None
+        };
+    let mut atom = if let Some((choices, excluded)) = list {
+        if choices
+            .iter()
+            .any(|c| !matches!(c, crate::generic::Alternative::Element { .. }))
+        {
+            return Err(ReadError::Unsupported(
+                "non-element MOL alternatives; use CDXML",
+            ));
+        }
+        p.generic
+            .alternatives
+            .push(crate::generic::AlternativeSite {
+                atom: p.graph.atoms.len() as u64 + 1,
+                choices,
+                excluded,
+            });
+        Atom {
+            no_implicit: true,
+            ..Atom::default()
+        }
+    } else {
+        r.symbol(symbol, true)?
+    };
     let position = Point3 {
         x: r.coordinate(r.token(&tokens, 2)?, false)?,
         y: r.coordinate(r.token(&tokens, 3)?, false)?,
@@ -432,6 +466,45 @@ fn trailing_blocks(
     let mut objects_found = false;
     let mut groups_found = false;
     while line.starts_with("LINKNODE") {
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        let [_, low, high, "2", a, b, c, d] = fields.as_slice() else {
+            return Err(r.invalid("LINKNODE requires exactly two connection pairs"));
+        };
+        let number = |s: &str| {
+            s.parse::<i32>()
+                .map_err(|_| r.invalid("Invalid LINKNODE integer"))
+        };
+        let low =
+            u32::try_from(number(low)?).map_err(|_| r.invalid("Invalid LINKNODE lower count"))?;
+        let high =
+            u32::try_from(number(high)?).map_err(|_| r.invalid("Invalid LINKNODE upper count"))?;
+        let index = |s: &str| {
+            indices
+                .get(&number(s)?)
+                .copied()
+                .ok_or_else(|| r.invalid("Missing LINKNODE atom"))
+        };
+        let (a, b, c, d) = (index(a)?, index(b)?, index(c)?, index(d)?);
+        if a != c
+            || b == d
+            || !p
+                .graph
+                .bonds
+                .iter()
+                .any(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
+            || !p
+                .graph
+                .bonds
+                .iter()
+                .any(|bond| (bond.a == c && bond.b == d) || (bond.a == d && bond.b == c))
+        {
+            return Err(r.invalid("LINKNODE connection pairs must share their repeated atom and identify two existing bonds"));
+        }
+        p.generic.links.push(crate::generic::LinkNode {
+            atom: a as u64 + 1,
+            min: low,
+            max: high,
+        });
         line = r.v3()?.to_ascii_uppercase();
     }
     while line.starts_with("BEGIN") {

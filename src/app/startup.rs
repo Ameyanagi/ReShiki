@@ -3,13 +3,13 @@ use iced::Task;
 use std::{ffi::OsString, path::PathBuf};
 
 #[derive(Default)]
-pub(super) struct Arguments {
-    pub(super) paths: Vec<PathBuf>,
-    shortcut_examples: bool,
-    office_host: Option<&'static str>,
+pub(crate) struct Arguments {
+    pub(crate) paths: Vec<PathBuf>,
+    pub(crate) shortcut_examples: bool,
+    pub(crate) office_host: Option<super::office::Host>,
 }
 
-pub(super) fn parse(args: impl IntoIterator<Item = OsString>) -> Arguments {
+pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Arguments {
     let mut args = args.into_iter();
     let mut parsed = Arguments::default();
     while let Some(arg) = args.next() {
@@ -21,21 +21,27 @@ pub(super) fn parse(args: impl IntoIterator<Item = OsString>) -> Arguments {
             parsed.shortcut_examples = true;
         }
         if arg == "--office-edit" {
-            parsed.office_host = Some("Office");
+            parsed.office_host = Some(super::office::Host::Office);
         } else if arg == "--libreoffice-edit" {
-            parsed.office_host = Some("LibreOffice");
+            parsed.office_host = Some(super::office::Host::LibreOffice);
         } else if arg == "--office-addin-edit" {
-            parsed.office_host = Some("Microsoft 365");
+            parsed.office_host = Some(super::office::Host::Microsoft365);
         }
     }
     parsed
 }
 
 impl App {
-    pub(super) fn open_startup(&mut self, args: Arguments) -> Task<Message> {
-        if let Some(host) = args.office_host {
-            self.office_path = args.paths.first().cloned();
-            self.office_host = host;
+    pub(super) fn open_startup(&mut self, mut args: Arguments) -> Task<Message> {
+        if let Some(host) = args.office_host
+            && !args.paths.is_empty()
+        {
+            let path = args.paths.remove(0);
+            let binding = super::office::Binding::standalone(path.clone(), host);
+            return Task::perform(files::read(path), move |opened| {
+                Message::OfficePrepared(binding.clone(), opened)
+            })
+            .chain(files::open_paths(args.paths));
         }
         if args.paths.is_empty() && args.shortcut_examples {
             return self.open_shortcut_examples();

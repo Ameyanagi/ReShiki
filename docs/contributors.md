@@ -4,6 +4,11 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Coordination/Join, generic structures and adaptive chemistry integration:
+@Ameyanagi in [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300).
+[Combined native review](changes/coordination-join-integration.md) records the
+supported behavior and deferred Join/Co(en)3 accuracy work; issue #246 remains open.
+
 - @Ameyanagi — project creator and maintainer; contributed ordinary-Copy ChemDoodle Open/Load reaction handoff in [PR #144](https://github.com/Ameyanagi/ReShiki/pull/144), Rust 3D optimization, depth appearance, and default keyboard drawing in [PR #146](https://github.com/Ameyanagi/ReShiki/pull/146), bounded 3D initialization in [PR #149](https://github.com/Ameyanagi/ReShiki/pull/149), editable embedded ChemDraw paste from Windows Office in [PR #150](https://github.com/Ameyanagi/ReShiki/pull/150), and signing and privacy policies in [PR #151](https://github.com/Ameyanagi/ReShiki/pull/151). Signing-policy wording clarified in [PR #152](https://github.com/Ameyanagi/ReShiki/pull/152); release CI shard coverage and Windows reference-fixture UTF-8 handling contributed in [PR #158](https://github.com/Ameyanagi/ReShiki/pull/158).
 - @HiroYokoyama — proposed improved benzene fusion and Kekulé-pattern selection, with regression tests and follow-up review fixes, in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40), and added Ctrl/Cmd drag to copy and Shift drag to lock an axis in [PR #87](https://github.com/Ameyanagi/ReShiki/pull/87).
 
@@ -55,5 +60,35 @@ Local Rust editor naming and molecule-name captions (under review, unreleased): 
 Visible reaction atom maps, reviewed mapping and rigid alignment (under review, unreleased): @Ameyanagi in [PR #294](https://github.com/Ameyanagi/ReShiki/pull/294); [review and native evidence](reaction-atom-mapping-validation.md).
 
 Retained `(+)-lactic acid` in the local naming dock (under review, unreleased): @Ameyanagi; [bounded retained-name correction and native evidence](changes/retained-plus-lactic-acid.md). This complete retained name resolves to the explicit S structure; it does not introduce a general optical-rotation-to-configuration rule.
+
+Office SVG picture export (under review, [PR #290](https://github.com/Ameyanagi/ReShiki/pull/290)): @Ameyanagi. [Review and evidence](changes/office-svg-placement.md).
+
+Under review: Windows window fitting by @Ameyanagi in [PR #273](https://github.com/Ameyanagi/ReShiki/pull/273). Native desktop interaction acceptance remains pending.
+
+Under review: Windows/Linux document-tab launches with per-document Office sessions by @Ameyanagi in [PR #274](https://github.com/Ameyanagi/ReShiki/pull/274). Native desktop and Office save-back acceptance remain pending.
+
+Coordination attachment, in-place chelate closure and endpoint-independent dative
+projection (under review in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)):
+@Ameyanagi, addressing
+[#246](https://github.com/Ameyanagi/ReShiki/issues/246). See the
+[desktop validation record](coordination-desktop-validation.md).
+
+Adaptive calculation budgets and ordered fused-ring aromaticity enumeration
+(under review in [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279)):
+@Ameyanagi, addressing [#245](https://github.com/Ameyanagi/ReShiki/issues/245)
+and [#248](https://github.com/Ameyanagi/ReShiki/issues/248). See the
+[desktop validation record](adaptive-chemistry-limits-validation.md).
+
+Assistant setup and the original guided ethanol image exercise: @Ameyanagi,
+project creator and maintainer; under review in
+[PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
+[Issue #93](https://github.com/Ameyanagi/ReShiki/issues/93) ·
+[Native review and evidence](changes/assistant-setup-review-2026-10-09.md).
+
+Assistant image benchmark, original synthetic fixture cohort and independent
+reference-graph comparison: @Ameyanagi, project creator and maintainer; under
+review in [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281).
+[Issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) ·
+[Method and measured results](assistant-benchmark.md).
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

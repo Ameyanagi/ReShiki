@@ -226,6 +226,13 @@ impl App {
         let command = Entry::command;
         let submenu = Entry::page;
         let mut entries = vec![];
+        if atoms {
+            entries.extend(
+                self.selected_join_commands()
+                    .into_iter()
+                    .map(|c| command(c.menu, c.message, c.enabled)),
+            );
+        }
         if atoms && self.atom_text_target().is_some() {
             entries.push(command(
                 "Edit atom label…",
@@ -268,6 +275,13 @@ impl App {
             entries.push(command(
                 "Create group label…",
                 Message::AtomText(super::atom_text::Action::ContractSelection),
+                true,
+            ));
+        }
+        if reshiki::generic::present(&self.tab.doc) {
+            entries.push(command(
+                "Expand Generic Structures",
+                Message::Generic(super::generic::Action::Expand),
                 true,
             ));
         }
@@ -475,6 +489,11 @@ impl App {
                 entries.push(command(
                     "Move & attach…",
                     Message::Join(super::joining::Action::Begin),
+                    true,
+                ));
+                entries.push(command(
+                    "Coordinate in place…",
+                    Message::Join(super::joining::Action::BeginCoordination),
                     true,
                 ));
             }

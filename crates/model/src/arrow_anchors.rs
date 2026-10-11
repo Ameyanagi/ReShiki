@@ -537,6 +537,42 @@ pub fn reconcile(doc: &mut Document) {
         }
     }
 }
+/// Internal prepared-output proof: the stored arrow is an exact fixed point of
+/// native endpoint reconciliation for this displayed label snapshot. Does not
+/// mutate, synthesize IDs, detach links or bypass ordinary reconciliation.
+/// Caller prepays target/ink lookups under its shared allowance.
+pub(crate) fn certify_resolved(doc: &Document) -> Result<(), String> {
+    for arrow in &doc.arrows {
+        if (arrow.start_anchor.is_some() || arrow.end_anchor.is_some())
+            && arrow.cubic.is_none()
+            && matches!(arrow.kind.as_str(), "curved" | "fishhook")
+        {
+            return Err("Prepared attached arrow still requires native curve normalization".into());
+        }
+        let pen = DEFAULT.world(arrow.appearance().width_pt) * 0.5;
+        for (anchor, endpoint) in [
+            (&arrow.start_anchor, arrow.start),
+            (&arrow.end_anchor, arrow.end),
+        ] {
+            if let Some(anchor) = anchor {
+                let resolved = anchor
+                    .resolved(doc, pen)
+                    .ok_or("Prepared arrow has an unresolved target")?;
+                let center = anchor
+                    .target
+                    .center(doc)
+                    .ok_or("Prepared arrow has a missing target")?;
+                if resolved != endpoint || anchor.offset != delta(resolved, center) {
+                    return Err(
+                        "Prepared arrow is not stable under native endpoint reconciliation".into(),
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn validate(doc: &Document) -> Result<(), String> {
     for a in &doc.atoms {
         let mut ids = HashSet::new();
@@ -560,6 +596,56 @@ pub fn remap(arrow: &mut Arrow, mapping: &HashMap<u64, u64>) {
         }
     }
 }
+/// Remap existing drawing links after atom identity changes in a join.
+/// Callers provide every old atom ID, including unchanged identities, before
+/// reconciliation. A positioned mark can move to another host only when that
+/// exact mark is retained there; equal local numbers alone are insufficient.
+/// Missing marks and collapsed bond targets detach at their cached geometry.
+/// Endpoint/control positions are resolved only after the complete graph edit.
+pub(crate) fn remap_for_join(
+    doc: &mut Document,
+    before_atoms: &[crate::document::Atom],
+    mapping: &HashMap<u64, u64>,
+) {
+    let plans: Vec<_> = doc
+        .arrows
+        .iter()
+        .map(|arrow| {
+            let remapped = |anchor: &Option<Anchor>| {
+                let mut anchor = anchor.clone()?;
+                if let Target::LonePair { atom, mark } = &anchor.target {
+                    let target = *mapping.get(atom)?;
+                    if target != *atom {
+                        let original = before_atoms
+                            .iter()
+                            .find(|a| a.id == *atom)?
+                            .marks
+                            .iter()
+                            .find(|m| m.id == Some(*mark) && lone_pair(m.kind))?;
+                        let retained = doc
+                            .atom(target)?
+                            .marks
+                            .iter()
+                            .find(|m| m.id == Some(*mark) && lone_pair(m.kind))?;
+                        if original != retained {
+                            return None;
+                        }
+                    }
+                }
+                if !anchor.target.remap(mapping) || anchor.target.center(doc).is_none() {
+                    return None;
+                }
+                Some(anchor)
+            };
+            (remapped(&arrow.start_anchor), remapped(&arrow.end_anchor))
+        })
+        .collect();
+    for (arrow, (start, end)) in doc.arrows.iter_mut().zip(plans) {
+        arrow.start_anchor = start;
+        arrow.end_anchor = end;
+    }
+}
+
 /// Called after selected points and targets have received an affine transform.
 /// References to targets outside the selection detach. Kept links rebase their
 /// offset to the transformed endpoint before absolute reconciliation.

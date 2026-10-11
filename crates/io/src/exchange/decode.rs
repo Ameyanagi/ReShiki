@@ -378,6 +378,29 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
                 r.done()?;
                 el.set(p.name, values.join(" "));
             }
+            "CDXElementList" => {
+                let count = i16::from_le_bytes(r.array()?);
+                if count == 0 || count == i16::MIN {
+                    return Err("Invalid element-list count".into());
+                }
+                let mut values = Vec::new();
+                for _ in 0..count.unsigned_abs() {
+                    let n = r.u16()?;
+                    if !(1..=118).contains(&n) {
+                        return Err("Invalid element-list atomic number".into());
+                    }
+                    values.push(n.to_string());
+                }
+                r.done()?;
+                el.set(
+                    p.name,
+                    format!(
+                        "{}{}",
+                        if count < 0 { "NOT " } else { "" },
+                        values.join(" ")
+                    ),
+                );
+            }
             "CDXRepresentsProperty" => {
                 let id = r.u32()?;
                 let attr = r.u16()?;

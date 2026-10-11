@@ -1,5 +1,52 @@
 use super::*;
 
+#[test]
+fn operational_capacity_is_bounded_by_independent_structural_limits() {
+    assert!(Capacity::for_heap(0).validate().is_err());
+    assert!(Capacity::for_heap(512 * 1024 - 1).validate().is_err());
+    assert_eq!(Capacity::for_heap(64 * 1024 * 1024).atoms, 128);
+    assert_eq!(Capacity::for_heap(256 * 1024 * 1024).atoms, 512);
+    let high = Capacity::for_heap(usize::MAX);
+    assert_eq!(high.atoms, MAX_ATOMS);
+    assert_eq!(high.bonds, 4 * MAX_ATOMS);
+    assert!(high.bonds <= MAX_BONDS);
+    assert_eq!(high.coordinates, MAX_COORDINATES);
+    assert!(high.validate().is_ok());
+    assert!(
+        Capacity {
+            atoms: MAX_ATOMS + 1,
+            ..high
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        Capacity {
+            bonds: MAX_BONDS + 1,
+            ..high
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        Capacity {
+            coordinates: MAX_COORDINATES + 1,
+            ..high
+        }
+        .validate()
+        .is_err()
+    );
+    let mut request = ethanol(ForceField::MMFF94s);
+    request.atoms = vec![request.atoms[0].clone(); 513];
+    request.bonds.clear();
+    assert!(request.validate_capacity(Capacity::default()).is_err());
+    assert!(request.validate_capacity(high).is_ok());
+    request
+        .atoms
+        .resize(MAX_ATOMS + 1, request.atoms[0].clone());
+    assert!(request.validate().is_err());
+}
+
 fn ethanol(field: ForceField) -> Request {
     Request {
         atoms: [6, 6, 8]

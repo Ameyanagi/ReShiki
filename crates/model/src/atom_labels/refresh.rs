@@ -42,7 +42,11 @@ impl Refresh {
         let mut refresh = Self::default();
         let mut atoms = 0;
         let mut bonds = 0;
-        for component in components(source) {
+        let (components, unresolved) = components(source);
+        if unresolved {
+            refresh.notice = Some("Expand Generic Structures before refreshing chemical labels for this molecular component".into());
+        }
+        for component in components {
             let Some(first) = component.atoms.first() else {
                 continue;
             };
@@ -130,7 +134,7 @@ fn compute(source: &Document) -> Result<Computed, String> {
     })
 }
 
-fn components(document: &Document) -> Vec<Document> {
+fn components(document: &Document) -> (Vec<Document>, bool) {
     let mut adjacent = HashMap::<u64, Vec<u64>>::new();
     for (a, b) in document.bonds.iter().map(|b| (b.a, b.b)).chain(
         document
@@ -160,7 +164,25 @@ fn components(document: &Document) -> Vec<Document> {
         }
         result.push(Document::default());
     }
+    // Mark dependencies using the existing atom/component index before any
+    // component copy or cache comparison. Never copy large typed definitions
+    // into every analysis fragment or reuse an earlier concrete cache entry.
+    let mut unresolved = vec![false; result.len()];
+    for id in crate::generic::atom_references(document) {
+        if let Some(flag) = component
+            .get(&id)
+            .and_then(|index| unresolved.get_mut(*index))
+        {
+            *flag = true;
+        }
+    }
     for atom in &document.atoms {
+        if component
+            .get(&atom.id)
+            .is_some_and(|index| unresolved.get(*index).copied().unwrap_or(true))
+        {
+            continue;
+        }
         // Display settings, cached labels and captions are not chemical input.
         // Keep stable IDs, all atom/bond chemistry, coordinates and projection.
         let mut atom = atom.clone();
@@ -174,6 +196,12 @@ fn components(document: &Document) -> Vec<Document> {
         }
     }
     for bond in &document.bonds {
+        if component
+            .get(&bond.a)
+            .is_some_and(|index| unresolved.get(*index).copied().unwrap_or(true))
+        {
+            continue;
+        }
         let mut bond = bond.clone();
         bond.cip_label = None;
         bond.color = crate::palette::Color::Ink;
@@ -186,7 +214,13 @@ fn components(document: &Document) -> Vec<Document> {
             part.bonds.push(bond);
         }
     }
-    result
+    let any_unresolved = unresolved.iter().any(|value| *value);
+    let ordinary = result
+        .into_iter()
+        .zip(unresolved)
+        .filter_map(|(part, unresolved)| (!unresolved).then_some(part))
+        .collect();
+    (ordinary, any_unresolved)
 }
 
 #[cfg(test)]

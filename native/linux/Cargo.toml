@@ -12,7 +12,7 @@ wayland-qa = ["smithay-clipboard/wayland-qa", "dep:tokio"]
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rustix = { version = "1.1.4", features = ["event", "fs", "pipe"] }
+rustix = { version = "1.1.4", features = ["event", "fs", "pipe", "net", "process"] }
 x11rb = "0.13.2"
 raw-window-handle = "=0.6.2"
 # Must resolve to the same patched instance used by Iced/window_clipboard.

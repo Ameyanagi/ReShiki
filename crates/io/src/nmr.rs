@@ -57,6 +57,8 @@ pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String
     if atom_ids.len() > core::MAX_ATOMS {
         return Err("NMR prediction supports at most 128 atoms".into());
     }
+    // Reject before copying a component or scheduling concrete prediction.
+    let fingerprint = fingerprint(document, atom_ids)?;
     let source = editing::analysis_document(document, atom_ids);
     if source
         .atoms
@@ -67,7 +69,6 @@ pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String
             "NMR does not support multi-centre or unresolved abbreviation attachments".into(),
         );
     }
-    let fingerprint = fingerprint(document, atom_ids)?;
     Ok(Request {
         source,
         atom_ids: atom_ids.clone(),
@@ -77,8 +78,15 @@ pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String
 
 /// A presentation-independent identity for linked results. Position, projection
 /// paint, labels, atom-map numbers and collapsed abbreviation visibility are
-/// excluded. Stored atom/bond chemistry and stable IDs are retained.
+/// excluded. Stored atom/bond chemistry and stable IDs are retained. Generic
+/// dependencies in these connected components reject; unrelated components do
+/// not change a pending or completed prediction identity.
 pub fn fingerprint(document: &Document, ids: &[u64]) -> Result<String, String> {
+    if crate::generic::component_intersects(document, ids) {
+        return Err(
+            "Expand Generic Structures before predicting NMR for this molecular component".into(),
+        );
+    }
     let wanted: std::collections::BTreeSet<_> = ids.iter().copied().collect();
     let mut atoms: Vec<_> = document
         .atoms

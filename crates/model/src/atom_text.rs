@@ -34,7 +34,9 @@ impl std::fmt::Display for Mode {
     }
 }
 pub fn description(text: &str, mode: Mode) -> &'static str {
-    if mode == Mode::Text {
+    if mode != Mode::Text && text.contains(',') {
+        "A finite list of element or chemical group alternatives. Expand Generic Structures generates each combination."
+    } else if mode == Mode::Text {
         "Text on a dummy atom; existing bonds stay connected."
     } else if crate::ligands::LABELS.contains(&text.trim()) {
         "A real Cp (C5H5−) or Cp* (C10H15−) ligand with a five-center attachment. Metal charge stays as entered."
@@ -58,6 +60,11 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
         return Err("Use a single line of printable text".into());
     }
     let text = text.trim();
+    if mode != Mode::Text
+        && let Some(candidate) = crate::generic::apply_label(doc, id, text)?
+    {
+        return Ok(candidate);
+    }
     if text.is_empty() || text.chars().count() > 32 {
         return Err("Enter 1–32 characters for the atom label".into());
     }
@@ -101,8 +108,19 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
         if doc.abbreviation(id).is_some_and(|a| a.label == text) {
             return Ok(doc.clone());
         }
+        if doc.generic.repeats.iter().any(|u| u.members.contains(&id)) {
+            return Err(
+                "Clear the repeating unit before replacing a member with a chemical group".into(),
+            );
+        }
+        let mut clean = doc.clone();
+        clean.generic.alternatives.retain(|s| s.atom != id);
+        clean.generic.links.retain(|s| s.atom != id);
+        if let Some(atom) = clean.atom_mut(id) {
+            atom.display.variable = None;
+        }
         let mut result = crate::chemistry::abbreviations::replace(
-            doc,
+            &clean,
             &selected,
             formula.map(|f| f.0).unwrap_or(text),
         )
@@ -155,6 +173,8 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
     let variable =
         (new_element == "*" && (text != "*" || mode == Mode::Text)).then(|| text.to_owned());
     let mut result = doc.clone();
+    result.generic.alternatives.retain(|s| s.atom != id);
+    result.generic.links.retain(|s| s.atom != id);
     let a = result
         .atom_mut(id)
         .ok_or("The atom is no longer available")?;
