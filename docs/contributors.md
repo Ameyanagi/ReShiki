@@ -4,8 +4,13 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
-Coordination/Join, generic structures and adaptive chemistry integration:
-@Ameyanagi in [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300).
+Coordination/Join, generic structures, adaptive chemistry, Assistant and
+Windows/Office integration (merged, unreleased):
+@Ameyanagi in [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300), including
+the adaptive/Assistant source from [PR #299](https://github.com/Ameyanagi/ReShiki/pull/299).
+The source-pinned Windows review-build route in [PR #301](https://github.com/Ameyanagi/ReShiki/pull/301)
+is merged; current combined native Windows acceptance, including measured display
+scale above 100%, remains pending.
 [Combined native review](changes/coordination-join-integration.md) records the
 supported behavior and deferred Join/Co(en)3 accuracy work; issue #246 remains open.
 
@@ -53,41 +58,68 @@ Offline atom-linked HOSE NMR prediction, compact palette that preserves drawing 
 
 The drawing and NMR contributions above were merged, unreleased, in [Integration PR #297](https://github.com/Ameyanagi/ReShiki/pull/297). Its [combined macOS native results](changes/drawing-tools-integration.md) cover the floating NMR report, exposed cage rim, attached cubic-arrow Stretch and save/fresh-process reopen. Original branch evidence remains historical; current combined Windows native acceptance remains pending.
 
-Local Rust chemical naming and editor integration (under review): @Ameyanagi. The separate parser is introduced in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291); the [guide and native review](chemical-naming-rust.md) describe the bounded app workflow.
+Local Rust chemical naming and editor integration (merged, unreleased): @Ameyanagi. The separate parser is introduced in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291); the [guide and native review](chemical-naming-rust.md) describe the bounded app workflow.
 
-Local Rust editor naming and molecule-name captions (under review, unreleased): @Ameyanagi in [PR #292](https://github.com/Ameyanagi/ReShiki/pull/292) and [PR #293](https://github.com/Ameyanagi/ReShiki/pull/293); [Import dock and caption review](changes/molecule-name-label.md). The upstream-derived OPSIN parser retains its separate MIT license and attribution in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291).
+Local Rust editor naming and molecule-name captions (merged, unreleased): @Ameyanagi in [PR #292](https://github.com/Ameyanagi/ReShiki/pull/292) and [PR #293](https://github.com/Ameyanagi/ReShiki/pull/293); [Import dock and caption review](changes/molecule-name-label.md). The upstream-derived OPSIN parser retains its separate MIT license and attribution in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291).
 
-Visible reaction atom maps, reviewed mapping and rigid alignment (under review, unreleased): @Ameyanagi in [PR #294](https://github.com/Ameyanagi/ReShiki/pull/294); [review and native evidence](reaction-atom-mapping-validation.md).
+Visible reaction atom maps, reviewed mapping and rigid alignment (merged, unreleased): @Ameyanagi in [PR #294](https://github.com/Ameyanagi/ReShiki/pull/294); [review and native evidence](reaction-atom-mapping-validation.md).
 
-Retained `(+)-lactic acid` in the local naming dock (under review, unreleased): @Ameyanagi; [bounded retained-name correction and native evidence](changes/retained-plus-lactic-acid.md). This complete retained name resolves to the explicit S structure; it does not introduce a general optical-rotation-to-configuration rule.
+Retained `(+)-lactic acid` in the local naming dock (merged, unreleased): @Ameyanagi; [bounded retained-name correction and native evidence](changes/retained-plus-lactic-acid.md). This complete retained name resolves to the explicit S structure; it does not introduce a general optical-rotation-to-configuration rule.
 
-Office SVG picture export (under review, [PR #290](https://github.com/Ameyanagi/ReShiki/pull/290)): @Ameyanagi. [Review and evidence](changes/office-svg-placement.md).
+The local naming, caption and reaction-map contributions above were merged,
+unreleased, in [Integration PR #298](https://github.com/Ameyanagi/ReShiki/pull/298).
+Their original review images retain their identified producers.
 
-Under review: Windows window fitting by @Ameyanagi in [PR #273](https://github.com/Ameyanagi/ReShiki/pull/273). Native desktop interaction acceptance remains pending.
+Multi-atom Join with retained survivor identity/style and fixed surrounding
+atoms (merged, unreleased): @Ameyanagi in [PR #295](https://github.com/Ameyanagi/ReShiki/pull/295),
+included in [Integration PR #300](https://github.com/Ameyanagi/ReShiki/pull/300).
+[Controls and restrictions](fragment-joining.md); selection/placement accuracy remains TODO.
 
-Under review: Windows/Linux document-tab launches with per-document Office sessions by @Ameyanagi in [PR #274](https://github.com/Ameyanagi/ReShiki/pull/274). Native desktop and Office save-back acceptance remain pending.
+Typed generic structures and finite expansion (merged, unreleased): @Ameyanagi
+in [PR #295](https://github.com/Ameyanagi/ReShiki/pull/295), included in
+[Integration PR #300](https://github.com/Ameyanagi/ReShiki/pull/300).
+[Supported scope](generic-structures.md) and [actual combined review](changes/coordination-join-integration.md)
+retain the original variable-position layout defect and its saved example;
+the correction was merged separately in [PR #302](https://github.com/Ameyanagi/ReShiki/pull/302).
+
+Ring attachment placement, bounded chemical-product deduplication and native
+review (merged, unreleased): @Ameyanagi in
+[PR #302](https://github.com/Ameyanagi/ReShiki/pull/302).
+The [source-pinned review](https://github.com/Ameyanagi/ReShiki/blob/1259f4a357558079a2c8556a591d552118864606/docs/changes/generic-ring-expansion.md)
+records the actual macOS producer, passing local model tests, native
+Undo/Redo/save/fresh-process reopen and retained placement/work limits.
+[Cross-platform CI](https://github.com/Ameyanagi/ReShiki/actions/runs/38110013391) passes.
+Join/Co(en)3 accuracy remains TODO;
+issue #246 stays open.
+
+Office SVG picture export (merged, unreleased, [PR #290](https://github.com/Ameyanagi/ReShiki/pull/290)): @Ameyanagi. [Review and evidence](changes/office-svg-placement.md).
+
+Merged, unreleased: Windows window fitting by @Ameyanagi in [PR #273](https://github.com/Ameyanagi/ReShiki/pull/273). Combined native Windows interaction acceptance, including measured display scale above 100%, remains pending.
+
+Merged, unreleased: Windows/Linux document-tab launches with per-document Office sessions by @Ameyanagi, originating in closed [PR #274](https://github.com/Ameyanagi/ReShiki/pull/274) and integrated through [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300). Native desktop and Office save-back acceptance remain pending.
 
 Coordination attachment, in-place chelate closure and endpoint-independent dative
-projection (under review in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)):
+projection (merged, unreleased; [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)):
 @Ameyanagi, addressing
 [#246](https://github.com/Ameyanagi/ReShiki/issues/246). See the
 [desktop validation record](coordination-desktop-validation.md).
 
 Adaptive calculation budgets and ordered fused-ring aromaticity enumeration
-(under review in [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279)):
+(merged, unreleased; [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279)):
 @Ameyanagi, addressing [#245](https://github.com/Ameyanagi/ReShiki/issues/245)
 and [#248](https://github.com/Ameyanagi/ReShiki/issues/248). See the
 [desktop validation record](adaptive-chemistry-limits-validation.md).
 
 Assistant setup and the original guided ethanol image exercise: @Ameyanagi,
-project creator and maintainer; under review in
+project creator and maintainer; merged, unreleased, in
 [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
 [Issue #93](https://github.com/Ameyanagi/ReShiki/issues/93) ·
 [Native review and evidence](changes/assistant-setup-review-2026-10-09.md).
 
 Assistant image benchmark, original synthetic fixture cohort and independent
-reference-graph comparison: @Ameyanagi, project creator and maintainer; under
-review in [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281).
+reference-graph comparison: @Ameyanagi, project creator and maintainer; merged,
+unreleased, through [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300),
+originating in closed [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281).
 [Issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) ·
 [Method and measured results](assistant-benchmark.md).
 
