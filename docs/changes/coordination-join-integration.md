@@ -36,7 +36,7 @@ Select a donor nitrogen and cobalt, press Cmd+J, and repeat for each donor.
 
 | Before adding contacts                                                                                              | After six contacts; arrow appearance remains TODO                                                                                                             |
 | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Co(en)3 input before the six donor-to-cobalt contacts](../images/coordination-join-integration/co-en3-before.png) | ![All six donor-to-cobalt arrows are visible, with unfinished head and tip proportions](../images/coordination-join-integration/co-en3-six-contacts-todo.png) |
+| ![Co(en)3 input before the six donor-to-cobalt contacts](../images/coordination-join-integration/co-en3-before.jpg) | ![All six donor-to-cobalt arrows are visible, with unfinished head and tip proportions](../images/coordination-join-integration/co-en3-six-contacts-todo.jpg) |
 
 Both views use 221% zoom, light theme, JACS / ACS, Arial 10 pt and keyboard
 drawing off. They are full 2560 × 1704 captures. Automatic hydrogen-label and
@@ -55,7 +55,7 @@ it, and native save followed by actual tab closure/reopen retains the products.
 The source stays unchanged. **The output layout is defective**, as shown below;
 the graph and history checks do not qualify its visual quality.
 
-![Six expanded products with unresolved ring-crossing substituent bonds](../images/coordination-join-integration/variable-arene-layout-todo.png)
+![Six expanded products with unresolved ring-crossing substituent bonds](../images/coordination-join-integration/variable-arene-layout-todo.jpg)
 
 This output view is at 126% with keyboard drawing on. It is a defect record,
 not a matched comparison or an accepted drawing example. The
