@@ -19,6 +19,13 @@ The coordination/Join, generic, adaptive chemistry, Assistant and Windows/Office
 
 - **Free-base porphine (merged, unreleased):** place a validated 21H,23H core with equal bonds and two inward N–H labels, or construct it from a supplied carbon seed using exact shared-pivot copies. Meso-phenyl bridge stretching keeps both rings rigid. [Guide](porphine-core.md) · [Desktop evidence and reusable images](changes/porphine-core.md) · [PR #287](https://github.com/Ameyanagi/ReShiki/pull/287) · @Ameyanagi.
 
+- **Fixed hydrogen-label directions (under review):** reflect or rotate selected atoms while keeping fixed hydrogen labels on the corresponding side. Porphine's N–H labels remain inward after a vertical flip, Undo/Redo and reopening the saved drawing; arbitrary rotations select the nearest cardinal side. [Matched native review and chemistry checks](changes/reflected-hydrogen-labels.md) · [PR #308](https://github.com/Ameyanagi/ReShiki/pull/308) · @Ameyanagi. [Issue #88](https://github.com/Ameyanagi/ReShiki/issues/88) remains open for reverse native clipboard exchange.
+
+![Reflected porphine retains both inward N–H labels](images/reflected-hydrogen-labels/after.png)
+
+Reusable caption: Porphine's two N–H labels remain inward after a vertical flip,
+Undo/Redo and reopening the saved drawing.
+
 - **Local Rust chemical naming (merged, unreleased):** parse supported names into editable structures and generate verified local systematic names from complete molecules. Both directions work without a naming API or Java runtime; reverse naming has a declared organic subset and does not claim every IUPAC or preferred name. [Guide](chemical-naming-rust.md) · [Native review](changes/rust-chemical-naming.md) · [Rust backend PR #291](https://github.com/Ameyanagi/ReShiki/pull/291) · @Ameyanagi.
 
 ![Local Rust parsing produces an editable ethanol preview](images/chemical-naming-rust/ethanol-local-parse-preview.jpg)

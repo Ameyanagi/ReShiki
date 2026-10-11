@@ -223,6 +223,7 @@ pub fn rotate(
             let (x, y) = (f64::from(p.x), f64::from(p.y));
             Point::new((x * c - y * s) as f32, (x * s + y * c) as f32)
         };
+        super::transform_hydrogen_positions(&mut candidate, &ids, vector);
         super::map_positions(
             &mut candidate,
             &ids,
