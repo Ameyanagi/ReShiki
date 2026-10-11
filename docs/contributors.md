@@ -58,6 +58,10 @@ Chemically defined symmetric free-base porphine template and supplied-seed
 construction: @Ameyanagi, merged, unreleased;
 [review evidence](changes/porphine-core.md). [PR #287](https://github.com/Ameyanagi/ReShiki/pull/287).
 
+Fixed hydrogen-label reflections and rotations (under review): @Ameyanagi in
+[PR #308](https://github.com/Ameyanagi/ReShiki/pull/308);
+[matched native review and regression checks](changes/reflected-hydrogen-labels.md).
+
 Drawing-tool defaults, orbital snapping and label readability: @Ameyanagi,
 merged, unreleased; original review in [PR #277](https://github.com/Ameyanagi/ReShiki/pull/277) for
 [#250](https://github.com/Ameyanagi/ReShiki/issues/250),
