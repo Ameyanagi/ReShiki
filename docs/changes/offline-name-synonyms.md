@@ -5,9 +5,9 @@ Rust name-to-structure and verified structure-to-systematic-name workflows.
 Their ordinary results carried no common-name or synonym list. This follow-up
 adds a finite, provenance-backed alias catalog without a naming service or a
 new runtime dependency. [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309)
-is under review and unreleased.
-Focused tests and the qualified macOS native workflow below passed; publication
-and its exact-head CI remain separate checks.
+is merged and unreleased. Focused tests, the qualified macOS native workflow
+below and publication-head CI passed; their distinct producers and limits are
+recorded below.
 
 ## User behavior
 
@@ -32,7 +32,7 @@ This finite selection is not a complete synonym database or universal IUPAC
 naming implementation. Optical signs are never interpreted as a general
 R/S rule.
 
-See the [user guide](../chemical-naming-rust.md#curated-offline-aliases--under-review)
+See the [user guide](../chemical-naming-rust.md#curated-offline-aliases)
 and [catalog sources, coverage and checks](../../src/naming/catalog/README.md).
 Selected OPSIN 2.9.0 resources retain MIT terms; the existing ChEBI:422
 `(+)-lactic acid` fact retains CC BY 4.0 attribution. [Notices](../../licenses/name-aliases/NOTICE)
@@ -112,7 +112,7 @@ from v2; the chemistry, catalog and identity code are unchanged. All 19 owned
 compiler artifacts were rebuilt, and source/index guards passed. No schema,
 parser-resource, reverse-grammar, process-limit or runtime prerequisite changed.
 
-### Integration base and remaining qualification
+### Integration base and publication checks
 
 PR #309 is based on main
 `1cde4b4ec32a3da96df0054bc05eb1a5e471b6e4`, after the independently validated
@@ -128,8 +128,13 @@ Configured source-commit hooks passed in 134.38 seconds at
 `ed6b252c4ac56fd903d7c239e536b8ce183649f9`, including all-feature Cargo check
 and Clippy, Rust formatting, Oxfmt and Oxlint. The branch was then rebased
 without edits to its naming implementation; those hook results retain their
-pre-rebase qualification. Exact publication-head CI remains pending. This
-follow-up claims no new export or native Windows naming acceptance.
+pre-rebase qualification. At publication head
+[`9a2f8637`](https://github.com/Ameyanagi/ReShiki/commit/9a2f8637934f7e76bdc0d3cc334434cbdbbd549e),
+CI completed with 21 successful and four expected skipped checks, including the
+[native-host checks](https://github.com/Ameyanagi/ReShiki/actions/runs/38137349387).
+PR #309 merged at
+[`dcc65df6`](https://github.com/Ameyanagi/ReShiki/commit/dcc65df65ed7b853efc6d67ea73c1d744697d787).
+This follow-up claims no new export or native Windows naming acceptance.
 
 ### Scoped checks
 

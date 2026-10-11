@@ -1,6 +1,6 @@
 # Windows NMR surface shadows
 
-[PR #310](https://github.com/Ameyanagi/ReShiki/pull/310) · @Ameyanagi · under review, unreleased.
+[PR #310](https://github.com/Ameyanagi/ReShiki/pull/310) · @Ameyanagi · merged, unreleased.
 
 With a floating NMR report open and the inspector expanded, repeated control
 interactions could accumulate a black rounded shadow over most of the report on
@@ -51,6 +51,15 @@ reports, collapsed titles and the label popup at scale factors 1, 1.25 and 2.
 Each performs 16 partial redraws and requires pixels outside the damaged region
 to remain unchanged. A separate style test checks both themes and the retained
 non-Windows appearance.
+
+At final PR head
+[`5a6baecf`](https://github.com/Ameyanagi/ReShiki/commit/5a6baecf52855e7d47bb7e2834392b256ed0d3a7),
+[Checks run 38140195238](https://github.com/Ameyanagi/ReShiki/actions/runs/38140195238)
+passed. After the [body-only contribution-license check](https://github.com/Ameyanagi/ReShiki/actions/runs/38142718286)
+also passed, the final rollup was 25 successful and four expected skipped checks.
+PR #310 merged at
+[`6d989010`](https://github.com/Ameyanagi/ReShiki/commit/6d989010a17966b81b7cb8d0092f4d1363ea96f8).
+These CI results do not change the native producers identified above.
 
 All nine active application shadow sites now use the platform guard. The unused
 iced `auto_scroll` shadow is not an active ReShiki feature. Native color-popover,

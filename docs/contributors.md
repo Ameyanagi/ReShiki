@@ -34,7 +34,7 @@ Nightly naming-helper configuration and regression coverage for all six release 
 
 Published Windows Nightly verification, actual screenshots and route/DPI receipts: @Ameyanagi in [PR #306](https://github.com/Ameyanagi/ReShiki/pull/306); [review and repeat steps](changes/nightly-windows-20261011.md).
 
-Windows NMR surface shadow correction and matched native/partial-redraw regression coverage (under review): @Ameyanagi in [PR #310](https://github.com/Ameyanagi/ReShiki/pull/310); [review and reusable images](changes/windows-nmr-shadows.md).
+Windows NMR surface shadow correction and matched native/partial-redraw regression coverage (merged, unreleased): @Ameyanagi in [PR #310](https://github.com/Ameyanagi/ReShiki/pull/310); [review and reusable images](changes/windows-nmr-shadows.md).
 
 Merged, unreleased: @Ameyanagi — checked numbered ChemDraw attachment import and original silicon fixtures for [issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) in [PR #284](https://github.com/Ameyanagi/ReShiki/pull/284), with [Mac File Open/native save/reopen and controlled Windows ChemDraw/PowerPoint clipboard evidence](changes/chemdraw-numbered-paste.md).
 
@@ -87,7 +87,7 @@ The local naming, caption and reaction-map contributions above were merged,
 unreleased, in [Integration PR #298](https://github.com/Ameyanagi/ReShiki/pull/298).
 Their original review images retain their identified producers.
 
-Curated offline chemical-name aliases (under review, unreleased): @Ameyanagi in
+Curated offline chemical-name aliases (merged, unreleased): @Ameyanagi in
 [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309). The finite catalog adds
 40 provenance-labelled names for 30 exact identities, with separate systematic
 name results, Copy and linked-caption actions, without a naming API or Java

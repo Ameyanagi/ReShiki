@@ -93,6 +93,6 @@ revision; its 28 app tests and five explicit renderer tests passed separately.
 Qualified macOS native checks and independent saved-file audits verified the
 ethanol and S-lactic graphs and linked alias captions. Final v3 also verified
 R/unspecified/no-alias Details results without inserting those graphs. This
-follow-up remains under review and unreleased. See the
+follow-up is merged, unreleased, in [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309). See the
 [review and compact identity audit](../../../docs/changes/offline-name-synonyms.md)
 for the exact producers, capture conditions, history attribution and limits.
