@@ -1,3 +1,4 @@
+use super::test_support::{accept, ethyl_acetate_doc, predicted};
 use super::*;
 use reshiki::document::Point;
 
@@ -482,10 +483,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
     };
     for size in [Size::new(940., 620.), Size::new(1280., 820.)] {
         let mut app = app();
-        app.tab.doc = Document::from_json(include_bytes!(
-            "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
-        ))
-        .unwrap();
+        app.tab.doc = ethyl_acetate_doc();
         app.tab.selected.clear();
         let _ = app.inspector_action(super::super::inspector::Action::Section(
             super::super::inspector::Section::Molecule,
@@ -676,10 +674,7 @@ async fn floating_nmr_preserves_canvas_and_owns_only_its_pointer_input() {
     for size in [Size::new(940., 620.), Size::new(1280., 820.)] {
         for inspector in [false, true] {
             let mut app = app();
-            app.tab.doc = Document::from_json(include_bytes!(
-                "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
-            ))
-            .unwrap();
+            app.tab.doc = ethyl_acetate_doc();
             app.tab.saved = app.tab.doc.clone();
             app.tab.busy = false;
             app.tab.selected.clear();
@@ -963,10 +958,7 @@ async fn compact_nmr_scrolls_to_later_sites_without_scrolling_the_drawing() {
 
 fn ethyl_acetate() -> App {
     let (mut app, _) = App::new();
-    app.tab.doc = Document::from_json(include_bytes!(
-        "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
-    ))
-    .unwrap();
+    app.tab.doc = ethyl_acetate_doc();
     app.tab.saved = app.tab.doc.clone();
     app.tab.selected.clear();
     app.tab.busy = false;
@@ -1284,10 +1276,7 @@ async fn tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls() {
     ui.redraw(&mut app);
     assert!(!app.inspector_open);
     assert!(!app.tab.nmr.docked);
-    app.tab.doc = Document::from_json(include_bytes!(
-        "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
-    ))
-    .unwrap();
+    app.tab.doc = ethyl_acetate_doc();
     app.tab.saved = app.tab.doc.clone();
     let _ = app.nmr_action(Action::Open);
     finish_prediction(&mut app);
@@ -2479,4 +2468,202 @@ fn unrelated_generic_definition_keeps_pending_result_and_nmr_labels_through_hist
         engine::fingerprint(&app.tab.doc, &request.atom_ids).unwrap(),
         request.fingerprint
     );
+}
+
+const STATUS_SENTINEL: &str = "Existing status sentinel";
+const NOTICE_SENTINEL: &str = "Existing NMR notice";
+const PREDICTION_ERROR: &str = "Expected dataset diagnostic";
+const EXPORT_ERROR: &str = "Could not write predicted NMR shifts";
+
+// Hard-coded so that a wording change in the method, data version, conditions,
+// limitations or attribution fails these tests instead of updating both sides.
+const PROVENANCE: &str = concat!(
+    "HOSE spherical environments · median · ReShiki v1. ",
+    "nmrshiftdb2 2026-03-15 · measured CDCl3 subset v1. ",
+    "CDCl3; recorded temperature 273–323 K, pooled without temperature/concentration correction. ",
+    "Connectivity-only 2D environments do not distinguish E/Z or relative configurations, ",
+    "stereoisomers, or resolve diastereotopic H. Multiple attached H are an unresolved group ",
+    "median, not an assigned peak. Exchangeable H, charged/radical structures, metals and ",
+    "non-default isotope labels are unsupported. Reference spread is descriptive and is not a ",
+    "calibrated confidence interval.. ",
+    "Contains information from nmrshiftdb2 (https://nmrshiftdb.nmr.uni-koeln.de), available ",
+    "under the nmrshiftdb2 Database License ",
+    "(https://svn.code.sf.net/p/nmrshiftdb2/code/trunk/snapshots/nmrshiftdb2datalicense.txt).",
+);
+
+fn description_with_provenance(prefix: &str) -> String {
+    format!("{prefix} {PROVENANCE}")
+}
+
+#[test]
+fn finished_prediction_status_text_pins_both_supported_ethyl_acetate_reports() {
+    const H1_STATUS: &str = "¹H NMR prediction · 3/3 supported atom-linked sites";
+    const C13_STATUS: &str = "¹³C NMR prediction · 4/4 supported atom-linked sites";
+    const H1_DESCRIPTION: &str = "Status: ¹H prediction: 3 of 3 atom-linked sites supported.";
+    const C13_DESCRIPTION: &str = "Status: ¹³C prediction: 4 of 4 atom-linked sites supported.";
+
+    for (nucleus, count, status, description) in [
+        (Nucleus::H1, 3, H1_STATUS, H1_DESCRIPTION),
+        (Nucleus::C13, 4, C13_STATUS, C13_DESCRIPTION),
+    ] {
+        let mut app = ethyl_acetate();
+        app.status = STATUS_SENTINEL.into();
+        app.error = true;
+        app.tab.nmr.notice = Some(NOTICE_SENTINEL.into());
+        let report = predicted(&app.tab.doc, nucleus);
+        assert_eq!(report.rows.len(), count);
+        assert_eq!(
+            report
+                .rows
+                .iter()
+                .filter(|row| row.statistics.is_some())
+                .count(),
+            count
+        );
+        accept(&mut app, report);
+
+        assert_eq!(app.status, status);
+        assert!(!app.error);
+        assert_eq!(app.tab.nmr.notice, None);
+        assert_eq!(
+            panel_description(&app.tab.nmr),
+            description_with_provenance(description)
+        );
+    }
+}
+
+#[test]
+fn failed_prediction_status_text_pins_error_and_notice() {
+    let mut app = ethyl_acetate();
+    let _ = app.nmr_action(Action::Predict(Nucleus::H1));
+    let key = app.tab.nmr.pending.clone().unwrap();
+    let _ = app.nmr_action(Action::Finished(key, Err(PREDICTION_ERROR.into())));
+
+    assert_eq!(app.status, PREDICTION_ERROR);
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.notice.as_deref(), Some(PREDICTION_ERROR));
+    assert_eq!(app.tab.nmr.pending, None);
+    assert!(app.tab.nmr.result.is_none());
+    assert_eq!(
+        panel_description(&app.tab.nmr),
+        description_with_provenance("Status: Expected dataset diagnostic.")
+    );
+}
+
+// Current behavior: selecting a result preserves the error flag and notice.
+#[test]
+fn selected_carbon_status_text_pins_linked_atom() {
+    let mut app = ethyl_acetate();
+    let report = predicted(&app.tab.doc, Nucleus::C13);
+    let atom_id = report.rows[0].atom_id;
+    accept(&mut app, report);
+    app.error = true;
+    app.tab.nmr.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::Select(0));
+
+    assert_eq!(
+        app.status,
+        format!("NMR prediction linked to atom #{atom_id}")
+    );
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.notice.as_deref(), Some(NOTICE_SENTINEL));
+    assert_eq!(app.tab.selected, [atom_id]);
+}
+
+// Current behavior: selecting a result preserves the error flag and notice.
+#[test]
+fn selected_proton_status_text_pins_unresolved_attached_hydrogen_group() {
+    const UNRESOLVED_GROUP: &str = " · unresolved attached-H group";
+    let mut app = ethyl_acetate();
+    let report = predicted(&app.tab.doc, Nucleus::H1);
+    let index = report
+        .rows
+        .iter()
+        .position(|row| row.hydrogen_count > 1)
+        .unwrap();
+    let atom_id = report.rows[index].atom_id;
+    accept(&mut app, report);
+    app.error = true;
+    app.tab.nmr.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::Select(index));
+
+    assert_eq!(
+        app.status,
+        format!("NMR prediction linked to atom #{atom_id}{UNRESOLVED_GROUP}")
+    );
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.notice.as_deref(), Some(NOTICE_SENTINEL));
+    assert_eq!(app.tab.selected, [atom_id]);
+}
+
+// Current behavior: export success clears the error flag while preserving the notice.
+#[test]
+fn successful_export_status_text_pins_relative_tsv_path() {
+    const EXPORTED_STATUS: &str = "Exported predicted NMR shifts to Predicted NMR shifts.tsv";
+    let mut app = ethyl_acetate();
+    app.status = STATUS_SENTINEL.into();
+    app.error = true;
+    app.tab.nmr.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::Exported(Ok(Some(std::path::PathBuf::from(
+        "Predicted NMR shifts.tsv",
+    )))));
+
+    assert_eq!(app.status, EXPORTED_STATUS);
+    assert!(!app.error);
+    assert_eq!(app.tab.nmr.notice.as_deref(), Some(NOTICE_SENTINEL));
+}
+
+// Current behavior: cancellation preserves even an existing error and notice.
+#[test]
+fn cancelled_export_status_text_preserves_sentinels() {
+    let mut app = ethyl_acetate();
+    app.status = STATUS_SENTINEL.into();
+    app.error = true;
+    app.tab.nmr.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::Exported(Ok(None)));
+
+    assert_eq!(app.status, STATUS_SENTINEL);
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.notice.as_deref(), Some(NOTICE_SENTINEL));
+}
+
+// Current behavior: export errors change the status without changing the notice.
+#[test]
+fn failed_export_status_text_pins_error_and_retains_notice() {
+    let mut app = ethyl_acetate();
+    app.status = STATUS_SENTINEL.into();
+    app.error = false;
+    app.tab.nmr.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::Exported(Err(EXPORT_ERROR.into())));
+
+    assert_eq!(app.status, EXPORT_ERROR);
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.notice.as_deref(), Some(NOTICE_SENTINEL));
+}
+
+#[test]
+fn panel_description_pins_no_result_pending_and_notice_text() {
+    let mut app = ethyl_acetate();
+    assert_eq!(
+        panel_description(&app.tab.nmr),
+        description_with_provenance("Status: No prediction result.")
+    );
+    app.tab.nmr.notice = Some(PREDICTION_ERROR.into());
+    assert_eq!(
+        panel_description(&app.tab.nmr),
+        description_with_provenance("Status: Expected dataset diagnostic.")
+    );
+
+    for (nucleus, description) in [
+        (Nucleus::H1, "Status: Calculating ¹H shifts."),
+        (Nucleus::C13, "Status: Calculating ¹³C shifts."),
+    ] {
+        let mut app = ethyl_acetate();
+        let _ = app.nmr_action(Action::Predict(nucleus));
+        assert!(app.tab.nmr.pending.is_some());
+        assert_eq!(
+            panel_description(&app.tab.nmr),
+            description_with_provenance(description)
+        );
+    }
 }

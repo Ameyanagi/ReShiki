@@ -1,0 +1,18 @@
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli render (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
+                            [-o OUTPUT|-] [--width N] [--height N] [--force]
+
+Renders the preview the assistant looks at: png on white, scaled to fit
+--width × --height, or svg with a transparent surround. For figures to
+publish, use convert. The input is read as for convert
+(reshiki --cli help convert).
+
+Options:
+  --to FORMAT  The image format: png, svg.
+               Without --to, the extension of OUTPUT picks it.
+  -o OUTPUT    Write the image to OUTPUT. Without -o, or with -o -, it goes
+               to stdout and needs --to; png is never written to a terminal.
+  --width N    The widest a png may be, in pixels (default 1600).
+  --height N   The tallest a png may be, in pixels (default 1000).
+               Each is 1 to 8192, and a png has at most 16000000 pixels.
+  --force      Replace OUTPUT if it exists; otherwise that is an error.

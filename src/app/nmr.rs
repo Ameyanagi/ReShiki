@@ -901,6 +901,8 @@ impl App {
 }
 
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod tests;
 
 fn named_command<'a>(
