@@ -32,6 +32,7 @@ const LIMIT: usize = 64 * 1024 * 1024;
 static ENABLED: AtomicBool = AtomicBool::new(false);
 type Render = fn(&[u8]) -> std::result::Result<super::OfficePreview, String>;
 type CResult<T> = windows::core::Result<T>;
+const CLIPBOARD_BUSY: HRESULT = HRESULT(0x800401D0_u32 as i32); // CLIPBRD_E_CANT_OPEN
 thread_local! {
     static OBJECTS: RefCell<Vec<Weak<State>>> = const { RefCell::new(Vec::new()) };
     static RENDER: Cell<Option<Render>> = const { Cell::new(None) };
@@ -411,13 +412,25 @@ pub(super) fn read_embedded(picture_only: bool) -> Result<Option<EmbeddedData>> 
     std::thread::spawn(move || -> Result<Option<EmbeddedData>> {
         let _apartment = Apartment::new()?;
         // SAFETY: OLE is initialized on this STA; data never leaves the thread.
-        let data = unsafe { OleGetClipboard()? };
+        let data = retry_clipboard_acquisition(|| unsafe { OleGetClipboard() })?;
         read_data_object(&data, [source, embedded], picture_only, || {
             clipboard::has_chemical_format().map(|has| !has)
         })
     })
     .join()
     .map_err(|_| anyhow::anyhow!("Office clipboard read thread failed"))?
+}
+
+fn retry_clipboard_acquisition<T>(mut acquire: impl FnMut() -> CResult<T>) -> CResult<T> {
+    for attempt in 0..20 {
+        match acquire() {
+            Err(error) if error.code() == CLIPBOARD_BUSY && attempt < 19 => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            result => return result,
+        }
+    }
+    unreachable!()
 }
 
 fn read_data_object(
@@ -436,7 +449,7 @@ fn read_data_object(
         }
         // SAFETY: the descriptor is valid; Medium releases the returned
         // storage and any release owner through ReleaseStgMedium on this STA.
-        let medium = match unsafe { data.GetData(&format) } {
+        let medium = match retry_clipboard_acquisition(|| unsafe { data.GetData(&format) }) {
             Ok(medium) => storage::Medium(medium),
             Err(error) => {
                 acquisition_error.get_or_insert(error.into());

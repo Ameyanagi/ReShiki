@@ -1,6 +1,7 @@
 use super::*;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::mem::ManuallyDrop;
+use std::sync::mpsc;
 
 const CHEMDRAW: &[u8] = include_bytes!("../../../../../tests/fixtures/native-ethyl-clipboard.cdx");
 const FOREIGN: GUID = GUID::from_u128(0x920a1869_a774_4e43_8910_22a4105c9615);
@@ -57,6 +58,7 @@ struct ClipboardObject {
     globals: BTreeMap<u32, Vec<u8>>,
     retrievals: Rc<RefCell<BTreeMap<u32, usize>>>,
     failed_retrieval: Option<u32>,
+    busy_retrievals: usize,
 }
 
 impl ClipboardObject {
@@ -81,7 +83,12 @@ impl IDataObject_Impl for ClipboardObject_Impl {
         let format = unsafe { &*format };
         let id = u32::from(format.cfFormat);
         if let Some(storage) = self.storages.get(&id) {
-            *self.retrievals.borrow_mut().entry(id).or_default() += 1;
+            let mut retrievals = self.retrievals.borrow_mut();
+            let count = retrievals.entry(id).or_default();
+            *count += 1;
+            if *count <= self.busy_retrievals {
+                return Err(Error::new(CLIPBOARD_BUSY, "Synthetic clipboard contention"));
+            }
             if self.failed_retrieval == Some(id) {
                 return Err(Error::new(E_FAIL, "Synthetic embedded retrieval failure"));
             }
@@ -264,6 +271,7 @@ fn check_reader(
         globals: BTreeMap::new(),
         retrievals: retrievals.clone(),
         failed_retrieval,
+        busy_retrievals: 0,
     }
     .into();
     let queried = Cell::new(false);
@@ -416,15 +424,151 @@ fn unavailable_first_embedded_format_preserves_other_own_and_standalone_priority
             globals: BTreeMap::new(),
             retrievals: retrievals.clone(),
             failed_retrieval: Some(source),
+            busy_retrievals: 0,
         }
         .into();
-        assert!(super::super::read_data_object(&object, formats, false, || Ok(true)).is_err());
+        let error = match super::super::read_data_object(&object, formats, false, || Ok(true)) {
+            Err(error) => error,
+            Ok(_) => panic!("nonbusy retrieval unexpectedly succeeded"),
+        };
+        assert_eq!(error.downcast_ref::<Error>().unwrap().code(), E_FAIL);
         assert_eq!(&*retrievals.borrow(), &BTreeMap::from([(source, 1)]));
         Ok(())
     })
     .join()
     .unwrap()
     .unwrap();
+}
+
+#[test]
+fn embedded_get_data_retries_only_transient_clipboard_contention() {
+    std::thread::spawn(|| -> Result<()> {
+        let _apartment = Apartment::new()?;
+        let source = clipboard::format("Embed Source")?;
+        let embedded = clipboard::format("Embedded Object")?;
+        for (busy_retrievals, expected_attempts) in [(2, 3), (20, 20)] {
+            let retrievals = Rc::new(RefCell::new(BTreeMap::new()));
+            let object: IDataObject = ClipboardObject {
+                storages: BTreeMap::from([(
+                    source,
+                    foreign_storage("CONTENTS", CHEMDRAW, None, false)?,
+                )]),
+                globals: BTreeMap::new(),
+                retrievals: retrievals.clone(),
+                failed_retrieval: None,
+                busy_retrievals,
+            }
+            .into();
+            let result =
+                super::super::read_data_object(&object, [source, embedded], false, || Ok(true));
+            if busy_retrievals == 2 {
+                assert_eq!(
+                    result?.map(EmbeddedData::into_parts),
+                    Some(("com.revvity.chemdraw.cdx-clipboard", CHEMDRAW.to_vec()))
+                );
+            } else {
+                let error = match result {
+                    Err(error) => error,
+                    Ok(_) => panic!("persistent clipboard contention unexpectedly succeeded"),
+                };
+                assert_eq!(
+                    error.downcast_ref::<Error>().unwrap().code(),
+                    CLIPBOARD_BUSY
+                );
+            }
+            assert_eq!(retrievals.borrow().get(&source), Some(&expected_attempts));
+        }
+        Ok(())
+    })
+    .join()
+    .unwrap()
+    .unwrap();
+}
+
+#[test]
+fn ole_get_clipboard_recovers_after_real_clipboard_contention() {
+    let _clipboard = clipboard::CLIPBOARD_TEST_LOCK.lock().unwrap();
+    publish(
+        "Embed Source",
+        || foreign_storage("CONTENTS", CHEMDRAW, None, false),
+        vec![],
+    );
+    let (held_tx, held_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let (released_tx, released_rx) = mpsc::channel();
+    let holder = std::thread::spawn(move || -> CResult<()> {
+        use windows::Win32::System::DataExchange::{CloseClipboard, OpenClipboard};
+        struct ClipboardGuard {
+            open: bool,
+        }
+        impl ClipboardGuard {
+            fn close(&mut self) -> CResult<()> {
+                unsafe { CloseClipboard()? };
+                self.open = false;
+                Ok(())
+            }
+        }
+        impl Drop for ClipboardGuard {
+            fn drop(&mut self) {
+                if self.open {
+                    let _ = unsafe { CloseClipboard() };
+                }
+            }
+        }
+        for attempt in 0..20 {
+            match unsafe { OpenClipboard(HWND::default()) } {
+                Ok(()) => break,
+                Err(_) if attempt < 19 => std::thread::sleep(Duration::from_millis(25)),
+                Err(error) => return Err(error),
+            }
+        }
+        let mut clipboard_guard = ClipboardGuard { open: true };
+        held_tx.send(()).unwrap();
+        release_rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("holder did not receive clipboard release within 10 seconds");
+        clipboard_guard.close()?;
+        released_tx.send(()).unwrap();
+        Ok(())
+    });
+    if let Err(error) = held_rx.recv_timeout(Duration::from_secs(10)) {
+        match holder.join() {
+            Ok(Err(open_error)) => panic!("holder failed to open the clipboard: {open_error}"),
+            Ok(Ok(())) => panic!("holder did not signal clipboard acquisition: {error}"),
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    }
+    let result = std::thread::spawn(move || -> Result<()> {
+        let _apartment = Apartment::new()?;
+        let source = clipboard::format("Embed Source")?;
+        let embedded = clipboard::format("Embedded Object")?;
+        let mut first = true;
+        let data = super::super::retry_clipboard_acquisition(|| {
+            let result = unsafe { OleGetClipboard() };
+            if first {
+                first = false;
+                release_tx.send(()).unwrap();
+                released_rx
+                    .recv_timeout(Duration::from_secs(10))
+                    .expect("holder did not confirm clipboard release within 10 seconds");
+                match &result {
+                    Err(error) => assert_eq!(error.code(), CLIPBOARD_BUSY),
+                    Ok(_) => panic!("OleGetClipboard succeeded while the clipboard was held"),
+                }
+            }
+            result
+        })?;
+        assert_eq!(
+            super::super::read_data_object(&data, [source, embedded], false, || Ok(true))?
+                .map(EmbeddedData::into_parts),
+            Some(("com.revvity.chemdraw.cdx-clipboard", CHEMDRAW.to_vec()))
+        );
+        Ok(())
+    })
+    .join()
+    .unwrap();
+    holder.join().unwrap().unwrap();
+    result.unwrap();
 }
 
 fn publish(
@@ -442,11 +586,12 @@ fn publish(
             globals: globals.into_iter().collect(),
             retrievals: Rc::new(RefCell::new(BTreeMap::new())),
             failed_retrieval: None,
+            busy_retrievals: 0,
         }
         .into();
         unsafe {
-            OleSetClipboard(&object)?;
-            OleFlushClipboard()?;
+            super::super::retry_clipboard_acquisition(|| OleSetClipboard(&object))?;
+            super::super::retry_clipboard_acquisition(|| OleFlushClipboard())?;
         }
         Ok(())
     })
