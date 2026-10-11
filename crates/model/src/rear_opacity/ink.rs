@@ -134,3 +134,6 @@ fn stroke(commands: &[PathCommand], style: &GraphicStyle) -> Option<Vec<PathComm
     }
     Some(commands)
 }
+
+#[cfg(test)]
+mod tests;

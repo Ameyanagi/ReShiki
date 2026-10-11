@@ -1963,3 +1963,6 @@ pub fn component_intersects(doc: &Document, ids: &[u64]) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod characterization_tests;

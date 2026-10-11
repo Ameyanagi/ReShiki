@@ -990,3 +990,98 @@ fn view_visibility_degenerate_cap_masks_never_restore_an_entire_hidden_bond() {
     assert_eq!(mask_clip(&polygon, &line, true), vec![polygon.clone()]);
     assert!(mask_clip(&polygon, &line[..2], false).is_empty());
 }
+
+#[test]
+fn view_visibility_scene_construction_count_characterizes_c60_rear_opacity() {
+    let doc = Document::from_json(
+        include_str!("../../../../tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk").as_bytes(),
+    )
+    .unwrap();
+    let before = visibility::construction_count();
+    assert!(!scene::primitives(&doc).is_empty());
+    let constructions = visibility::construction_count() - before;
+    // Current behavior: this fixture already meets q-25's target of one
+    // construction per scene; q-25 shares the paint for aromatic circles/arcs.
+    assert_eq!(constructions, 1);
+}
+
+#[test]
+fn view_visibility_negative_cage_layers_characterize_masks_and_hidden_ranges() {
+    let mut doc = cage(sources()[0]);
+    let a = doc.add_atom("C", Point::new(-1., 0.));
+    let b = doc.add_atom("C", Point::new(1., 0.));
+    for id in [a, b] {
+        doc.atom_mut(id).unwrap().depth = -200.;
+    }
+    doc.add_bond(a, b, 1, "plain");
+    depth::set_rear_opacity(&mut doc, &[a, b], 0.25).unwrap();
+    let external = doc.bonds.len() - 1;
+    doc.bonds[external].z_order = -4;
+    let first = doc.atom(a).unwrap().position;
+    let last = doc.atom(b).unwrap().position;
+    // Current behavior: negative shell faces mask only owners entirely inside
+    // the shell, while hidden ranges still cover external/mixed owners at an
+    // equal or lower explicit layer. Neutral faces mask all three owner groups.
+    for (shell_layer, mask_counts) in [(-2, [180, 0, 0]), (0, [180, 180, 180])] {
+        for bond in &mut doc.bonds[..external] {
+            bond.z_order = shell_layer;
+        }
+        doc.bonds[0].z_order = shell_layer - 1;
+        let view = visibility::Visibility::new(&doc);
+        assert_eq!(view.face_count(), 32);
+        for ((name, owners, front_ranges), mask_count) in [
+            ("inside", [1, 2], [vec![], vec![], vec![]]),
+            ("outside", [a, b], [vec![(0., 1.)], vec![], vec![]]),
+            ("mixed", [1, a], [vec![(0., 1.)], vec![], vec![]]),
+        ]
+        .into_iter()
+        .zip(mask_counts)
+        {
+            for (z, expected_count, expected_ranges) in [
+                (-200., mask_count, [vec![(0., 1.)], vec![(0., 1.)], vec![]]),
+                (1000., 0, front_ranges),
+            ] {
+                let field = Field::Constant(z);
+                let masks = view.masks(field, &owners);
+                assert_eq!(
+                    masks.len(),
+                    expected_count,
+                    "Mask count at shell layer {shell_layer}, owners {name}, depth {z}"
+                );
+                assert!(masks.iter().all(|triangle| triangle.len() == 3));
+                for (layer, expected) in [shell_layer - 1, shell_layer, shell_layer + 1]
+                    .into_iter()
+                    .zip(expected_ranges)
+                {
+                    assert_eq!(
+                        view.hidden(first, last, field, &owners, layer),
+                        expected,
+                        "Hidden ranges at shell layer {shell_layer}, query layer {layer}, owners {name}, depth {z}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn view_visibility_scene_construction_count_characterizes_tilted_aromatic_ring() {
+    let mut doc = Document::default();
+    let ids = crate::editing::ring(&mut doc, Point::default(), 6, true, 0.);
+    projection::tilt(&mut doc, &ids, 65., true);
+    projection::tilt(&mut doc, &ids, 20., false);
+    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    let mut counts = vec![];
+    for ring_arc in [false, true] {
+        for bond in &mut doc.bonds {
+            bond.ring_arc = ring_arc;
+        }
+        let before = visibility::construction_count();
+        assert!(!scene::primitives(&doc).is_empty());
+        counts.push(visibility::construction_count() - before);
+    }
+    // Current behavior: primitives() builds one Paint and crossings::ring_stroke
+    // builds another for the ring's stroke, with or without ring arcs. q-25
+    // shares the scene Paint and changes both counts to one.
+    assert_eq!(counts, vec![2, 2]);
+}

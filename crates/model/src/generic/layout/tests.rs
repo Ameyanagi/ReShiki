@@ -2354,3 +2354,55 @@ fn variable_connector_refuses_folded_moving_bonds_and_atoms_before_publication()
         assert_eq!(source, before);
     }
 }
+
+#[test]
+fn anchored_components_keep_atom_scan_and_stack_pop_traversal_order() {
+    let mut doc = Document::default();
+    let ids: Vec<_> = (0..12)
+        .map(|i| doc.add_atom("C", Point::new((i % 4) as f32 * 42., (i / 4) as f32 * 42.)))
+        .collect();
+    // Interleave the three components in atom order and deliberately vary
+    // branch insertion order: the last neighbor pushed is the first popped.
+    for (a, b) in [
+        (0, 2),
+        (0, 5),
+        (5, 8),
+        (1, 7),
+        (1, 4),
+        (7, 10),
+        (3, 6),
+        (3, 9),
+        (9, 11),
+    ] {
+        doc.add_bond(ids[a], ids[b], 1, "plain");
+    }
+    let expected = vec![vec![0, 5, 8, 2], vec![1, 4, 7, 10], vec![3, 9, 11, 6]];
+    for (anchors, components) in [
+        (vec![ids[11], ids[8], ids[10]], expected.clone()),
+        (vec![ids[11], ids[10]], expected[1..].to_vec()),
+    ] {
+        let plan = Plan::new(
+            &doc,
+            &anchors.into_iter().collect(),
+            &mut Work::new(usize::MAX),
+        )
+        .unwrap();
+        assert_eq!(plan.components, components);
+    }
+
+    // protect_references keeps its component labels private; pin its observable
+    // result on this graph, including a caption spanning only part of a branch.
+    assert_eq!(protect_references(&doc, &mut Work::new(usize::MAX)), Ok(()));
+    doc.molecule_names
+        .push(crate::molecule_names::MoleculeName {
+            annotation: doc.next_id(),
+            atoms: vec![ids[0], ids[2]],
+            smiles: "CC".into(),
+            text: "ethane".into(),
+        });
+    const INCOMPLETE_NAME: &str = "Generated drawings require complete inherited named components; the source drawing is retained";
+    assert_eq!(
+        protect_references(&doc, &mut Work::new(usize::MAX)).unwrap_err(),
+        INCOMPLETE_NAME
+    );
+}

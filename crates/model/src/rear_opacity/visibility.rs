@@ -3,6 +3,14 @@
 use super::{Field, PathCommand, Point, Primitive, flatten, ink};
 use crate::document::{Bond, Document};
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(test)]
+thread_local! {
+    static CONSTRUCTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+#[cfg(test)]
+pub(super) fn construction_count() -> usize {
+    CONSTRUCTIONS.with(std::cell::Cell::get)
+}
 
 type V = [f64; 3];
 const MAX_VERTICES: usize = 256;
@@ -246,6 +254,8 @@ pub(super) struct Visibility {
 }
 impl Visibility {
     pub(super) fn new(doc: &Document) -> Self {
+        #[cfg(test)]
+        CONSTRUCTIONS.with(|count| count.set(count.get() + 1));
         // Flat 2D drawings retain their exact paint order and opaque ink.
         let lo = doc
             .atoms
