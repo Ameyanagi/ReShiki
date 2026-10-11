@@ -32,7 +32,7 @@ Windows SignPath signing and internal test-signed nightly integration: @Ameyanag
 
 Nightly naming-helper configuration and regression coverage for all six release targets (merged, unreleased): @Ameyanagi in [PR #304](https://github.com/Ameyanagi/ReShiki/pull/304).
 
-Published Windows Nightly verification, actual screenshots and route/DPI receipts: @Ameyanagi; [review and repeat steps](changes/nightly-windows-20261011.md).
+Published Windows Nightly verification, actual screenshots and route/DPI receipts: @Ameyanagi in [PR #306](https://github.com/Ameyanagi/ReShiki/pull/306); [review and repeat steps](changes/nightly-windows-20261011.md).
 
 Merged, unreleased: @Ameyanagi — checked numbered ChemDraw attachment import and original silicon fixtures for [issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) in [PR #284](https://github.com/Ameyanagi/ReShiki/pull/284), with [Mac File Open/native save/reopen and controlled Windows ChemDraw/PowerPoint clipboard evidence](changes/chemdraw-numbered-paste.md).
 

@@ -4,7 +4,8 @@ The published Windows x64 Nightly passes the recorded CLI/load checks and
 scoped desktop interactions at **96 DPI / 100% scale**: arc editing with
 Undo/Redo, document-tab activation, direct local-name insertion and floating
 NMR selection. Fresh Office clipboard/save-back and high or mixed DPI
-acceptance remain pending. Review, captures and verification: @Ameyanagi.
+acceptance remain pending. Review, captures and verification: @Ameyanagi in
+[PR #306](https://github.com/Ameyanagi/ReShiki/pull/306).
 
 ## Fixes and package qualification
 
