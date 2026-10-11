@@ -68,7 +68,16 @@ class Receiver:
                 Gdk.ContentProvider.new_for_bytes(mime, GLib.Bytes.new(Path(filename).read_bytes()))
                 for mime, filename in command["items"].items()
             ]
+            marker = command["marker"]
+            providers.append(
+                Gdk.ContentProvider.new_for_bytes(marker, GLib.Bytes.new(marker.encode()))
+            )
+            result["marker"] = marker
             result["queued"] = self.clipboard.set_content(Gdk.ContentProvider.new_union(providers))
+            # This orders queued requests while the publisher remains focused.
+            # Only the incoming selection marker and an independent read prove
+            # acceptance; GTK local content and this sync are not receipts.
+            self.window.get_display().sync()
             atomic_json(self.directory / "result.json", result)
         elif command["operation"] == "focus":
             atomic_json(self.directory / "result.json", result)

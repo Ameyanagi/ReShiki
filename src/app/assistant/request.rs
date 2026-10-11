@@ -12,6 +12,12 @@ impl App {
         if self.assistant.busy || self.assistant.reading_image || self.tab.cleanup.is_some() {
             return Task::none();
         }
+        if !matches!(
+            self.assistant.connection,
+            super::setup::Connection::Ready | super::setup::Connection::Unchecked
+        ) {
+            return Task::none();
+        }
         let prompt = self.assistant.input.text().trim().to_string();
         let prompt = if improving && prompt.is_empty() {
             self.assistant.messages.iter().rev().find(|m| m.role == "You").map(|m| m.text.clone()).unwrap_or_else(|| "Improve this scheme’s spacing, alignment and captions while preserving all chemistry and structural detail.".into())
@@ -122,6 +128,8 @@ impl App {
         self.assistant.input = text_editor::Content::new();
         self.assistant.serial = self.assistant.serial.wrapping_add(1);
         self.assistant.cancel = Default::default();
+        self.assistant.requires_apply =
+            self.assistant.guided_example || (improving && self.assistant.requires_apply);
         self.assistant.busy = true;
         self.assistant.error = false;
         self.assistant.status = "Preparing your scheme…".into();
@@ -244,7 +252,10 @@ impl App {
                         replace,
                     });
                     self.assistant.status = "Ready for review · Nothing has been applied".into();
-                    if self.assistant.preferences.auto_apply && can_auto_apply {
+                    if self.assistant.preferences.auto_apply
+                        && can_auto_apply
+                        && !self.assistant.requires_apply
+                    {
                         return self.assistant_action(Action::Apply);
                     }
                 } else {
@@ -262,6 +273,10 @@ impl App {
         super::chat_scroll(scroll)
     }
     pub(super) fn assistant_stop(&mut self) {
+        let checking_connection = self.assistant.connection == super::setup::Connection::Checking;
+        if checking_connection {
+            self.assistant.connection = super::setup::Connection::Cancelled;
+        }
         self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
         self.assistant.reading_image = false;
         self.assistant.waiting_for_canvas_edit = false;
@@ -278,6 +293,11 @@ impl App {
         self.assistant.started = None;
         self.assistant
             .retain_preview("Quality review has not finished. Review the draft before applying.");
+        if checking_connection {
+            self.assistant.status = codex::ConnectionError::Cancelled.to_string();
+            self.assistant.error = false;
+            return;
+        }
         self.assistant.status = "Stopped · Completed previews are retained".into();
         self.assistant.record(
             "ReShiki",
@@ -291,6 +311,12 @@ impl App {
         self.assistant.pending_proposal = None;
         self.assistant.viewed_image = None;
         self.assistant.source_image = None;
+        self.assistant.guided_example = false;
+        self.assistant.requires_apply = false;
+        self.assistant.example_reference = None;
+        if self.assistant.connection == super::setup::Connection::Checking {
+            self.assistant.connection = super::setup::Connection::Cancelled;
+        }
         self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
         self.assistant.reading_image = false;
         self.assistant.waiting_for_canvas_edit = false;

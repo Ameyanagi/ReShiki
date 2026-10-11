@@ -17,13 +17,16 @@ mod poll;
 mod preferences;
 mod previews;
 mod request;
+mod setup;
 mod view;
 
 #[derive(Debug, Clone)]
 pub enum Action {
     Open,
     Connect,
-    Connected(u64, Result<codex::Account, String>),
+    Connected(u64, Result<codex::Account, codex::ConnectionError>),
+    SetupHelp(setup::Help),
+    ImageExample,
     Input(text_editor::Action),
     Paste {
         image_only: bool,
@@ -108,6 +111,11 @@ pub struct State {
     pub draft: Option<Draft>,
     messages: Vec<ChatMessage>,
     account: Option<codex::Account>,
+    connection: setup::Connection,
+    guided_example: bool,
+    /// The pending/draft request waits for Apply even if its composer image changes.
+    requires_apply: bool,
+    example_reference: Option<Document>,
     preferences: Preferences,
     preferences_dirty: bool,
     preferences_saving: bool,
@@ -231,11 +239,17 @@ impl App {
         }
         let scroll = matches!(
             &action,
-            Action::Send | Action::Improve | Action::JumpToResult | Action::Reject
+            Action::Send
+                | Action::Improve
+                | Action::JumpToResult
+                | Action::Reject
+                | Action::ImageExample
         );
         match action {
             Action::ViewImage(image) => self.assistant.viewed_image = image,
             Action::Open => return self.assistant_open(),
+            Action::SetupHelp(help) => return self.assistant_setup_help(help),
+            Action::ImageExample => self.assistant_image_example(),
             Action::Input(action) => {
                 self.assistant.input.perform(action);
             }
@@ -297,7 +311,12 @@ impl App {
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Assistant;
         self.palette = None;
-        if self.assistant.account.is_none() && !self.assistant.busy {
+        if self.assistant.connection == setup::Connection::Unchecked
+            && self.assistant.account.as_ref().is_some_and(|a| a.connected)
+        {
+            self.assistant.connection = setup::Connection::Ready;
+        }
+        if self.assistant.connection == setup::Connection::Unchecked && !self.assistant.busy {
             return self.assistant_action(Action::Connect);
         }
         if self.assistant.follow_chat {

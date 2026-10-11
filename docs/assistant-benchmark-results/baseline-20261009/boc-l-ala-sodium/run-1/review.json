@@ -1,0 +1,9 @@
+{
+  "changes": [],
+  "issues": [
+    "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+  ],
+  "passes": 1,
+  "summary": "The Boc and NH labels, connectivity, bond orders, solid wedge, carboxylate O⁻, and separate Na⁺ match the source. Labels are clear and unclipped; no corrections are needed.",
+  "verified": true
+}

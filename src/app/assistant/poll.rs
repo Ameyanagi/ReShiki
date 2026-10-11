@@ -71,7 +71,24 @@ impl App {
                             format!("Checking the rendered draft · Pass {pass} of 3");
                     }
                     codex::Progress::Status(message) => self.assistant.status = message,
-                    codex::Progress::Catalog(account) => self.assistant.account = Some(account),
+                    codex::Progress::Catalog(account) => {
+                        self.assistant.connection = if account.connected {
+                            super::setup::Connection::Ready
+                        } else {
+                            super::setup::Connection::SignInRequired
+                        };
+                        self.assistant.account = Some(account);
+                    }
+                    codex::Progress::ConnectionFailed(error) => {
+                        self.assistant.account = None;
+                        self.assistant.connection = if error == codex::ConnectionError::Cancelled {
+                            super::setup::Connection::Cancelled
+                        } else {
+                            super::setup::Connection::Failed(error)
+                        };
+                        self.assistant.status = error.to_string();
+                        self.assistant.error = error != codex::ConnectionError::Cancelled;
+                    }
                     codex::Progress::Reply(reply) => self.assistant.reply = reply,
                     codex::Progress::Started { model, effort } => {
                         self.assistant.running_model =
