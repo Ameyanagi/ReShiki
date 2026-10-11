@@ -1,0 +1,10 @@
+{
+  "smiles": "CCO",
+  "formula": "C2H6O",
+  "heavy_atoms": 3,
+  "bonds": 2,
+  "tetrahedral_cip": [],
+  "fragments": 1,
+  "policy": "Exact protonation, formal charge, tautomer and specified stereochemistry; no tautomer/protonation equivalence.",
+  "abbreviations": []
+}

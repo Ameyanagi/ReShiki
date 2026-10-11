@@ -8,14 +8,70 @@ import re
 import shutil
 import subprocess
 import time
+import uuid
 from pathlib import Path
-
-from gi.repository import GLib
 
 NATIVE = "application/x-reshiki-drawing+json"
 TEXT = "text/plain;charset=utf-8"
 MIMES = [NATIVE, "image/png", "image/svg+xml", TEXT]
 ROOT = Path(__file__).resolve().parents[3]
+PUBLICATION_TIMEOUT = 5
+
+
+def write_json(path, value):
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(value, indent=2) + "\n")
+    temporary.replace(path)
+
+
+def publication_receipt(protocol, marker):
+    """Require the publisher's incoming matching offer/selection, not local GTK data."""
+    source = None
+    request = None
+    receipt = None
+    offers = {}
+    for line in protocol.splitlines():
+        event = re.fullmatch(r"\[\s*[\d.]+\]\s*(->\s*)?(wl_data_\w+)@(\d+)\.(\w+)\((.*)\)", line)
+        if not event:
+            continue
+        outgoing, interface, identifier, name, arguments = event.groups()
+        if outgoing:
+            if interface == "wl_data_source" and name == "offer" and arguments == f'"{marker}"':
+                source = identifier
+            elif interface == "wl_data_device" and name == "set_selection":
+                selected = re.fullmatch(r"wl_data_source@(\d+), (\d+)", arguments)
+                if selected and selected[1] == source:
+                    request = {"device": identifier, "source": source, "serial": int(selected[2])}
+            continue
+        if interface == "wl_data_source" and name == "cancelled" and identifier == source:
+            raise AssertionError(f"Fixture publication cancelled before verification: {marker}")
+        if interface == "wl_data_device" and name == "data_offer":
+            offered = re.fullmatch(r"new id wl_data_offer@(\d+)", arguments)
+            if offered:
+                offers[offered[1]] = {"device": identifier, "marker": False}
+        elif interface == "wl_data_offer" and name == "offer" and identifier in offers:
+            if arguments == f'"{marker}"':
+                offers[identifier]["marker"] = True
+        elif interface == "wl_data_device" and name == "selection" and request:
+            selected = re.fullmatch(r"wl_data_offer@(\d+)", arguments)
+            offer = offers.get(selected[1]) if selected else None
+            if identifier == request["device"]:
+                receipt = (
+                    request | {"offer": selected[1], "marker": marker}
+                    if offer and offer["device"] == identifier and offer["marker"]
+                    else None
+                )
+    return receipt
+
+
+def verify_publication(result, expected):
+    """Check every fixture payload and its unique marker in the independent reader."""
+    for mime, digest in expected.items():
+        assert mime in result["formats"], f"Fixture publication MIME missing: {mime}"
+        item = result.get(mime, {})
+        assert item.get("mime") == mime and item.get("sha256") == digest, (
+            f"Fixture publication payload mismatch: {mime}: {item}"
+        )
 
 
 def wait_for(check, description, timeout=30):
@@ -69,6 +125,7 @@ class Session:
         self.command_id = 0
         self.receipts = []
         self.gates = []
+        self.publications = []
         self.binary_hash = hashlib.sha256(args.binary.read_bytes()).hexdigest()
 
     def start(self, name, command, env=None):
@@ -197,6 +254,8 @@ class Session:
                 "Sway window focus",
             )
         else:
+            from gi.repository import GLib
+
             expression = f"(() => {{ Main.overview.hide(); if (Main.overview.visible) return false; const a = global.get_window_actors().find(a => a.meta_window.get_pid() === {process.pid}); if (!a || !a.is_mapped() || !a.is_visible() || a.meta_window.is_hidden()) return false; const r = a.meta_window.get_frame_rect(); if (r.width <= 0 || r.height <= 0) return false; a.meta_window.activate(global.get_current_time()); return global.display.focus_window === a.meta_window; }})()"
 
             def focused():
@@ -296,10 +355,16 @@ class Session:
         wait_for(lambda: (self.receiver_dir / "ready.json").exists(), "GTK receiver")
         self.focus(self.consumer)
 
-    def clipboard(self, operation="read", items=None):
+    def clipboard(self, operation="read", items=None, marker=None, mimes=None):
         self.focus(self.consumer)
         self.command_id += 1
-        command = {"id": self.command_id, "operation": operation, "mimes": MIMES, "items": items}
+        command = {
+            "id": self.command_id,
+            "operation": operation,
+            "mimes": MIMES if mimes is None else mimes,
+            "items": items,
+            "marker": marker,
+        }
         temporary = self.receiver_dir / "command.tmp"
         temporary.write_text(json.dumps(command))
         temporary.replace(self.receiver_dir / "command.json")
@@ -313,9 +378,58 @@ class Session:
             ),
             "independent clipboard transfer",
         )
-        assert result["active"], result
         self.receipts.append(result)
+        write_json(self.out / "receipts.json", self.receipts)
+        assert result["active"], result
         return result
+
+    def publish(self, items):
+        publisher = self.consumer
+        protocol = self.protocol_logs[publisher.pid]
+        offset = len(protocol.read_text())
+        marker = "application/x-reshiki-qa-publication-" + uuid.uuid4().hex
+        expected = {
+            mime: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+            for mime, path in items.items()
+        }
+        expected[marker] = hashlib.sha256(marker.encode()).hexdigest()
+        publication = {
+            "marker": marker,
+            "publisher_pid": publisher.pid,
+            "expected_sha256": expected,
+        }
+        self.publications.append(publication)
+        path = self.out / f"publication-{len(self.publications)}.json"
+        write_json(path, publication)
+        try:
+            queued = self.clipboard("publish", items, marker=marker)
+            publication["queued"] = queued
+            write_json(path, publication)
+            assert queued.get("queued") and queued.get("marker") == marker, queued
+
+            def accepted():
+                assert publisher.poll() is None, "Fixture publisher exited before acceptance"
+                return publication_receipt(protocol.read_text()[offset:], marker)
+
+            # Do not focus a reader or ReShiki until the compositor has returned
+            # this publication's marker to the still-focused publisher.
+            publication["selection_receipt"] = wait_for(
+                accepted, f"fixture publication selection receipt {marker}", PUBLICATION_TIMEOUT
+            )
+            write_json(path, publication)
+            self.receiver(f"publication-reader-{self.command_id}")
+            result = self.clipboard(mimes=list(expected))
+            publication["independent_read"] = result
+            write_json(path, publication)
+            assert publisher.poll() is None, "Fixture publisher exited during independent read"
+            verify_publication(result, expected)
+            publication["verified"] = True
+            write_json(path, publication)
+            return result
+        except Exception as error:
+            publication["failure"] = str(error)
+            write_json(path, publication)
+            raise
 
     def save(self, name):
         self.app_key("ctrl+s", "saved")
@@ -350,6 +464,7 @@ class Session:
                 "pending_state": state,
             }
         )
+        write_json(self.out / "gates.json", self.gates)
         return before
 
     def release_gate(self, phase):
@@ -362,11 +477,7 @@ class Session:
         assert state["error"] and "cancelled by QA" in state["status"], state
         assert state["atoms"] == 3
         if replace:
-            self.clipboard("publish", replace)
-            self.receiver("replacement-receiver")
-            # An independent process proves B is published by the compositor;
-            # this does not read the GTK publisher's cached local content.
-            replaced = self.clipboard()
+            replaced = self.publish(replace)
             assert (
                 replaced[NATIVE]["sha256"]
                 == hashlib.sha256(Path(replace[NATIVE]).read_bytes()).hexdigest()
@@ -398,7 +509,7 @@ class Session:
 
         sentinel = self.out / "sentinel.txt"
         sentinel.write_text("foreign clipboard owner\n")
-        self.clipboard("publish", {"text/plain;charset=utf-8": str(sentinel)})
+        self.publish({"text/plain;charset=utf-8": str(sentinel)})
         self.app_key("ctrl+c", "clipboard_written")
         replaced = self.clipboard()
         assert replaced[NATIVE]["sha256"] == copied[NATIVE]["sha256"]
@@ -408,7 +519,7 @@ class Session:
         foreign_document["atoms"][2]["charge"] = 1
         foreign.write_text(json.dumps(foreign_document))
         foreign_items = {NATIVE: str(foreign), "image/png": copied["image/png"]["file"]}
-        self.clipboard("publish", foreign_items)
+        self.publish(foreign_items)
         before = self.begin_gated_cut("request")
         self.clipboard("focus")  # Real receiver F12 arrives after keyboard focus.
         self.release_gate("request")
@@ -438,9 +549,7 @@ class Session:
         assert self.app_key("ctrl+z", "undo")["atoms"] == 3
         assert graph(self.save("undo.rsk")) == graph(original)
 
-        self.clipboard(
-            "publish", {NATIVE: copied[NATIVE]["file"], "image/png": copied["image/png"]["file"]}
-        )
+        self.publish({NATIVE: copied[NATIVE]["file"], "image/png": copied["image/png"]["file"]})
         assert self.app_key("ctrl+v", "clipboard_read")["atoms"] == 6
         pasted = self.save("pasted.rsk")
         assert len(pasted["bonds"]) == 4
@@ -546,6 +655,7 @@ class Session:
             ),
             "receipts": self.receipts,
             "gates": self.gates,
+            "fixture_publications": self.publications,
             "publication_serials": serials,
             "checks": [
                 "real_keyboard_copy",

@@ -90,8 +90,13 @@ conformations rather than guaranteeing a global minimum. The displayed energy
 is in kcal/mol; compare it within the same molecule and force field.
 After switching fields in a stopped preview, press **Start** to recalculate.
 
-The supported calculation domain is one connected covalent component with at
-most **512 original atoms** and **2048 bonds**. Supported elements are
+The supported calculation domain is one connected covalent component. Available
+memory determines admission of **128–640 original atoms**, with at most four
+times as many original bonds and **4,096 all-atom coordinates**, including
+temporary hydrogens. Unknown memory observations retain the 512-atom / 2,048-bond
+envelope. Larger structures remain editable. See the
+[calculation resource policy](chemistry-resource-policy.md) for independent
+safety ceilings and time limits. Supported elements are
 **H, B, C, N, O, F, Si, P, S, Cl, As, Se, Br, and I**, with valid valence and
 available parameters for the selected field. Formal charges are limited to
 −8…+8. Single, double, triple, and aromatic bonds, ordinary tetrahedral stereo,

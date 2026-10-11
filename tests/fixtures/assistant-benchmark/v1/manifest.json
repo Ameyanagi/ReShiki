@@ -1,0 +1,111 @@
+{
+  "dataset_version": 1,
+  "reference_checker": "RDKit 2026.03.6",
+  "source_renderer_sha256": "7bccebe7d6ca35112e93945389daa93d6251f76cd8dc3dffc07277493b02510d",
+  "cases": [
+    {
+      "id": "ethanol",
+      "image": "ethanol.png",
+      "reference": "ethanol.reference.json",
+      "width": 177,
+      "height": 85,
+      "image_sha256": "d19437ff3bc0533695aec2a271dd3bc9f1af20def1d0346dc1106b8faa4e31ea",
+      "category": "control",
+      "source": "Original synthetic structure; independently authored reference SMILES, checked by RDKit formula/count/CIP/fragments and rendered as a ReShiki native drawing.",
+      "license": "MIT OR Apache-2.0",
+      "expected_response": "editable_draft"
+    },
+    {
+      "id": "gly-l-ala",
+      "image": "gly-l-ala.png",
+      "reference": "gly-l-ala.reference.json",
+      "width": 432,
+      "height": 220,
+      "image_sha256": "897950936a1f7f886a08432f758f87a1cca0a4d10319cffc14dcde9757a23cb8",
+      "category": "linear peptide stereo",
+      "source": "Original synthetic structure; independently authored reference SMILES, checked by RDKit formula/count/CIP/fragments and rendered as a ReShiki native drawing.",
+      "license": "MIT OR Apache-2.0",
+      "expected_response": "editable_draft"
+    },
+    {
+      "id": "cyclic-gly4",
+      "image": "cyclic-gly4.png",
+      "reference": "cyclic-gly4.reference.json",
+      "width": 356,
+      "height": 369,
+      "image_sha256": "151efcdf29e598345b1ba8cd2de0616175c9d256d15576575c3dc2063af81071",
+      "category": "cyclic peptide macrocycle",
+      "source": "Original synthetic structure; independently authored reference SMILES, checked by RDKit formula/count/CIP/fragments and rendered as a ReShiki native drawing.",
+      "license": "MIT OR Apache-2.0",
+      "expected_response": "editable_draft"
+    },
+    {
+      "id": "boc-l-ala-sodium",
+      "image": "boc-l-ala-sodium.png",
+      "reference": "boc-l-ala-sodium.reference.json",
+      "width": 390,
+      "height": 224,
+      "image_sha256": "92c504b638995e7a532424cf62978037a945fbc4815d3c08227c6d9ad74c0df1",
+      "category": "abbreviation and disconnected salt",
+      "source": "Original synthetic structure; independently authored reference SMILES, checked by RDKit formula/count/CIP/fragments and rendered as a ReShiki native drawing.",
+      "license": "MIT OR Apache-2.0",
+      "expected_response": "editable_draft"
+    },
+    {
+      "id": "gly-l-ala-low-resolution",
+      "image": "gly-l-ala-low-resolution.png",
+      "reference": "gly-l-ala.reference.json",
+      "parent": "gly-l-ala",
+      "transform": "half resolution",
+      "width": 216,
+      "height": 110,
+      "image_sha256": "db3dbeefb2ee2227d51d1c47b3c9751b1d9e736e47678075e086057bf4ce8765",
+      "category": "resolution/contrast variation",
+      "source": "Deterministic variation of an original synthetic ReShiki image. No unique complete graph is scored for cropped/unreadable cases.",
+      "license": "MIT OR Apache-2.0",
+      "expected_response": "editable_draft"
+    },
+    {
+      "id": "cyclic-gly4-low-contrast",
+      "image": "cyclic-gly4-low-contrast.png",
+      "reference": "cyclic-gly4.reference.json",
+      "parent": "cyclic-gly4",
+      "transform": "40 percent contrast",
+      "width": 356,
+      "height": 369,
+      "image_sha256": "04f132ada105e867aa8fa0cbc4e68def1e6e6b33beed7f3143534519e5da1610",
+      "category": "resolution/contrast variation",
+      "source": "Deterministic variation of an original synthetic ReShiki image. No unique complete graph is scored for cropped/unreadable cases.",
+      "license": "MIT OR Apache-2.0",
+      "expected_response": "editable_draft"
+    },
+    {
+      "id": "gly-l-ala-cropped",
+      "image": "gly-l-ala-cropped.png",
+      "reference": null,
+      "parent": "gly-l-ala",
+      "transform": "right 55 percent only; partial bonds/peptide missing",
+      "width": 238,
+      "height": 220,
+      "image_sha256": "54bef8ae792623c5e8f49fbfe3fc8b162b525babd8b6eb2f73b18edb8b91cf12",
+      "category": "ambiguous or unsupported readable graph",
+      "source": "Deterministic variation of an original synthetic ReShiki image. No unique complete graph is scored for cropped/unreadable cases.",
+      "license": "MIT OR Apache-2.0",
+      "expected_response": "clarification_or_flagged_partial"
+    },
+    {
+      "id": "ethanol-unreadable",
+      "image": "ethanol-unreadable.png",
+      "reference": null,
+      "parent": "ethanol",
+      "transform": "11 by 5 pixel image; atom labels no longer reliable",
+      "width": 11,
+      "height": 5,
+      "image_sha256": "cc253f9e700c43ef2ec8f6b3ba9af25d5471f135493bed5a2c141bd5c1b2ce56",
+      "category": "ambiguous or unsupported readable graph",
+      "source": "Deterministic variation of an original synthetic ReShiki image. No unique complete graph is scored for cropped/unreadable cases.",
+      "license": "MIT OR Apache-2.0",
+      "expected_response": "clarification_or_flagged_partial"
+    }
+  ]
+}

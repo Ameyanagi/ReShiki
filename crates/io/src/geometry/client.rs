@@ -1,9 +1,11 @@
-//! One immutable native request per disposable process. Drop cancels the child.
+//! One immutable native request per disposable process. Drop requests child killing;
+//! Tokio does not await termination when the request future is dropped.
 use super::{Conformer, Error, ForceField, Optimized, Pin, Point3, Prepared, wire};
 use std::{path::PathBuf, process::Stdio, time::Duration};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::Command,
+    time::Instant,
 };
 
 const MAX_STDERR_BYTES: usize = 64 * 1024;
@@ -17,13 +19,17 @@ pub struct Limits {
 }
 impl Default for Limits {
     fn default() -> Self {
+        let budget = reshiki_process_heap::policy::Capabilities::detect().resolve();
         Self {
-            timeout: Duration::from_secs(60),
-            heap_bytes: 256 * 1024 * 1024,
+            timeout: budget.geometry_timeout(),
+            heap_bytes: budget.heap_bytes(),
         }
     }
 }
 impl Limits {
+    pub fn capacity(self) -> reshiki_geometry::Capacity {
+        reshiki_geometry::Capacity::for_heap(self.heap_bytes)
+    }
     pub(super) fn validate(self) -> Result<(), Error> {
         if self.timeout.is_zero()
             || self.timeout > MAX_TIMEOUT
@@ -141,6 +147,10 @@ impl Client {
         previous: Option<&Conformer>,
     ) -> Result<Optimized, Error> {
         self.limits.validate()?;
+        let capacity = self.limits.capacity();
+        operation
+            .validate_capacity(capacity)
+            .map_err(Error::Invalid)?;
         let field = operation.field;
         let iterations = operation.max_iterations;
         let evaluating = matches!(operation.operation, reshiki_geometry::Operation::Evaluate);
@@ -159,6 +169,7 @@ impl Client {
         let request = wire::encode(
             &wire::Request {
                 heap_bytes: self.limits.heap_bytes,
+                capacity: Some(capacity),
                 operation,
             },
             wire::MAX_REQUEST_BYTES,
@@ -168,7 +179,22 @@ impl Client {
             Some(path) => path.clone(),
             None => std::env::current_exe()?,
         };
-        let bytes = exchange(executable, &request, self.limits.timeout).await?;
+        // Waiting for a shared memory reservation consumes this operation's
+        // deadline and remains cancellable with the async future.
+        let budget = reshiki_process_heap::policy::Capabilities::detect().resolve();
+        let reserved_bytes = self
+            .limits
+            .heap_bytes
+            .checked_add(32 * 1024 * 1024)
+            .ok_or_else(|| Error::Invalid("Geometry reservation size overflow".into()))?;
+        if reserved_bytes > budget.reservation_ceiling() {
+            return Err(Error::Invalid(
+                "Insufficient available memory for this geometry budget".into(),
+            ));
+        }
+        let deadline = Instant::now() + self.limits.timeout;
+        let _reservation = reserve_until(deadline, || budget.try_reserve(reserved_bytes)).await?;
+        let bytes = exchange(executable, &request, deadline).await?;
         let response: wire::Response =
             wire::decode(&bytes, wire::MAX_RESPONSE_BYTES).map_err(Error::Protocol)?;
         if response.version != reshiki_geometry::RDKIT_VERSION {
@@ -197,6 +223,11 @@ impl Client {
             hydrogen_parents: response.hydrogen_parents,
         };
         conformer.validate(originals)?;
+        if conformer.positions.len() > capacity.coordinates {
+            return Err(Error::Coordinates(
+                "Conformer exceeds its machine-budget coordinate capacity",
+            ));
+        }
         for (index, [x, y, z]) in fixed {
             let actual = conformer
                 .positions
@@ -250,6 +281,28 @@ impl Client {
     }
 }
 
+// Return ownership to execute so admission remains charged through response
+// decoding and validation, just as it is while the child is running.
+async fn reserve_until<R>(
+    deadline: Instant,
+    mut try_reserve: impl FnMut() -> Option<R>,
+) -> Result<R, Error> {
+    loop {
+        if Instant::now() >= deadline {
+            return Err(Error::Timeout);
+        }
+        if let Some(reservation) = try_reserve() {
+            // Acquisition can be descheduled after its first deadline check.
+            if Instant::now() >= deadline {
+                drop(reservation);
+                return Err(Error::Timeout);
+            }
+            return Ok(reservation);
+        }
+        tokio::time::sleep_until(deadline.min(Instant::now() + Duration::from_millis(10))).await;
+    }
+}
+
 async fn read_limited(
     mut stream: impl AsyncRead + Unpin,
     limit: usize,
@@ -276,9 +329,12 @@ async fn read_limited(
 async fn exchange(
     executable: PathBuf,
     request: &[u8],
-    timeout: Duration,
+    deadline: Instant,
 ) -> Result<Vec<u8>, Error> {
-    exchange_with_deadline(executable, request, tokio::time::sleep(timeout)).await
+    if Instant::now() >= deadline {
+        return Err(Error::Timeout);
+    }
+    exchange_with_deadline(executable, request, tokio::time::sleep_until(deadline)).await
 }
 
 async fn exchange_with_deadline(
@@ -330,8 +386,10 @@ async fn exchange_with_deadline(
         Ok(response)
     };
     tokio::select! {
-        result = operation => result,
+        // A deadline already ready on this poll must not poll child startup.
+        biased;
         () = deadline => Err(Error::Timeout),
+        result = operation => result,
     }
 }
 

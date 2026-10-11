@@ -1,0 +1,30 @@
+{
+  "graph_identity": true,
+  "reference_smiles": "O=C1CNC(=O)CNC(=O)CNC(=O)CN1",
+  "observed_smiles": "O=C1CNC(=O)CNC(=O)CNC(=O)CN1",
+  "reference_atoms": 16,
+  "observed_atoms": 16,
+  "reference_bonds": 16,
+  "observed_bonds": 16,
+  "atom_errors": [],
+  "hydrogen_errors": [],
+  "missing_atoms": [],
+  "extra_atoms": [],
+  "bond_errors": [],
+  "missing_bonds": [],
+  "extra_bonds": [],
+  "stereochemistry_errors": [],
+  "reference_fragments": 1,
+  "observed_fragments": 1,
+  "missing_fragments": [],
+  "extra_fragments": [],
+  "abbreviations": {
+    "missing_display_labels": {},
+    "extra_display_labels": {},
+    "member_chemistry_errors": [],
+    "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+  },
+  "localization_search_timed_out": false,
+  "localized_metrics_available": true,
+  "reference_checker": "RDKit 2026.03.6"
+}

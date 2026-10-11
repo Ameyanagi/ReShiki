@@ -2,6 +2,8 @@
 
 See [ReShiki 0.11.0](changes-0.11.md) for the latest release notes.
 
+- **Adaptive chemistry limits (under review):** larger 3D drawings and fused-ring imports use bounded budgets adapted to available machine resources; eligibility remains distinct from completion or convergence. [Desktop examples and native-file checks](adaptive-chemistry-limits-validation.md) · [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279) · [#245](https://github.com/Ameyanagi/ReShiki/issues/245) · [#248](https://github.com/Ameyanagi/ReShiki/issues/248) · @Ameyanagi.
+
 - **Retained Windows EMF pictures (merged, unreleased):** import spectra at their recorded physical size and retain original vectors with a portable preview. Native Windows import/save/vector export/fresh-process reopen and controlled Word/PowerPoint insert/save/fresh-process reopen checks pass; Mac portable save/resize/reopen checks pass. [Review record and reusable images](changes/emf-picture-import.md) · [PR #285](https://github.com/Ameyanagi/ReShiki/pull/285) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296) · [Issue #64](https://github.com/Ameyanagi/ReShiki/issues/64) · @Ameyanagi.
 - **MOL 3D import (merged, unreleased):** retain source XYZ for rotation and draw removable ordinary hydrogens implicitly while protecting isotopic, charged and other essential H. Native saves retain the conformation; MOL export keeps its existing stereo-safe2D policy. [Review and matched desktop evidence](changes/mol-import-3d-review.md) · [PR #282](https://github.com/Ameyanagi/ReShiki/pull/282) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296) · @Ameyanagi.
 - **Numbered ChemDraw silicon groups (merged, unreleased):** read the checked binary attachment property used by ChemDraw 26 while preserving the chemical graph and malformed-data diagnostics. Actual Mac File Open/native save/reopen passes; controlled Windows ChemDraw/PowerPoint copy-paste, Undo/Redo, native save and same-process fresh-tab reopen pass for the single silicon structure. [Review record and reusable images](changes/chemdraw-numbered-paste.md) · [PR #284](https://github.com/Ameyanagi/ReShiki/pull/284) · [Issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) · @Ameyanagi.
@@ -49,3 +51,21 @@ Reusable caption: Click-added lone pairs sit closer to visible atom labels and
 avoid nearby chemical ink; manual and previously saved offsets stay exact.
 
 - **Offline NMR prediction (merged, unreleased):** predict atom-linked ¹H group medians and ¹³C shifts from measured reference environments in a compact palette that preserves drawing space and zoom, with reference details, source conditions, coverage and limitations on demand. [Desktop review](nmr-visual-review.md) · [Method and data](nmr-prediction.md) · [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) · @Ameyanagi.
+- **Assistant setup and guided image exercise — under review:** explains Codex installation, sign-in, connection recovery and image transfer, then offers a small original ethanol image whose editable draft waits for Apply. [Setup guide](assistant-setup.md) · [Native review and saved-graph proof](changes/assistant-setup-review-2026-10-09.md) · [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280) · @Ameyanagi.
+
+![Assistant explains connection readiness and image-transfer guidance before a guided example](images/assistant-setup/assistant-setup-ready.jpg)
+
+![The original ethanol image and known reference attach locally before Send](images/assistant-setup/assistant-local-example.jpg)
+
+The known ethanol exercise is a first-use example. Model generation and visual
+review do not establish chemical correctness for other images; inspect the draft
+before Apply. This entry remains unreleased while the contribution is under review.
+
+- **Assistant image benchmark — under review:** records independent graph identity, unfinished drafts and failures for eight original synthetic images. Six exact completed graphs out of eleven attempted finite-reference runs remain separate from provisional previews and the known guided exercise. [Method and measured results](assistant-benchmark.md) · [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281) · @Ameyanagi.
+
+![Provisional macrocycle preview retained after a structured-output failure; excluded from completed successes](assistant-benchmark-results/baseline-20261009/cyclic-gly4/run-2/provisional.png)
+
+The small synthetic cohort does not establish accuracy on real scans or general
+peptide/macrocycle reliability. The retained preview is unfinished even though
+its graph matches the reference. See the report for failures, missing display
+labels, uncertainty and not-run repeats.

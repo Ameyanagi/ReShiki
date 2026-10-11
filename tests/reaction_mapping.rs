@@ -460,3 +460,155 @@ fn newly_mapped_shared_participants_with_nonunit_coefficients_are_rejected_atomi
     );
     assert_eq!(doc, before);
 }
+
+#[tokio::test]
+async fn aromatic_kekule_mapping_uses_adjacent_anchors_without_repainting_the_graph() {
+    use std::collections::BTreeSet;
+
+    let mut doc = import("[cH:41]1[cH:42]cccc1>>[CH:41]1=[CH:42]C=CC=C1").await;
+    let reactants = side(&doc, Role::Reactant);
+    let products = side(&doc, Role::Product);
+    assert_eq!(doc.atoms.len(), 12);
+    assert_eq!(doc.bonds.len(), 12);
+    assert_eq!(reactants.len(), 6);
+    assert_eq!(products.len(), 6);
+    for ids in [&reactants, &products] {
+        // Independently pin each input's six-cycle in SMILES traversal order.
+        let expected_edges: BTreeSet<_> = ids
+            .iter()
+            .zip(ids.iter().cycle().skip(1))
+            .map(|(&a, &b)| (a.min(b), a.max(b)))
+            .collect();
+        let bonds: Vec<_> = doc
+            .bonds
+            .iter()
+            .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
+            .collect();
+        assert_eq!(bonds.len(), 6);
+        assert_eq!(
+            bonds
+                .iter()
+                .map(|b| (b.a.min(b.b), b.a.max(b.b)))
+                .collect::<BTreeSet<_>>(),
+            expected_edges
+        );
+        assert_eq!(bonds.iter().filter(|b| b.order == 1).count(), 3);
+        assert_eq!(bonds.iter().filter(|b| b.order == 2).count(), 3);
+        for (index, &id) in ids.iter().enumerate() {
+            let atom = doc.atom(id).unwrap();
+            assert_eq!(atom.element, "C");
+            assert_eq!(atom.charge, 0);
+            assert_eq!(atom.isotope, 0);
+            assert_eq!(atom.map_num, [41, 42, 0, 0, 0, 0][index]);
+        }
+    }
+
+    // Import depicts both rings as Kekulé bonds. Use the public identity-checked
+    // display edit so this fixture really contains different stored bond orders.
+    doc = reshiki::chemistry::document::aromatic_display(&doc, &reactants)
+        .unwrap()
+        .finish()
+        .unwrap()
+        .document;
+    assert_eq!(
+        doc.bonds
+            .iter()
+            .filter(|b| reactants.contains(&b.a) && b.order == 4)
+            .count(),
+        6
+    );
+    assert_eq!(
+        doc.bonds
+            .iter()
+            .filter(|b| products.contains(&b.a) && matches!(b.order, 1 | 2))
+            .count(),
+        6
+    );
+    doc.atom_labels.maps = true;
+    let visible = reactants[0];
+    let hidden = reactants[1];
+    let display = &mut doc.atom_mut(visible).unwrap().display.mapping;
+    display.show = Some(true);
+    display.offset = Some(Point::new(-11., 23.));
+    display.style.bold = true;
+    display.style.size_pt = 11.;
+    display.style.color = reshiki::palette::Color::Custom([31, 78, 121]);
+    doc.atom_mut(hidden).unwrap().display.mapping.show = Some(false);
+    let original = doc.clone();
+
+    // Ordered adjacent anchors fix a six-cycle uniquely: a graph automorphism
+    // fixing both vertices individually cannot reflect or rotate the ring.
+    let mut expected_pairs: Vec<_> = reactants.iter().copied().zip(products).collect();
+    expected_pairs.sort_unstable();
+    let proposal = mapping::propose(&doc, doc.reactions[0].arrow, Budget::default()).unwrap();
+    assert!(proposal.complete);
+    assert!(!proposal.multiple_best);
+    assert_eq!(proposal.unmatched_reactants, 0);
+    assert_eq!(proposal.unmatched_products, 0);
+    assert_eq!(proposal.pairs, expected_pairs);
+    // Correct pairing alone is insufficient: aromatic perception must make all
+    // six corresponding chemical bonds unchanged despite the stored 4 vs 1/2.
+    assert_eq!(proposal.score.heavy_adjacency, 6);
+    assert_eq!(proposal.score.adjacency, 6);
+    assert_eq!(proposal.score.unchanged_bonds, 6);
+    assert_eq!(proposal.score.changed_atoms, 0);
+    assert_eq!(proposal.score.property_delta, 0);
+    let mapped = proposal.apply(&doc, false).unwrap();
+    assert_eq!(doc, original);
+    for &(a, b) in &expected_pairs {
+        let left = mapped.atom(a).unwrap().map_num;
+        assert_ne!(left, 0);
+        assert_eq!(left, mapped.atom(b).unwrap().map_num);
+    }
+    assert_eq!(
+        mapped
+            .atoms
+            .iter()
+            .map(|a| a.map_num)
+            .collect::<BTreeSet<_>>()
+            .len(),
+        6
+    );
+    // Only fresh map assignments may change; original anchors, IDs, all atom
+    // chemistry/coordinates, bond orders/styles and other document data survive.
+    let mut restored_maps = mapped.clone();
+    for (after, before) in restored_maps.atoms.iter_mut().zip(&original.atoms) {
+        if before.map_num != 0 {
+            assert_eq!(after.map_num, before.map_num);
+        }
+        after.map_num = before.map_num;
+    }
+    assert_eq!(mapped.bonds, original.bonds);
+    assert_eq!(restored_maps, original);
+    let indicators = atom_labels::indicators(&mapped);
+    let label = indicators
+        .iter()
+        .find(|i| i.owner == Owner::Mapping(visible))
+        .unwrap();
+    assert_eq!(label.text, "41");
+    assert_eq!(
+        label.center,
+        original.atom(visible).unwrap().position.offset(-11., 23.)
+    );
+    assert_eq!(
+        label.style,
+        original.atom(visible).unwrap().display.mapping.style
+    );
+    assert!(!indicators.iter().any(|i| i.owner == Owner::Mapping(hidden)));
+
+    // Use the edit-finalization API used by the app, not a raw history-only copy.
+    let mut history = History::default();
+    let mut current = mapped.clone();
+    assert!(
+        reshiki::transaction::apply(&mut current, &mut history, original.clone(), false)
+            .unwrap()
+            .recorded
+    );
+    assert_eq!(current, mapped);
+    assert!(history.undo(&mut current));
+    assert_eq!(current, original);
+    assert!(!history.can_undo());
+    assert!(history.redo(&mut current));
+    assert_eq!(current, mapped);
+    assert!(!history.can_redo());
+}

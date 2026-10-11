@@ -1,0 +1,12 @@
+{
+  "smiles": "NCC(=O)N[C@@H](C)C(=O)O",
+  "formula": "C5H10N2O3",
+  "heavy_atoms": 10,
+  "bonds": 9,
+  "tetrahedral_cip": [
+    "S"
+  ],
+  "fragments": 1,
+  "policy": "Exact protonation, formal charge, tautomer and specified stereochemistry; no tautomer/protonation equivalence.",
+  "abbreviations": []
+}

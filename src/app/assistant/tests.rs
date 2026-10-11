@@ -544,3 +544,126 @@ fn immediate_activity_stop_retains_preview_and_unverified_drafts_require_review(
     );
     assert_eq!(app.tab.doc, original);
 }
+
+// Baseline state fixtures for #93: written before setup production changes,
+// then adapted to typed outcomes. Source/UI confirmation preceded implementation;
+// fixture execution waited for the shared Cargo lane.
+#[test]
+fn first_use_connection_states_do_not_change_the_drawing() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab
+        .doc
+        .add_atom("O", reshiki::document::Point::default());
+    let drawing = app.tab.doc.clone();
+    let task = app.assistant_action(Action::Open);
+    assert!(task.units() > 0);
+    assert!(app.assistant.busy);
+    assert_eq!(app.assistant.status, "Connecting to Codex…");
+    assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+    let serial = app.assistant.serial;
+    let _ = app.assistant_action(Action::Connected(
+        serial,
+        Ok(codex::Account {
+            connected: false,
+            models: vec![],
+        }),
+    ));
+    assert!(!app.assistant.busy);
+    assert!(app.assistant.error);
+    assert!(app.assistant.status.contains("codex login"));
+    assert_eq!(app.tab.doc, drawing);
+
+    assert!(app.assistant_action(Action::Connect).units() > 0);
+    let serial = app.assistant.serial;
+    let _ = app.assistant_action(Action::Connected(
+        serial,
+        Err(codex::ConnectionError::ModelsFailed),
+    ));
+    assert!(!app.assistant.busy);
+    assert!(app.assistant.error);
+    assert_eq!(
+        app.assistant.status,
+        codex::ConnectionError::ModelsFailed.to_string()
+    );
+    assert_eq!(app.tab.doc, drawing);
+
+    assert!(app.assistant_action(Action::Connect).units() > 0);
+    let serial = app.assistant.serial;
+    let _ = app.assistant_action(Action::Connected(
+        serial,
+        Ok(codex::Account {
+            connected: true,
+            models: vec![],
+        }),
+    ));
+    assert!(!app.assistant.busy);
+    assert!(!app.assistant.error);
+    assert_eq!(app.assistant.status, "Connected to Codex");
+    assert_eq!(app.tab.doc, drawing);
+}
+
+#[test]
+fn cancelling_first_connection_ignores_late_result_and_permits_retry() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let drawing = app.tab.doc.clone();
+    let _ = app.assistant_action(Action::Connect);
+    let serial = app.assistant.serial;
+    let cancel = app.assistant.cancel.clone();
+    let _ = app.assistant_action(Action::Stop);
+    assert!(cancel.stopped());
+    assert!(!app.assistant.busy);
+    let status = app.assistant.status.clone();
+    let _ = app.assistant_action(Action::Connected(
+        serial,
+        Ok(codex::Account {
+            connected: true,
+            models: vec![],
+        }),
+    ));
+    assert!(app.assistant.account.is_none());
+    assert_eq!(app.assistant.status, status);
+    assert!(app.assistant_action(Action::Connect).units() > 0);
+    assert!(!app.assistant.cancel.stopped());
+    assert_eq!(app.tab.doc, drawing);
+}
+
+#[test]
+fn failed_refresh_clears_old_account_and_each_setup_failure_allows_drawing_and_retry() {
+    use super::setup::Connection;
+    for failure in [
+        codex::ConnectionError::MissingInstallation,
+        codex::ConnectionError::InvalidExecutable,
+        codex::ConnectionError::StartFailed,
+        codex::ConnectionError::HandshakeFailed,
+        codex::ConnectionError::AccountFailed,
+        codex::ConnectionError::ModelsFailed,
+        codex::ConnectionError::NoModels,
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.assistant.account = Some(codex::Account {
+            connected: true,
+            models: vec![],
+        });
+        let _ = app.assistant_action(Action::Connect);
+        assert!(app.assistant.account.is_none());
+        let serial = app.assistant.serial;
+        let _ = app.assistant_action(Action::Connected(serial, Err(failure)));
+        assert_eq!(app.assistant.connection, Connection::Failed(failure));
+        assert!(app.assistant.account.is_none());
+        app.assistant.input = text_editor::Content::with_text("Draw ethanol");
+        assert_eq!(app.assistant_action(Action::Send).units(), 0);
+        assert!(!app.assistant.busy);
+        app.tool = crate::canvas::Tool::Atom;
+        let _ = app.update(Message::Canvas(crate::canvas::Edit::Click(
+            reshiki::document::Point::new(120., 120.),
+        )));
+        assert_eq!(app.tab.doc.atoms.len(), 1);
+        assert!(app.assistant_action(Action::Connect).units() > 0);
+        assert_eq!(app.assistant.connection, Connection::Checking);
+        let _ = app.assistant_action(Action::Stop);
+        assert_eq!(app.assistant.connection, Connection::Cancelled);
+    }
+}

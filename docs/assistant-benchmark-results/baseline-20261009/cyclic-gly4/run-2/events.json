@@ -1,0 +1,18 @@
+[
+  {
+    "effort": "xhigh",
+    "elapsed_seconds": 2.130161667,
+    "event": "started",
+    "model_label": "GPT-6.1-Sol"
+  },
+  {
+    "elapsed_seconds": 221.081589709,
+    "event": "proposal"
+  },
+  {
+    "atoms": 16,
+    "bonds": 16,
+    "elapsed_seconds": 221.081964667,
+    "event": "preview"
+  }
+]

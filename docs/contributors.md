@@ -56,4 +56,22 @@ Visible reaction atom maps, reviewed mapping and rigid alignment (under review, 
 
 Retained `(+)-lactic acid` in the local naming dock (under review, unreleased): @Ameyanagi; [bounded retained-name correction and native evidence](changes/retained-plus-lactic-acid.md). This complete retained name resolves to the explicit S structure; it does not introduce a general optical-rotation-to-configuration rule.
 
+Adaptive calculation budgets and ordered fused-ring aromaticity enumeration
+(under review in [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279)):
+@Ameyanagi, addressing [#245](https://github.com/Ameyanagi/ReShiki/issues/245)
+and [#248](https://github.com/Ameyanagi/ReShiki/issues/248). See the
+[desktop validation record](adaptive-chemistry-limits-validation.md).
+
+Assistant setup and the original guided ethanol image exercise: @Ameyanagi,
+project creator and maintainer; under review in
+[PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
+[Issue #93](https://github.com/Ameyanagi/ReShiki/issues/93) ·
+[Native review and evidence](changes/assistant-setup-review-2026-10-09.md).
+
+Assistant image benchmark, original synthetic fixture cohort and independent
+reference-graph comparison: @Ameyanagi, project creator and maintainer; under
+review in [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281).
+[Issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) ·
+[Method and measured results](assistant-benchmark.md).
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.11.md) credit contributors alongside their changes.

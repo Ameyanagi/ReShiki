@@ -10,6 +10,9 @@ const PROTOCOL: u16 = 1;
 #[serde(deny_unknown_fields)]
 pub(super) struct Request {
     pub heap_bytes: usize,
+    /// Missing in protocol-1 legacy clients: retain their historical envelope.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capacity: Option<reshiki_geometry::Capacity>,
     pub operation: reshiki_geometry::Request,
 }
 #[derive(Debug, Serialize, Deserialize)]

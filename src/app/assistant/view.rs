@@ -97,7 +97,16 @@ impl App {
     fn assistant_chat(&self) -> Element<'_, Message> {
         let state = &self.assistant;
         let mut chat = column![].spacing(12).padding([2, 2]).width(Length::Fill);
-        if state.messages.is_empty() {
+        if state.messages.is_empty() || state.connection != super::setup::Connection::Ready {
+            chat = chat.push(self.assistant_setup_card());
+        }
+        if state.guided_example {
+            chat = chat.push(self.assistant_example_card());
+        }
+        if state.messages.is_empty()
+            && state.connection == super::setup::Connection::Ready
+            && !state.guided_example
+        {
             chat = chat.push(Space::new().height(20))
                 .push(text("What would you like to draw?").size(19))
                 .push(text("Molecules, reactions, or a starting point for your next scheme.").size(13).style(super::super::workspace::muted_text))
@@ -320,12 +329,15 @@ impl App {
         column![
             activity,
             composer,
+            self.assistant_transfer_note(),
             row![
                 connection,
                 Space::new().width(Length::Fill),
                 action(format!("{effort} ⌄"), Action::Menu(Some(Menu::Effort))).padding([3, 4]),
                 action(
-                    if state.preferences.auto_apply {
+                    if state.guided_example || state.requires_apply {
+                        "Review example ⌄"
+                    } else if state.preferences.auto_apply {
                         "Auto apply ⌄"
                     } else {
                         "Review ⌄"
@@ -348,7 +360,9 @@ impl App {
             activity = activity.push(
                 text(format!(
                     "{} · {seconds}s",
-                    if state.checking > 0 {
+                    if state.connection == super::setup::Connection::Checking {
+                        "Checking connection"
+                    } else if state.checking > 0 {
                         "Checking draft"
                     } else if state.structures.is_some() {
                         "Preparing structures"
@@ -441,7 +455,9 @@ impl App {
             action("↑ Send", Action::Send)
                 .style(crate::appearance::primary)
                 .on_press_maybe(
-                    ((!state.input.text().trim().is_empty() || state.source_image.is_some())
+                    ((state.account.as_ref().is_some_and(|a| a.connected)
+                        && (!state.input.text().trim().is_empty()
+                            || state.source_image.is_some()))
                         && !state.reading_image
                         && self.tab.cleanup.is_none())
                     .then_some(Message::Assistant(Action::Send)),
