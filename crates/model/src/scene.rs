@@ -1030,14 +1030,11 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     // direction. Normalize only a detached render copy, after collecting the
     // chemical labels from the original graph (reversing a dative graph would
     // otherwise change donor hydrogen counts).
-    let projection_paint = if doc
-        .bonds
-        .iter()
-        .any(|b| b.order == 5 && b.display.ends_with("_end"))
-    {
+    let projection_paint = if doc.bonds.iter().any(|b| b.narrowed_at_acceptor()) {
         let mut painted = doc.clone();
         for bond in &mut painted.bonds {
-            if bond.order == 5 && bond.display.ends_with("_end") {
+            if bond.narrowed_at_acceptor() {
+                // Unlike Bond::base_display, render normalization strips repeated suffixes.
                 bond.display = bond.display.trim_end_matches("_end").into();
                 bond.reverse();
             }

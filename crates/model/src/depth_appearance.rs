@@ -68,7 +68,7 @@ fn component_groups(doc: &Document, ids: &[u64], covalent_only: bool) -> Vec<Vec
     let mut remaining: HashSet<_> = ids.iter().copied().filter(|id| real.contains(id)).collect();
     let mut adjacent: HashMap<u64, Vec<u64>> = HashMap::new();
     for bond in &doc.bonds {
-        if (!covalent_only || matches!(bond.order, 1..=4 | 6 | 7))
+        if (!covalent_only || bond.is_covalent())
             && remaining.contains(&bond.a)
             && remaining.contains(&bond.b)
         {

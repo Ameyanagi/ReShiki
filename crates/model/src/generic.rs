@@ -649,24 +649,7 @@ impl Ids {
     }
 }
 fn ordinary_bond(a: u64, b: u64) -> crate::document::Bond {
-    crate::document::Bond {
-        a,
-        b,
-        order: 1,
-        display: "plain".into(),
-        stereo: None,
-        stereo_atoms: Vec::new(),
-        stereo_authoritative: false,
-        highlight: None,
-        ring_arc: false,
-        projection: false,
-        z_order: 0,
-        indicator: Default::default(),
-        cip_label: None,
-        double_position: Default::default(),
-        secondary_display: None,
-        color: Default::default(),
-    }
+    crate::document::Bond::plain(a, b, 1, "plain")
 }
 fn reject_affected_stereo(doc: &Document, ids: &[u64]) -> Result<(), String> {
     let affected: HashSet<_> = ids.iter().copied().collect();
@@ -689,16 +672,10 @@ fn reject_affected_stereo(doc: &Document, ids: &[u64]) -> Result<(), String> {
         })
     });
     let bond_stereo = doc.bonds.iter().any(|b| {
-        let chemical_marker = !b.projection
-            && matches!(
-                b.display.as_str(),
-                "wedge" | "hollow_wedge" | "bold" | "hash" | "hashed" | "wavy"
-            );
-        let specified = b.stereo.is_some()
-            || b.stereo_authoritative
-            || !b.stereo_atoms.is_empty()
-            || chemical_marker;
-        specified
+        // Neighbor bonds count only authoritative stereo or a chemical marker,
+        // a narrower rule than Bond::specifies_stereo.
+        let chemical_marker = !b.projection && crate::bonds::is_stereo_marker(&b.display);
+        b.specifies_stereo()
             && (affected.contains(&b.a)
                 || affected.contains(&b.b)
                 || b.stereo_atoms.iter().any(|id| affected.contains(id))

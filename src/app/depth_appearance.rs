@@ -76,10 +76,7 @@ impl App {
         };
         let mut adjacent: HashMap<u64, Vec<u64>> = HashMap::new();
         for bond in &document.bonds {
-            if matches!(bond.order, 1..=4 | 6 | 7)
-                && real.contains(&bond.a)
-                && real.contains(&bond.b)
-            {
+            if bond.is_covalent() && real.contains(&bond.a) && real.contains(&bond.b) {
                 adjacent.entry(bond.a).or_default().push(bond.b);
                 adjacent.entry(bond.b).or_default().push(bond.a);
             }

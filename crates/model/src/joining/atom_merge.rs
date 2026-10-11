@@ -253,7 +253,8 @@ fn same_bond(a: &Bond, b: &Bond) -> bool {
     a.cip_label = None;
     b.cip_label = None;
     if a.a != b.a {
-        if a.order == 5 || matches!(a.display.as_str(), "wedge" | "hollow_wedge" | "hash") {
+        // This direction check uses fewer displays than bonds::is_stereo_marker.
+        if a.is_dative() || matches!(a.display.as_str(), "wedge" | "hollow_wedge" | "hash") {
             return false;
         }
         b.reverse();

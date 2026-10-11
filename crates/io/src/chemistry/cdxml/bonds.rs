@@ -9,7 +9,10 @@ use super::{
     numeric::{self, integer, quoted},
     presentation::NativeColor,
 };
-use crate::{bonds::DoublePosition, document::Bond};
+use crate::{
+    bonds::{DATIVE, DoublePosition, dative_projects},
+    document::Bond,
+};
 use roxmltree::Node;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -85,7 +88,7 @@ impl NativeBond {
     pub fn into_document(self) -> Result<Bond> {
         Ok(Bond {
             ring_arc: false,
-            projection: self.order == 5 && !matches!(self.display.as_str(), "plain" | "dashed"),
+            projection: self.order == DATIVE && dative_projects(&self.display),
             stereo_authoritative: false,
             a: self.a,
             b: self.b,

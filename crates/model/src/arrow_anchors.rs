@@ -73,9 +73,7 @@ impl Target {
         match *self {
             Self::Atom { atom } => doc.atom(atom).map(|a| a.position),
             Self::Bond { a, b, fraction } => {
-                doc.bonds
-                    .iter()
-                    .find(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))?;
+                doc.bond_between(a, b)?;
                 let (a, b) = doc.atom(a).zip(doc.atom(b))?;
                 Some(a.position.offset(
                     (b.position.x - a.position.x) * fraction,
@@ -186,10 +184,7 @@ fn clearance(doc: &Document, target: &Target, direction: Point) -> Option<f32> {
                 .fold(doc.drawing_style.line_width() * 0.5, f32::max)
         }
         Target::Bond { a, b, .. } => {
-            let bond = doc
-                .bonds
-                .iter()
-                .find(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))?;
+            let (_, bond) = doc.bond_between(a, b)?;
             let style = &doc.drawing_style;
             let stroke = DEFAULT.world(
                 if matches!(
@@ -353,21 +348,16 @@ fn new_target_visible(
     match target {
         Pick::Atom(id) => ink.atom(*id),
         Pick::LonePair { atom, .. } => ink.mark(*atom),
-        Pick::Bond { a, b, fraction } => doc
-            .bonds
-            .iter()
-            .enumerate()
-            .find(|(_, bond)| (bond.a == *a && bond.b == *b) || (bond.a == *b && bond.b == *a))
-            .is_some_and(|(index, bond)| {
-                ink.bond(
-                    index,
-                    if bond.a == *a {
-                        *fraction
-                    } else {
-                        1. - *fraction
-                    },
-                )
-            }),
+        Pick::Bond { a, b, fraction } => doc.bond_between(*a, *b).is_some_and(|(index, bond)| {
+            ink.bond(
+                index,
+                if bond.a == *a {
+                    *fraction
+                } else {
+                    1. - *fraction
+                },
+            )
+        }),
     }
 }
 /// Creates one independent cubic. IDs and mark IDs change only after success.

@@ -1047,16 +1047,14 @@ fn shared_atom_label(
                 .is_some_and(|stereo| stereo.neighbors.contains(&id))
         })
         || doc.bonds.iter().any(|b| {
+            // Unlike Bond::specifies_stereo: markers count only on order 1 (or a
+            // wavy double), and stereo_authoritative is not checked.
             b.stereo_atoms.contains(&id)
                 || (b.a == id || b.b == id)
                     && (b.stereo.is_some()
                         || !b.stereo_atoms.is_empty()
                         || (!b.projection
-                            && ((b.order == 1
-                                && matches!(
-                                    b.display.as_str(),
-                                    "wedge" | "hollow_wedge" | "bold" | "hash" | "hashed" | "wavy"
-                                ))
+                            && ((b.order == 1 && crate::bonds::is_stereo_marker(&b.display))
                                 || (b.order == 2 && b.display == "wavy"))))
         });
     let reason = if stereo {

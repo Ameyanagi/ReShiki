@@ -1360,17 +1360,10 @@ impl Plan {
             .atoms
             .iter()
             .any(|a| affected_ids.contains(&a.id) && a.stereo.is_some())
-            || doc.bonds.iter().any(|b| {
-                affected_ids.contains(&b.a)
-                    && (b.stereo.is_some()
-                        || b.stereo_authoritative
-                        || !b.stereo_atoms.is_empty()
-                        || !b.projection
-                            && matches!(
-                                b.display.as_str(),
-                                "wedge" | "hollow_wedge" | "bold" | "hash" | "hashed" | "wavy"
-                            ))
-            })
+            || doc
+                .bonds
+                .iter()
+                .any(|b| affected_ids.contains(&b.a) && b.specifies_stereo())
         {
             return Err(stereo_error());
         }

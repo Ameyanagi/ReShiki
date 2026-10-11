@@ -21,7 +21,7 @@ impl Target {
             Self::Bond(a, b) => doc
                 .bonds
                 .iter()
-                .any(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
+                .any(|bond| bond.connects(a, b))
                 .then(|| doc.atom(a).zip(doc.atom(b)))
                 .flatten()
                 .map(|(a, b)| {
@@ -283,7 +283,7 @@ impl State {
             Target::Bond(a, b) => doc
                 .bonds
                 .iter()
-                .find(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
+                .find(|bond| bond.connects(a, b))
                 .map(|bond| {
                     crate::bonds::BondPreset::of(bond).map_or_else(
                         || format!("Bond {a}–{b}"),
@@ -479,11 +479,7 @@ pub fn connect_atoms(source: &Document, a: u64, b: u64) -> Result<Document, Stri
     if a == b {
         return Err("Choose a different atom to connect".into());
     }
-    if source
-        .bonds
-        .iter()
-        .any(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
-    {
+    if source.bonds.iter().any(|bond| bond.connects(a, b)) {
         return Err("These atoms already have a bond".into());
     }
     if [a, b]

@@ -262,7 +262,7 @@ impl Stretch {
         let bond = doc
             .bonds
             .iter()
-            .find(|b| (b.a == fixed && b.b == moving) || (b.a == moving && b.b == fixed))
+            .find(|b| b.connects(fixed, moving))
             .ok_or("Choose an existing bond to stretch")?;
         if bond.order == 0
             || [fixed, moving].iter().any(|id| {
@@ -284,7 +284,7 @@ impl Stretch {
         }
         let mut adjacent: HashMap<u64, Vec<u64>> = HashMap::new();
         for b in &doc.bonds {
-            if b.order == 0 || (b.a == fixed && b.b == moving) || (b.a == moving && b.b == fixed) {
+            if b.order == 0 || b.connects(fixed, moving) {
                 continue;
             }
             adjacent.entry(b.a).or_default().push(b.b);
@@ -320,7 +320,7 @@ impl Stretch {
         if ids.contains(&fixed)
             || doc.bonds.iter().any(|b| {
                 let boundary = ids.contains(&b.a) != ids.contains(&b.b);
-                boundary && !((b.a == fixed && b.b == moving) || (b.a == moving && b.b == fixed))
+                boundary && !b.connects(fixed, moving)
             })
         {
             return Err("This fragment has more than one fixed attachment".into());

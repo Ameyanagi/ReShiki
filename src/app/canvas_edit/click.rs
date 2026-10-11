@@ -156,7 +156,7 @@ impl App {
                 .bond_preset()
                 .filter(|p| p.preserves_chemistry(&b))
             {
-                if b.order == 5 {
+                if b.is_dative() {
                     if let Some(bond) = self
                         .tab
                         .doc
@@ -181,11 +181,7 @@ impl App {
                     .iter_mut()
                     .find(|bond| bond.a == b.a && bond.b == b.b)
             {
-                if bond.order == 5 {
-                    bond.reverse_projection();
-                } else {
-                    bond.reverse();
-                }
+                bond.reverse_drawn(false);
             }
             self.tab.selected = vec![b.a, b.b];
         } else {

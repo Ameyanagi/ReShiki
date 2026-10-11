@@ -1049,7 +1049,7 @@ impl App {
                         ]
                         .spacing(6),
                         command(
-                            if bonds.iter().all(|b| b.order == 5 && b.projection) {
+                            if bonds.iter().all(|b| b.is_projected_dative()) {
                                 "Reverse projection tip"
                             } else {
                                 "Reverse bonds"

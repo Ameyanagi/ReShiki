@@ -1197,7 +1197,7 @@ pub fn coordinate_atoms(source: &Document, donor: u64, metal: u64) -> Result<Doc
         .iter()
         .find(|b| (b.a == donor && b.b == metal) || (b.a == metal && b.b == donor))
     {
-        return if bond.order == 5 && bond.a == donor {
+        return if bond.is_dative() && bond.a == donor {
             Ok(source.clone())
         } else {
             Err("These atoms already have a different bond; remove it explicitly before coordinating.".into())
@@ -1219,24 +1219,12 @@ pub fn coordinate_atoms(source: &Document, donor: u64, metal: u64) -> Result<Doc
     // Existing directed order 5 consumes no donor covalent valence. Do not use
     // invalidate_chemistry here: donor H/stereo and remote chemistry must survive.
     crate::atom_labels::clear_computed(&mut candidate);
-    candidate.bonds.push(crate::document::Bond {
-        a: donor,
-        b: metal,
-        order: 5,
-        display: "plain".into(),
-        highlight: None,
-        ring_arc: false,
-        projection: false,
-        stereo_authoritative: false,
-        z_order: 0,
-        indicator: Default::default(),
-        cip_label: None,
-        stereo: None,
-        stereo_atoms: vec![],
-        double_position: Default::default(),
-        secondary_display: None,
-        color: Default::default(),
-    });
+    candidate.bonds.push(crate::document::Bond::plain(
+        donor,
+        metal,
+        crate::bonds::DATIVE,
+        "plain",
+    ));
     candidate.reconcile_molecule_groups();
     crate::reactions::reconcile(&mut candidate)?;
     candidate.validate()?;

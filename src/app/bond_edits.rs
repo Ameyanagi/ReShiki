@@ -127,18 +127,14 @@ impl App {
             .filter(|b| {
                 self.tab.selected.contains(&b.a)
                     && self.tab.selected.contains(&b.b)
-                    && !(b.order == 5 && b.projection)
+                    && !b.is_projected_dative()
             })
             .flat_map(|b| [b.a, b.b])
             .collect();
         self.tab.doc.invalidate_chemistry(&affected);
         for b in &mut self.tab.doc.bonds {
             if self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b) {
-                if b.order == 5 && b.projection {
-                    b.reverse_projection();
-                } else {
-                    b.reverse();
-                }
+                b.reverse_drawn(true);
             }
         }
         self.changed(before);
@@ -162,7 +158,7 @@ impl App {
                 .doc
                 .bonds
                 .iter_mut()
-                .find(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
+                .find(|bond| bond.connects(a, b))
         {
             preset.apply(bond);
         }

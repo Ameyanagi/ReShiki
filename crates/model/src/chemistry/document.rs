@@ -212,6 +212,7 @@ fn build(document: &Document) -> Result<Input, Error> {
         .iter()
         .map(|b| {
             if !b.projection && (b.order == 1 || b.order == 2 && b.display == "wavy") {
+                // Same displays as bonds::is_stereo_marker, mapped to a direction.
                 match b.display.as_str() {
                     "wedge" | "hollow_wedge" | "bold" => Direction::Wedge,
                     "hash" | "hashed" => Direction::Hash,

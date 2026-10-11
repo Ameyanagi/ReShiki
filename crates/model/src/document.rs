@@ -352,6 +352,13 @@ impl Document {
     pub fn atom_mut(&mut self, id: u64) -> Option<&mut Atom> {
         self.atoms.iter_mut().find(|a| a.id == id)
     }
+    /// Return the first bond connecting either endpoint order, with its index.
+    pub fn bond_between(&self, a: u64, b: u64) -> Option<(usize, &Bond)> {
+        self.bonds
+            .iter()
+            .enumerate()
+            .find(|(_, bond)| bond.connects(a, b))
+    }
     pub fn nearest(&self, point: Point, radius: f32) -> Option<u64> {
         self.atoms
             .iter()
@@ -374,24 +381,14 @@ impl Document {
             .iter_mut()
             .find(|x| (x.a == a && x.b == b) || (x.a == b && x.b == a));
         let retained = previous.as_deref();
-        let fresh = Bond {
-            highlight: retained.and_then(|bond| bond.highlight),
-            ring_arc: false,
-            projection: false,
-            stereo_authoritative: false,
-            z_order: retained.map_or(0, |bond| bond.z_order),
-            indicator: retained.map_or_else(Default::default, |bond| bond.indicator.clone()),
-            cip_label: None,
-            a,
-            b,
-            order,
-            display: display.into(),
-            stereo: None,
-            stereo_atoms: vec![],
-            double_position: retained.map_or(Default::default(), |bond| bond.double_position),
-            secondary_display: None,
-            color: retained.map_or(Default::default(), |bond| bond.color),
-        };
+        let mut fresh = Bond::plain(a, b, order, display);
+        if let Some(retained) = retained {
+            fresh.highlight = retained.highlight;
+            fresh.z_order = retained.z_order;
+            fresh.indicator = retained.indicator.clone();
+            fresh.double_position = retained.double_position;
+            fresh.color = retained.color;
+        }
         if let Some(bond) = previous {
             *bond = fresh;
         } else {

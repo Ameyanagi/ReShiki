@@ -468,11 +468,7 @@ fn finish(
                 .inchi
                 .clone(),
             Some("mol") => {
-                if document
-                    .bonds
-                    .iter()
-                    .any(|bond| bond.order == 5 && bond.projection)
-                {
+                if document.bonds.iter().any(|bond| bond.is_projected_dative()) {
                     response.warnings.push("MOL retains directed dative chemistry and metal charge, but omits solid/hashed coordination projection appearance. Use native ReShiki or figure export to retain that drawing.".into());
                 }
                 let molecule = &prepared.ok_or(Error::MissingPrepared)?.molecule;
@@ -485,11 +481,7 @@ fn finish(
                 }
             }
             Some("cdxml" | "cdx") => {
-                if document
-                    .bonds
-                    .iter()
-                    .any(|bond| bond.order == 5 && bond.projection)
-                {
+                if document.bonds.iter().any(|bond| bond.is_projected_dative()) {
                     response.warnings.push("CDXML/CDX retains directed coordination chemistry and ReShiki projection attributes. ChemDraw 26 displays dative arrows and removes wedge/hash paint on save. Use native ReShiki or figure export for faithful projection appearance.".into());
                 }
                 let xml = exchange::drawing::write(document, request.into())?;

@@ -1,5 +1,8 @@
 use super::*;
-use crate::atom_labels::{AtomDisplay, Number, StereoDisplay};
+use crate::{
+    atom_labels::{AtomDisplay, Number, StereoDisplay},
+    bonds::dative_projects,
+};
 
 fn narrow(point: ImportPoint) -> Point {
     Point::new(point.x as f32, point.y as f32)
@@ -180,8 +183,9 @@ impl CdxmlScene {
                 bond.order = old.order;
             }
             bond.display = old.display;
+            // Aromatic import uses a narrower rule than bonds::dative_projects.
             if bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge")
-                || bond.order == 5 && !matches!(bond.display.as_str(), "plain" | "dashed")
+                || bond.is_dative() && dative_projects(&bond.display)
             {
                 bond.projection = true;
             }

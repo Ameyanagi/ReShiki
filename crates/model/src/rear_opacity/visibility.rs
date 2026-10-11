@@ -973,7 +973,7 @@ fn cages(doc: &Document, queries: usize) -> Vec<Triangle> {
     let mut adjacent: BTreeMap<u64, BTreeSet<u64>> = BTreeMap::new();
     let mut duplicate = BTreeSet::new();
     for b in &doc.bonds {
-        if matches!(b.order, 1..=4 | 6 | 7)
+        if b.is_covalent()
             && doc.bond_visible(b.a, b.b)
             && real.contains(&b.a)
             && real.contains(&b.b)
@@ -1134,7 +1134,7 @@ fn shell(
     let layers: BTreeMap<_, _> = doc
         .bonds
         .iter()
-        .filter(|b| ids.contains(&b.a) && ids.contains(&b.b) && matches!(b.order, 1..=4 | 6 | 7))
+        .filter(|b| ids.contains(&b.a) && ids.contains(&b.b) && b.is_covalent())
         .map(|b| ((b.a.min(b.b), b.a.max(b.b)), b.z_order))
         .collect();
     let mut counts: BTreeMap<(u64, u64), usize> = BTreeMap::new();
