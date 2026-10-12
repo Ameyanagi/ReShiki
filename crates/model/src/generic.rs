@@ -3,8 +3,20 @@
 use crate::document::{Document, Point};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+mod authoring;
+mod definitions;
+mod guards;
 mod layout;
+mod probe;
 mod symmetry;
+
+pub use authoring::{alternative, apply_label, define_bracket, set_repeat_unit};
+pub use definitions::{prune, selection, validate};
+pub use guards::{atom_references, component_intersects, intersects, touches};
+
+use definitions::{check_range, pair, printable};
+use guards::reject_affected_stereo;
+use probe::Stage;
 
 /// A detached concrete drawing and its positioned label/object extents. These
 /// bounds are transient layout output, never authoritative document metadata.
@@ -184,366 +196,18 @@ impl Default for Limits {
     }
 }
 pub const NOTICE: &str = "Generic choices retained. Expand Generic Structures to choose concrete atoms, attachment positions or finite repeats before calculating identifiers or molecular properties.";
+/// Joining referenced generic structures requires concrete chemical choices first.
+pub const JOIN_NOTICE: &str =
+    "Expand Generic Structures before joining referenced generic atoms or repeating units.";
+
 pub fn present(doc: &Document) -> bool {
     !doc.generic.is_empty() || doc.atoms.iter().any(|a| a.is_variable_attachment())
-}
-fn pair(a: u64, b: u64) -> (u64, u64) {
-    (a.min(b), a.max(b))
-}
-fn check_range(min: u32, max: u32) -> Result<(), String> {
-    if min == 0 || max < min || max > 1000 {
-        Err("Repeat counts must be an ordered range from 1 to 1000".into())
-    } else {
-        Ok(())
-    }
 }
 fn bonds_at(doc: &Document, id: u64) -> Vec<&crate::document::Bond> {
     doc.bonds
         .iter()
         .filter(|b| b.a == id || b.b == id)
         .collect()
-}
-fn printable(text: &str) -> bool {
-    !text.is_empty() && text.chars().count() <= 64 && !text.chars().any(char::is_control)
-}
-pub fn validate(doc: &Document) -> Result<(), String> {
-    if doc.generic.alternatives.len() + doc.generic.links.len() + doc.generic.repeats.len() > 10_000
-    {
-        return Err("Too many generic definitions".into());
-    }
-    let atoms: HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a)).collect();
-    let graphics: HashMap<_, _> = doc.graphics.iter().map(|g| (g.id, g)).collect();
-    let mut degrees = HashMap::<u64, usize>::new();
-    for b in &doc.bonds {
-        *degrees.entry(b.a).or_default() += 1;
-        *degrees.entry(b.b).or_default() += 1;
-    }
-    let mut sites = HashSet::new();
-    for s in &doc.generic.alternatives {
-        let a = atoms.get(&s.atom).ok_or("Missing alternative atom")?;
-        if !sites.insert(s.atom)
-            || a.element != "*"
-            || a.attachment.is_some()
-            || !a.centroid.is_empty()
-            || s.choices.is_empty()
-            || s.choices.len() > 118
-        {
-            return Err("Invalid alternative atom definition".into());
-        }
-        let mut unique = HashSet::new();
-        for choice in &s.choices {
-            let key = match choice {
-                Alternative::Element { symbol, isotope } => {
-                    if !crate::editing::ELEMENTS.contains(&symbol.as_str())
-                        || *isotope > u16::MAX.into()
-                    {
-                        return Err("Invalid alternative element".into());
-                    }
-                    format!("{symbol}:{isotope}")
-                }
-                Alternative::Group { label } | Alternative::Unresolved { label } => {
-                    if !printable(label) {
-                        return Err("Invalid alternative label".into());
-                    }
-                    label.clone()
-                }
-            };
-            if !unique.insert(key) {
-                return Err("Duplicate alternative choice".into());
-            }
-        }
-    }
-    for link in &doc.generic.links {
-        check_range(link.min, link.max)?;
-        let a = atoms.get(&link.atom).ok_or("Missing link atom")?;
-        if !sites.insert(link.atom)
-            || a.attachment.is_some()
-            || !a.centroid.is_empty()
-            || degrees.get(&link.atom) != Some(&2)
-        {
-            return Err("A link node requires exactly two connecting bonds".into());
-        }
-    }
-    let mut members = 0usize;
-    for unit in &doc.generic.repeats {
-        members = members.saturating_add(unit.members.len() + unit.crossings.len());
-        let set: HashSet<_> = unit.members.iter().copied().collect();
-        if members > 100_000
-            || set.is_empty()
-            || set.len() != unit.members.len()
-            || set.iter().any(|id| !atoms.contains_key(id))
-            || !printable(&unit.usage)
-            || !printable(&unit.label)
-        {
-            return Err("Invalid repeating unit".into());
-        }
-        if let Some(id) = unit.bracket
-            && graphics.get(&id).is_none_or(|g| !g.kind.brackets())
-        {
-            return Err("Missing repeating-unit bracket".into());
-        }
-        if unit
-            .bracket_objects
-            .iter()
-            .any(|id| graphics.get(id).is_none_or(|g| !g.kind.brackets()))
-        {
-            return Err("Missing additional repeating-unit bracket".into());
-        }
-        if !unit.crossing_brackets.is_empty()
-            && (unit.crossing_brackets.len() != unit.crossings.len()
-                || unit
-                    .crossing_brackets
-                    .iter()
-                    .any(|id| unit.bracket != Some(*id) && !unit.bracket_objects.contains(id)))
-        {
-            return Err("Invalid crossing-bond bracket association".into());
-        }
-        if unit
-            .head_count
-            .is_some_and(|n| n == 0 || n > unit.crossings.len())
-        {
-            return Err("Invalid repeat head-bond count".into());
-        }
-        match &unit.count {
-            RepeatCount::Finite { min, max } => check_range(*min, *max)?,
-            RepeatCount::Indefinite { label } => {
-                if !printable(label) {
-                    return Err("Invalid indefinite repeat label".into());
-                }
-            }
-        }
-        let actual: HashSet<_> = doc
-            .bonds
-            .iter()
-            .filter(|b| set.contains(&b.a) != set.contains(&b.b))
-            .map(|b| pair(b.a, b.b))
-            .collect();
-        let expected: HashSet<_> = unit
-            .crossings
-            .iter()
-            .map(|c| pair(c.inside, c.outside))
-            .collect();
-        if actual != expected
-            || expected.len() != unit.crossings.len()
-            || unit
-                .crossings
-                .iter()
-                .any(|c| !set.contains(&c.inside) || set.contains(&c.outside))
-        {
-            return Err("Repeating-unit crossing bonds must match its atom membership".into());
-        }
-    }
-    Ok(())
-}
-pub fn prune(doc: &mut Document) {
-    let atoms: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
-    let graphics: HashSet<_> = doc.graphics.iter().map(|g| g.id).collect();
-    doc.generic.alternatives.retain(|s| atoms.contains(&s.atom));
-    let mut degrees = HashMap::<u64, usize>::new();
-    for b in &doc.bonds {
-        *degrees.entry(b.a).or_default() += 1;
-        *degrees.entry(b.b).or_default() += 1;
-    }
-    let removed: Vec<_> = doc
-        .generic
-        .links
-        .iter()
-        .filter(|s| !atoms.contains(&s.atom) || degrees.get(&s.atom) != Some(&2))
-        .map(|s| s.atom)
-        .collect();
-    doc.generic.links.retain(|s| !removed.contains(&s.atom));
-    for id in removed {
-        if let Some(atom) = doc.atom_mut(id) {
-            atom.display.variable = None;
-        }
-    }
-    let bonds: HashSet<_> = doc.bonds.iter().map(|b| pair(b.a, b.b)).collect();
-    doc.generic.repeats.retain(|u| {
-        u.members.iter().all(|id| atoms.contains(id))
-            && u.crossings.iter().all(|c| atoms.contains(&c.outside))
-            && u.bracket.is_none_or(|id| graphics.contains(&id))
-            && u.bracket_objects.iter().all(|id| graphics.contains(id))
-            && u.crossings
-                .iter()
-                .all(|c| bonds.contains(&pair(c.inside, c.outside)))
-    });
-}
-pub fn selection(doc: &Document, ids: &[u64]) -> Vec<u64> {
-    let mut set: HashSet<_> = ids.iter().copied().collect();
-    // Shared endpoints can connect more than one retained unit. Compute the
-    // closure so selecting any referenced object never makes it look concrete.
-    loop {
-        let before = set.len();
-        for unit in &doc.generic.repeats {
-            if unit.bracket.is_some_and(|id| set.contains(&id))
-                || unit.bracket_objects.iter().any(|id| set.contains(id))
-                || unit.members.iter().any(|id| set.contains(id))
-                || unit.crossings.iter().any(|c| set.contains(&c.outside))
-            {
-                set.extend(unit.bracket_objects.iter().copied());
-                set.extend(unit.members.iter().copied());
-                set.extend(unit.crossings.iter().map(|c| c.outside));
-                if let Some(id) = unit.bracket {
-                    set.insert(id);
-                }
-            }
-        }
-        if set.len() == before {
-            break;
-        }
-    }
-    let mut result: Vec<_> = set.into_iter().collect();
-    result.sort_unstable();
-    result
-}
-
-pub fn alternative(text: &str) -> Result<Option<(Vec<Alternative>, bool)>, String> {
-    let text = text.trim();
-    let bracketed = text.starts_with('[') && text.ends_with(']');
-    let inside = if bracketed {
-        text.strip_prefix('[')
-            .and_then(|s| s.strip_suffix(']'))
-            .ok_or("Invalid alternative list")?
-    } else {
-        text
-    };
-    if !inside.contains(',') {
-        return Ok(None);
-    }
-    if text.contains(['[', ']']) && !bracketed {
-        return Err("Use matching brackets for an alternative list".into());
-    }
-    let (inside, excluded) = if let Some(s) = inside.trim().strip_prefix("NOT ") {
-        (s, true)
-    } else if let Some(s) = inside.trim().strip_prefix('-') {
-        (s, true)
-    } else {
-        (inside, false)
-    };
-    let mut choices = Vec::new();
-    for item in inside.split(',') {
-        let item = item.trim();
-        if !printable(item) {
-            return Err("Each alternative must be a printable element or defined group".into());
-        }
-        let choice = if crate::editing::ELEMENTS.contains(&item) {
-            Alternative::Element {
-                symbol: item.into(),
-                isotope: 0,
-            }
-        } else if matches!(item, "D" | "T") {
-            Alternative::Element {
-                symbol: "H".into(),
-                isotope: if item == "D" { 2 } else { 3 },
-            }
-        } else if !excluded
-            && (crate::abbreviations::PRESETS.contains(&item)
-                || crate::common_groups::LABELS.contains(&item)
-                || item == "OPh")
-        {
-            Alternative::Group { label: item.into() }
-        } else if !excluded
-            && (item == "R"
-                || item == "X"
-                || item
-                    .strip_prefix('R')
-                    .is_some_and(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())))
-        {
-            Alternative::Unresolved { label: item.into() }
-        } else {
-            return Err(format!(
-                "Alternative {item} has no defined chemical fragment"
-            ));
-        };
-        choices.push(choice);
-    }
-    if choices.len() > 118 {
-        return Err("Too many alternatives".into());
-    }
-    Ok(Some((choices, excluded)))
-}
-pub fn apply_label(doc: &Document, id: u64, text: &str) -> Result<Option<Document>, String> {
-    if let Some((choices, excluded)) = alternative(text)? {
-        reject_affected_stereo(doc, &[id])?;
-        if doc.abbreviation(id).is_some() {
-            return Err("Expand this abbreviation before defining alternatives".into());
-        }
-        let mut result = doc.clone();
-        result.generic.alternatives.retain(|s| s.atom != id);
-        result.generic.links.retain(|s| s.atom != id);
-        let a = result.atom_mut(id).ok_or("Missing alternative atom")?;
-        if a.attachment.is_some() || !a.centroid.is_empty() {
-            return Err("Use an ordinary atom for alternatives".into());
-        }
-        a.element = "*".into();
-        a.no_implicit = true;
-        a.explicit_h = 0;
-        a.isotope = 0;
-        a.charge = 0;
-        a.aromatic = false;
-        a.label_h = 0;
-        a.display.variable = Some(text.into());
-        result.generic.alternatives.push(AlternativeSite {
-            atom: id,
-            choices,
-            excluded,
-        });
-        result.invalidate_chemistry(&[id]);
-        result.validate()?;
-        return Ok(Some(result));
-    }
-    let mut base = None;
-    for (open, close) in [('[', ']'), ('(', ')'), ('{', '}')] {
-        if let Some(after) = text.strip_prefix(open)
-            && let Some((label, range)) = after.split_once(close)
-            && !range.is_empty()
-        {
-            base = Some((label, range));
-            break;
-        }
-    }
-    if base.is_none()
-        && let Some(start) = text.find(|c: char| c.is_ascii_digit())
-        && text.get(start..).is_some_and(|s| s.contains('-'))
-    {
-        base = Some((
-            text.get(..start).ok_or("Invalid link label")?,
-            text.get(start..).ok_or("Invalid link range")?,
-        ));
-    }
-    let Some((label, range)) = base else {
-        return Ok(None);
-    };
-    let RepeatCount::Finite { min, max } = RepeatCount::parse(range)? else {
-        return Err("A link node requires a finite number range".into());
-    };
-    reject_affected_stereo(doc, &[id])?;
-    let mut result = doc.clone();
-    result.generic.links.retain(|s| s.atom != id);
-    result.generic.alternatives.retain(|s| s.atom != id);
-    // Use the existing element/hydride input contract for the repeated atom.
-    result = crate::atom_text::apply(&result, id, label, crate::atom_text::Mode::Auto)?;
-    if result.abbreviation(id).is_some() {
-        return Err("A link node must be one atom or a generic atom label".into());
-    }
-    result
-        .atom_mut(id)
-        .ok_or("Missing link atom")?
-        .display
-        .variable = Some(text.into());
-    result.generic.links.push(LinkNode { atom: id, min, max });
-    result.validate()?;
-    Ok(Some(result))
-}
-pub fn set_repeat_unit(doc: &mut Document, unit: RepeatUnit) -> Result<(), String> {
-    let mut candidate = doc.clone();
-    if let Some(id) = unit.bracket {
-        candidate.generic.repeats.retain(|u| u.bracket != Some(id));
-    }
-    candidate.generic.repeats.push(unit);
-    candidate.validate()?;
-    *doc = candidate;
-    Ok(())
 }
 
 #[derive(Clone)]
@@ -652,43 +316,6 @@ impl Ids {
 fn ordinary_bond(a: u64, b: u64) -> crate::document::Bond {
     crate::document::Bond::plain(a, b, 1, "plain")
 }
-fn reject_affected_stereo(doc: &Document, ids: &[u64]) -> Result<(), String> {
-    let affected: HashSet<_> = ids.iter().copied().collect();
-    let neighbors: HashSet<_> = doc
-        .bonds
-        .iter()
-        .filter_map(|b| {
-            if affected.contains(&b.a) {
-                Some(b.b)
-            } else if affected.contains(&b.b) {
-                Some(b.a)
-            } else {
-                None
-            }
-        })
-        .collect();
-    let atom_stereo = doc.atoms.iter().any(|a| {
-        a.stereo.as_ref().is_some_and(|s| {
-            affected.contains(&a.id) || s.neighbors.iter().any(|id| affected.contains(id))
-        })
-    });
-    let bond_stereo = doc.bonds.iter().any(|b| {
-        // Neighbor bonds count only authoritative stereo or a chemical marker,
-        // a narrower rule than Bond::specifies_stereo.
-        let chemical_marker = !b.projection && crate::bonds::is_stereo_marker(&b.display);
-        b.specifies_stereo()
-            && (affected.contains(&b.a)
-                || affected.contains(&b.b)
-                || b.stereo_atoms.iter().any(|id| affected.contains(id))
-                || (b.stereo_authoritative || chemical_marker)
-                    && (neighbors.contains(&b.a) || neighbors.contains(&b.b)))
-    });
-    if atom_stereo || bond_stereo {
-        Err("Generic expansion involving specified atom or bond stereochemistry is unsupported; the source drawing is retained".into())
-    } else {
-        Ok(())
-    }
-}
 fn clear_after_expansion(doc: &mut Document) {
     // The explicit-stereo guard has already checked every affected center and
     // bond. Cached labels need clearing, but unrelated captured stereo remains.
@@ -700,6 +327,8 @@ fn clear_after_expansion(doc: &mut Document) {
 /// Enumerate chemistry without changing the materializers' coordinates. This
 /// API retains large finite graph enumeration under its existing work bounds;
 /// generated canvas layout/ink measurement has a separate, stricter cost.
+/// Verification entry point used by io round-trip and app tests.
+#[doc(hidden)]
 pub fn expand(source: &Document, limits: Limits) -> Result<Vec<Document>, String> {
     Ok(expand_inner(source, limits, false)?
         .drawings
@@ -714,6 +343,8 @@ pub fn expand(source: &Document, limits: Limits) -> Result<Vec<Document>, String
 /// Changed components with generated-name, attached-arrow or depth-scope
 /// dependencies fail closed. Independent native associations are inherited
 /// exactly; this API does not freshly verify arbitrary saved name claims.
+/// Verification entry point used by io round-trip and app tests.
+#[doc(hidden)]
 pub fn expand_drawings(source: &Document, limits: Limits) -> Result<Vec<ExpandedDrawing>, String> {
     Ok(expand_inner(source, limits, true)?.drawings)
 }
@@ -789,14 +420,12 @@ pub fn prepare_expansion_input(
     let presentation = layout::Presentation::inspect(source, &mut work)?;
     presentation.charge_input(source, selected, &mut work)?;
     let owned = if selected.is_empty() {
-        #[cfg(test)]
-        layout::entered(4);
+        probe::enter(Stage::Snapshot);
         source.clone()
     } else {
         // Whole source validation is covered by the selected-input reservation.
         source.validate()?;
-        #[cfg(test)]
-        layout::entered(4);
+        probe::enter(Stage::Snapshot);
         crate::editing::preserved_expansion_selection(source, selected)?
     };
     Ok(ExpansionInput {
@@ -821,7 +450,11 @@ pub fn expand_prepared(input: ExpansionInput) -> Result<PreparedExpansion, Strin
 /// Assemble under the same aggregate remainder and publish an opaque one-use
 /// result. Preserved tiles use exact remap/common translation; ordinary append
 /// and its whole-result arrow/name repair are deliberately not this path.
-pub fn prepare_expansion(source: &Document, limits: Limits) -> Result<PreparedExpansion, String> {
+#[cfg(test)]
+pub(crate) fn prepare_expansion(
+    source: &Document,
+    limits: Limits,
+) -> Result<PreparedExpansion, String> {
     assemble_expansion(source, expand_inner(source, limits, true)?)
 }
 fn assemble_expansion(
@@ -1195,8 +828,7 @@ fn expand_with_work(
             &mut work,
         )?;
     }
-    #[cfg(test)]
-    layout::entered(4);
+    probe::enter(Stage::Snapshot);
     let mut seed = source.clone();
     seed.generic = Generic::default();
     for link in &source.generic.links {
@@ -1211,8 +843,7 @@ fn expand_with_work(
         let mut atoms = 0usize;
         for product in products {
             for i in 0..count {
-                #[cfg(test)]
-                layout::entered(3);
+                probe::enter(Stage::Materialize);
                 let mut candidate =
                     materialize(&product, &site, i, &fragments, drawing, &mut work)?;
                 candidate.validate()?;
@@ -1257,8 +888,7 @@ fn expand_with_work(
         } else {
             None
         };
-        #[cfg(test)]
-        layout::entered(0);
+        probe::enter(Stage::Prepare);
         let molecule = crate::chemistry::document::prepare(&product)
             .map_err(|e| format!("Expanded structure has invalid chemistry: {e}"))?;
         if !unique.insert(&molecule, &mut work)? {
@@ -1745,194 +1375,9 @@ fn component(doc: &Document, start: u64, allowed: &HashSet<u64>) -> HashSet<u64>
     }
     found
 }
-/// The bracket frame defines the atom membership; connectivity still comes
-/// exclusively from existing bonds crossing that explicit member set.
-pub fn define_bracket(
-    source: &Document,
-    bracket: u64,
-    label: &str,
-    pattern: RepeatPattern,
-) -> Result<Document, String> {
-    source.validate()?;
-    let graphic = source
-        .graphics
-        .iter()
-        .find(|g| g.id == bracket && g.kind.brackets())
-        .ok_or("Select one bracket around the repeating unit")?;
-    let det = graphic.frame_determinant();
-    if det.abs() < 0.01 {
-        return Err("Draw a bracket with a nonzero enclosed area".into());
-    }
-    let members: Vec<_> = source
-        .atoms
-        .iter()
-        .filter(|a| {
-            let p = graphic.world_to_local(a.position, det);
-            (0.0..=1.).contains(&p.x) && (0.0..=1.).contains(&p.y)
-        })
-        .map(|a| a.id)
-        .collect();
-    if members.is_empty() {
-        return Err("The bracket encloses no atoms".into());
-    }
-    let set: HashSet<_> = members.iter().copied().collect();
-    let mut crossings: Vec<_> = source
-        .bonds
-        .iter()
-        .filter(|b| set.contains(&b.a) != set.contains(&b.b))
-        .map(|b| {
-            if set.contains(&b.a) {
-                Crossing {
-                    inside: b.a,
-                    outside: b.b,
-                }
-            } else {
-                Crossing {
-                    inside: b.b,
-                    outside: b.a,
-                }
-            }
-        })
-        .collect();
-    crossings.sort_by(|a, b| {
-        let projection = |c: &Crossing| {
-            source
-                .atom(c.outside)
-                .map(|a| {
-                    (a.position.x - graphic.origin.x) * graphic.axis_x.x
-                        + (a.position.y - graphic.origin.y) * graphic.axis_x.y
-                })
-                .unwrap_or(0.)
-        };
-        projection(a).total_cmp(&projection(b))
-    });
-    let count = RepeatCount::parse(label)?;
-    let head_count = if crossings.len() == 2 { Some(1) } else { None };
-    let mut candidate = source.clone();
-    set_repeat_unit(
-        &mut candidate,
-        RepeatUnit {
-            bracket: Some(bracket),
-            bracket_objects: Vec::new(),
-            members,
-            crossings,
-            crossing_brackets: Vec::new(),
-            head_count,
-            usage: "SRU".into(),
-            pattern,
-            count,
-            label: label.trim().into(),
-            flip: "Unspecified".into(),
-        },
-    )?;
-    Ok(candidate)
-}
-
-/// Joining referenced generic structures requires concrete chemical choices first.
-pub const JOIN_NOTICE: &str =
-    "Expand Generic Structures before joining referenced generic atoms or repeating units.";
-
-/// Shared guard for operations that remap, delete or infer chemistry for IDs.
-/// Pure coordinate transforms can preserve definitions without this guard.
-pub fn intersects(doc: &Document, ids: &[u64]) -> bool {
-    let selected: HashSet<_> = ids.iter().copied().collect();
-    doc.generic
-        .alternatives
-        .iter()
-        .any(|s| selected.contains(&s.atom))
-        || doc.generic.links.iter().any(|s| selected.contains(&s.atom))
-        || doc.generic.repeats.iter().any(|u| {
-            u.bracket.is_some_and(|id| selected.contains(&id))
-                || u.bracket_objects.iter().any(|id| selected.contains(id))
-                || u.crossing_brackets.iter().any(|id| selected.contains(id))
-                || u.members.iter().any(|id| selected.contains(id))
-                || u.crossings
-                    .iter()
-                    .any(|c| selected.contains(&c.inside) || selected.contains(&c.outside))
-        })
-        || doc.atoms.iter().any(|a| {
-            a.is_variable_attachment()
-                && (selected.contains(&a.id) || a.centroid.iter().any(|id| selected.contains(id)))
-        })
-}
-
-/// Whether IDs or their connected components reference generic chemistry.
-pub fn touches(doc: &Document, ids: &[u64]) -> bool {
-    intersects(doc, ids) || component_intersects(doc, ids)
-}
-
-/// Borrow chemical atom dependencies without copying alternative strings or
-/// repeat metadata. Bracket graphics are presentation, not chemical components.
-pub fn atom_references(doc: &Document) -> impl Iterator<Item = u64> + '_ {
-    doc.generic
-        .alternatives
-        .iter()
-        .map(|site| site.atom)
-        .chain(doc.generic.links.iter().map(|site| site.atom))
-        .chain(doc.generic.repeats.iter().flat_map(|unit| {
-            unit.members.iter().copied().chain(
-                unit.crossings
-                    .iter()
-                    .flat_map(|port| [port.inside, port.outside]),
-            )
-        }))
-        .chain(
-            doc.atoms
-                .iter()
-                .filter(|atom| atom.is_variable_attachment())
-                .flat_map(|atom| std::iter::once(atom.id).chain(atom.centroid.iter().copied())),
-        )
-}
-
-/// Reject unresolved chemistry only in the connected components of `ids`.
-/// One borrowed reference scan and one graph index avoid cloning metadata or
-/// scanning every definition again for each selected atom/component.
-pub fn component_intersects(doc: &Document, ids: &[u64]) -> bool {
-    let unresolved: HashSet<_> = atom_references(doc).collect();
-    if unresolved.is_empty() {
-        return false;
-    }
-    let selected: HashSet<_> = ids.iter().copied().collect();
-    let mut visited = selected.clone();
-    // Only explicitly carried drawing links are source dependencies. An
-    // unselected arrow must not connect otherwise separate chemical components.
-    for arrow in doc
-        .arrows
-        .iter()
-        .filter(|arrow| selected.contains(&arrow.id))
-    {
-        for anchor in arrow.start_anchor.iter().chain(arrow.end_anchor.iter()) {
-            visited.extend(anchor.target.atoms());
-        }
-    }
-    if visited.iter().any(|id| unresolved.contains(id)) {
-        return true;
-    }
-    let mut adjacent = HashMap::<u64, Vec<u64>>::new();
-    for (a, b) in doc.bonds.iter().map(|bond| (bond.a, bond.b)).chain(
-        doc.atoms
-            .iter()
-            .flat_map(|atom| atom.centroid.iter().map(move |id| (atom.id, *id))),
-    ) {
-        adjacent.entry(a).or_default().push(b);
-        adjacent.entry(b).or_default().push(a);
-    }
-    let mut pending: Vec<_> = visited.iter().copied().collect();
-    while let Some(id) = pending.pop() {
-        for neighbor in adjacent.get(&id).into_iter().flatten() {
-            if unresolved.contains(neighbor) {
-                return true;
-            }
-            if visited.insert(*neighbor) {
-                pending.push(*neighbor);
-            }
-        }
-    }
-    false
-}
 
 #[cfg(test)]
-mod characterization_tests;
+mod test_support;
 
 #[cfg(test)]
 mod tests;

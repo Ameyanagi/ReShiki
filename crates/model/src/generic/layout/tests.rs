@@ -417,7 +417,7 @@ fn generated_branched_repeat_keeps_branches_and_fixed_neighboring_components() {
 fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_work() {
     let source = atom_text::apply(&chain(&["C", "C", "C"]), 2, "[CH2]1-3", Mode::Auto).unwrap();
     let before = source.clone();
-    STAGES.with(|s| s.set([0; 5]));
+    probe::reset();
     assert!(
         generic::expand_drawings(
             &source,
@@ -429,7 +429,7 @@ fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_wo
         .unwrap_err()
         .contains("work limit")
     );
-    assert_eq!(STAGES.with(std::cell::Cell::get), [0; 5]);
+    assert_eq!(probe::counts(), [0; 5]);
     let anchors = HashSet::from([2]);
     let candidate = raw(&source, 1);
     let mut probe = Work::new(usize::MAX);
@@ -437,7 +437,7 @@ fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_wo
     let reserved = usize::MAX - probe.remaining;
     let mut short = Work::new(reserved - 1);
     assert!(Plan::new(&candidate, &anchors, &mut short).is_err());
-    assert_eq!(STAGES.with(std::cell::Cell::get), [0; 5]);
+    assert_eq!(probe::counts(), [0; 5]);
     // A consumed allowance is not restored for the next product. This budget
     // funds one complete product but cannot even reserve the next product.
     let molecule = crate::chemistry::document::prepare(&candidate).unwrap();
@@ -482,7 +482,7 @@ fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_wo
     let mut third = Work::new(usize::MAX);
     Plan::new(&raw(&source, 3), &anchors, &mut third).unwrap();
     let third = usize::MAX - third.remaining;
-    STAGES.with(|s| s.set([0; 5]));
+    probe::reset();
     assert!(
         generic::expand_drawings(
             &source,
@@ -493,13 +493,15 @@ fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_wo
         )
         .is_err()
     );
-    let stages = STAGES.with(std::cell::Cell::get);
+    let stages = probe::counts();
     assert_eq!(
-        stages[0], 2,
+        probe::count(Stage::Prepare),
+        2,
         "the aggregate reservation must prevent the third product's preparation: {stages:?}"
     );
     assert_eq!(
-        stages[2], 2,
+        probe::count(Stage::Measure),
+        2,
         "completed earlier products must not escape on later exhaustion: {stages:?}"
     );
     // Solver/measurement errors reject detached data; no partially completed
@@ -542,14 +544,14 @@ fn generated_presentation_preflight_rejects_large_cartesian_annotations_before_m
     });
     source.validate().unwrap();
     let before = source.clone();
-    STAGES.with(|s| s.set([0; 5]));
+    probe::reset();
     assert!(
         generic::expand_drawings(&source, Limits::default())
             .unwrap_err()
             .contains("work limit")
     );
     assert_eq!(
-        STAGES.with(std::cell::Cell::get),
+        probe::counts(),
         [0; 5],
         "reject before seed cloning, materialization, preparation, depiction or ink measurement"
     );
@@ -894,7 +896,7 @@ fn generated_union_picture_preflight_counts_emf_and_shared_png_once() {
     )
     .unwrap();
     assert_eq!(usize::MAX - copies.remaining, two.copy * 128);
-    STAGES.with(|s| s.set([0; 5]));
+    probe::reset();
     assert!(
         generic::expand_drawings(
             &source,
@@ -906,7 +908,7 @@ fn generated_union_picture_preflight_counts_emf_and_shared_png_once() {
         .unwrap_err()
         .contains("work limit")
     );
-    assert_eq!(STAGES.with(std::cell::Cell::get), [0; 5]);
+    assert_eq!(probe::counts(), [0; 5]);
     assert!(
         generic::prepare_expansion_input(
             &source,
@@ -920,7 +922,7 @@ fn generated_union_picture_preflight_counts_emf_and_shared_png_once() {
         .unwrap()
         .contains("work limit")
     );
-    assert_eq!(STAGES.with(std::cell::Cell::get), [0; 5]);
+    assert_eq!(probe::counts(), [0; 5]);
     assert_eq!(source, before);
     for g in &source.graphics {
         assert_eq!(g.picture.as_ref().unwrap().png(), picture.png());
@@ -1030,13 +1032,13 @@ fn generated_union_rejects_changed_component_dependencies_atomically() {
     for (source, expected) in cases {
         let before = source.clone();
         source.validate().unwrap();
-        STAGES.with(|s| s.set([0; 5]));
+        probe::reset();
         assert!(
             generic::prepare_expansion(&source, Limits::default())
                 .unwrap_err()
                 .contains(expected)
         );
-        assert_eq!(STAGES.with(std::cell::Cell::get), [0; 5]);
+        assert_eq!(probe::counts(), [0; 5]);
         assert_eq!(source, before);
     }
 }
@@ -1073,14 +1075,14 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
         text: "x".repeat(3_000_000),
         format: Default::default(),
     });
-    STAGES.with(|s| s.set([0; 5]));
+    probe::reset();
     assert!(
         generic::prepare_expansion_input(&oversized, &[], Limits::default())
             .err()
             .unwrap()
             .contains("work limit")
     );
-    assert_eq!(STAGES.with(std::cell::Cell::get), [0; 5]);
+    assert_eq!(probe::counts(), [0; 5]);
     let replay = prepared.clone();
     let bounds = prepared.bounds();
     assert!(!format!("{prepared:?}").contains("oxidane"));
@@ -1373,10 +1375,10 @@ fn native_variable_arene_unique_drawing_fits_default_work_and_measured_ink() {
             .all(|a| a.display.stereo.show == Some(false))
     );
     let before = source.clone();
-    let solver_calls = STAGES.with(|s| s.get()[1]);
+    let solver_calls = probe::count(Stage::Solver);
     let input = generic::prepare_expansion_input(&source, &[], Limits::default()).unwrap();
     let prepared = generic::expand_prepared(input).unwrap();
-    assert_eq!(STAGES.with(|s| s.get()[1]), solver_calls);
+    assert_eq!(probe::count(Stage::Solver), solver_calls);
     // Six equivalent raw sites yield one stable first chemical representative.
     // Direct pose coverage below still exercises every one of the six sites.
     assert_eq!(prepared.count(), 1);

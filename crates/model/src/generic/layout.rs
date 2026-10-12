@@ -1,26 +1,13 @@
 //! Coordinate-only depiction and bounded variable-substituent placement.
-use super::{Work, drawing_size};
+use super::{
+    Work, drawing_size,
+    probe::{self, Stage},
+};
 use crate::{
     chemistry::{depict, document::Molecule},
     document::{Document, Point},
 };
 use std::collections::{HashMap, HashSet};
-
-#[cfg(test)]
-mod tests;
-
-#[cfg(test)]
-thread_local! {
-    static STAGES: std::cell::Cell<[usize; 5]> = const { std::cell::Cell::new([0; 5]) };
-}
-#[cfg(test)]
-pub(super) fn entered(stage: usize) {
-    STAGES.with(|s| {
-        let mut counts = s.get();
-        counts[stage] += 1;
-        s.set(counts);
-    });
-}
 
 /// Owned presentation buffers are copied by every materializer, not merely
 /// measured after enumeration. Inspect lengths without serializing or cloning.
@@ -1448,8 +1435,7 @@ impl Plan {
                 })
                 .collect();
             let ranks = vec![None; n];
-            #[cfg(test)]
-            entered(1);
+            probe::enter(Stage::Solver);
             let conformer = depict::compute_with_work(
                 state,
                 &ranks,
@@ -1482,8 +1468,7 @@ impl Plan {
                 .checked_add(at(&state.valences, i)?.implicit_hydrogens)
                 .ok_or("Generated hydrogen label overflow")?;
         }
-        #[cfg(test)]
-        entered(2);
+        probe::enter(Stage::Measure);
         let mut boxes = saved_and_refreshed_boxes(doc, &preview)?;
         let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
         let bond_length = doc.drawing_style.bond_length_world;
@@ -2475,3 +2460,6 @@ pub(super) fn certify_translation(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
