@@ -237,11 +237,11 @@ async fn predicate_cases(key: optimization::Key) -> Vec<(&'static str, Message, 
             Message::Optimization(optimization::Action::WorkerDone(key, Err(FAILURE.into()))),
             [true, true, false, false, true],
         ),
-        ("Nmr Finished", nmr, [true, true, false, false, true]),
+        ("Nmr Finished", nmr, [true; 5]),
         (
             "Nmr Exported",
             Message::Nmr(nmr::Action::Exported(Err(FAILURE.into()))),
-            [true, true, false, false, true],
+            [true; 5],
         ),
         (
             "Exported",
@@ -561,17 +561,13 @@ async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal(
         (
             ResultRow::NmrFinished,
             [
-                Continue, Dropped, // Dropped today; q-10 delivers it
-                Dropped, // Dropped today; q-10 delivers it
-                Continue, Continue, Dropped, Deferred,
+                Continue, Continue, Continue, Continue, Continue, Dropped, Deferred,
             ],
         ),
         (
             ResultRow::NmrExported,
             [
-                Continue, Dropped, // Dropped today; q-10 delivers it
-                Dropped, // Dropped today; q-10 delivers it
-                Continue, Continue, Dropped, Deferred,
+                Continue, Continue, Continue, Continue, Continue, Dropped, Deferred,
             ],
         ),
         (

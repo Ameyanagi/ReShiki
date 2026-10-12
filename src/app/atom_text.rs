@@ -340,6 +340,7 @@ pub(super) fn background(message: &Message) -> bool {
             | Message::Pictures(super::pictures::Action::Loaded(..))
             | Message::Imports(super::import::Action::Loaded(..))
             | Message::Naming(super::naming::Action::Finished(..))
+            | Message::Nmr(super::nmr::Action::Finished(..) | super::nmr::Action::Exported(..))
             | Message::Printing(
                 super::printing::Action::Prepared(..) | super::printing::Action::Finished(..)
             )

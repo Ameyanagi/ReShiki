@@ -401,6 +401,7 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
             | Message::Tick
             | Message::EngineDone { .. }
             | Message::Naming(super::naming::Action::Finished(..))
+            | Message::Nmr(super::nmr::Action::Finished(..) | super::nmr::Action::Exported(..))
             | Message::Close(_)
             | Message::Discard
             | Message::Cancel
