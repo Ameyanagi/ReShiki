@@ -1,7 +1,16 @@
 //! Contextual pen authoring and node edits.
 use super::*;
-use iced::widget::{column, row, text};
+use iced::widget::{Column, column, row, text};
 use reshiki::graphics::{Graphic, PathHandle};
+
+const NODE_HINT: &str =
+    "Round nodes carry adjacent controls. Square controls change each tangent independently.";
+const CONTROL_HINT: &str =
+    "A direction control is selected. Drag its square, or choose a node above.";
+const DRAWING_HINT: &str = concat!(
+    "Drag the first segment. Then click for a line or drag a new node for a curve. ",
+    "Click the first node to close. Escape cancels the active gesture."
+);
 
 #[derive(Debug, Clone, Copy)]
 pub enum Action {
@@ -29,6 +38,16 @@ fn path_button(
     reshiki::accessibility::button(id, label, text(label).size(11))
         .padding([6, 8])
         .style(control(false))
+}
+fn path_hint(node: Option<usize>) -> Element<'static, Message> {
+    text(if node.is_some() {
+        NODE_HINT
+    } else {
+        CONTROL_HINT
+    })
+    .size(11)
+    .style(muted_text)
+    .into()
 }
 impl std::fmt::Display for Choice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -67,29 +86,87 @@ impl App {
         if let Some(graphic) = self.selected_path()
             && let Some(handles) = graphic.path_handles()
         {
-            let choices: Vec<_> = handles
-                .iter()
-                .filter(|h| h.node)
-                .enumerate()
-                .map(|(i, h)| Choice {
-                    ordinal: i + 1,
-                    index: h.index,
-                })
-                .collect();
-            let point = self.path_point(graphic, &handles);
-            let node = choices
-                .iter()
-                .position(|choice| Some(choice.index) == point);
-            let closed = graphic.path_closed();
-            let following = node.is_some_and(|i| closed || i + 1 < choices.len());
-            panel=panel.push(text(format!("{} nodes · {}",choices.len(),if closed {"Closed"} else {"Open"})).size(12))
-                .push(crate::appearance::pick_list(choices.clone(),node.and_then(|i|choices.get(i).copied()),move |choice|send(Action::Node(choice.index))).text_size(12).padding(5).width(Length::Fill))
-                .push(row![path_button("pen-insert", "Insert after").on_press_maybe(following.then(||send(Action::Insert))),path_button("pen-delete", "Delete node").on_press_maybe((node.is_some() && choices.len()>if closed {3} else {2}).then(||send(Action::Delete)))].spacing(5))
-                .push(row![path_button("pen-straight", "Straight segment").on_press_maybe(following.then(||send(Action::Straight))),path_button("pen-curved", "Curved segment").on_press_maybe(following.then(||send(Action::Curved)))].spacing(5))
-                .push(row![path_button("pen-close",if closed {"Open path"} else {"Close path"}).on_press_maybe((closed || choices.len()>=3).then(||send(if closed {Action::Open} else {Action::Close}))),path_button("pen-continue", "Continue drawing").on_press_maybe((!closed).then(||send(Action::Continue)))].spacing(5))
-                .push(text(if node.is_some() {"Round nodes carry adjacent controls. Square controls change each tangent independently."} else {"A direction control is selected. Drag its square, or choose a node above."}).size(11).style(muted_text));
+            panel = self.path_node_controls(panel, graphic, &handles);
         }
-        panel.push(text("Drag the first segment. Then click for a line or drag a new node for a curve. Click the first node to close. Escape cancels the active gesture.").size(11).style(muted_text)).into()
+        panel
+            .push(text(DRAWING_HINT).size(11).style(muted_text))
+            .into()
+    }
+    fn path_node_controls<'a>(
+        &'a self,
+        panel: Column<'a, Message>,
+        graphic: &Graphic,
+        handles: &[PathHandle],
+    ) -> Column<'a, Message> {
+        let send = |a| Message::Graphics(super::Action::Path(a));
+        let choices: Vec<_> = handles
+            .iter()
+            .filter(|h| h.node)
+            .enumerate()
+            .map(|(i, h)| Choice {
+                ordinal: i + 1,
+                index: h.index,
+            })
+            .collect();
+        let point = self.path_point(graphic, handles);
+        let node = choices
+            .iter()
+            .position(|choice| Some(choice.index) == point);
+        let closed = graphic.path_closed();
+        let following = node.is_some_and(|i| closed || i + 1 < choices.len());
+        panel
+            .push(
+                text(format!(
+                    "{} nodes · {}",
+                    choices.len(),
+                    if closed { "Closed" } else { "Open" }
+                ))
+                .size(12),
+            )
+            .push(
+                crate::appearance::pick_list(
+                    choices.clone(),
+                    node.and_then(|i| choices.get(i).copied()),
+                    move |choice| send(Action::Node(choice.index)),
+                )
+                .text_size(12)
+                .padding(5)
+                .width(Length::Fill),
+            )
+            .push(
+                row![
+                    path_button("pen-insert", "Insert after")
+                        .on_press_maybe(following.then(|| send(Action::Insert))),
+                    path_button("pen-delete", "Delete node").on_press_maybe(
+                        (node.is_some() && choices.len() > if closed { 3 } else { 2 })
+                            .then(|| send(Action::Delete))
+                    )
+                ]
+                .spacing(5),
+            )
+            .push(
+                row![
+                    path_button("pen-straight", "Straight segment")
+                        .on_press_maybe(following.then(|| send(Action::Straight))),
+                    path_button("pen-curved", "Curved segment")
+                        .on_press_maybe(following.then(|| send(Action::Curved)))
+                ]
+                .spacing(5),
+            )
+            .push(
+                row![
+                    path_button("pen-close", if closed { "Open path" } else { "Close path" })
+                        .on_press_maybe(
+                            (closed || choices.len() >= 3).then(|| {
+                                send(if closed { Action::Open } else { Action::Close })
+                            })
+                        ),
+                    path_button("pen-continue", "Continue drawing")
+                        .on_press_maybe((!closed).then(|| send(Action::Continue)))
+                ]
+                .spacing(5),
+            )
+            .push(path_hint(node))
     }
     pub(super) fn path_action(&mut self, action: Action) {
         match action {

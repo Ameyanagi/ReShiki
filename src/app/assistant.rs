@@ -20,12 +20,15 @@ mod request;
 mod setup;
 mod view;
 
+pub(super) use setup::Help;
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Open,
     Connect,
     Connected(u64, Result<codex::Account, codex::ConnectionError>),
-    SetupHelp(setup::Help),
+    SetupHelp(Help),
+    SetupHelpOpened(Help, Result<(), String>),
     ImageExample,
     Input(text_editor::Action),
     Paste {
@@ -151,6 +154,15 @@ impl Drop for State {
     }
 }
 impl State {
+    /// Ends the guided example; a pending draft keeps its Apply requirement.
+    fn clear_example(&mut self) {
+        self.guided_example = false;
+        if self.draft.is_none() {
+            self.requires_apply = false;
+        }
+        self.example_reference = None;
+    }
+
     #[cfg(test)]
     pub(super) fn input_text(&self) -> String {
         self.input.text()
@@ -249,6 +261,9 @@ impl App {
             Action::ViewImage(image) => self.assistant.viewed_image = image,
             Action::Open => return self.assistant_open(),
             Action::SetupHelp(help) => return self.assistant_setup_help(help),
+            Action::SetupHelpOpened(help, result) => {
+                self.assistant_setup_help_opened(help, result);
+            }
             Action::ImageExample => self.assistant_image_example(),
             Action::Input(action) => {
                 self.assistant.input.perform(action);

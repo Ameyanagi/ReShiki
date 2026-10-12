@@ -1,14 +1,16 @@
 //! Finite expansion creates a new drawing; the source and its history stay intact.
 use super::{App, Message, Tool, document_tab::TabId};
-use iced::widget::{column, row, text};
+use iced::widget::{Row, column, row, text};
 use iced::{Element, Task};
-use reshiki::{
-    document::Point,
-    generic::{Limits, PreparedExpansion, RepeatPattern},
-};
+use reshiki::generic::{Limits, PreparedExpansion, RepeatPattern};
 
 pub(super) const EXPANSION_DISCARDED: &str =
     "Generic expansion was discarded because another edit was open; expand again";
+
+const REPEAT_HINT: &str = concat!(
+    "The bracket records its enclosed atoms and the existing crossing bonds. ",
+    "Use n for an indefinite polymer."
+);
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -43,6 +45,8 @@ impl State {
         self.pending.is_some()
     }
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PatternChoice(RepeatPattern);
 impl std::fmt::Display for PatternChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self.0 {
@@ -52,8 +56,6 @@ impl std::fmt::Display for PatternChoice {
         })
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PatternChoice(RepeatPattern);
 impl App {
     /// These are exactly the states whose later gates drop the expansion result.
     pub(super) fn generic_expansion_blocked(&self) -> bool {
@@ -92,10 +94,7 @@ impl App {
                         self.status =
                             "Repeating unit defined from enclosed atoms and crossing bonds".into();
                     }
-                    Err(error) => {
-                        self.status = error;
-                        self.error = true;
-                    }
+                    Err(error) => return self.generic_failed(error),
                 }
             }
             Action::ClearRepeat(bracket) => {
@@ -119,11 +118,7 @@ impl App {
                     Limits::default(),
                 ) {
                     Ok(input) => input,
-                    Err(error) => {
-                        self.status = error;
-                        self.error = true;
-                        return Task::none();
-                    }
+                    Err(error) => return self.generic_failed(error),
                 };
                 let key = (self.tab.id, self.tab.file_epoch);
                 self.generic.pending = Some(key);
@@ -169,11 +164,7 @@ impl App {
                         // opening a tab; replay/lock errors must not create an output.
                         let insertion = match reshiki::transaction::take_expansion(prepared) {
                             Ok(insertion) => insertion,
-                            Err(error) => {
-                                self.status = error.message().into();
-                                self.error = true;
-                                return Task::none();
-                            }
+                            Err(error) => return self.generic_failed(error.message()),
                         };
                         let count = insertion.count();
                         let bounds = insertion.bounds();
@@ -185,11 +176,7 @@ impl App {
                             insertion,
                         ) {
                             Ok(reconciled) => reconciled,
-                            Err(error) => {
-                                self.status = error.message().into();
-                                self.error = true;
-                                return Task::none();
-                            }
+                            Err(error) => return self.generic_failed(error.message()),
                         };
                         self.tab.cleanup = None;
                         self.tab.erase_stroke = false;
@@ -197,28 +184,21 @@ impl App {
                         self.commit_changed(reconciled, false);
                         self.sync_drawing_defaults();
                         self.tool = Tool::Select;
-                        self.fit_prepared_expansion(bounds);
+                        self.fit_bounds(bounds);
                         self.status =
                             format!("Expanded {count} concrete structures in a new drawing");
                         self.error = false;
                     }
-                    Err(error) => {
-                        self.status = error;
-                        self.error = true;
-                    }
+                    Err(error) => return self.generic_failed(error),
                 }
             }
         }
         Task::none()
     }
-    fn fit_prepared_expansion(&mut self, (lo, hi): (Point, Point)) {
-        self.tab.pages.fit = None;
-        self.tab.camera.center = Point::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5);
-        let viewport = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        self.tab.camera.zoom = ((viewport.width - 80.).max(100.) / (hi.x - lo.x).max(240.))
-            .min((viewport.height - 80.).max(100.) / (hi.y - lo.y).max(200.))
-            .clamp(0.005, 2.5);
-        self.tab.fit_to_view = true;
+    fn generic_failed(&mut self, message: impl Into<String>) -> Task<Message> {
+        self.status = message.into();
+        self.error = true;
+        Task::none()
     }
     pub(super) fn generic_expand_button(&self) -> Element<'_, Message> {
         reshiki::accessibility::button(
@@ -242,14 +222,73 @@ impl App {
             .repeats
             .iter()
             .any(|u| u.bracket == Some(id) || u.bracket_objects.contains(&id));
-        column![text("REPEATING UNIT").size(11).style(super::workspace::muted_text),
-            row![text("Repeats").size(12),reshiki::accessibility::text_input("polymer-repeat-count","Polymer repeat count or label","1-3 or n",&self.generic.label).on_input(|s|Message::Generic(Action::RepeatLabel(s))).on_submit(Message::Generic(Action::DefineRepeat(id))).size(12).padding(6)].spacing(8),
-            crate::appearance::pick_list([PatternChoice(RepeatPattern::HeadToTail),PatternChoice(RepeatPattern::HeadToHead),PatternChoice(RepeatPattern::EitherUnknown)],Some(PatternChoice(self.generic.pattern)),|v|Message::Generic(Action::Pattern(v.0))).text_size(12).padding(6),
-            reshiki::accessibility::button("define-polymer-repeat","Use enclosed atoms",text("Use enclosed atoms").size(12)).on_press(Message::Generic(Action::DefineRepeat(id))).padding([7,9]).style(super::workspace::control(false)),
-            text("The bracket records its enclosed atoms and the existing crossing bonds. Use n for an indefinite polymer.").size(11).style(super::workspace::muted_text),
-            reshiki::accessibility::button("clear-polymer-repeat","Clear repeating unit",text("Clear repeating unit").size(12)).on_press_maybe(defined.then_some(Message::Generic(Action::ClearRepeat(id)))).padding([7,9]).style(super::workspace::control(false)),
-            self.generic_expand_button()
-        ].spacing(8).into()
+        column![
+            text("REPEATING UNIT")
+                .size(11)
+                .style(super::workspace::muted_text),
+            self.repeat_count_row(id),
+            self.pattern_picker(),
+        ]
+        .extend(self.bracket_buttons(defined, id))
+        .spacing(8)
+        .into()
+    }
+    fn repeat_count_row(&self, id: u64) -> Row<'_, Message> {
+        row![
+            text("Repeats").size(12),
+            reshiki::accessibility::text_input(
+                "polymer-repeat-count",
+                "Polymer repeat count or label",
+                "1-3 or n",
+                &self.generic.label,
+            )
+            .on_input(|s| Message::Generic(Action::RepeatLabel(s)))
+            .on_submit(Message::Generic(Action::DefineRepeat(id)))
+            .size(12)
+            .padding(6),
+        ]
+        .spacing(8)
+    }
+    fn pattern_picker(&self) -> Element<'_, Message> {
+        crate::appearance::pick_list(
+            [
+                PatternChoice(RepeatPattern::HeadToTail),
+                PatternChoice(RepeatPattern::HeadToHead),
+                PatternChoice(RepeatPattern::EitherUnknown),
+            ],
+            Some(PatternChoice(self.generic.pattern)),
+            |v| Message::Generic(Action::Pattern(v.0)),
+        )
+        .text_size(12)
+        .padding(6)
+        .into()
+    }
+    fn bracket_buttons(&self, defined: bool, id: u64) -> [Element<'_, Message>; 4] {
+        [
+            reshiki::accessibility::button(
+                "define-polymer-repeat",
+                "Use enclosed atoms",
+                text("Use enclosed atoms").size(12),
+            )
+            .on_press(Message::Generic(Action::DefineRepeat(id)))
+            .padding([7, 9])
+            .style(super::workspace::control(false))
+            .into(),
+            text(REPEAT_HINT)
+                .size(11)
+                .style(super::workspace::muted_text)
+                .into(),
+            reshiki::accessibility::button(
+                "clear-polymer-repeat",
+                "Clear repeating unit",
+                text("Clear repeating unit").size(12),
+            )
+            .on_press_maybe(defined.then_some(Message::Generic(Action::ClearRepeat(id))))
+            .padding([7, 9])
+            .style(super::workspace::control(false))
+            .into(),
+            self.generic_expand_button(),
+        ]
     }
 }
 

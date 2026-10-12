@@ -2,7 +2,7 @@
 //! relative numeric fields and shortcuts unchanged.
 use super::{Action as NumericAction, App, Message, control, hover_hint};
 use crate::canvas::Tool;
-use iced::widget::{column, row, text, tooltip};
+use iced::widget::{Column, column, row, text, tooltip};
 use iced::{Element, Length};
 use reshiki::{
     document::Point,
@@ -11,6 +11,9 @@ use reshiki::{
         reference::{self, Edge, Stretch},
     },
 };
+
+const STRETCH_HINT: &str =
+    "Keeps this bond's original direction; the moving branch stays rigid. No atom merging.";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Scope {
@@ -120,6 +123,17 @@ impl State {
 }
 fn message(action: Action) -> Message {
     Message::NumericTransform(NumericAction::Reference(action))
+}
+fn reference_button<'a>(
+    id: &'static str,
+    label: &'static str,
+    action: Action,
+    enabled: bool,
+) -> reshiki::accessibility::Button<'a, Message> {
+    reshiki::accessibility::button(id, label, text(label).size(12))
+        .padding([6, 9])
+        .style(control(false))
+        .on_press_maybe(enabled.then_some(message(action)))
 }
 fn number(input: &str, label: &str) -> Result<f32, String> {
     input
@@ -417,13 +431,7 @@ impl App {
                 .padding(6)
                 .width(Length::Fill),
             );
-        let button = |id: &'static str, label: &'static str, action: Action, enabled: bool| {
-            reshiki::accessibility::button(id, label, text(label).size(12))
-                .padding([6, 9])
-                .style(control(false))
-                .on_press_maybe(enabled.then_some(message(action)))
-        };
-        body = body.push(button(
+        body = body.push(reference_button(
             "reference-pin-center",
             "Pin selected center",
             Action::PinCenter,
@@ -450,13 +458,13 @@ impl App {
         body = body
             .push(
                 row![
-                    button(
+                    reference_button(
                         "reference-horizontal",
                         "Horizontal",
                         Action::Align(0.),
                         enabled
                     ),
-                    button(
+                    reference_button(
                         "reference-vertical",
                         "Vertical",
                         Action::Align(90.),
@@ -472,7 +480,7 @@ impl App {
                         .on_submit(message(Action::AlignTarget))
                         .size(12)
                         .padding(5),
-                    button(
+                    reference_button(
                         "reference-to-angle",
                         "To angle",
                         Action::AlignTarget,
@@ -494,8 +502,8 @@ impl App {
             )
             .push(
                 row![
-                    button("reference-rotate", "Rotate", Action::Rotate(false), enabled),
-                    button(
+                    reference_button("reference-rotate", "Rotate", Action::Rotate(false), enabled),
+                    reference_button(
                         "reference-copy-rotate",
                         "Copy + rotate",
                         Action::Rotate(true),
@@ -506,30 +514,66 @@ impl App {
             );
         let plan = self.reference_stretch();
         match plan {
-            Ok(plan) => {
-                let fixed = self
-                    .tab
-                    .doc
-                    .atom(plan.fixed)
-                    .map_or("atom", |a| a.element.as_str());
-                let length = format!(
-                    "{:.2}",
-                    plan.length * self.tab.doc.drawing_style.points_per_world()
-                );
-                let end = if state.swap_fixed {
-                    "reference end"
-                } else {
-                    "reference start"
-                };
-                body=body.push(text(format!("Stretch · fixed: {end} ({fixed}) · {length} pt")).size(11))
-                    .push(button("reference-swap-fixed","Swap fixed end",Action::SwapFixed,true))
-                    .push(row![crate::appearance::text_input(&length,&state.length).on_input(|s|message(Action::Length(s))).on_submit(message(Action::Stretch)).size(12).padding(5),text("pt").size(11),button("reference-stretch","Set length",Action::Stretch,!state.length.is_empty())].spacing(5))
-                    .push(hover_hint(button("reference-stretch-drag","Drag to stretch",Action::StretchDrag,true),"Keeps this bond's original direction; the moving branch stays rigid. No atom merging.",tooltip::Position::Top));
-            }
+            Ok(plan) => body = self.reference_stretch_controls(body, plan),
             Err(error) if enabled => body = body.push(text(error).size(11)),
             Err(_) => {}
         }
         body.into()
+    }
+    fn reference_stretch_controls<'a>(
+        &'a self,
+        body: Column<'a, Message>,
+        plan: Stretch,
+    ) -> Column<'a, Message> {
+        let state = &self.tab.numeric_transforms.reference;
+        let fixed = self
+            .tab
+            .doc
+            .atom(plan.fixed)
+            .map_or("atom", |a| a.element.as_str());
+        let length = format!(
+            "{:.2}",
+            plan.length * self.tab.doc.drawing_style.points_per_world()
+        );
+        let end = if state.swap_fixed {
+            "reference end"
+        } else {
+            "reference start"
+        };
+        body.push(text(format!("Stretch · fixed: {end} ({fixed}) · {length} pt")).size(11))
+            .push(reference_button(
+                "reference-swap-fixed",
+                "Swap fixed end",
+                Action::SwapFixed,
+                true,
+            ))
+            .push(
+                row![
+                    crate::appearance::text_input(&length, &state.length)
+                        .on_input(|s| message(Action::Length(s)))
+                        .on_submit(message(Action::Stretch))
+                        .size(12)
+                        .padding(5),
+                    text("pt").size(11),
+                    reference_button(
+                        "reference-stretch",
+                        "Set length",
+                        Action::Stretch,
+                        !state.length.is_empty()
+                    )
+                ]
+                .spacing(5),
+            )
+            .push(hover_hint(
+                reference_button(
+                    "reference-stretch-drag",
+                    "Drag to stretch",
+                    Action::StretchDrag,
+                    true,
+                ),
+                STRETCH_HINT,
+                tooltip::Position::Top,
+            ))
     }
 }
 

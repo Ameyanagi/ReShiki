@@ -10,6 +10,30 @@ pub use search::{Budget, Proposal, Score, propose};
 
 pub const MAX_MAP: u32 = i32::MAX as u32;
 
+/// The error for a map number outside 0..=MAX_MAP (or not a number at all).
+pub fn map_range_error() -> String {
+    format!("Enter an atom map from 1 to {MAX_MAP}, or 0 to clear")
+}
+
+/// Set the drawing-wide visibility and clear every per-atom visibility override.
+pub fn set_maps_visible(doc: &Document, show: bool) -> Document {
+    let mut candidate = doc.clone();
+    candidate.atom_labels.maps = show;
+    for atom in &mut candidate.atoms {
+        atom.display.mapping.show = None;
+    }
+    candidate
+}
+
+/// Restore automatic placement without changing map numbers or visibility.
+pub fn reset_label_offsets(doc: &Document) -> Document {
+    let mut candidate = doc.clone();
+    for atom in &mut candidate.atoms {
+        atom.display.mapping.offset = None;
+    }
+    candidate
+}
+
 pub fn reaction(doc: &Document, arrow: u64) -> Result<&Reaction, String> {
     doc.reactions
         .iter()
@@ -99,7 +123,7 @@ fn check_edit(doc: &Document, atom: u64, before: &Document) -> Result<(), String
 /// Return a validated replacement; errors leave the caller's document untouched.
 pub fn set_map(doc: &Document, atom: u64, number: u32) -> Result<Document, String> {
     if number > MAX_MAP {
-        return Err("Enter an atom map from 1 to 2147483647, or 0 to clear".into());
+        return Err(map_range_error());
     }
     let mut candidate = doc.clone();
     candidate
@@ -112,6 +136,7 @@ pub fn set_map(doc: &Document, atom: u64, number: u32) -> Result<Document, Strin
     candidate.validate()?;
     Ok(candidate)
 }
+
 /// Assign a selected reactant/product atom pair. Existing labels remain locked.
 pub fn pair(doc: &Document, arrow: u64, selected: &[u64]) -> Result<Document, String> {
     let r = reaction(doc, arrow)?;
@@ -253,3 +278,6 @@ pub fn align(doc: &Document, arrow: u64) -> Result<Document, String> {
     candidate.validate()?;
     Ok(candidate)
 }
+
+#[cfg(test)]
+mod tests;

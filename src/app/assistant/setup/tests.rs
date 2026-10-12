@@ -135,3 +135,33 @@ fn example_is_local_and_preserves_the_drawing_until_apply() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, original);
 }
+
+#[test]
+fn setup_help_runs_in_a_task_and_only_failure_changes_status() {
+    for help in [Help::Setup, Help::Install, Help::SignIn] {
+        let (mut app, _) = App::new();
+        app.assistant.status = "Existing status".into();
+        app.assistant.error = true;
+        let task = app.assistant_action(Action::SetupHelp(help));
+        assert!(task.units() > 0);
+        assert_eq!(app.assistant.status, "Existing status");
+        assert!(app.assistant.error);
+
+        let task = app.assistant_action(Action::SetupHelpOpened(help, Ok(())));
+        assert_eq!(task.units(), 0);
+        assert_eq!(app.assistant.status, "Existing status");
+        assert!(app.assistant.error);
+
+        app.assistant.error = false;
+        let task = app.assistant_action(Action::SetupHelpOpened(
+            help,
+            Err("Browser launch failed".into()),
+        ));
+        assert_eq!(task.units(), 0);
+        assert_eq!(
+            app.assistant.status,
+            format!("Could not open the browser. Visit {}", help.url())
+        );
+        assert!(app.assistant.error);
+    }
+}

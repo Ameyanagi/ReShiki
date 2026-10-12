@@ -25,6 +25,70 @@ pub struct State {
     pub revision: u64,
     pub epoch: u64,
 }
+impl State {
+    fn is_coordination(&self) -> bool {
+        self.mode == Connection::Coordinate
+    }
+}
+
+const CONNECT_DETAIL: &str =
+    "Click a destination atom to add a single bond. Drag from that atom to set the direction.";
+const SHARE_ATOM_DETAIL: &str = concat!(
+    "Click a matching destination atom to merge the two atoms. ",
+    "Drag from it to choose the orientation."
+);
+const FUSE_BOND_DETAIL: &str =
+    "Click a matching destination bond to share its two atoms. Drag from it to choose the side.";
+const COORDINATION_DETAIL: &str = concat!(
+    "Click a transition-metal atom to add a directed donor → metal contact. ",
+    "Positions, donor hydrogens and metal charge are retained, ",
+    "including within an existing chelate."
+);
+const COORDINATION_HINT: &str = concat!(
+    "No atoms move. Escape cancels. Each new contact is one Undo step. ",
+    "Wedge/hash styling depicts projection; it does not assign complex stereochemistry."
+);
+const JOIN_HINT: &str =
+    "Shift/Ctrl drag snaps the direction. Escape cancels. Joining is one Undo step.";
+
+struct JoinModeTexts {
+    panel_title: &'static str,
+    instruction: &'static str,
+    footer: &'static str,
+    bar_title: &'static str,
+    bar_subtitle: &'static str,
+}
+
+fn join_mode_texts(mode: Connection) -> JoinModeTexts {
+    let instruction = match mode {
+        Connection::Connect | Connection::Auto => CONNECT_DETAIL,
+        Connection::ShareAtom => SHARE_ATOM_DETAIL,
+        Connection::FuseBond => FUSE_BOND_DETAIL,
+        Connection::Coordinate => COORDINATION_DETAIL,
+    };
+    let coordination = mode == Connection::Coordinate;
+    let title = if coordination {
+        "Coordinate in place"
+    } else {
+        "Move & attach"
+    };
+    JoinModeTexts {
+        panel_title: title,
+        instruction,
+        footer: if coordination {
+            COORDINATION_HINT
+        } else {
+            JOIN_HINT
+        },
+        bar_title: title,
+        bar_subtitle: if coordination {
+            "Choose a metal · Positions stay fixed"
+        } else {
+            "Choose a destination · Drag to orient"
+        },
+    }
+}
+
 impl App {
     /// Before committing style/text drafts: inspect only actual Join routes.
     /// Pure model guards remain authoritative for direct callers and previews.
@@ -291,6 +355,8 @@ impl App {
         let Some(state) = &self.tab.joining else {
             return text("Select a fragment to attach").into();
         };
+        let coordination = state.is_coordination();
+        let texts = join_mode_texts(state.mode);
         let preview: Element<'_, Anchor> = canvas(TemplateAnchorPreview {
             document: &state.prepared.fragment,
             anchor: state.anchor,
@@ -299,52 +365,66 @@ impl App {
         .height(200)
         .into();
         column![
-            text(if state.mode == Connection::Coordinate { "Coordinate in place" } else { "Move & attach" }).size(18),
-            text("Choose the atom or bond on this fragment to use as its attachment point.").size(12).style(super::workspace::muted_text),
-            crate::appearance::pick_list([Connection::Connect,Connection::ShareAtom,Connection::FuseBond,Connection::Coordinate], Some(state.mode), |mode| Message::Join(Action::Mode(mode))).text_size(12).width(Length::Fill),
-            reshiki::accessibility::button("coordination.mode", "Coordinate in place: donor to metal", text("Coordinate in place").size(12)).checked(state.mode == Connection::Coordinate).style(super::workspace::control(state.mode == Connection::Coordinate)).on_press(Message::Join(Action::Mode(Connection::Coordinate))),
+            text(texts.panel_title).size(18),
+            text("Choose the atom or bond on this fragment to use as its attachment point.")
+                .size(12)
+                .style(super::workspace::muted_text),
+            crate::appearance::pick_list(
+                [
+                    Connection::Connect,
+                    Connection::ShareAtom,
+                    Connection::FuseBond,
+                    Connection::Coordinate
+                ],
+                Some(state.mode),
+                |mode| Message::Join(Action::Mode(mode))
+            )
+            .text_size(12)
+            .width(Length::Fill),
+            reshiki::accessibility::button(
+                "coordination.mode",
+                "Coordinate in place: donor to metal",
+                text("Coordinate in place").size(12)
+            )
+            .checked(coordination)
+            .style(super::workspace::control(coordination))
+            .on_press(Message::Join(Action::Mode(Connection::Coordinate))),
             preview.map(|anchor| Message::Join(Action::Anchor(anchor))),
-            text(state.anchor.to_string()).size(11).style(super::workspace::muted_text),
-            text(match state.mode {
-                Connection::Connect | Connection::Auto => "Click a destination atom to add a single bond. Drag from that atom to set the direction.",
-                Connection::ShareAtom => "Click a matching destination atom to merge the two atoms. Drag from it to choose the orientation.",
-                Connection::FuseBond => "Click a matching destination bond to share its two atoms. Drag from it to choose the side.",
-                Connection::Coordinate => "Click a transition-metal atom to add a directed donor → metal contact. Positions, donor hydrogens and metal charge are retained, including within an existing chelate."
-            }).size(12),
-            text(if state.mode == Connection::Coordinate { "No atoms move. Escape cancels. Each new contact is one Undo step. Wedge/hash styling depicts projection; it does not assign complex stereochemistry." } else { "Shift/Ctrl drag snaps the direction. Escape cancels. Joining is one Undo step." }).size(11).style(super::workspace::muted_text),
-            reshiki::accessibility::button("coordination.cancel", "Cancel attachment", text("Cancel")).on_press(Message::Join(Action::Cancel)).style(super::workspace::control(false))
-        ].spacing(12).into()
-    }
-    pub(super) fn join_bar(&self) -> Element<'_, Message> {
-        container(
-            row![
-                text(
-                    if self
-                        .tab
-                        .joining
-                        .as_ref()
-                        .is_some_and(|state| state.mode == Connection::Coordinate)
-                    {
-                        "Coordinate in place"
-                    } else {
-                        "Move & attach"
-                    }
-                )
-                .size(12),
-                text(
-                    if self
-                        .tab
-                        .joining
-                        .as_ref()
-                        .is_some_and(|state| state.mode == Connection::Coordinate)
-                    {
-                        "Choose a metal · Positions stay fixed"
-                    } else {
-                        "Choose a destination · Drag to orient"
-                    }
-                )
+            text(state.anchor.to_string())
                 .size(11)
                 .style(super::workspace::muted_text),
+            text(texts.instruction).size(12),
+            text(texts.footer)
+                .size(11)
+                .style(super::workspace::muted_text),
+            reshiki::accessibility::button(
+                "coordination.cancel",
+                "Cancel attachment",
+                text("Cancel")
+            )
+            .on_press(Message::Join(Action::Cancel))
+            .style(super::workspace::control(false))
+        ]
+        .spacing(12)
+        .into()
+    }
+    pub(super) fn join_bar(&self) -> Element<'_, Message> {
+        let coordination = self
+            .tab
+            .joining
+            .as_ref()
+            .is_some_and(State::is_coordination);
+        let texts = join_mode_texts(if coordination {
+            Connection::Coordinate
+        } else {
+            Connection::Connect
+        });
+        container(
+            row![
+                text(texts.bar_title).size(12),
+                text(texts.bar_subtitle)
+                    .size(11)
+                    .style(super::workspace::muted_text),
                 reshiki::accessibility::button(
                     "coordination.cancel-bar",
                     "Cancel attachment",

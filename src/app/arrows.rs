@@ -101,6 +101,25 @@ pub enum Action {
     Reset,
 }
 impl App {
+    fn selected_arrow_anchors(&self) -> (bool, bool) {
+        let mut start = false;
+        let mut end = false;
+        for arrow in self
+            .tab
+            .doc
+            .arrows
+            .iter()
+            .filter(|arrow| self.tab.selected.contains(&arrow.id))
+        {
+            start |= arrow.start_anchor.is_some();
+            end |= arrow.end_anchor.is_some();
+            if start && end {
+                break;
+            }
+        }
+        (start, end)
+    }
+
     pub(super) fn arrow_attach_mode(&self) -> bool {
         self.tab.arrows.attach_targets && self.tab.arrow_style.supports_attachments()
     }
@@ -451,18 +470,7 @@ impl App {
             );
         }
         if has_selection {
-            let start = self
-                .tab
-                .doc
-                .arrows
-                .iter()
-                .any(|a| self.tab.selected.contains(&a.id) && a.start_anchor.is_some());
-            let end = self
-                .tab
-                .doc
-                .arrows
-                .iter()
-                .any(|a| self.tab.selected.contains(&a.id) && a.end_anchor.is_some());
+            let (start, end) = self.selected_arrow_anchors();
             panel = panel.push(
                 row![
                     reshiki::accessibility::button(

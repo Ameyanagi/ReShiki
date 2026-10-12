@@ -116,3 +116,13 @@ fn receipts_outside_the_matrix_preserve_predicates_and_wrapper_routing() {
         assert!(!tabs::document_result(&message), "{message:?}");
     }
 }
+
+#[test]
+fn assistant_help_completion_belongs_to_the_app() {
+    let message = Message::Assistant(crate::app::assistant::Action::SetupHelpOpened(
+        crate::app::assistant::Help::Setup,
+        Ok(()),
+    ));
+    assert_eq!(async_result(&message), Some(Owner::App));
+    assert!(!tabs::document_result(&message));
+}

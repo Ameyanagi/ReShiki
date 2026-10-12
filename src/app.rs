@@ -104,6 +104,17 @@ pub(crate) use workspace::text_width;
 /// The status bar's idle message.
 const READY: &str = "Ready · Choose a tool to start drawing";
 
+// App::fit_bounds: screen pixels kept free around the fitted drawing, the
+// smallest usable viewport side (pixels) and the smallest fitted extent (world
+// units), so a tiny drawing is not zoomed in without bound.
+const FIT_MARGIN: f32 = 80.0;
+const MIN_VIEWPORT: f32 = 100.0;
+const MIN_FIT_WIDTH: f32 = 240.0;
+const MIN_FIT_HEIGHT: f32 = 200.0;
+/// Fit's zoom range; interactive zoom elsewhere clamps to 0.005..5.
+const MIN_ZOOM: f32 = 0.005;
+const MAX_FIT_ZOOM: f32 = 2.5;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InspectorTab {
     Reactions,
@@ -640,18 +651,24 @@ impl App {
         self.tab.selected.retain(|id| existing.contains(id));
     }
     fn fit(&mut self) {
-        self.tab.pages.fit = None;
         if self.display_document().all_ids().is_empty() {
+            self.tab.pages.fit = None;
             self.tab.camera = Camera::default();
             self.tab.fit_to_view = false;
             return;
         }
-        let (lo, hi) = self.display_document().bounds();
+        self.fit_bounds(self.display_document().bounds());
+    }
+    /// Centers and zooms the camera so the world rectangle `(lo, hi)` fits the paper viewport.
+    pub(super) fn fit_bounds(&mut self, (lo, hi): (Point, Point)) {
+        self.tab.pages.fit = None;
         self.tab.camera.center = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
         let viewport = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        self.tab.camera.zoom = ((viewport.width - 80.0).max(100.0) / (hi.x - lo.x).max(240.0))
-            .min((viewport.height - 80.0).max(100.0) / (hi.y - lo.y).max(200.0))
-            .clamp(0.005, 2.5);
+        let across =
+            (viewport.width - FIT_MARGIN).max(MIN_VIEWPORT) / (hi.x - lo.x).max(MIN_FIT_WIDTH);
+        let down =
+            (viewport.height - FIT_MARGIN).max(MIN_VIEWPORT) / (hi.y - lo.y).max(MIN_FIT_HEIGHT);
+        self.tab.camera.zoom = across.min(down).clamp(MIN_ZOOM, MAX_FIT_ZOOM);
         self.tab.fit_to_view = true;
     }
     /// Shows the save dialog for the tab in front; its answer continues `action`.

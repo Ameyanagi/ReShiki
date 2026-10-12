@@ -32,6 +32,202 @@ fn pending_proposal(app: &mut App) -> (u64, u64, Arc<Proposal>) {
     (epoch, serial, proposal)
 }
 
+const BEFORE_ACTION: &str = "Mapping status before action";
+
+fn action_app() -> App {
+    let mut app = app();
+    app.status = BEFORE_ACTION.into();
+    app.error = true;
+    app
+}
+
+fn assert_outcome(app: &App, status: &str, error: bool, undo_depth: usize) {
+    assert_eq!(app.status, status);
+    assert_eq!(app.error, error);
+    assert_eq!(app.tab.history.undo_frames().len(), undo_depth);
+}
+
+#[test]
+fn open_action_preserves_status_error_and_history() {
+    let mut app = action_app();
+    app.tab.selected = vec![1];
+    let _ = app.mapping_action(Action::Open);
+    assert_outcome(&app, BEFORE_ACTION, true, 0);
+    assert_eq!(app.tab.mapping.atom, Some(1));
+    assert_eq!(app.tab.mapping.text, "0");
+}
+
+#[test]
+fn text_action_preserves_status_error_and_history() {
+    let mut app = action_app();
+    app.tab.selected = vec![1];
+    let _ = app.mapping_action(Action::Text("27".into()));
+    assert_outcome(&app, BEFORE_ACTION, true, 0);
+    assert_eq!(app.tab.mapping.text, "27");
+}
+
+#[test]
+fn apply_action_updates_status_error_and_one_history_frame() {
+    let mut app = action_app();
+    app.tab.selected = vec![1];
+    app.tab.mapping.atom = Some(1);
+    app.tab.mapping.text = "27".into();
+    let _ = app.mapping_action(Action::Apply);
+    assert_outcome(&app, "Atom mapping updated", false, 1);
+    assert_eq!(app.tab.doc.atom(1).unwrap().map_num, 27);
+}
+
+#[test]
+fn clear_action_updates_status_error_and_one_history_frame() {
+    let mut app = action_app();
+    app.tab.doc = mapping::set_map(&app.tab.doc, 1, 27).unwrap();
+    app.tab.selected = vec![1];
+    let _ = app.mapping_action(Action::Clear);
+    assert_outcome(&app, "Atom mapping updated", false, 1);
+    assert_eq!(app.tab.doc.atom(1).unwrap().map_num, 0);
+}
+
+#[test]
+fn pair_action_updates_status_error_and_one_history_frame() {
+    let mut app = action_app();
+    app.tab.selected = vec![1, 2];
+    let _ = app.mapping_action(Action::Pair);
+    assert_outcome(&app, "Atom mapping updated", false, 1);
+    assert_eq!(app.tab.doc.atom(1).unwrap().map_num, 1);
+    assert_eq!(app.tab.doc.atom(2).unwrap().map_num, 1);
+}
+
+#[test]
+fn show_action_commits_only_when_the_document_changes() {
+    let mut app = action_app();
+    let show = app.tab.doc.atom_labels.maps;
+    let _ = app.mapping_action(Action::Show(show));
+    assert_outcome(&app, "Atom mapping updated", false, 0);
+    let _ = app.mapping_action(Action::Show(!show));
+    assert_outcome(&app, "Atom mapping updated", false, 1);
+    assert_eq!(app.tab.doc.atom_labels.maps, !show);
+}
+
+#[test]
+fn position_action_sets_status_and_preserves_error_and_history() {
+    let mut app = action_app();
+    app.tab.doc = mapping::set_map(&app.tab.doc, 1, 27).unwrap();
+    let _ = app.mapping_action(Action::Position);
+    assert_outcome(&app, "Drag atom-map handles · Escape finishes", true, 0);
+    assert_eq!(app.tab.selected, vec![1]);
+    assert_eq!(app.tool, Tool::EditPoints);
+}
+
+#[test]
+fn reset_positions_action_commits_only_when_the_document_changes() {
+    let mut app = action_app();
+    let _ = app.mapping_action(Action::ResetPositions);
+    assert_outcome(&app, "Atom mapping updated", false, 0);
+    app.tab.doc.atom_mut(1).unwrap().display.mapping.offset = Some(Point::new(0., -38.));
+    let _ = app.mapping_action(Action::ResetPositions);
+    assert_outcome(&app, "Atom mapping updated", false, 1);
+    assert_eq!(app.tab.doc.atom(1).unwrap().display.mapping.offset, None);
+}
+
+#[test]
+fn auto_action_sets_status_error_and_pending_without_history() {
+    let mut app = action_app();
+    assert!(app.mapping_action(Action::Auto).units() > 0);
+    assert_outcome(&app, "Finding atom correspondence…", false, 0);
+    assert!(app.tab.mapping.pending.is_some());
+}
+
+#[test]
+fn ready_action_sets_status_error_and_proposal_without_history() {
+    let mut app = action_app();
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    let _ = app.mapping_action(Action::Ready(epoch, serial, Ok(proposal.clone())));
+    assert_outcome(&app, "Atom-map proposal ready to review", false, 0);
+    assert!(Arc::ptr_eq(
+        app.tab.mapping.proposal.as_ref().unwrap(),
+        &proposal,
+    ));
+}
+
+#[test]
+fn apply_proposal_action_updates_status_error_and_one_history_frame() {
+    let mut app = action_app();
+    let (_, _, proposal) = pending_proposal(&mut app);
+    app.tab.mapping.proposal = Some(proposal);
+    let _ = app.mapping_action(Action::ApplyProposal);
+    assert_outcome(&app, "Atom mapping updated", false, 1);
+    assert!(app.tab.mapping.proposal.is_none());
+}
+
+#[test]
+fn dismiss_action_preserves_status_error_and_history() {
+    let mut app = action_app();
+    let (_, _, proposal) = pending_proposal(&mut app);
+    app.tab.mapping.proposal = Some(proposal);
+    let _ = app.mapping_action(Action::Dismiss);
+    assert_outcome(&app, BEFORE_ACTION, true, 0);
+    assert!(app.tab.mapping.proposal.is_none());
+}
+
+#[test]
+fn review_pair_action_preserves_status_error_and_history() {
+    let mut app = action_app();
+    let (_, _, proposal) = pending_proposal(&mut app);
+    app.tab.mapping.proposal = Some(proposal);
+    let _ = app.mapping_action(Action::ReviewPair(0));
+    assert_outcome(&app, BEFORE_ACTION, true, 0);
+    assert_eq!(app.tab.selected, vec![1, 2]);
+    assert_eq!(app.tool, Tool::Select);
+}
+
+#[test]
+fn align_action_updates_status_error_and_one_history_frame() {
+    let mut app = action_app();
+    let extra_product = app.tab.doc.add_atom("C", Point::new(300., 0.));
+    reactions::assign(&mut app.tab.doc, 3, &[extra_product], Role::Product).unwrap();
+    app.tab.doc = mapping::pair(&app.tab.doc, 3, &[1, 2]).unwrap();
+    let _ = app.mapping_action(Action::Align);
+    assert_outcome(&app, "Atom mapping updated", false, 1);
+    assert_ne!(app.tab.doc.atom(2).unwrap().position, Point::new(250., 0.));
+}
+
+#[test]
+fn apply_errors_keep_selection_editor_and_parse_precedence_without_history() {
+    let mut app = action_app();
+    app.tab.mapping.text = "invalid".into();
+    let _ = app.mapping_action(Action::Apply);
+    assert_outcome(&app, "Select one atom to edit its map", true, 0);
+    app.tab.selected = vec![1];
+    let _ = app.mapping_action(Action::Apply);
+    assert_outcome(&app, "Enter the atom map for this atom first", true, 0);
+    app.tab.mapping.atom = Some(1);
+    for value in ["invalid", "2147483648"] {
+        app.tab.mapping.text = value.into();
+        let _ = app.mapping_action(Action::Apply);
+        assert_outcome(
+            &app,
+            "Enter an atom map from 1 to 2147483647, or 0 to clear",
+            true,
+            0,
+        );
+    }
+}
+
+#[test]
+fn mapping_edits_without_their_required_inputs_report_errors_without_history() {
+    let mut app = action_app();
+    let _ = app.mapping_action(Action::Clear);
+    assert_outcome(&app, "Select one atom to edit its map", true, 0);
+    let _ = app.mapping_action(Action::ApplyProposal);
+    assert_outcome(&app, "Run Auto-map first", true, 0);
+    app.tab.doc.reactions.clear();
+    app.tab.doc.arrows.clear();
+    for action in [Action::Pair, Action::Align] {
+        let _ = app.mapping_action(action);
+        assert_outcome(&app, "Assign reactants and products first", true, 0);
+    }
+}
+
 #[test]
 fn file_epoch_clears_mapping_pending_and_old_result_cannot_clear_new_work() {
     let mut app = app();

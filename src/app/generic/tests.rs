@@ -1,5 +1,5 @@
 use super::*;
-use reshiki::document::Document;
+use reshiki::document::{Document, Point};
 
 fn expand_drawing(source: Document) -> Result<PreparedExpansion, String> {
     reshiki::generic::expand_prepared(reshiki::generic::prepare_expansion_input(

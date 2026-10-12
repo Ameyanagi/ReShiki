@@ -146,3 +146,36 @@ fn request_preflight_changes_replace_stale_ready_setup_state() {
         assert!(app.assistant_action(Action::Connect).units() > 0);
     }
 }
+
+#[test]
+fn poll_drains_connection_events_in_order_without_changing_catalog_status() {
+    use super::setup::Connection;
+
+    let mut app = fresh();
+    let (tx, rx) = tokio::sync::mpsc::channel(3);
+    app.assistant.progress = Some(rx);
+    for event in [
+        codex::Progress::Catalog(codex::Account {
+            connected: true,
+            models: vec![],
+        }),
+        codex::Progress::ConnectionFailed(codex::ConnectionError::ModelsFailed),
+        codex::Progress::Catalog(codex::Account {
+            connected: false,
+            models: vec![],
+        }),
+    ] {
+        tx.try_send(event).unwrap();
+    }
+    assert_eq!(app.assistant_action(Action::Poll).units(), 0);
+    assert_eq!(app.assistant.connection, Connection::SignInRequired);
+    assert!(app.assistant.account.as_ref().is_some_and(|a| !a.connected));
+    assert_eq!(
+        app.assistant.status,
+        codex::ConnectionError::ModelsFailed.to_string()
+    );
+    assert!(app.assistant.error);
+    let status = app.assistant.status.clone();
+    assert_eq!(app.assistant_action(Action::Poll).units(), 0);
+    assert_eq!(app.assistant.status, status);
+}

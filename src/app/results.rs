@@ -44,7 +44,7 @@ enum Completion {
     Pasted,
     /// Pictures(Loaded).
     Pictures,
-    /// Assistant(Connected | PreferencesSaved | ImageRead | TextPasted).
+    /// Assistant(Connected | PreferencesSaved | ImageRead | TextPasted | SetupHelpOpened).
     AssistantApp,
     /// Templates(Finished | Imported | WarningAcknowledged).
     Templates,
@@ -414,6 +414,7 @@ fn completion(message: &Message) -> Option<Completion> {
             use super::assistant::Action;
             match action {
                 Action::Connected(..)
+                | Action::SetupHelpOpened(..)
                 | Action::ImageRead { .. }
                 | Action::TextPasted { .. }
                 | Action::PreferencesSaved(..) => Some(Completion::AssistantApp),

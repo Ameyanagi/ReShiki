@@ -448,7 +448,7 @@ async fn predicate_cases(key: optimization::Key) -> Vec<(&'static str, Message, 
 #[tokio::test]
 async fn every_constructible_completion_pins_all_five_admission_predicates() {
     let (mut app, key) = previewing(drawing());
-    let cases = predicate_cases(key).await;
+    let mut cases = predicate_cases(key).await;
     assert_eq!(
         cases.len(),
         if reshiki::printing::available() {
@@ -458,6 +458,16 @@ async fn every_constructible_completion_pins_all_five_admission_predicates() {
         },
         "All constructible completion variants must be represented"
     );
+    // SetupHelpOpened (the setup-help browser receipt) joins the matrix after the count
+    // above, which pins the completion variants that existed before it.
+    cases.push((
+        "Assistant SetupHelpOpened",
+        Message::Assistant(assistant::Action::SetupHelpOpened(
+            assistant::Help::Setup,
+            Err(FAILURE.into()),
+        )),
+        [false, true, true, false, true],
+    ));
     for (name, message, expected) in cases {
         let actual = [
             tabs::document_result(&message),
