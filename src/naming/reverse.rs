@@ -34,7 +34,7 @@ fn generate_worker(smiles: &str, cancel: &Cancel) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let mut command = Command::new(worker::executable()?);
     command
-        .arg("--naming-worker")
+        .arg(crate::workers::NAMING_WORKER)
         .current_dir(directory.path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

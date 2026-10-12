@@ -14,6 +14,10 @@ mod colors;
 mod reaction;
 
 const WORKER: &str = "reference/engine/worker.py";
+/// Keeps the worker console hidden. Copies: reshiki::workers, geometry/client.rs,
+/// reshiki-chemistry's inchi/generator.rs, reshiki-windows' metafile_worker.rs.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 struct Worker {
     _child: Child,
@@ -101,7 +105,7 @@ impl PythonEngine {
             .env("PYTHONUTF8", "1");
         // A GUI launch on Windows must not open a console for the local worker.
         #[cfg(windows)]
-        command.creation_flags(0x08000000);
+        command.creation_flags(CREATE_NO_WINDOW);
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

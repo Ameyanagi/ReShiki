@@ -214,7 +214,7 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
 async fn invoke(operation: &str, representations: &[Representation]) -> Result<Packet, String> {
     let input = encode_request(operation, representations)?;
     let mut command = Command::new(helper()?);
-    command.arg("--clipboard-worker");
+    command.arg(crate::workers::CLIPBOARD_WORKER);
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

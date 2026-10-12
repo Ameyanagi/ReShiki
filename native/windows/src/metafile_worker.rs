@@ -1,7 +1,10 @@
 //! Native file playback is isolated from the editor and bounded by a Windows
 //! job, including allocations GDI+ makes outside the Rust global allocator.
 use super::Result;
-use std::io::{Read, Write};
+use std::{
+    io::{Read, Write},
+    time::Duration,
+};
 use windows::Win32::{
     Foundation::*,
     System::{JobObjects::*, Threading::*},
@@ -37,6 +40,14 @@ fn limited_job() -> Result<Job> {
 }
 
 const MAX_SNAPSHOT: usize = 128 * 1024 * 1024;
+pub const EMF_IMPORT_WORKER: &str = "--emf-worker";
+pub const EMF_FILE_WORKER: &str = "--emf-file-worker";
+pub const EMF_OFFICE_WORKER: &str = "--emf-office-worker";
+pub const PLAYBACK_LIMIT: Duration = Duration::from_secs(30);
+/// Keeps the worker console hidden. Copies: reshiki::workers, reshiki-io's
+/// geometry/client.rs and engine/reference.rs, reshiki-chemistry's
+/// inchi/generator.rs (none of them can share one crate).
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 fn deadline() -> Result<std::sync::mpsc::Sender<()>> {
     let (finished, waiting) = std::sync::mpsc::channel();
@@ -44,7 +55,7 @@ fn deadline() -> Result<std::sync::mpsc::Sender<()>> {
         .name("emf-deadline".into())
         .spawn(move || {
             if matches!(
-                waiting.recv_timeout(std::time::Duration::from_secs(30)),
+                waiting.recv_timeout(PLAYBACK_LIMIT),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout)
             ) {
                 // SAFETY: this disposable worker owns only this process. An
@@ -61,7 +72,7 @@ pub(super) fn run(mode: &str) -> Result<()> {
     let _job = limited_job()?;
     let _deadline = deadline()?;
     let mut bytes = Vec::new();
-    let limit = if mode == "--emf-worker" {
+    let limit = if mode == EMF_IMPORT_WORKER {
         reshiki_metafile::MAX_BYTES
     } else {
         MAX_SNAPSHOT
@@ -73,9 +84,9 @@ pub(super) fn run(mode: &str) -> Result<()> {
         return Err(anyhow::anyhow!("EMF worker input limit exceeded"));
     }
     let output = match mode {
-        "--emf-worker" => super::printing::import_metafile(&bytes)?,
-        "--emf-file-worker" => super::printing::file_metafile(&bytes)?,
-        "--emf-office-worker" => super::printing::metafile(&bytes)?,
+        mode if mode == EMF_IMPORT_WORKER => super::printing::import_metafile(&bytes)?,
+        mode if mode == EMF_FILE_WORKER => super::printing::file_metafile(&bytes)?,
+        mode if mode == EMF_OFFICE_WORKER => super::printing::metafile(&bytes)?,
         _ => return Err(anyhow::anyhow!("Unknown EMF worker operation")),
     };
     if output.len() > MAX_SNAPSHOT {
@@ -90,21 +101,21 @@ pub(super) fn record(bytes: &[u8], file: bool) -> Result<Vec<u8>> {
     use std::{
         os::windows::process::CommandExt,
         process::{Command, Stdio},
-        time::{Duration, Instant},
+        time::Instant,
     };
     if bytes.len() > MAX_SNAPSHOT {
         return Err(anyhow::anyhow!("EMF snapshot exceeds 128 MB"));
     }
     let mut child = Command::new(std::env::current_exe()?)
         .arg(if file {
-            "--emf-file-worker"
+            EMF_FILE_WORKER
         } else {
-            "--emf-office-worker"
+            EMF_OFFICE_WORKER
         })
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(0x0800_0000)
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()?;
     let mut input = child
         .stdin
@@ -123,7 +134,7 @@ pub(super) fn record(bytes: &[u8], file: bool) -> Result<Vec<u8>> {
             .read_to_end(&mut bytes)?;
         Ok::<_, std::io::Error>(bytes)
     });
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + PLAYBACK_LIMIT;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Ok(status),

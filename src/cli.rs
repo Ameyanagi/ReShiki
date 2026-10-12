@@ -28,7 +28,10 @@ mod compose;
 mod convert;
 mod host;
 mod io;
+mod mcp_usage;
 mod render;
+
+pub use mcp_usage::{MCP_USAGE, heap};
 
 use args::{Command, Topic};
 use host::{CliError, Session, labelled};

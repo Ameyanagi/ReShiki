@@ -11,6 +11,10 @@ use tokio::{
 const MAX_STDERR_BYTES: usize = 64 * 1024;
 pub(super) const MAX_HEAP_BYTES: usize = 512 * 1024 * 1024;
 pub(super) const MAX_TIMEOUT: Duration = Duration::from_secs(120);
+/// Keeps the worker console hidden. Copies: reshiki::workers, engine/reference.rs,
+/// reshiki-chemistry's inchi/generator.rs, reshiki-windows' metafile_worker.rs.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -351,7 +355,7 @@ async fn exchange_with_deadline(
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         #[cfg(windows)]
-        command.creation_flags(0x0800_0000);
+        command.creation_flags(CREATE_NO_WINDOW);
         let mut child = command.spawn()?;
         let mut stdin = child
             .stdin

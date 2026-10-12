@@ -23,6 +23,7 @@ mod printing;
 mod stdio;
 pub mod window;
 
+pub use metafile_worker::{EMF_FILE_WORKER, EMF_IMPORT_WORKER, EMF_OFFICE_WORKER, PLAYBACK_LIMIT};
 pub use stdio::{
     Protected, StdHandle, StdioError, disinherit_standard_handles, standard_handle_inheritable,
 };

@@ -19,6 +19,11 @@ const MAX_STDERR_BYTES: usize = 64 * 1024;
 pub const MAX_TIMEOUT: Duration = Duration::from_secs(120);
 pub const DEFAULT_HEAP_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_HEAP_BYTES: usize = 512 * 1024 * 1024;
+/// Keeps the worker console hidden. Copies: reshiki::workers, reshiki-io's
+/// geometry/client.rs and engine/reference.rs, reshiki-windows'
+/// metafile_worker.rs (none of them can share one crate).
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Bounds live Rust allocations during the operation, including the adapter
 /// and response. This is not an RSS or stack limit. Request parsing is byte bounded.
@@ -233,7 +238,7 @@ fn helper_command(helper: &Path) -> Command {
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     #[cfg(windows)]
-    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW for the desktop app.
+    command.creation_flags(CREATE_NO_WINDOW);
     command
 }
 

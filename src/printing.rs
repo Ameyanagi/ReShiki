@@ -162,7 +162,7 @@ pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
     })
     .map_err(|e| e.to_string())?;
     let mut command = Command::new(helper);
-    command.arg("--print-worker");
+    command.arg(crate::workers::PRINT_WORKER);
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

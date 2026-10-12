@@ -99,7 +99,7 @@ fn run_with_executable(name: &str, cancel: &Cancel, executable: &Path) -> Result
         .map_err(|e| e.to_string())?;
     let mut command = Command::new(executable);
     command
-        .arg("--naming-worker")
+        .arg(crate::workers::NAMING_WORKER)
         .current_dir(directory.path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

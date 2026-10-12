@@ -226,7 +226,7 @@ impl Server {
             .map_err(|_| ConnectionError::StartFailed)?;
         let mut command = Command::new(executable);
         #[cfg(windows)]
-        command.creation_flags(0x08000000);
+        command.creation_flags(crate::workers::CREATE_NO_WINDOW);
         command.env(
             "PATH",
             std::env::join_paths(search_directories()).map_err(|_| ConnectionError::StartFailed)?,

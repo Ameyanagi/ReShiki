@@ -41,7 +41,7 @@ pub(super) async fn invoke(
     let executable =
         std::env::current_exe().map_err(|e| format!("Could not locate the application: {e}"))?;
     let child = Command::new(executable)
-        .arg("--clipboard-worker")
+        .arg(crate::workers::CLIPBOARD_WORKER)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
