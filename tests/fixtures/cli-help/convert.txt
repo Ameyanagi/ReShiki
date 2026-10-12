@@ -27,3 +27,6 @@ Options:
 Inputs are at most 16777216 bytes (16777218 for cdx), so a ReShiki drawing with
 large embedded pictures that the app opens can be too large here. rsk, rxn,
 rsmi, cdx and emf files cannot be written.
+
+Export details, such as PNG size and dpi, are printed to stderr as a
+`reshiki: warning:` line; this does not mean the command failed.

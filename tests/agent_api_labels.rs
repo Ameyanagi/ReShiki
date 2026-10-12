@@ -122,8 +122,11 @@ fn initialize_names_the_server_experimental() {
 #[test]
 fn cli_help_opens_with_the_notice() {
     let output = cli(&["help"]);
+    assert!(output.stderr.is_empty(), "{:?}", output.stderr);
     let help = String::from_utf8(output.stdout).expect("UTF-8 help");
     assert_eq!(help.lines().next(), Some(NOTICE), "{help}");
+    let documentation = format!("Documentation: {GUIDE_URL}");
+    assert_eq!(help.lines().last(), Some(documentation.as_str()), "{help}");
 }
 
 #[test]

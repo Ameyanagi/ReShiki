@@ -7,6 +7,8 @@
 mod headless;
 
 use headless::{McpSession, StderrMode};
+use reshiki::cli::MCP_USAGE;
+use reshiki_agent::stability::{GUIDE_URL, NOTICE};
 use serde_json::{Value, json};
 use std::{
     process::{Output, Stdio},
@@ -179,7 +181,10 @@ fn usage_errors_exit_2_without_output() {
         stderr.starts_with("reshiki --mcp: unknown option `--bogus`\n"),
         "{stderr}"
     );
-    assert!(stderr.contains("Usage: reshiki --mcp"), "{stderr}");
+    assert_eq!(
+        stderr,
+        format!("reshiki --mcp: unknown option `--bogus`\n{}", *MCP_USAGE)
+    );
 }
 
 fn info(session: &mut McpSession, id: i64) -> Value {
@@ -281,8 +286,14 @@ fn help_goes_to_stderr() {
         assert_eq!(output.status.code(), Some(0), "{flag}");
         assert!(output.stdout.is_empty(), "{flag}: {}", text(&output.stdout));
         let stderr = text(&output.stderr);
-        assert!(stderr.starts_with("Experimental: "), "{flag}: {stderr}");
-        assert!(stderr.contains("Usage: reshiki --mcp"), "{flag}: {stderr}");
+        assert_eq!(stderr, *MCP_USAGE, "{flag}");
+        assert_eq!(stderr.lines().next(), Some(NOTICE), "{flag}");
+        let documentation = format!("Documentation: {GUIDE_URL}");
+        assert_eq!(
+            stderr.lines().last(),
+            Some(documentation.as_str()),
+            "{flag}"
+        );
     }
 }
 

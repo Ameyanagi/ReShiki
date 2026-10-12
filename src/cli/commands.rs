@@ -1,6 +1,10 @@
 //! The command grammar and help text for `reshiki --cli`.
-use super::{input_formats, io, output_formats, render_formats};
-use reshiki_agent::ops::budget::Budgets;
+use super::{
+    FAILURE, SUCCESS, USAGE, heap::HEAP_VARIABLE, input_formats, io,
+    mcp_usage::heap_environment_help, output_formats, render_formats,
+};
+use reshiki_agent::{ops::budget::Budgets, stability::GUIDE_URL};
+use reshiki_process_heap::RESOURCE_EXIT;
 
 /// One option accepted by a command.
 #[derive(Debug, Clone, Copy)]
@@ -157,17 +161,10 @@ pub(crate) fn overview() -> String {
     for spec in COMMANDS {
         text.push_str(&format!("  {:width$}  {}\n", spec.name, spec.summary));
     }
-    text.push_str(OVERVIEW_END);
-    text
-}
+    let end = format!(
+        "\n\
+Options are allowed once each; -- ends the options.
 
-const OVERVIEW_START: &str = "\
-Usage: reshiki --cli <command> [options]
-
-Commands:
-";
-
-const OVERVIEW_END: &str = "\n\
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
   reshiki --cli convert scheme.rsk -o figure.pdf
@@ -181,13 +178,28 @@ Output:
   Warnings and errors go to stderr.
 
 Exit status:
-  0  success
-  1  the operation failed, or reading the input or writing the output failed
-  2  usage error
+  {SUCCESS:<2}  success
+  {FAILURE:<2}  the operation failed, or reading the input or writing the output failed
+  {USAGE:<2}  usage error
+  {RESOURCE_EXIT:<2}  the memory ceiling was reached (see {HEAP_VARIABLE})
 
+{environment}
 Files named on the command line are read and written with your own
 permissions. On Windows, release builds cannot write to a console window:
 redirect the output, for example `reshiki --cli info > info.json`.
+
+Documentation: {GUIDE_URL}
+",
+        environment = heap_environment_help(),
+    );
+    text.push_str(&end);
+    text
+}
+
+const OVERVIEW_START: &str = "\
+Usage: reshiki --cli <command> [options]
+
+Commands:
 ";
 
 const ANALYZE_HELP: &str = "\
@@ -200,6 +212,18 @@ value.analysis. The input is read as for convert (reshiki --cli help convert).
 const INFO_HELP: &str = "\
 Prints ReShiki's versions, the limits it enforces and the input and output
 formats as one JSON line.
+
+grants and files describe the file tools of reshiki --mcp; the command line
+uses neither.
+";
+
+/// The agent reference's Proposal section: the schema and an example.
+const PROPOSAL_URL: &str = "https://reshiki.com/developer/agent-reference/#proposal";
+
+/// Convert and compose print the export receipt's detail as a warning.
+const EXPORT_DETAIL_HELP: &str = "\
+Export details, such as PNG size and dpi, are printed to stderr as a
+`reshiki: warning:` line; this does not mean the command failed.
 ";
 
 fn convert_help() -> String {
@@ -233,7 +257,8 @@ Options:
 Inputs are at most {text} bytes ({cdx} for cdx), so a ReShiki drawing with
 large embedded pictures that the app opens can be too large here. rsk, rxn,
 rsmi, cdx and emf files cannot be written.
-",
+
+{EXPORT_DETAIL_HELP}",
         usage = CONVERT.usage,
         inputs = input_formats().join(", "),
         outputs = output_formats().join(", "),
@@ -281,9 +306,9 @@ Usage: {usage}
 Lays out a Proposal as ReShiki's assistant composes its drafts, in the
 default style, then writes the drawing as convert does.
 
-PROPOSAL is a JSON file, or - for standard input, of at most {text} bytes.
-It follows the assistant's Proposal schema, which `reshiki --mcp` publishes
-with its compose tool; replace_ids must be empty.
+PROPOSAL is a JSON file, or - for standard input, of at most {text} bytes;
+its replace_ids must be empty. The Proposal schema and an example are at
+{PROPOSAL_URL}
 
 Options:
   --to FORMAT  The output format: {outputs}.
@@ -297,7 +322,8 @@ Options:
                convert does.
 
 A ReShiki drawing (.rsk) cannot be written.
-",
+
+{EXPORT_DETAIL_HELP}",
         usage = COMPOSE.usage,
         text = Budgets::default().max_text_bytes,
         outputs = output_formats().join(", "),

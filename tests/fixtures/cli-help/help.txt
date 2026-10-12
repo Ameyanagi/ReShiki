@@ -9,6 +9,8 @@ Commands:
   info     Print versions, limits and formats as one JSON line
   help     Show this help, or a command's help: reshiki --cli help <command>
 
+Options are allowed once each; -- ends the options.
+
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
   reshiki --cli convert scheme.rsk -o figure.pdf
@@ -22,10 +24,17 @@ Output:
   Warnings and errors go to stderr.
 
 Exit status:
-  0  success
-  1  the operation failed, or reading the input or writing the output failed
-  2  usage error
+  0   success
+  1   the operation failed, or reading the input or writing the output failed
+  2   usage error
+  75  the memory ceiling was reached (see RESHIKI_AGENT_HEAP_MB)
+
+Environment:
+  RESHIKI_AGENT_HEAP_MB  memory ceiling in MiB, 256-16384
+                         (default 2048); an invalid value exits 2
 
 Files named on the command line are read and written with your own
 permissions. On Windows, release builds cannot write to a console window:
 redirect the output, for example `reshiki --cli info > info.json`.
+
+Documentation: https://reshiki.com/guide/agents/

@@ -793,7 +793,6 @@ async fn binary_output_never_goes_to_a_terminal() {
 }
 
 const HELP_GOLDENS: &[(&str, &str)] = &[
-    // Current behavior: overview help omits exit status 75 and RESHIKI_AGENT_HEAP_MB.
     (
         "help",
         include_str!("../../tests/fixtures/cli-help/help.txt"),

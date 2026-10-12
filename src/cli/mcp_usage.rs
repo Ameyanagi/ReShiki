@@ -1,10 +1,30 @@
 //! Shared MCP help and heap limits for headless entry points.
 
-use reshiki_agent::stability::NOTICE;
+use super::{FAILURE, SUCCESS, USAGE};
+use heap::{DEFAULT_HEAP_MIB, HEAP_MIB, HEAP_VARIABLE};
+use reshiki_agent::stability::{GUIDE_URL, NOTICE};
+use reshiki_process_heap::RESOURCE_EXIT;
 use std::sync::LazyLock;
 
 /// The MCP command-line help, beginning with the agent API's experimental notice.
-pub static MCP_USAGE: LazyLock<String> = LazyLock::new(|| format!("{NOTICE}\n{MCP_USAGE_BODY}"));
+pub static MCP_USAGE: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "{NOTICE}\n{MCP_USAGE_BODY}\n\
+Exit status:
+  {SUCCESS:<2}  input ended and every reply was delivered
+  {FAILURE:<2}  stdout failed or closed, a reply was not delivered, a request went
+      unanswered, or the server could not start
+  {USAGE:<2}  usage, grant or {HEAP_VARIABLE} error
+  {RESOURCE_EXIT:<2}  the memory ceiling was reached
+
+{environment}
+agent-access.json grants folders too (in ReShiki's data folder; see the docs).
+
+Documentation: {GUIDE_URL}
+",
+        environment = heap_environment_help(),
+    )
+});
 
 const MCP_USAGE_BODY: &str = "\
 Usage: reshiki --mcp [--log-level <level>] [--allow-read <folder>]... [--allow-write <folder>]...
@@ -17,9 +37,22 @@ Options:
   --allow-read <folder>   Let file_open read files in <folder>; repeatable
   --allow-write <folder>  Let file_save write files in <folder>; repeatable
   -h, --help              Show this help
-
-Folders listed in agent-access.json in ReShiki's data folder are granted too.
 ";
+
+/// The `Environment:` block of the `--cli` and `--mcp` help: what
+/// [`HEAP_VARIABLE`](heap::HEAP_VARIABLE) sets.
+pub(super) fn heap_environment_help() -> String {
+    let indent = " ".repeat(HEAP_VARIABLE.len() + 4);
+    format!(
+        "\
+Environment:
+  {HEAP_VARIABLE}  memory ceiling in MiB, {min}-{max}
+{indent}(default {DEFAULT_HEAP_MIB}); an invalid value exits {USAGE}
+",
+        min = HEAP_MIB.start(),
+        max = HEAP_MIB.end(),
+    )
+}
 
 /// Heap ceiling settings shared by `--mcp` and `--cli`.
 pub mod heap {
