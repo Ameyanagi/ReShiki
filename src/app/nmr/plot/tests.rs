@@ -172,11 +172,12 @@ fn missing_data_and_nonfinite_values_never_become_zero_shift_markers() {
         positions: vec![],
     };
     assert!(
-        plot.hit(
+        plot.hits(
             Point::new(axis.x(0., 384.), 60.),
             Rectangle::with_size(Size::new(384., HEIGHT))
         )
-        .is_empty()
+        .next()
+        .is_none()
     );
 }
 

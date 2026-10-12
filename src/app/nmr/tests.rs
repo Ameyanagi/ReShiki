@@ -1,8 +1,11 @@
 use super::test_support::{accept, ethyl_acetate_doc, predicted};
+use super::view::{Placement, panel_description};
 use super::*;
 #[cfg(windows)]
-use iced::Theme;
-use iced::Vector;
+use iced::widget::{Space, container};
+#[cfg(windows)]
+use iced::{Length, Theme};
+use iced::{Size, Vector};
 use reshiki::document::Point;
 
 #[cfg(windows)]
@@ -32,7 +35,7 @@ fn nmr_surfaces_partial_redraws_preserve_unchanged_pixels() {
                 iced::Pixels(16.),
             ));
             let view = if mode == "docked" {
-                container(app.nmr_panel(false))
+                container(app.nmr_panel(Placement::Docked))
                     .width(360)
                     .height(500)
                     .padding(20)
@@ -260,7 +263,7 @@ impl NmrUi {
     fn panel_bounds(&mut self, app: &App) -> iced::Rectangle {
         use iced::advanced::{layout, widget::Tree};
         let mut panel = palette::floating(
-            app.nmr_panel(true),
+            app.nmr_panel(Placement::Floating),
             app.tab.nmr.palette.position,
             app.tab.nmr.palette.width,
             !app.tab.nmr.collapsed,
@@ -300,7 +303,7 @@ impl NmrUi {
     fn resize_glyph(&mut self, app: &App, rect: iced::Rectangle) -> iced::Rectangle {
         use iced::advanced::{Layout, layout, widget::Tree};
         // Inspect the actual final footer glyph, independently of its hit area.
-        let mut panel = app.nmr_panel(true);
+        let mut panel = app.nmr_panel(Placement::Floating);
         let mut tree = Tree::new(&panel);
         let node = panel
             .as_widget_mut()
