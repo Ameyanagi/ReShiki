@@ -5,23 +5,15 @@ use reshiki::arrow_anchors;
 
 impl App {
     pub(in crate::app) fn arrow_target_click(&mut self, p: reshiki::document::Point, bypass: bool) {
-        if bypass
-            || !self.tab.arrows.attach_targets
-            || !matches!(self.tab.arrow_style, Preset::Curved | Preset::Fishhook)
-        {
-            self.tab.arrow_source = None;
+        if bypass || !self.arrow_attach_mode() {
+            self.tab.arrows.cancel_source();
             let before = self.tab.doc.clone();
             let hit = crate::canvas::hit_object(
                 &self.tab.doc,
                 p,
                 self.tab.camera.world_len(PICK_RADIUS_PX),
             );
-            if let Some(id) = hit.filter(|id| self.tab.doc.arrows.iter().any(|a| a.id == *id)) {
-                self.apply_arrow_tool(id);
-            } else {
-                let length = self.tab.doc.drawing_style.bond_length_world * 2.;
-                self.place_arrow(p, p.offset(length, 0.));
-            }
+            self.place_or_restyle_arrow(p, hit);
             self.changed(before);
             return;
         }
@@ -31,14 +23,16 @@ impl App {
             self.tab.camera.world_len(ARROW_TARGET_PICK_PX),
         ) else {
             self.error = true;
-            self.status = "Choose an atom, a visible bond, or a positioned lone pair; Alt-click or turn off Attach targets for free placement".into();
+            let hint = "Choose an atom, a visible bond, or a positioned lone pair; Alt-click or turn off Attach targets for free placement";
+            self.status = hint.into();
             return;
         };
-        let Some(source) = self.tab.arrow_source.clone() else {
-            self.tab.arrow_source = Some(target);
+        let Some(source) = self.tab.arrows.source().cloned() else {
+            self.tab.arrows.begin_source(target);
             self.tab.selected.clear();
             self.error = false;
-            self.status = "Arrow source selected · Click a destination atom, bond, or lone pair · Escape cancels".into();
+            let status = "Arrow source selected · Click a destination atom, bond, or lone pair · Escape cancels";
+            self.status = status.into();
             return;
         };
         let before = self.tab.doc.clone();
@@ -50,11 +44,12 @@ impl App {
             self.tab.arrows.style.clone(),
         ) {
             Ok(id) => {
-                self.tab.arrow_source = None;
+                self.tab.arrows.cancel_source();
                 self.tab.selected = vec![id];
                 self.changed(before);
                 self.error = false;
-                self.status = "Attached arrow created · Drag the squares to adjust each end direction · Drag an endpoint to detach it".into();
+                let status = "Attached arrow created · Drag the squares to adjust each end direction · Drag an endpoint to detach it";
+                self.status = status.into();
             }
             Err(error) => {
                 self.status = error;

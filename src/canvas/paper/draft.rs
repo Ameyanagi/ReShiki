@@ -5,6 +5,7 @@ use crate::canvas::hit::region_selection;
 use crate::canvas::snapping::arrow_endpoint;
 use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, pick, tilt};
 use iced::{Point, Rectangle};
+use reshiki::arrows::ArrowHandle;
 use reshiki::graphics::{Graphic, GraphicKind};
 
 impl MoleculeCanvas<'_> {
@@ -121,7 +122,7 @@ impl MoleculeCanvas<'_> {
             if let Some(Gesture::ArrowHandle { id, index }) = &state.gesture
                 && let Some(arrow) = self.doc.arrows.iter().find(|a| a.id == *id)
             {
-                let end = if *index < 2 {
+                let end = if ArrowHandle::from_index(*index).is_some_and(ArrowHandle::is_endpoint) {
                     let (end, guides) = self.arrow_end(state, arrow, *index, end, bounds);
                     *smart = guides;
                     end

@@ -37,10 +37,12 @@ fn file_epoch_clears_mapping_pending_and_old_result_cannot_clear_new_work() {
     let mut app = app();
     assert!(app.update(Message::Mapping(Action::Auto)).units() > 0);
     let old = app.tab.mapping.pending.unwrap();
-    app.tab.arrow_source = Some(reshiki::arrow_anchors::Pick::Atom(1));
+    app.tab
+        .arrows
+        .begin_source(reshiki::arrow_anchors::Pick::Atom(1));
     app.begin_file_epoch();
     assert!(!app.tab.mapping.is_pending());
-    assert!(app.tab.arrow_source.is_none());
+    assert!(app.tab.arrows.source().is_none());
     assert!(app.update(Message::Mapping(Action::Auto)).units() > 0);
     let current = app.tab.mapping.pending.unwrap();
     assert_ne!(current, old);

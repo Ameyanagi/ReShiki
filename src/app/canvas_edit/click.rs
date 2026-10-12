@@ -57,23 +57,10 @@ impl App {
                     self.tool = Tool::Select;
                 }
             }
-            Tool::Arrow
-                if self.tab.arrows.attach_targets
-                    && matches!(
-                        self.tab.arrow_style,
-                        reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
-                    ) =>
-            {
+            Tool::Arrow if self.arrow_attach_mode() => {
                 return self.arrow_target_click(p, false);
             }
-            Tool::Arrow => {
-                if let Some(id) = hit.filter(|id| self.tab.doc.arrows.iter().any(|a| a.id == *id)) {
-                    self.apply_arrow_tool(id);
-                } else {
-                    let length = self.tab.doc.drawing_style.bond_length_world * 2.;
-                    self.place_arrow(p, p.offset(length, 0.));
-                }
-            }
+            Tool::Arrow => self.place_or_restyle_arrow(p, hit),
             Tool::Erase => {
                 reshiki::erasing::stroke(&mut self.tab.doc, p, p, 7. / self.tab.camera.zoom)
             }

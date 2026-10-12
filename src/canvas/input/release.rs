@@ -9,6 +9,7 @@ use crate::canvas::{
 };
 use iced::widget::canvas::Action;
 use iced::{Point, Rectangle};
+use reshiki::arrows::ArrowHandle;
 use reshiki::graphics::GraphicKind;
 use std::ops::ControlFlow;
 
@@ -179,7 +180,8 @@ impl MoleculeCanvas<'_> {
         if !inside {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        if (self.tool == Tool::Arrow || index >= 3)
+        let handle = ArrowHandle::from_index(index);
+        if (self.tool == Tool::Arrow || handle.is_some_and(ArrowHandle::is_direction))
             && self
                 .doc
                 .arrows
@@ -188,12 +190,12 @@ impl MoleculeCanvas<'_> {
                 .and_then(|a| a.handles().get(index).copied())
                 .is_some_and(|handle| handle.distance(p) < self.camera.world_len(DRAG_SLOP_PX))
         {
-            if index >= 3 {
+            if handle.is_some_and(ArrowHandle::is_direction) {
                 return ControlFlow::Break(Action::request_redraw().and_capture());
             }
             return ControlFlow::Break(Action::publish(Edit::ArrowClick(id)).and_capture());
         }
-        let end = if index < 2 {
+        let end = if handle.is_some_and(ArrowHandle::is_endpoint) {
             self.doc
                 .arrows
                 .iter()
@@ -306,13 +308,7 @@ impl MoleculeCanvas<'_> {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
         ControlFlow::Continue(if start.distance(p) < self.camera.world_len(DRAG_SLOP_PX) {
-            if self.tool == Tool::Arrow
-                && self.arrows.attach_targets
-                && matches!(
-                    self.arrows.preset,
-                    reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
-                )
-            {
+            if self.arrow_attach_mode() {
                 Edit::ArrowTarget(p, state.modifiers.alt())
             } else {
                 Edit::Click(p)

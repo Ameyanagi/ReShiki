@@ -231,7 +231,7 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
-        self.tab.arrow_source = None;
+        self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
         self.pause_optimization();

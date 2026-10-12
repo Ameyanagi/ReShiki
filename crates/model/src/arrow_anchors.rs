@@ -377,7 +377,7 @@ pub fn create(
     preset: Preset,
     style: ArrowStyle,
 ) -> Result<u64, String> {
-    if !matches!(preset, Preset::Curved | Preset::Fishhook) {
+    if !preset.supports_attachments() {
         return Err("Attachments require a curved mechanism arrow".into());
     }
     if source.same_target(destination) {

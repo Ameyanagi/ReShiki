@@ -438,6 +438,16 @@ pub struct MoleculeCanvas<'a> {
 }
 
 impl<'a> MoleculeCanvas<'a> {
+    fn arrow_attach_mode(&self) -> bool {
+        self.tool == Tool::Arrow
+            && self.arrows.attach_targets
+            && self.arrows.preset.supports_attachments()
+    }
+
+    fn attaching_arrows(&self, modifiers: iced::keyboard::Modifiers) -> bool {
+        self.arrow_attach_mode() && !modifiers.alt()
+    }
+
     /// Build a name preview with the tab's styles and inactive tool options.
     pub fn preview(
         doc: &'a Document,

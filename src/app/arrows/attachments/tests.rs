@@ -12,16 +12,129 @@ fn app() -> App {
     let _ = app.update(Message::ArrowStyle(Preset::Curved));
     app
 }
+
+fn select_source(app: &mut App) {
+    app.edit(Edit::ArrowTarget(Point::new(0., -29.166668), false));
+    assert!(app.tab.arrows.source().is_some());
+}
+
+#[test]
+fn cancel_arrow_source_edit_clears_source_error_and_sets_status() {
+    let mut app = app();
+    select_source(&mut app);
+    let before = app.tab.doc.clone();
+    app.error = true;
+    app.edit(Edit::CancelArrowSource);
+    assert!(app.tab.arrows.source().is_none());
+    assert!(!app.error);
+    assert_eq!(app.status, "Arrow source canceled");
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn context_menu_edit_cancels_arrow_source() {
+    let mut app = app();
+    select_source(&mut app);
+    app.edit(Edit::ContextMenu {
+        position: iced::Point::new(200., 200.),
+        selected: vec![],
+        hit: vec![],
+    });
+    assert!(app.tab.arrows.source().is_none());
+    assert!(app.context_menu.is_some());
+}
+
+#[test]
+fn bond_edit_cancels_arrow_source() {
+    let mut app = app();
+    select_source(&mut app);
+    app.edit(Edit::Bond(
+        Point::new(200., 200.),
+        Point::new(242., 200.),
+        None,
+        None,
+    ));
+    assert!(app.tab.arrows.source().is_none());
+}
+
+#[test]
+fn arrow_click_cancels_source_even_when_arrow_is_missing() {
+    let mut app = app();
+    select_source(&mut app);
+    let before = app.tab.doc.clone();
+    app.edit(Edit::ArrowClick(u64::MAX));
+    assert!(app.tab.arrows.source().is_none());
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn attach_targets_toggle_cancels_arrow_source() {
+    let mut app = app();
+    select_source(&mut app);
+    app.arrow_action(Action::AttachTargets(false));
+    assert!(app.tab.arrows.source().is_none());
+    assert!(!app.tab.arrows.attach_targets);
+}
+
+#[test]
+fn arrow_style_message_cancels_arrow_source() {
+    let mut app = app();
+    select_source(&mut app);
+    let _ = app.update(Message::ArrowStyle(Preset::Fishhook));
+    assert!(app.tab.arrows.source().is_none());
+    assert_eq!(app.tab.arrow_style, Preset::Fishhook);
+}
+
+#[test]
+fn alt_arrow_target_bypass_cancels_live_source() {
+    let mut app = app();
+    select_source(&mut app);
+    app.edit(Edit::ArrowTarget(Point::new(200., 200.), true));
+    assert!(app.tab.arrows.source().is_none());
+    assert_eq!(app.tab.doc.arrows.len(), 1);
+    assert!(app.tab.doc.arrows[0].start_anchor.is_none());
+    assert!(app.tab.doc.arrows[0].end_anchor.is_none());
+}
+
+#[test]
+fn free_arrow_target_placement_cancels_live_source_when_attach_mode_is_off() {
+    let mut app = app();
+    select_source(&mut app);
+    app.tab.arrows.attach_targets = false;
+    app.arrow_target_click(Point::new(200., 200.), false);
+    assert!(app.tab.arrows.source().is_none());
+    assert_eq!(app.tab.doc.arrows.len(), 1);
+    assert!(app.tab.doc.arrows[0].start_anchor.is_none());
+    assert!(app.tab.doc.arrows[0].end_anchor.is_none());
+}
+
+#[test]
+fn rejected_document_edit_still_cancels_arrow_source() {
+    let mut app = app();
+    select_source(&mut app);
+    let before = app.tab.doc.clone();
+    app.tab.doc.bonds[0].order = 8;
+    app.changed_continuing(before.clone(), false);
+    assert!(app.tab.arrows.source().is_none());
+    assert_eq!(app.tab.doc, before);
+    assert!(app.error);
+    assert_eq!(
+        app.status,
+        "Edit cancelled: Invalid bond endpoints or order"
+    );
+    assert!(!app.tab.history.can_undo());
+}
+
 #[test]
 fn mechanism_attachment_92_two_clicks_one_arrow_one_undo_and_redo() {
     let mut app = app();
     let before = app.tab.doc.clone();
     app.edit(Edit::ArrowTarget(Point::new(0., -29.166668), false));
-    assert!(app.tab.arrow_source.is_some());
+    assert!(app.tab.arrows.source().is_some());
     assert_eq!(app.tab.doc, before);
     assert_eq!(app.tab.history.undo_frames().len(), 0);
     app.edit(Edit::ArrowTarget(Point::new(-36.373, -21.), false));
-    assert!(app.tab.arrow_source.is_none());
+    assert!(app.tab.arrows.source().is_none());
     assert_eq!(app.tab.doc.arrows.len(), 1);
     assert_eq!(app.tab.history.undo_frames().len(), 1);
     assert!(app.tab.doc.arrows[0].cubic.is_some());
@@ -48,24 +161,24 @@ fn mechanism_attachment_92_cancel_same_invalid_free_and_alt_leave_no_partial_obj
     app.edit(Edit::ArrowTarget(source, false));
     app.edit(Edit::ArrowTarget(source, false));
     assert!(app.error);
-    assert!(app.tab.arrow_source.is_some());
+    assert!(app.tab.arrows.source().is_some());
     assert_eq!(app.tab.doc, before);
     app.edit(Edit::ArrowTarget(Point::new(300., 300.), false));
     assert!(app.error);
     assert_eq!(app.tab.doc, before);
     let _ = app.update(Message::Escape);
-    assert!(app.tab.arrow_source.is_none());
+    assert!(app.tab.arrows.source().is_none());
     assert_eq!(app.tab.doc, before);
     let _ = app.update(Message::ArrowStyle(Preset::Curved));
     app.edit(Edit::ArrowTarget(source, false));
     let _ = app.update(Message::Tool(Tool::Select));
-    assert!(app.tab.arrow_source.is_none());
+    assert!(app.tab.arrows.source().is_none());
     let _ = app.update(Message::ArrowStyle(Preset::Curved));
     app.edit(Edit::ArrowTarget(source, false));
     app.add_tab();
-    assert!(app.tab.arrow_source.is_none());
+    assert!(app.tab.arrows.source().is_none());
     app.select_tab(0);
-    assert!(app.tab.arrow_source.is_none());
+    assert!(app.tab.arrows.source().is_none());
     app.edit(Edit::ArrowTarget(source, true));
     assert_eq!(app.tab.doc.arrows.len(), 1);
     assert!(app.tab.doc.arrows[0].start_anchor.is_none());
@@ -116,7 +229,9 @@ fn composed_pen_and_attachment_edits_keep_distinct_owners_and_atomic_history() {
     app.tab.saved = app.tab.doc.clone();
     app.tool = Tool::Graphic(reshiki::graphics::GraphicKind::Path);
     // A stale source must not consume a pen segment or a path handle edit.
-    app.tab.arrow_source = Some(reshiki::arrow_anchors::Pick::Atom(a));
+    app.tab
+        .arrows
+        .begin_source(reshiki::arrow_anchors::Pick::Atom(a));
     app.edit(Edit::PenSegment(crate::canvas::pen::Stroke {
         start: Point::new(-150., -80.),
         end: Point::new(-70., -40.),
@@ -124,7 +239,7 @@ fn composed_pen_and_attachment_edits_keep_distinct_owners_and_atomic_history() {
         close: false,
     }));
     assert!(!app.error);
-    assert!(app.tab.arrow_source.is_none());
+    assert!(app.tab.arrows.source().is_none());
     assert!(app.tab.doc.arrows.is_empty());
     assert_eq!(app.tab.doc.graphics.len(), 1);
     let (graphic, point) = app.tab.path_point.unwrap();

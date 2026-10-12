@@ -48,6 +48,7 @@ pub struct State {
     pub numbers: [String; 6],
     pub color: String,
     pub attach_targets: bool,
+    source: Option<reshiki::arrow_anchors::Pick>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -57,10 +58,23 @@ impl Default for State {
             style,
             color: "#000000".into(),
             attach_targets: true,
+            source: None,
         }
     }
 }
 impl State {
+    pub(super) fn begin_source(&mut self, pick: reshiki::arrow_anchors::Pick) {
+        self.source = Some(pick);
+    }
+
+    pub(super) fn cancel_source(&mut self) {
+        self.source = None;
+    }
+
+    pub(super) fn source(&self) -> Option<&reshiki::arrow_anchors::Pick> {
+        self.source.as_ref()
+    }
+
     pub(super) fn refresh_inputs(&mut self, palette: &reshiki::palette::Palette) {
         self.numbers = FIELDS.map(|f| f.get(&self.style).to_string());
         self.color = reshiki::palette::hex(palette.rgb(self.style.color));
@@ -87,8 +101,21 @@ pub enum Action {
     Reset,
 }
 impl App {
+    pub(super) fn arrow_attach_mode(&self) -> bool {
+        self.tab.arrows.attach_targets && self.tab.arrow_style.supports_attachments()
+    }
+
+    pub(super) fn place_or_restyle_arrow(&mut self, p: Point, hit: Option<u64>) {
+        if let Some(id) = hit.filter(|id| self.tab.doc.arrows.iter().any(|a| a.id == *id)) {
+            self.apply_arrow_tool(id);
+        } else {
+            let length = self.tab.doc.drawing_style.bond_length_world * 2.;
+            self.place_arrow(p, p.offset(length, 0.));
+        }
+    }
+
     pub(super) fn apply_arrow_tool(&mut self, id: u64) {
-        self.tab.arrow_source = None;
+        self.tab.arrows.cancel_source();
         let Some(arrow) = self.tab.doc.arrows.iter_mut().find(|a| a.id == id) else {
             return;
         };
@@ -129,7 +156,7 @@ impl App {
         match action {
             Action::AttachTargets(value) => {
                 self.tab.arrows.attach_targets = value;
-                self.tab.arrow_source = None;
+                self.tab.arrows.cancel_source();
                 self.error = false;
                 self.status = if value {
                     "Click a source then a destination atom, bond, or lone pair"
@@ -387,7 +414,7 @@ impl App {
                     .size(14)
                     .text_size(12),
             );
-        if matches!(self.tab.arrow_style, Preset::Curved | Preset::Fishhook) {
+        if self.tab.arrow_style.supports_attachments() {
             panel = panel.push(
                 checkbox(self.tab.arrows.attach_targets)
                     .label("Attach targets (two clicks)")
@@ -395,7 +422,8 @@ impl App {
                     .size(14)
                     .text_size(12),
             );
-            panel = panel.push(text("Click a source then a destination. Alt-click or turn off Attach targets for free arrows; dragging remains free.").size(11).style(muted_text));
+            let hint = "Click a source then a destination. Alt-click or turn off Attach targets for free arrows; dragging remains free.";
+            panel = panel.push(text(hint).size(11).style(muted_text));
         }
         if has_selection {
             panel = panel.push(
@@ -461,7 +489,7 @@ impl App {
             .push(text("Drag circles to move endpoints, the diamond to bend, or squares on direction lines to adjust each end independently. Escape cancels a drag. Return applies fields.").size(11).style(muted_text)).into()
     }
     pub(super) fn set_arrow_style(&mut self, style: Preset) {
-        self.tab.arrow_source = None;
+        self.tab.arrows.cancel_source();
         self.tab.arrow_style = style;
         self.tab.arrows.style = reshiki::arrows::ArrowStyle::preset(style);
         self.tab.arrows.style.width_pt = self.tab.doc.drawing_style.line_width_pt;
@@ -471,13 +499,7 @@ impl App {
         let before = self.tab.doc.clone();
         for a in &mut self.tab.doc.arrows {
             if self.tab.selected.contains(&a.id) {
-                let curved = |kind: &str| matches!(kind, "curved" | "fishhook");
-                if a.kind != style.kind() && !(curved(&a.kind) && curved(style.kind())) {
-                    a.control = None;
-                    a.cubic = None;
-                }
-                a.kind = style.kind().into();
-                a.style = Some(self.tab.arrows.style.clone());
+                a.set_preset(style, &self.tab.arrows.style);
             }
         }
         self.changed(before);

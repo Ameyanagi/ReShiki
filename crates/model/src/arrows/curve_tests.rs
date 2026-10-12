@@ -240,3 +240,100 @@ fn collapsed_cubic_tangents_keep_the_shaft_inside_full_and_half_heads() {
         assert!(lo.x > -15. && hi.x < 135. && lo.y > -15. && hi.y < 15.);
     }
 }
+
+#[test]
+fn preset_transitions_preserve_only_matching_or_mechanism_curve_geometry() {
+    let start = Point::new(2., -4.);
+    let end = Point::new(122., 16.);
+    let control = Point::new(48., -52.);
+    let controls = [Point::new(8., -72.), Point::new(116., 84.)];
+    let compatible = [
+        (Preset::Curved, Preset::Fishhook),
+        (Preset::Fishhook, Preset::Curved),
+    ];
+    for is_cubic in [false, true] {
+        for &from in Preset::ALL {
+            for &to in Preset::ALL {
+                let mut arrow = Arrow::new(1, start, end, from, ArrowStyle::preset(from));
+                if is_cubic {
+                    arrow.cubic = Some(controls);
+                } else {
+                    arrow.control = Some(control);
+                }
+                let mut style = ArrowStyle::preset(to);
+                style.width_pt = 1.3;
+                arrow.set_preset(to, &style);
+                let keeps_geometry = from == to || compatible.contains(&(from, to));
+                assert_eq!(
+                    arrow.control,
+                    (keeps_geometry && !is_cubic).then_some(control),
+                    "quadratic {from:?} -> {to:?}, cubic={is_cubic}"
+                );
+                assert_eq!(
+                    arrow.cubic,
+                    (keeps_geometry && is_cubic).then_some(controls),
+                    "cubic {from:?} -> {to:?}, cubic={is_cubic}"
+                );
+                assert_eq!((arrow.start, arrow.end), (start, end));
+                assert_eq!(arrow.kind, to.kind());
+                assert_eq!(arrow.style, Some(style));
+            }
+        }
+    }
+}
+
+#[test]
+fn setting_a_preset_clears_unknown_saved_kind_geometry() {
+    for is_cubic in [false, true] {
+        for &preset in Preset::ALL {
+            let mut arrow = cubic();
+            arrow.kind = "unknown_saved_kind".into();
+            if !is_cubic {
+                arrow.cubic = None;
+                arrow.control = Some(Point::new(50., -90.));
+            }
+            let style = ArrowStyle::preset(preset);
+            arrow.set_preset(preset, &style);
+            assert_eq!(arrow.control, None, "{preset:?}, cubic={is_cubic}");
+            assert_eq!(arrow.cubic, None, "{preset:?}, cubic={is_cubic}");
+            assert_eq!(arrow.kind, preset.kind());
+            assert_eq!(arrow.style, Some(style));
+        }
+    }
+}
+
+#[test]
+fn typed_handles_keep_visible_order_and_first_nearest_tie() {
+    use crate::arrows::ArrowHandle;
+
+    let start = Point::new(0., 0.);
+    let end = Point::new(12., 0.);
+    for preset in [Preset::Forward, Preset::Curved] {
+        let mut arrow = Arrow::new(1, start, end, preset, ArrowStyle::preset(preset));
+        let mut expected = vec![
+            (ArrowHandle::Start, start),
+            (ArrowHandle::End, end),
+            (ArrowHandle::Bend, Point::new(6., 0.)),
+        ];
+        if preset == Preset::Curved {
+            arrow.cubic = Some([start, end]);
+            expected.extend([(ArrowHandle::Departure, start), (ArrowHandle::Arrival, end)]);
+        }
+        let handles = arrow.handles();
+        let copied = handles;
+        assert_eq!(copied.len(), expected.len());
+        assert_eq!(handles.typed().collect::<Vec<_>>(), expected);
+        assert_eq!(arrow.handle_at(start, 1.), Some(0));
+        assert_eq!(arrow.handle_at(end, 1.), Some(1));
+        assert_eq!(arrow.handle_at(Point::new(3., 0.), 3.1), Some(0));
+        assert_eq!(arrow.handle_at(Point::new(3., 0.), 3.), None);
+        for (index, (handle, _)) in expected.into_iter().enumerate() {
+            assert_eq!(handle.index(), index);
+            assert_eq!(ArrowHandle::from_index(index), Some(handle));
+            assert_eq!(handle.is_endpoint(), index < 2);
+            assert_eq!(handle.is_direction(), index >= 3);
+        }
+    }
+    assert_eq!(ArrowHandle::from_index(5), None);
+    assert_eq!(ArrowHandle::from_index(usize::MAX), None);
+}

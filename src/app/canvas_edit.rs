@@ -15,28 +15,27 @@ impl App {
             }
             Edit::CancelArrowSource => {
                 self.error = false;
-                self.tab.arrow_source = None;
+                self.tab.arrows.cancel_source();
                 self.status = "Arrow source canceled".into();
                 return;
             }
-            _ => {}
-        }
-        if let Edit::ContextMenu {
-            position,
-            selected,
-            hit,
-        } = edit
-        {
-            self.tab.arrow_source = None;
-            if self.tab.cleanup.is_none() {
-                self.tab.selected = selected;
-                self.tool = Tool::Select;
-                self.sync_typography();
-                let mut menu = context_menu::State::new(position, Default::default());
-                menu.hit = Some(hit);
-                self.context_menu = Some(menu);
+            Edit::ContextMenu {
+                position,
+                selected,
+                hit,
+            } => {
+                self.tab.arrows.cancel_source();
+                if self.tab.cleanup.is_none() {
+                    self.tab.selected = selected;
+                    self.tool = Tool::Select;
+                    self.sync_typography();
+                    let mut menu = context_menu::State::new(position, Default::default());
+                    menu.hit = Some(hit);
+                    self.context_menu = Some(menu);
+                }
+                return;
             }
-            return;
+            _ => {}
         }
         match edit {
             Edit::EraseStart(p) => {
@@ -92,9 +91,10 @@ impl App {
         }
         let before = self.tab.doc.clone();
         if matches!(edit, Edit::Bond(..)) {
-            self.tab.arrow_source = None;
+            self.tab.arrows.cancel_source();
         }
         match edit {
+            // These edits are handled by the leading match, before preview gates.
             Edit::ContextMenu { .. } | Edit::ArrowTarget(..) | Edit::CancelArrowSource => return,
             Edit::Hover(_)
             | Edit::RelaxDragStart { .. }

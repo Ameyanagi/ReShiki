@@ -7,6 +7,7 @@ use crate::canvas::{
 };
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Vector, keyboard, mouse};
+use reshiki::arrows::ArrowHandle;
 use reshiki::document::Document;
 use reshiki::graphics::{GraphicKind, PathCommand};
 use std::ops::ControlFlow;
@@ -79,14 +80,7 @@ impl MoleculeCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) {
-        if self.tool != Tool::Arrow
-            || !self.arrows.attach_targets
-            || state.modifiers.alt()
-            || !matches!(
-                self.arrows.preset,
-                reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
-            )
-        {
+        if !self.attaching_arrows(state.modifiers) {
             return;
         }
         let pointer = state
@@ -228,14 +222,12 @@ impl MoleculeCanvas<'_> {
                         );
                     }
                 }
-                for (i, p) in a.handles().into_iter().enumerate() {
+                for (handle, p) in a.handles().typed() {
                     let p = self.camera.screen(p, bounds);
-                    let shape = if i >= 3 {
-                        HandleShape::Square
-                    } else if i == 2 {
-                        HandleShape::Diamond
-                    } else {
-                        HandleShape::Circle(4.)
+                    let shape = match handle {
+                        ArrowHandle::Departure | ArrowHandle::Arrival => HandleShape::Square,
+                        ArrowHandle::Bend => HandleShape::Diamond,
+                        ArrowHandle::Start | ArrowHandle::End => HandleShape::Circle(4.),
                     };
                     draw_handle(frame, p, shape, false);
                 }

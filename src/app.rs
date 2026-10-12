@@ -392,7 +392,7 @@ impl App {
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
         self.tab.mapping.clear_pending();
-        self.tab.arrow_source = None;
+        self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
         self.tab.nmr.clear_pending();
     }
@@ -580,7 +580,7 @@ impl App {
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
         if self.tab.doc != before {
-            self.tab.arrow_source = None;
+            self.tab.arrows.cancel_source();
         }
         self.tab.cleanup = None;
         let reconciled = match reshiki::transaction::reconcile(&mut self.tab.doc, before) {

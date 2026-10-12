@@ -297,7 +297,7 @@ impl App {
             arrows: ArrowOptions {
                 preset: self.tab.arrow_style,
                 style: &self.tab.arrows.style,
-                source: self.tab.arrow_source.as_ref(),
+                source: self.tab.arrows.source(),
                 attach_targets: self.tab.arrows.attach_targets,
             },
             doc: self.display_document(),
