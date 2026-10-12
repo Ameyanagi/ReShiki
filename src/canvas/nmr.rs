@@ -5,7 +5,7 @@ use super::{Camera, MoleculeCanvas, layered, rgb};
 use iced::widget::canvas::{Path, Stroke, Text};
 use iced::{Point, Rectangle, Size, Vector};
 use reshiki::document::Document;
-use reshiki_io::nmr::Report;
+use reshiki::nmr::Report;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum LabelMode {
@@ -24,11 +24,7 @@ impl Context<'_> {
         self.report
             .rows
             .iter()
-            .filter(|row| {
-                row.statistics
-                    .as_ref()
-                    .is_some_and(|s| s.median.is_finite())
-            })
+            .filter(|row| row.shift().is_some())
             .map(|row| row.atom_id)
             .collect()
     }
@@ -105,12 +101,7 @@ pub(crate) fn placements(
         .collect();
     let mut result = Vec::new();
     for row in &context.report.rows {
-        let Some(shift) = row
-            .statistics
-            .as_ref()
-            .map(|s| s.median)
-            .filter(|s| s.is_finite())
-        else {
+        let Some(shift) = row.shift() else {
             continue;
         };
         let Some(atom) = doc.atom(row.atom_id) else {

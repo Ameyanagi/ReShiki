@@ -253,3 +253,81 @@ fn generic_nmr_gate_covers_connected_dependencies_but_not_independent_components
     assert!(request.source.generic.is_empty());
     assert_eq!(request.fingerprint, identity);
 }
+
+fn row_with_median(atom_id: u64, median: Option<f64>) -> Row {
+    Row {
+        atom_id,
+        hydrogen_ids: vec![],
+        hydrogen_count: 1,
+        radius: None,
+        statistics: median.map(|median| Statistics {
+            support: 2,
+            median,
+            standard_deviation: 0.,
+            minimum: median,
+            maximum: median,
+        }),
+        limitation: None,
+    }
+}
+
+fn report_with_rows(rows: Vec<Row>) -> Report {
+    Report {
+        nucleus: Nucleus::H1,
+        atom_ids: rows.iter().map(|row| row.atom_id).collect(),
+        fingerprint: String::new(),
+        rows,
+        method: METHOD.into(),
+        data_version: DATA_VERSION.into(),
+        conditions: CONDITIONS.into(),
+        limitations: LIMITATIONS.into(),
+        attribution: ATTRIBUTION.into(),
+    }
+}
+
+#[test]
+fn row_helpers_distinguish_statistics_from_finite_shifts() {
+    let unsupported = row_with_median(1, None);
+    assert!(!unsupported.has_statistics());
+    assert_eq!(unsupported.shift(), None);
+
+    for median in [-2.5, 0., 8.25] {
+        let row = row_with_median(1, Some(median));
+        assert!(row.has_statistics());
+        assert_eq!(row.shift(), Some(median));
+    }
+
+    for median in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let row = row_with_median(1, Some(median));
+        assert!(row.has_statistics());
+        assert_eq!(row.shift(), None);
+    }
+}
+
+#[test]
+fn report_helpers_count_statistics_and_keep_finite_shifts_in_row_order() {
+    let report = report_with_rows(vec![
+        row_with_median(70, None),
+        row_with_median(42, Some(8.25)),
+        row_with_median(10, Some(f64::NAN)),
+        row_with_median(10, Some(-2.5)),
+        row_with_median(5, Some(f64::INFINITY)),
+        row_with_median(3, Some(8.25)),
+        row_with_median(1, Some(f64::NEG_INFINITY)),
+    ]);
+
+    assert_eq!(report.supported_count(), 6);
+    assert_eq!(
+        report.shifts().collect::<Vec<_>>(),
+        vec![(1, 8.25), (3, -2.5), (5, 8.25)]
+    );
+}
+
+#[test]
+fn report_helpers_handle_reports_without_statistics() {
+    for rows in [vec![], vec![row_with_median(1, None)]] {
+        let report = report_with_rows(rows);
+        assert_eq!(report.supported_count(), 0);
+        assert_eq!(report.shifts().next(), None);
+    }
+}

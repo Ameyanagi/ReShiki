@@ -14,7 +14,7 @@ use crate::app::{
     assistant, depth_appearance, generic, graphics, import, inspector, joining, naming, nmr,
     reaction_mapping, shortcuts, template_library,
 };
-use reshiki::chemistry::nmr::Nucleus;
+use reshiki::nmr::Nucleus;
 use std::cell::Cell;
 
 /// What a scene may ask of the harness besides messages.
@@ -172,7 +172,7 @@ fn ethyl_acetate(app: &mut App) {
 fn nmr_proton(app: &mut App, _: &Driver<'_>) {
     predicted(app);
     // Choosing a row selects its carbon and attached hydrogens.
-    let _ = app.update(Message::Nmr(nmr::Action::Select(1)));
+    let _ = app.update(Message::Nmr(nmr::Action::SelectRow(1)));
 }
 
 fn predicted(app: &mut App) {
@@ -185,7 +185,7 @@ fn nmr_carbon_labels(app: &mut App, _: &Driver<'_>) {
     predicted(app);
     settle(app, Message::Nmr(nmr::Action::Predict(Nucleus::C13)));
     for action in [
-        nmr::Action::Labels,
+        nmr::Action::ToggleLabels,
         nmr::Action::LabelMode(crate::canvas::nmr::LabelMode::Both),
     ] {
         let _ = app.update(Message::Nmr(action));
@@ -196,7 +196,7 @@ fn nmr_carbon_labels(app: &mut App, _: &Driver<'_>) {
 /// The label format menu of the floating palette.
 fn nmr_label_menu(app: &mut App, _: &Driver<'_>) {
     predicted(app);
-    for action in [nmr::Action::Labels, nmr::Action::LabelMenu(true)] {
+    for action in [nmr::Action::ToggleLabels, nmr::Action::LabelMenu(true)] {
         let _ = app.update(Message::Nmr(action));
     }
 }
@@ -204,7 +204,7 @@ fn nmr_label_menu(app: &mut App, _: &Driver<'_>) {
 /// The ¹H report docked in the inspector, with reference details shown.
 fn nmr_docked(app: &mut App, _: &Driver<'_>) {
     predicted(app);
-    for action in [nmr::Action::Dock, nmr::Action::Details] {
+    for action in [nmr::Action::Dock, nmr::Action::ToggleDetails] {
         settle(app, Message::Nmr(action));
     }
 }

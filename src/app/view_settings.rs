@@ -27,10 +27,10 @@ impl App {
         }
     }
     pub(super) fn set_viewport(&mut self, size: iced::Size) {
-        // Docking NMR changes the available width, but is not a request to fit
-        // the drawing. Only suppress this expected layout transition; later
+        // Inspector width changes, such as docking NMR, do not request fitting
+        // the drawing. Only suppress the expected layout transition; later
         // genuine window resizes keep their ordinary fit behavior.
-        let preserve_camera = self.tab.nmr.take_layout_transition(size);
+        let preserve_camera = self.tab.inspector_ui.take_expected_viewport(size);
         if self.viewport != size {
             self.viewport = size;
             if !preserve_camera {

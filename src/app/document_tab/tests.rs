@@ -4,8 +4,8 @@ use crate::{app::App, app::Message, canvas::Tool};
 #[test]
 fn pending_per_file_work_prevents_reuse_until_it_is_cleared() {
     use crate::app::{naming, nmr, reaction_mapping};
-    use reshiki::chemistry::nmr::Nucleus;
     use reshiki::document::Arrow;
+    use reshiki::nmr::Nucleus;
     for feature in ["naming", "mapping", "NMR"] {
         let (mut app, _) = App::new();
         app.tab.busy = false;

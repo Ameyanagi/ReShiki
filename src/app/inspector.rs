@@ -152,6 +152,7 @@ pub struct PropertyKey {
 }
 #[derive(Default)]
 pub(super) struct State {
+    expected_viewport: Option<iced::Size>,
     expanded: HashMap<Section, bool>,
     figure: FigureFormat,
     figure_menu: bool,
@@ -161,6 +162,16 @@ pub(super) struct State {
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
 }
 impl State {
+    pub(super) fn expect_viewport(&mut self, size: iced::Size) {
+        self.expected_viewport = Some(size);
+    }
+
+    pub(super) fn take_expected_viewport(&mut self, size: iced::Size) -> bool {
+        self.expected_viewport.take().is_some_and(|expected| {
+            (size.width - expected.width).abs() < 1. && (size.height - expected.height).abs() < 1.
+        })
+    }
+
     pub(super) fn menu_open(&self) -> bool {
         self.figure_menu || self.chemical_menu
     }

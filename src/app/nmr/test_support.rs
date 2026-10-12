@@ -14,11 +14,14 @@ pub(super) fn predicted(document: &Document, nucleus: Nucleus) -> Arc<Report> {
 }
 
 pub(super) fn accept(app: &mut App, report: Arc<Report>) {
-    assert!(app.tab.nmr.pending.is_none());
+    assert!(app.tab.nmr.job.pending.is_none());
     let _ = app.nmr_action(Action::Predict(report.nucleus));
-    let key = app.tab.nmr.pending.clone().unwrap();
+    let key = app.tab.nmr.job.pending.clone().unwrap();
     let _ = app.nmr_action(Action::Finished(key, Ok(report.clone())));
-    assert!(app.tab.nmr.pending.is_none());
-    assert_eq!(app.tab.nmr.result_epoch, Some(app.tab.file_epoch));
-    assert!(Arc::ptr_eq(app.tab.nmr.result.as_ref().unwrap(), &report));
+    assert!(app.tab.nmr.job.pending.is_none());
+    assert_eq!(app.tab.nmr.job.result_epoch, Some(app.tab.file_epoch));
+    assert!(Arc::ptr_eq(
+        app.tab.nmr.job.result.as_ref().unwrap(),
+        &report
+    ));
 }

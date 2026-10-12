@@ -1555,6 +1555,18 @@ impl App {
         }
     }
 
+    /// Records the viewport the canvas will get after the inspector changed
+    /// from `old_width`, so `set_viewport` keeps the camera for that resize.
+    pub(super) fn expect_inspector_width_change(&mut self, old_width: f32) {
+        let new_width = self.inspector_width();
+        if old_width != new_width {
+            self.tab.inspector_ui.expect_viewport(iced::Size::new(
+                self.viewport.width + old_width - new_width,
+                self.viewport.height,
+            ));
+        }
+    }
+
     fn inspector(&self) -> Element<'_, Message> {
         if self.inspector_tab == InspectorTab::Names {
             return container(scrollable(container(self.naming_panel()).padding([12, 16])))

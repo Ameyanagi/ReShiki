@@ -46,7 +46,7 @@ fn nmr_panel_size_keeps_transient_menus_open() {
         inspector::Action::ChemicalMenu(true),
     ] {
         let mut app = open_transient_menus(menu);
-        let _ = app.update(Message::Nmr(nmr::Action::PanelSize(iced::Size::new(
+        let _ = app.update(Message::Nmr(nmr::Action::RenderedSize(iced::Size::new(
             360., 440.,
         ))));
 
@@ -74,7 +74,7 @@ fn resizes_keep_the_style_menus_and_a_hue_edit_open() {
     use color_popover::{Action, Menu};
     for resize in [
         Message::Viewport(iced::Size::new(1040., 720.)),
-        Message::Nmr(nmr::Action::PanelSize(iced::Size::new(360., 440.))),
+        Message::Nmr(nmr::Action::RenderedSize(iced::Size::new(360., 440.))),
     ] {
         let context = format!("{resize:?}");
         let mut app = open_style_menu(&[Action::Align]);

@@ -8,8 +8,8 @@ fn carbon() -> Report {
         "../../../../tests/fixtures/nmr/ethyl-acetate.rsk"
     ))
     .unwrap();
-    let request = reshiki_io::nmr::prepare(&document, &[]).unwrap();
-    reshiki_io::nmr::predict(&request, Nucleus::C13).unwrap()
+    let request = reshiki::nmr::prepare(&document, &[]).unwrap();
+    reshiki::nmr::predict(&request, Nucleus::C13).unwrap()
 }
 
 fn app_with_report(report: &Report) -> crate::app::App {
@@ -24,14 +24,20 @@ fn app_with_report(report: &Report) -> crate::app::App {
     // prediction. Directly assigning result would leave its epoch unset, so
     // the next App::update correctly invalidates that stale fixture.
     let _ = app.update(Message::Nmr(Action::Predict(report.nucleus)));
-    let key = app.tab.nmr.pending.clone().expect("Prediction owns a key");
+    let key = app
+        .tab
+        .nmr
+        .job
+        .pending
+        .clone()
+        .expect("Prediction owns a key");
     let report = std::sync::Arc::new(report.clone());
     let _ = app.update(Message::Nmr(Action::Finished(key, Ok(report.clone()))));
     assert!(std::sync::Arc::ptr_eq(
-        app.tab.nmr.result.as_ref().expect("Accepted report"),
+        app.tab.nmr.job.result.as_ref().expect("Accepted report"),
         &report,
     ));
-    assert_eq!(app.tab.nmr.result_epoch, Some(app.tab.file_epoch));
+    assert_eq!(app.tab.nmr.job.result_epoch, Some(app.tab.file_epoch));
     app
 }
 
@@ -81,7 +87,7 @@ fn assert_coverage_and_clear_labels(report: &Report, groups: &[Group], width: f3
 #[test]
 fn carbon_labels_stay_individual_and_stagger_close_real_shifts() {
     let report = carbon();
-    let original = reshiki_io::nmr::to_tsv(&report);
+    let original = reshiki::nmr::to_tsv(&report);
     let axis = Axis::new(&report);
     assert!(axis.x(170.7, 384.) < axis.x(61.05, 384.));
     assert!(axis.x(61.05, 384.) < axis.x(20.9, 384.));
@@ -108,7 +114,7 @@ fn carbon_labels_stay_individual_and_stagger_close_real_shifts() {
             assert_ne!(fifth.lane, first.lane);
         }
     }
-    assert_eq!(reshiki_io::nmr::to_tsv(&report), original);
+    assert_eq!(reshiki::nmr::to_tsv(&report), original);
 }
 
 #[test]
@@ -341,12 +347,12 @@ impl Ui {
 async fn actual_plot_has_four_teal_sticks_separate_labels_and_preserves_history() {
     let report = carbon();
     let mut app = app_with_report(&report);
-    let accepted = app.tab.nmr.result.as_ref().unwrap().clone();
+    let accepted = app.tab.nmr.job.result.as_ref().unwrap().clone();
     app.tab.selected = vec![2];
     let original = app.tab.doc.file_json().unwrap();
     let svg = reshiki::scene::svg(&app.tab.doc);
     let revision = app.tab.revision;
-    let tsv = reshiki_io::nmr::to_tsv(&report);
+    let tsv = reshiki::nmr::to_tsv(&report);
     let mut ui = Ui::new().await;
     for width in [284., 460., 304., 584.] {
         ui.bounds = Rectangle::with_size(Size::new(width, HEIGHT));
@@ -419,6 +425,7 @@ async fn actual_plot_has_four_teal_sticks_separate_labels_and_preserves_history(
         assert!(std::sync::Arc::ptr_eq(
             app.tab
                 .nmr
+                .job
                 .result
                 .as_ref()
                 .expect("Marker keeps prediction"),
@@ -431,7 +438,7 @@ async fn actual_plot_has_four_teal_sticks_separate_labels_and_preserves_history(
     assert_eq!(app.tab.revision, revision);
     assert!(!app.tab.history.can_undo() && !app.tab.history.can_redo());
     assert_eq!(
-        reshiki_io::nmr::to_tsv(app.tab.nmr.result.as_ref().unwrap()),
+        reshiki::nmr::to_tsv(app.tab.nmr.job.result.as_ref().unwrap()),
         tsv
     );
 }
@@ -480,10 +487,10 @@ async fn dense_marker_keeps_all_distinct_original_atoms_accessible_and_cycleable
     }
     let mut ui = Ui::new().await;
     let mut app = app_with_report(&report);
-    let accepted = app.tab.nmr.result.as_ref().unwrap().clone();
+    let accepted = app.tab.nmr.job.result.as_ref().unwrap().clone();
     let original = app.tab.doc.file_json().unwrap();
     let svg = reshiki::scene::svg(&app.tab.doc);
-    let tsv = reshiki_io::nmr::to_tsv(&report);
+    let tsv = reshiki::nmr::to_tsv(&report);
     let revision = app.tab.revision;
     let group = groups(&report, Axis::new(&report), ui.bounds.width)
         .into_iter()
@@ -507,6 +514,7 @@ async fn dense_marker_keeps_all_distinct_original_atoms_accessible_and_cycleable
         assert!(std::sync::Arc::ptr_eq(
             app.tab
                 .nmr
+                .job
                 .result
                 .as_ref()
                 .expect("Cycling keeps prediction"),
@@ -515,7 +523,7 @@ async fn dense_marker_keeps_all_distinct_original_atoms_accessible_and_cycleable
     }
     assert_eq!(app.tab.doc.file_json().unwrap(), original);
     assert_eq!(reshiki::scene::svg(&app.tab.doc), svg);
-    assert_eq!(reshiki_io::nmr::to_tsv(&accepted), tsv);
+    assert_eq!(reshiki::nmr::to_tsv(&accepted), tsv);
     assert_eq!(app.tab.revision, revision);
     assert!(!app.tab.history.can_undo() && !app.tab.history.can_redo());
 }

@@ -1,13 +1,11 @@
 //! Complete drawing graph adapter and separately licensed offline NMR index.
 use crate::{chemistry::document, document::Document, editing, reactions};
-use reshiki_model::chemistry::nmr::{
-    self as core, Environment, Index, Nucleus, Prediction, Statistics,
-};
+use reshiki_model::chemistry::nmr::{self as core, Environment, Index, Prediction, Statistics};
 use serde::Serialize;
 use std::sync::OnceLock;
 
 pub mod dataset;
-pub use core::Nucleus as ObservedNucleus;
+pub use core::{METHOD, Nucleus};
 pub const DATA_VERSION: &str = "nmrshiftdb2 2026-03-15 · measured CDCl3 subset v1";
 pub const CONDITIONS: &str =
     "CDCl3; recorded temperature 273–323 K, pooled without temperature/concentration correction";
@@ -30,6 +28,19 @@ pub struct Row {
     pub statistics: Option<Statistics>,
     pub limitation: Option<String>,
 }
+impl Row {
+    /// A finite predicted median suitable for plotting and drawing labels.
+    pub fn shift(&self) -> Option<f64> {
+        self.statistics
+            .as_ref()
+            .map(|statistics| statistics.median)
+            .filter(|shift| shift.is_finite())
+    }
+
+    pub fn has_statistics(&self) -> bool {
+        self.statistics.is_some()
+    }
+}
 #[derive(Debug, Clone, Serialize)]
 pub struct Report {
     pub nucleus: Nucleus,
@@ -41,6 +52,20 @@ pub struct Report {
     pub conditions: String,
     pub limitations: String,
     pub attribution: String,
+}
+impl Report {
+    /// Count rows with reference statistics, including nonfinite medians.
+    pub fn supported_count(&self) -> usize {
+        self.rows.iter().filter(|row| row.has_statistics()).count()
+    }
+
+    /// Finite shifts with their original row indices, in report order.
+    pub fn shifts(&self) -> impl Iterator<Item = (usize, f64)> + '_ {
+        self.rows
+            .iter()
+            .enumerate()
+            .filter_map(|(index, row)| row.shift().map(|shift| (index, shift)))
+    }
 }
 
 pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String> {

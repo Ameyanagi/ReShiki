@@ -3,7 +3,6 @@
 use super::*;
 use crate::chemistry::molfile;
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::{Duration, Instant};
 
 pub const SOURCE_SHA256: &str = "0e86688360e23c88ccf0eb82a1251315fa57ec6f5b376dc8886f3311793a0afe";
 pub const SOURCE_URL: &str =
@@ -231,7 +230,7 @@ pub fn observations(source: &str) -> Result<(Vec<Observation>, Audit), String> {
                     continue;
                 };
                 let ppm = Statistics::from_values(values.clone())?.median;
-                let deadline = Instant::now() + Duration::from_secs(3);
+                let deadline = Environment::deadline();
                 let codes = (core::MIN_RADIUS..=core::MAX_RADIUS)
                     .map(|r| Ok((r, environment.code(site, nucleus, r, deadline)?)))
                     .collect::<Result<_, String>>()?;

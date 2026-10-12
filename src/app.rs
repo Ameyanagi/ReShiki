@@ -997,17 +997,13 @@ async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<Path
         "svg-office" => "svg",
         _ => format,
     };
-    let Some(path) = files::save_path(
+    files::save_bytes(
         "Export drawing",
         &format!("Molecule.{extension}"),
         extension,
+        &bytes,
     )
     .await
-    else {
-        return Ok(None);
-    };
-    reshiki::storage::write_atomic(&path, &bytes)?;
-    Ok(Some(path))
 }
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)

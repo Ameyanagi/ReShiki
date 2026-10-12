@@ -79,6 +79,20 @@ pub(super) async fn save_path(title: &str, name: &str, extension: &str) -> Optio
     Some(path)
 }
 
+/// Save bytes through the native dialog, preserving cancellation and write errors.
+pub(super) async fn save_bytes(
+    title: &str,
+    suggested_name: &str,
+    extension: &str,
+    bytes: &[u8],
+) -> Result<Option<PathBuf>, String> {
+    let Some(path) = save_path(title, suggested_name, extension).await else {
+        return Ok(None);
+    };
+    reshiki::storage::write_atomic(&path, bytes)?;
+    Ok(Some(path))
+}
+
 #[derive(Default)]
 pub(super) struct State {
     pub(super) saving: bool,

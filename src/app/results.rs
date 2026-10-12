@@ -283,17 +283,17 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Dock
                 | Action::Undock
                 | Action::Predict(..)
-                | Action::Collapse
-                | Action::Details
-                | Action::Plot
-                | Action::Labels
+                | Action::ToggleCollapsed
+                | Action::ToggleDetails
+                | Action::TogglePlot
+                | Action::ToggleLabels
                 | Action::LabelMode(..)
                 | Action::LabelMenu(..)
                 | Action::Move(..)
                 | Action::Resize(..)
                 | Action::ResetPosition
-                | Action::PanelSize(..)
-                | Action::Select(..)
+                | Action::RenderedSize(..)
+                | Action::SelectRow(..)
                 | Action::SelectMarker(..)
                 | Action::Copy
                 | Action::Export => None,

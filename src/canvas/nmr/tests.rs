@@ -1,14 +1,14 @@
 use super::*;
-use reshiki::chemistry::nmr::Nucleus;
 use reshiki::document::Point as World;
+use reshiki::nmr::Nucleus;
 
 fn fixture(nucleus: Nucleus) -> (Document, Report) {
     let doc = Document::from_json(include_bytes!(
         "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
     ))
     .unwrap();
-    let request = reshiki_io::nmr::prepare(&doc, &[]).unwrap();
-    let report = reshiki_io::nmr::predict(&request, nucleus).unwrap();
+    let request = reshiki::nmr::prepare(&doc, &[]).unwrap();
+    let report = reshiki::nmr::predict(&request, nucleus).unwrap();
     (doc, report)
 }
 fn camera() -> Camera {
@@ -91,7 +91,7 @@ fn assignment_numbers_use_original_atoms_and_avoid_fixture_symbols_and_each_othe
 #[test]
 fn shift_and_combined_modes_follow_moved_atom_without_changing_predictions_or_export() {
     let (mut doc, report) = fixture(Nucleus::C13);
-    let export = reshiki_io::nmr::to_tsv(&report);
+    let export = reshiki::nmr::to_tsv(&report);
     for mode in [LabelMode::Shift, LabelMode::Both] {
         let labels = placements(
             &doc,
@@ -130,16 +130,16 @@ fn shift_and_combined_modes_follow_moved_atom_without_changing_predictions_or_ex
     let after = after.iter().find(|l| l.atom_id == 2).unwrap();
     assert_eq!(after.anchor, before.anchor + Vector::new(75., 0.));
     assert_eq!(
-        reshiki_io::nmr::fingerprint(&doc, &report.atom_ids).unwrap(),
+        reshiki::nmr::fingerprint(&doc, &report.atom_ids).unwrap(),
         report.fingerprint
     );
-    assert_eq!(reshiki_io::nmr::to_tsv(&report), export);
+    assert_eq!(reshiki::nmr::to_tsv(&report), export);
 }
 
 #[test]
 fn proton_assignments_name_the_parent_and_unresolved_group_not_individual_protons() {
     let (doc, report) = fixture(Nucleus::H1);
-    let original = reshiki_io::nmr::to_tsv(&report);
+    let original = reshiki::nmr::to_tsv(&report);
     let labels = placements(
         &doc,
         Context {
@@ -166,7 +166,7 @@ fn proton_assignments_name_the_parent_and_unresolved_group_not_individual_proton
         );
         assert!(row.hydrogen_count > 1);
     }
-    assert_eq!(reshiki_io::nmr::to_tsv(&report), original);
+    assert_eq!(reshiki::nmr::to_tsv(&report), original);
 }
 
 #[test]
@@ -221,7 +221,7 @@ fn collapsed_assignments_retain_original_owners_at_the_visible_group_anchor() {
             alignment: Default::default(),
         });
     let original = doc.clone();
-    let report_bytes = reshiki_io::nmr::to_tsv(&report);
+    let report_bytes = reshiki::nmr::to_tsv(&report);
     let labels = placements(
         &doc,
         Context {
@@ -243,7 +243,7 @@ fn collapsed_assignments_retain_original_owners_at_the_visible_group_anchor() {
         }
     }
     assert_eq!(doc, original);
-    assert_eq!(reshiki_io::nmr::to_tsv(&report), report_bytes);
+    assert_eq!(reshiki::nmr::to_tsv(&report), report_bytes);
 }
 
 #[test]

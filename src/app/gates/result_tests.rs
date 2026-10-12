@@ -8,9 +8,9 @@ use crate::app::{
 };
 use iced::{Task, futures::StreamExt};
 use reshiki::{
-    chemistry::nmr::Nucleus,
     document::{Arrow, Document, Point},
     geometry::{Conformer, ForceField, Optimized, Point3},
+    nmr::Nucleus,
     reactions::{self, Role},
     recovery::Recovery,
 };
@@ -629,7 +629,7 @@ async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal(
             let deferred = app.tabs.deferred_results.len();
             let gate = app.gate(message);
             let handled = match row {
-                ResultRow::NmrFinished => app.tab.nmr.notice.as_deref() == Some(FAILURE),
+                ResultRow::NmrFinished => app.tab.nmr.notice() == Some(FAILURE),
                 ResultRow::NmrExported | ResultRow::Generic => app.error && app.status == FAILURE,
                 // Naming's notice is private. Generate is a no-op while its request is pending.
                 ResultRow::Naming => app.naming_action(naming::Action::Generate).units() > 0,

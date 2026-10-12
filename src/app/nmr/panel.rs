@@ -1,6 +1,7 @@
 //! The floating panel's height follows its rendered rows, including wrapping.
 //! A single body scrolls when the window cannot fit even the first full row.
 use super::Message;
+use super::palette::{MAX_SIZE, PANEL_PADDING, PREFERRED_ROWS};
 use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
     widget::{Operation, Tree},
@@ -8,6 +9,7 @@ use iced::advanced::{
 use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector};
 use std::any::Any;
 
+const MAX_CONTENT_HEIGHT: f32 = MAX_SIZE.height - 2. * PANEL_PADDING;
 const GAP: f32 = 8.;
 // Iced rounds the scroll translation to logical pixels. Reserve this space
 // inside the content as well as in the preferred height, so a rounded-down
@@ -105,12 +107,12 @@ impl Widget<Message, Theme, Renderer> for Panel<'_> {
         };
         let fixed = header_node.size().height + footer_node.size().height + 2. * GAP;
         let minimum = fixed + body_height(1);
-        let preferred = fixed + body_height(4);
+        let preferred = fixed + body_height(PREFERRED_ROWS);
         let height = if self.floating {
             self.requested
                 .unwrap_or(preferred)
                 .max(minimum)
-                .min(limits.max().height.min(620.))
+                .min(limits.max().height.min(MAX_CONTENT_HEIGHT))
         } else {
             limits.max().height
         };

@@ -37,13 +37,7 @@ impl Axis {
                 200.
             },
         };
-        for shift in report
-            .rows
-            .iter()
-            .filter_map(|r| r.statistics.as_ref())
-            .map(|s| s.median)
-            .filter(|s| s.is_finite())
-        {
+        for (_, shift) in report.shifts() {
             let low = (shift / step).floor() * step;
             let high = (shift / step).ceil() * step;
             axis.low = axis.low.min(if low.is_finite() { low } else { shift });
@@ -123,17 +117,7 @@ fn marker_name(report: &Report, indices: &[usize]) -> String {
 }
 
 fn groups(report: &Report, axis: Axis, width: f32) -> Vec<Group> {
-    let mut shifts: Vec<_> = report
-        .rows
-        .iter()
-        .enumerate()
-        .filter_map(|(index, row)| {
-            row.statistics
-                .as_ref()
-                .filter(|s| s.median.is_finite())
-                .map(|s| (index, s.median))
-        })
-        .collect();
+    let mut shifts: Vec<_> = report.shifts().collect();
     shifts.sort_by(|a, b| b.1.total_cmp(&a.1));
     struct Placed {
         start: usize,
@@ -309,9 +293,8 @@ impl Plot<'_> {
             .iter()
             .enumerate()
             .filter_map(|(index, row)| {
-                let shift = row.statistics.as_ref()?.median;
-                (shift.is_finite()
-                    && (self.axis.x(shift, bounds.width) + bounds.x - point.x).abs() <= 9.)
+                let shift = row.shift()?;
+                ((self.axis.x(shift, bounds.width) + bounds.x - point.x).abs() <= 9.)
                     .then_some(index)
             })
             .collect()
@@ -387,12 +370,7 @@ impl Widget<Message, Theme, Renderer> for Plot<'_> {
                 color,
             );
             for row in &self.report.rows {
-                let Some(shift) = row
-                    .statistics
-                    .as_ref()
-                    .map(|s| s.median)
-                    .filter(|s| s.is_finite())
-                else {
+                let Some(shift) = row.shift() else {
                     continue;
                 };
                 let selected = self.selected.contains(&row.atom_id);
