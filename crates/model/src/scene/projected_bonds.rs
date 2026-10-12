@@ -1,4 +1,5 @@
 //! Secondary rails in a retained ring face, projected without rescaling XY.
+use super::depth_field::DepthField;
 use crate::{
     document::{Bond, Document, Point},
     polygon::closed_edges,
@@ -254,7 +255,7 @@ pub(super) fn rail(
 #[derive(Clone)]
 pub(crate) struct RailDepth {
     pub points: (Point, Point),
-    pub field: crate::rear_opacity::Field,
+    pub field: DepthField,
     pub support: Vec<u64>,
 }
 pub(crate) fn rail_depth(
@@ -305,7 +306,7 @@ pub(crate) fn rail_depth(
     }
     Some(points.map(|points| RailDepth {
         points,
-        field: crate::rear_opacity::Field::Bond {
+        field: DepthField::Bond {
             a: first,
             b: last,
             wa: first_z,

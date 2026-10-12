@@ -208,7 +208,7 @@ fn outside_polygon(points: &[Point], (lo, hi): Box2) -> Vec<Vec<Point>> {
     out
 }
 
-// Deliberate sibling of rear_opacity::flatten (sqrt, 1e-6 cutoff, 0.02/depth 12, pushes a
+// Deliberate sibling of rear_opacity::clip::flatten (sqrt, 1e-6 cutoff, 0.02/depth 12, pushes a
 // cubic end without a preceding Move); do not merge them.
 fn flatten(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     let mut paths: Vec<Vec<Point>> = Vec::new();

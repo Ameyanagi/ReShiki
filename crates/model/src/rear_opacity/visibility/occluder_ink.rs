@@ -1,13 +1,13 @@
 use super::triangle::clip;
 use super::vector::{V, cross_xy};
-use super::{Field, Point};
+use super::{DepthField, Point};
 use crate::polygon::closed_edges;
 
 pub(super) struct Ink {
     pub(super) owners: Vec<u64>,
     pub(super) layer: i16,
     pub(super) contours: Vec<Vec<Point>>,
-    pub(super) field: Field,
+    pub(super) field: DepthField,
 }
 impl Ink {
     fn winding(&self, p: V) -> i32 {

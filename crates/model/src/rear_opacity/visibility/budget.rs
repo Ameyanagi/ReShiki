@@ -10,6 +10,15 @@ pub(super) const MAX_LINE_QUERIES: usize = 1_000_000;
 pub(super) const MAX_INK_WORK: usize = 100_000_000;
 const MAX_CROSSING_WORK: usize = 200_000;
 
+/// Conservative preflight weight for each generated source part.
+pub(super) const QUERIES_PER_SOURCE_PART: usize = 4;
+/// Conservative preflight weight for each managed bond.
+const QUERIES_PER_BOND: usize = 4;
+/// Conservative preflight weight for each managed ring fill.
+const QUERIES_PER_RING_FILL: usize = 128;
+/// Conservative preflight weight for each segment of an owned curve.
+const OWNED_CURVE_QUERIES: usize = 2;
+
 pub(super) fn rear_ids(doc: &Document) -> BTreeSet<u64> {
     let mut ids: BTreeSet<_> = doc
         .depth_appearance
@@ -65,8 +74,8 @@ pub(super) fn estimated_queries(doc: &Document, rear: &BTreeSet<u64>) -> usize {
         }
     }
     rear.len()
-        .saturating_add(bonds.saturating_mul(4))
-        .saturating_add(fills.saturating_mul(128))
+        .saturating_add(bonds.saturating_mul(QUERIES_PER_BOND))
+        .saturating_add(fills.saturating_mul(QUERIES_PER_RING_FILL))
         .saturating_add(curves)
 }
 fn ring_queries(
@@ -117,7 +126,8 @@ fn ring_queries(
             crossings += 1;
         }
     }
-    Some(count.saturating_mul(crossings.saturating_add(if owned { 2 } else { 0 })))
+    let owned_queries = if owned { OWNED_CURVE_QUERIES } else { 0 };
+    Some(count.saturating_mul(crossings.saturating_add(owned_queries)))
 }
 pub(super) fn curve_queries(part: &Primitive) -> usize {
     match part {

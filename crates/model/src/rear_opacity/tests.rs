@@ -551,7 +551,7 @@ fn tilted_aromatic_ring() -> Document {
 
 fn assert_ring_paint_parity(doc: &Document) -> (usize, usize) {
     let raw = Paint::new(doc);
-    assert_eq!(raw.is_empty(), !present(doc));
+    assert_eq!(!raw.has_visibility(), !present(doc));
     let painted = depth::Paint::new(doc).materialize(doc);
     let canonical = crate::canvas_theme::canonical_document(&painted);
     let canonical = canonical.as_ref();
@@ -710,8 +710,8 @@ fn ring_knockouts_keep_the_canonical_paint_at_the_visibility_budget_boundary() {
         let canonical = crate::canvas_theme::canonical_document(&painted);
         let canonical = canonical.as_ref();
         let old = Paint::new(canonical);
-        assert!(!raw.is_empty());
-        assert!(old.is_empty());
+        assert!(raw.has_visibility());
+        assert!(!old.has_visibility());
         assert_eq!(raw.bond(&doc.bonds[6], 0.208), 0.25);
         let strokes = |paint: &Paint| {
             if ring_arc {
@@ -765,7 +765,7 @@ fn opaque_paint_avoids_maps_and_preserves_every_ink_query() {
     assert!(paint.nodes.is_empty());
     assert!(paint.atoms.is_empty());
     assert!(paint.corners.is_empty());
-    assert!(paint.is_empty());
+    assert!(!paint.has_visibility());
     let bond = &doc.bonds[1];
     assert!(!paint.manages_bond(bond));
     assert_eq!(paint.atom(bond.a), 1.);
@@ -781,7 +781,7 @@ fn opaque_paint_avoids_maps_and_preserves_every_ink_query() {
     )];
     let rail = crate::scene::projected_bonds::RailDepth {
         points: (Point::new(42., 2.), Point::new(84., 2.)),
-        field: Field::Constant(-20.),
+        field: DepthField::Constant(-20.),
         support: vec![bond.a, bond.b],
     };
     for result in [

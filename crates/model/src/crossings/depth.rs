@@ -51,6 +51,11 @@ pub(super) struct Plane {
     dy: f32,
 }
 impl Plane {
+    // Keep this separate from crate::scene::depth_field::DepthField::plane:
+    // crossings use f32 throughout; depth uses f64 with weight subtraction
+    // still in f32. Area starts at 0 with area.max(0.001), versus 1e-6 there,
+    // and residual limits are 0.01 here versus 0.001 after f32 rounding there.
+    // These fits must remain separate to preserve output.
     pub(super) fn fit(doc: &Document, ids: &[u64]) -> Option<Self> {
         let atoms: Option<Vec<_>> = ids.iter().map(|id| doc.atom(*id)).collect();
         let atoms = atoms?;

@@ -1,6 +1,10 @@
 use super::*;
 use super::{budget::curve_queries, cage::improper_intersection, vector::cross2};
-use crate::rear_opacity::{Field, Paint, flatten, mask_clip};
+use crate::rear_opacity::{
+    Paint,
+    clip::{flatten, mask_clip},
+};
+use crate::scene::depth_field::DepthField;
 use crate::{depth_appearance as depth, projection, scene};
 
 #[test]
@@ -159,7 +163,7 @@ fn ink_sweep_preserves_holes_tangencies_vertex_crossings_and_many_disjoint_conto
         owners: vec![],
         layer: 0,
         contours: vec![outer, hole],
-        field: Field::Constant(10.),
+        field: DepthField::Constant(10.),
     };
     assert_eq!(
         ink.intervals(Point::new(-5., 5.), Point::new(15., 5.), 0., 0., 0, 0.001),
@@ -191,7 +195,7 @@ fn ink_sweep_preserves_holes_tangencies_vertex_crossings_and_many_disjoint_conto
         contours: (0..1000)
             .map(|i| rectangle(i as f32 * 2., -1., 1., 2.))
             .collect(),
-        field: Field::Constant(10.),
+        field: DepthField::Constant(10.),
     };
     let intervals = many.intervals(Point::new(-1., 0.), Point::new(2000., 0.), 0., 0., 0, 0.001);
     assert_eq!(intervals.len(), 1000);
@@ -586,7 +590,10 @@ fn view_visibility_query_budget_tracks_nonopaque_owners_and_independent_cages() 
     depth::set_rear_opacity(&mut doc, &[first[0]], 0.25).unwrap();
     let first_edit = doc.clone();
     let paint = Paint::new(&doc);
-    assert!(!paint.is_empty(), "An opaque neighbor disabled cage fading");
+    assert!(
+        paint.has_visibility(),
+        "An opaque neighbor disabled cage fading"
+    );
     assert!(first.iter().any(|id| paint.atom(*id) == 0.25));
     assert!(
         doc.bonds
@@ -611,7 +618,7 @@ fn view_visibility_query_budget_tracks_nonopaque_owners_and_independent_cages() 
     depth::set_rear_opacity(&mut doc, &[second[0]], 0.5).unwrap();
     let paint = Paint::new(&doc);
     assert!(
-        !paint.is_empty(),
+        paint.has_visibility(),
         "Two ordinary cages exceeded the query estimate"
     );
     assert!(first.iter().any(|id| paint.atom(*id) == 0.25));
@@ -652,12 +659,12 @@ fn view_visibility_budget_fallback_is_wholly_opaque_and_order_independent() {
         );
     }
     let paint = Paint::new(&doc);
-    assert!(paint.is_empty());
+    assert!(!paint.has_visibility());
     assert!(doc.atoms.iter().all(|a| paint.atom(a.id) == 1.));
     assert!(doc.bonds.iter().all(|b| paint.bond(b, 0.5) == 1.));
     doc.atoms.reverse();
     doc.bonds.reverse();
-    assert!(Paint::new(&doc).is_empty());
+    assert!(!Paint::new(&doc).has_visibility());
 }
 #[test]
 fn view_visibility_rim_backbone_and_inward_rail_have_independent_depth() {
@@ -1219,7 +1226,7 @@ fn view_visibility_negative_cage_layers_characterize_masks_and_hidden_ranges() {
                 (-200., mask_count, [vec![(0., 1.)], vec![(0., 1.)], vec![]]),
                 (1000., 0, front_ranges),
             ] {
-                let field = Field::Constant(z);
+                let field = DepthField::Constant(z);
                 let masks = view.masks(field, &owners);
                 assert_eq!(
                     masks.len(),

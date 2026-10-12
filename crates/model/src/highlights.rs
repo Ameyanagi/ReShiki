@@ -312,7 +312,7 @@ pub(crate) fn primitives_with_opacity(
         if commands.is_empty() {
             continue;
         }
-        if opacity.is_empty() {
+        if !opacity.has_visibility() {
             bonds
                 .entry((color, 1_f32.to_bits()))
                 .or_default()
@@ -354,7 +354,7 @@ pub(crate) fn primitives_with_opacity(
         // A matching bond cap covers an unlabeled atom when no other bond
         // color can overpaint it (including unrelated crossing bonds). Avoid
         // drawing that same boundary twice and darkening its antialiased edge.
-        if opacity.is_empty()
+        if !opacity.has_visibility()
             && a == b
             && rx == ry
             && bonds.len() == 1
@@ -363,7 +363,7 @@ pub(crate) fn primitives_with_opacity(
             continue;
         }
         let commands = capsule(a, b, Point::new(rx, 0.), Point::new(0., ry));
-        if opacity.is_empty() {
+        if !opacity.has_visibility() {
             atoms
                 .entry((color, 1_f32.to_bits()))
                 .or_default()
@@ -379,7 +379,7 @@ pub(crate) fn primitives_with_opacity(
             );
         }
     }
-    if !opacity.is_empty() {
+    if opacity.has_visibility() {
         // Batch translucent rear paint to avoid doubling identical endpoint
         // halos. Keep opaque front atoms above opaque bond halos across colors,
         // as in the legacy scene, instead of globally sorting their colors.

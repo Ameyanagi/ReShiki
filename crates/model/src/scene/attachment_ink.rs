@@ -119,7 +119,7 @@ impl<'a> AttachmentInk<'a> {
         let Some(opacity) = self.opacity() else {
             return true;
         };
-        if opacity.is_empty() {
+        if !opacity.has_visibility() {
             return true;
         }
         let Some((a, b)) = self.doc.atom(bond.a).zip(self.doc.atom(bond.b)) else {

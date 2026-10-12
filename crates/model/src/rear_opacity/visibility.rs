@@ -1,7 +1,11 @@
 //! View visibility for conservative closed cages and real projected ink.
 //! Geometry is recomputed from retained XYZ; RGB/frozen paint is not a camera.
-use super::{Field, PathCommand, Point, Primitive, flatten, ink};
-use crate::document::{Bond, Document};
+use super::{clip, clip::flatten, ink};
+use crate::{
+    document::{Bond, Document, Point},
+    graphics::PathCommand,
+    scene::{OcclusionSource, Primitive, depth_field::DepthField},
+};
 use std::collections::BTreeMap;
 #[cfg(test)]
 use std::collections::BTreeSet;
@@ -14,7 +18,8 @@ mod triangle;
 mod vector;
 
 use budget::{
-    MAX_INK_EDGES, MAX_INK_WORK, MAX_LINE_QUERIES, crossing_queries, estimated_queries, rear_ids,
+    MAX_INK_EDGES, MAX_INK_WORK, MAX_LINE_QUERIES, QUERIES_PER_SOURCE_PART, crossing_queries,
+    estimated_queries, rear_ids,
 };
 use cage::cages;
 use occluder_ink::Ink;
@@ -68,21 +73,27 @@ impl Visibility {
         // not merely one query. Crossing cuts can proliferate runtime pieces.
         let source_queries = sources
             .iter()
-            .filter(|(owners, _, _, _)| owners.iter().any(|id| rear.contains(id)))
-            .map(|(_, _, _, parts)| parts.len())
+            .filter(|source| source.owners.iter().any(|id| rear.contains(id)))
+            .map(|source| source.parts.len())
             .sum::<usize>()
-            .saturating_mul(4)
+            .saturating_mul(QUERIES_PER_SOURCE_PART)
             .saturating_add(rear.len());
         let queries = estimated_queries(doc, &rear)
             .max(source_queries)
             .saturating_add(crossing_queries(doc, &rear));
         let triangles = cages(doc, queries);
         let (rim_atoms, rim_bonds, atom_shells) = rims(doc, &triangles, epsilon);
-        for (owners, layer, field, parts) in sources {
+        for OcclusionSource {
+            owners,
+            layer,
+            field,
+            parts,
+        } in sources
+        {
             let mut contours = vec![];
             for part in parts {
                 let part = match part {
-                    Primitive::Line(a, b, w) => Primitive::Polygon(super::capsule(a, b, w)),
+                    Primitive::Line(a, b, w) => Primitive::Polygon(clip::capsule(a, b, w)),
                     p => ink::single_paint(p),
                 };
                 let paths = match part {
@@ -142,7 +153,7 @@ impl Visibility {
         &self,
         a: Point,
         b: Point,
-        field: Field,
+        field: DepthField,
         owners: &[u64],
         layer: i16,
     ) -> Vec<(f32, f32)> {
@@ -152,7 +163,7 @@ impl Visibility {
         &self,
         a: Point,
         b: Point,
-        field: Field,
+        field: DepthField,
         owners: &[u64],
         layer: i16,
         support: Option<&[u64]>,
@@ -165,7 +176,7 @@ impl Visibility {
         &self,
         a: Point,
         b: Point,
-        field: Field,
+        field: DepthField,
         bond: &Bond,
         anchor: u64,
     ) -> Vec<(f32, f32)> {
@@ -182,7 +193,7 @@ impl Visibility {
         &self,
         a: Point,
         b: Point,
-        field: Field,
+        field: DepthField,
         owners: &[u64],
         layer: i16,
         (support, exempt_shell): (Option<&[u64]>, Option<u64>),
@@ -256,14 +267,14 @@ impl Visibility {
     }
     pub(super) fn occluded(&self, p: Point, z: f32, owners: &[u64], layer: i16) -> bool {
         !self
-            .hidden(p, p, Field::Constant(z), owners, layer)
+            .hidden(p, p, DepthField::Constant(z), owners, layer)
             .is_empty()
     }
     /// Unlike hidden_with_policy, masks ignore the query layer: faces with a
     /// nonnegative layer depth-test every owner group, and faces with a negative
     /// layer only mask owners that all lie in their shell. Pinned by
     /// view_visibility_negative_cage_layers_characterize_masks_and_hidden_ranges.
-    pub(super) fn masks(&self, field: Field, owners: &[u64]) -> Vec<Vec<Point>> {
+    pub(super) fn masks(&self, field: DepthField, owners: &[u64]) -> Vec<Vec<Point>> {
         let support = face_key(owners);
         self.triangles
             .iter()
@@ -273,7 +284,7 @@ impl Visibility {
             })
             .filter_map(|triangle| {
                 let p: Vec<_> = triangle.vertices.iter().copied().map(xy).collect();
-                let clipped = super::clip_values(&p, |p| {
+                let clipped = clip::clip_values(&p, |p| {
                     triangle.depth(p).unwrap_or(f64::NEG_INFINITY)
                         - f64::from(field.at(p))
                         - self.epsilon
@@ -321,37 +332,6 @@ pub(super) fn merge(mut ranges: Vec<(f32, f32)>) -> Vec<(f32, f32)> {
     out
 }
 
-pub(crate) fn bond_field(doc: &Document, bond: &Bond) -> Field {
-    let (Some(a), Some(b)) = (doc.atom(bond.a), doc.atom(bond.b)) else {
-        return Field::Constant(0.);
-    };
-    let linear = Field::Bond {
-        a: a.position,
-        b: b.position,
-        wa: a.depth,
-        wb: b.depth,
-    };
-    if matches!(bond.order, 2 | 7) && bond.double_position == crate::bonds::DoublePosition::Auto {
-        crate::scene::projected_bonds::face_atoms(doc, bond)
-            .and_then(|ids| {
-                let vertices: Vec<_> = ids.iter().filter_map(|id| doc.atom(*id)).collect();
-                let n = vertices.len().max(1) as f32;
-                let center = vertices.iter().fold(Point::default(), |p, a| {
-                    p.offset(a.position.x / n, a.position.y / n)
-                });
-                let depth = vertices.iter().map(|a| a.depth / n).sum();
-                Field::plane(&[
-                    (a.position, a.depth),
-                    (b.position, b.depth),
-                    (center, depth),
-                ])
-            })
-            .unwrap_or(linear)
-    } else {
-        linear
-    }
-}
-
 #[cfg(test)]
 impl Triangle {
     fn hidden(&self, a: Point, b: Point, za: f64, zb: f64, epsilon: f64) -> Option<(f32, f32)> {
@@ -365,7 +345,7 @@ impl Visibility {
         &self,
         a: Point,
         b: Point,
-        field: Field,
+        field: DepthField,
         support: &[u64],
     ) -> Vec<(f32, f32)> {
         let key = face_key(support);

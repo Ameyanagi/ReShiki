@@ -1,6 +1,8 @@
 use crate::document::{Atom, Bond, Document, Point};
 use crate::style::DEFAULT as STYLE;
+use depth_field::{DepthField, bond_depth_field};
 pub(crate) mod attachment_ink;
+pub(crate) mod depth_field;
 pub(crate) mod projected_bonds;
 
 #[derive(Debug, Clone)]
@@ -1080,7 +1082,7 @@ pub fn primitives_with_opacity(
     }
     push_junctions(&mut out, &mut joined, &joins, &crossing_gaps, doc, opacity);
     push_joined_outlines(&mut out, joined);
-    if !opacity.is_empty() {
+    if opacity.has_visibility() {
         // Every opaque front shape covers its faded base, including differently
         // colored secondary rails; preserve order within each paint pass.
         let (rear, front): (Vec<_>, Vec<_>) = out
@@ -1100,12 +1102,18 @@ pub fn primitives_with_opacity(
     out
 }
 
+/// Real vector ink grouped with its chemical owners, layer, and current depth.
+pub(crate) struct OcclusionSource {
+    pub(crate) owners: Vec<u64>,
+    pub(crate) layer: i16,
+    pub(crate) field: DepthField,
+    pub(crate) parts: Vec<Primitive>,
+}
+
 /// Real vector ink for visibility, with its chemical owner and current depth.
 /// Clearing only display scopes prevents visibility from recursively querying
 /// itself; coordinate, bond, label and projected-rail geometry remain exact.
-pub(crate) fn occlusion_ink(
-    doc: &Document,
-) -> Vec<(Vec<u64>, i16, crate::rear_opacity::Field, Vec<Primitive>)> {
+pub(crate) fn occlusion_ink(doc: &Document) -> Vec<OcclusionSource> {
     let mut drawing = doc.clone();
     drawing.depth_appearance.clear();
     let doc = &drawing;
@@ -1144,7 +1152,12 @@ pub(crate) fn occlusion_ink(
             Some(&mut sources),
         );
         for (field, parts) in sources {
-            ink.push((vec![bond.a, bond.b], bond.z_order, field, parts));
+            ink.push(OcclusionSource {
+                owners: vec![bond.a, bond.b],
+                layer: bond.z_order,
+                field,
+                parts,
+            });
         }
     }
     for atom in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
@@ -1189,12 +1202,12 @@ pub(crate) fn occlusion_ink(
                 }),
         );
         if !parts.is_empty() {
-            ink.push((
-                vec![atom.id],
-                0,
-                crate::rear_opacity::Field::Constant(atom.depth),
+            ink.push(OcclusionSource {
+                owners: vec![atom.id],
+                layer: 0,
+                field: DepthField::Constant(atom.depth),
                 parts,
-            ));
+            });
         }
     }
     ink
@@ -1571,7 +1584,7 @@ fn push_bond(
     >,
     bond_index: usize,
     b: &Bond,
-    ink_sources: Option<&mut Vec<(crate::rear_opacity::Field, Vec<Primitive>)>>,
+    ink_sources: Option<&mut Vec<(DepthField, Vec<Primitive>)>>,
 ) {
     let BondScene { style, joins, .. } = scene;
     let Some(frame) = bond_frame(scene, b) else {
@@ -1629,11 +1642,11 @@ fn push_bond(
             let field = rail_depths
                 .get(&index)
                 .map(|r| r.field)
-                .unwrap_or_else(|| crate::rear_opacity::bond_field(scene.doc, b));
+                .unwrap_or_else(|| bond_depth_field(scene.doc, b));
             sources.push((field, vec![part.clone()]));
         }
     }
-    if scene.opacity.is_empty() {
+    if !scene.opacity.has_visibility() {
         cut_bond_crossings(scene, out, bond_index, bond_start);
     } else {
         let parts: Vec<_> = out.drain(bond_start..).collect();
@@ -1847,7 +1860,7 @@ fn push_bond_rails(
                 }
                 _ => projected_bonds::RailDepth {
                     points: (first, last),
-                    field: crate::rear_opacity::Field::Bond {
+                    field: DepthField::Bond {
                         a: a.position,
                         b: z.position,
                         wa: a.depth,
