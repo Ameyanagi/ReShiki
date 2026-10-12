@@ -6,9 +6,10 @@ use std::sync::{Arc, Mutex};
 use super::expansion::expand_drawing_inner;
 use super::{
     Limits,
-    budget::{Work, drawing_size},
+    budget::{self, Work, drawing_size},
+    certify,
     expansion::{DrawingBatch, expand_drawing},
-    layout,
+    ink,
     probe::{self, Stage},
 };
 
@@ -55,7 +56,7 @@ pub struct ExpansionInput {
     pub(super) source: Document,
     limits: Limits,
     work: Work,
-    presentation: layout::Presentation,
+    presentation: budget::Presentation,
 }
 /// Borrow the live drawing and selection, reject costs before snapshot/selection
 /// copies or scheduling. Selection retains complete dependencies without repair.
@@ -74,7 +75,7 @@ pub fn prepare_expansion_input(
         return Err("Generic expansion exceeds the source atom or bond limit".into());
     }
     let mut work = Work::new(limits.max_work);
-    let presentation = layout::Presentation::inspect(source, &mut work)?;
+    let presentation = budget::Presentation::inspect(source, &mut work)?;
     presentation.charge_input(source, selected, &mut work)?;
     let owned = if selected.is_empty() {
         probe::enter(Stage::Snapshot);
@@ -153,7 +154,7 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
             let total_size = drawing_size(&result).saturating_add(drawing_size(&tile.document));
             presentation.charge_assembly(
                 source,
-                layout::AssemblyCounts {
+                budget::AssemblyCounts {
                     tile_atoms: tile.document.atoms.len(),
                     tile_size: drawing_size(&tile.document),
                     tiles: i + 1,
@@ -167,9 +168,9 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
             if ids.is_empty() {
                 return Err("Prepared expansion has an empty tile".into());
             }
-            layout::certify_translation(&tile.document, &part, &mapping, shift)?;
+            certify::certify_translation(&tile.document, &part, &mapping, shift)?;
             crate::molecule_names::certify_inherited(&tile.document, &part, &mapping, shift)?;
-            let bounds = layout::measure_translated(
+            let bounds = ink::measure_translated(
                 &mut part,
                 &tile.hydrogens,
                 source,

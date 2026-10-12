@@ -5,14 +5,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 mod authoring;
 mod budget;
+mod certify;
+mod clearance;
 mod definitions;
+mod depiction;
 mod expansion;
+mod geometry;
 mod guards;
-mod layout;
+mod ink;
 mod materialize;
 mod prepared;
 mod probe;
+mod references;
 mod symmetry;
+mod variable;
 
 pub use authoring::{alternative, apply_label, define_bracket, set_repeat_unit};
 pub use definitions::{prune, selection, validate};
@@ -223,6 +229,9 @@ fn bonds_at(doc: &Document, id: u64) -> Vec<&crate::document::Bond> {
         .filter(|b| b.a == id || b.b == id)
         .collect()
 }
+
+#[cfg(test)]
+mod drawing_test_support;
 
 #[cfg(test)]
 mod test_support;

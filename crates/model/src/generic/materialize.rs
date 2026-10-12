@@ -4,7 +4,7 @@ use super::{
     definitions::pair,
     expansion::{Mode, Site},
     guards::reject_affected_stereo,
-    layout,
+    variable,
 };
 use crate::document::{Document, Point};
 use std::collections::{HashMap, HashSet};
@@ -102,7 +102,7 @@ pub(super) fn materialize(
                 } else {
                     contact.a
                 };
-                layout::pose_variable(&mut result, *id, target, root, work)?;
+                variable::pose_variable(&mut result, *id, target, root, work)?;
             }
             result.atoms.retain(|a| a.id != *id);
             for b in &mut result.bonds {

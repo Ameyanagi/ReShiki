@@ -1,10 +1,10 @@
 //! Bounded finite enumeration and typed chemistry/drawing completion.
 use super::{
     Alternative, AlternativeSite, ExpandedDrawing, Generic, Limits, LinkNode, RepeatUnit, Work,
-    drawing_size, intersects, layout,
+    budget, depiction, drawing_size, ink, intersects,
     materialize::{group, materialize},
     probe::{self, Stage},
-    symmetry,
+    references, symmetry,
 };
 use crate::{
     chemistry::document::Molecule,
@@ -51,7 +51,7 @@ impl Site {
 #[derive(Clone, Copy)]
 pub(super) enum Mode<'a> {
     Chemistry,
-    Drawing(&'a layout::Presentation),
+    Drawing(&'a budget::Presentation),
 }
 
 /// A drawing product, its measured bounds and the hydrogen counts its labels
@@ -67,7 +67,7 @@ pub(super) struct Tile {
 pub(super) struct DrawingBatch {
     pub(super) tiles: Vec<Tile>,
     pub(super) work: Work,
-    pub(super) presentation: layout::Presentation,
+    pub(super) presentation: budget::Presentation,
 }
 
 /// Enumerate chemistry without changing the materializers' coordinates. This
@@ -123,7 +123,7 @@ pub(super) fn expand_drawing_inner(
     positive_limits(limits)?;
     total_limit(source, limits)?;
     let mut work = Work::new(limits.max_work);
-    let presentation = layout::Presentation::inspect(source, &mut work)?;
+    let presentation = budget::Presentation::inspect(source, &mut work)?;
     expand_drawing(source, limits, presentation, work)
 }
 
@@ -139,7 +139,7 @@ pub(super) fn expand_chemistry(
 pub(super) fn expand_drawing(
     source: &Document,
     limits: Limits,
-    presentation: layout::Presentation,
+    presentation: budget::Presentation,
     mut work: Work,
 ) -> Result<DrawingBatch, String> {
     let products = expand_with_work(source, limits, Mode::Drawing(&presentation), &mut work)?;
@@ -180,7 +180,7 @@ fn admit_structure(
     work.charge(source_size.saturating_mul(definitions.saturating_add(10)))?;
     source.validate()?;
     if let Mode::Drawing(_) = mode {
-        layout::protect_references(source, work)?;
+        references::protect_references(source, work)?;
     }
     if source
         .reactions
@@ -481,7 +481,7 @@ fn finish_chemistry(products: Vec<Document>, work: &mut Work) -> Result<Vec<Docu
 fn finish_tiles(
     source: &Document,
     products: Vec<Document>,
-    presentation: &layout::Presentation,
+    presentation: &budget::Presentation,
     work: &mut Work,
 ) -> Result<Vec<Tile>, String> {
     let anchors: HashSet<_> = source
@@ -503,7 +503,7 @@ fn finish_tiles(
         require_concrete(&product)?;
         // Index/copy/ink/clearance work is reserved before the existing final
         // preparation. Its Molecule is reused; no cleanup/identity/rewedge call.
-        let plan = layout::Plan::new(&product, &anchors, work)?;
+        let plan = depiction::Plan::new(&product, &anchors, work)?;
         let molecule = prepare_product(&product)?;
         if !unique.insert(&molecule, work)? {
             continue;
@@ -527,7 +527,7 @@ fn finish_tiles(
             })
             .collect();
         let values = values?;
-        layout::normalize_arrows(&mut product, &values, source, presentation, work)?;
+        ink::normalize_arrows(&mut product, &values, source, presentation, work)?;
         let bounds = plan.finish(&mut product, &molecule, work)?;
         tiles.push(Tile {
             document: product,
