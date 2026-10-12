@@ -51,10 +51,10 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
         .into_iter()
         .collect();
     if opacity {
-        notices.push("Editable CDX copy omits rear opacity; native copy and SVG/PNG retain it. Chemical structure and XYZ are unchanged.".into());
+        notices.push(crate::rear_opacity::EXPORT_NOTICE.into());
     }
     if source.bonds.iter().any(|bond| bond.is_projected_dative()) {
-        notices.push("Editable CDX retains donor→metal direction and projection attributes; ChemDraw 26 redraws dative arrows and removes wedge/hash paint when saved".into());
+        notices.push(crate::engine::export_notices::DATIVE_CDX_NOTICE.into());
     }
     if charges != 0 {
         notices.push(format!("Editable CDX copy shows {charges} hidden charge label(s); chemical charges are unchanged"));

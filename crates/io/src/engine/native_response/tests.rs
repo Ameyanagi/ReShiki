@@ -551,23 +551,32 @@ async fn attachment_early_export_loss_notices_are_pinned() -> anyhow::Result<()>
                 Error(LOSS_REAR_DRAWING_ERROR),
             ],
         ),
-        // Current behavior: the early attachment route omits the arrow-link notice.
+        // CDXML/CDX adds the arrow-link notice after the attachment notice;
+        // MOL omits the arrow entirely, so the arrow-link notice does not apply.
         (
             "attachment targets with anchored mechanism arrow",
             Anchor,
-            [Unanalyzed(&[LOSS_ATTACHMENT]); 3],
+            [
+                Unanalyzed(&[LOSS_ATTACHMENT]),
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_ANCHOR]),
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_ANCHOR]),
+            ],
         ),
-        // Current behavior: the early attachment route omits both dative paint notices.
+        // All attachment exports add the format's dative paint notice.
         (
             "attachment targets with projected dative",
             Dative,
-            [Unanalyzed(&[LOSS_ATTACHMENT]); 3],
+            [
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_DATIVE_MOL]),
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_DATIVE_DRAWING]),
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_DATIVE_DRAWING]),
+            ],
         ),
-        // Current behavior: the early attachment route omits the reaction-role notice.
+        // All attachment exports add the reaction-role notice.
         (
             "attachment targets with reaction roles",
             Reaction,
-            [Unanalyzed(&[LOSS_ATTACHMENT]); 3],
+            [Unanalyzed(&[LOSS_ATTACHMENT, LOSS_REACTION_ROLES]); 3],
         ),
     ];
     for (name, decoration, expected) in cases {
@@ -617,7 +626,7 @@ async fn unprepared_drawing_export_loss_notices_are_pinned() -> anyhow::Result<(
             Plain,
             [Unanalyzed(&[LOSS_UNVALIDATED]); 2],
         ),
-        // Current behavior: fallback CDXML/CDX rejects rear opacity before returning notices.
+        // The writer rejects rear opacity before any notice, kept as an error by design.
         (
             "unsanitizable carbon with rear opacity",
             Rear,
@@ -628,17 +637,17 @@ async fn unprepared_drawing_export_loss_notices_are_pinned() -> anyhow::Result<(
             Anchor,
             [Unanalyzed(&[LOSS_UNVALIDATED, LOSS_ANCHOR]); 2],
         ),
-        // Current behavior: the unprepared fallback omits the dative paint notice.
+        // The unprepared fallback adds the dative paint notice after the unvalidated notice.
         (
             "unsanitizable carbon with projected dative",
             Dative,
-            [Unanalyzed(&[LOSS_UNVALIDATED]); 2],
+            [Unanalyzed(&[LOSS_UNVALIDATED, LOSS_DATIVE_DRAWING]); 2],
         ),
-        // Current behavior: the unprepared fallback omits the reaction-role notice.
+        // The unprepared fallback adds the reaction-role notice after the unvalidated notice.
         (
             "unsanitizable carbon with reaction roles",
             Reaction,
-            [Unanalyzed(&[LOSS_UNVALIDATED]); 2],
+            [Unanalyzed(&[LOSS_UNVALIDATED, LOSS_REACTION_ROLES]); 2],
         ),
     ];
     for (name, decoration, expected) in cases {
