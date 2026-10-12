@@ -229,7 +229,9 @@ fn coordinate_atoms_rejects_generic_donor_and_metal_components_before_chemistry(
             for existing_contact in [false, true] {
                 let (mut doc, metal, donor, second, remote) = chelate();
                 if existing_contact {
-                    doc = templates::coordinate_atoms(&doc, donor, metal).unwrap();
+                    doc = crate::joining::coordinate_atoms(&doc, donor, metal)
+                        .unwrap()
+                        .into_document(&doc);
                 }
                 let site = if host_side {
                     let [a, b, _] = chain(&mut doc, -180., 0.);
@@ -244,13 +246,13 @@ fn coordinate_atoms_rejects_generic_donor_and_metal_components_before_chemistry(
                 unchanged(
                     &doc,
                     &before,
-                    templates::coordinate_atoms(&doc, second, metal),
+                    crate::joining::coordinate_atoms(&doc, second, metal),
                 );
                 // An already existing contact must not bypass the unresolved-site guard.
                 unchanged(
                     &doc,
                     &before,
-                    templates::coordinate_atoms(&doc, donor, metal),
+                    crate::joining::coordinate_atoms(&doc, donor, metal),
                 );
             }
         }
@@ -496,7 +498,9 @@ fn ordinary_joins_preserve_disconnected_generic_components_and_arrow_references(
     let (mut doc, metal, donor, _, _) = chelate();
     let [_, gb, _] = chain(&mut doc, 600., 300.);
     define(&mut doc, gb, Definition::Link);
-    let after = templates::coordinate_atoms(&doc, donor, metal).unwrap();
+    let after = crate::joining::coordinate_atoms(&doc, donor, metal)
+        .unwrap()
+        .into_document(&doc);
     assert_eq!(after.atoms, doc.atoms);
     assert_eq!(after.generic, doc.generic);
     assert_eq!(after.bonds.len(), doc.bonds.len() + 1);
@@ -673,4 +677,56 @@ fn plain_joins_and_free_generic_insertion_keep_unrelated_host_definitions() {
     );
     inserted.validate().unwrap();
     assert_eq!(host, before);
+}
+
+#[test]
+fn prepared_generic_source_keeps_invalid_anchor_and_geometry_errors_first() {
+    let mut doc = Document::default();
+    doc.add_atom("Co", Point::default());
+    let donor = doc.add_atom("N", Point::new(180., 0.));
+    let remote = doc.add_atom("C", Point::new(222., 0.));
+    doc.add_bond(donor, remote, 1, "plain");
+    let mut prepared = Prepared::with_mode(&doc, &[donor], Connection::Coordinate).unwrap();
+    prepared.fragment = atom_text::apply(&prepared.fragment, remote, "[C,N]", Mode::Auto).unwrap();
+    assert!(crate::generic::intersects(
+        &prepared.fragment,
+        &prepared.fragment.all_ids()
+    ));
+    let anchor_error = "Choose an exact source atom or bond in the fragment preview.";
+    let geometry_error = "Invalid connection target geometry.";
+    for mode in [Connection::Connect, Connection::Coordinate] {
+        for (point, radius, anchor, expected) in [
+            (Point::default(), 5., Anchor::Atom(u64::MAX), anchor_error),
+            (Point::default(), 5., Anchor::Auto, anchor_error),
+            (
+                Point::new(f32::NAN, 0.),
+                5.,
+                Anchor::Atom(donor),
+                geometry_error,
+            ),
+            (
+                Point::new(0., f32::INFINITY),
+                5.,
+                Anchor::Atom(donor),
+                geometry_error,
+            ),
+            (
+                Point::default(),
+                f32::NAN,
+                Anchor::Atom(donor),
+                geometry_error,
+            ),
+            (Point::default(), 0., Anchor::Atom(donor), geometry_error),
+            (Point::default(), -1., Anchor::Atom(donor), geometry_error),
+        ] {
+            assert_eq!(
+                prepared
+                    .place(point, None, radius, anchor, mode)
+                    .unwrap_err(),
+                expected,
+                "{mode:?} {anchor:?} {point:?} {radius}"
+            );
+            assert!(!prepared.generic_rejection(point, radius, anchor, mode));
+        }
+    }
 }

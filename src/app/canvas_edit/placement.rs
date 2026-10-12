@@ -1,9 +1,10 @@
 //! Drawing gestures that place new structure.
-use crate::app::App;
+use crate::app::{App, joining};
 use crate::canvas::Tool;
 use reshiki::document::{Document, Point};
 use reshiki::editing;
 use reshiki::graphics::Graphic;
+use reshiki::joining::{Coordination, Placed};
 
 impl App {
     pub(super) fn place_chain(
@@ -101,32 +102,38 @@ impl App {
                 self.error = true;
                 return;
             }
-            match state.prepared.place(
+            match state.prepared.place_outcome(
                 anchor,
                 direction,
                 10. / self.tab.camera.zoom,
                 state.anchor,
                 state.mode,
             ) {
-                Ok((document, selected)) => {
-                    let coordination = state.mode == reshiki::templates::Connection::Coordinate;
-                    let unchanged = document == before;
-                    self.tab.doc = document;
+                Ok((outcome, selected)) => {
+                    let status = match &outcome {
+                        // A label refresh can update the drawing during the preparation
+                        // without a new revision. Installing the prepared copy of an
+                        // existing contact then still changes the drawing, so it is
+                        // reported as an edit, as the document comparison always did.
+                        Placed::Coordinated(Coordination::AlreadyPresent)
+                            if state.prepared.original != before =>
+                        {
+                            joining::CONTACT_ADDED
+                        }
+                        Placed::Coordinated(coordination) => {
+                            joining::coordination_status(coordination, false)
+                        }
+                        Placed::Joined(_) => {
+                            "Fragments joined · Undo restores their original positions"
+                        }
+                    };
+                    self.tab.doc = outcome.into_document(&state.prepared.original);
                     self.tab.selected = selected;
                     self.tab.joining = None;
                     self.tool = Tool::Select;
                     self.changed(before);
                     self.error = false;
-                    self.status = if coordination {
-                        if unchanged {
-                            "This donor is already coordinated to that metal"
-                        } else {
-                            "Donor → metal contact added in place · Undo removes it"
-                        }
-                    } else {
-                        "Fragments joined · Undo restores their original positions"
-                    }
-                    .into();
+                    self.status = status.into();
                     self.sync_typography();
                 }
                 Err(error) => {

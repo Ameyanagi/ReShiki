@@ -5,7 +5,7 @@ use iced::widget::{column, container, row, text};
 use iced::{Element, Length, Task};
 use reshiki::{
     document::{Document, Point},
-    joining::Prepared,
+    joining::{Coordination, JoinPlan, Prepared},
     templates::{Anchor, Connection},
 };
 
@@ -80,37 +80,12 @@ impl App {
         {
             return false;
         }
-        let touched = |ids: &[u64]| reshiki::generic::touches(doc, ids);
-        if matches!(action, super::shortcuts::Action::MergeAtoms) {
-            return selected.len() >= 3 && touched(selected);
-        }
-        if let [source, target] = selected {
-            if [source, target].into_iter().any(|id| {
-                doc.atom(*id)
-                    .is_some_and(reshiki::templates::coordination_metal)
-            }) {
-                return touched(selected);
-            }
-            return reshiki::joining::source_intersects_generic(doc, &[*source])
-                || touched(&[*target]);
-        }
-        if selected.len() == 4 {
-            let bonds: Vec<_> = doc
-                .bonds
-                .iter()
-                .filter(|bond| selected.contains(&bond.a) && selected.contains(&bond.b))
-                .collect();
-            if let [source, target] = bonds.as_slice()
-                && source.a != target.a
-                && source.a != target.b
-                && source.b != target.a
-                && source.b != target.b
-            {
-                return reshiki::joining::source_intersects_generic(doc, &[source.a, source.b])
-                    || touched(&[target.a, target.b]);
-            }
-        }
-        selected.len() >= 3 && touched(selected)
+        let plan = if matches!(action, super::shortcuts::Action::MergeAtoms) {
+            (selected.len() >= 3).then_some(JoinPlan::Merge)
+        } else {
+            reshiki::joining::join_plan(doc, selected)
+        };
+        plan.is_some_and(|plan| plan.generic_blocked(doc, selected))
     }
 
     /// Shared by the context row, its overflow menu and the selection menu.
@@ -216,9 +191,10 @@ impl App {
                         let selected_donor = (mode == Connection::Coordinate)
                             .then(|| {
                                 self.tab.selected.iter().copied().find(|id| {
-                                    prepared.fragment.atom(*id).is_some_and(|a| {
-                                        matches!(a.element.as_str(), "N" | "O" | "S" | "P")
-                                    })
+                                    prepared
+                                        .fragment
+                                        .atom(*id)
+                                        .is_some_and(reshiki::joining::coordination_donor)
                                 })
                             })
                             .flatten();
@@ -246,7 +222,12 @@ impl App {
                         self.inspector_open = true;
                         self.inspector_tab = InspectorTab::Properties;
                         self.tab.fit_to_view = false;
-                        self.status = if mode == Connection::Coordinate { "Choose the donor N/O/S/P in the preview, then click the metal. All positions are retained." } else { "Choose the source atom or bond in the preview, then its destination on the canvas" }.into();
+                        let status = if mode == Connection::Coordinate {
+                            "Choose the donor N/O/S/P in the preview, then click the metal. All positions are retained."
+                        } else {
+                            "Choose the source atom or bond in the preview, then its destination on the canvas"
+                        };
+                        self.status = status.into();
                         self.error = false;
                     }
                     Err(error) => {
@@ -377,6 +358,22 @@ impl App {
         .center_y(46)
         .style(super::workspace::panel)
         .into()
+    }
+}
+
+/// The canvas status for a coordination placement that changed the drawing.
+pub(super) const CONTACT_ADDED: &str = "Donor → metal contact added in place · Undo removes it";
+
+pub(super) fn coordination_status(outcome: &Coordination, marked: bool) -> &'static str {
+    match (outcome, marked) {
+        (Coordination::Added(_), false) => CONTACT_ADDED,
+        (Coordination::AlreadyPresent, false) => "This donor is already coordinated to that metal",
+        (Coordination::Added(_), true) => {
+            "Marked donor → metal contact added in place · Undo removes it"
+        }
+        (Coordination::AlreadyPresent, true) => {
+            "This marked donor is already coordinated to that metal"
+        }
     }
 }
 

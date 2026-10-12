@@ -1,5 +1,10 @@
 use super::*;
-use crate::{bonds::BondPreset, joining::Prepared};
+use crate::{
+    bonds::BondPreset,
+    document::Point,
+    joining::Prepared,
+    templates::{Anchor, Connection, capacity, valence},
+};
 
 pub(crate) fn en3() -> (Document, u64, Vec<u64>) {
     let mut doc = Document::default();
@@ -58,7 +63,10 @@ fn all_six_chelate_contacts_retain_positions_ids_hydrogens_charge_and_skeletons(
             .count(),
         6
     );
-    assert_eq!(coordinate_atoms(&doc, donors[0], co).unwrap(), doc);
+    assert_eq!(
+        coordinate_atoms(&doc, donors[0], co),
+        Ok(Coordination::AlreadyPresent)
+    );
     doc.validate().unwrap();
     let chemical = crate::chemistry::document::prepare(&doc).unwrap();
     for donor in &donors {
@@ -133,7 +141,9 @@ fn explicit_coordination_does_not_relax_covalent_capacity_or_merge_atom_identity
     let mut fixed_h = doc.clone();
     fixed_h.atom_mut(donors[0]).unwrap().explicit_h = 2;
     fixed_h.atom_mut(donors[0]).unwrap().no_implicit = true;
-    let connected = coordinate_atoms(&fixed_h, donors[0], co).unwrap();
+    let connected = coordinate_atoms(&fixed_h, donors[0], co)
+        .unwrap()
+        .into_document(&fixed_h);
     assert_eq!(connected.atoms, fixed_h.atoms);
     fixed_h.atom_mut(donors[0]).unwrap().explicit_h = 3;
     assert!(
@@ -147,7 +157,9 @@ fn explicit_coordination_does_not_relax_covalent_capacity_or_merge_atom_identity
 #[test]
 fn dative_projection_styling_never_changes_order_direction_or_stereo() {
     let (doc, co, donors) = en3();
-    let mut doc = coordinate_atoms(&doc, donors[0], co).unwrap();
+    let mut doc = coordinate_atoms(&doc, donors[0], co)
+        .unwrap()
+        .into_document(&doc);
     for preset in [
         BondPreset::Wedge,
         BondPreset::HashedWedge,
@@ -198,7 +210,9 @@ fn solid_coordination_projection_renders_a_taper_at_either_requested_end() {
     let donor = original.add_atom("N", Point::default());
     let metal = original.add_atom("Co", Point::new(120., 0.));
     original.atom_mut(metal).unwrap().charge = 3;
-    let original = coordinate_atoms(&original, donor, metal).unwrap();
+    let original = coordinate_atoms(&original, donor, metal)
+        .unwrap()
+        .into_document(&original);
     let mut projected = original.clone();
     BondPreset::Wedge.apply(&mut projected.bonds[0]);
     for acceptor_narrowed in [false, true] {
@@ -261,7 +275,9 @@ fn hashed_coordination_projection_tapers_at_either_requested_end() {
     let donor = original.add_atom("N", Point::default());
     let metal = original.add_atom("Co", Point::new(120., 0.));
     original.atom_mut(metal).unwrap().charge = 3;
-    let original = coordinate_atoms(&original, donor, metal).unwrap();
+    let original = coordinate_atoms(&original, donor, metal)
+        .unwrap()
+        .into_document(&original);
     let mut projected = original.clone();
     BondPreset::HashedWedge.apply(&mut projected.bonds[0]);
     for acceptor_narrowed in [false, true] {
@@ -308,7 +324,9 @@ fn projected_dative_crossing_clearance_is_independent_of_narrow_endpoint() {
     let donor = doc.add_atom("N", Point::default());
     let metal = doc.add_atom("Co", Point::new(120., 0.));
     doc.atom_mut(metal).unwrap().charge = 3;
-    let mut doc = coordinate_atoms(&doc, donor, metal).unwrap();
+    let mut doc = coordinate_atoms(&doc, donor, metal)
+        .unwrap()
+        .into_document(&doc);
     BondPreset::Wedge.apply(&mut doc.bonds[0]);
     doc.bonds[0].z_order = 1;
     let lo = Point::new(60., -45.);

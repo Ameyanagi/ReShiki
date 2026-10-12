@@ -37,13 +37,7 @@ impl App {
             return Break(Task::none());
         };
         let message = self.restart_gate(message)?;
-        // Join admission precedes hue/text commits and preview cancellation.
-        // Modal atom text/cleanup ownership and unrelated commands are unchanged.
-        if self.generic_join_rejection(&message) {
-            self.status = reshiki::generic::JOIN_NOTICE.into();
-            self.error = true;
-            return Break(Task::none());
-        }
+        let message = self.generic_join_gate(message)?;
         let message = self.style_menu_gate(message)?;
         let message = self.import_drag_gate(message)?;
         let message = self.atom_text_gate(message)?;
@@ -57,6 +51,17 @@ impl App {
         let message = self.palette_assistant_gate(message)?;
         let message = self.cleanup_preview_gate(message)?;
         self.abbreviation_member_gate(message)
+    }
+
+    /// Join admission precedes hue/text commits and preview cancellation.
+    /// Modal atom text/cleanup ownership and unrelated commands are unchanged.
+    fn generic_join_gate(&mut self, message: Message) -> Gate {
+        if self.generic_join_rejection(&message) {
+            self.status = reshiki::generic::JOIN_NOTICE.into();
+            self.error = true;
+            return Break(Task::none());
+        }
+        Continue(message)
     }
 
     fn early_results_gate(&mut self, message: Message) -> Gate {

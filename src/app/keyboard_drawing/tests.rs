@@ -1148,3 +1148,41 @@ fn marked_coordination_is_explicit_and_preserves_ordinary_connect_checks() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, original);
 }
+
+#[test]
+fn repeated_marked_coordination_reports_duplicate_without_another_history_frame() {
+    let mut app = app();
+    let metal = app.tab.doc.add_atom("Co", Point::default());
+    app.tab.doc.atom_mut(metal).unwrap().charge = 3;
+    let donor = app.tab.doc.add_atom("N", Point::new(40., 0.));
+    app.tab.doc.atom_mut(donor).unwrap().explicit_h = 2;
+    let carbon = app.tab.doc.add_atom("C", Point::new(80., 0.));
+    app.tab.doc.add_bond(donor, carbon, 1, "plain");
+    let original = app.tab.doc.clone();
+    let history = app.tab.history.undo_frames().len();
+    for status in [
+        "Marked donor → metal contact added in place · Undo removes it",
+        "This marked donor is already coordinated to that metal",
+    ] {
+        let before = app.tab.doc.clone();
+        app.tab
+            .keyboard_drawing
+            .set_target(Target::Atom(donor), &app.tab.doc);
+        let _ = app.keyboard_drawing_action(Action::Mark);
+        app.tab
+            .keyboard_drawing
+            .set_target(Target::Atom(metal), &app.tab.doc);
+        let _ = app.keyboard_context_key("}");
+        assert_eq!(app.status, status);
+        assert!(!app.error);
+        assert!(app.tab.keyboard_drawing.marked().is_none());
+        assert_eq!(app.tab.doc.atoms, original.atoms);
+        assert_eq!(app.tab.doc.bonds.len(), original.bonds.len() + 1);
+        assert_eq!(app.tab.history.undo_frames().len(), history + 1);
+        if before != original {
+            assert_eq!(app.tab.doc, before);
+        }
+    }
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+}
