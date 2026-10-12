@@ -13,6 +13,81 @@ fn record(smiles: &str) -> Record {
     }
 }
 
+#[test]
+fn native_open_preserves_pending_naming_in_an_empty_source_tab() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let source = app.tab.id;
+    let epoch = app.tab.file_epoch;
+    assert!(app.update(Message::Naming(Action::Generate)).units() > 0);
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    assert!(!app.tab.reusable());
+    let mut document = Document::default();
+    document.add_atom("O", Point::default());
+    let _ = app.update(Message::FilePrepared(Some((
+        "pending-name-open.rsk".into(),
+        Ok(super::super::files::Prepared::Native(Box::new(
+            document.clone(),
+        ))),
+    ))));
+    assert_ne!(app.tab.id, source);
+    assert!(app.tab.file_epoch > epoch);
+    assert!(!app.tab.naming.is_pending());
+    assert_eq!(app.tab.doc, document);
+    let original = app.strip().find(|tab| tab.id == source).unwrap();
+    assert_eq!(original.file_epoch, epoch);
+    assert_eq!(original.naming.pending.unwrap().ticket(), ticket);
+    let front = app.tab.id;
+    let _ = app.update(Message::Tab(
+        source,
+        Box::new(Message::Naming(Action::Finished(
+            ticket,
+            Box::new(Ok(Outcome::Structure(record("CCO")))),
+        ))),
+    ));
+    let original = app.strip().find(|tab| tab.id == source).unwrap();
+    assert!(!original.naming.is_pending());
+    assert_eq!(original.naming.structure.as_ref().unwrap().0, ticket);
+    assert_eq!(app.tab.id, front);
+    assert_eq!(app.tab.doc, document);
+}
+
+#[test]
+fn file_epoch_clears_naming_and_old_completion_cannot_clear_a_new_request() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    assert!(app.update(Message::Naming(Action::Generate)).units() > 0);
+    let old = app.tab.naming.pending.unwrap().ticket();
+    assert!(app.tab.naming.local_cancel.is_some());
+    // Retained generated names stay visible as previous names after a file change.
+    app.tab.naming.structure = Some((old, record("CCO")));
+    app.tab.naming.import_alias = Some(0);
+    let epoch = app.tab.file_epoch;
+    app.begin_file_epoch();
+    assert!(app.tab.file_epoch > epoch);
+    assert!(!app.tab.naming.is_pending());
+    assert!(app.tab.naming.local_cancel.is_none());
+    assert!(app.tab.naming.import_alias.is_none());
+    assert_eq!(app.tab.naming.structure.as_ref().unwrap().0, old);
+    assert!(app.update(Message::Naming(Action::Generate)).units() > 0);
+    let current = app.tab.naming.pending.unwrap().ticket();
+    assert_ne!(current, old);
+    let _ = app.update(Message::Naming(Action::Finished(
+        old,
+        Box::new(Ok(Outcome::Structure(record("CCO")))),
+    )));
+    assert_eq!(app.tab.naming.pending.unwrap().ticket(), current);
+    assert!(app.tab.naming.local_cancel.is_some());
+    assert!(app.tab.naming.structure.is_none());
+    assert!(app.tab.naming.notice.is_none());
+    let _ = app.update(Message::Naming(Action::Finished(
+        current,
+        Box::new(Ok(Outcome::Structure(record("CCO")))),
+    )));
+    assert!(!app.tab.naming.is_pending());
+    assert_eq!(app.tab.naming.structure.as_ref().unwrap().0, current);
+}
+
 #[tokio::test]
 async fn preview_insertion_is_native_editable_and_one_history_step() -> Result<(), String> {
     let (mut app, _) = App::new();

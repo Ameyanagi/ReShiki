@@ -10,6 +10,8 @@ use std::sync::Mutex;
 use tokio::sync::mpsc::Receiver;
 
 static EVENTS: Mutex<Option<Receiver<Event>>> = Mutex::new(None);
+const LOST_PROXY_STATUS: &str =
+    "The Office launch session ended. Save this retained drawing to another file.";
 #[derive(Debug, Clone)]
 pub enum Action {
     Request(Event),
@@ -169,13 +171,13 @@ impl App {
                     .collect::<Vec<_>>();
                 for id in lost {
                     self.office.closing.retain(|queued| *queued != id);
-                    self.in_tab(id,|app| {
+                    self.in_tab(id, |app| {
                         app.tab.office = None;
                         app.tab.path = None;
                         app.tab.saved = reshiki::document::Document::default();
-                        app.tab.file_epoch = app.next_epoch();
+                        app.begin_file_epoch();
                         app.request_autosave();
-                        app.status = "The Office launch session ended. Save this retained drawing to another file.".into();
+                        app.status = LOST_PROXY_STATUS.into();
                         app.error = true;
                     });
                 }

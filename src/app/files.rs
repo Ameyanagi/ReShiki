@@ -276,7 +276,7 @@ impl super::App {
                     return iced::Task::none();
                 }
                 self.clear_recovery();
-                self.tab.file_epoch = self.next_epoch();
+                self.begin_file_epoch();
                 self.tab.doc = *doc;
                 self.sync_drawing_defaults();
                 self.tab.styles.editor = None;

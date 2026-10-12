@@ -16,6 +16,15 @@ pub(super) struct State {
     pending: Option<(u64, u64)>,
     proposal: Option<Arc<Proposal>>,
 }
+impl State {
+    pub(super) fn is_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    pub(super) fn clear_pending(&mut self) {
+        self.pending = None;
+    }
+}
 #[derive(Debug, Clone)]
 pub enum Action {
     Open,

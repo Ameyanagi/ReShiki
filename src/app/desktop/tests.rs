@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     app::{
-        Job,
+        Job, naming,
         office::{Host, Lease},
         tabs,
     },
@@ -124,6 +124,9 @@ fn lost_proxy_revokes_host_target_but_keeps_the_drawing_and_styles() {
     ));
     let before = app.tab.doc.clone();
     let epoch = app.tab.file_epoch;
+    let _ = app.naming_action(naming::Action::Name("ethanol".into()));
+    assert!(app.naming_action(naming::Action::Resolve).units() > 0);
+    assert!(app.tab.naming.is_pending());
     alive.store(false, Ordering::Release);
     let _ = app.update(Message::Desktop(Action::Poll));
     assert_eq!(app.tab.doc, before);
@@ -133,6 +136,65 @@ fn lost_proxy_revokes_host_target_but_keeps_the_drawing_and_styles() {
     assert!(app.dirty());
     assert!(!lease.writable());
     assert!(app.error);
+    assert!(!app.tab.naming.is_pending());
+    assert!(app.naming_action(naming::Action::Generate).units() > 0);
+    assert!(app.tab.naming.is_pending());
+}
+
+#[test]
+fn background_proxy_loss_clears_naming_without_changing_the_front_tab() {
+    let (mut app, _) = App::new();
+    let alive = Arc::new(AtomicBool::new(true));
+    let check = alive.clone();
+    let lease = Lease::new([4; 16], move || check.load(Ordering::Acquire));
+    let binding = Binding {
+        path: "background-office.rsk".into(),
+        host: Host::Microsoft365,
+        lease: Some(lease.clone()),
+    };
+    let mut doc = Document::default();
+    doc.add_atom("O", Point::default());
+    let _ = app.update(Message::OfficePrepared(
+        binding,
+        Some((
+            "background-office.rsk".into(),
+            Ok(files::Prepared::Native(Box::new(doc))),
+        )),
+    ));
+    let (id, epoch, before) = (app.tab.id, app.tab.file_epoch, app.tab.doc.clone());
+    let _ = app.naming_action(naming::Action::Name("ethanol".into()));
+    assert!(app.naming_action(naming::Action::Resolve).units() > 0);
+    assert!(app.tab.naming.is_pending());
+    let front = tabs::tests::Front::new(&mut app);
+
+    alive.store(false, Ordering::Release);
+    // Isolate background lease handling from the update wrapper's front label scheduling.
+    let _ = app.desktop_action(Action::Poll);
+    front.assert_unchanged(&app);
+    let source = app.strip().find(|tab| tab.id == id).unwrap();
+    assert_eq!(source.doc, before);
+    assert!(source.office.is_none());
+    assert!(source.path.is_none());
+    assert_ne!(source.file_epoch, epoch);
+    assert!(source.dirty());
+    assert!(source.error);
+    assert_eq!(source.status, LOST_PROXY_STATUS);
+    assert!(!source.naming.is_pending());
+    assert!(!lease.writable());
+    let units = app
+        .in_tab(id, |app| {
+            app.naming_action(naming::Action::Generate).units()
+        })
+        .unwrap();
+    assert!(units > 0);
+    assert!(
+        app.strip()
+            .find(|tab| tab.id == id)
+            .unwrap()
+            .naming
+            .is_pending()
+    );
+    front.assert_unchanged(&app);
 }
 
 #[test]

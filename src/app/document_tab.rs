@@ -215,6 +215,9 @@ impl DocumentTab {
             && !self.dirty()
             && !self.busy
             && !self.clipboard_busy
+            && !self.naming.is_pending()
+            && !self.mapping.is_pending()
+            && !self.nmr.is_pending()
             && self.cleanup.is_none()
             && self.optimization.is_none()
             && self.inline_text.is_none()

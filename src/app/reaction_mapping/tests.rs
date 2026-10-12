@@ -33,6 +33,27 @@ fn pending_proposal(app: &mut App) -> (u64, u64, Arc<Proposal>) {
 }
 
 #[test]
+fn file_epoch_clears_mapping_pending_and_old_result_cannot_clear_new_work() {
+    let mut app = app();
+    assert!(app.update(Message::Mapping(Action::Auto)).units() > 0);
+    let old = app.tab.mapping.pending.unwrap();
+    app.tab.arrow_source = Some(reshiki::arrow_anchors::Pick::Atom(1));
+    app.begin_file_epoch();
+    assert!(!app.tab.mapping.is_pending());
+    assert!(app.tab.arrow_source.is_none());
+    assert!(app.update(Message::Mapping(Action::Auto)).units() > 0);
+    let current = app.tab.mapping.pending.unwrap();
+    assert_ne!(current, old);
+    let _ = app.update(Message::Mapping(Action::Ready(
+        old.0,
+        old.1,
+        Err("Stale mapping completion".into()),
+    )));
+    assert_eq!(app.tab.mapping.pending, Some(current));
+    assert!(!app.error);
+}
+
+#[test]
 fn completion_routes_only_to_originating_tab() {
     let mut app = app();
     let id = app.tab.id;

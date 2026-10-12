@@ -226,7 +226,7 @@ impl App {
                 self.tab.path = None;
                 self.tab.untitled_name = None;
                 self.tab.saved = Document::default();
-                self.tab.file_epoch = self.next_epoch();
+                self.begin_file_epoch();
             }
         }
         self.tab.analysis = response.analysis;

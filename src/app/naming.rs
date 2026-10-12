@@ -150,7 +150,11 @@ impl Drop for State {
     }
 }
 impl State {
-    fn invalidate_name(&mut self) {
+    pub(super) fn is_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    pub(super) fn invalidate_name(&mut self) {
         self.serial = self.serial.wrapping_add(1);
         self.pending = None;
         self.label_target = None;

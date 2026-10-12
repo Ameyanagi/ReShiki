@@ -439,7 +439,7 @@ impl App {
         self.tab.path = None;
         self.tab.untitled_name = None;
         self.tab.saved = Document::default();
-        self.tab.file_epoch = self.next_epoch();
+        self.begin_file_epoch();
         self.changed(before);
         self.tab.revision = self.tab.revision.wrapping_add(1);
         self.fit();

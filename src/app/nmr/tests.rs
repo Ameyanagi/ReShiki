@@ -1034,6 +1034,97 @@ fn update_reports_nmr_export_under_atom_text_and_cleanup_without_editing() {
 }
 
 #[test]
+fn restore_during_prediction_keeps_source_work_and_allows_prediction_in_the_recovered_tab() {
+    use reshiki::recovery::{Candidate, Snapshot};
+    let directory = tempfile::tempdir().unwrap();
+    let mut app = ethyl_acetate();
+    let source = app.tab.id;
+    let epoch = app.tab.file_epoch;
+    let original = app.tab.doc.clone();
+    assert!(
+        app.update(Message::Nmr(Action::Predict(Nucleus::H1)))
+            .units()
+            > 0
+    );
+    let key = app.tab.nmr.pending.clone().unwrap();
+    let recovered = ethyl_acetate_doc();
+    let path = directory.path().join("4294967294-nmr.json");
+    std::fs::write(&path, "draft").unwrap();
+    app.tabs.recovery_root = Some(directory.path().into());
+    app.recovered = vec![Candidate {
+        path,
+        snapshot: Snapshot {
+            document: recovered.clone(),
+            source: None,
+            saved_at: 1,
+        },
+    }];
+    let _ = app.update(Message::Restore);
+    assert!(app.recovered.is_empty());
+    assert_eq!(app.strip().count(), 2);
+    assert_ne!(app.tab.id, source);
+    assert!(app.tab.file_epoch > epoch);
+    assert_eq!(app.tab.doc, recovered);
+    assert!(!app.tab.nmr.is_pending());
+    let original_tab = app.strip().find(|tab| tab.id == source).unwrap();
+    assert_eq!(original_tab.file_epoch, epoch);
+    assert_eq!(original_tab.doc, original);
+    assert_eq!(original_tab.nmr.pending.as_ref(), Some(&key));
+    let front = app.tab.id;
+    assert!(
+        app.update(Message::Nmr(Action::Predict(Nucleus::H1)))
+            .units()
+            > 0
+    );
+    let current = app.tab.nmr.pending.clone().unwrap();
+    let report = predicted(&original, Nucleus::H1);
+    let _ = app.update(Message::Tab(
+        source,
+        Box::new(Message::Nmr(Action::Finished(key, Ok(report.clone())))),
+    ));
+    assert_eq!(app.tab.id, front);
+    assert_eq!(app.tab.nmr.pending.as_ref(), Some(&current));
+    assert!(app.tab.nmr.result.is_none());
+    let original_tab = app.strip().find(|tab| tab.id == source).unwrap();
+    assert!(!original_tab.nmr.is_pending());
+    assert!(Arc::ptr_eq(
+        original_tab.nmr.result.as_ref().unwrap(),
+        &report
+    ));
+}
+
+#[test]
+fn file_epoch_clears_nmr_pending_but_keeps_report_and_notice() {
+    let mut app = ethyl_acetate();
+    assert!(
+        app.update(Message::Nmr(Action::Predict(Nucleus::H1)))
+            .units()
+            > 0
+    );
+    let old = app.tab.nmr.pending.clone().unwrap();
+    let report = predicted(&app.tab.doc, Nucleus::H1);
+    app.tab.nmr.result = Some(report.clone());
+    app.tab.nmr.notice = Some("Retained NMR diagnostic".into());
+    app.begin_file_epoch();
+    assert!(app.tab.nmr.pending.is_none());
+    assert!(Arc::ptr_eq(app.tab.nmr.result.as_ref().unwrap(), &report));
+    assert_eq!(
+        app.tab.nmr.notice.as_deref(),
+        Some("Retained NMR diagnostic")
+    );
+    assert!(
+        app.update(Message::Nmr(Action::Predict(Nucleus::H1)))
+            .units()
+            > 0
+    );
+    let current = app.tab.nmr.pending.clone().unwrap();
+    assert_ne!(current, old);
+    let _ = app.update(Message::Nmr(Action::Finished(old, Ok(report))));
+    assert_eq!(app.tab.nmr.pending.as_ref(), Some(&current));
+    assert!(app.tab.nmr.result.is_none());
+}
+
+#[test]
 fn hybrid_docking_preserves_report_and_camera_and_restores_a_hidden_inspector() {
     let mut app = ethyl_acetate();
     app.inspector_open = false;

@@ -385,6 +385,17 @@ pub struct App {
     templates: template_library::State,
 }
 impl App {
+    /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
+    pub(super) fn begin_file_epoch(&mut self) {
+        self.tab.file_epoch = self.next_epoch();
+        // Invalidate tickets before clearing gestures that may switch the front tab's tool.
+        self.tab.naming.invalidate_name();
+        self.tab.mapping.clear_pending();
+        self.tab.arrow_source = None;
+        self.cancel_reference_stretch();
+        self.tab.nmr.clear_pending();
+    }
+
     pub fn new() -> (Self, Task<Message>) {
         let recovery = if cfg!(test) {
             None

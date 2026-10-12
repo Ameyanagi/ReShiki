@@ -98,6 +98,14 @@ impl Default for State {
     }
 }
 impl State {
+    pub(super) fn is_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    pub(super) fn clear_pending(&mut self) {
+        self.pending = None;
+    }
+
     #[cfg(test)]
     pub(super) fn docking_state_for_test(&self) -> (bool, bool, Option<(bool, InspectorTab)>) {
         (self.docked, self.restore_dock, self.dock_return)
