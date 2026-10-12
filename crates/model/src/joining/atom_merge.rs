@@ -197,6 +197,8 @@ fn merge_atoms_with_position(
         dedup(&mut scope.atoms);
         scope.weights = remap_weights(&scope.weights, &mapped)?;
         scope.overrides = remap_weights(&scope.overrides, &mapped)?;
+        scope.rear_weights = remap_weights(&scope.rear_weights, &mapped)?;
+        scope.rear_overrides = remap_weights(&scope.rear_overrides, &mapped)?;
     }
     crate::depth_appearance::validate(&result)
         .map_err(|_| "Joining would combine conflicting depth appearance scopes. Clear their depth appearance first.")?;
@@ -211,6 +213,7 @@ fn merge_atoms_with_position(
         .collect();
     crate::arrow_anchors::remap_for_join(&mut result, &doc.atoms, &endpoint_mapping);
     crate::atom_labels::clear_computed(&mut result);
+    crate::molecule_names::reconcile(&mut result, doc);
     result.validate()?;
     Ok((result, vec![survivor]))
 }

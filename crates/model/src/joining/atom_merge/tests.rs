@@ -361,6 +361,131 @@ fn depth_paint_remaps_without_stale_ids_and_conflicts_are_rejected() {
     rejects(&doc, &selected, "depth paint");
 }
 
+fn rear_painted_sites() -> (Document, Vec<u64>) {
+    let (mut doc, selected) = sites(3, "C", false);
+    doc.depth_appearance.push(crate::depth_appearance::Scope {
+        atoms: selected.clone(),
+        automatic: false,
+        strength: 0.6,
+        rear_opacity: 0.25,
+        rear_overrides: selected.iter().map(|id| (*id, 0.5)).collect(),
+        rear_weights: selected.iter().map(|id| (*id, 0.8)).collect(),
+        weights: selected.iter().map(|id| (*id, 0.2)).collect(),
+        overrides: selected.iter().map(|id| (*id, 0.4)).collect(),
+    });
+    doc.validate().unwrap();
+    (doc, selected)
+}
+
+#[test]
+fn rear_depth_paint_remaps_equal_frozen_weights_and_overrides_to_only_the_survivor() {
+    let (doc, mut selected) = rear_painted_sites();
+    selected.reverse();
+    let before = doc.clone();
+    let (joined, ids) = merge_atoms(&doc, &selected).unwrap();
+    assert_eq!(ids, [selected[0]]);
+    let scope = &joined.depth_appearance[0];
+    assert_eq!(scope.atoms, [selected[0]]);
+    assert!(!scope.automatic);
+    assert_eq!(scope.strength, 0.6);
+    assert_eq!(scope.rear_opacity, 0.25);
+    for (weights, value) in [
+        (&scope.weights, 0.2),
+        (&scope.overrides, 0.4),
+        (&scope.rear_weights, 0.8),
+        (&scope.rear_overrides, 0.5),
+    ] {
+        assert_eq!(*weights, BTreeMap::from([(selected[0], value)]));
+    }
+    assert_eq!(doc, before);
+    joined.validate().unwrap();
+}
+
+#[test]
+fn rear_depth_paint_conflicting_weights_are_rejected_atomically() {
+    let (mut doc, selected) = rear_painted_sites();
+    doc.depth_appearance[0]
+        .rear_weights
+        .insert(selected[1], 0.7);
+    doc.validate().unwrap();
+    rejects(&doc, &selected, "depth paint");
+}
+
+#[test]
+fn rear_depth_paint_conflicting_overrides_are_rejected_atomically() {
+    let (mut doc, selected) = rear_painted_sites();
+    doc.depth_appearance[0]
+        .rear_overrides
+        .insert(selected[1], 0.7);
+    doc.validate().unwrap();
+    rejects(&doc, &selected, "depth paint");
+}
+
+fn named_sites() -> (Document, Vec<u64>, u64) {
+    let (mut doc, selected) = sites(3, "C", false);
+    doc.add_bond(selected[0], selected[1], 1, "plain");
+    doc.add_bond(selected[1], selected[2], 1, "plain");
+    let caption = crate::molecule_names::show(
+        &mut doc,
+        &selected,
+        "propane".into(),
+        "CCC".into(),
+        Default::default(),
+    )
+    .unwrap();
+    doc.validate().unwrap();
+    (doc, selected, caption)
+}
+
+#[test]
+fn named_molecule_merge_removes_obsolete_automatic_caption() {
+    let (doc, selected, _) = named_sites();
+    let before = doc.clone();
+    let (joined, ids) = merge_atoms(&doc, &selected).unwrap();
+    assert_eq!(ids, [selected[0]]);
+    assert!(joined.annotations.is_empty());
+    assert!(joined.molecule_names.is_empty());
+    assert_eq!(doc, before);
+    joined.validate().unwrap();
+}
+
+#[test]
+fn named_molecule_merge_detaches_and_preserves_user_edited_caption() {
+    let (mut doc, selected, caption) = named_sites();
+    let annotation = doc
+        .annotations
+        .iter_mut()
+        .find(|a| a.id == caption)
+        .unwrap();
+    annotation.text = "My propane sample".into();
+    let expected = annotation.clone();
+    doc.validate().unwrap();
+    let before = doc.clone();
+    let (joined, _) = merge_atoms(&doc, &selected).unwrap();
+    assert_eq!(joined.annotations, [expected]);
+    assert!(joined.molecule_names.is_empty());
+    assert_eq!(doc, before);
+    joined.validate().unwrap();
+}
+
+#[test]
+fn named_molecule_merge_preserves_unrelated_caption_and_association() {
+    let (mut doc, named, _) = named_sites();
+    let selected: Vec<_> = (0..3)
+        .map(|index| doc.add_atom("C", Point::new(200. + index as f32 * 42., 200.)))
+        .collect();
+    doc.validate().unwrap();
+    let before = doc.clone();
+    let (joined, _) = merge_atoms(&doc, &selected).unwrap();
+    assert_eq!(joined.annotations, doc.annotations);
+    assert_eq!(joined.molecule_names, doc.molecule_names);
+    for id in named {
+        assert_eq!(joined.atom(id), doc.atom(id));
+    }
+    assert_eq!(doc, before);
+    joined.validate().unwrap();
+}
+
 #[test]
 fn painted_ring_members_remap_and_collapsed_ring_paint_is_rejected() {
     let (mut doc, selected) = sites(3, "C", false);
