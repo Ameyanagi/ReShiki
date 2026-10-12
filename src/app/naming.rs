@@ -1,7 +1,7 @@
 //! Per-document local name parsing, editable previews and rule-based name generation.
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
-use crate::canvas::{Camera, Edit, MoleculeCanvas, Tool};
+use crate::canvas::{Camera, Edit, MoleculeCanvas, PreviewStyles, Tool};
 use iced::widget::{column, container, row, text};
 mod aliases;
 mod import_dock;
@@ -201,6 +201,18 @@ async fn resolve_preview(
 }
 
 impl App {
+    fn name_preview_styles(&self) -> PreviewStyles<'_> {
+        PreviewStyles {
+            bond_drawing: self.tab.bond_drawing,
+            chain_drawing: self.tab.chain_drawing,
+            arrow_preset: self.tab.arrow_style,
+            arrow_style: &self.tab.arrows.style,
+            orbital_phase: self.tab.orbital_phase,
+            graphic_style: &self.tab.graphic_style,
+            bracket_sides: self.tab.bracket_sides,
+        }
+    }
+
     fn naming_ticket(&mut self) -> Ticket {
         self.tab.naming.serial = self.tab.naming.serial.wrapping_add(1);
         let ticket = Ticket {
@@ -557,40 +569,12 @@ impl App {
         if let Some(preview) = &state.preview {
             content = content.push(text(preview.record.provenance.label()).size(12));
             content = content.push(text(&preview.record.title).size(14));
-            let drawing: Element<'_, Edit> = canvas(preview::Preview(MoleculeCanvas {
-                nmr: None,
-                optimizer: None,
-                keyboard_target: None,
-                joining: None,
-                hidden_annotation: None,
-                bond_drawing: self.tab.bond_drawing,
-                chain_drawing: self.tab.chain_drawing,
-                doc: &preview.document,
-                element: "C",
-                selected: &preview.selected,
-                tool: Tool::Select,
-                camera: preview.camera,
-                grid: false,
-                guides: Default::default(),
-                smart_guides: false,
-                ring_size: 6,
-                aromatic_ring: false,
-                template_connection: Default::default(),
-                template: None,
-                arrow_preset: self.tab.arrow_style,
-                arrow_style: &self.tab.arrows.style,
-                arrow_source: None,
-                attach_arrow_targets: false,
-                orbital_phase: self.tab.orbital_phase,
-                phase_flipped: false,
-                attach_symbols: false,
-                snap_orbitals: false,
-                graphic_constrain: false,
-                graphic_arc: Default::default(),
-                graphic_style: &self.tab.graphic_style,
-                graphic_point: None,
-                bracket_sides: self.tab.bracket_sides,
-            }))
+            let drawing: Element<'_, Edit> = canvas(preview::Preview(MoleculeCanvas::preview(
+                &preview.document,
+                &preview.selected,
+                preview.camera,
+                self.name_preview_styles(),
+            )))
             .width(Length::Fill)
             .height(180)
             .into();

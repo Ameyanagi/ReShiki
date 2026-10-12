@@ -225,7 +225,7 @@ fn pen_preview_commit_and_escape_share_segments_for_new_append_and_close() {
                         panic!("one completed pen segment")
                     };
                     let (committed, _, _) =
-                        pen::apply(doc, selected, canvas.graphic_style, stroke).unwrap();
+                        pen::apply(doc, selected, canvas.graphics.style, stroke).unwrap();
                     assert_eq!(committed, preview);
                     assert_eq!(committed.atoms, doc.atoms);
                     assert_eq!(committed.bonds, doc.bonds);

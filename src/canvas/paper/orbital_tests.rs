@@ -20,7 +20,7 @@ fn orbital_preview_commit_and_temporary_bypass_agree_at_every_zoom() {
                     crate::canvas::tests::chain_canvas(&doc, reshiki::chains::ChainMode::Straight);
                 canvas.tool = Tool::Graphic(GraphicKind::Orbital(OrbitalKind::P));
                 canvas.camera.zoom = zoom;
-                canvas.snap_orbitals = enabled;
+                canvas.graphics.snap = enabled;
                 let start = World::new(4. / zoom, 0.);
                 let end = start.offset(7., -42.);
                 let mut state = State {
@@ -64,10 +64,10 @@ fn orbital_preview_commit_and_temporary_bypass_agree_at_every_zoom() {
                 assert_eq!(actual_snap, snap);
                 let drawing = reshiki::scientific::Drawing {
                     kind: GraphicKind::Orbital(OrbitalKind::P),
-                    style: canvas.graphic_style.clone(),
-                    phase: canvas.orbital_phase,
-                    flipped: canvas.phase_flipped,
-                    attach: canvas.attach_symbols,
+                    style: canvas.graphics.style.clone(),
+                    phase: canvas.graphics.phase,
+                    flipped: canvas.graphics.flipped,
+                    attach: canvas.graphics.attach,
                     snap_orbitals: actual_snap,
                 };
                 let mut committed = doc.clone();
@@ -130,9 +130,9 @@ fn lone_pair_click_and_drag_previews_match_the_exact_committed_marks() {
             };
             let drawing = reshiki::scientific::Drawing {
                 kind,
-                style: canvas.graphic_style.clone(),
-                phase: canvas.orbital_phase,
-                flipped: canvas.phase_flipped,
+                style: canvas.graphics.style.clone(),
+                phase: canvas.graphics.phase,
+                flipped: canvas.graphics.flipped,
                 attach: true,
                 snap_orbitals: true,
             };

@@ -4,7 +4,7 @@ use super::{
     shortcuts::keys,
 };
 use crate::canvas::layered::canvas;
-use crate::canvas::{Edit, MoleculeCanvas, Tool};
+use crate::canvas::{ArrowOptions, Edit, GraphicOptions, MoleculeCanvas, Tool};
 use iced::widget::{
     Space, button, checkbox, column, combo_box, container, mouse_area, responsive, rich_text, row,
     scrollable, sensor, span, text, tooltip,
@@ -283,19 +283,23 @@ impl App {
             hidden_annotation: self.inline_label_id(),
             bond_drawing: self.tab.bond_drawing,
             chain_drawing: self.tab.chain_drawing,
-            graphic_constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
-            graphic_arc: self.tab.arc_editor.geometry,
-            graphic_style: &self.tab.graphic_style,
-            graphic_point: self.tab.path_point,
-            orbital_phase: self.tab.orbital_phase,
-            phase_flipped: self.tab.phase_flipped,
-            attach_symbols: self.tab.attach_symbols,
-            snap_orbitals: self.tab.snap_orbitals,
-            arrow_preset: self.tab.arrow_style,
-            arrow_style: &self.tab.arrows.style,
-            arrow_source: self.tab.arrow_source.as_ref(),
-            attach_arrow_targets: self.tab.arrows.attach_targets,
-            bracket_sides: self.tab.bracket_sides,
+            graphics: GraphicOptions {
+                constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
+                arc: self.tab.arc_editor.geometry,
+                style: &self.tab.graphic_style,
+                point: self.tab.path_point,
+                phase: self.tab.orbital_phase,
+                flipped: self.tab.phase_flipped,
+                attach: self.tab.attach_symbols,
+                snap: self.tab.snap_orbitals,
+                bracket_sides: self.tab.bracket_sides,
+            },
+            arrows: ArrowOptions {
+                preset: self.tab.arrow_style,
+                style: &self.tab.arrows.style,
+                source: self.tab.arrow_source.as_ref(),
+                attach_targets: self.tab.arrows.attach_targets,
+            },
             doc: self.display_document(),
             selected: if self.tab.cleanup.is_some() || self.tab.inline_text.is_some() {
                 &[]

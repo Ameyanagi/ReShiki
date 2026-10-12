@@ -1,5 +1,6 @@
 //! Selection decorations in world coordinates, retained with the current scene.
-use super::{Camera, Document, Point, Rectangle, World, layered, rgb};
+use super::{Camera, Document, Point, Rectangle, World, layered};
+use crate::canvas::overlay::ACCENT;
 use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Size};
 use std::collections::{HashMap, HashSet};
@@ -108,7 +109,7 @@ impl Markers {
                         &Path::line(a, b),
                         Stroke::default()
                             .with_width(7. * scale)
-                            .with_color(Color::from_rgba8(19, 135, 116, 0.16)),
+                            .with_color(Color { a: 0.16, ..ACCENT }),
                     );
                 }
             }
@@ -125,7 +126,7 @@ impl Markers {
                         // compositing. The frame adapts it to the page once.
                         Color::from_rgb8(208, 241, 235)
                     } else {
-                        Color::from_rgba8(19, 135, 116, 0.12)
+                        Color { a: 0.12, ..ACCENT }
                     };
                     frame.fill(&circle, fill);
                 }
@@ -134,7 +135,7 @@ impl Markers {
                         &circle,
                         Stroke::default()
                             .with_width((if selected { 1.8 } else { 1.4 }) * scale.sqrt())
-                            .with_color(rgb([19, 135, 116])),
+                            .with_color(ACCENT),
                     );
                 }
             }

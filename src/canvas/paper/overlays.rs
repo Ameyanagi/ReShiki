@@ -1,16 +1,77 @@
 //! Editing aids drawn over the document: handles, notices and badges, gesture outlines and hover, the erase cursor, the selection box and tilt bounds.
 
 use crate::canvas::hit::{bond_target_with, hit_selection};
+use crate::canvas::overlay::{ACCENT, ACCENT_TINT, ARROW_SOURCE};
 use crate::canvas::{
-    Gesture, Handle, MoleculeCanvas, SelectionBox, State, Tool, World, layered, markers, rgb,
+    Gesture, Handle, MoleculeCanvas, SelectionBox, State, Tool, World, layered, markers, pick, rgb,
 };
 use iced::widget::canvas::{self, Path, Stroke};
-use iced::{Color, Point, Rectangle, Vector, mouse};
+use iced::{Color, Point, Rectangle, Vector, keyboard, mouse};
 use reshiki::document::Document;
-use reshiki::graphics::PathCommand;
+use reshiki::graphics::{GraphicKind, PathCommand};
 use std::ops::ControlFlow;
 
+enum HandleShape {
+    Circle(f32),
+    Square,
+    Diamond,
+}
+
+fn draw_handle(frame: &mut layered::Frame<'_>, point: Point, shape: HandleShape, chosen: bool) {
+    let path = match shape {
+        HandleShape::Circle(radius) => Path::circle(point, radius),
+        HandleShape::Square => {
+            Path::rectangle(point - Vector::new(4., 4.), iced::Size::new(8., 8.))
+        }
+        HandleShape::Diamond => Path::new(|builder| {
+            builder.move_to(point - Vector::new(0., 5.));
+            builder.line_to(point + Vector::new(5., 0.));
+            builder.line_to(point + Vector::new(0., 5.));
+            builder.line_to(point - Vector::new(5., 0.));
+            builder.close();
+        }),
+    };
+    frame.fill(
+        &path,
+        if chosen {
+            ACCENT
+        } else if matches!(shape, HandleShape::Square) {
+            ACCENT_TINT
+        } else {
+            Color::WHITE
+        },
+    );
+    frame.stroke(
+        &path,
+        Stroke::default()
+            .with_width(if chosen { 2. } else { 1.5 })
+            .with_color(ACCENT),
+    );
+}
+
+fn draw_direction_line(frame: &mut layered::Frame<'_>, from: Point, to: Point) {
+    frame.stroke(
+        &Path::line(from, to),
+        Stroke::default().with_width(1.).with_color(ACCENT),
+    );
+}
+
 impl MoleculeCanvas<'_> {
+    pub(super) fn scientific_drawing(
+        &self,
+        kind: GraphicKind,
+        modifiers: keyboard::Modifiers,
+    ) -> reshiki::scientific::Drawing {
+        reshiki::scientific::Drawing {
+            kind,
+            style: self.graphics.style.clone(),
+            phase: self.graphics.phase,
+            flipped: self.graphics.flipped,
+            attach: self.graphics.attach,
+            snap_orbitals: self.graphics.snap && !modifiers.alt(),
+        }
+    }
+
     pub(super) fn draw_arrow_targets(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -19,10 +80,10 @@ impl MoleculeCanvas<'_> {
         cursor: mouse::Cursor,
     ) {
         if self.tool != Tool::Arrow
-            || !self.attach_arrow_targets
+            || !self.arrows.attach_targets
             || state.modifiers.alt()
             || !matches!(
-                self.arrow_preset,
+                self.arrows.preset,
                 reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
             )
         {
@@ -36,12 +97,12 @@ impl MoleculeCanvas<'_> {
             reshiki::arrow_anchors::pick(
                 self.doc,
                 self.camera.world(p, bounds),
-                8. / self.camera.zoom,
+                self.camera.world_len(pick::ARROW_TARGET_PICK_PX),
             )
         });
         for (target, color, radius) in [
-            (self.arrow_source, rgb([38, 113, 208]), 10.),
-            (hovered.as_ref(), rgb([19, 135, 116]), 8.),
+            (self.arrows.source, ARROW_SOURCE, 10.),
+            (hovered.as_ref(), ACCENT, 8.),
         ] {
             if let Some((target, center)) =
                 target.and_then(|t| t.center(self.doc).map(|center| (t, center)))
@@ -104,23 +165,15 @@ impl MoleculeCanvas<'_> {
             }
             _ => return,
         };
-        let drawing = reshiki::scientific::Drawing {
-            kind,
-            style: self.graphic_style.clone(),
-            phase: self.orbital_phase,
-            flipped: self.phase_flipped,
-            attach: self.attach_symbols,
-            snap_orbitals: self.snap_orbitals && !state.modifiers.alt(),
-        };
-        if let Some(id) = drawing.orbital_target(self.doc, start, 10. / self.camera.zoom)
+        let drawing = self.scientific_drawing(kind, state.modifiers);
+        if let Some(id) =
+            drawing.orbital_target(self.doc, start, self.camera.world_len(pick::PICK_RADIUS_PX))
             && let Some(atom) = self.doc.atom(id)
         {
             let center = self.camera.screen(atom.position, bounds);
             frame.stroke(
                 &Path::circle(center, 8.),
-                Stroke::default()
-                    .with_width(1.5)
-                    .with_color(rgb([19, 135, 116])),
+                Stroke::default().with_width(1.5).with_color(ACCENT),
             );
         }
     }
@@ -134,9 +187,7 @@ impl MoleculeCanvas<'_> {
         // Editing aids stay out of the shared scene used by figure/Office export.
         for atom in reshiki::attachments::editor_markers(preview) {
             let center = self.camera.screen(atom.position, bounds);
-            let stroke = Stroke::default()
-                .with_width(1.2)
-                .with_color(rgb([19, 135, 116]));
+            let stroke = Stroke::default().with_width(1.2).with_color(ACCENT);
             frame.stroke(&Path::circle(center, 4.), stroke);
             for delta in [Vector::new(6., 0.), Vector::new(0., 6.)] {
                 frame.stroke(&Path::line(center - delta, center + delta), stroke);
@@ -147,9 +198,7 @@ impl MoleculeCanvas<'_> {
         {
             let a = self.camera.screen(a.position, bounds);
             let b = self.camera.screen(b.position, bounds);
-            let stroke = Stroke::default()
-                .with_width(1.5)
-                .with_color(rgb([19, 135, 116]));
+            let stroke = Stroke::default().with_width(1.5).with_color(ACCENT);
             frame.stroke(&Path::line(a, b), stroke);
             frame.stroke(
                 &Path::rectangle(a - Vector::new(4., 4.), iced::Size::new(8., 8.)),
@@ -172,46 +221,23 @@ impl MoleculeCanvas<'_> {
             for a in preview.arrows.iter().filter(|a| selected.contains(&a.id)) {
                 if let Some([departure, arrival]) = a.bezier_controls() {
                     for (endpoint, control) in [(a.start, departure), (a.end, arrival)] {
-                        frame.stroke(
-                            &Path::line(
-                                self.camera.screen(endpoint, bounds),
-                                self.camera.screen(control, bounds),
-                            ),
-                            Stroke::default()
-                                .with_width(1.)
-                                .with_color(rgb([19, 135, 116])),
+                        draw_direction_line(
+                            frame,
+                            self.camera.screen(endpoint, bounds),
+                            self.camera.screen(control, bounds),
                         );
                     }
                 }
                 for (i, p) in a.handles().into_iter().enumerate() {
                     let p = self.camera.screen(p, bounds);
-                    let path = if i >= 3 {
-                        Path::rectangle(p - Vector::new(4., 4.), iced::Size::new(8., 8.))
+                    let shape = if i >= 3 {
+                        HandleShape::Square
                     } else if i == 2 {
-                        Path::new(|builder| {
-                            builder.move_to(p - Vector::new(0., 5.));
-                            builder.line_to(p + Vector::new(5., 0.));
-                            builder.line_to(p + Vector::new(0., 5.));
-                            builder.line_to(p - Vector::new(5., 0.));
-                            builder.close();
-                        })
+                        HandleShape::Diamond
                     } else {
-                        Path::circle(p, 4.)
+                        HandleShape::Circle(4.)
                     };
-                    frame.fill(
-                        &path,
-                        if i >= 3 {
-                            rgb([225, 242, 237])
-                        } else {
-                            Color::WHITE
-                        },
-                    );
-                    frame.stroke(
-                        &path,
-                        Stroke::default()
-                            .with_width(1.5)
-                            .with_color(rgb([19, 135, 116])),
-                    );
+                    draw_handle(frame, p, shape, false);
                 }
             }
         }
@@ -231,11 +257,11 @@ impl MoleculeCanvas<'_> {
             frame.fill_rectangle(
                 position - Vector::new(5., 4.),
                 iced::Size::new((bounds.width - 18.).max(1.), 25.),
-                rgb(if valid {
-                    [225, 242, 237]
+                if valid {
+                    ACCENT_TINT
                 } else {
-                    [253, 235, 233]
-                }),
+                    rgb([253, 235, 233])
+                },
             );
             frame.fill_text(canvas::Text {
                 content,
@@ -305,14 +331,7 @@ impl MoleculeCanvas<'_> {
                         &Path::line(self.camera.screen(anchor, bounds), center),
                         Stroke::default().with_color(rgb([120, 170, 155])),
                     );
-                    let path = Path::circle(center, 4.);
-                    frame.fill(&path, Color::WHITE);
-                    frame.stroke(
-                        &path,
-                        Stroke::default()
-                            .with_width(1.5)
-                            .with_color(rgb([19, 135, 116])),
-                    );
+                    draw_handle(frame, center, HandleShape::Circle(4.), false);
                 }
             }
             for a in preview.atoms.iter().filter(|a| {
@@ -328,14 +347,7 @@ impl MoleculeCanvas<'_> {
                         &Path::line(self.camera.screen(a.position, bounds), center),
                         Stroke::default().with_color(rgb([120, 170, 155])),
                     );
-                    let path = Path::circle(center, 4.);
-                    frame.fill(&path, Color::WHITE);
-                    frame.stroke(
-                        &path,
-                        Stroke::default()
-                            .with_width(1.5)
-                            .with_color(rgb([19, 135, 116])),
-                    );
+                    draw_handle(frame, center, HandleShape::Circle(4.), false);
                 }
             }
             for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
@@ -345,14 +357,10 @@ impl MoleculeCanvas<'_> {
                         for command in graphic.commands() {
                             if let PathCommand::Cubic(a, b, end) = command {
                                 for (from, to) in [(anchor, a), (end, b)] {
-                                    frame.stroke(
-                                        &Path::line(
-                                            self.camera.screen(from, bounds),
-                                            self.camera.screen(to, bounds),
-                                        ),
-                                        Stroke::default()
-                                            .with_width(1.)
-                                            .with_color(rgb([19, 135, 116])),
+                                    draw_direction_line(
+                                        frame,
+                                        self.camera.screen(from, bounds),
+                                        self.camera.screen(to, bounds),
                                     );
                                 }
                                 anchor = end;
@@ -366,28 +374,13 @@ impl MoleculeCanvas<'_> {
                         .filter(|h| self.tool == Tool::EditPoints || h.node)
                     {
                         let point = self.camera.screen(handle.point, bounds);
-                        let path = if handle.node {
-                            Path::circle(point, 4.5)
+                        let shape = if handle.node {
+                            HandleShape::Circle(4.5)
                         } else {
-                            Path::rectangle(point - Vector::new(4., 4.), iced::Size::new(8., 8.))
+                            HandleShape::Square
                         };
-                        let chosen = self.graphic_point == Some((graphic.id, handle.index));
-                        frame.fill(
-                            &path,
-                            if chosen {
-                                rgb([19, 135, 116])
-                            } else if handle.node {
-                                Color::WHITE
-                            } else {
-                                rgb([225, 242, 237])
-                            },
-                        );
-                        frame.stroke(
-                            &path,
-                            Stroke::default()
-                                .with_width(if chosen { 2. } else { 1.5 })
-                                .with_color(rgb([19, 135, 116])),
-                        );
+                        let chosen = self.graphics.point == Some((graphic.id, handle.index));
+                        draw_handle(frame, point, shape, chosen);
                     }
                     continue;
                 }
@@ -396,13 +389,11 @@ impl MoleculeCanvas<'_> {
                 }
                 if graphic.kind == reshiki::graphics::GraphicKind::Arc {
                     for p in graphic.edit_points() {
-                        let path = Path::circle(self.camera.screen(p, bounds), 5.0);
-                        frame.fill(&path, Color::WHITE);
-                        frame.stroke(
-                            &path,
-                            Stroke::default()
-                                .with_width(1.5)
-                                .with_color(rgb([19, 135, 116])),
+                        draw_handle(
+                            frame,
+                            self.camera.screen(p, bounds),
+                            HandleShape::Circle(5.0),
+                            false,
                         );
                     }
                     continue;
@@ -412,12 +403,10 @@ impl MoleculeCanvas<'_> {
                     let points = c.points();
                     if let PathCommand::Cubic(a, b, end) = c {
                         for (from, to) in [(anchor, a), (b, end)] {
-                            frame.stroke(
-                                &Path::line(
-                                    self.camera.screen(from, bounds),
-                                    self.camera.screen(to, bounds),
-                                ),
-                                Stroke::default().with_color(rgb([19, 135, 116])),
+                            draw_direction_line(
+                                frame,
+                                self.camera.screen(from, bounds),
+                                self.camera.screen(to, bounds),
                             );
                         }
                         anchor = end;
@@ -425,13 +414,11 @@ impl MoleculeCanvas<'_> {
                         anchor = *p;
                     }
                     for p in points {
-                        let path = Path::circle(self.camera.screen(p, bounds), 4.0);
-                        frame.fill(&path, Color::WHITE);
-                        frame.stroke(
-                            &path,
-                            Stroke::default()
-                                .with_width(1.5)
-                                .with_color(rgb([19, 135, 116])),
+                        draw_handle(
+                            frame,
+                            self.camera.screen(p, bounds),
+                            HandleShape::Circle(4.0),
+                            false,
                         );
                     }
                 }
@@ -459,7 +446,7 @@ impl MoleculeCanvas<'_> {
                         .unwrap_or(*start);
                     let end = self.camera.world(p, bounds);
                     // A preview exists only during an actual drag, never while idle.
-                    if start.distance(end) < 3.0 / self.camera.zoom {
+                    if start.distance(end) < self.camera.world_len(pick::DRAG_SLOP_PX) {
                         return ControlFlow::Break(());
                     }
                     let end = if self.tool == Tool::Arrow {
@@ -480,9 +467,7 @@ impl MoleculeCanvas<'_> {
                             self.camera.screen(origin, bounds),
                             self.camera.screen(end, bounds),
                         ),
-                        Stroke::default()
-                            .with_width(2.0)
-                            .with_color(rgb([19, 135, 116])),
+                        Stroke::default().with_width(2.0).with_color(ACCENT),
                     );
                 }
                 Some(Gesture::Lasso { points }) => {
@@ -495,23 +480,24 @@ impl MoleculeCanvas<'_> {
                             b.line_to(p);
                             b.close();
                         });
-                        frame.fill(&path, Color::from_rgba8(19, 135, 116, 0.08));
-                        frame.stroke(&path, Stroke::default().with_color(rgb([19, 135, 116])));
+                        frame.fill(&path, Color { a: 0.08, ..ACCENT });
+                        frame.stroke(&path, Stroke::default().with_color(ACCENT));
                     }
                 }
                 Some(Gesture::Select { start }) => {
                     let a = self.camera.screen(*start, bounds);
                     let lo = Point::new(a.x.min(p.x), a.y.min(p.y));
                     let size = iced::Size::new((a.x - p.x).abs(), (a.y - p.y).abs());
-                    frame.fill_rectangle(lo, size, Color::from_rgba8(19, 135, 116, 0.08));
+                    frame.fill_rectangle(lo, size, Color { a: 0.08, ..ACCENT });
                     frame.stroke(
                         &Path::rectangle(lo, size),
-                        Stroke::default().with_color(rgb([19, 135, 116])),
+                        Stroke::default().with_color(ACCENT),
                     );
                 }
                 None if cursor.is_over(bounds) && self.tool != Tool::Erase => {
                     let point = self.camera.world(p, bounds);
-                    let mut hit = hit_selection(self.doc, point, 10.0 / self.camera.zoom);
+                    let mut hit =
+                        hit_selection(self.doc, point, self.camera.world_len(pick::PICK_RADIUS_PX));
                     if self.tool.selects() && hit.is_empty() {
                         hit = reshiki::editing::ring_at(self.doc, point).unwrap_or_default();
                     }
@@ -654,11 +640,11 @@ fn badge(
     frame.fill_rectangle(
         position - Vector::new(5., 4.),
         iced::Size::new(width, 24.),
-        rgb(if valid {
-            [225, 242, 237]
+        if valid {
+            ACCENT_TINT
         } else {
-            [253, 235, 233]
-        }),
+            rgb([253, 235, 233])
+        },
     );
     frame.fill_text(canvas::Text {
         content,

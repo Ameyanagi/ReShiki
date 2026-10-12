@@ -1,5 +1,5 @@
 use super::*;
-use crate::canvas::{Camera, Edit};
+use crate::canvas::{ArrowOptions, Edit, GraphicOptions};
 use iced::widget::canvas::Program;
 use iced::{Event, Size, mouse};
 use reshiki::{document::Document, editing::reference::Stretch};
@@ -9,42 +9,22 @@ fn canvas<'a>(
     arrow: &'a reshiki::arrows::ArrowStyle,
     graphic: &'a reshiki::graphics::GraphicStyle,
 ) -> MoleculeCanvas<'a> {
+    let base = crate::canvas::tests::chain_canvas(doc, crate::canvas::ChainMode::Straight);
     MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc,
-        element: "C",
-        selected: &[],
         tool: Tool::StretchBond {
             fixed: 1,
             moving: 2,
         },
-        camera: Camera::default(),
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
         template_connection: Default::default(),
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: arrow,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: graphic,
-        graphic_point: None,
-        bracket_sides: Default::default(),
+        arrows: ArrowOptions {
+            style: arrow,
+            ..base.arrows
+        },
+        graphics: GraphicOptions {
+            style: graphic,
+            ..base.graphics
+        },
+        ..base
     }
 }
 fn fixture() -> Document {

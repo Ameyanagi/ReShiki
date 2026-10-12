@@ -294,40 +294,12 @@ impl App {
     }
 
     fn compact_name_preview<'a>(&'a self, preview: &'a Preview) -> Element<'a, Message> {
-        let drawing: Element<'_, Edit> = canvas(preview::Preview(MoleculeCanvas {
-            nmr: None,
-            optimizer: None,
-            keyboard_target: None,
-            joining: None,
-            hidden_annotation: None,
-            bond_drawing: self.tab.bond_drawing,
-            chain_drawing: self.tab.chain_drawing,
-            doc: &preview.document,
-            element: "C",
-            selected: &preview.selected,
-            tool: Tool::Select,
-            camera: preview.camera,
-            grid: false,
-            guides: Default::default(),
-            smart_guides: false,
-            ring_size: 6,
-            aromatic_ring: false,
-            template_connection: Default::default(),
-            template: None,
-            arrow_preset: self.tab.arrow_style,
-            arrow_style: &self.tab.arrows.style,
-            arrow_source: None,
-            attach_arrow_targets: false,
-            orbital_phase: self.tab.orbital_phase,
-            phase_flipped: false,
-            attach_symbols: false,
-            snap_orbitals: false,
-            graphic_constrain: false,
-            graphic_arc: Default::default(),
-            graphic_style: &self.tab.graphic_style,
-            graphic_point: None,
-            bracket_sides: self.tab.bracket_sides,
-        }))
+        let drawing: Element<'_, Edit> = canvas(preview::Preview(MoleculeCanvas::preview(
+            &preview.document,
+            &preview.selected,
+            preview.camera,
+            self.name_preview_styles(),
+        )))
         .width(Length::Fill)
         .height(160)
         .into();

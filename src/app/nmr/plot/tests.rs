@@ -1,4 +1,5 @@
 use super::*;
+use iced::Color;
 use iced::advanced::{renderer::Headless, widget::operation};
 use reshiki::document::Document;
 

@@ -1,5 +1,6 @@
 //! One shared plan for pen previews and completed segments.
 use super::{MoleculeCanvas, World};
+use crate::canvas::pick::{DRAG_SLOP_PX, HANDLE_PICK_PX};
 use reshiki::{
     document::Document,
     graphics::{Graphic, GraphicKind, GraphicStyle},
@@ -83,7 +84,7 @@ pub(crate) fn apply(
 
 impl MoleculeCanvas<'_> {
     pub(super) fn pen_stroke(&self, start: World, end: World) -> Option<Stroke> {
-        let dragged = start.distance(end) >= 3. / self.camera.zoom;
+        let dragged = start.distance(end) >= self.camera.world_len(DRAG_SLOP_PX);
         let path = active(self.doc, self.selected);
         if path.is_none() && !dragged {
             return None;
@@ -91,9 +92,9 @@ impl MoleculeCanvas<'_> {
         let close = path.and_then(Graphic::path_handles).is_some_and(|handles| {
             let nodes: Vec<_> = handles.into_iter().filter(|h| h.node).collect();
             nodes.len() >= 3
-                && nodes
-                    .first()
-                    .is_some_and(|node| start.distance(node.point) < 8. / self.camera.zoom)
+                && nodes.first().is_some_and(|node| {
+                    start.distance(node.point) < self.camera.world_len(HANDLE_PICK_PX)
+                })
         });
         Some(Stroke {
             start,

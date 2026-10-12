@@ -270,8 +270,8 @@ async fn mechanism_attachment_92_native_renderer_uses_resolved_curve_and_clear_s
         let mut canvas = tests::chain_canvas(doc, ChainMode::Straight);
         canvas.camera = camera;
         canvas.tool = if pending { Tool::Arrow } else { Tool::Select };
-        canvas.arrow_preset = Preset::Curved;
-        canvas.arrow_source = pending.then_some(&source);
+        canvas.arrows.preset = Preset::Curved;
+        canvas.arrows.source = pending.then_some(&source);
         for geometry in canvas.draw(
             &State::default(),
             &renderer,

@@ -1,4 +1,5 @@
-use super::{Camera, World, rgb};
+use super::{Camera, World};
+use crate::canvas::overlay::ACCENT;
 use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Point, Rectangle, Size, mouse};
 use reshiki::{document::Document, editing, scene};
@@ -154,9 +155,7 @@ impl SelectionBox {
             }
             p.close();
         });
-        let stroke = Stroke::default()
-            .with_width(1.2)
-            .with_color(rgb([19, 135, 116]));
+        let stroke = Stroke::default().with_width(1.2).with_color(ACCENT);
         frame.stroke(&outline, stroke);
         for p in corners {
             let handle = Path::rectangle(Point::new(p.x - 4.0, p.y - 4.0), Size::new(8.0, 8.0));
@@ -180,7 +179,7 @@ impl SelectionBox {
         let handle = Path::circle(grip, 6.0);
         frame.fill(&handle, Color::WHITE);
         frame.stroke(&handle, stroke.with_width(1.8));
-        frame.fill(&Path::circle(grip, 2.0), rgb([19, 135, 116]));
+        frame.fill(&Path::circle(grip, 2.0), ACCENT);
     }
 }
 

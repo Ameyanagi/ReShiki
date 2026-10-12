@@ -1,6 +1,7 @@
 //! Drawing gestures that place new structure.
 use crate::app::{App, joining};
 use crate::canvas::Tool;
+use crate::canvas::pick::PICK_RADIUS_PX;
 use reshiki::document::{Document, Point};
 use reshiki::editing;
 use reshiki::graphics::Graphic;
@@ -19,7 +20,7 @@ impl App {
             points,
             source,
             target,
-            10.0 / self.tab.camera.zoom,
+            self.tab.camera.world_len(PICK_RADIUS_PX),
         ) {
             Ok((doc, ids)) => {
                 self.tab.doc = doc;
@@ -60,7 +61,7 @@ impl App {
                     start,
                     end,
                     constrain,
-                    10. / self.tab.camera.zoom,
+                    self.tab.camera.world_len(PICK_RADIUS_PX),
                 ) {
                     Ok(id) => self.tab.selected = vec![id],
                     Err(error) => {
@@ -105,7 +106,7 @@ impl App {
             match state.prepared.place_outcome(
                 anchor,
                 direction,
-                10. / self.tab.camera.zoom,
+                self.tab.camera.world_len(PICK_RADIUS_PX),
                 state.anchor,
                 state.mode,
             ) {
@@ -153,7 +154,7 @@ impl App {
             &self.tab.doc,
             anchor,
             direction,
-            10.0 / self.tab.camera.zoom,
+            self.tab.camera.world_len(PICK_RADIUS_PX),
             self.templates.anchor,
             self.templates.connection,
         ) {
@@ -187,7 +188,12 @@ impl App {
             alternate,
             connect,
         };
-        match drawing.place(&self.tab.doc, anchor, direction, 10. / self.tab.camera.zoom) {
+        match drawing.place(
+            &self.tab.doc,
+            anchor,
+            direction,
+            self.tab.camera.world_len(PICK_RADIUS_PX),
+        ) {
             Ok((doc, ids)) => {
                 self.tab.doc = doc;
                 self.tab.selected = ids;
@@ -213,7 +219,7 @@ impl App {
             anchor,
             size,
             aromatic,
-            10.0 / self.tab.camera.zoom,
+            self.tab.camera.world_len(PICK_RADIUS_PX),
             direction,
         ) {
             Ok(ids) => self.tab.selected = ids,

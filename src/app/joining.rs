@@ -1,5 +1,6 @@
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
+use crate::canvas::pick::PICK_RADIUS_PX;
 use crate::canvas::{TemplateAnchorPreview, Tool};
 use iced::widget::{column, container, row, text};
 use iced::{Element, Length, Task};
@@ -41,7 +42,7 @@ impl App {
                     && state.epoch == self.tab.file_epoch
                     && state.prepared.generic_rejection(
                         *point,
-                        10. / self.tab.camera.zoom,
+                        self.tab.camera.world_len(PICK_RADIUS_PX),
                         state.anchor,
                         state.mode,
                     )
@@ -204,7 +205,9 @@ impl App {
                                     .hover
                                     .filter(|(_, epoch)| *epoch == self.tab.file_epoch)
                                     .and_then(|(p, _)| {
-                                        prepared.fragment.nearest(p, 10. / self.tab.camera.zoom)
+                                        prepared
+                                            .fragment
+                                            .nearest(p, self.tab.camera.world_len(PICK_RADIUS_PX))
                                     })
                             })
                             .map(Anchor::Atom)

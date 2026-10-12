@@ -1,6 +1,7 @@
 //! Pointer releases: finish the active gesture as one edit.
 
 use crate::canvas::hit::{bond_target_with, hit_object, plane_endpoint, region_selection};
+use crate::canvas::pick::{CLICK_SLOP_PX, DRAG_SLOP_PX, HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::snapping::{arrow_endpoint, ring_gesture};
 use crate::canvas::{
     Edit, Gesture, HandleClick, MoleculeCanvas, State, Tool, TransformDrag, World,
@@ -65,7 +66,7 @@ impl MoleculeCanvas<'_> {
                     return Some(Action::publish(Edit::PenSegment(stroke)).and_capture());
                 }
                 if !inside
-                    || (start.distance(p) < 3.0 / self.camera.zoom
+                    || (start.distance(p) < self.camera.world_len(DRAG_SLOP_PX)
                         && !matches!(
                             self.tool,
                             Tool::Graphic(GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
@@ -73,13 +74,13 @@ impl MoleculeCanvas<'_> {
                 {
                     return Some(Action::request_redraw().and_capture());
                 }
-                let constrain = state.modifiers.shift() || self.graphic_constrain;
+                let constrain = state.modifiers.shift() || self.graphics.constrain;
                 if matches!(self.tool, Tool::Graphic(GraphicKind::Orbital(_))) {
                     Edit::Orbital(
                         start,
                         p,
                         constrain,
-                        self.snap_orbitals && !state.modifiers.alt(),
+                        self.graphics.snap && !state.modifiers.alt(),
                     )
                 } else {
                     Edit::Graphic(start, p, constrain)
@@ -129,7 +130,7 @@ impl MoleculeCanvas<'_> {
                 ControlFlow::Break(action) => return Some(action),
             },
             Gesture::StretchBond { start, plan } => {
-                if !inside || start.distance(p) < 1. / self.camera.zoom {
+                if !inside || start.distance(p) < self.camera.world_len(CLICK_SLOP_PX) {
                     return Some(Action::request_redraw().and_capture());
                 }
                 Edit::StretchBond {
@@ -185,7 +186,7 @@ impl MoleculeCanvas<'_> {
                 .iter()
                 .find(|a| a.id == id)
                 .and_then(|a| a.handles().get(index).copied())
-                .is_some_and(|handle| handle.distance(p) < 3. / self.camera.zoom)
+                .is_some_and(|handle| handle.distance(p) < self.camera.world_len(DRAG_SLOP_PX))
         {
             if index >= 3 {
                 return ControlFlow::Break(Action::request_redraw().and_capture());
@@ -272,7 +273,7 @@ impl MoleculeCanvas<'_> {
             start,
             p,
             attached || self.tool == Tool::Template || matches!(self.tool, Tool::RingPreset(_)),
-            10.0 / self.camera.zoom,
+            self.camera.world_len(PICK_RADIUS_PX),
         );
         ControlFlow::Continue(
             if let Some(size) = delocalized_ring_size(self.tool, self.ring_size, state.modifiers) {
@@ -304,11 +305,11 @@ impl MoleculeCanvas<'_> {
         if !inside {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        ControlFlow::Continue(if start.distance(p) < 3.0 / self.camera.zoom {
+        ControlFlow::Continue(if start.distance(p) < self.camera.world_len(DRAG_SLOP_PX) {
             if self.tool == Tool::Arrow
-                && self.attach_arrow_targets
+                && self.arrows.attach_targets
                 && matches!(
-                    self.arrow_preset,
+                    self.arrows.preset,
                     reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
                 )
             {
@@ -366,9 +367,10 @@ impl MoleculeCanvas<'_> {
         p: World,
         bounds: Rectangle,
     ) -> ControlFlow<Action<Edit>, Edit> {
-        ControlFlow::Continue(if start.distance(p) < 1.0 / self.camera.zoom {
+        let click_slop = self.camera.world_len(CLICK_SLOP_PX);
+        ControlFlow::Continue(if start.distance(p) < click_slop {
             if !state.modifiers.shift()
-                && let Some(label) = hit_object(self.doc, p, 8. / self.camera.zoom)
+                && let Some(label) = hit_object(self.doc, p, self.camera.world_len(HANDLE_PICK_PX))
                     .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id))
             {
                 let now = std::time::Instant::now();

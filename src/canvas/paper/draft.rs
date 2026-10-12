@@ -3,12 +3,9 @@
 use super::Draft;
 use crate::canvas::hit::region_selection;
 use crate::canvas::snapping::arrow_endpoint;
-use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, tilt};
+use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, pick, tilt};
 use iced::{Point, Rectangle};
 use reshiki::graphics::{Graphic, GraphicKind};
-
-#[cfg(test)]
-mod stretch_tests;
 
 impl MoleculeCanvas<'_> {
     pub(super) fn preview_tilt(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
@@ -60,7 +57,7 @@ impl MoleculeCanvas<'_> {
                         && let Ok((doc, id, _)) = crate::canvas::pen::apply(
                             self.doc,
                             self.selected,
-                            self.graphic_style,
+                            self.graphics.style,
                             stroke,
                         )
                     {
@@ -68,17 +65,13 @@ impl MoleculeCanvas<'_> {
                         *ring_selection = Some(vec![id]);
                     }
                 } else if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
-                    let drawing = reshiki::scientific::Drawing {
-                        kind,
-                        style: self.graphic_style.clone(),
-                        phase: self.orbital_phase,
-                        flipped: self.phase_flipped,
-                        attach: self.attach_symbols,
-                        snap_orbitals: self.snap_orbitals && !state.modifiers.alt(),
-                    };
+                    let drawing = self.scientific_drawing(kind, state.modifiers);
                     if matches!(kind, GraphicKind::Orbital(_)) {
-                        let target =
-                            drawing.orbital_target(self.doc, *start, 10. / self.camera.zoom);
+                        let target = drawing.orbital_target(
+                            self.doc,
+                            *start,
+                            self.camera.world_len(pick::PICK_RADIUS_PX),
+                        );
                         *template_notice = Some((
                             target.map_or_else(
                                 || "Orbital · Free node placement · Shift snaps angle".into(),
@@ -97,8 +90,8 @@ impl MoleculeCanvas<'_> {
                         preview.to_mut(),
                         *start,
                         end,
-                        state.modifiers.shift() || self.graphic_constrain,
-                        10. / self.camera.zoom,
+                        state.modifiers.shift() || self.graphics.constrain,
+                        self.camera.world_len(pick::PICK_RADIUS_PX),
                     ) {
                         *ring_selection = Some(vec![id]);
                     }
@@ -110,11 +103,11 @@ impl MoleculeCanvas<'_> {
                             kind,
                             *start,
                             end,
-                            self.graphic_style.clone(),
-                            self.bracket_sides,
-                            state.modifiers.shift() || self.graphic_constrain,
+                            self.graphics.style.clone(),
+                            self.graphics.bracket_sides,
+                            state.modifiers.shift() || self.graphics.constrain,
                         )
-                        .with_arc(self.graphic_arc),
+                        .with_arc(self.graphics.arc),
                     );
                     *ring_selection = Some(vec![id]);
                 }
@@ -141,7 +134,7 @@ impl MoleculeCanvas<'_> {
             }
             if let Some(Gesture::Draw { start, .. }) = &state.gesture
                 && self.tool == Tool::Arrow
-                && start.distance(end) >= 3.0 / self.camera.zoom
+                && start.distance(end) >= self.camera.world_len(pick::DRAG_SLOP_PX)
             {
                 let end = arrow_endpoint(
                     *start,
@@ -153,8 +146,8 @@ impl MoleculeCanvas<'_> {
                     id,
                     *start,
                     end,
-                    self.arrow_preset,
-                    self.arrow_style.clone(),
+                    self.arrows.preset,
+                    self.arrows.style.clone(),
                 ));
             }
             if let Some(Gesture::AtomIndicator { owner }) = &state.gesture
@@ -229,7 +222,7 @@ impl MoleculeCanvas<'_> {
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
             let (delta, guides) =
                 self.move_delta(state, ids, World::new(p.x - start.x, p.y - start.y), bounds);
-            if start.distance(p) < 1.0 / self.camera.zoom {
+            if start.distance(p) < self.camera.world_len(pick::CLICK_SLOP_PX) {
                 *ring_selection = Some(ids.clone());
             } else if self.copies(state.modifiers) {
                 let part = state.scene.borrow_mut().copy(self.doc, ids);
@@ -285,3 +278,6 @@ impl MoleculeCanvas<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod stretch_tests;

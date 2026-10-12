@@ -1,5 +1,6 @@
 //! Session-only NMR assignments. These labels never enter the chemical graph,
 //! persistent atom labels, the retained document scene or figure exports.
+use super::overlay::ACCENT;
 use super::{Camera, MoleculeCanvas, layered, rgb};
 use iced::widget::canvas::{Path, Stroke, Text};
 use iced::{Point, Rectangle, Size, Vector};
@@ -237,11 +238,7 @@ impl MoleculeCanvas<'_> {
         };
         for assignment in placements(preview, context, self.camera, bounds) {
             let selected = selected.contains(&assignment.atom_id);
-            let color = rgb(if selected {
-                [19, 105, 89]
-            } else {
-                [19, 135, 116]
-            });
+            let color = if selected { rgb([19, 105, 89]) } else { ACCENT };
             // Close labels need no callout. A displaced crowded label still
             // indicates its real atom or visible abbreviation anchor.
             if assignment.leader {

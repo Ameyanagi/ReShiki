@@ -1,12 +1,13 @@
 //! Chemical-shift sticks with atom-linked labels. Heights are deliberately
 //! uniform; the backend supplies shifts, not intensities or a spin simulation.
 use super::{Action, Message, Nucleus, Report, site_description};
+use crate::canvas::overlay::ACCENT;
 use iced::advanced::{
     Clipboard, Layout, Renderer as _, Shell, Widget, layout, mouse, renderer,
     widget::{Operation, Tree, tree},
 };
 use iced::widget::{button, responsive, text};
-use iced::{Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, touch};
+use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, touch};
 
 pub(super) const HEIGHT: f32 = 112.;
 const MARGIN: f32 = 16.;
@@ -228,10 +229,7 @@ pub(super) fn view<'a>(report: &'a Report, selected: &'a [u64]) -> Element<'a, M
 
 fn marker_style(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
-        let color = crate::appearance::color(
-            crate::appearance::is_dark(theme),
-            Color::from_rgb8(19, 135, 116),
-        );
+        let color = crate::appearance::color(crate::appearance::is_dark(theme), ACCENT);
         button::Style {
             text_color: color,
             background: matches!(status, button::Status::Hovered | button::Status::Pressed)
@@ -409,10 +407,7 @@ impl Widget<Message, Theme, Renderer> for Plot<'_> {
                         },
                         ..Default::default()
                     },
-                    crate::appearance::color(
-                        crate::appearance::is_dark(theme),
-                        Color::from_rgb8(19, 135, 116),
-                    ),
+                    crate::appearance::color(crate::appearance::is_dark(theme), ACCENT),
                 );
             }
             for index in 0..=4 {

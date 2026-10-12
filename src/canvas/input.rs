@@ -4,6 +4,7 @@ mod motion;
 mod press;
 mod release;
 
+use crate::canvas::pick::{HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::{Edit, Gesture, Handle, MoleculeCanvas, State, Tool, optimization};
 use iced::widget::canvas::Action;
 use iced::{Event, Point, Rectangle, mouse};
@@ -70,7 +71,7 @@ impl MoleculeCanvas<'_> {
                 if matches!(state.end_gesture(), Some(Gesture::Erase { .. })) {
                     return Some(Action::publish(Edit::EraseEnd));
                 }
-                if self.arrow_source.is_some() {
+                if self.arrows.source.is_some() {
                     Some(Action::publish(Edit::CancelArrowSource).and_capture())
                 } else {
                     Some(Action::request_redraw())
@@ -168,7 +169,7 @@ impl MoleculeCanvas<'_> {
                 && crate::canvas::hit::hit_selection(
                     self.doc,
                     self.camera.world(p, bounds),
-                    10. / self.camera.zoom,
+                    self.camera.world_len(PICK_RADIUS_PX),
                 )
                 .iter()
                 .any(|id| plan.ids.contains(id))
@@ -199,7 +200,7 @@ impl MoleculeCanvas<'_> {
                 .any(|a| {
                     a.handles()
                         .iter()
-                        .any(|q| q.distance(p) < 8. / self.camera.zoom)
+                        .any(|q| q.distance(p) < self.camera.world_len(HANDLE_PICK_PX))
                 })
             {
                 return mouse::Interaction::Grab;

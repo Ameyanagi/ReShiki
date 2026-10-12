@@ -1,5 +1,6 @@
 //! Two target clicks are one document edit; the source is tab-local UI state.
 use super::*;
+use crate::canvas::pick::{ARROW_TARGET_PICK_PX, PICK_RADIUS_PX};
 use reshiki::arrow_anchors;
 
 impl App {
@@ -10,7 +11,11 @@ impl App {
         {
             self.tab.arrow_source = None;
             let before = self.tab.doc.clone();
-            let hit = crate::canvas::hit_object(&self.tab.doc, p, 10. / self.tab.camera.zoom);
+            let hit = crate::canvas::hit_object(
+                &self.tab.doc,
+                p,
+                self.tab.camera.world_len(PICK_RADIUS_PX),
+            );
             if let Some(id) = hit.filter(|id| self.tab.doc.arrows.iter().any(|a| a.id == *id)) {
                 self.apply_arrow_tool(id);
             } else {
@@ -20,7 +25,11 @@ impl App {
             self.changed(before);
             return;
         }
-        let Some(target) = arrow_anchors::pick(&self.tab.doc, p, 8. / self.tab.camera.zoom) else {
+        let Some(target) = arrow_anchors::pick(
+            &self.tab.doc,
+            p,
+            self.tab.camera.world_len(ARROW_TARGET_PICK_PX),
+        ) else {
             self.error = true;
             self.status = "Choose an atom, a visible bond, or a positioned lone pair; Alt-click or turn off Attach targets for free placement".into();
             return;
