@@ -1,8 +1,8 @@
 //! Modal gates that run before message dispatch. Their order decides which modal surface wins.
 use super::{
-    App, InspectorTab, Message, atom_text, cleanup, color_popover, document_styles, import,
-    inline_text, joining, object_toolbar, optimization, pictures, printing, tabs, template_library,
-    theme_generator, updates, view_settings,
+    App, InspectorTab, Message, atom_text, cleanup, color_popover, document_styles, generic,
+    import, inline_text, joining, object_toolbar, optimization, pictures, printing, tabs,
+    template_library, theme_generator, updates, view_settings,
 };
 use crate::canvas::{self, Edit, Tool};
 use iced::Task;
@@ -60,6 +60,12 @@ impl App {
     }
 
     fn early_results_gate(&mut self, message: Message) -> Gate {
+        if let Message::Generic(generic::Action::Expanded { source, epoch, .. }) = &message
+            && self.generic_expansion_blocked()
+        {
+            self.discard_generic_expansion(*source, *epoch);
+            return Break(Task::none());
+        }
         if let Message::Autosaved(key, result) = message {
             return Break(self.autosaved(key, result));
         }

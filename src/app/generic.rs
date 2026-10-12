@@ -6,6 +6,10 @@ use reshiki::{
     document::Point,
     generic::{Limits, PreparedExpansion, RepeatPattern},
 };
+
+pub(super) const EXPANSION_DISCARDED: &str =
+    "Generic expansion was discarded because another edit was open; expand again";
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Expand,
@@ -33,6 +37,12 @@ impl Default for State {
         }
     }
 }
+#[cfg(test)]
+impl State {
+    pub(super) fn is_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+}
 impl std::fmt::Display for PatternChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self.0 {
@@ -45,6 +55,24 @@ impl std::fmt::Display for PatternChoice {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PatternChoice(RepeatPattern);
 impl App {
+    /// These are exactly the states whose later gates drop the expansion result.
+    pub(super) fn generic_expansion_blocked(&self) -> bool {
+        self.tab.atom_text.is_some()
+            || self.tab.cleanup.is_some()
+            || self.tab.optimization.is_some()
+            || self.updates.open
+            || self.updates.restarting
+            || self.exit.frozen()
+    }
+
+    pub(super) fn discard_generic_expansion(&mut self, source: TabId, epoch: u64) {
+        if self.generic.pending == Some((source, epoch)) {
+            self.generic.pending = None;
+            self.status = EXPANSION_DISCARDED.into();
+            self.error = false;
+        }
+    }
+
     pub(super) fn generic_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::RepeatLabel(label) => self.generic.label = label,

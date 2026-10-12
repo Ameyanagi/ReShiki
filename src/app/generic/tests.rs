@@ -18,6 +18,239 @@ fn prepared_document_for_test(prepared: PreparedExpansion) -> (Document, usize) 
     accepted.commit(&mut doc, &mut reshiki::document::History::default(), false);
     (doc, count)
 }
+
+fn pending_expansion() -> (App, Message) {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let carbon = app.tab.doc.add_atom("C", Point::default());
+    let choice = app.tab.doc.add_atom("*", Point::new(42., 0.));
+    app.tab.doc.add_bond(carbon, choice, 1, "plain");
+    app.tab.doc = reshiki::atom_text::apply(
+        &app.tab.doc,
+        choice,
+        "[Cl,Br]",
+        reshiki::atom_text::Mode::Auto,
+    )
+    .unwrap();
+    app.tab.selected = app.tab.doc.all_ids();
+    let task = app.update(Message::Generic(Action::Expand));
+    assert!(task.units() > 0);
+    let (source, epoch) = app.generic.pending.unwrap();
+    let result = expand_drawing(app.tab.doc.clone()).unwrap();
+    (
+        app,
+        Message::Generic(Action::Expanded {
+            source,
+            epoch,
+            result: Box::new(Ok(result)),
+        }),
+    )
+}
+
+fn open_optimization_preview(app: &mut App) {
+    use crate::app::optimization;
+    use reshiki::geometry::{Conformer, ForceField, Optimized, Point3};
+    use std::sync::Arc;
+    // Geometry preparation needs a concrete drawing; the expansion source stays behind it.
+    let _ = app.update(Message::New);
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.selected = vec![a];
+    let _ = app.update(Message::Optimization(optimization::Action::Begin));
+    let key = app.optimization_key_for_test().unwrap();
+    let optimized = Optimized {
+        conformer: Conformer {
+            positions: vec![
+                Point3::default(),
+                Point3 {
+                    x: 1.5,
+                    y: 0.,
+                    z: 0.4,
+                },
+            ],
+            original_atom_count: 2,
+            hydrogen_parents: vec![],
+        },
+        initial_energy: 2.,
+        energy: 1.,
+        gradient: None,
+        converged: true,
+        iterations: 20,
+        force_field: ForceField::Mmff94s,
+        diagnostics: vec![],
+    };
+    let _ = app.update(Message::Optimization(optimization::Action::WorkerDone(
+        key,
+        Ok(Arc::new(optimized)),
+    )));
+    assert!(app.tab.optimization.is_some());
+    assert!(app.optimization_canvas().unwrap().interactive);
+}
+
+#[test]
+fn update_discards_expansion_under_each_blocking_state_and_allows_retry() {
+    use crate::app::{CleanupPreview, atom_text, cleanup, optimization, tabs, template_library};
+    use reshiki::recovery::Recovery;
+    for modal in [
+        "atom text",
+        "cleanup",
+        "3D",
+        "updates",
+        "restarting",
+        "exit",
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let (mut app, completion) = pending_expansion();
+        let source = app.tab.id;
+        let source_document = app.tab.doc.clone();
+        match modal {
+            "atom text" => {
+                let _ = app.update(Message::AtomText(atom_text::Action::Begin(Some(
+                    app.tab.doc.atoms[0].id,
+                ))));
+            }
+            "cleanup" => {
+                app.tab.cleanup = Some(CleanupPreview {
+                    job: cleanup::CleanupJob {
+                        options: Default::default(),
+                        selection: vec![],
+                        serial: app.tab.cleanup_serial,
+                        epoch: app.tab.file_epoch,
+                    },
+                    warnings: vec![],
+                    document: app.tab.doc.clone(),
+                    analysis: None,
+                    revision: app.tab.revision,
+                    epoch: app.tab.file_epoch,
+                    original: false,
+                });
+            }
+            "3D" => open_optimization_preview(&mut app),
+            "updates" => app.updates.open = true,
+            "restarting" => app.updates.restarting = true,
+            "exit" => {
+                // A real pending library write holds exit and its failure cancels close.
+                let mut fragment = Document::default();
+                fragment.add_atom("O", Point::default());
+                app.templates.path = Some(directory.path().join("templates.json"));
+                app.templates.draft = Some(fragment);
+                app.templates.editing = true;
+                app.templates.name = "Hydroxyl".into();
+                let task = app.template_message(template_library::Action::SaveDetails);
+                assert!(task.units() > 0 && app.templates.pending());
+                app.tab.saved = app.tab.doc.clone();
+                app.tab.recovery = Some(Recovery::in_directory(directory.path()).unwrap());
+                let _ = app.update(Message::Close(iced::window::Id::unique()));
+            }
+            _ => unreachable!(),
+        }
+        assert!(app.generic_expansion_blocked(), "{modal}");
+        let tabs = app.strip().count();
+        let front = app.tab.id;
+        let before = app.tab.doc.clone();
+        app.error = true;
+        let _ = app.update(completion);
+        assert_eq!(app.strip().count(), tabs, "{modal}");
+        assert_eq!(app.tab.id, front, "{modal}");
+        assert_eq!(app.tab.doc, before, "{modal}");
+        assert_eq!(app.status, EXPANSION_DISCARDED, "{modal}");
+        assert!(!app.error, "{modal}");
+        assert!(app.generic.pending.is_none(), "{modal}");
+        assert!(app.tabs.deferred_results.is_empty(), "{modal}");
+        match modal {
+            "atom text" => {
+                assert!(app.tab.atom_text.is_some());
+                let _ = app.update(Message::AtomText(atom_text::Action::Cancel));
+            }
+            "cleanup" => {
+                assert!(app.tab.cleanup.is_some());
+                let _ = app.update(Message::Cleanup(cleanup::Action::Cancel));
+            }
+            "3D" => {
+                assert!(app.tab.optimization.is_some());
+                let _ = app.update(Message::Optimization(optimization::Action::Cancel));
+                let _ = app.update(Message::Tabs(tabs::Action::Select(source)));
+            }
+            "updates" => {
+                assert!(app.updates.open);
+                let _ = app.update(Message::Escape);
+            }
+            "restarting" => {
+                assert!(app.updates.restarting);
+                // A failed restart clears restarting through its ordinary result handler.
+                let _ = app.update(Message::Updates(crate::app::updates::Action::Restarted(
+                    Err("Controlled restart failure".into()),
+                )));
+                assert!(!app.updates.restarting);
+                assert!(app.updates.open);
+                let _ = app.update(Message::Escape);
+            }
+            "exit" => {
+                assert!(app.exit.frozen());
+                let _ = app.update(Message::Templates(template_library::Action::Finished(
+                    1,
+                    Err("Controlled library write failure".into()),
+                )));
+                assert!(!app.exit.frozen());
+            }
+            _ => unreachable!(),
+        }
+        assert!(!app.generic_expansion_blocked(), "{modal}");
+        assert_eq!(app.tab.id, source);
+        assert_eq!(app.tab.doc, source_document);
+        app.tab.selected = app.tab.doc.all_ids();
+        let task = app.update(Message::Generic(Action::Expand));
+        assert!(task.units() > 0, "{modal}: expand can start again");
+        assert_eq!(app.generic.pending, Some((source, app.tab.file_epoch)));
+    }
+}
+
+#[test]
+fn update_installs_one_expansion_tab_and_keeps_later_gate_side_effects() {
+    let (mut app, completion) = pending_expansion();
+    let source = app.tab.id;
+    let before = app.tab.doc.clone();
+    let count = app.strip().count();
+    app.style_menu = Some(crate::app::color_popover::Menu::Align);
+    app.tabs.menu = true;
+    app.imports.menu = true;
+    let _ = app.update(completion);
+    assert_eq!(app.strip().count(), count + 1);
+    assert_ne!(app.tab.id, source);
+    assert_eq!(app.tab.untitled_name, Some("Generic expansion"));
+    assert_eq!(app.tab.doc.atoms.len(), 4);
+    assert!(app.tab.doc.generic.is_empty());
+    assert_eq!(app.tabs.background[0].doc, before);
+    assert!(app.generic.pending.is_none());
+    assert_eq!(
+        app.status,
+        "Expanded 2 concrete structures in a new drawing"
+    );
+    assert!(!app.error);
+    assert!(app.style_menu.is_none());
+    assert!(!app.tabs.menu && !app.imports.menu);
+}
+
+#[test]
+fn blocked_stale_expansion_does_not_clear_newer_pending_or_change_status() {
+    let (mut app, _) = pending_expansion();
+    let (source, epoch) = app.generic.pending.unwrap();
+    app.updates.open = true;
+    app.status = "Keep the current status".into();
+    app.error = true;
+    let _ = app.update(Message::Generic(Action::Expanded {
+        source,
+        epoch: epoch.wrapping_add(1),
+        result: Box::new(Err("Stale completion".into())),
+    }));
+    assert_eq!(app.generic.pending, Some((source, epoch)));
+    assert_eq!(app.status, "Keep the current status");
+    assert!(app.error);
+    assert!(app.updates.open);
+    assert_eq!(app.strip().count(), 1);
+}
+
 #[test]
 fn generated_layout_preserves_manual_presentation_and_packs_ink_bounds() {
     use reshiki::atom_labels::{Carbons, HydrogenPosition, Number};

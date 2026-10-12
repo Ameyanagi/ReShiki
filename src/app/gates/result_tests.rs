@@ -503,6 +503,7 @@ enum Outcome {
     Handled,
     Dropped,
     Deferred,
+    Discarded,
 }
 
 fn open_modal(mut app: App, modal: Modal, directory: &tempfile::TempDir) -> App {
@@ -555,7 +556,7 @@ fn open_modal(mut app: App, modal: Modal, directory: &tempfile::TempDir) -> App 
 
 #[tokio::test]
 async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal() {
-    use Outcome::{Continue, Deferred, Dropped, Handled};
+    use Outcome::{Continue, Deferred, Discarded, Dropped, Handled};
     // Columns: no modal, atom text, cleanup, 3D optimization, updates, restarting, exit frozen.
     let rows = [
         (
@@ -573,12 +574,7 @@ async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal(
         (
             ResultRow::Generic,
             [
-                Continue, Dropped, // Dropped today; q-10 delivers it
-                Dropped, // Dropped today; q-10 delivers it
-                Dropped, // Dropped today; q-10 delivers it
-                Dropped, // Dropped today; q-10 delivers it
-                Dropped, // Dropped today; q-10 delivers it
-                Dropped, // Dropped today; q-10 delivers it
+                Continue, Discarded, Discarded, Discarded, Discarded, Discarded, Discarded,
             ],
         ),
         (
@@ -637,6 +633,12 @@ async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal(
                 Continue
             } else if app.tabs.deferred_results.len() > deferred {
                 Deferred
+            } else if matches!(row, ResultRow::Generic)
+                && !app.error
+                && app.status == generic::EXPANSION_DISCARDED
+                && !app.generic.is_pending()
+            {
+                Discarded
             } else if handled {
                 Handled
             } else {
@@ -691,7 +693,7 @@ async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal(
                     );
                 }
             }
-            // Retry APIs prove that a dropped Break did not quietly clear a pending job.
+            // Retry APIs distinguish a discarded completion from one still pending at the gate.
             let retry = match row {
                 ResultRow::NmrFinished => Some(app.nmr_action(nmr::Action::Predict(Nucleus::H1))),
                 ResultRow::Generic => Some(
@@ -707,11 +709,18 @@ async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal(
                 _ => None,
             };
             if let Some(task) = retry {
-                assert_eq!(
-                    task.units(),
-                    0,
-                    "{context}: completion remains pending at the gate"
-                );
+                if expected == Discarded {
+                    assert!(
+                        task.units() > 0,
+                        "{context}: discarded work can start again"
+                    );
+                } else {
+                    assert_eq!(
+                        task.units(),
+                        0,
+                        "{context}: completion remains pending at the gate"
+                    );
+                }
             }
         }
     }
