@@ -16,12 +16,23 @@ use std::{
 /// A parsed command line.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Command {
-    Help(Option<&'static CommandSpec>),
+    Help {
+        topic: Option<&'static CommandSpec>,
+        json: bool,
+    },
     Info,
+    Tools,
+    Schema(Schema),
     Convert(Convert),
     Render(Render),
     Compose(Compose),
     Analyze(Input),
+}
+
+/// A schema the CLI can print without a tool host.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Schema {
+    Proposal,
 }
 
 /// Where the input comes from.
@@ -94,6 +105,9 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "help" => help(rest),
         "info" if rest.is_empty() => Ok(Command::Info),
         "info" => Err("info takes no arguments".into()),
+        "tools" if rest.is_empty() => Ok(Command::Tools),
+        "tools" => Err("tools takes no arguments".into()),
+        "schema" => schema(&options(spec, rest)?),
         "convert" => convert(&options(spec, rest)?),
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
@@ -107,18 +121,60 @@ fn unknown_command(name: &str) -> String {
     format!("unknown command `{name}`; run `reshiki --cli help`")
 }
 
-/// `help [COMMAND]`.
+/// The usage message for an option `command` does not take: a file command's
+/// flag names the command; any other flag, such as help's --json, stays an
+/// unknown option there, as it was before another command took it.
+fn foreign_option(command: &str, token: &OsStr) -> String {
+    match commands::FILE_COMMANDS
+        .iter()
+        .flat_map(|command| command.options)
+        .find(|option| token == option.flag)
+    {
+        Some(known) => format!("{command} does not take {}", known.flag),
+        None => format!("unknown option `{}`", token.to_string_lossy()),
+    }
+}
+
+/// `help [--json] [COMMAND]`; without `--json`, keep the original grammar.
 fn help(rest: &[OsString]) -> Result<Command, String> {
-    let [topic] = rest else {
-        return if rest.is_empty() {
-            Ok(Command::Help(None))
+    let mut json = false;
+    let mut topics = Vec::new();
+    for token in rest {
+        if token == "--json" {
+            if json {
+                return Err("--json given more than once".into());
+            }
+            json = true;
+        } else {
+            topics.push(token);
+        }
+    }
+    let [topic] = topics.as_slice() else {
+        return if topics.is_empty() {
+            Ok(Command::Help { topic: None, json })
         } else {
             Err("help takes at most one command".into())
         };
     };
     let name = topic.to_string_lossy();
     let topic = commands::find(&name).ok_or_else(|| unknown_command(&name))?;
-    Ok(Command::Help(Some(topic)))
+    Ok(Command::Help {
+        topic: Some(topic),
+        json,
+    })
+}
+
+/// `schema NAME`; reuse the standard option and positional-input errors.
+fn schema(options: &Options) -> Result<Command, String> {
+    let name = options
+        .input
+        .as_ref()
+        .ok_or("schema needs a name: proposal")?
+        .to_string_lossy();
+    match name.as_ref() {
+        "proposal" => Ok(Command::Schema(Schema::Proposal)),
+        _ => Err(format!("unknown schema `{name}`; supported: proposal")),
+    }
 }
 
 /// The tokens after a command, each option at most once.
@@ -159,17 +215,10 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
             options.input = Some(token.clone());
             continue;
         }
-        let Some(known) = commands::COMMANDS
-            .iter()
-            .flat_map(|command| command.options)
-            .find(|option| token == option.flag)
-        else {
-            return Err(format!("unknown option `{}`", token.to_string_lossy()));
+        let Some(option) = spec.options.iter().find(|option| token == option.flag) else {
+            return Err(foreign_option(command, token));
         };
-        let name = known.flag;
-        let Some(option) = spec.options.iter().find(|option| option.flag == name) else {
-            return Err(format!("{command} does not take {name}"));
-        };
+        let name = option.flag;
         if seen.contains(&name) {
             return Err(format!("{name} given more than once"));
         }

@@ -18,6 +18,8 @@ Commands:
   compose  Lay out an assistant Proposal (JSON) and write it as a file
   analyze  Print molecular properties as one JSON line
   info     Print versions, limits and formats as one JSON line
+  tools    Print the agent tool catalog as one JSON line
+  schema   Print a JSON Schema: reshiki --cli schema proposal
   help     Show this help, or a command's help: reshiki --cli help <command>
 
 Options are allowed once each; -- ends the options.
@@ -124,6 +126,7 @@ default style, then writes the drawing as convert does.
 PROPOSAL is a JSON file, or - for standard input, of at most 16777216 bytes;
 its replace_ids must be empty. The Proposal schema and an example are at
 https://reshiki.com/developer/agent-reference/#proposal
+Run `reshiki --cli schema proposal` for the schema.
 
 Options:
   --to FORMAT  The output format: svg, pdf, png, cdxml, mol, smiles, inchi.
@@ -165,6 +168,29 @@ formats as one JSON line.
 
 grants and files describe the file tools of reshiki --mcp; the command line
 uses neither.
+```
+
+### reshiki --cli tools
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli tools
+
+Prints one JSON line with the experimental notice, the data-not-instructions
+rule, the guide URL and every operation tool reshiki --mcp serves, including
+its title, description, inputSchema and hints. The catalog is versioned by
+api.operation_api. Run `reshiki --cli help --json` for the commands as JSON.
+```
+
+### reshiki --cli schema
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli schema NAME
+
+NAME is proposal: the Proposal JSON Schema compose reads, the same schema
+reshiki --mcp publishes. It is printed as one JSON line without the
+experimental label, so it can be saved and used as a schema file.
 ```
 
 ### reshiki --cli help

@@ -7,6 +7,8 @@ Commands:
   compose  Lay out an assistant Proposal (JSON) and write it as a file
   analyze  Print molecular properties as one JSON line
   info     Print versions, limits and formats as one JSON line
+  tools    Print the agent tool catalog as one JSON line
+  schema   Print a JSON Schema: reshiki --cli schema proposal
   help     Show this help, or a command's help: reshiki --cli help <command>
 
 Options are allowed once each; -- ends the options.

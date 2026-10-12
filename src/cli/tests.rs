@@ -1,5 +1,5 @@
 use super::{
-    args::{Compose, Convert, Export, Input, Output, Render, Source, parse},
+    args::{Compose, Convert, Export, Input, Output, Render, Schema, Source, parse},
     *,
 };
 use reshiki_agent::ops::{
@@ -72,6 +72,8 @@ async fn help_describes_one_command() {
         ("compose", "Usage: reshiki --cli compose "),
         ("analyze", "Usage: reshiki --cli analyze "),
         ("info", "Usage: reshiki --cli info"),
+        ("tools", "Usage: reshiki --cli tools"),
+        ("schema", "Usage: reshiki --cli schema NAME"),
         ("help", "Usage: reshiki --cli <command> [options]"),
     ] {
         let (code, out, err) = call(&["help", topic]).await;
@@ -158,6 +160,151 @@ async fn info_takes_no_arguments() {
     assert_eq!(code, USAGE);
     assert!(out.is_empty());
     assert_eq!(err, "reshiki: info takes no arguments\n");
+}
+
+#[test]
+fn discovery_command_lines_parse() {
+    assert_eq!(parsed(&["tools"]), Ok(Command::Tools));
+    for tokens in [&["schema", "proposal"][..], &["schema", "--", "proposal"]] {
+        assert_eq!(parsed(tokens), Ok(Command::Schema(Schema::Proposal)));
+    }
+    for alias in ["help", "--help", "-h"] {
+        for (tokens, topic, json) in [
+            (vec![alias], None, false),
+            (vec![alias, "convert"], commands::find("convert"), false),
+            (vec![alias, "--json"], None, true),
+            (
+                vec![alias, "--json", "convert"],
+                commands::find("convert"),
+                true,
+            ),
+            (
+                vec![alias, "convert", "--json"],
+                commands::find("convert"),
+                true,
+            ),
+        ] {
+            assert_eq!(
+                parsed(&tokens),
+                Ok(Command::Help { topic, json }),
+                "{tokens:?}"
+            );
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn discovery_outputs_match_the_contract_goldens() {
+    let tools_golden = include_str!("../../tests/fixtures/agent-contract/cli-tools.json");
+    let help_golden = include_str!("../../tests/fixtures/agent-contract/cli-help.json");
+    let schema_golden = include_str!("../../tests/fixtures/agent-contract/proposal-schema.json");
+    for (tokens, golden) in [
+        (&["tools"][..], tools_golden),
+        (&["help", "--json"][..], help_golden),
+        (&["schema", "proposal"][..], schema_golden),
+    ] {
+        let (code, out, err) = call(tokens).await;
+        assert_eq!(code, SUCCESS, "{tokens:?}: {err}");
+        assert!(err.is_empty(), "{tokens:?}: {err}");
+        assert_help_golden(&out, golden, &tokens.join(" "));
+        let line = out.strip_suffix('\n').unwrap();
+        let value: Value = serde_json::from_str(line).unwrap();
+        assert_eq!(line, value.to_string(), "one minified JSON line");
+    }
+    let (_, out, _) = call(&["tools"]).await;
+    let tools: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(tools["tools"], reshiki_agent::ops::catalog::catalog_json());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn json_help_lists_every_command_and_option_in_order() {
+    let (_, out, _) = call(&["help", "--json"]).await;
+    let help: Value = serde_json::from_str(&out).unwrap();
+    let commands = help["commands"].as_array().unwrap();
+    let names: Vec<_> = commands
+        .iter()
+        .map(|command| command["name"].as_str().unwrap())
+        .collect();
+    let expected: Vec<_> = commands::COMMANDS.iter().map(|spec| spec.name).collect();
+    assert_eq!(names, expected);
+    let unique: std::collections::BTreeSet<_> = names.iter().collect();
+    assert_eq!(
+        unique.len(),
+        names.len(),
+        "each command appears exactly once"
+    );
+    for (command, spec) in commands.iter().zip(commands::COMMANDS) {
+        let options = command["options"].as_array().unwrap();
+        assert_eq!(options.len(), spec.options.len(), "{}", spec.name);
+        for (option, spec) in options.iter().zip(spec.options) {
+            assert_eq!(option["flag"], spec.flag);
+            assert_eq!(option["value"], json!(spec.value));
+            assert_eq!(
+                option["default"],
+                json!(spec.default.map(|default| default()))
+            );
+            assert_eq!(option["help"], spec.help);
+            assert_eq!(option["sets"], json!(spec.sets));
+            assert_eq!(option["equivalent"], json!(spec.equivalent));
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn json_help_for_one_command_preserves_the_other_fields() {
+    let (_, out, _) = call(&["help", "--json"]).await;
+    let mut full: Value = serde_json::from_str(&out).unwrap();
+    let convert = full["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|command| command["name"] == "convert")
+        .unwrap()
+        .clone();
+    full["commands"] = json!([convert]);
+    for tokens in [
+        &["help", "--json", "convert"][..],
+        &["help", "convert", "--json"],
+    ] {
+        let (code, out, err) = call(tokens).await;
+        assert_eq!(code, SUCCESS);
+        assert!(err.is_empty(), "{err}");
+        assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), full);
+    }
+}
+
+#[test]
+fn catalog_mappings_name_real_tool_arguments() {
+    let catalog = reshiki_agent::ops::catalog::catalog_json();
+    let tools = catalog.as_array().unwrap();
+    for spec in commands::COMMANDS {
+        for name in spec.tools {
+            assert!(tools.iter().any(|tool| tool["name"] == *name), "{name}");
+        }
+        let sets = spec
+            .operand
+            .and_then(|operand| operand.sets)
+            .into_iter()
+            .chain(spec.options.iter().filter_map(|option| option.sets));
+        let equivalents = spec.options.iter().filter_map(|option| option.equivalent);
+        for (mapping, called) in sets
+            .map(|mapping| (mapping, true))
+            .chain(equivalents.map(|mapping| (mapping, false)))
+        {
+            let (tool, argument) = mapping.split_once('.').unwrap();
+            assert_eq!(
+                spec.tools.contains(&tool),
+                called,
+                "{}: {mapping}",
+                spec.name
+            );
+            let tool = tools.iter().find(|entry| entry["name"] == tool).unwrap();
+            assert!(
+                tool["inputSchema"]["properties"].get(argument).is_some(),
+                "{mapping}"
+            );
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -406,6 +553,50 @@ async fn usage_errors_exit_2_before_any_work() {
         IMPORT_FORMATS.join(", ")
     );
     let cases: Vec<(&[&str], String)> = vec![
+        (&["tools", "x"], "tools takes no arguments".into()),
+        (&["tools", "--json"], "tools takes no arguments".into()),
+        (&["tools", "tools"], "tools takes no arguments".into()),
+        (&["schema"], "schema needs a name: proposal".into()),
+        (
+            &["schema", "x"],
+            "unknown schema `x`; supported: proposal".into(),
+        ),
+        (
+            &["schema", "proposal", "x"],
+            "schema takes one input; unexpected `x`".into(),
+        ),
+        (
+            &["schema", "proposal", "proposal"],
+            "schema takes one input; unexpected `proposal`".into(),
+        ),
+        (
+            &["schema", "--to", "svg"],
+            "schema does not take --to".into(),
+        ),
+        (&["schema", "--x"], "unknown option `--x`".into()),
+        (
+            &["help", "--json", "--json"],
+            "--json given more than once".into(),
+        ),
+        (
+            &["help", "--json", "a", "b"],
+            "help takes at most one command".into(),
+        ),
+        (
+            &["help", "--json", "x"],
+            "unknown command `x`; run `reshiki --cli help`".into(),
+        ),
+        (
+            &["help", "--to"],
+            "unknown command `--to`; run `reshiki --cli help`".into(),
+        ),
+        (
+            &["help", "--", "convert"],
+            "help takes at most one command".into(),
+        ),
+        // Flags only help takes stay unknown options to the file commands.
+        (&["convert", "--json"], "unknown option `--json`".into()),
+        (&["analyze", "--json"], "unknown option `--json`".into()),
         (
             &["convert"],
             "convert needs an input: a file, - for standard input, or --smiles TEXT".into(),
@@ -816,6 +1007,14 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
     (
         "info",
         include_str!("../../tests/fixtures/cli-help/info.txt"),
+    ),
+    (
+        "tools",
+        include_str!("../../tests/fixtures/cli-help/tools.txt"),
+    ),
+    (
+        "schema",
+        include_str!("../../tests/fixtures/cli-help/schema.txt"),
     ),
 ];
 

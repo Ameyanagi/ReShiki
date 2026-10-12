@@ -1,5 +1,5 @@
-//! `reshiki --cli convert`, `render`, `compose` and `analyze` through the
-//! real binary: the stdout/stderr and exit-code contract.
+//! `reshiki --cli` through the real binary: the stdout/stderr and exit-code
+//! contract.
 //!
 //! Every run has an empty data folder, a temporary working folder and a
 //! watchdog, and inherits RESHIKI_INCHI_HELPER as CI sets it
@@ -13,7 +13,7 @@ use tempfile::TempDir;
 
 /// Long enough for a debug build's first chemistry engine call on CI.
 const CONVERT: Duration = Duration::from_secs(120);
-/// A usage error exits before any work.
+/// Usage errors and discovery commands exit before any operation work.
 const USAGE: Duration = Duration::from_secs(30);
 
 fn cli(dir: &Path, args: &[&str]) -> Output {
@@ -58,6 +58,31 @@ fn with_ethanol() -> TempDir {
     let molfile = fs::read_to_string(dir.path().join("eth.mol")).expect("eth.mol");
     assert!(molfile.contains("M  END"), "{molfile}");
     dir
+}
+
+#[test]
+fn discovery_prints_one_json_line_quickly() {
+    let dir = tempfile::tempdir().expect("working folder");
+    for args in [
+        &["tools"][..],
+        &["help", "--json"][..],
+        &["schema", "proposal"][..],
+    ] {
+        let output = headless::run_cli(dir.path(), args, b"", USAGE);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{args:?}: {}",
+            text(&output.stderr)
+        );
+        assert!(output.stderr.is_empty(), "{args:?}: {:?}", output.stderr);
+        let stdout = String::from_utf8(output.stdout).expect("UTF-8 JSON");
+        let line = stdout.strip_suffix('\n').expect("one LF-terminated line");
+        assert!(!line.contains('\n'), "{args:?}: {stdout}");
+        let value: serde_json::Value = serde_json::from_str(line).expect("JSON line");
+        assert_eq!(line, value.to_string(), "{args:?}: minified JSON");
+        assert!(files(&dir).is_empty(), "{args:?} created a file");
+    }
 }
 
 #[test]

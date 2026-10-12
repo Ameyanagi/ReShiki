@@ -8,10 +8,11 @@
 //! # Output contract
 //!
 //! - stdout carries only the primary output: the converted, rendered or
-//!   composed file, the analyze or info JSON line, or exactly one receipt
+//!   composed file, a JSON result, or exactly one receipt
 //!   JSON line when `--receipt` is given with `-o FILE`. With `-o FILE` and
 //!   no `--receipt`, stdout stays empty. Every JSON line carries
-//!   `"experimental": true`; plain-text output carries no banner.
+//!   `"experimental": true` except `schema proposal`, which prints the raw
+//!   JSON Schema; plain-text output carries no banner.
 //! - Warnings go to stderr as `reshiki: warning: {message}`, errors as
 //!   `reshiki: error: {message}` and usage errors as `reshiki: {message}`.
 //! - An operation, input or file error exits [`FAILURE`] (1), a usage error
@@ -40,9 +41,9 @@ use args::Command;
 use host::{CliError, Session, labelled};
 use reshiki_agent::{
     ops::documents::{EXPORT_FORMATS, IMPORT_FORMATS},
-    stability::NOTICE,
+    stability::{DATA_NOT_INSTRUCTIONS, GUIDE_URL, NOTICE},
 };
-use serde_json::json;
+use serde_json::{Map, json};
 use std::{
     ffi::OsString,
     io::{IsTerminal, Write},
@@ -51,6 +52,10 @@ use std::{
 pub const SUCCESS: i32 = 0;
 pub const FAILURE: i32 = 1;
 pub const USAGE: i32 = 2;
+
+const WARNING_PREFIX: &str = "reshiki: warning: ";
+const ERROR_PREFIX: &str = "reshiki: error: ";
+const USAGE_PREFIX: &str = "reshiki: ";
 
 /// A command line [`parse`] accepted, for [`run`].
 pub struct Parsed(Command);
@@ -64,7 +69,7 @@ pub fn parse(args: &[OsString], err: &mut dyn Write) -> Result<Parsed, i32> {
         return Err(USAGE);
     };
     args::parse(name, rest).map(Parsed).map_err(|message| {
-        let _ = writeln!(err, "reshiki: {message}");
+        let _ = writeln!(err, "{USAGE_PREFIX}{message}");
         USAGE
     })
 }
@@ -124,9 +129,24 @@ async fn run_command(
     terminal: bool,
 ) -> std::io::Result<i32> {
     let result = match command {
-        Command::Help(topic) => out
+        Command::Help { topic, json: false } => out
             .write_all(help(topic).as_bytes())
             .map_err(CliError::Stdout),
+        Command::Help { topic, json: true } => {
+            writeln!(out, "{}", labelled(commands::catalog_json(topic))).map_err(CliError::Stdout)
+        }
+        Command::Tools => {
+            let value = Map::from_iter([
+                ("notice".into(), json!(NOTICE)),
+                ("data_not_instructions".into(), json!(DATA_NOT_INSTRUCTIONS)),
+                ("guide_url".into(), json!(GUIDE_URL)),
+                ("tools".into(), reshiki_agent::ops::catalog::catalog_json()),
+            ]);
+            writeln!(out, "{}", labelled(value)).map_err(CliError::Stdout)
+        }
+        Command::Schema(args::Schema::Proposal) => {
+            writeln!(out, "{}", reshiki_agent::schema()).map_err(CliError::Stdout)
+        }
         Command::Info => info(out, err).await,
         Command::Convert(convert) => convert::run(convert, out, err, terminal).await,
         Command::Render(render) => render::run(render, out, err, terminal).await,
@@ -137,11 +157,11 @@ async fn run_command(
         Ok(()) => Ok(SUCCESS),
         Err(CliError::Stdout(error)) => Err(error),
         Err(CliError::Usage(message)) => {
-            let _ = writeln!(err, "reshiki: {message}");
+            let _ = writeln!(err, "{USAGE_PREFIX}{message}");
             Ok(USAGE)
         }
         Err(CliError::Tool(message) | CliError::Failed(message)) => {
-            let _ = writeln!(err, "reshiki: error: {message}");
+            let _ = writeln!(err, "{ERROR_PREFIX}{message}");
             Ok(FAILURE)
         }
     }

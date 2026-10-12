@@ -39,6 +39,9 @@ Options:
   -h, --help              Show this help
 ";
 
+pub(super) const HEAP_MEANING: &str = "memory ceiling";
+pub(super) const HEAP_UNIT: &str = "MiB";
+
 /// The `Environment:` block of the `--cli` and `--mcp` help: what
 /// [`HEAP_VARIABLE`](heap::HEAP_VARIABLE) sets.
 pub(super) fn heap_environment_help() -> String {
@@ -46,7 +49,7 @@ pub(super) fn heap_environment_help() -> String {
     format!(
         "\
 Environment:
-  {HEAP_VARIABLE}  memory ceiling in MiB, {min}-{max}
+  {HEAP_VARIABLE}  {HEAP_MEANING} in {HEAP_UNIT}, {min}-{max}
 {indent}(default {DEFAULT_HEAP_MIB}); an invalid value exits {USAGE}
 ",
         min = HEAP_MIB.start(),

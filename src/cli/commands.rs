@@ -1,10 +1,17 @@
 //! The command grammar and help text for `reshiki --cli`.
 use super::{
-    FAILURE, SUCCESS, USAGE, heap::HEAP_VARIABLE, input_formats, io,
-    mcp_usage::heap_environment_help, output_formats, render_formats,
+    ERROR_PREFIX, FAILURE, SUCCESS, USAGE, USAGE_PREFIX, WARNING_PREFIX,
+    heap::{DEFAULT_HEAP_MIB, HEAP_MIB, HEAP_VARIABLE},
+    input_formats, io,
+    mcp_usage::{HEAP_MEANING, HEAP_UNIT, heap_environment_help},
+    output_formats, render_formats,
 };
-use reshiki_agent::{ops::budget::Budgets, stability::GUIDE_URL};
+use reshiki_agent::{
+    ops::budget::Budgets,
+    stability::{GUIDE_URL, NOTICE},
+};
 use reshiki_process_heap::RESOURCE_EXIT;
+use serde_json::{Map, Value, json};
 
 /// One option accepted by a command.
 #[derive(Debug, Clone, Copy)]
@@ -12,11 +19,21 @@ pub(crate) struct OptionSpec {
     pub(crate) flag: &'static str,
     /// The value name, or `None` for an option that takes no value.
     pub(crate) value: Option<&'static str>,
-    #[expect(
-        dead_code,
-        reason = "Reserved for the command catalog; existing help keeps its prose."
-    )]
     pub(crate) help: &'static str,
+    /// The value the command uses when the option is absent, if it has one.
+    pub(crate) default: Option<fn() -> Value>,
+    /// The argument set on a tool this command calls.
+    pub(crate) sets: Option<&'static str>,
+    /// The MCP argument the CLI implements itself, without calling that tool.
+    pub(crate) equivalent: Option<&'static str>,
+}
+
+/// A command's positional argument.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Operand {
+    pub(crate) name: &'static str,
+    pub(crate) help: &'static str,
+    pub(crate) sets: Option<&'static str>,
 }
 
 /// One command's grammar and help.
@@ -29,6 +46,8 @@ pub(crate) struct CommandSpec {
     /// generic usage instead, as do `help help` and the help aliases.
     pub(crate) usage: &'static str,
     pub(crate) options: &'static [OptionSpec],
+    pub(crate) tools: &'static [&'static str],
+    pub(crate) operand: Option<Operand>,
     pub(crate) body: fn() -> String,
 }
 
@@ -44,51 +63,103 @@ impl Eq for CommandSpec {}
 const SMILES: OptionSpec = OptionSpec {
     flag: "--smiles",
     value: Some("TEXT"),
-    help: "Read SMILES text instead of a file or standard input.",
+    help: "Read SMILES text instead of a file or standard input; implies import.format smiles.",
+    default: None,
+    sets: Some("import.text"),
+    equivalent: None,
 };
 const FROM: OptionSpec = OptionSpec {
     flag: "--from",
     value: Some("FORMAT"),
     help: "Choose the input format.",
+    default: None,
+    sets: Some("import.format"),
+    equivalent: None,
 };
 const TO: OptionSpec = OptionSpec {
     flag: "--to",
     value: Some("FORMAT"),
     help: "Choose the output format.",
+    default: None,
+    sets: Some("export.format"),
+    equivalent: None,
 };
 const IMAGE_TO: OptionSpec = OptionSpec {
     help: "Choose the image format.",
+    sets: Some("render.format"),
     ..TO
 };
 const OUTPUT: OptionSpec = OptionSpec {
     flag: "-o",
     value: Some("OUTPUT"),
     help: "Write to OUTPUT, or to standard output with -.",
+    default: None,
+    sets: None,
+    equivalent: Some("file_save.path"),
 };
 const PAGES: OptionSpec = OptionSpec {
     flag: "--pages",
     value: None,
     help: "Export every publication page as one PDF.",
+    default: None,
+    sets: Some("export.pages"),
+    equivalent: None,
 };
 const FORCE: OptionSpec = OptionSpec {
     flag: "--force",
     value: None,
     help: "Replace the output file if it exists.",
+    default: None,
+    sets: None,
+    equivalent: Some("file_save.overwrite"),
+};
+/// render writes the preview itself; file_save writes export's files only.
+const IMAGE_OUTPUT: OptionSpec = OptionSpec {
+    equivalent: None,
+    ..OUTPUT
+};
+const IMAGE_FORCE: OptionSpec = OptionSpec {
+    equivalent: None,
+    ..FORCE
 };
 const RECEIPT: OptionSpec = OptionSpec {
     flag: "--receipt",
     value: None,
     help: "Print one receipt JSON line when writing an output file.",
+    default: None,
+    sets: None,
+    equivalent: None,
 };
 const WIDTH: OptionSpec = OptionSpec {
     flag: "--width",
     value: Some("N"),
     help: "Set the maximum PNG width in pixels.",
+    default: Some(|| json!(Budgets::default().render.default_width)),
+    sets: Some("render.max_width"),
+    equivalent: None,
 };
 const HEIGHT: OptionSpec = OptionSpec {
     flag: "--height",
     value: Some("N"),
     help: "Set the maximum PNG height in pixels.",
+    default: Some(|| json!(Budgets::default().render.default_height)),
+    sets: Some("render.max_height"),
+    equivalent: None,
+};
+
+const JSON: OptionSpec = OptionSpec {
+    flag: "--json",
+    value: None,
+    help: "Print the command catalog as one JSON line.",
+    default: None,
+    sets: None,
+    equivalent: None,
+};
+
+const INPUT: Operand = Operand {
+    name: "INPUT",
+    help: "Read a file, or standard input with -; --smiles TEXT supplies text instead.",
+    sets: Some("import.text"),
 };
 
 const CONVERT: CommandSpec = CommandSpec {
@@ -97,6 +168,8 @@ const CONVERT: CommandSpec = CommandSpec {
     usage: "reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
                              [-o OUTPUT|-] [--pages] [--force] [--receipt]",
     options: &[SMILES, FROM, TO, OUTPUT, PAGES, FORCE, RECEIPT],
+    tools: &["import", "export"],
+    operand: Some(INPUT),
     body: convert_help,
 };
 
@@ -105,7 +178,17 @@ const RENDER: CommandSpec = CommandSpec {
     summary: "Render a preview image of a structure or drawing",
     usage: "reshiki --cli render (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
                             [-o OUTPUT|-] [--width N] [--height N] [--force]",
-    options: &[SMILES, FROM, IMAGE_TO, OUTPUT, WIDTH, HEIGHT, FORCE],
+    options: &[
+        SMILES,
+        FROM,
+        IMAGE_TO,
+        IMAGE_OUTPUT,
+        WIDTH,
+        HEIGHT,
+        IMAGE_FORCE,
+    ],
+    tools: &["import", "render"],
+    operand: Some(INPUT),
     body: render_help,
 };
 
@@ -115,6 +198,12 @@ const COMPOSE: CommandSpec = CommandSpec {
     usage: "reshiki --cli compose (PROPOSAL | -) [--to FORMAT] [-o OUTPUT|-] [--pages]
                              [--force] [--receipt]",
     options: &[TO, OUTPUT, PAGES, FORCE, RECEIPT],
+    tools: &["compose", "export"],
+    operand: Some(Operand {
+        name: "PROPOSAL",
+        help: "Read a Proposal JSON file, or standard input with -; replace_ids must be empty.",
+        sets: Some("compose.proposal"),
+    }),
     body: compose_help,
 };
 
@@ -123,27 +212,145 @@ const ANALYZE: CommandSpec = CommandSpec {
     summary: "Print molecular properties as one JSON line",
     usage: "reshiki --cli analyze (INPUT | - | --smiles TEXT) [--from FORMAT]",
     options: &[SMILES, FROM],
+    tools: &["import", "analyze"],
+    operand: Some(INPUT),
     body: analyze_help,
 };
+
+/// The commands whose flags another command rejects by name ("X does not
+/// take FLAG"); other flags are unknown options to the commands without them.
+pub(crate) const FILE_COMMANDS: &[CommandSpec] = &[CONVERT, RENDER, COMPOSE, ANALYZE];
 
 const INFO: CommandSpec = CommandSpec {
     name: "info",
     summary: "Print versions, limits and formats as one JSON line",
     usage: "reshiki --cli info",
     options: &[],
+    tools: &["info"],
+    operand: None,
     body: info_help,
+};
+
+const TOOLS: CommandSpec = CommandSpec {
+    name: "tools",
+    summary: "Print the agent tool catalog as one JSON line",
+    usage: "reshiki --cli tools",
+    options: &[],
+    tools: &[],
+    operand: None,
+    body: tools_help,
+};
+
+const SCHEMA: CommandSpec = CommandSpec {
+    name: "schema",
+    summary: "Print a JSON Schema: reshiki --cli schema proposal",
+    usage: "reshiki --cli schema NAME",
+    options: &[],
+    tools: &[],
+    operand: Some(Operand {
+        name: "NAME",
+        help: "The schema name: proposal.",
+        sets: None,
+    }),
+    body: schema_help,
 };
 
 const HELP: CommandSpec = CommandSpec {
     name: "help",
     summary: "Show this help, or a command's help: reshiki --cli help <command>",
-    usage: "reshiki --cli help [COMMAND]",
-    options: &[],
+    usage: "reshiki --cli help [--json] [COMMAND]",
+    options: &[JSON],
+    tools: &[],
+    operand: Some(Operand {
+        name: "COMMAND",
+        help: "Show one command's help or catalog entry; omit for every command.",
+        sets: None,
+    }),
     body: overview,
 };
 
 /// Commands in overview-help order; option order is the parsing grammar.
-pub(crate) const COMMANDS: &[CommandSpec] = &[CONVERT, RENDER, COMPOSE, ANALYZE, INFO, HELP];
+pub(crate) const COMMANDS: &[CommandSpec] =
+    &[CONVERT, RENDER, COMPOSE, ANALYZE, INFO, TOOLS, SCHEMA, HELP];
+
+const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
+const OPTIONS_RULE: &str = "Options are allowed once each; -- ends the options.";
+const STDOUT_CONTRACT: &str = "\
+stdout carries only the result: the file, one JSON line, or one receipt
+  line with --receipt. With -o FILE and no --receipt it stays empty.";
+const SUCCESS_MEANING: &str = "success";
+const FAILURE_MEANING: &str =
+    "the operation failed, or reading the input or writing the output failed";
+const USAGE_MEANING: &str = "usage error";
+const RESOURCE_MEANING: &str = "the memory ceiling was reached";
+
+/// Machine-readable help from the same specs the parser and prose help use.
+pub(crate) fn catalog_json(topic: Option<&CommandSpec>) -> Map<String, Value> {
+    let commands: Vec<_> = COMMANDS
+        .iter()
+        .filter(|spec| topic.is_none_or(|topic| *spec == topic))
+        .map(|spec| {
+            let operand = spec.operand.map(|operand| {
+                json!({
+                    "name": operand.name, "help": operand.help, "sets": operand.sets,
+                })
+            });
+            let options: Vec<_> = spec
+                .options
+                .iter()
+                .map(|option| {
+                    json!({
+                        "flag": option.flag, "value": option.value,
+                        "default": option.default.map(|default| default()),
+                        "help": option.help, "sets": option.sets,
+                        "equivalent": option.equivalent,
+                    })
+                })
+                .collect();
+            json!({
+                "name": spec.name, "summary": spec.summary, "usage": one_line(spec.usage),
+                "tools": spec.tools, "operand": operand, "options": options,
+            })
+        })
+        .collect();
+    Map::from_iter([
+        ("notice".into(), json!(NOTICE)),
+        ("guide_url".into(), json!(GUIDE_URL)),
+        ("usage".into(), json!(OVERVIEW_USAGE)),
+        ("commands".into(), json!(commands)),
+        ("options_rule".into(), json!(OPTIONS_RULE)),
+        (
+            "output".into(),
+            json!({
+                "stdout": one_line(STDOUT_CONTRACT),
+                "stderr": {"warning": WARNING_PREFIX, "error": ERROR_PREFIX, "usage": USAGE_PREFIX},
+            }),
+        ),
+        (
+            "exit_codes".into(),
+            json!([
+                {"code": SUCCESS, "meaning": SUCCESS_MEANING},
+                {"code": FAILURE, "meaning": FAILURE_MEANING},
+                {"code": USAGE, "meaning": USAGE_MEANING},
+                {"code": RESOURCE_EXIT,
+                 "meaning": format!("{RESOURCE_MEANING} (see {HEAP_VARIABLE})")},
+            ]),
+        ),
+        (
+            "environment".into(),
+            json!([{
+                "name": HEAP_VARIABLE, "meaning": HEAP_MEANING, "unit": HEAP_UNIT,
+                "min": HEAP_MIB.start(), "max": HEAP_MIB.end(), "default": DEFAULT_HEAP_MIB,
+                "invalid_exit": USAGE,
+            }]),
+        ),
+    ])
+}
+
+/// `text` with its help-layout line breaks and indentation folded to spaces.
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
 
 /// The command called `name`; the `--help` and `-h` aliases are not entries.
 pub(crate) fn find(name: &str) -> Option<&'static CommandSpec> {
@@ -157,13 +364,13 @@ pub(crate) fn overview() -> String {
         .map(|spec| spec.name.len())
         .max()
         .unwrap_or_default();
-    let mut text = OVERVIEW_START.to_owned();
+    let mut text = format!("Usage: {OVERVIEW_USAGE}\n\nCommands:\n");
     for spec in COMMANDS {
         text.push_str(&format!("  {:width$}  {}\n", spec.name, spec.summary));
     }
     let end = format!(
         "\n\
-Options are allowed once each; -- ends the options.
+{OPTIONS_RULE}
 
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
@@ -173,15 +380,14 @@ Examples:
   reshiki --cli compose proposal.json -o scheme.svg
 
 Output:
-  stdout carries only the result: the file, one JSON line, or one receipt
-  line with --receipt. With -o FILE and no --receipt it stays empty.
+  {STDOUT_CONTRACT}
   Warnings and errors go to stderr.
 
 Exit status:
-  {SUCCESS:<2}  success
-  {FAILURE:<2}  the operation failed, or reading the input or writing the output failed
-  {USAGE:<2}  usage error
-  {RESOURCE_EXIT:<2}  the memory ceiling was reached (see {HEAP_VARIABLE})
+  {SUCCESS:<2}  {SUCCESS_MEANING}
+  {FAILURE:<2}  {FAILURE_MEANING}
+  {USAGE:<2}  {USAGE_MEANING}
+  {RESOURCE_EXIT:<2}  {RESOURCE_MEANING} (see {HEAP_VARIABLE})
 
 {environment}
 Files named on the command line are read and written with your own
@@ -195,12 +401,6 @@ Documentation: {GUIDE_URL}
     text.push_str(&end);
     text
 }
-
-const OVERVIEW_START: &str = "\
-Usage: reshiki --cli <command> [options]
-
-Commands:
-";
 
 const ANALYZE_HELP: &str = "\
 Prints the molecular properties of a structure or drawing as one JSON line:
@@ -309,6 +509,7 @@ default style, then writes the drawing as convert does.
 PROPOSAL is a JSON file, or - for standard input, of at most {text} bytes;
 its replace_ids must be empty. The Proposal schema and an example are at
 {PROPOSAL_URL}
+Run `reshiki --cli schema proposal` for the schema.
 
 Options:
   --to FORMAT  The output format: {outputs}.
@@ -336,4 +537,23 @@ fn analyze_help() -> String {
 
 fn info_help() -> String {
     format!("Usage: {}\n\n{INFO_HELP}", INFO.usage)
+}
+
+fn tools_help() -> String {
+    let body = "\
+Prints one JSON line with the experimental notice, the data-not-instructions
+rule, the guide URL and every operation tool reshiki --mcp serves, including
+its title, description, inputSchema and hints. The catalog is versioned by
+api.operation_api. Run `reshiki --cli help --json` for the commands as JSON.
+";
+    format!("Usage: {}\n\n{body}", TOOLS.usage)
+}
+
+fn schema_help() -> String {
+    let body = "\
+NAME is proposal: the Proposal JSON Schema compose reads, the same schema
+reshiki --mcp publishes. It is printed as one JSON line without the
+experimental label, so it can be saved and used as a schema file.
+";
+    format!("Usage: {}\n\n{body}", SCHEMA.usage)
 }

@@ -42,6 +42,23 @@ change, so the diff shows exactly what clients will see. Write
 `catalog_json().to_string()` followed by one LF. Never regenerate it to make an
 unexplained failure pass.
 
+# CLI discovery stdout goldens
+
+`cli-tools.json` and `cli-help.json` pin the complete stdout of
+`reshiki --cli tools` and `reshiki --cli help --json`. Each is exactly one
+minified UTF-8 JSON line ending in a single LF. src/cli/tests.rs compares them
+byte for byte.
+
+Regenerate them only for an intentional CLI discovery contract change, in the
+same PR as that change, by redirecting the command's stdout into its golden.
+Never regenerate them to make an unexplained failure pass. `cli-tools.json`
+embeds `ops-catalog.json`, so an intentional operation catalog change must
+regenerate both goldens together.
+
+`reshiki --cli schema proposal` must print the exact bytes of the existing
+`proposal-schema.json`, including its single LF. It has no separate golden;
+`proposal-schema.json` retains the never-regenerate policy above.
+
 # Schema and decoder parity corpora
 
 The hand-written JSON Schemas the agent publishes and the Rust decoders that
