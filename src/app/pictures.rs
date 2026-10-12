@@ -41,13 +41,9 @@ impl Default for State {
     }
 }
 async fn choose_picture() -> Result<Option<Picture>, String> {
-    let mut extensions = vec!["png", "jpg", "jpeg", "tif", "tiff", "webp"];
-    if cfg!(windows) {
-        extensions.push("emf");
-    }
     let Some(file) = rfd::AsyncFileDialog::new()
         .set_title("Replace the picture")
-        .add_filter("Pictures", &extensions)
+        .add_filter("Pictures", reshiki::metafile::PICTURE_EXTENSIONS)
         .pick_file()
         .await
     else {
@@ -124,12 +120,8 @@ impl App {
         };
         let width = g.axis_x.distance(Point::default());
         let height = g.axis_y.distance(Point::default());
-        let scale = (width / picture.width() as f32).min(height / picture.height() as f32);
-        if let Err(error) = reshiki::pictures::resize(
-            g,
-            picture.width() as f32 * scale,
-            picture.height() as f32 * scale,
-        ) {
+        let (width, height) = picture.fit_within(width, height);
+        if let Err(error) = reshiki::pictures::resize(g, width, height) {
             self.error = true;
             self.status = error;
             return;
@@ -260,11 +252,7 @@ impl App {
                 };
                 let width = g.axis_x.distance(Point::default());
                 let height = g.axis_y.distance(Point::default());
-                let scale = (width / picture.width() as f32).min(height / picture.height() as f32);
-                self.resize_picture((
-                    picture.width() as f32 * scale,
-                    picture.height() as f32 * scale,
-                ));
+                self.resize_picture(picture.fit_within(width, height));
             }
         }
         Task::none()
@@ -294,7 +282,11 @@ impl App {
             if let Some(p) = &g.picture {
                 if p.emf().is_some() {
                     panel = panel.push(text("EMF vector picture").size(12));
-                    panel = panel.push(text("Windows EMF export keeps the original vectors. PNG, SVG, PDF and print use a preview.").size(11).style(muted_text));
+                    panel = panel.push(
+                        text(reshiki::metafile::EMF_PANEL_NOTICE)
+                            .size(11)
+                            .style(muted_text),
+                    );
                 }
                 panel = panel.push(
                     text(format!("{} × {} pixels", p.width(), p.height()))

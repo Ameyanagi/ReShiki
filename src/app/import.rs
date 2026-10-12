@@ -7,6 +7,7 @@ use iced::widget::{column, container, row, stack, text, text_editor, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Rectangle, Renderer, Task, Theme, mouse};
 use reshiki::document::{Document, Point};
 use reshiki::engine::{ChemistryEngine, LocalEngine, Request};
+use reshiki::metafile::PICTURE_EXTENSIONS as PICTURES;
 use reshiki::pictures::Picture;
 use std::path::{Path, PathBuf};
 
@@ -28,10 +29,6 @@ const STRUCTURES: [(&str, &str); 6] = [
     ("smi", "smiles"),
     ("smiles", "smiles"),
 ];
-#[cfg(not(windows))]
-const PICTURES: &[&str] = &["png", "jpg", "jpeg", "tif", "tiff", "webp"];
-#[cfg(windows)]
-const PICTURES: &[&str] = &["png", "jpg", "jpeg", "tif", "tiff", "webp", "emf"];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Example(&'static str, &'static str);
@@ -219,7 +216,7 @@ async fn read(engine: &LocalEngine, path: &Path) -> Result<(Document, Vec<String
         Kind::Picture => {
             let picture = reshiki::metafile::open(path).await?;
             let warnings = if picture.emf().is_some() {
-                vec!["EMF imported at physical size. Save .rsk or export EMF on Windows to retain vectors; other formats use a preview.".into()]
+                vec![reshiki::metafile::EMF_IMPORT_NOTICE.into()]
             } else {
                 vec![]
             };

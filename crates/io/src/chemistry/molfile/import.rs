@@ -1,17 +1,50 @@
 //! Drawing import policy, separate from the lossless MOL parser snapshot.
 use super::{Imported, ReadError};
-use crate::chemistry::{
-    document, hydrogens, sanitize,
-    stereo::{cip::label, perception},
+use crate::{
+    chemistry::{
+        document::{self, Molecule, WORLD_PER_DEPICT_UNIT},
+        hydrogens, sanitize,
+        stereo::{cip::label, perception},
+    },
+    document::Document,
+    engine::native_import::Error,
 };
 use std::collections::{BTreeMap, HashMap};
 
 impl Imported {
+    /// Build the display drawing and retain the imported molecular state unless
+    /// restoring Haworth conventions requires preparing the finished drawing.
+    pub(crate) fn display_document(self) -> Result<(Document, Molecule), Error> {
+        let imported = self.for_display()?;
+        let drawing = imported.drawing()?;
+        let labels = drawing.labels()?;
+        let mut document =
+            drawing.finish_with(labels, |document| imported.restore_xyz(document))?;
+        let restored = imported.restore_haworth(&mut document);
+        let molecule = if restored {
+            document::prepare(&document)?
+        } else {
+            imported.molecule
+        };
+        Ok((document, molecule))
+    }
+
     /// Fold ordinary terminal H only after file stereo has been assigned.
     /// The shared graph operation adjusts winding and double-bond controls;
     /// kept indices remap coordinates, stable IDs and file annotations together.
-    /// The raw parser result stays available and is never modified.
-    pub(crate) fn for_display(&self) -> Result<Self, ReadError> {
+    /// Callers can retain the raw parser snapshot before moving it here.
+    pub(crate) fn for_display(self) -> Result<Self, ReadError> {
+        let Some(protected) = self.foldable_hydrogens()? else {
+            return Ok(self);
+        };
+        let Some((removed, folded)) = self.fold(&protected)? else {
+            return Ok(self);
+        };
+        verify_folding(&self.molecule.state, &folded, &removed)?;
+        self.remap(folded, &removed)
+    }
+
+    fn foldable_hydrogens(&self) -> Result<Option<Vec<bool>>, ReadError> {
         document::validate_molecule(&self.molecule)
             .map_err(|error| ReadError::Chemistry(error.to_string()))?;
         let state = &self.molecule.state;
@@ -68,7 +101,7 @@ impl Imported {
                 let bond_meta = at(&state.metadata.bonds, *bond)?;
                 // A metal hydride or coordinate contact is not an ordinary
                 // implicit-H substituent, even when it is terminal and neutral.
-                matches!(parent_atom.atomic_number, 5..=9 | 14..=17 | 34..=35 | 53)
+                ordinary_hydride_parent(parent_atom.atomic_number)
                     && at(&state.graph.bonds, *bond)?.order == 1
                     && !bond_meta.unknown_stereo
                     && bond_meta.stereo == 0
@@ -97,9 +130,15 @@ impl Imported {
                     .ok_or_else(|| invalid("Missing protected MOL hydrogen"))? = true;
             }
         }
-        if !eligible {
-            return Ok(self.clone());
-        }
+        Ok(eligible.then_some(protected))
+    }
+
+    fn fold(
+        &self,
+        protected: &[bool],
+    ) -> Result<Option<(hydrogens::Removal, perception::State)>, ReadError> {
+        let state = &self.molecule.state;
+        let n = state.graph.atoms.len();
         let removed = hydrogens::remove(&hydrogens::Input {
             graph: state.graph.clone(),
             metadata: state.metadata.clone(),
@@ -116,7 +155,7 @@ impl Imported {
         })
         .map_err(|error| ReadError::Chemistry(error.to_string()))?;
         if removed.kept_atoms.len() == n {
-            return Ok(self.clone());
+            return Ok(None);
         }
         let sanitized = sanitize::sanitize(&removed.graph, &removed.metadata, &removed.directions)?;
         let mut properties = perception::Properties::unspecified(&sanitized.graph);
@@ -144,44 +183,28 @@ impl Imported {
             },
         )
         .map_err(ReadError::Chemistry)?;
-        // Verify composition/charge/radical inventory and full CIP descriptors
-        // independently of the removal operation's neighbor-parity updates.
-        if inventory(state)? != inventory(&folded)? {
-            return Err(invalid("MOL hydrogen folding changed chemical composition"));
-        }
-        let before = label::assign(state, &Default::default())
-            .map_err(|error| ReadError::Chemistry(error.to_string()))?
-            .state;
-        let after = label::assign(&folded, &Default::default())
-            .map_err(|error| ReadError::Chemistry(error.to_string()))?
-            .state;
-        for (new, &old) in removed.kept_atoms.iter().enumerate() {
-            if at(&before.properties.atoms, old)?.cip_code
-                != at(&after.properties.atoms, new)?.cip_code
-            {
-                return Err(invalid("MOL hydrogen folding changed atom stereochemistry"));
-            }
-        }
-        for (new, &old) in removed.kept_bonds.iter().enumerate() {
-            if at(&before.properties.bond_codes, old)? != at(&after.properties.bond_codes, new)? {
-                return Err(invalid("MOL hydrogen folding changed bond stereochemistry"));
-            }
-        }
-        let mut display = self.clone();
-        display.molecule.state = folded;
-        display.molecule.ids = select(&self.molecule.ids, &removed.kept_atoms)?;
-        display.molecule.positions = select(&self.molecule.positions, &removed.kept_atoms)?;
-        display.annotations.attachment_points =
+        Ok(Some((removed, folded)))
+    }
+
+    fn remap(
+        mut self,
+        folded: perception::State,
+        removed: &hydrogens::Removal,
+    ) -> Result<Self, ReadError> {
+        self.molecule.state = folded;
+        self.molecule.ids = select(&self.molecule.ids, &removed.kept_atoms)?;
+        self.molecule.positions = select(&self.molecule.positions, &removed.kept_atoms)?;
+        self.annotations.attachment_points =
             select(&self.annotations.attachment_points, &removed.kept_atoms)?;
-        display.annotations.dummy_labels =
+        self.annotations.dummy_labels =
             select(&self.annotations.dummy_labels, &removed.kept_atoms)?;
         if !self.annotations.chemdraw_directions.is_empty() {
-            display.annotations.chemdraw_directions =
+            self.annotations.chemdraw_directions =
                 select(&self.annotations.chemdraw_directions, &removed.kept_bonds)?;
         }
-        document::validate_molecule(&display.molecule)
+        document::validate_molecule(&self.molecule)
             .map_err(|error| ReadError::Chemistry(error.to_string()))?;
-        Ok(display)
+        Ok(self)
     }
 
     /// X/Y already use this single source-to-canvas factor. Retain Z with the
@@ -215,7 +238,7 @@ impl Imported {
                     "MOL XYZ identities changed".into(),
                 ));
             }
-            atom.depth = (position.z * 28.) as f32;
+            atom.depth = (position.z * WORLD_PER_DEPICT_UNIT) as f32;
         }
         // The molecular tags/controls were captured from the original XYZ.
         // A rotated or edge-on projection must not infer different chemistry.
@@ -238,23 +261,21 @@ impl Imported {
                     document::Error::Drawing("Missing MOL double-bond identity".into())
                 })?;
                 if bond.order == 2 {
-                    unknown_doubles.insert((a.min(b), a.max(b)));
+                    unknown_doubles.insert(bond_key(a, b));
                 } else {
-                    unknown_singles.insert((a.min(b), a.max(b)));
+                    unknown_singles.insert(bond_key(a, b));
                 }
             }
         }
         for bond in &mut document.bonds {
-            if bond.order == 1
-                && unknown_singles.contains(&(bond.a.min(bond.b), bond.a.max(bond.b)))
-            {
+            if bond.order == 1 && unknown_singles.contains(&bond_key(bond.a, bond.b)) {
                 bond.display = "wavy".into();
             }
             if bond.order == 2 {
                 // Full CIP labels encode E/Z only. Preserve explicit ANY in
                 // native chemical controls before projection disables the
                 // otherwise usable wavy-paint inference.
-                if unknown_doubles.contains(&(bond.a.min(bond.b), bond.a.max(bond.b))) {
+                if unknown_doubles.contains(&bond_key(bond.a, bond.b)) {
                     bond.stereo = Some("any".into());
                 }
                 bond.stereo_authoritative = true;
@@ -268,6 +289,44 @@ impl Imported {
         }
         Ok(())
     }
+}
+
+fn ordinary_hydride_parent(z: u8) -> bool {
+    matches!(z, 5..=9 | 14..=17 | 34..=35 | 53)
+}
+
+fn bond_key(a: u64, b: u64) -> (u64, u64) {
+    (a.min(b), a.max(b))
+}
+
+fn verify_folding(
+    before: &perception::State,
+    after: &perception::State,
+    removed: &hydrogens::Removal,
+) -> Result<(), ReadError> {
+    // Verify composition/charge/radical inventory and full CIP descriptors
+    // independently of the removal operation's neighbor-parity updates.
+    if inventory(before)? != inventory(after)? {
+        return Err(invalid("MOL hydrogen folding changed chemical composition"));
+    }
+    let before = label::assign(before, &Default::default())
+        .map_err(|error| ReadError::Chemistry(error.to_string()))?
+        .state;
+    let after = label::assign(after, &Default::default())
+        .map_err(|error| ReadError::Chemistry(error.to_string()))?
+        .state;
+    for (new, &old) in removed.kept_atoms.iter().enumerate() {
+        if at(&before.properties.atoms, old)?.cip_code != at(&after.properties.atoms, new)?.cip_code
+        {
+            return Err(invalid("MOL hydrogen folding changed atom stereochemistry"));
+        }
+    }
+    for (new, &old) in removed.kept_bonds.iter().enumerate() {
+        if at(&before.properties.bond_codes, old)? != at(&after.properties.bond_codes, new)? {
+            return Err(invalid("MOL hydrogen folding changed bond stereochemistry"));
+        }
+    }
+    Ok(())
 }
 
 fn invalid(message: &str) -> ReadError {

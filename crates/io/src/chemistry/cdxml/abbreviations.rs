@@ -1,6 +1,10 @@
 //! Explicit chemical abbreviation expansion, ported from
 //! reference/engine/abbreviations_exchange.py::flatten. All edits are to a detached tree.
-use super::{Error, Result, tree::Tree};
+use super::{
+    Error, Result,
+    tree::{Element, Tree},
+};
+use crate::exchange::external_connection_number;
 use serde::Serialize;
 use std::{
     borrow::Cow,
@@ -184,7 +188,8 @@ pub fn flatten_abbreviations(text: &str) -> Result<Flattened> {
 }
 pub(super) fn flatten_tree(mut tree: Tree) -> Result<Flattened> {
     let source = tree.descendants(0)?;
-    let before = chemical_count(&tree, &source)?;
+    let elements = validate_connection_numbers(&tree, &source)?;
+    let before = chemical_count(&elements);
     let wrappers = source
         .into_iter()
         .filter_map(|index| match wrapper(&tree, index) {
@@ -213,7 +218,9 @@ pub(super) fn flatten_tree(mut tree: Tree) -> Result<Flattened> {
         removed.0 += expanded.atoms;
         removed.1 += expanded.bonds;
     }
-    let after = chemical_count(&tree, &tree.descendants(0)?)?;
+    let descendants = tree.descendants(0)?;
+    let elements = validate_connection_numbers(&tree, &descendants)?;
+    let after = chemical_count(&elements);
     if (after.0 + removed.0, after.1 + removed.1) != before {
         return Err(Error::Unsupported("discarded abbreviation chemistry"));
     }
@@ -223,29 +230,31 @@ pub(super) fn flatten_tree(mut tree: Tree) -> Result<Flattened> {
     })
 }
 
-fn chemical_count(tree: &Tree, nodes: &[usize]) -> Result<(usize, usize)> {
-    let mut counts = (0usize, 0usize);
+fn validate_connection_numbers<'a>(tree: &'a Tree, nodes: &[usize]) -> Result<Vec<&'a Element>> {
+    // Reuse each checked node for counting: Tree::node spends work, so reading
+    // it again would change the established work-limit and error boundaries.
+    let mut elements = Vec::with_capacity(nodes.len());
     for &node in nodes {
         let element = tree.node(node)?;
         if let Some(number) = element.attr("ExternalConnectionNum") {
-            if element.tag != "n" || element.attr("NodeType") != Some("ExternalConnectionPoint") {
-                return Err(invalid(
-                    "ExternalConnectionNum requires an external connection point",
-                ));
-            }
-            if !number.trim().parse::<i8>().is_ok_and(|number| number > 0) {
-                return Err(invalid(
-                    "ExternalConnectionNum must be a positive signed byte",
-                ));
-            }
+            external_connection_number(&element.tag, element.attr("NodeType"), number)
+                .map_err(|message| invalid(&message))?;
         }
+        elements.push(element);
+    }
+    Ok(elements)
+}
+
+fn chemical_count(nodes: &[&Element]) -> (usize, usize) {
+    let mut counts = (0usize, 0usize);
+    for element in nodes {
         match element.tag.as_str() {
             "n" => counts.0 += 1,
             "b" => counts.1 += 1,
             _ => (),
         }
     }
-    Ok(counts)
+    counts
 }
 struct Expanded {
     abbreviation: Abbreviation,
@@ -386,10 +395,9 @@ fn definition_atoms(tree: &Tree, outer: usize, inner: usize) -> Result<Definitio
         if element.attr("NodeType") == Some("ExternalConnectionPoint") {
             connections.push(node);
             if let Some(number) = element.attr("ExternalConnectionNum") {
-                let number = number
-                    .trim()
-                    .parse::<i8>()
-                    .map_err(|_| invalid("Invalid external connection number"))?;
+                let number =
+                    external_connection_number(&element.tag, element.attr("NodeType"), number)
+                        .map_err(|_| invalid("Invalid external connection number"))?;
                 if !numbers.insert(number) {
                     return Err(invalid(
                         "Duplicate external connection numbers in abbreviation",

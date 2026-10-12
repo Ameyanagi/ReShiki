@@ -46,7 +46,7 @@ impl App {
             async {
                 let Some(file) = rfd::AsyncFileDialog::new()
                     .set_title("Attach a chemical drawing")
-                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "webp"])
+                    .add_filter("Images", reshiki::pictures::RASTER_EXTENSIONS)
                     .pick_file()
                     .await
                 else {

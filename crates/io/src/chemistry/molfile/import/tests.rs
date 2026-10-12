@@ -17,12 +17,6 @@ const ALKENE_V2: &str =
 const ALKENE_V3: &str =
     include_str!("../../../../../../tests/fixtures/mol-import-3d/alkene-3d-v3000.mol");
 
-fn drawing(imported: &Imported) -> anyhow::Result<Document> {
-    let draft = imported.drawing()?;
-    let labels = draft.labels()?;
-    Ok(draft.finish_with(labels, |document| imported.restore_xyz(document))?)
-}
-
 fn smiles(imported: &Imported) -> anyhow::Result<String> {
     Ok(smiles::write::write(&imported.molecule.state, Default::default())?.text)
 }
@@ -85,14 +79,14 @@ fn v2000_v3000_keep_xyz_and_fold_only_ordinary_hydrogens() -> anyhow::Result<()>
         let raw = molfile::read(text)?;
         let snapshot = serde_json::to_value(&raw)?;
         assert_eq!(raw.molecule.state.graph.atoms.len(), 20);
-        let imported = raw.for_display()?;
+        let imported = raw.clone().for_display()?;
         assert_eq!(imported.molecule.state.graph.atoms.len(), 6);
         assert_eq!(smiles(&imported)?, "CCCCCC");
         assert_eq!(
             inventory(&raw.molecule.state)?,
             inventory(&imported.molecule.state)?
         );
-        let document = drawing(&imported)?;
+        let document = raw.clone().display_document()?.0;
         assert!(document.atoms.iter().any(|atom| atom.depth != 0.));
         for ((atom, position), &id) in document
             .atoms
@@ -157,9 +151,10 @@ fn captured_chiral_and_alkene_stereo_survive_h_folding_and_edge_on_rotation() ->
             "F/C=C\\F",
         ),
     ] {
-        let imported = molfile::read(text)?.for_display()?;
+        let raw = molfile::read(text)?;
+        let imported = raw.clone().for_display()?;
         assert_eq!(smiles(&imported)?, expected);
-        let document = drawing(&imported)?;
+        let document = raw.display_document()?.0;
         let bytes = document.file_json().map_err(anyhow::Error::msg)?;
         let mut document = Document::from_json(&bytes).map_err(anyhow::Error::msg)?;
         for atom in &mut document.atoms {
@@ -206,7 +201,7 @@ fn mixed_ordinary_isotopic_and_unknown_h_keep_stable_stereo_and_ids() -> anyhow:
         include_str!("../../../../../../tests/fixtures/mol-import-3d/mixed-isotope-r-v3000.mol"),
     ] {
         let raw = molfile::read(text)?;
-        let imported = raw.for_display()?;
+        let imported = raw.clone().for_display()?;
         assert_eq!(raw.molecule.ids.len(), 5);
         assert_eq!(imported.molecule.ids.len(), 4);
         assert_eq!(smiles(&imported)?, "[2H][C@H](F)Cl");
@@ -228,7 +223,7 @@ fn mixed_ordinary_isotopic_and_unknown_h_keep_stable_stereo_and_ids() -> anyhow:
             imported.molecule.positions[isotope],
             raw.molecule.positions[old]
         );
-        let mut document = drawing(&imported)?;
+        let mut document = raw.display_document()?.0;
         let ids = document
             .atoms
             .iter()
@@ -248,9 +243,9 @@ fn mixed_ordinary_isotopic_and_unknown_h_keep_stable_stereo_and_ids() -> anyhow:
         include_str!("../../../../../../tests/fixtures/mol-import-3d/chiral-wavy-h-3d-v3000.mol"),
     ] {
         let raw = molfile::read(text)?;
-        let imported = raw.for_display()?;
+        let imported = raw.clone().for_display()?;
         assert_eq!(imported.molecule.ids, raw.molecule.ids);
-        let mut document = drawing(&imported)?;
+        let mut document = raw.display_document()?.0;
         let ids = document
             .atoms
             .iter()
@@ -297,12 +292,12 @@ fn essential_hydrogens_and_their_annotations_stay_visible() -> anyhow::Result<()
         include_str!("../../../../../../tests/fixtures/mol-import-3d/bridging-h.mol"),
     ] {
         let raw = molfile::read(text)?;
-        let imported = raw.for_display()?;
+        let imported = raw.clone().for_display()?;
         assert_eq!(
             serde_json::to_value(&imported)?,
             serde_json::to_value(&raw)?
         );
-        let document = drawing(&imported)?;
+        let document = raw.display_document()?.0;
         assert!(document.atoms.iter().any(|atom| atom.element == "H"));
     }
     // The source's ordinary chiral H becomes essential when it has a map or
@@ -316,7 +311,7 @@ fn essential_hydrogens_and_their_annotations_stay_visible() -> anyhow::Result<()
             raw.annotations.attachment_points[4] = Some(1);
         }
         assert_eq!(
-            serde_json::to_value(raw.for_display()?)?,
+            serde_json::to_value(raw.clone().for_display()?)?,
             serde_json::to_value(&raw)?
         );
     }
@@ -335,8 +330,7 @@ fn ordinary_2d_controls_keep_their_current_drawing() -> anyhow::Result<()> {
         let old = raw.drawing()?;
         let labels = old.labels()?;
         let old = old.finish(labels)?;
-        let imported = raw.for_display()?;
-        assert_eq!(drawing(&imported)?, old);
+        assert_eq!(raw.display_document()?.0, old);
     }
     Ok(())
 }
@@ -348,7 +342,10 @@ fn a_nonzero_z_is_retained_even_below_the_readers_stereo_threshold() -> anyhow::
     ))?;
     imported.molecule.positions[0].z = 0.000_01;
     assert!(!imported.annotations.is_3d);
-    let document = drawing(&imported)?;
+    // Exercise XYZ restoration on the raw parser snapshot, without display folding.
+    let draft = imported.drawing()?;
+    let labels = draft.labels()?;
+    let document = draft.finish_with(labels, |document| imported.restore_xyz(document))?;
     assert_eq!(document.atoms[0].depth, (0.000_01 * 28.) as f32);
     Ok(())
 }
@@ -371,9 +368,9 @@ fn explicit_unknown_double_stereo_survives_native_and_projected_interchange() ->
     ] {
         let raw = molfile::read(text)?;
         unknown(&raw.molecule.state);
-        let imported = raw.for_display()?;
+        let imported = raw.clone().for_display()?;
         unknown(&imported.molecule.state);
-        let document = drawing(&imported)?;
+        let document = raw.display_document()?.0;
         let bytes = document.file_json().map_err(anyhow::Error::msg)?;
         let mut document = Document::from_json(&bytes).map_err(anyhow::Error::msg)?;
         let ids = document

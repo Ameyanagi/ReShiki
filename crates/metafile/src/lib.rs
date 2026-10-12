@@ -16,6 +16,8 @@
     )
 )]
 
+// MAX_BYTES, MAX_PIXELS and MAX_SIDE are the picture limits for every format;
+// reshiki_model::pictures re-exports them.
 pub const MAX_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_RECORDS: usize = 100_000;
 pub const MAX_PIXELS: u64 = 16_000_000;
@@ -190,7 +192,7 @@ pub fn validate(bytes: &[u8]) -> Result<Dimensions, String> {
     Err("EMF has no end record".into())
 }
 
-/// A 1200 DPI portable preview, reduced uniformly to existing picture limits.
+/// A 1200 DPI portable preview, reduced uniformly to the shared picture limits.
 pub fn preview_size(d: Dimensions) -> (u32, u32) {
     let width = f64::from(d.width_pt) * 1200. / 72.;
     let height = f64::from(d.height_pt) * 1200. / 72.;

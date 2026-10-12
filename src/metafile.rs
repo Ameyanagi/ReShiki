@@ -2,6 +2,15 @@
 use crate::pictures::Picture;
 use std::path::Path;
 
+#[cfg(windows)]
+pub const PICTURE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "tif", "tiff", "webp", "emf"];
+#[cfg(not(windows))]
+pub const PICTURE_EXTENSIONS: &[&str] = crate::pictures::RASTER_EXTENSIONS;
+
+pub const EMF_IMPORT_NOTICE: &str = "EMF imported at physical size. Save .rsk or export EMF on Windows to retain vectors; other formats use a preview.";
+pub const EMF_PANEL_NOTICE: &str =
+    "Windows EMF export keeps the original vectors. PNG, SVG, PDF and print use a preview.";
+
 pub async fn open(path: &Path) -> Result<Picture, String> {
     #[cfg(windows)]
     if path
@@ -20,22 +29,15 @@ pub async fn open(path: &Path) -> Result<Picture, String> {
 async fn open_emf(path: &Path) -> Result<Picture, String> {
     use crate::workers::{CREATE_NO_WINDOW, EMF_IMPORT_WORKER};
     use reshiki_windows::PLAYBACK_LIMIT;
-    use std::{io::Read, process::Stdio};
+    use std::process::Stdio;
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         process::Command,
     };
     let path = path.to_owned();
     let bytes = tokio::task::spawn_blocking(move || {
-        let file = std::fs::File::open(path).map_err(|error| error.to_string())?;
-        let metadata = file.metadata().map_err(|error| error.to_string())?;
-        if !metadata.is_file() || metadata.len() > crate::pictures::MAX_BYTES as u64 {
-            return Err("Choose an EMF file no larger than 16 MB".into());
-        }
-        let mut bytes = Vec::new();
-        file.take(crate::pictures::MAX_BYTES as u64 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|error| error.to_string())?;
+        let bytes =
+            crate::pictures::read_bounded(&path, "Choose an EMF file no larger than 16 MB")?;
         // from_emf validates again when accepting the completed preview.
         crate::pictures::emf_dimensions(&bytes)?;
         Ok::<_, String>(bytes)
@@ -84,3 +86,6 @@ async fn open_emf(path: &Path) -> Result<Picture, String> {
         .await
         .map_err(|error| error.to_string())?
 }
+
+#[cfg(test)]
+mod tests;

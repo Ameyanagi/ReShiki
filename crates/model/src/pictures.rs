@@ -11,20 +11,19 @@ use iced_core::image::Handle;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
-    io::Cursor,
+    io::{Cursor, Read as _},
+    path::Path,
     sync::{Arc, OnceLock},
 };
 
-pub const MAX_BYTES: usize = 16 * 1024 * 1024;
-pub const MAX_PIXELS: u64 = 16_000_000;
 pub use reshiki_metafile::validate as emf_dimensions;
-const MAX_SIDE: u32 = 8192;
+pub use reshiki_metafile::{MAX_BYTES, MAX_PIXELS, MAX_SIDE};
 #[derive(Clone)]
 pub struct Picture(Arc<Data>);
 struct Data {
     png: Bytes,
     /// Original vector picture; PNG remains the portable viewing preview.
-    emf: Option<Bytes>,
+    emf: Option<(Bytes, reshiki_metafile::Dimensions)>,
     width: u32,
     height: u32,
     handle: Handle,
@@ -41,12 +40,12 @@ impl std::fmt::Debug for Picture {
 }
 impl PartialEq for Picture {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) || self.0.png == other.0.png && self.0.emf == other.0.emf
+        Arc::ptr_eq(&self.0, &other.0) || self.0.png == other.0.png && self.emf() == other.emf()
     }
 }
 impl Serialize for Picture {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if let Some(emf) = &self.0.emf {
+        if let Some((emf, _)) = &self.0.emf {
             StoredMetafile {
                 png: STANDARD.encode(&self.0.png),
                 emf: STANDARD.encode(emf),
@@ -68,21 +67,12 @@ impl<'de> Deserialize<'de> for Picture {
         let text = match Stored::deserialize(deserializer)? {
             Stored::Png(text) => text,
             Stored::Metafile(source) => {
-                let decode = |text: &str| {
-                    if text.len() > MAX_BYTES.div_ceil(3) * 4 {
-                        return Err("Picture exceeds 16 MB".to_owned());
-                    }
-                    STANDARD.decode(text).map_err(|error| error.to_string())
-                };
-                let png = decode(&source.png).map_err(serde::de::Error::custom)?;
-                let emf = decode(&source.emf).map_err(serde::de::Error::custom)?;
+                let png = decode_base64_limited(&source.png).map_err(serde::de::Error::custom)?;
+                let emf = decode_base64_limited(&source.emf).map_err(serde::de::Error::custom)?;
                 return Self::from_emf(&emf, &png).map_err(serde::de::Error::custom);
             }
         };
-        if text.len() > MAX_BYTES.div_ceil(3) * 4 {
-            return Err(serde::de::Error::custom("Picture exceeds 16 MB"));
-        }
-        let bytes = STANDARD.decode(text).map_err(serde::de::Error::custom)?;
+        let bytes = decode_base64_limited(&text).map_err(serde::de::Error::custom)?;
         let (decoded, format) = decode(&bytes).map_err(serde::de::Error::custom)?;
         if format != ImageFormat::Png {
             return Err(serde::de::Error::custom("Stored pictures must be PNG"));
@@ -96,9 +86,31 @@ struct StoredMetafile {
     png: String,
     emf: String,
 }
+fn decode_base64_limited(text: &str) -> Result<Vec<u8>, String> {
+    if text.len() > MAX_BYTES.div_ceil(3) * 4 {
+        return Err("Picture exceeds 16 MB".to_owned());
+    }
+    STANDARD.decode(text).map_err(|error| error.to_string())
+}
+
+/// Read a picture file with a bound on bytes consumed.
+pub fn read_bounded(path: &Path, too_large: &str) -> Result<Vec<u8>, String> {
+    let file = std::fs::File::open(path).map_err(|error| error.to_string())?;
+    let metadata = file.metadata().map_err(|error| error.to_string())?;
+    if !metadata.is_file() || metadata.len() > MAX_BYTES as u64 {
+        return Err(too_large.into());
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    Ok(bytes)
+}
+
 fn decode(bytes: &[u8]) -> Result<(DynamicImage, ImageFormat), String> {
     decode_limited(bytes, None, MAX_PIXELS)
 }
+pub const RASTER_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "tif", "tiff", "webp"];
 fn decode_limited(
     bytes: &[u8],
     expected: Option<ImageFormat>,
@@ -142,17 +154,8 @@ fn decode_limited(
     Ok((image, format))
 }
 impl Picture {
-    pub fn open(path: &std::path::Path) -> Result<Self, String> {
-        use std::io::Read as _;
-        let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-        let metadata = file.metadata().map_err(|e| e.to_string())?;
-        if !metadata.is_file() || metadata.len() > MAX_BYTES as u64 {
-            return Err("Choose a picture file no larger than 16 MB".into());
-        }
-        let mut bytes = Vec::new();
-        file.take(MAX_BYTES as u64 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|e| e.to_string())?;
+    pub fn open(path: &Path) -> Result<Self, String> {
+        let bytes = read_bounded(path, "Choose a picture file no larger than 16 MB")?;
         Self::import(&bytes)
     }
     fn stored(bytes: Vec<u8>, width: u32, height: u32) -> Self {
@@ -175,7 +178,7 @@ impl Picture {
     /// New EMF input is decoded by the isolated Windows worker; stored drawings
     /// can be reopened using their PNG preview on every platform.
     pub fn from_emf(emf: &[u8], png: &[u8]) -> Result<Self, String> {
-        reshiki_metafile::validate(emf)?;
+        let dimensions = reshiki_metafile::validate(emf)?;
         if emf.len().saturating_add(png.len()) > MAX_BYTES {
             return Err("EMF and its preview exceed the 16 MB picture storage limit".into());
         }
@@ -185,7 +188,7 @@ impl Picture {
         if emf.len().saturating_add(data.png.len()) > MAX_BYTES {
             return Err("EMF and its preview exceed the 16 MB picture storage limit".into());
         }
-        data.emf = Some(Bytes::from(emf.to_vec()));
+        data.emf = Some((Bytes::from(emf.to_vec()), dimensions));
         Ok(picture)
     }
     fn from_decoded(image: DynamicImage) -> Result<Self, String> {
@@ -211,10 +214,34 @@ impl Picture {
         &self.0.png
     }
     pub fn emf(&self) -> Option<&[u8]> {
-        self.0.emf.as_deref()
+        self.0.emf.as_ref().map(|(bytes, _)| &**bytes)
     }
     pub fn stored_bytes(&self) -> usize {
-        self.0.png.len() + self.0.emf.as_ref().map_or(0, |bytes| bytes.len())
+        self.0.png.len() + self.0.emf.as_ref().map_or(0, |(bytes, _)| bytes.len())
+    }
+    /// Original insertion dimensions in world units, including an EMF's physical frame.
+    pub fn intrinsic_size(&self) -> (f32, f32) {
+        // Start at 300 dpi, capped at 100 mm wide/tall; handles change size later.
+        let scale = (crate::style::DEFAULT.world(72. / 300.)).min(
+            crate::style::DEFAULT.world(100. * 72. / 25.4)
+                / (self.width().max(self.height()) as f32),
+        );
+        self.0
+            .emf
+            .as_ref()
+            .map(|(_, size)| {
+                (
+                    crate::style::DEFAULT.world(size.width_pt),
+                    crate::style::DEFAULT.world(size.height_pt),
+                )
+            })
+            .unwrap_or((self.width() as f32 * scale, self.height() as f32 * scale))
+    }
+    /// Fit the preview's pixel aspect ratio within these dimensions.
+    /// This uses preview pixels, including for pictures with retained EMF vectors.
+    pub fn fit_within(&self, width: f32, height: f32) -> (f32, f32) {
+        let scale = (width / self.width() as f32).min(height / self.height() as f32);
+        (self.width() as f32 * scale, self.height() as f32 * scale)
     }
     /// An opaque copy for consumers that may discard alpha. Composite before
     /// encoding RGB so transparent black backgrounds cannot swallow line art.
@@ -258,21 +285,7 @@ impl Picture {
             .cloned()
     }
     pub fn graphic(&self, id: u64, center: Point) -> Graphic {
-        // Start at 300 dpi, capped at 100 mm wide/tall; handles change size later.
-        let scale = (crate::style::DEFAULT.world(72. / 300.)).min(
-            crate::style::DEFAULT.world(100. * 72. / 25.4)
-                / (self.width().max(self.height()) as f32),
-        );
-        let (width, height) = self
-            .emf()
-            .and_then(|bytes| reshiki_metafile::validate(bytes).ok())
-            .map(|size| {
-                (
-                    crate::style::DEFAULT.world(size.width_pt),
-                    crate::style::DEFAULT.world(size.height_pt),
-                )
-            })
-            .unwrap_or((self.width() as f32 * scale, self.height() as f32 * scale));
+        let (width, height) = self.intrinsic_size();
         let mut graphic = Graphic::dragged(
             id,
             GraphicKind::Picture,
@@ -347,3 +360,6 @@ pub fn clipboard_document(bytes: &[u8]) -> Result<Document, String> {
     doc.validate()?;
     Ok(doc)
 }
+
+#[cfg(test)]
+mod tests;
