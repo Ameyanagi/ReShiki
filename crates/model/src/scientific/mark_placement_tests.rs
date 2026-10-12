@@ -189,3 +189,97 @@ fn a_hydrogen_above_or_beside_the_owner_does_not_pull_a_new_pair_away_from_the_h
         }
     }
 }
+
+#[test]
+fn first_click_pairs_avoid_view_occluded_bond_ink_at_positive_rear_opacity() {
+    use crate::scene::Primitive;
+
+    for kind in [SymbolKind::LonePair, SymbolKind::LonePairBar] {
+        let mut doc = Document::default();
+        let owner = doc.add_atom("O", p(0., 0.));
+        doc.atom_mut(owner).unwrap().depth = 40.;
+        let mut clear = doc.clone();
+        click(&mut clear, owner, kind);
+        let preferred = clear.atom(owner).unwrap().marks[0].clone();
+        let preferred_bounds = mark_bounds(&clear, owner, 0);
+        assert_eq!(preferred.offset.x, 0.);
+        assert!(
+            preferred.offset.y < 0.,
+            "The first preference must be above O"
+        );
+
+        // A closed tetrahedral cage supplies a real front face, with its
+        // outline well clear of the O label and its preferred top pair.
+        let cage: Vec<_> = [
+            (-60., -50., 20.),
+            (60., -50., 20.),
+            (0., 70., 20.),
+            (0., 20., -60.),
+        ]
+        .into_iter()
+        .map(|(x, y, z)| {
+            let id = doc.add_atom("C", p(x, y));
+            doc.atom_mut(id).unwrap().depth = z;
+            id
+        })
+        .collect();
+        for (i, &a) in cage.iter().enumerate() {
+            for &b in cage.iter().skip(i + 1) {
+                doc.add_bond(a, b, 1, "plain");
+            }
+        }
+        let rear_start = p(-18., preferred.offset.y);
+        let rear_end = p(18., preferred.offset.y);
+        let rear: Vec<_> = [rear_start, rear_end]
+            .into_iter()
+            .map(|position| {
+                let id = doc.add_atom("C", position);
+                doc.atom_mut(id).unwrap().depth = -20.;
+                id
+            })
+            .collect();
+        doc.add_bond(rear[0], rear[1], 1, "plain");
+        let half_width = doc.drawing_style.line_width() * 0.5;
+        let rear_bounds = (
+            rear_start.offset(-half_width, -half_width),
+            rear_end.offset(half_width, half_width),
+        );
+        assert_eq!(rectangle_gap(preferred_bounds, rear_bounds), 0.);
+
+        let mut positive_placement = None;
+        for alpha in [0., 0.25, 1.] {
+            let mut drawing = doc.clone();
+            crate::depth_appearance::set_rear_opacity(&mut drawing, &rear, alpha).unwrap();
+            let parts = crate::scene::primitives(&drawing);
+            if alpha == 0.25 {
+                assert!(
+                    parts.iter().any(|part| matches!(
+                        part,
+                        Primitive::Opacity { alpha: 0.25, primitive }
+                            if matches!(primitive.as_ref(), Primitive::Line(a, b, _)
+                                if *a == rear_start && *b == rear_end)
+                    )),
+                    "The relevant rear bond must emit actual 25% opacity ink"
+                );
+            }
+            click(&mut drawing, owner, kind);
+            let mark = &drawing.atom(owner).unwrap().marks[0];
+            let placement = (mark.offset, mark.angle);
+            if alpha == 0. {
+                assert_eq!(placement, (preferred.offset, preferred.angle));
+                assert_eq!(
+                    rectangle_gap(mark_bounds(&drawing, owner, 0), rear_bounds),
+                    0.
+                );
+            } else {
+                assert_ne!(placement, (preferred.offset, preferred.angle));
+                assert!(rectangle_gap(mark_bounds(&drawing, owner, 0), rear_bounds) > 0.2);
+                if let Some(previous) = positive_placement {
+                    assert_eq!(placement, previous);
+                }
+                positive_placement = Some(placement);
+            }
+            drawing.validate().unwrap();
+        }
+    }
+}

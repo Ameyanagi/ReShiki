@@ -49,31 +49,7 @@ pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, 
     chemistry.annotations.clear();
     let obstacles: Vec<_> = crate::scene::primitives(&chemistry)
         .into_iter()
-        .flat_map(|primitive| match primitive {
-            Primitive::Line(a, b, width) => vec![Obstacle {
-                points: vec![a, b],
-                width,
-                filled: false,
-            }],
-            Primitive::Polygon(points) => vec![Obstacle {
-                points,
-                width: 0.,
-                filled: true,
-            }],
-            Primitive::Path {
-                commands,
-                style,
-                filled,
-            } => flattened(&commands)
-                .into_iter()
-                .map(|points| Obstacle {
-                    points,
-                    width: style.width(),
-                    filled,
-                })
-                .collect(),
-            _ => Vec::new(),
-        })
+        .flat_map(primitive_obstacles)
         .collect();
     let candidates: Vec<_> = [(0., -1., 0.), (-1., 0., 90.), (0., 1., 0.), (1., 0., 90.)]
         .into_iter()
@@ -137,6 +113,35 @@ pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, 
     // Extremely crowded drawings retain a deterministic usable placement;
     // the user can still drag an exact offset or move the new mark afterward.
     fallback
+}
+
+fn primitive_obstacles(primitive: Primitive) -> Vec<Obstacle> {
+    match primitive {
+        Primitive::Opacity { alpha, primitive } if alpha > 0. => primitive_obstacles(*primitive),
+        Primitive::Line(a, b, width) => vec![Obstacle {
+            points: vec![a, b],
+            width,
+            filled: false,
+        }],
+        Primitive::Polygon(points) => vec![Obstacle {
+            points,
+            width: 0.,
+            filled: true,
+        }],
+        Primitive::Path {
+            commands,
+            style,
+            filled,
+        } => flattened(&commands)
+            .into_iter()
+            .map(|points| Obstacle {
+                points,
+                width: style.width(),
+                filled,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 fn new_mark_bounds(atom: &Atom, doc: &Document, kind: MarkKind, angle: f32) -> Box2 {
