@@ -299,9 +299,9 @@ pub(crate) fn primitives_with_opacity(
         // scientific symbols have independent geometry and are not text boxes.
         let boxes: Vec<_> = [a, b]
             .into_iter()
-            .filter(|atom| opacity.atom(atom.id) > 0. && atom_color(doc, atom).is_none())
             .filter(|atom| {
-                crate::atom_labels::visible(atom, doc) || doc.abbreviation(atom.id).is_some()
+                crate::scene::label_trims_bonds(atom, doc, Some(opacity))
+                    && atom_color(doc, atom).is_none()
             })
             .flat_map(|atom| crate::scene::atom_label_ink_boxes(atom, doc))
             .collect();

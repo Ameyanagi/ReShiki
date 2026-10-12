@@ -1,9 +1,14 @@
 use crate::document::{Atom, Bond, Document, Point};
 use crate::style::DEFAULT as STYLE;
+use charge_placement::{ChargeLayout, place_automatic_charge};
 use depth_field::{DepthField, bond_depth_field};
+pub(crate) use occlusion::{OcclusionSource, occlusion_ink};
 pub(crate) mod attachment_ink;
+mod charge_placement;
 pub(crate) mod depth_field;
+mod occlusion;
 pub(crate) mod projected_bonds;
+mod svg;
 
 #[derive(Debug, Clone)]
 pub enum Primitive {
@@ -30,6 +35,18 @@ pub enum Primitive {
 }
 fn visible(a: &Atom, doc: &Document) -> bool {
     crate::atom_labels::visible(a, doc)
+}
+
+/// Whether this atom's label ink trims its bonds: shown under rear opacity,
+/// with a visible element label or abbreviation. A charge beside an implicit
+/// carbon does not trim bonds.
+pub(crate) fn label_trims_bonds(
+    atom: &Atom,
+    doc: &Document,
+    opacity: Option<&crate::rear_opacity::Paint>,
+) -> bool {
+    opacity.is_none_or(|paint| paint.atom(atom.id) > 0.)
+        && (visible(atom, doc) || doc.abbreviation(atom.id).is_some())
 }
 
 pub fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
@@ -120,13 +137,6 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
     atom_label_runs_with_charge_layout(a, doc, ChargeLayout::Automatic)
 }
 
-#[derive(Clone, Copy)]
-enum ChargeLayout {
-    Automatic,
-    Unplaced,
-    Omitted,
-}
-
 fn atom_label_runs_with_charge_layout(
     a: &Atom,
     doc: &Document,
@@ -172,20 +182,19 @@ fn atom_label_runs_with_charge_layout(
     };
     let size = STYLE.world(style.size_pt);
     let small = size * 0.7;
+    let is_link = doc.generic.links.iter().any(|s| s.atom == a.id);
     let label = internal_group
         .map(|group| group.label.as_str())
         .or_else(|| {
             a.display
                 .variable
                 .as_deref()
-                .filter(|_| a.element == "*" || doc.generic.links.iter().any(|s| s.atom == a.id))
+                .filter(|_| a.element == "*" || is_link)
         })
         .unwrap_or(&a.element);
-    let condensed = (internal_group.is_some()
-        || a.element == "*"
-        || doc.generic.links.iter().any(|s| s.atom == a.id))
-    .then(|| crate::atom_labels::condensed_label(label))
-    .flatten();
+    let condensed = (internal_group.is_some() || a.element == "*" || is_link)
+        .then(|| crate::atom_labels::condensed_label(label))
+        .flatten();
     let label = condensed.map_or(label, |(core, _)| core);
     let element_width = text_width(label, size);
     let origin = a.position.offset(
@@ -223,7 +232,7 @@ fn atom_label_runs_with_charge_layout(
     if internal_group.is_some() {
         return cursor.runs;
     }
-    if !doc.generic.links.iter().any(|s| s.atom == a.id) {
+    if !is_link {
         push_hydrogens(a, doc, frame, &mut cursor, show_element);
     }
     push_isotope(a, frame, &mut cursor);
@@ -513,143 +522,6 @@ fn push_radicals(a: &Atom, frame: LabelFrame<'_>, cursor: &mut LabelCursor) {
     }
 }
 
-/// Keep the usual superscript unless its ink extends into an incident shaft.
-/// Charge and any automatic radical dots travel together; explicit marks and
-/// the chemical document are never moved. If no nearby raised slot clears the
-/// bonds and label ink, retain the original position and genuine bond clipping.
-fn place_automatic_charge(
-    a: &Atom,
-    doc: &Document,
-    frame: LabelFrame<'_>,
-    core: &[Primitive],
-    charge: &mut [Primitive],
-) {
-    let core_boxes = label_ink_boxes(core);
-    let charge_boxes = label_ink_boxes(charge);
-    let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
-    let neighbors: Vec<_> = doc
-        .bonds
-        .iter()
-        .filter(|b| (b.a == a.id || b.b == a.id) && doc.bond_visible(b.a, b.b))
-        .filter_map(|b| doc.atom(if b.a == a.id { b.b } else { b.a }))
-        .collect();
-    let rays: Vec<_> = neighbors
-        .iter()
-        .copied()
-        .filter_map(|other| {
-            let length = a.position.distance(other.position);
-            if length < 0.1 {
-                return None;
-            }
-            let ux = (other.position.x - a.position.x) / length;
-            let uy = (other.position.y - a.position.y) / length;
-            let end = label_end(a.position, ux, uy, &core_boxes, length, margin);
-            let trim = (end.x - a.position.x) * ux + (end.y - a.position.y) * uy;
-            let other_core = if visible(other, doc) || doc.abbreviation(other.id).is_some() {
-                label_ink_boxes(&atom_label_runs_with_charge_layout(
-                    other,
-                    doc,
-                    ChargeLayout::Omitted,
-                ))
-            } else {
-                vec![]
-            };
-            let other_end = label_end(other.position, -ux, -uy, &other_core, length, margin);
-            let other_trim =
-                (other.position.x - other_end.x) * ux + (other.position.y - other_end.y) * uy;
-            // Both endpoint cores participate in genuine bond clipping.
-            // Their jointly covered span has no shaft for charge to rescue.
-            (length - trim - other_trim > 0.1).then_some((ux, uy, length, trim))
-        })
-        .collect();
-    let blocks_shaft = |boxes: &[(Point, Point)]| {
-        rays.iter().any(|&(ux, uy, length, trim)| {
-            let end = label_end(a.position, ux, uy, boxes, length, margin);
-            (end.x - a.position.x) * ux + (end.y - a.position.y) * uy > trim + 0.1
-        })
-    };
-    if !blocks_shaft(&charge_boxes) {
-        return;
-    }
-    let extent = |boxes: &[(Point, Point)]| {
-        boxes.iter().copied().reduce(|(lo, hi), (a, b)| {
-            (
-                Point::new(lo.x.min(a.x), lo.y.min(a.y)),
-                Point::new(hi.x.max(b.x), hi.y.max(b.y)),
-            )
-        })
-    };
-    let (Some((core_lo, core_hi)), Some((charge_lo, charge_hi))) =
-        (extent(&core_boxes), extent(&charge_boxes))
-    else {
-        return;
-    };
-    let mut occupied = core_boxes;
-    let mut reserve_marks = |atom: &Atom| {
-        for part in crate::scientific::styled_mark_parts(atom, &doc.drawing_style) {
-            let points: Vec<_> = part
-                .commands
-                .iter()
-                .flat_map(crate::graphics::PathCommand::iter_points)
-                .map(|p| (p, p))
-                .collect();
-            if let Some((lo, hi)) = extent(&points) {
-                let pad = part.style.width() * 0.5;
-                occupied.push((lo.offset(-pad, -pad), hi.offset(pad, pad)));
-            }
-        }
-    };
-    reserve_marks(a);
-    // Even a core-covered bond's visible neighbor still paints its label and
-    // user-positioned marks; only its shaft constraint was discarded above.
-    for other in &neighbors {
-        reserve_marks(other);
-    }
-    for other in &neighbors {
-        // Unplaced neighbor runs avoid recursive charge/indicator placement.
-        occupied.extend(label_ink_boxes(&atom_label_runs_with_charge_layout(
-            other,
-            doc,
-            ChargeLayout::Unplaced,
-        )));
-    }
-    let gap = frame.size * 0.12;
-    let left = core_lo.x - gap - charge_hi.x;
-    let center = (core_lo.x + core_hi.x - charge_lo.x - charge_hi.x) * 0.5;
-    let mut best: Option<(f32, Point)> = None;
-    // At most 18 nearby slots. Raise rather than lowering a formal charge
-    // into a subscript position; ties prefer the familiar right-hand side.
-    for rise in 0..=5 {
-        for dx in [0., left, center] {
-            let offset = Point::new(dx, -(rise as f32) * frame.size * 0.25);
-            let boxes: Vec<_> = charge_boxes
-                .iter()
-                .map(|(lo, hi)| (lo.offset(offset.x, offset.y), hi.offset(offset.x, offset.y)))
-                .collect();
-            if blocks_shaft(&boxes)
-                || boxes.iter().any(|(lo, hi)| {
-                    occupied.iter().any(|(a, b)| {
-                        hi.x > a.x - gap && lo.x < b.x + gap && hi.y > a.y - gap && lo.y < b.y + gap
-                    })
-                })
-            {
-                continue;
-            }
-            let distance = offset.x * offset.x + offset.y * offset.y;
-            if best.is_none_or(|(previous, _)| distance < previous) {
-                best = Some((distance, offset));
-            }
-        }
-    }
-    if let Some((_, offset)) = best {
-        for run in charge {
-            if let Primitive::Text { position, .. } = run {
-                *position = position.offset(offset.x, offset.y);
-            }
-        }
-    }
-}
-
 /// Stack using actual glyph ink, including subscripts, so H₂/Cl₂ clear the core.
 /// A stacked appendage shares the core's left edge; its subscript is not centered
 /// over the attachment point. Bond clipping consumes these same positioned runs.
@@ -842,25 +714,53 @@ pub(crate) fn bond_segment(
         return None;
     }
     let (a, b) = doc.atom(bond.a).zip(doc.atom(bond.b))?;
-    let length = a.position.distance(b.position);
-    if length < 0.1 {
-        return None;
-    }
-    let ux = (b.position.x - a.position.x) / length;
-    let uy = (b.position.y - a.position.y) / length;
     let boxes = |a: &Atom| {
-        if opacity.is_none_or(|paint| paint.atom(a.id) > 0.)
-            && (visible(a, doc) || doc.abbreviation(a.id).is_some())
-        {
+        if label_trims_bonds(a, doc, opacity) {
             atom_label_ink_boxes(a, doc)
         } else {
             vec![]
         }
     };
     let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
-    let start = label_end(a.position, ux, uy, &boxes(a), length, margin);
-    let end = label_end(b.position, -ux, -uy, &boxes(b), length, margin);
-    (((end.x - start.x) * ux + (end.y - start.y) * uy) > 0.1).then_some((start, end))
+    let span = trimmed_span(a.position, b.position, &boxes(a), &boxes(b), margin)?;
+    // Unlike bond_frame, picking rejects a NaN visible span.
+    (span.along > 0.1).then_some((span.start, span.end))
+}
+
+/// A label-trimmed segment: its ends, unit direction and visible length.
+struct TrimmedSpan {
+    start: Point,
+    end: Point,
+    ux: f32,
+    uy: f32,
+    along: f32,
+}
+
+/// Shared trimming arithmetic. Each caller keeps its own visible-span test:
+/// bond_frame's `<= 0.1` and bond_segment's `> 0.1` differ for NaN.
+fn trimmed_span(
+    a: Point,
+    z: Point,
+    a_boxes: &[(Point, Point)],
+    z_boxes: &[(Point, Point)],
+    margin: f32,
+) -> Option<TrimmedSpan> {
+    let length = a.distance(z);
+    if length < 0.1 {
+        return None;
+    }
+    let ux = (z.x - a.x) / length;
+    let uy = (z.y - a.y) / length;
+    let start = label_end(a, ux, uy, a_boxes, length, margin);
+    let end = label_end(z, -ux, -uy, z_boxes, length, margin);
+    let along = (end.x - start.x) * ux + (end.y - start.y) * uy;
+    Some(TrimmedSpan {
+        start,
+        end,
+        ux,
+        uy,
+        along,
+    })
 }
 
 fn label_end(
@@ -1010,24 +910,7 @@ pub fn primitives_with_opacity(
         runs: labels,
         bounds: label_bounds,
     } = collect_atom_labels(doc, opacity);
-    let orbital_label_boxes: Vec<_> = if doc
-        .graphics
-        .iter()
-        .any(|graphic| matches!(graphic.kind, crate::graphics::GraphicKind::Orbital(_)))
-    {
-        doc.atoms
-            .iter()
-            .filter(|atom| doc.atom_visible(atom.id) && opacity.atom(atom.id) > 0.)
-            .flat_map(|atom| {
-                labels
-                    .get(&atom.id)
-                    .map(|runs| label_ink_boxes(runs))
-                    .unwrap_or_default()
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    let orbital_label_boxes = orbital_label_boxes(doc, &labels, opacity);
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
     push_underlays(&mut out, doc, &graphics, opacity, &orbital_label_boxes);
@@ -1036,23 +919,7 @@ pub fn primitives_with_opacity(
         circles,
         crossing_gaps,
     } = push_ring_strokes(&mut out, doc, opacity);
-    // Projection tip orientation is independent of dative donor→acceptor
-    // direction. Normalize only a detached render copy, after collecting the
-    // chemical labels from the original graph (reversing a dative graph would
-    // otherwise change donor hydrogen counts).
-    let projection_paint = if doc.bonds.iter().any(|b| b.narrowed_at_acceptor()) {
-        let mut painted = doc.clone();
-        for bond in &mut painted.bonds {
-            if bond.narrowed_at_acceptor() {
-                // Unlike Bond::base_display, render normalization strips repeated suffixes.
-                bond.display = bond.display.trim_end_matches("_end").into();
-                bond.reverse();
-            }
-        }
-        std::borrow::Cow::Owned(painted)
-    } else {
-        std::borrow::Cow::Borrowed(doc)
-    };
+    let projection_paint = projection_render_copy(doc);
     let doc = projection_paint.as_ref();
     // Fill joined bond outlines together. Separate antialiased polygons leave
     // translucent seams even when their mathematical corners agree exactly.
@@ -1083,13 +950,7 @@ pub fn primitives_with_opacity(
     push_junctions(&mut out, &mut joined, &joins, &crossing_gaps, doc, opacity);
     push_joined_outlines(&mut out, joined);
     if opacity.has_visibility() {
-        // Every opaque front shape covers its faded base, including differently
-        // colored secondary rails; preserve order within each paint pass.
-        let (rear, front): (Vec<_>, Vec<_>) = out
-            .drain(bond_paint_start..)
-            .partition(|part| matches!(part, Primitive::Opacity { .. }));
-        out.extend(rear);
-        out.extend(front);
+        paint_rear_before_front(&mut out, bond_paint_start);
     }
     push_atom_labels(&mut out, doc, &labels, opacity);
     push_arrows_and_annotations(&mut out, doc);
@@ -1102,116 +963,62 @@ pub fn primitives_with_opacity(
     out
 }
 
-/// Real vector ink grouped with its chemical owners, layer, and current depth.
-pub(crate) struct OcclusionSource {
-    pub(crate) owners: Vec<u64>,
-    pub(crate) layer: i16,
-    pub(crate) field: DepthField,
-    pub(crate) parts: Vec<Primitive>,
+/// Visible label ink that orbital lobes keep clear of; empty without orbitals.
+fn orbital_label_boxes(
+    doc: &Document,
+    labels: &std::collections::HashMap<u64, Vec<Primitive>>,
+    opacity: &crate::rear_opacity::Paint,
+) -> Vec<(Point, Point)> {
+    if doc
+        .graphics
+        .iter()
+        .any(|graphic| matches!(graphic.kind, crate::graphics::GraphicKind::Orbital(_)))
+    {
+        doc.atoms
+            .iter()
+            .filter(|atom| doc.atom_visible(atom.id) && opacity.atom(atom.id) > 0.)
+            .flat_map(|atom| {
+                labels
+                    .get(&atom.id)
+                    .map(|runs| label_ink_boxes(runs))
+                    .unwrap_or_default()
+            })
+            .collect()
+    } else {
+        Vec::new()
+    }
 }
 
-/// Real vector ink for visibility, with its chemical owner and current depth.
-/// Clearing only display scopes prevents visibility from recursively querying
-/// itself; coordinate, bond, label and projected-rail geometry remain exact.
-pub(crate) fn occlusion_ink(doc: &Document) -> Vec<OcclusionSource> {
-    let mut drawing = doc.clone();
-    drawing.depth_appearance.clear();
-    let doc = &drawing;
-    let opacity = crate::rear_opacity::Paint::new(doc);
-    let arcs = crate::ring_arcs::render(doc);
-    let circles = crate::aromatic::circles(doc);
-    let labels = collect_atom_labels(doc, &opacity);
-    let joins = crate::bond_joins::Joins::new(doc);
-    let gaps = vec![vec![]; doc.bonds.len()];
-    let scene = BondScene {
-        doc,
-        style: &doc.drawing_style,
-        arcs: &arcs,
-        circles: &circles,
-        label_bounds: &labels.bounds,
-        joins: &joins,
-        crossing_gaps: &gaps,
-        opacity: &opacity,
-    };
-    let mut ink = vec![];
-    for (index, bond) in doc
-        .bonds
-        .iter()
-        .enumerate()
-        .filter(|(_, b)| doc.bond_visible(b.a, b.b))
-    {
-        let mut parts = vec![];
-        let mut joined = Default::default();
-        let mut sources = vec![];
-        push_bond(
-            scene,
-            &mut parts,
-            &mut joined,
-            index,
-            bond,
-            Some(&mut sources),
-        );
-        for (field, parts) in sources {
-            ink.push(OcclusionSource {
-                owners: vec![bond.a, bond.b],
-                layer: bond.z_order,
-                field,
-                parts,
-            });
-        }
-    }
-    for atom in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
-        let mut parts = vec![];
-        for part in labels.runs.get(&atom.id).into_iter().flatten() {
-            // Unknown/custom font outlines conservatively do not hide ink.
-            // Default label outlines preserve counters instead of using a box.
-            if let Primitive::Text {
-                position,
-                text,
-                size,
-                style,
-                ..
-            } = part
-                && style.family == crate::style::DEFAULT.font_family
-                && !style.bold
-                && !style.italic
-                && !style.underline
-            {
-                parts.push(Primitive::Path {
-                    commands: crate::style::outline_text(
-                        text,
-                        *size,
-                        position.offset(0., *size * crate::style::text_ascent(style)),
-                    ),
-                    style: crate::graphics::GraphicStyle {
-                        fill: Some(crate::palette::Color::Ink),
-                        width_pt: 0.,
-                        ..Default::default()
-                    },
-                    filled: true,
-                });
+/// Projection tip orientation is independent of dative donor→acceptor
+/// direction. Normalize only a detached render copy, after collecting the
+/// chemical labels from the original graph (reversing a dative graph would
+/// otherwise change donor hydrogen counts).
+fn projection_render_copy(doc: &Document) -> std::borrow::Cow<'_, Document> {
+    if doc.bonds.iter().any(|b| b.narrowed_at_acceptor()) {
+        let mut painted = doc.clone();
+        for bond in &mut painted.bonds {
+            if bond.narrowed_at_acceptor() {
+                // Unlike Bond::base_display, render normalization strips repeated suffixes.
+                bond.display = bond.display.trim_end_matches("_end").into();
+                bond.reverse();
             }
         }
-        parts.extend(
-            crate::scientific::styled_mark_parts(atom, &doc.drawing_style)
-                .into_iter()
-                .map(|p| Primitive::Path {
-                    commands: p.commands,
-                    style: p.style,
-                    filled: p.filled,
-                }),
-        );
-        if !parts.is_empty() {
-            ink.push(OcclusionSource {
-                owners: vec![atom.id],
-                layer: 0,
-                field: DepthField::Constant(atom.depth),
-                parts,
-            });
-        }
+        std::borrow::Cow::Owned(painted)
+    } else {
+        std::borrow::Cow::Borrowed(doc)
     }
-    ink
 }
+
+fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
+    // Every opaque front shape covers its faded base, including differently
+    // colored secondary rails; preserve order within each paint pass.
+    let (rear, front): (Vec<_>, Vec<_>) = out
+        .drain(start..)
+        .partition(|part| matches!(part, Primitive::Opacity { .. }));
+    out.extend(rear);
+    out.extend(front);
+}
+
 fn graphic_primitive(
     g: &&crate::graphics::Graphic,
     label_boxes: &[(Point, Point)],
@@ -1326,9 +1133,7 @@ fn collect_atom_labels(doc: &Document, opacity: &crate::rear_opacity::Paint) -> 
             // A charge beside an implicit carbon must not shorten its bonds.
             let bounds = doc
                 .atom(*id)
-                .filter(|a| {
-                    opacity.atom(*id) > 0. && (visible(a, doc) || doc.abbreviation(*id).is_some())
-                })
+                .filter(|a| label_trims_bonds(a, doc, Some(opacity)))
                 .map(|_| label_ink_boxes(runs))
                 .unwrap_or_default();
             (*id, bounds)
@@ -1531,37 +1336,26 @@ fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
     let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
         return None;
     };
-    let length = a.position.distance(z.position);
-    if length < 0.1 {
-        return None;
-    }
-    let ux = (z.position.x - a.position.x) / length;
-    let uy = (z.position.y - a.position.y) / length;
-    let start = label_end(
+    let span = trimmed_span(
         a.position,
-        ux,
-        uy,
+        z.position,
         label_bounds
             .get(&a.id)
             .map(Vec::as_slice)
             .unwrap_or_default(),
-        length,
-        style.world(style.margin_width_pt),
-    );
-    let end = label_end(
-        z.position,
-        -ux,
-        -uy,
         label_bounds
             .get(&z.id)
             .map(Vec::as_slice)
             .unwrap_or_default(),
-        length,
         style.world(style.margin_width_pt),
-    );
-    if (end.x - start.x) * ux + (end.y - start.y) * uy <= 0.1 {
+    )?;
+    // Unlike bond_segment, rendering retains a NaN visible span.
+    if span.along <= 0.1 {
         return None;
     }
+    let TrimmedSpan {
+        start, end, ux, uy, ..
+    } = span;
     let nx = -uy;
     let ny = ux;
     Some(BondFrame {
@@ -1575,6 +1369,24 @@ fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
         ny,
     })
 }
+
+/// A rail carries its own depth (projected face or plain atom-to-atom
+/// DepthField::Bond) only when the pass needs depth; every other piece paints
+/// with bond_depth_field.
+struct BondPiece {
+    primitive: Primitive,
+    depth: Option<projected_bonds::RailDepth>,
+}
+impl BondPiece {
+    /// A non-rail piece, painted with the bond's own depth.
+    fn plain(primitive: Primitive) -> Self {
+        Self {
+            primitive,
+            depth: None,
+        }
+    }
+}
+
 fn push_bond(
     scene: BondScene<'_, '_>,
     out: &mut Vec<Primitive>,
@@ -1600,25 +1412,28 @@ fn push_bond(
         ..
     } = frame;
     let bond_start = out.len();
-    let mut rail_depths = std::collections::BTreeMap::new();
+    let depth = ink_sources.is_some() || scene.opacity.has_visibility();
+    let mut pieces = Vec::new();
     match b.display.as_str() {
         "plain" | "bold" | "wedge" if !matches!(b.order, 2 | 7) && joins.needed(b) => {
-            out.push(Primitive::Polygon(joins.polygon(b, start, end)));
+            pieces.push(BondPiece::plain(Primitive::Polygon(
+                joins.polygon(b, start, end),
+            )));
         }
-        "hollow_wedge" => push_hollow_wedge(scene, out, b, start, end),
-        "hash" | "hashed" => push_hashed_wedge(scene, out, b, frame),
+        "hollow_wedge" => push_hollow_wedge(scene, &mut pieces, b, start, end),
+        "hash" | "hashed" => push_hashed_wedge(scene, &mut pieces, b, frame),
         "wavy" if b.order == 2 => {
             let half = style.bond_length_world * style.bond_spacing_ratio / 2.0;
             for sign in [-1.0, 1.0] {
-                out.push(Primitive::Line(
+                pieces.push(BondPiece::plain(Primitive::Line(
                     start.offset(nx * half * sign, ny * half * sign),
                     end.offset(-nx * half * sign, -ny * half * sign),
                     style.line_width(),
-                ));
+                )));
             }
         }
         "wavy" => {
-            out.push(Primitive::Path {
+            pieces.push(BondPiece::plain(Primitive::Path {
                 commands: crate::bonds::wavy_path(
                     start,
                     end,
@@ -1630,48 +1445,63 @@ fn push_bond(
                     ..Default::default()
                 },
                 filled: false,
-            });
+            }));
         }
-        _ => push_bond_rails(scene, out, b, frame, &mut rail_depths),
+        _ => push_bond_rails(scene, &mut pieces, b, frame, depth),
     }
     if b.order == 5 && b.display == "plain" {
-        head(out, end, uy.atan2(ux), false, style.line_width());
+        head(&mut pieces, end, uy.atan2(ux), false, style.line_width());
     }
+    finish_bond_paint(scene, out, b, bond_index, bond_start, pieces, ink_sources);
+    collect_joined_outlines(scene, out, joined, bond_start, b);
+    recolor_bond(out, bond_start, b);
+}
+
+/// Collect occlusion ink, cut crossing gaps and apply rear opacity to the
+/// bond's pieces, appending them to `out` in order.
+fn finish_bond_paint(
+    scene: BondScene<'_, '_>,
+    out: &mut Vec<Primitive>,
+    b: &Bond,
+    bond_index: usize,
+    bond_start: usize,
+    pieces: Vec<BondPiece>,
+    ink_sources: Option<&mut Vec<(DepthField, Vec<Primitive>)>>,
+) {
     if let Some(sources) = ink_sources {
-        for (index, part) in out.iter().enumerate().skip(bond_start) {
-            let field = rail_depths
-                .get(&index)
+        for piece in &pieces {
+            let field = piece
+                .depth
+                .as_ref()
                 .map(|r| r.field)
                 .unwrap_or_else(|| bond_depth_field(scene.doc, b));
-            sources.push((field, vec![part.clone()]));
+            sources.push((field, vec![piece.primitive.clone()]));
         }
     }
     if !scene.opacity.has_visibility() {
+        out.extend(pieces.into_iter().map(|piece| piece.primitive));
         cut_bond_crossings(scene, out, bond_index, bond_start);
     } else {
-        let parts: Vec<_> = out.drain(bond_start..).collect();
-        for (index, part) in parts.into_iter().enumerate() {
+        for BondPiece { primitive, depth } in pieces {
             let cut = crate::crossings::cut(
-                vec![part],
+                vec![primitive],
                 scene
                     .crossing_gaps
                     .get(bond_index)
                     .map(Vec::as_slice)
                     .unwrap_or_default(),
             );
-            if let Some(rail) = rail_depths.get(&(bond_start + index)) {
-                out.extend(scene.opacity.rail_parts(scene.doc, b, rail, cut));
+            if let Some(rail) = depth {
+                out.extend(scene.opacity.rail_parts(scene.doc, b, &rail, cut));
             } else {
                 out.extend(scene.opacity.bond_parts(scene.doc, b, cut));
             }
         }
     }
-    collect_joined_outlines(scene, out, joined, bond_start, b);
-    recolor_bond(out, bond_start, b);
 }
 fn push_hollow_wedge(
     scene: BondScene<'_, '_>,
-    out: &mut Vec<Primitive>,
+    pieces: &mut Vec<BondPiece>,
     b: &Bond,
     start: Point,
     end: Point,
@@ -1683,19 +1513,19 @@ fn push_hollow_wedge(
         let mut commands = vec![PathCommand::Move(*first)];
         commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
         commands.push(PathCommand::Close);
-        out.push(Primitive::Path {
+        pieces.push(BondPiece::plain(Primitive::Path {
             commands,
             style: crate::graphics::GraphicStyle {
                 width_pt: style.line_width_pt,
                 ..Default::default()
             },
             filled: false,
-        });
+        }));
     }
 }
 fn push_hashed_wedge(
     scene: BondScene<'_, '_>,
-    out: &mut Vec<Primitive>,
+    pieces: &mut Vec<BondPiece>,
     b: &Bond,
     frame: BondFrame<'_>,
 ) {
@@ -1712,7 +1542,7 @@ fn push_hashed_wedge(
             start.y + (end.y - start.y) * t,
         );
         let t = if b.display == "hashed" { 1.0 } else { t };
-        out.push(Primitive::Line(
+        pieces.push(BondPiece::plain(Primitive::Line(
             p.offset(
                 nx * (style.line_width()
                     + t * (style.world(style.bold_width_pt) - style.line_width()))
@@ -1730,15 +1560,15 @@ fn push_hashed_wedge(
                     / 2.0,
             ),
             style.line_width(),
-        ));
+        )));
     }
 }
 fn push_bond_rails(
     scene: BondScene<'_, '_>,
-    out: &mut Vec<Primitive>,
+    pieces: &mut Vec<BondPiece>,
     b: &Bond,
     frame: BondFrame<'_>,
-    rail_depths: &mut std::collections::BTreeMap<usize, projected_bonds::RailDepth>,
+    depth: bool,
 ) {
     let BondScene {
         doc,
@@ -1851,39 +1681,36 @@ fn push_bond_rails(
         if (last.x - first.x) * ux + (last.y - first.y) * uy <= 0.1 {
             continue;
         }
-        rail_depths.insert(
-            out.len(),
-            match projected {
-                Some(Some(mut rail)) => {
-                    rail.points = (first, last);
-                    rail
-                }
-                _ => projected_bonds::RailDepth {
-                    points: (first, last),
-                    field: DepthField::Bond {
-                        a: a.position,
-                        b: z.position,
-                        wa: a.depth,
-                        wb: z.depth,
-                    },
-                    support: vec![],
+        let depth = depth.then(|| match projected {
+            Some(Some(mut rail)) => {
+                rail.points = (first, last);
+                rail
+            }
+            _ => projected_bonds::RailDepth {
+                points: (first, last),
+                field: DepthField::Bond {
+                    a: a.position,
+                    b: z.position,
+                    wa: a.depth,
+                    wb: z.depth,
                 },
+                support: vec![],
             },
-        );
-        if index == 0 && *offset == 0. && joins.needed(b) {
-            out.push(Primitive::Polygon(joins.polygon(b, first, last)));
+        });
+        let primitive = if index == 0 && *offset == 0. && joins.needed(b) {
+            Primitive::Polygon(joins.polygon(b, first, last))
         } else if display == "bold" {
             // An explicitly centered bold rail still needs flat
             // ends; round caps protrude beyond the junction.
             let half = style.world(style.bold_width_pt) / 2.;
-            out.push(Primitive::Polygon(vec![
+            Primitive::Polygon(vec![
                 first.offset(nx * half, ny * half),
                 last.offset(nx * half, ny * half),
                 last.offset(-nx * half, -ny * half),
                 first.offset(-nx * half, -ny * half),
-            ]));
+            ])
         } else if matches!(display, "dashed" | "dotted") {
-            out.push(Primitive::Path {
+            Primitive::Path {
                 commands: vec![
                     crate::graphics::PathCommand::Move(first),
                     crate::graphics::PathCommand::Line(last),
@@ -1898,9 +1725,9 @@ fn push_bond_rails(
                     ..Default::default()
                 },
                 filled: false,
-            });
+            }
         } else {
-            out.push(Primitive::Line(
+            Primitive::Line(
                 first,
                 last,
                 if display == "bold" {
@@ -1908,8 +1735,9 @@ fn push_bond_rails(
                 } else {
                     style.line_width()
                 },
-            ));
-        }
+            )
+        };
+        pieces.push(BondPiece { primitive, depth });
     }
     if b.order == 4
         && !arcs.contains(b.a, b.b)
@@ -1918,7 +1746,7 @@ fn push_bond_rails(
         for i in 0..5 {
             let t = i as f32 / 5.0;
             let v = (i as f32 + 0.5) / 5.0;
-            out.push(Primitive::Line(
+            pieces.push(BondPiece::plain(Primitive::Line(
                 Point::new(
                     start.x + (end.x - start.x) * t + nx * spacing * inward,
                     start.y + (end.y - start.y) * t + ny * spacing * inward,
@@ -1928,7 +1756,7 @@ fn push_bond_rails(
                     start.y + (end.y - start.y) * v + ny * spacing * inward,
                 ),
                 style.line_width(),
-            ));
+            )));
         }
     }
 }
@@ -2033,26 +1861,20 @@ fn take_opacity(primitive: Primitive) -> (f32, Primitive) {
 pub(crate) const DATIVE_HEAD_LENGTH: f32 = 10.;
 pub(crate) const DATIVE_HEAD_HALF_WIDTH: f32 = 3.5;
 
-fn head(out: &mut Vec<Primitive>, end: Point, angle: f32, half: bool, width: f32) {
+fn head(pieces: &mut Vec<BondPiece>, end: Point, angle: f32, half: bool, width: f32) {
     let a = end.offset(
         -angle.cos() * DATIVE_HEAD_LENGTH - angle.sin() * DATIVE_HEAD_HALF_WIDTH,
         -angle.sin() * DATIVE_HEAD_LENGTH + angle.cos() * DATIVE_HEAD_HALF_WIDTH,
     );
     if half {
-        out.push(Primitive::Line(end, a, width));
+        pieces.push(BondPiece::plain(Primitive::Line(end, a, width)));
     } else {
         let b = end.offset(
             -angle.cos() * DATIVE_HEAD_LENGTH + angle.sin() * DATIVE_HEAD_HALF_WIDTH,
             -angle.sin() * DATIVE_HEAD_LENGTH - angle.cos() * DATIVE_HEAD_HALF_WIDTH,
         );
-        out.push(Primitive::Polygon(vec![end, a, b]));
+        pieces.push(BondPiece::plain(Primitive::Polygon(vec![end, a, b])));
     }
-}
-fn escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
 }
 pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
     let mut points = vec![];
@@ -2113,121 +1935,11 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
 }
 /// The themed drawing with a transparent surround, for compositing and geometry checks.
 pub fn svg(doc: &Document) -> String {
-    render_svg(doc, false)
+    svg::render_svg(doc, false)
 }
 /// A figure carries the canvas background when exported or copied.
 pub fn svg_with_background(doc: &Document) -> String {
-    render_svg(doc, true)
-}
-fn render_svg(doc: &Document, background: bool) -> String {
-    let drawing = primitives(doc);
-    let (lo, hi) = bounds(&drawing);
-    let mut s = format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {} {}\" width=\"{}pt\" height=\"{}pt\">\n",
-        lo.x,
-        lo.y,
-        hi.x - lo.x,
-        hi.y - lo.y,
-        (hi.x - lo.x) * STYLE.points_per_world(),
-        (hi.y - lo.y) * STYLE.points_per_world()
-    );
-    let theme = doc.canvas_theme;
-    if background {
-        let [r, g, b] = theme.background();
-        s.push_str(&format!(
-            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"rgb({r},{g},{b})\"/>\n",
-            lo.x,
-            lo.y,
-            hi.x - lo.x,
-            hi.y - lo.y
-        ));
-    }
-    push_svg(&mut s, drawing, theme);
-    s.push_str("</svg>\n");
-    s
-}
-
-fn push_svg(s: &mut String, drawing: Vec<Primitive>, theme: crate::canvas_theme::CanvasTheme) {
-    let [r, g, b] = theme.color([0; 3]);
-    let ink = format!("rgb({r},{g},{b})");
-    for p in drawing {
-        match p {
-            Primitive::Opacity { alpha, primitive } => {
-                s.push_str(&format!("<g opacity=\"{alpha}\">"));
-                push_svg(s, vec![*primitive], theme);
-                s.push_str("</g>");
-            }
-            Primitive::Picture(g) => {
-                use base64::Engine as _;
-                if let Some(picture) = &g.picture {
-                    let data = base64::engine::general_purpose::STANDARD.encode(picture.png());
-                    s.push_str(&format!("<image id=\"reshiki-picture-{}\" width=\"1\" height=\"1\" preserveAspectRatio=\"none\" transform=\"matrix({} {} {} {} {} {})\" href=\"data:image/png;base64,{}\"/>",g.id,g.axis_x.x,g.axis_x.y,g.axis_y.x,g.axis_y.y,g.origin.x,g.origin.y,data));
-                }
-            }
-            Primitive::Path {
-                commands,
-                style,
-                filled,
-            } => {
-                let stroke = theme.color(style.stroke.rgb());
-                let fill = style.fill.map(|color| theme.color(color.rgb()));
-                use crate::graphics::PathCommand;
-                let mut path = String::new();
-                for c in commands {
-                    match c {
-                        PathCommand::Move(p) => path.push_str(&format!("M{} {} ", p.x, p.y)),
-                        PathCommand::Line(p) => path.push_str(&format!("L{} {} ", p.x, p.y)),
-                        PathCommand::Cubic(a, b, c) => path.push_str(&format!(
-                            "C{} {} {} {} {} {} ",
-                            a.x, a.y, b.x, b.y, c.x, c.y
-                        )),
-                        PathCommand::Close => path.push_str("Z "),
-                    }
-                }
-                let fill = if filled {
-                    fill.map(|c| format!("rgb({},{},{})", c[0], c[1], c[2]))
-                        .unwrap_or_else(|| "none".into())
-                } else {
-                    "none".into()
-                };
-                let dashes = style
-                    .dashes()
-                    .iter()
-                    .map(f32::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let dash = if dashes.is_empty() {
-                    String::new()
-                } else {
-                    format!(" stroke-dasharray=\"{dashes}\"")
-                };
-                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dash}/>",stroke[0],stroke[1],stroke[2],style.width()));
-            }
-            Primitive::Line(a, b, w) => {
-                s.push_str(&format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{ink}\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y));
-            }
-            Primitive::Polygon(points) => {
-                s.push_str(&format!(
-                    "<polygon points=\"{}\" fill=\"{ink}\"/>",
-                    points
-                        .iter()
-                        .map(|p| format!("{},{}", p.x, p.y))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                ));
-            }
-            Primitive::Text {
-                position,
-                text,
-                size,
-                color,
-                style,
-            } => {
-                let color = theme.color(color);
-                s.push_str(&format!("<text xml:space=\"preserve\" x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{size}\" font-weight=\"{}\" font-style=\"{}\" text-decoration=\"{}\" fill=\"rgb({},{},{})\" dominant-baseline=\"text-before-edge\">{}</text>",position.x,position.y,escape(&style.family),if style.bold {"bold"} else {"normal"},if style.italic {"italic"} else {"normal"},if style.underline {"underline"} else {"none"},color[0],color[1],color[2],escape(&text)));
-            }
-        }
-    }
+    svg::render_svg(doc, true)
 }
 
 #[cfg(test)]
