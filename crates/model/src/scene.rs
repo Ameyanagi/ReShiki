@@ -1,6 +1,6 @@
 use crate::document::{Atom, Bond, Document, Point};
 use crate::style::DEFAULT as STYLE;
-use bond_pass::{BondInputs, BondPass, DativeHandling, Resolve};
+use bond_pass::{BondInputs, BondPass, Resolve};
 use charge_placement::{ChargeLayout, place_automatic_charge};
 use depth_field::{DepthField, bond_depth_field_with_faces};
 pub(crate) use occlusion::{OcclusionSource, occlusion_ink};
@@ -907,12 +907,7 @@ pub fn primitives_with_opacity(
     doc: &Document,
     opacity: &crate::rear_opacity::Paint,
 ) -> Vec<Primitive> {
-    let inputs = BondInputs::prepare(
-        doc,
-        opacity,
-        Resolve::Scene,
-        DativeHandling::ReverseProjection,
-    );
+    let inputs = BondInputs::prepare(doc, opacity, Resolve::Scene);
     let doc = inputs.doc();
     let style = &doc.drawing_style;
     let mut out = vec![];

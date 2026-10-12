@@ -1,6 +1,8 @@
 //! Bond preparation has two stages: inputs own any resolved/projection copies,
 //! then a pass borrows them. Joins borrows its document, so combining that index
 //! with an owned document in one struct would make it self-referential.
+//! Every consumer uses the drawn dative projection geometry, after collecting
+//! labels from the chemical document.
 //! Preparation never emits ink; callers retain their own ring/emission stages.
 
 use super::{
@@ -15,16 +17,8 @@ pub(crate) enum Resolve {
     AsGiven,
 }
 
-/// Each caller's current dative projection handling: the scene draws reversed
-/// wedges from a render-only copy, while occlusion and picking still use the
-/// stored bonds (plain rails for `_end` displays).
-pub(crate) enum DativeHandling {
-    ReverseProjection,
-    AsStored,
-}
-
 /// Stage one, owned by the caller: the resolved document, its atom labels and
-/// the optional render-only dative projection copy.
+/// the optional dative projection copy shared by drawing, occlusion and picking.
 pub(crate) struct BondInputs<'d> {
     doc: Cow<'d, Document>,
     labels: AtomLabels,
@@ -32,12 +26,7 @@ pub(crate) struct BondInputs<'d> {
 }
 
 impl<'d> BondInputs<'d> {
-    pub(crate) fn prepare(
-        doc: &'d Document,
-        opacity: &Paint,
-        resolve: Resolve,
-        dative: DativeHandling,
-    ) -> Self {
+    pub(crate) fn prepare(doc: &'d Document, opacity: &Paint, resolve: Resolve) -> Self {
         let doc = match resolve {
             Resolve::Scene => {
                 let paint = crate::depth_appearance::Paint::new(doc);
@@ -52,14 +41,11 @@ impl<'d> BondInputs<'d> {
             Resolve::AsGiven => Cow::Borrowed(doc),
         };
         // Reversing a dative graph changes donor hydrogen counts. Labels must
-        // use the resolved chemical document, before render-only normalization.
+        // use the resolved chemical document, before projection normalization.
         let labels = collect_atom_labels(&doc, opacity);
-        let projection = match dative {
-            DativeHandling::ReverseProjection => match projection_render_copy(&doc) {
-                Cow::Owned(doc) => Some(doc),
-                Cow::Borrowed(_) => None,
-            },
-            DativeHandling::AsStored => None,
+        let projection = match projection_render_copy(&doc) {
+            Cow::Owned(doc) => Some(doc),
+            Cow::Borrowed(_) => None,
         };
         Self {
             doc,

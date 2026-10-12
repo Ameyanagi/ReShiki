@@ -148,12 +148,12 @@ fn rendered_bond_parts(
     opacity: &crate::rear_opacity::Paint,
 ) -> Vec<Vec<Primitive>> {
     // The scene's detached color/style preparation and molecular bond pass,
-    // except that dative projection bonds keep their stored direction (see
-    // DativeHandling). Ring strokes provide crossing gaps; their own ink is not
-    // attributed to an arbitrary bond. Unrelated labels, pictures and arrows
-    // cannot make a hidden chemical bond eligible. The one-time result is
-    // shared by all candidate bonds of this pointer/commit query.
-    let inputs = BondInputs::prepare(doc, opacity, Resolve::Scene, DativeHandling::AsStored);
+    // including the drawn dative projection geometry. Ring strokes provide
+    // crossing gaps; their own ink is not attributed to an arbitrary bond.
+    // Unrelated labels, pictures and arrows cannot make a hidden chemical bond
+    // eligible. The one-time result is shared by all candidate bonds of this
+    // pointer/commit query.
+    let inputs = BondInputs::prepare(doc, opacity, Resolve::Scene);
     let rings = push_ring_strokes(&mut Vec::new(), inputs.doc(), opacity);
     let pass = BondPass::new(&inputs);
     let doc = pass.doc;

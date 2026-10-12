@@ -1,8 +1,7 @@
 //! Vector ink sources for chemical depth occlusion.
 
 use super::{
-    BondInputs, BondPass, DativeHandling, DepthField, Document, Primitive, Resolve, RingStrokes,
-    push_bond,
+    BondInputs, BondPass, DepthField, Document, Primitive, Resolve, RingStrokes, push_bond,
 };
 
 /// Real vector ink grouped with its chemical owners, layer, and current depth.
@@ -21,7 +20,7 @@ pub(crate) fn occlusion_ink(doc: &Document) -> Vec<OcclusionSource> {
     drawing.depth_appearance.clear();
     let doc = &drawing;
     let opacity = crate::rear_opacity::Paint::new(doc);
-    let inputs = BondInputs::prepare(doc, &opacity, Resolve::AsGiven, DativeHandling::AsStored);
+    let inputs = BondInputs::prepare(doc, &opacity, Resolve::AsGiven);
     let rings = RingStrokes::without_gaps(inputs.doc());
     let pass = BondPass::new(&inputs);
     let doc = pass.doc;

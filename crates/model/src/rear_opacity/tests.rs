@@ -844,3 +844,87 @@ fn shared_arrow_paint_keeps_picks_and_never_rebuilds_visibility() {
         }
     }
 }
+
+fn dative_projection_end(display: &str) -> Document {
+    let mut doc = Document::default();
+    let ids: Vec<_> = [
+        (0., 0., -10.),
+        (80., 0., 10.),
+        (-40., -30., -20.),
+        (120., 30., 20.),
+    ]
+    .into_iter()
+    .map(|(x, y, z)| {
+        let id = doc.add_atom("C", Point::new(x, y));
+        doc.atom_mut(id).unwrap().depth = z;
+        id
+    })
+    .collect();
+    doc.add_bond(ids[0], ids[1], crate::bonds::DATIVE, display);
+    doc.bonds[0].projection = true;
+    doc.add_bond(ids[2], ids[0], 1, "plain");
+    doc.add_bond(ids[1], ids[3], 1, "plain");
+    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    doc
+}
+
+fn dative_occlusion_signature(doc: &Document) -> Vec<(Vec<u64>, i16, String, String)> {
+    let bond = &doc.bonds[0];
+    let mut owners = vec![bond.a, bond.b];
+    owners.sort_unstable();
+    crate::scene::occlusion_ink(doc)
+        .into_iter()
+        .filter_map(|mut source| {
+            source.owners.sort_unstable();
+            if source.owners != owners {
+                return None;
+            }
+            let field = match source.field {
+                DepthField::Constant(z) => format!("constant {z:?}"),
+                DepthField::Bond { a, b, wa, wb } => format!("bond {a:?} {b:?} {wa:?} {wb:?}"),
+                DepthField::Plane {
+                    origin,
+                    weight,
+                    dx,
+                    dy,
+                } => format!("plane {origin:?} {weight:?} {dx:?} {dy:?}"),
+            };
+            let parts = format!("{:?}", source.parts);
+            Some((source.owners, source.layer, field, parts))
+        })
+        .collect()
+}
+
+#[test]
+fn dative_projection_end_occlusion_matches_drawn_geometry() {
+    let mut mismatches = vec![];
+    for display in ["wedge_end", "hash_end", "hollow_wedge_end"] {
+        let mut doc = dative_projection_end(display);
+        assert!(Paint::new(&doc).has_visibility(), "{display}");
+        let mut twin = doc.clone();
+        twin.bonds[0].display = display.trim_end_matches("_end").into();
+        twin.bonds[0].reverse();
+        assert!(Paint::new(&twin).has_visibility(), "{display}");
+        assert_eq!(
+            format!("{:?}", crate::scene::primitives(&doc)),
+            format!("{:?}", crate::scene::primitives(&twin)),
+            "render anchor: {display}"
+        );
+        let ink = dative_occlusion_signature(&doc);
+        assert!(!ink.is_empty(), "{display}");
+        if ink != dative_occlusion_signature(&twin) {
+            mismatches.push(display);
+        }
+        let ids = doc.all_ids();
+        depth::set_rear_opacity(&mut doc, &ids, 1.).unwrap();
+        assert!(!Paint::new(&doc).has_visibility(), "{display}");
+        let mut clear = doc.clone();
+        clear.depth_appearance.clear();
+        assert_eq!(
+            format!("{:?}", crate::scene::primitives(&doc)),
+            format!("{:?}", crate::scene::primitives(&clear)),
+            "opaque render: {display}"
+        );
+    }
+    assert!(mismatches.is_empty(), "occlusion drift: {mismatches:?}");
+}
