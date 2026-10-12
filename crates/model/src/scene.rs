@@ -2000,17 +2000,22 @@ fn take_opacity(primitive: Primitive) -> (f32, Primitive) {
         primitive => (1., primitive),
     }
 }
+/// Dative arrowhead extents in world units: length along the bond and half
+/// width across it. Generic ink bounds reserve the same wings.
+pub(crate) const DATIVE_HEAD_LENGTH: f32 = 10.;
+pub(crate) const DATIVE_HEAD_HALF_WIDTH: f32 = 3.5;
+
 fn head(out: &mut Vec<Primitive>, end: Point, angle: f32, half: bool, width: f32) {
     let a = end.offset(
-        -angle.cos() * 10. - angle.sin() * 3.5,
-        -angle.sin() * 10. + angle.cos() * 3.5,
+        -angle.cos() * DATIVE_HEAD_LENGTH - angle.sin() * DATIVE_HEAD_HALF_WIDTH,
+        -angle.sin() * DATIVE_HEAD_LENGTH + angle.cos() * DATIVE_HEAD_HALF_WIDTH,
     );
     if half {
         out.push(Primitive::Line(end, a, width));
     } else {
         let b = end.offset(
-            -angle.cos() * 10. + angle.sin() * 3.5,
-            -angle.sin() * 10. - angle.cos() * 3.5,
+            -angle.cos() * DATIVE_HEAD_LENGTH + angle.sin() * DATIVE_HEAD_HALF_WIDTH,
+            -angle.sin() * DATIVE_HEAD_LENGTH - angle.cos() * DATIVE_HEAD_HALF_WIDTH,
         );
         out.push(Primitive::Polygon(vec![end, a, b]));
     }

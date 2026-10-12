@@ -5,7 +5,11 @@ use super::{
     geometry::{at, finite, include},
     variable::variable_ink_clearance,
 };
-use crate::document::{Document, Point};
+use crate::{
+    atom_labels::{bond_indicator_shown, map_indicator_shown, stereo_indicator_shown},
+    document::{Atom, Document, Point},
+    highlights::{CAPSULE_RADIUS_SCALE, label_shape_from, radius},
+};
 
 pub(super) fn measured_bounds(
     doc: &Document,
@@ -18,21 +22,15 @@ pub(super) fn measured_bounds(
             include(&mut bounds, lo, hi);
         }
         if crate::highlights::atom_color(doc, a).is_some() {
-            let radius = highlight_radius(&doc.drawing_style);
+            let radius = radius(&doc.drawing_style);
             // These cached boxes contain the renderer's label/mark ink
             // (and may also contain indicators). A larger box only grows
             // its elliptical capsule; it cannot exclude the real pill.
-            let (left, right, rx, ry) = if let Some((lo, hi)) = *at(boxes, i)? {
-                let ry = (hi.y - lo.y + radius) * 0.5;
-                let y = (lo.y + hi.y) * 0.5;
-                (Point::new(lo.x, y), Point::new(hi.x, y), ry * 0.5, ry)
-            } else {
-                (a.position, a.position, radius, radius)
-            };
+            let (left, right, rx, ry) = label_shape_from(*at(boxes, i)?, a.position, radius);
             include(
                 &mut bounds,
-                left.offset(-rx * CAPSULE_SCALE, -ry * CAPSULE_SCALE),
-                right.offset(rx * CAPSULE_SCALE, ry * CAPSULE_SCALE),
+                left.offset(-rx * CAPSULE_RADIUS_SCALE, -ry * CAPSULE_RADIUS_SCALE),
+                right.offset(rx * CAPSULE_RADIUS_SCALE, ry * CAPSULE_RADIUS_SCALE),
             );
         }
     }
@@ -148,14 +146,6 @@ pub(super) fn measure_translated(
     measured_bounds(doc, &boxes)
 }
 
-// The renderer uses four cubic circle segments. Their maximum radial
-// overshoot is 0.0273%; highlights.rs reserves the same outward allowance.
-pub(super) const CAPSULE_SCALE: f32 = 1.0003;
-
-pub(super) fn highlight_radius(style: &crate::style::DrawingStyle) -> f32 {
-    style.bond_length_world * style.bond_spacing_ratio * 1.5 + style.line_width() * 0.5
-}
-
 pub(super) fn bond_paint_radius(style: &crate::style::DrawingStyle) -> f32 {
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
     let bold = style.world(style.bold_width_pt);
@@ -168,58 +158,150 @@ pub(super) fn bond_paint_radius(style: &crate::style::DrawingStyle) -> f32 {
     let envelope = (spacing * 1.5 + bold * 0.5)
         .max(line * 1.25 + bold * 0.5)
         .max(bold * 2.);
-    let highlight = highlight_radius(style).max(envelope + line) * CAPSULE_SCALE;
+    let highlight = radius(style).max(envelope + line) * CAPSULE_RADIUS_SCALE;
     // The dative arrowhead's fixed 10 by 3.5 world-unit wings also fit here.
-    highlight.max(10_f32.hypot(3.5) + line)
+    highlight
+        .max(crate::scene::DATIVE_HEAD_LENGTH.hypot(crate::scene::DATIVE_HEAD_HALF_WIDTH) + line)
 }
 
-pub(super) fn atom_bounds(
-    a: &crate::document::Atom,
-    doc: &Document,
-) -> Result<Option<(Point, Point)>, String> {
-    let mut bounds = crate::scene::atom_label_ink_bounds(a, doc);
-    for part in crate::scientific::styled_mark_parts(a, &doc.drawing_style) {
-        for p in part
-            .commands
-            .iter()
-            .flat_map(crate::graphics::PathCommand::iter_points)
-        {
-            let pad = part.style.width() * 0.5;
-            include(&mut bounds, p.offset(-pad, -pad), p.offset(pad, pad));
+/// Borrowed decisions shared by prepaid work and actual atom-ink measurement.
+/// Rebuild each snapshot's plan: layout and native refresh can change labels
+/// between charging and measurement, so no borrowed plan crosses that mutation.
+pub(super) struct LabelPlan<'a> {
+    atom: &'a Atom,
+    doc: &'a Document,
+    main_label: bool,
+    map_label: bool,
+    stereo_label: bool,
+    number: Option<&'a crate::atom_labels::Number>,
+    marks: bool,
+    bytes: usize,
+    fonts: usize,
+}
+
+impl<'a> LabelPlan<'a> {
+    pub(super) fn new(a: &'a Atom, doc: &'a Document) -> Self {
+        let main_label = doc.abbreviation(a.id).is_some()
+            || crate::atom_labels::visible(a, doc)
+            || a.charge != 0;
+        let map_label = map_indicator_shown(a, doc);
+        let stereo_label = stereo_indicator_shown(a, doc);
+        let number = a.display.number.as_ref();
+        let mut plan = Self {
+            atom: a,
+            doc,
+            main_label,
+            map_label,
+            stereo_label,
+            number,
+            marks: !a.marks.is_empty(),
+            bytes: 0,
+            fonts: 0,
+        };
+        if plan.skip() {
+            return plan;
         }
+        plan.bytes = a.element.len()
+            + a.cip_label.as_ref().map_or(0, String::len)
+            + a.display.variable.as_ref().map_or(0, String::len)
+            + number.map_or(0, |v| v.text.len())
+            + a.marks.len().saturating_mul(512);
+        let number_chars = number.map_or(0, |v| v.text.len());
+        let main_font = if main_label {
+            a.text_style
+                .as_ref()
+                .map_or(doc.drawing_style.font_family.len(), |s| s.family.len())
+                .saturating_mul(64)
+        } else {
+            0
+        };
+        let map_font = if map_label {
+            a.display.mapping.style.family.len().saturating_mul(10)
+        } else {
+            0
+        };
+        let stereo_font = if stereo_label {
+            a.display.stereo.style.family.len().saturating_mul(
+                a.cip_label
+                    .as_ref()
+                    .map_or(0, |v| v.len().saturating_add(2))
+                    .saturating_add(FUTURE_CIP_LABELS.len().saturating_mul(3)),
+            )
+        } else {
+            0
+        };
+        plan.fonts = main_font
+            .saturating_add(map_font)
+            .saturating_add(stereo_font)
+            .saturating_add(
+                number.map_or(0, |v| v.style.family.len().saturating_mul(number_chars)),
+            );
+        plan
     }
-    if let Some(number) = &a.display.number {
-        indicator_bounds(
-            &mut bounds,
-            a.position,
-            &number.text,
-            number.offset,
-            &number.style,
-        );
+
+    pub(super) fn skip(&self) -> bool {
+        !self.main_label
+            && !self.map_label
+            && !self.stereo_label
+            && self.number.is_none()
+            && !self.marks
     }
-    if a.map_num != 0 && a.display.mapping.show.unwrap_or(doc.atom_labels.maps) {
-        indicator_bounds(
-            &mut bounds,
-            a.position,
-            &a.map_num.to_string(),
-            a.display.mapping.offset,
-            &a.display.mapping.style,
-        );
+
+    pub(super) fn ink_work(&self) -> usize {
+        self.bytes
+            .saturating_add(128)
+            .saturating_mul(32)
+            .saturating_add(self.fonts.saturating_mul(8))
     }
-    if a.display.stereo.show.unwrap_or(doc.atom_labels.stereo) {
-        cip_bounds(
-            &mut bounds,
-            a.position,
-            a.cip_label.as_deref(),
-            a.display.stereo.offset,
-            &a.display.stereo.style,
-        );
+
+    fn bounds(&self) -> Result<Option<(Point, Point)>, String> {
+        let a = self.atom;
+        // Measure only what charge_ink_work paid for. scene's label runs are
+        // empty unless the atom has an abbreviation, a visible element or a
+        // charge, and mark ink comes only from `marks`, so skipping both here
+        // drops no ink.
+        let mut bounds = if self.main_label || self.marks {
+            crate::highlights::label_bounds(self.doc, a)
+        } else {
+            None
+        };
+        if let Some(number) = self.number {
+            indicator_bounds(
+                &mut bounds,
+                a.position,
+                &number.text,
+                number.offset,
+                &number.style,
+            );
+        }
+        if self.map_label {
+            indicator_bounds(
+                &mut bounds,
+                a.position,
+                &a.map_num.to_string(),
+                a.display.mapping.offset,
+                &a.display.mapping.style,
+            );
+        }
+        if self.stereo_label {
+            cip_bounds(
+                &mut bounds,
+                a.position,
+                a.cip_label.as_deref(),
+                a.display.stereo.offset,
+                &a.display.stereo.style,
+            );
+        }
+        if let Some((lo, hi)) = bounds {
+            finite(lo)?;
+            finite(hi)?;
+        }
+        Ok(bounds)
     }
-    if let Some((lo, hi)) = bounds {
-        finite(lo)?;
-        finite(hi)?;
-    }
-    Ok(bounds)
+}
+
+pub(super) fn atom_bounds(a: &Atom, doc: &Document) -> Result<Option<(Point, Point)>, String> {
+    LabelPlan::new(a, doc).bounds()
 }
 
 // Completed chemistry descriptors are the fixed single-character set emitted
@@ -256,7 +338,8 @@ fn indicator_bounds(
     let width = crate::style::styled_text_width(text, height, style);
     // Automatic indicator candidates have five fixed radii, ending at 3.25h+6.
     // Their conservative envelope avoids a second label-placement pass.
-    let radius = offset.map_or(height * 3.25 + 6., |_| 0.);
+    let [_, _, _, _, automatic_radius] = crate::atom_labels::indicator_radii(height);
+    let radius = offset.map_or(automatic_radius, |_| 0.);
     let center = offset.map_or(anchor, |p| anchor.offset(p.x, p.y));
     include(
         bounds,
@@ -335,7 +418,7 @@ pub(super) fn object_bounds(doc: &Document) -> Result<Option<(Point, Point)>, St
         }
     }
     for b in &doc.bonds {
-        if b.indicator.show.unwrap_or(doc.atom_labels.stereo) {
+        if bond_indicator_shown(b, doc) {
             let a = doc.atom(b.a).ok_or("Missing indicator endpoint")?.position;
             let z = doc.atom(b.b).ok_or("Missing indicator endpoint")?.position;
             cip_bounds(

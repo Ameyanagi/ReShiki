@@ -15,6 +15,14 @@ pub(super) fn check_range(min: u32, max: u32) -> Result<(), String> {
 pub(super) fn printable(text: &str) -> bool {
     !text.is_empty() && text.chars().count() <= 64 && !text.chars().any(char::is_control)
 }
+fn degrees(doc: &Document) -> HashMap<u64, usize> {
+    let mut degrees = HashMap::new();
+    for b in &doc.bonds {
+        *degrees.entry(b.a).or_default() += 1;
+        *degrees.entry(b.b).or_default() += 1;
+    }
+    degrees
+}
 pub fn validate(doc: &Document) -> Result<(), String> {
     if doc.generic.alternatives.len() + doc.generic.links.len() + doc.generic.repeats.len() > 10_000
     {
@@ -22,11 +30,7 @@ pub fn validate(doc: &Document) -> Result<(), String> {
     }
     let atoms: HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a)).collect();
     let graphics: HashMap<_, _> = doc.graphics.iter().map(|g| (g.id, g)).collect();
-    let mut degrees = HashMap::<u64, usize>::new();
-    for b in &doc.bonds {
-        *degrees.entry(b.a).or_default() += 1;
-        *degrees.entry(b.b).or_default() += 1;
-    }
+    let degrees = degrees(doc);
     let mut sites = HashSet::new();
     for s in &doc.generic.alternatives {
         let a = atoms.get(&s.atom).ok_or("Missing alternative atom")?;
@@ -148,11 +152,7 @@ pub fn prune(doc: &mut Document) {
     let atoms: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
     let graphics: HashSet<_> = doc.graphics.iter().map(|g| g.id).collect();
     doc.generic.alternatives.retain(|s| atoms.contains(&s.atom));
-    let mut degrees = HashMap::<u64, usize>::new();
-    for b in &doc.bonds {
-        *degrees.entry(b.a).or_default() += 1;
-        *degrees.entry(b.b).or_default() += 1;
-    }
+    let degrees = degrees(doc);
     let removed: Vec<_> = doc
         .generic
         .links

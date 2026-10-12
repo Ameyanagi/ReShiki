@@ -202,33 +202,12 @@ pub(super) fn certify_translation(
         ] {
             match (new.as_mut(), prior.as_ref()) {
                 (Some(new), Some(prior)) => {
-                    use crate::arrow_anchors::Target;
-                    let target = match prior.target {
-                        Target::Atom { atom } => Target::Atom {
-                            atom: *mapping.get(&atom).ok_or("Missing anchor remap")?,
-                        },
-                        Target::LonePair { atom, mark } => Target::LonePair {
-                            atom: *mapping.get(&atom).ok_or("Missing anchor remap")?,
-                            mark,
-                        },
-                        Target::Bond { a, b, fraction } => {
-                            let x = *mapping.get(&a).ok_or("Missing anchor remap")?;
-                            let y = *mapping.get(&b).ok_or("Missing anchor remap")?;
-                            if x < y {
-                                Target::Bond {
-                                    a: x,
-                                    b: y,
-                                    fraction,
-                                }
-                            } else {
-                                Target::Bond {
-                                    a: y,
-                                    b: x,
-                                    fraction: 1. - fraction,
-                                }
-                            }
-                        }
-                    };
+                    // Validated bond targets have distinct atoms, and the
+                    // injective mapping above keeps their remapped IDs distinct.
+                    let mut target = prior.target.clone();
+                    if !target.remap(mapping) {
+                        return Err("Missing anchor remap".into());
+                    }
                     if new.target != target
                         || new.offset != prior.offset
                         || new.direction != prior.direction

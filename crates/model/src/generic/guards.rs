@@ -93,6 +93,9 @@ pub fn atom_references(doc: &Document) -> impl Iterator<Item = u64> + '_ {
 /// Reject unresolved chemistry only in the connected components of `ids`.
 /// One borrowed reference scan and one graph index avoid cloning metadata or
 /// scanning every definition again for each selected atom/component.
+/// This traversal also follows centroid edges. It stays separate from
+/// `IndexedGraph` because its selected-arrow seeds and early unresolved-neighbor
+/// exits have different semantics.
 pub fn component_intersects(doc: &Document, ids: &[u64]) -> bool {
     let unresolved: HashSet<_> = atom_references(doc).collect();
     if unresolved.is_empty() {

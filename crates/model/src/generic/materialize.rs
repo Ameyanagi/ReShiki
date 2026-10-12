@@ -3,6 +3,7 @@ use super::{
     Alternative, LinkNode, RepeatPattern, RepeatUnit, Work, bonds_at,
     definitions::pair,
     expansion::{Mode, Site},
+    graph::IndexedGraph,
     guards::reject_affected_stereo,
     variable,
 };
@@ -373,7 +374,7 @@ pub(super) fn repeat(doc: &Document, unit: &RepeatUnit, count: u32) -> Result<Do
     reject_affected_stereo(doc, &affected)?;
     // Overlapping/nested definitions and disconnected unit graphs cannot infer
     // a head/tail chain from the bracket's appearance.
-    let reached = component(doc, head.inside, &members);
+    let reached = component(doc, head.inside, &members)?;
     if reached.len() != members.len() {
         return Err("Repeating-unit atoms must form one connected fragment".into());
     }
@@ -448,7 +449,7 @@ pub(super) fn repeat(doc: &Document, unit: &RepeatUnit, count: u32) -> Result<Do
         .filter(|a| !members.contains(&a.id))
         .map(|a| a.id)
         .collect();
-    let tail_component = component(doc, tail.outside, &outside);
+    let tail_component = component(doc, tail.outside, &outside)?;
     if !tail_component.contains(&head.outside) {
         for a in &mut result.atoms {
             if tail_component.contains(&a.id) {
@@ -468,20 +469,31 @@ pub(super) fn repeat(doc: &Document, unit: &RepeatUnit, count: u32) -> Result<Do
     clear_after_expansion(&mut result);
     Ok(result)
 }
-fn component(doc: &Document, start: u64, allowed: &HashSet<u64>) -> HashSet<u64> {
-    let mut adjacent = HashMap::<u64, Vec<u64>>::new();
-    for b in &doc.bonds {
-        if allowed.contains(&b.a) && allowed.contains(&b.b) {
-            adjacent.entry(b.a).or_default().push(b.b);
-            adjacent.entry(b.b).or_default().push(b.a);
-        }
+fn component(doc: &Document, start: u64, allowed: &HashSet<u64>) -> Result<HashSet<u64>, String> {
+    if !allowed.contains(&start) {
+        return Ok(HashSet::new());
     }
-    let mut pending = vec![start];
-    let mut found = HashSet::new();
-    while let Some(id) = pending.pop() {
-        if allowed.contains(&id) && found.insert(id) {
-            pending.extend(adjacent.get(&id).into_iter().flatten().copied());
-        }
-    }
-    found
+    // Allowed IDs are validated repeat members or drawn atoms outside the unit;
+    // each start comes from a validated crossing bond. Missing atom/endpoint
+    // errors therefore cannot occur on the admitted expansion path.
+    let graph = IndexedGraph::from_edges(
+        doc,
+        doc.bonds
+            .iter()
+            .filter(|bond| allowed.contains(&bond.a) && allowed.contains(&bond.b))
+            .map(|bond| (bond.a, bond.b)),
+        "Missing repeat component endpoint",
+    )?;
+    let start = *graph
+        .indices
+        .get(&start)
+        .ok_or("Missing repeat component atom")?;
+    let found = graph.reach(start, None)?;
+    Ok(doc
+        .atoms
+        .iter()
+        .zip(found)
+        .filter(|(_, flag)| *flag)
+        .map(|(atom, _)| atom.id)
+        .collect())
 }

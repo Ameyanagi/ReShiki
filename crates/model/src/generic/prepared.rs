@@ -65,15 +65,7 @@ pub fn prepare_expansion_input(
     selected: &[u64],
     limits: Limits,
 ) -> Result<ExpansionInput, String> {
-    if limits.max_outputs == 0 || limits.max_total_atoms == 0 || limits.max_work == 0 {
-        return Err("Expansion limits must be positive".into());
-    }
-    if source.atoms.len() > 100_000
-        || source.bonds.len() > 300_000
-        || selected.is_empty() && source.atoms.len() > limits.max_total_atoms
-    {
-        return Err("Generic expansion exceeds the source atom or bond limit".into());
-    }
+    limits.check(source, Some(selected))?;
     let mut work = Work::new(limits.max_work);
     let presentation = budget::Presentation::inspect(source, &mut work)?;
     presentation.charge_input(source, selected, &mut work)?;

@@ -116,12 +116,30 @@ fn total_limit(source: &Document, limits: Limits) -> Result<(), String> {
     Ok(())
 }
 
+impl Limits {
+    /// Live selection checks retain their source-size refusal; an already
+    /// detached drawing checks the total-size limit instead.
+    pub(super) fn check(self, source: &Document, selected: Option<&[u64]>) -> Result<(), String> {
+        positive_limits(self)?;
+        if let Some(selected) = selected {
+            if source.atoms.len() > 100_000
+                || source.bonds.len() > 300_000
+                || selected.is_empty() && source.atoms.len() > self.max_total_atoms
+            {
+                return Err("Generic expansion exceeds the source atom or bond limit".into());
+            }
+            Ok(())
+        } else {
+            total_limit(source, self)
+        }
+    }
+}
+
 pub(super) fn expand_drawing_inner(
     source: &Document,
     limits: Limits,
 ) -> Result<DrawingBatch, String> {
-    positive_limits(limits)?;
-    total_limit(source, limits)?;
+    limits.check(source, None)?;
     let mut work = Work::new(limits.max_work);
     let presentation = budget::Presentation::inspect(source, &mut work)?;
     expand_drawing(source, limits, presentation, work)
@@ -132,7 +150,7 @@ pub(super) fn expand_chemistry(
     limits: Limits,
     mut work: Work,
 ) -> Result<Vec<Document>, String> {
-    let products = expand_with_work(source, limits, Mode::Chemistry, &mut work)?;
+    let (products, _) = expand_with_work(source, limits, Mode::Chemistry, &mut work)?;
     finish_chemistry(products, &mut work)
 }
 
@@ -142,8 +160,9 @@ pub(super) fn expand_drawing(
     presentation: budget::Presentation,
     mut work: Work,
 ) -> Result<DrawingBatch, String> {
-    let products = expand_with_work(source, limits, Mode::Drawing(&presentation), &mut work)?;
-    let tiles = finish_tiles(source, products, &presentation, &mut work)?;
+    let (products, replicated) =
+        expand_with_work(source, limits, Mode::Drawing(&presentation), &mut work)?;
+    let tiles = finish_tiles(source, products, &replicated, &presentation, &mut work)?;
     Ok(DrawingBatch {
         tiles,
         work,
@@ -151,16 +170,33 @@ pub(super) fn expand_drawing(
     })
 }
 
+fn replicated_atoms(source: &Document) -> HashSet<u64> {
+    source
+        .generic
+        .links
+        .iter()
+        .map(|s| s.atom)
+        .chain(
+            source
+                .generic
+                .repeats
+                .iter()
+                .flat_map(|s| s.members.iter().copied()),
+        )
+        .collect()
+}
+
 fn expand_with_work(
     source: &Document,
     limits: Limits,
     mode: Mode<'_>,
     work: &mut Work,
-) -> Result<Vec<Document>, String> {
-    admit_structure(source, limits, mode, work)?;
+) -> Result<(Vec<Document>, HashSet<u64>), String> {
+    let replicated = admit_structure(source, limits, mode, work)?;
     let sites = collect_sites(source)?;
     let fragments = plan_budget(source, limits, &sites, mode, work)?;
-    enumerate(source, limits, sites, &fragments, mode, work)
+    let products = enumerate(source, limits, sites, &fragments, mode, work)?;
+    Ok((products, replicated))
 }
 
 fn admit_structure(
@@ -168,7 +204,7 @@ fn admit_structure(
     limits: Limits,
     mode: Mode<'_>,
     work: &mut Work,
-) -> Result<(), String> {
+) -> Result<HashSet<u64>, String> {
     total_limit(source, limits)?;
     let source_size = drawing_size(source);
     // Validation scans repeat boundaries and attachment target lists. Debit a
@@ -189,19 +225,8 @@ fn admit_structure(
     {
         return Err("Generic expansion involving explicit reaction membership is unsupported; expand a separate generic structure first".into());
     }
-    let replicated: HashSet<_> = source
-        .generic
-        .links
-        .iter()
-        .map(|s| s.atom)
-        .chain(
-            source
-                .generic
-                .repeats
-                .iter()
-                .flat_map(|s| s.members.iter().copied()),
-        )
-        .collect();
+    // Built only after the admission charge above has prepaid the scan.
+    let replicated = replicated_atoms(source);
     if source
         .atoms
         .iter()
@@ -252,7 +277,7 @@ fn admit_structure(
             );
         }
     }
-    Ok(())
+    Ok(replicated)
 }
 
 fn collect_sites(source: &Document) -> Result<Vec<Site>, String> {
@@ -481,29 +506,17 @@ fn finish_chemistry(products: Vec<Document>, work: &mut Work) -> Result<Vec<Docu
 fn finish_tiles(
     source: &Document,
     products: Vec<Document>,
+    anchors: &HashSet<u64>,
     presentation: &budget::Presentation,
     work: &mut Work,
 ) -> Result<Vec<Tile>, String> {
-    let anchors: HashSet<_> = source
-        .generic
-        .links
-        .iter()
-        .map(|s| s.atom)
-        .chain(
-            source
-                .generic
-                .repeats
-                .iter()
-                .flat_map(|s| s.members.iter().copied()),
-        )
-        .collect();
     let mut tiles = Vec::with_capacity(products.len());
     let mut unique = symmetry::Deduplicator::default();
     for mut product in products {
         require_concrete(&product)?;
         // Index/copy/ink/clearance work is reserved before the existing final
         // preparation. Its Molecule is reused; no cleanup/identity/rewedge call.
-        let plan = depiction::Plan::new(&product, &anchors, work)?;
+        let plan = depiction::Plan::new(&product, anchors, work)?;
         let molecule = prepare_product(&product)?;
         if !unique.insert(&molecule, work)? {
             continue;

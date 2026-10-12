@@ -1,6 +1,6 @@
 //! Expansion work allowance, drawing-size accounting and the prepaid
 //! presentation, ink and clearance cost model.
-use super::ink::FUTURE_CIP_LABELS;
+use super::ink::{FUTURE_CIP_LABELS, LabelPlan};
 use crate::document::Document;
 use std::collections::HashSet;
 
@@ -573,66 +573,14 @@ pub(super) fn charge_ink_work(doc: &Document, work: &mut Work) -> Result<(), Str
         // indexing allowance above has already paid these visibility lookups.
         // Recheck each materialized/saved/refreshed tile, so a newly visible
         // element or enabled descriptor is prepaid before its measurement.
-        let main_label = doc.abbreviation(a.id).is_some()
-            || crate::atom_labels::visible(a, doc)
-            || a.charge != 0;
-        let map_label = a.map_num != 0 && a.display.mapping.show.unwrap_or(doc.atom_labels.maps);
-        let stereo_label = a.display.stereo.show.unwrap_or(doc.atom_labels.stereo);
-        if !main_label
-            && !map_label
-            && !stereo_label
-            && a.display.number.is_none()
-            && a.marks.is_empty()
-        {
+        let plan = LabelPlan::new(a, doc);
+        if plan.skip() {
             continue;
         }
-        let bytes = a.element.len()
-            + a.cip_label.as_ref().map_or(0, String::len)
-            + a.display.variable.as_ref().map_or(0, String::len)
-            + a.display.number.as_ref().map_or(0, |v| v.text.len())
-            + a.marks.len().saturating_mul(512);
-        let number_chars = a.display.number.as_ref().map_or(0, |v| v.text.len());
-        let main_font = if main_label {
-            a.text_style
-                .as_ref()
-                .map_or(doc.drawing_style.font_family.len(), |s| s.family.len())
-                .saturating_mul(64)
-        } else {
-            0
-        };
-        let map_font = if map_label {
-            a.display.mapping.style.family.len().saturating_mul(10)
-        } else {
-            0
-        };
-        let stereo_font = if stereo_label {
-            a.display.stereo.style.family.len().saturating_mul(
-                a.cip_label
-                    .as_ref()
-                    .map_or(0, |v| v.len().saturating_add(2))
-                    .saturating_add(FUTURE_CIP_LABELS.len().saturating_mul(3)),
-            )
-        } else {
-            0
-        };
-        let fonts = main_font
-            .saturating_add(map_font)
-            .saturating_add(stereo_font)
-            .saturating_add(
-                a.display
-                    .number
-                    .as_ref()
-                    .map_or(0, |v| v.style.family.len().saturating_mul(number_chars)),
-            );
-        reserve(
-            bytes
-                .saturating_add(128)
-                .saturating_mul(32)
-                .saturating_add(fonts.saturating_mul(8)),
-        )?;
+        reserve(plan.ink_work())?;
     }
     for b in &doc.bonds {
-        if !b.indicator.show.unwrap_or(doc.atom_labels.stereo) {
+        if !crate::atom_labels::bond_indicator_shown(b, doc) {
             continue;
         }
         // Fresh labels can restore displayed descriptors on an unrelated fixed

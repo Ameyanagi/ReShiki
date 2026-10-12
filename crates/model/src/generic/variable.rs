@@ -4,10 +4,13 @@ use super::{
     budget::charge_clearance,
     clearance::Footprint,
     geometry::{at, at_mut, finite, include},
-    ink::{CAPSULE_SCALE, bond_paint_radius, highlight_radius},
+    graph::IndexedGraph,
+    ink::bond_paint_radius,
 };
-use crate::document::{Document, Point};
-use std::collections::HashMap;
+use crate::{
+    document::{Document, Point},
+    highlights::{CAPSULE_RADIUS_SCALE, label_shape_from, radius},
+};
 
 /// Pose one detachable substituent before replacing its virtual handle bond.
 /// The host stays fixed. A supporting half-plane separates its ring/backbone;
@@ -45,42 +48,29 @@ pub(super) fn pose_variable(
         "Variable attachment has no supported exterior placement; the source drawing is retained"
             .to_owned()
     };
-    let indices: HashMap<_, _> = doc
-        .atoms
-        .iter()
-        .enumerate()
-        .map(|(i, a)| (a.id, i))
-        .collect();
-    let h = *indices.get(&handle).ok_or("Missing variable handle")?;
-    let t = *indices.get(&target).ok_or("Missing attachment target")?;
-    let r = *indices.get(&root).ok_or("Missing substituent root")?;
+    let mut graph = IndexedGraph::index(doc);
+    let h = *graph
+        .indices
+        .get(&handle)
+        .ok_or("Missing variable handle")?;
+    let t = *graph
+        .indices
+        .get(&target)
+        .ok_or("Missing attachment target")?;
+    let r = *graph.indices.get(&root).ok_or("Missing substituent root")?;
     if h == t || h == r || t == r {
         return Err(shared());
     }
-    let mut adjacent = vec![Vec::new(); doc.atoms.len()];
-    for b in &doc.bonds {
-        let a = *indices.get(&b.a).ok_or("Missing variable bond endpoint")?;
-        let z = *indices.get(&b.b).ok_or("Missing variable bond endpoint")?;
-        if a != h && z != h {
-            at_mut(&mut adjacent, a)?.push(z);
-            at_mut(&mut adjacent, z)?.push(a);
-        }
-    }
-    let component = |start| -> Result<Vec<bool>, String> {
-        let mut found = vec![false; doc.atoms.len()];
-        let mut pending = vec![start];
-        *at_mut(&mut found, start)? = true;
-        while let Some(i) = pending.pop() {
-            for &j in at(&adjacent, i)? {
-                if !*at(&found, j)? {
-                    *at_mut(&mut found, j)? = true;
-                    pending.push(j);
-                }
-            }
-        }
-        Ok(found)
-    };
-    let moving = component(r)?;
+    // Resolve the three identities and shared-anchor refusal before bond
+    // endpoints; even discarded handle bonds must still validate both ends.
+    graph.connect(
+        doc.bonds.iter().map(|b| (b.a, b.b)),
+        "Missing variable bond endpoint",
+        |a, z| a != h && z != h,
+    )?;
+    let indices = &graph.indices;
+    let adjacent = &graph.adjacent;
+    let moving = graph.reach(r, None)?;
     for id in &at(&doc.atoms, h)?.centroid {
         let i = *indices.get(id).ok_or("Missing variable candidate")?;
         if *at(&moving, i)? {
@@ -132,7 +122,7 @@ pub(super) fn pose_variable(
     finite(center)?;
     finite(old_root)?;
     let authored_incoming = unit(delta(old_root, at(&doc.atoms, h)?.position))?;
-    let lone_neighbor = match at(&adjacent, r)?.as_slice() {
+    let lone_neighbor = match at(adjacent, r)?.as_slice() {
         [neighbor] => Some(at(&doc.atoms, *neighbor)?),
         _ => None,
     };
@@ -160,7 +150,7 @@ pub(super) fn pose_variable(
     } else {
         authored_incoming
     };
-    let outward = match at(&adjacent, t)?.as_slice() {
+    let outward = match at(adjacent, t)?.as_slice() {
         [] => incoming,
         [a] => {
             let (x, y) = unit(delta(at(&doc.atoms, *a)?.position, center))?;
@@ -194,7 +184,7 @@ pub(super) fn pose_variable(
             * (f64::EPSILON * 8.);
         (x + y, error)
     };
-    let host = component(t)?;
+    let host = graph.reach(t, None)?;
     // Link/repeat depiction would later move this component again. There is
     // no simultaneous anchored pose policy: refuse rather than certify a pose
     // that a later whole-component depiction can invalidate.
@@ -247,7 +237,7 @@ pub(super) fn pose_variable(
                 continue;
             }
             *at_mut(&mut core, i)? = false;
-            for &j in at(&adjacent, i)? {
+            for &j in at(adjacent, i)? {
                 if *at(&core, j)? {
                     let degree = at_mut(&mut degrees, j)?;
                     *degree = degree.saturating_sub(1);
@@ -402,12 +392,6 @@ pub(super) fn variable_ink_clearance(
     let collision = || {
         "Variable attachment cannot clear the preserved bonds and atom labels; the source drawing is retained".to_owned()
     };
-    let indices: HashMap<_, _> = doc
-        .atoms
-        .iter()
-        .enumerate()
-        .map(|(i, a)| (a.id, i))
-        .collect();
     let atoms: Vec<_> = doc
         .atoms
         .iter()
@@ -415,18 +399,12 @@ pub(super) fn variable_ink_clearance(
         .map(|(i, atom)| {
             let mut bounds = *at(boxes, i)?;
             if crate::highlights::atom_color(doc, atom).is_some() {
-                let radius = highlight_radius(&doc.drawing_style);
-                let (left, right, rx, ry) = if let Some((lo, hi)) = bounds {
-                    let ry = (hi.y - lo.y + radius) * 0.5;
-                    let y = (lo.y + hi.y) * 0.5;
-                    (Point::new(lo.x, y), Point::new(hi.x, y), ry * 0.5, ry)
-                } else {
-                    (atom.position, atom.position, radius, radius)
-                };
+                let radius = radius(&doc.drawing_style);
+                let (left, right, rx, ry) = label_shape_from(bounds, atom.position, radius);
                 include(
                     &mut bounds,
-                    left.offset(-rx * CAPSULE_SCALE, -ry * CAPSULE_SCALE),
-                    right.offset(rx * CAPSULE_SCALE, ry * CAPSULE_SCALE),
+                    left.offset(-rx * CAPSULE_RADIUS_SCALE, -ry * CAPSULE_RADIUS_SCALE),
+                    right.offset(rx * CAPSULE_RADIUS_SCALE, ry * CAPSULE_RADIUS_SCALE),
                 );
             }
             if let Some((lo, hi)) = bounds {
@@ -439,13 +417,18 @@ pub(super) fn variable_ink_clearance(
             ))
         })
         .collect::<Result<_, String>>()?;
-    let mut adjacent = vec![Vec::new(); doc.atoms.len()];
+    // Atom footprints must be checked before resolving any bond endpoint.
+    let graph = IndexedGraph::from_edges(
+        doc,
+        doc.bonds.iter().map(|b| (b.a, b.b)),
+        "Missing generated endpoint",
+    )?;
+    let indices = &graph.indices;
+    let adjacent = &graph.adjacent;
     let mut edges = Vec::with_capacity(doc.bonds.len());
     for bond in &doc.bonds {
         let a = *indices.get(&bond.a).ok_or("Missing generated endpoint")?;
         let b = *indices.get(&bond.b).ok_or("Missing generated endpoint")?;
-        at_mut(&mut adjacent, a)?.push(b);
-        at_mut(&mut adjacent, b)?.push(a);
         edges.push((
             a,
             b,
@@ -470,7 +453,7 @@ pub(super) fn variable_ink_clearance(
         let root = *indices
             .get(&root)
             .ok_or("Variable root identity changed during expansion")?;
-        let mut targets = at(&adjacent, root)?.iter().copied().filter(|&i| {
+        let mut targets = at(adjacent, root)?.iter().copied().filter(|&i| {
             doc.atoms
                 .get(i)
                 .is_some_and(|a| variable.centroid.contains(&a.id))
@@ -479,25 +462,8 @@ pub(super) fn variable_ink_clearance(
         if targets.next().is_some() {
             return Err(collision());
         }
-        let component = |start| -> Result<Vec<bool>, String> {
-            let mut found = vec![false; doc.atoms.len()];
-            let mut pending = vec![start];
-            *at_mut(&mut found, start)? = true;
-            while let Some(i) = pending.pop() {
-                for &j in at(&adjacent, i)? {
-                    if (i == root && j == target) || (i == target && j == root) {
-                        continue;
-                    }
-                    if !*at(&found, j)? {
-                        *at_mut(&mut found, j)? = true;
-                        pending.push(j);
-                    }
-                }
-            }
-            Ok(found)
-        };
-        let moving = component(root)?;
-        let host = component(target)?;
+        let moving = graph.reach(root, Some((root, target)))?;
+        let host = graph.reach(target, Some((root, target)))?;
         if *at(&moving, target)? {
             return Err(collision());
         }
@@ -506,12 +472,7 @@ pub(super) fn variable_ink_clearance(
         let junction = at(&doc.atoms, target)?;
         if !junction.marks.is_empty()
             || junction.display.number.is_some()
-            || (junction.map_num != 0
-                && junction
-                    .display
-                    .mapping
-                    .show
-                    .unwrap_or(doc.atom_labels.maps))
+            || crate::atom_labels::map_indicator_shown(junction, doc)
         {
             return Err(collision());
         }

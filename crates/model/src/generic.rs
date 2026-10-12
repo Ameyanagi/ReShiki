@@ -11,6 +11,7 @@ mod definitions;
 mod depiction;
 mod expansion;
 mod geometry;
+mod graph;
 mod guards;
 mod ink;
 mod materialize;

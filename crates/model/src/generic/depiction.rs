@@ -4,21 +4,21 @@ use super::{
     budget::charge_ink_work,
     certify::preserve,
     geometry::{at, at_mut, finite, include},
+    graph::IndexedGraph,
     ink::{measured_bounds, move_box, object_bounds, reach, saved_and_refreshed_boxes},
     probe::{self, Stage},
-    references::{anchor_touches, reference_error},
+    references::reject_changed_references,
 };
 use crate::{
     chemistry::{depict, document::Molecule},
     document::{Document, Point},
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub(super) struct Plan {
-    adjacent: Vec<Vec<usize>>,
+    graph: IndexedGraph,
     components: Vec<Vec<usize>>,
     affected: Vec<bool>,
-    indices: HashMap<u64, usize>,
 }
 
 impl Plan {
@@ -29,38 +29,15 @@ impl Plan {
     ) -> Result<Self, String> {
         let n = doc.atoms.len();
         charge_ink_work(doc, work)?;
-        let indices: HashMap<_, _> = doc
-            .atoms
-            .iter()
-            .enumerate()
-            .map(|(i, a)| (a.id, i))
-            .collect();
-        let mut adjacent = vec![Vec::new(); n];
-        for b in &doc.bonds {
-            let a = *indices.get(&b.a).ok_or("Missing generated bond endpoint")?;
-            let z = *indices.get(&b.b).ok_or("Missing generated bond endpoint")?;
-            at_mut(&mut adjacent, a)?.push(z);
-            at_mut(&mut adjacent, z)?.push(a);
-        }
-        let mut done = vec![false; n];
+        let graph = IndexedGraph::from_edges(
+            doc,
+            doc.bonds.iter().map(|bond| (bond.a, bond.b)),
+            "Missing generated bond endpoint",
+        )?;
+        let (_, all_components) = graph.components()?;
         let mut affected = vec![false; n];
         let mut components = Vec::new();
-        for start in 0..n {
-            if *at(&done, start)? {
-                continue;
-            }
-            let mut pending = vec![start];
-            let mut component = Vec::new();
-            *at_mut(&mut done, start)? = true;
-            while let Some(i) = pending.pop() {
-                component.push(i);
-                for &j in at(&adjacent, i)? {
-                    if !*at(&done, j)? {
-                        *at_mut(&mut done, j)? = true;
-                        pending.push(j);
-                    }
-                }
-            }
+        for component in all_components {
             if component
                 .iter()
                 .any(|&i| doc.atoms.get(i).is_some_and(|a| anchors.contains(&a.id)))
@@ -91,33 +68,11 @@ impl Plan {
         {
             return Err(stereo_error());
         }
-        if doc
-            .molecule_names
-            .iter()
-            .any(|n| n.atoms.iter().any(|id| affected_ids.contains(id)))
-        {
-            return Err(reference_error("generated name captions"));
-        }
-        if doc
-            .arrows
-            .iter()
-            .flat_map(|a| a.start_anchor.iter().chain(a.end_anchor.iter()))
-            .any(|anchor| anchor_touches(anchor, &affected_ids))
-        {
-            return Err(reference_error("attached arrows"));
-        }
-        if doc
-            .depth_appearance
-            .iter()
-            .any(|s| s.atoms.iter().any(|id| affected_ids.contains(id)))
-        {
-            return Err(reference_error("depth appearance scopes"));
-        }
+        reject_changed_references(doc, &affected_ids, |_| Ok(()))?;
         Ok(Self {
-            adjacent,
+            graph,
             components,
             affected,
-            indices,
         })
     }
 
@@ -223,8 +178,16 @@ impl Plan {
             .iter()
             .map(|b| {
                 Ok(super::pair(
-                    *self.indices.get(&b.a).ok_or("Missing generated endpoint")? as u64,
-                    *self.indices.get(&b.b).ok_or("Missing generated endpoint")? as u64,
+                    *self
+                        .graph
+                        .indices
+                        .get(&b.a)
+                        .ok_or("Missing generated endpoint")? as u64,
+                    *self
+                        .graph
+                        .indices
+                        .get(&b.b)
+                        .ok_or("Missing generated endpoint")? as u64,
                 ))
             })
             .collect::<Result<_, String>>()?;
@@ -238,17 +201,8 @@ impl Plan {
                     if !distance.is_finite() || distance < 0.01 {
                         return Err("Generated layout has coincident atoms".into());
                     }
-                    let ux = (q.x - p.x) / distance;
-                    let uy = (q.y - p.y) / distance;
-                    let clearance = if edges.contains(&super::pair(i as u64, j as u64)) {
-                        gap
-                    } else {
-                        margin * 2. + 1.
-                    };
                     scale = scale.max(
-                        (reach(p, *at(&boxes, i)?, ux, uy)
-                            + reach(q, *at(&boxes, j)?, -ux, -uy)
-                            + clearance)
+                        required_clearance(doc, &boxes, &edges, (i, j), distance, gap, margin)?
                             / distance,
                     );
                 }
@@ -318,15 +272,8 @@ impl Plan {
                     let p = at(&doc.atoms, i)?.position;
                     let q = at(&doc.atoms, j)?.position;
                     let distance = p.distance(q);
-                    let ux = (q.x - p.x) / distance;
-                    let uy = (q.y - p.y) / distance;
-                    let required = reach(p, *at(&boxes, i)?, ux, uy)
-                        + reach(q, *at(&boxes, j)?, -ux, -uy)
-                        + if edges.contains(&super::pair(i as u64, j as u64)) {
-                            gap
-                        } else {
-                            margin * 2. + 1.
-                        };
+                    let required =
+                        required_clearance(doc, &boxes, &edges, (i, j), distance, gap, margin)?;
                     if distance + 0.01 < required {
                         return Err(
                             "Generated layout cannot clear the preserved atom labels".into()
@@ -338,7 +285,7 @@ impl Plan {
         // Ordinary hidden saturated carbons need a visible vertex. A solver
         // failure may not turn a multi-carbon repeat back into one long line.
         for (i, a) in doc.atoms.iter().enumerate() {
-            let neighbors = at(&self.adjacent, i)?;
+            let neighbors = at(&self.graph.adjacent, i)?;
             if !*at(&self.affected, i)?
                 || a.element != "C"
                 || neighbors.len() != 2
@@ -364,6 +311,28 @@ impl Plan {
         preserve(&before, doc, &self.affected)?;
         measured_bounds(doc, &boxes)
     }
+}
+
+fn required_clearance(
+    doc: &Document,
+    boxes: &[Option<(Point, Point)>],
+    edges: &HashSet<(u64, u64)>,
+    (i, j): (usize, usize),
+    distance: f32,
+    gap: f32,
+    margin: f32,
+) -> Result<f32, String> {
+    let p = at(&doc.atoms, i)?.position;
+    let q = at(&doc.atoms, j)?.position;
+    let ux = (q.x - p.x) / distance;
+    let uy = (q.y - p.y) / distance;
+    Ok(reach(p, *at(boxes, i)?, ux, uy)
+        + reach(q, *at(boxes, j)?, -ux, -uy)
+        + if edges.contains(&super::pair(i as u64, j as u64)) {
+            gap
+        } else {
+            margin * 2. + 1.
+        })
 }
 
 fn stereo_error() -> String {
