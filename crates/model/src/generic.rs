@@ -9,11 +9,13 @@ mod certify;
 mod clearance;
 mod definitions;
 mod depiction;
+mod errors;
 mod expansion;
 mod geometry;
 mod graph;
 mod guards;
 mod ink;
+pub mod limits;
 mod materialize;
 mod prepared;
 mod probe;
@@ -38,6 +40,10 @@ pub(crate) use prepared::prepare_expansion;
 
 use definitions::{check_range, pair, printable};
 use guards::reject_affected_stereo;
+use limits::{MAX_LABEL_CHARS, MAX_OUTPUTS, MAX_SOURCE_ATOMS};
+
+/// Polymer flip types that finite expansion and MOL export accept.
+pub const EXPANDABLE_FLIPS: [&str; 3] = ["", "NoFlip", "Unspecified"];
 
 /// A detached concrete drawing and its positioned label/object extents. These
 /// bounds are transient layout output, never authoritative document metadata.
@@ -113,6 +119,22 @@ pub enum Alternative {
         label: String,
     },
 }
+impl Alternative {
+    pub fn display_symbol(&self) -> &str {
+        match self {
+            Self::Element { symbol, isotope } if symbol == "H" && *isotope == 2 => "D",
+            Self::Element { symbol, isotope } if symbol == "H" && *isotope == 3 => "T",
+            _ => self.symbol(),
+        }
+    }
+
+    fn symbol(&self) -> &str {
+        match self {
+            Self::Element { symbol, .. } => symbol,
+            Self::Group { label } | Self::Unresolved { label } => label,
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlternativeSite {
     pub atom: u64,
@@ -120,11 +142,43 @@ pub struct AlternativeSite {
     #[serde(default)]
     pub excluded: bool,
 }
+impl AlternativeSite {
+    pub fn label(&self) -> String {
+        Self::label_with_symbols(self.excluded, &self.choices, Alternative::display_symbol)
+    }
+
+    /// CDXML's anonymous import fallback uses raw symbols; adding D/T aliases
+    /// there would change the imported label.
+    pub fn label_without_isotope_aliases(excluded: bool, choices: &[Alternative]) -> String {
+        Self::label_with_symbols(excluded, choices, Alternative::symbol)
+    }
+
+    fn label_with_symbols(
+        excluded: bool,
+        choices: &[Alternative],
+        symbol: fn(&Alternative) -> &str,
+    ) -> String {
+        format!(
+            "[{}{}]",
+            if excluded { "NOT " } else { "" },
+            choices.iter().map(symbol).collect::<Vec<_>>().join(",")
+        )
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LinkNode {
     pub atom: u64,
     pub min: u32,
     pub max: u32,
+}
+impl LinkNode {
+    pub fn label(&self, element: &str) -> String {
+        Self::format_label(element, self.min, self.max)
+    }
+
+    pub fn format_label(element: &str, min: u32, max: u32) -> String {
+        format!("[{element}]{min}-{max}")
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Crossing {
@@ -138,6 +192,32 @@ pub enum RepeatPattern {
     HeadToHead,
     EitherUnknown,
 }
+impl RepeatPattern {
+    pub fn cdxml(self) -> &'static str {
+        match self {
+            Self::HeadToTail => "HeadToTail",
+            Self::HeadToHead => "HeadToHead",
+            Self::EitherUnknown => "EitherUnknown",
+        }
+    }
+
+    pub fn from_cdxml(value: &str) -> Option<Self> {
+        match value {
+            "HeadToTail" => Some(Self::HeadToTail),
+            "HeadToHead" => Some(Self::HeadToHead),
+            "EitherUnknown" => Some(Self::EitherUnknown),
+            _ => None,
+        }
+    }
+
+    pub fn molfile_connect(self) -> &'static str {
+        match self {
+            Self::HeadToTail => "HT",
+            Self::HeadToHead => "HH",
+            Self::EitherUnknown => "EU",
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RepeatCount {
@@ -147,7 +227,10 @@ pub enum RepeatCount {
 impl RepeatCount {
     pub fn parse(label: &str) -> Result<Self, String> {
         let label = label.trim();
-        if label.is_empty() || label.len() > 64 || label.chars().any(char::is_control) {
+        // This limit measures bytes; definitions::printable counts characters.
+        // Unifying them would change behavior pinned by q-03.
+        if label.is_empty() || label.len() > MAX_LABEL_CHARS || label.chars().any(char::is_control)
+        {
             return Err("Enter a repeat count or label, such as 1-3 or n".into());
         }
         if let Ok(n) = label.parse::<u32>() {
@@ -201,6 +284,11 @@ pub struct RepeatUnit {
     #[serde(default)]
     pub flip: String,
 }
+impl RepeatUnit {
+    pub fn default_head_count(crossings: usize) -> Option<usize> {
+        if crossings == 2 { Some(1) } else { None }
+    }
+}
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
     pub max_outputs: usize,
@@ -210,8 +298,8 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_outputs: 500,
-            max_total_atoms: 100_000,
+            max_outputs: MAX_OUTPUTS,
+            max_total_atoms: MAX_SOURCE_ATOMS,
             max_work: 5_000_000,
         }
     }

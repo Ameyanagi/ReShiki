@@ -4,6 +4,7 @@ use super::{Error, Fragment, ObjectMapEntry, Result, tree::Tree};
 use crate::generic::{
     Alternative, AlternativeSite, Crossing, Generic, LinkNode, RepeatCount, RepeatPattern,
     RepeatUnit,
+    limits::{MAX_DEFINITIONS, MAX_REPEAT_COUNT, MAX_REPEAT_MEMBERS},
 };
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -89,7 +90,7 @@ impl SourceGeneric {
                 }
             }
             total_members = total_members.saturating_add(members.len());
-            if total_members > 100_000 {
+            if total_members > MAX_REPEAT_MEMBERS {
                 return Err(Error::Limit);
             }
             let mut graphics = Vec::new();
@@ -133,11 +134,7 @@ impl SourceGeneric {
                         Ok(*id)
                     })
                     .collect::<Result<Vec<_>>>()?,
-                head_count: if source.crossings.len() == 2 {
-                    Some(1)
-                } else {
-                    None
-                },
+                head_count: RepeatUnit::default_head_count(source.crossings.len()),
                 usage: source.usage.clone(),
                 pattern: source.pattern,
                 count: source.count.clone(),
@@ -299,19 +296,7 @@ pub(super) fn extract(xml: &str) -> Result<(String, SourceGeneric)> {
                 }
             }
             let label = if label.trim().is_empty() {
-                format!(
-                    "[{}{}]",
-                    if excluded { "NOT " } else { "" },
-                    choices
-                        .iter()
-                        .map(|c| match c {
-                            Alternative::Element { symbol, .. } => symbol.as_str(),
-                            Alternative::Group { label } | Alternative::Unresolved { label } =>
-                                label.as_str(),
-                        })
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
+                AlternativeSite::label_without_isotope_aliases(excluded, &choices)
             } else {
                 label
             };
@@ -365,7 +350,7 @@ pub(super) fn extract(xml: &str) -> Result<(String, SourceGeneric)> {
             source.labels.push((
                 atom,
                 if entered.trim().is_empty() {
-                    format!("[{symbol}]{min}-{max}")
+                    LinkNode::format_label(&symbol, min, max)
                 } else {
                     entered
                 },
@@ -400,7 +385,11 @@ pub(super) fn extract(xml: &str) -> Result<(String, SourceGeneric)> {
                 let value = value
                     .parse::<f64>()
                     .map_err(|_| invalid("Invalid polymer repeat count"))?;
-                if !value.is_finite() || value.fract() != 0. || value < 1. || value > 1000. {
+                if !value.is_finite()
+                    || value.fract() != 0.
+                    || value < 1.
+                    || value > f64::from(MAX_REPEAT_COUNT)
+                {
                     return Err(invalid("Invalid finite polymer repeat count"));
                 }
                 RepeatCount::Finite {
@@ -410,12 +399,10 @@ pub(super) fn extract(xml: &str) -> Result<(String, SourceGeneric)> {
             } else {
                 RepeatCount::parse(&label).map_err(Error::Invalid)?
             };
-            let pattern = match node.attr("PolymerRepeatPattern").unwrap_or("HeadToTail") {
-                "HeadToTail" => RepeatPattern::HeadToTail,
-                "HeadToHead" => RepeatPattern::HeadToHead,
-                "EitherUnknown" => RepeatPattern::EitherUnknown,
-                _ => return Err(invalid("Unsupported polymer repeat-pattern value")),
-            };
+            let pattern = RepeatPattern::from_cdxml(
+                node.attr("PolymerRepeatPattern").unwrap_or("HeadToTail"),
+            )
+            .ok_or_else(|| invalid("Unsupported polymer repeat-pattern value"))?;
             let mut graphics = Vec::new();
             let mut crossings = Vec::new();
             let mut crossing_brackets = Vec::new();
@@ -471,7 +458,9 @@ pub(super) fn extract(xml: &str) -> Result<(String, SourceGeneric)> {
             ));
         }
     }
-    if source.atoms.alternatives.len() + source.atoms.links.len() + source.repeats.len() > 10_000 {
+    if source.atoms.alternatives.len() + source.atoms.links.len() + source.repeats.len()
+        > MAX_DEFINITIONS
+    {
         return Err(Error::Limit);
     }
     Ok((

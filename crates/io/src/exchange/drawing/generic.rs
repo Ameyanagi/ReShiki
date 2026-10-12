@@ -2,7 +2,7 @@
 use super::{Result, Writer, invalid, tree::Key};
 use crate::{
     document::Atom,
-    generic::{Alternative, RepeatCount, RepeatPattern},
+    generic::{Alternative, RepeatCount, RepeatUnit},
     typography::TextFormat,
 };
 impl Writer<'_> {
@@ -64,28 +64,7 @@ impl Writer<'_> {
             }
             self.tree.set(node, "Element", "0")?;
             self.tree.set(node, "NumHydrogens", "0")?;
-            let label = {
-                format!(
-                    "[{}{}]",
-                    if site.excluded { "NOT " } else { "" },
-                    site.choices
-                        .iter()
-                        .map(|c| match c {
-                            Alternative::Element { symbol, isotope } =>
-                                if symbol == "H" && *isotope == 2 {
-                                    "D"
-                                } else if symbol == "H" && *isotope == 3 {
-                                    "T"
-                                } else {
-                                    symbol.as_str()
-                                },
-                            Alternative::Group { label } | Alternative::Unresolved { label } =>
-                                label.as_str(),
-                        })
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
-            };
+            let label = site.label();
             if !elements {
                 self.tree.set(node, "GenericNickname", label.clone())?;
             }
@@ -115,7 +94,7 @@ impl Writer<'_> {
                 .display
                 .variable
                 .clone()
-                .unwrap_or_else(|| format!("[{}]{}-{}", atom.element, link.min, link.max));
+                .unwrap_or_else(|| link.label(&atom.element));
             self.text(
                 node,
                 &label,
@@ -287,11 +266,7 @@ impl Writer<'_> {
     pub(super) fn generic_units(&mut self) -> Result<()> {
         let doc = self.doc;
         for unit in &doc.generic.repeats {
-            let ordered = if unit.crossings.len() == 2 {
-                Some(1)
-            } else {
-                None
-            };
+            let ordered = RepeatUnit::default_head_count(unit.crossings.len());
             if unit.head_count != ordered {
                 return Err(invalid(
                     "This explicit or unspecified head-bond assignment requires MOL or native ReShiki export",
@@ -320,15 +295,7 @@ impl Writer<'_> {
                     ("id", id),
                     ("BracketUsage", unit.usage.clone()),
                     ("BracketedObjectIDs", members.join(" ")),
-                    (
-                        "PolymerRepeatPattern",
-                        match unit.pattern {
-                            RepeatPattern::HeadToTail => "HeadToTail",
-                            RepeatPattern::HeadToHead => "HeadToHead",
-                            RepeatPattern::EitherUnknown => "EitherUnknown",
-                        }
-                        .into(),
-                    ),
+                    ("PolymerRepeatPattern", unit.pattern.cdxml().into()),
                     (
                         "PolymerFlipType",
                         if unit.flip.is_empty() {
@@ -370,12 +337,7 @@ impl Writer<'_> {
                     {
                         let index = self
                             .doc
-                            .bonds
-                            .iter()
-                            .position(|b| {
-                                (b.a == crossing.inside && b.b == crossing.outside)
-                                    || (b.b == crossing.inside && b.a == crossing.outside)
-                            })
+                            .bond_position(crossing.inside, crossing.outside)
                             .ok_or_else(|| invalid("Missing polymer crossing bond"))?;
                         let bond = *self
                             .bond_nodes

@@ -3,6 +3,7 @@ use super::{
     Work,
     budget::charge_clearance,
     clearance::Footprint,
+    errors::{variable_collision, variable_exterior, variable_precision, variable_shared},
     geometry::{at, at_mut, finite, include},
     graph::IndexedGraph,
     ink::bond_paint_radius,
@@ -41,13 +42,6 @@ pub(super) fn pose_variable(
             .saturating_add(references)
             .saturating_mul(64),
     )?;
-    let shared = || {
-        "Variable attachment requires a detachable substituent with one anchor; the source drawing is retained".to_owned()
-    };
-    let exterior = || {
-        "Variable attachment has no supported exterior placement; the source drawing is retained"
-            .to_owned()
-    };
     let mut graph = IndexedGraph::index(doc);
     let h = *graph
         .indices
@@ -59,7 +53,7 @@ pub(super) fn pose_variable(
         .ok_or("Missing attachment target")?;
     let r = *graph.indices.get(&root).ok_or("Missing substituent root")?;
     if h == t || h == r || t == r {
-        return Err(shared());
+        return Err(variable_shared());
     }
     // Resolve the three identities and shared-anchor refusal before bond
     // endpoints; even discarded handle bonds must still validate both ends.
@@ -74,11 +68,11 @@ pub(super) fn pose_variable(
     for id in &at(&doc.atoms, h)?.centroid {
         let i = *indices.get(id).ok_or("Missing variable candidate")?;
         if *at(&moving, i)? {
-            return Err(shared());
+            return Err(variable_shared());
         }
     }
     if *at(&moving, t)? {
-        return Err(shared());
+        return Err(variable_shared());
     }
     // Another semantic handle or a derived centroid sharing the moving branch
     // would need a joint placement policy, not independent one-anchor poses.
@@ -87,12 +81,12 @@ pub(super) fn pose_variable(
             continue;
         }
         if *at(&moving, i)? && (atom.attachment.is_some() || !atom.centroid.is_empty()) {
-            return Err(shared());
+            return Err(variable_shared());
         }
         for id in &atom.centroid {
             let j = *indices.get(id).ok_or("Missing centroid member")?;
             if *at(&moving, j)? {
-                return Err(shared());
+                return Err(variable_shared());
             }
         }
     }
@@ -113,7 +107,7 @@ pub(super) fn pose_variable(
     let unit = |(x, y): (f64, f64)| -> Result<(f64, f64), String> {
         let length = x.hypot(y);
         if !length.is_finite() || length < 0.000001 {
-            return Err(exterior());
+            return Err(variable_exterior());
         }
         Ok((x / length, y / length))
     };
@@ -163,11 +157,11 @@ pub(super) fn pose_variable(
             // rather than accept a boundary/collinear contact as separated.
             unit((-first.0 - second.0, -first.1 - second.1))?
         }
-        _ => return Err(exterior()),
+        _ => return Err(variable_exterior()),
     };
     let length = f64::from(doc.drawing_style.bond_length_world);
     if !length.is_finite() || length <= 0. {
-        return Err(exterior());
+        return Err(variable_exterior());
     }
     let tolerance = (length * 0.00001).max(0.0001);
     let side = |position: Point| {
@@ -209,7 +203,7 @@ pub(super) fn pose_variable(
             .iter()
             .any(|repeat| repeat.members.iter().any(mixed))
     {
-        return Err(shared());
+        return Err(variable_shared());
     }
     let mut all_inward = true;
     for (i, (atom, fixed)) in doc.atoms.iter().zip(&host).enumerate() {
@@ -248,13 +242,13 @@ pub(super) fn pose_variable(
             }
         }
         if !*at(&core, t)? {
-            return Err(exterior());
+            return Err(variable_exterior());
         }
         for (i, atom) in doc.atoms.iter().enumerate() {
             if i != t && *at(&core, i)? {
                 let (distance, error) = side(atom.position);
                 if distance >= -error {
-                    return Err(exterior());
+                    return Err(variable_exterior());
                 }
             }
         }
@@ -268,9 +262,6 @@ pub(super) fn pose_variable(
         f64::from(center.x) + length * outward.0,
         f64::from(center.y) + length * outward.1,
     );
-    let precision = || {
-        "Variable attachment cannot preserve bond geometry at this coordinate precision; the source drawing is retained".to_owned()
-    };
     let mut positions = vec![None; doc.atoms.len()];
     for (i, atom) in doc.atoms.iter().enumerate() {
         if !*at(&moving, i)? {
@@ -285,18 +276,18 @@ pub(super) fn pose_variable(
         finite(position)?;
         let rounding = (f64::from(position.x) - ideal.0).hypot(f64::from(position.y) - ideal.1);
         if rounding > tolerance {
-            return Err(precision());
+            return Err(variable_precision());
         }
         let (distance, error) = side(position);
         if distance <= error {
-            return Err(exterior());
+            return Err(variable_exterior());
         }
         *at_mut(&mut positions, i)? = Some(position);
     }
     let installed_root = at(&positions, r)?.ok_or("Missing posed substituent root")?;
     let connecting = delta(installed_root, center);
     if (connecting.0.hypot(connecting.1) - length).abs() > tolerance {
-        return Err(precision());
+        return Err(variable_precision());
     }
     for bond in &doc.bonds {
         let a = *indices
@@ -312,7 +303,7 @@ pub(super) fn pose_variable(
                 at(&positions, b)?.ok_or("Missing posed branch endpoint")?,
             );
             if (old.0.hypot(old.1) - new.0.hypot(new.1)).abs() > tolerance * 2. {
-                return Err(precision());
+                return Err(variable_precision());
             }
         }
     }
@@ -333,7 +324,7 @@ pub(super) fn pose_variable(
         for (i, atom) in doc.atoms.iter().enumerate() {
             if *at(&host, i)? && i != t && !connector.separated(Footprint::point(atom.position, 0.))
             {
-                return Err(exterior());
+                return Err(variable_exterior());
             }
         }
         for (edge_index, edge) in doc.bonds.iter().enumerate() {
@@ -348,14 +339,14 @@ pub(super) fn pose_variable(
                 *at(&radii, edge_index)?,
             );
             if a != t && b != t && !connector.separated(fixed) {
-                return Err(exterior());
+                return Err(variable_exterior());
             }
             for (i, position) in positions.iter().enumerate() {
                 if let Some(position) = position
                     && *at(&moving, i)?
                     && !Footprint::point(*position, 0.).separated(fixed)
                 {
-                    return Err(exterior());
+                    return Err(variable_exterior());
                 }
             }
             for (branch_index, branch) in doc.bonds.iter().enumerate() {
@@ -370,7 +361,7 @@ pub(super) fn pose_variable(
                     )
                     .separated(fixed)
                 {
-                    return Err(exterior());
+                    return Err(variable_exterior());
                 }
             }
         }
@@ -389,9 +380,6 @@ pub(super) fn variable_ink_clearance(
     doc: &Document,
     boxes: &[Option<(Point, Point)>],
 ) -> Result<(), String> {
-    let collision = || {
-        "Variable attachment cannot clear the preserved bonds and atom labels; the source drawing is retained".to_owned()
-    };
     let atoms: Vec<_> = doc
         .atoms
         .iter()
@@ -460,12 +448,12 @@ pub(super) fn variable_ink_clearance(
         });
         let target = targets.next().ok_or("Missing generated variable contact")?;
         if targets.next().is_some() {
-            return Err(collision());
+            return Err(variable_collision());
         }
         let moving = graph.reach(root, Some((root, target)))?;
         let host = graph.reach(target, Some((root, target)))?;
         if *at(&moving, target)? {
-            return Err(collision());
+            return Err(variable_collision());
         }
         // Custom off-site marks/indicators are not clipped by a new bond like
         // the atom's chemical label. No supported junction policy exists.
@@ -474,7 +462,7 @@ pub(super) fn variable_ink_clearance(
             || junction.display.number.is_some()
             || crate::atom_labels::map_indicator_shown(junction, doc)
         {
-            return Err(collision());
+            return Err(variable_collision());
         }
         for (i, moved) in moving.iter().enumerate() {
             if !moved {
@@ -482,7 +470,7 @@ pub(super) fn variable_ink_clearance(
             }
             for (j, fixed) in host.iter().enumerate() {
                 if *fixed && !at(&atoms, i)?.separated(*at(&atoms, j)?) {
-                    return Err(collision());
+                    return Err(variable_collision());
                 }
             }
         }
@@ -498,7 +486,7 @@ pub(super) fn variable_ink_clearance(
                 // These linear scans fit the already prepaid full pair bound.
                 for (i, moved) in moving.iter().enumerate() {
                     if *moved && i != root && !branch.separated(*at(&atoms, i)?) {
-                        return Err(collision());
+                        return Err(variable_collision());
                     }
                 }
                 for &(c, d, internal) in &edges {
@@ -508,14 +496,14 @@ pub(super) fn variable_ink_clearance(
                         && d != root
                         && !branch.separated(internal)
                     {
-                        return Err(collision());
+                        return Err(variable_collision());
                     }
                 }
             }
             for (i, fixed) in host.iter().enumerate() {
                 // The chemical label is clipped at its own bond junction.
                 if *fixed && !(connector && i == target) && !branch.separated(*at(&atoms, i)?) {
-                    return Err(collision());
+                    return Err(variable_collision());
                 }
             }
             for &(c, d, fixed) in &edges {
@@ -524,7 +512,7 @@ pub(super) fn variable_ink_clearance(
                     && !(connector && (c == target || d == target))
                     && !branch.separated(fixed)
                 {
-                    return Err(collision());
+                    return Err(variable_collision());
                 }
             }
         }
@@ -534,7 +522,7 @@ pub(super) fn variable_ink_clearance(
             }
             for &(a, b, fixed) in &edges {
                 if *at(&host, a)? && *at(&host, b)? && !at(&atoms, i)?.separated(fixed) {
-                    return Err(collision());
+                    return Err(variable_collision());
                 }
             }
         }

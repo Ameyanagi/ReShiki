@@ -1,5 +1,8 @@
 //! Certify preserved drawing data and exact assembly translations.
-use super::geometry::{at, finite};
+use super::{
+    errors::retained,
+    geometry::{at, finite},
+};
 use crate::document::{Document, Point};
 use std::collections::HashMap;
 
@@ -60,7 +63,9 @@ pub(super) fn certify_translation(
         let error_x = (f64::from(new.x) - f64::from(old.x) - f64::from(shift.x)).abs();
         let error_y = (f64::from(new.y) - f64::from(old.y) - f64::from(shift.y)).abs();
         if error_x > 0.01 || error_y > 0.01 {
-            return Err("Prepared tile loses local geometry at these finite coordinates; the source drawing is retained".into());
+            return Err(retained(
+                "Prepared tile loses local geometry at these finite coordinates",
+            ));
         }
         Ok(())
     };
@@ -68,7 +73,9 @@ pub(super) fn certify_translation(
         let dx = ((f64::from(y.x) - f64::from(x.x)) - (f64::from(b.x) - f64::from(a.x))).abs();
         let dy = ((f64::from(y.y) - f64::from(x.y)) - (f64::from(b.y) - f64::from(a.y))).abs();
         if dx > 0.01 || dy > 0.01 {
-            return Err("Prepared tile loses local geometry at these finite coordinates; the source drawing is retained".into());
+            return Err(retained(
+                "Prepared tile loses local geometry at these finite coordinates",
+            ));
         }
         Ok(())
     };

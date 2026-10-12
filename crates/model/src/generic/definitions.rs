@@ -1,4 +1,9 @@
-use super::{Alternative, RepeatCount};
+use super::{
+    Alternative, RepeatCount,
+    limits::{
+        MAX_ALTERNATIVES, MAX_DEFINITIONS, MAX_LABEL_CHARS, MAX_REPEAT_COUNT, MAX_REPEAT_MEMBERS,
+    },
+};
 use crate::document::Document;
 use std::collections::{HashMap, HashSet};
 
@@ -6,14 +11,16 @@ pub(super) fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
 }
 pub(super) fn check_range(min: u32, max: u32) -> Result<(), String> {
-    if min == 0 || max < min || max > 1000 {
+    if min == 0 || max < min || max > MAX_REPEAT_COUNT {
         Err("Repeat counts must be an ordered range from 1 to 1000".into())
     } else {
         Ok(())
     }
 }
 pub(super) fn printable(text: &str) -> bool {
-    !text.is_empty() && text.chars().count() <= 64 && !text.chars().any(char::is_control)
+    !text.is_empty()
+        && text.chars().count() <= MAX_LABEL_CHARS
+        && !text.chars().any(char::is_control)
 }
 fn degrees(doc: &Document) -> HashMap<u64, usize> {
     let mut degrees = HashMap::new();
@@ -24,7 +31,8 @@ fn degrees(doc: &Document) -> HashMap<u64, usize> {
     degrees
 }
 pub fn validate(doc: &Document) -> Result<(), String> {
-    if doc.generic.alternatives.len() + doc.generic.links.len() + doc.generic.repeats.len() > 10_000
+    if doc.generic.alternatives.len() + doc.generic.links.len() + doc.generic.repeats.len()
+        > MAX_DEFINITIONS
     {
         return Err("Too many generic definitions".into());
     }
@@ -39,7 +47,7 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || a.attachment.is_some()
             || !a.centroid.is_empty()
             || s.choices.is_empty()
-            || s.choices.len() > 118
+            || s.choices.len() > MAX_ALTERNATIVES
         {
             return Err("Invalid alternative atom definition".into());
         }
@@ -81,7 +89,7 @@ pub fn validate(doc: &Document) -> Result<(), String> {
     for unit in &doc.generic.repeats {
         members = members.saturating_add(unit.members.len() + unit.crossings.len());
         let set: HashSet<_> = unit.members.iter().copied().collect();
-        if members > 100_000
+        if members > MAX_REPEAT_MEMBERS
             || set.is_empty()
             || set.len() != unit.members.len()
             || set.iter().any(|id| !atoms.contains_key(id))

@@ -2,6 +2,7 @@
 use super::{
     Alternative, AlternativeSite, ExpandedDrawing, Generic, Limits, LinkNode, RepeatUnit, Work,
     budget, depiction, drawing_size, ink, intersects,
+    limits::{MAX_OUTPUTS, MAX_SOURCE_ATOMS, MAX_SOURCE_BONDS},
     materialize::{group, materialize},
     probe::{self, Stage},
     references, symmetry,
@@ -108,8 +109,8 @@ fn positive_limits(limits: Limits) -> Result<(), String> {
 
 fn total_limit(source: &Document, limits: Limits) -> Result<(), String> {
     if source.atoms.len() > limits.max_total_atoms
-        || source.atoms.len() > 100_000
-        || source.bonds.len() > 300_000
+        || source.atoms.len() > MAX_SOURCE_ATOMS
+        || source.bonds.len() > MAX_SOURCE_BONDS
     {
         return Err("Generic expansion exceeds the total atom or bond limit".into());
     }
@@ -122,8 +123,8 @@ impl Limits {
     pub(super) fn check(self, source: &Document, selected: Option<&[u64]>) -> Result<(), String> {
         positive_limits(self)?;
         if let Some(selected) = selected {
-            if source.atoms.len() > 100_000
-                || source.bonds.len() > 300_000
+            if source.atoms.len() > MAX_SOURCE_ATOMS
+                || source.bonds.len() > MAX_SOURCE_BONDS
                 || selected.is_empty() && source.atoms.len() > self.max_total_atoms
             {
                 return Err("Generic expansion exceeds the source atom or bond limit".into());
@@ -321,7 +322,7 @@ fn plan_budget(
         outputs = outputs
             .checked_mul(site.count()?)
             .ok_or("Too many generic combinations")?;
-        if outputs > limits.max_outputs.min(500) {
+        if outputs > limits.max_outputs.min(MAX_OUTPUTS) {
             return Err(
                 "Generic expansion exceeds the output limit (maximum 500 structures)".into(),
             );
@@ -405,7 +406,10 @@ fn plan_budget(
                 .saturating_mul(10),
         );
     }
-    if upper_atoms > 100_000 || total_atoms < 0 || total_atoms > limits.max_total_atoms as i128 {
+    if upper_atoms > MAX_SOURCE_ATOMS
+        || total_atoms < 0
+        || total_atoms > limits.max_total_atoms as i128
+    {
         return Err("Generic expansion exceeds the total atom limit".into());
     }
     // Reserve construction, validation and final graph preparation before

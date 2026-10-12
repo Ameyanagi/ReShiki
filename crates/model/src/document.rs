@@ -417,6 +417,10 @@ impl Document {
             .enumerate()
             .find(|(_, bond)| bond.connects(a, b))
     }
+    /// Return the index of the first bond connecting either endpoint order.
+    pub fn bond_position(&self, a: u64, b: u64) -> Option<usize> {
+        self.bond_between(a, b).map(|(i, _)| i)
+    }
     pub fn nearest(&self, point: Point, radius: f32) -> Option<u64> {
         self.atoms
             .iter()

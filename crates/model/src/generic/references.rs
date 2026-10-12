@@ -1,5 +1,8 @@
 //! Guard inherited drawing references against changed components.
-use super::{Work, drawing_size, geometry::at, graph::IndexedGraph, guards::atom_references};
+use super::{
+    Work, drawing_size, errors::retained_text, geometry::at, graph::IndexedGraph,
+    guards::atom_references,
+};
 use crate::{document::Document, molecule_names::MoleculeName};
 use std::collections::HashSet;
 
@@ -7,8 +10,10 @@ use std::collections::HashSet;
 /// moved-component changes. This structural dependency check does not verify
 /// arbitrary saved name/SMILES claims or invoke name/identifier generation.
 pub(super) fn protect_references(doc: &Document, work: &mut Work) -> Result<(), String> {
-    const INCOMPLETE_NAME: &str = "Generated drawings require complete inherited named components; the source drawing is retained";
-    const CAPTION_MISMATCH: &str = "Inherited generated-caption text does not match its association; the source drawing is retained";
+    const INCOMPLETE_NAME: &str =
+        retained_text!("Generated drawings require complete inherited named components");
+    const CAPTION_MISMATCH: &str =
+        retained_text!("Inherited generated-caption text does not match its association");
     let members = doc
         .molecule_names
         .iter()
@@ -116,7 +121,10 @@ pub(super) fn anchor_touches(anchor: &crate::arrow_anchors::Anchor, ids: &HashSe
 
 pub(super) fn reference_error(kind: &str) -> String {
     format!(
-        "Generic drawing expansion involving {kind} on a changed component is unsupported; the source drawing is retained"
+        retained_text!(
+            "Generic drawing expansion involving {kind} on a changed component is unsupported"
+        ),
+        kind = kind,
     )
 }
 

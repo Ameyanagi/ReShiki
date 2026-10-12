@@ -17,6 +17,9 @@ mod output;
 pub use output::{BondLabel, Drawing, Labels, for_drawing, for_import};
 pub use output::{for_import_scene, for_import_with_attachments, kekule, validate_molecule};
 
+/// Drawing world units per depiction (RDKit coordinate) unit.
+pub const WORLD_PER_DEPICT_UNIT: f64 = 28.0;
+
 #[cfg(test)]
 mod tests;
 
@@ -228,8 +231,8 @@ fn build(document: &Document) -> Result<Input, Error> {
         .atoms
         .iter()
         .map(|a| Point3 {
-            x: f64::from(a.position.x) / 28.0,
-            y: -f64::from(a.position.y) / 28.0,
+            x: f64::from(a.position.x) / WORLD_PER_DEPICT_UNIT,
+            y: -f64::from(a.position.y) / WORLD_PER_DEPICT_UNIT,
             z: 0.0,
         })
         .collect();

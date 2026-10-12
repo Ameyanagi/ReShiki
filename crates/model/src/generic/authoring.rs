@@ -1,6 +1,6 @@
 use super::{
     Alternative, AlternativeSite, Crossing, LinkNode, RepeatCount, RepeatPattern, RepeatUnit,
-    printable, reject_affected_stereo,
+    limits::MAX_ALTERNATIVES, printable, reject_affected_stereo,
 };
 use crate::document::Document;
 use std::collections::HashSet;
@@ -65,7 +65,7 @@ pub fn alternative(text: &str) -> Result<Option<(Vec<Alternative>, bool)>, Strin
         };
         choices.push(choice);
     }
-    if choices.len() > 118 {
+    if choices.len() > MAX_ALTERNATIVES {
         return Err("Too many alternatives".into());
     }
     Ok(Some((choices, excluded)))
@@ -216,7 +216,7 @@ pub fn define_bracket(
         projection(a).total_cmp(&projection(b))
     });
     let count = RepeatCount::parse(label)?;
-    let head_count = if crossings.len() == 2 { Some(1) } else { None };
+    let head_count = RepeatUnit::default_head_count(crossings.len());
     let mut candidate = source.clone();
     set_repeat_unit(
         &mut candidate,

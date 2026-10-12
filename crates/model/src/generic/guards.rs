@@ -1,3 +1,4 @@
+use super::errors::retained;
 use crate::document::Document;
 use std::collections::{HashMap, HashSet};
 
@@ -33,7 +34,9 @@ pub(super) fn reject_affected_stereo(doc: &Document, ids: &[u64]) -> Result<(), 
                     && (neighbors.contains(&b.a) || neighbors.contains(&b.b)))
     });
     if atom_stereo || bond_stereo {
-        Err("Generic expansion involving specified atom or bond stereochemistry is unsupported; the source drawing is retained".into())
+        Err(retained(
+            "Generic expansion involving specified atom or bond stereochemistry is unsupported",
+        ))
     } else {
         Ok(())
     }

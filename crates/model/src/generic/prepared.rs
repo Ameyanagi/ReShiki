@@ -8,10 +8,16 @@ use super::{
     Limits,
     budget::{self, Work, drawing_size},
     certify,
+    errors::retained,
     expansion::{DrawingBatch, expand_drawing},
     ink,
     probe::{self, Stage},
 };
+
+const TILE_GAP: f32 = 84.;
+const MAX_GRID_COLUMNS: usize = 5;
+const GRID_GUARD: f32 = 1.;
+const MAX_PLACEMENT_ATTEMPTS: usize = 3;
 
 /// Cheaply cloned, single-use transport for an already bounded, measured native
 /// insertion. No caller can mutate the sealed drawing or construct a proof.
@@ -118,7 +124,7 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
     let mut result = source.clone();
     result.version = crate::document::VERSION;
     result.clear_content();
-    let columns = (count as f32).sqrt().ceil().min(5.) as usize;
+    let columns = (count as f32).sqrt().ceil().min(MAX_GRID_COLUMNS as f32) as usize;
     let mut x = 0_f32;
     let mut y = 0_f32;
     let mut row_height = 0_f32;
@@ -126,7 +132,7 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
     for (i, tile) in tiles.into_iter().enumerate() {
         if i > 0 && i % columns == 0 {
             x = 0.;
-            y += row_height + 84.;
+            y += row_height + TILE_GAP;
             row_height = 0.;
         }
         let (lo, _hi) = tile.bounds;
@@ -134,11 +140,11 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
         // Exact-boundary translation can round the actual f32 ink just outside
         // the grid and waste a fully prepaid attempt. Measurement still checks
         // the translated tile; this inset does not replace its certificate.
-        let mut shift = Point::new(x - lo.x + 1., y - lo.y + 1.);
+        let mut shift = Point::new(x - lo.x + GRID_GUARD, y - lo.y + GRID_GUARD);
         let mut accepted = None;
         // Supplementary cap: all attempts still debit the SAME Work before
         // baseline deepclone and scene/normalization/glyph calculation.
-        for attempt in 0..3 {
+        for attempt in 0..MAX_PLACEMENT_ATTEMPTS {
             if !shift.is_finite() {
                 return Err("Prepared expansion grid is nonfinite".into());
             }
@@ -174,13 +180,15 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
                 accepted = Some((part, bounds));
                 break;
             }
-            if attempt == 2 {
-                return Err("Prepared tile cannot reach a stable measured grid position; the source drawing is retained".into());
+            if attempt == MAX_PLACEMENT_ATTEMPTS - 1 {
+                return Err(retained(
+                    "Prepared tile cannot reach a stable measured grid position",
+                ));
             }
             // Rebuild the original tile next time. A one-world-unit guard
             // prevents a subpixel correction loop; no chemistry/stereo changes.
-            shift.x += (x - bounds.0.x).max(0.) + 1.;
-            shift.y += (y - bounds.0.y).max(0.) + 1.;
+            shift.x += (x - bounds.0.x).max(0.) + GRID_GUARD;
+            shift.y += (y - bounds.0.y).max(0.) + GRID_GUARD;
         }
         let (part, (a, b)) = accepted.ok_or("Missing stable measured expansion tile")?;
         crate::editing::extend_append_part(&mut result, part);
@@ -191,8 +199,8 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
                 Point::new(hi.x.max(b.x), hi.y.max(b.y)),
             )
         }));
-        x = b.x.max(x + 84.) + 84.;
-        row_height = row_height.max((b.y - y).max(84.));
+        x = b.x.max(x + TILE_GAP) + TILE_GAP;
+        row_height = row_height.max((b.y - y).max(TILE_GAP));
     }
     let bounds = grid.ok_or("Prepared expansion has no measured ink")?;
     presentation.charge_publication(

@@ -3,6 +3,7 @@ use super::{
     Work,
     budget::charge_ink_work,
     certify::preserve,
+    errors::retained,
     geometry::{at, at_mut, finite, include},
     graph::IndexedGraph,
     ink::{measured_bounds, move_box, object_bounds, reach, saved_and_refreshed_boxes},
@@ -10,10 +11,20 @@ use super::{
     references::reject_changed_references,
 };
 use crate::{
-    chemistry::{depict, document::Molecule},
+    chemistry::{
+        depict,
+        document::{Molecule, WORLD_PER_DEPICT_UNIT},
+    },
     document::{Document, Point},
 };
 use std::collections::HashSet;
+
+const BOND_LABEL_GAP_RATIO: f32 = 0.4;
+const MIN_VERTEX_TURN: f32 = 0.15;
+
+fn label_clearance(margin: f32) -> f32 {
+    margin * 2. + 1.
+}
 
 pub(super) struct Plan {
     graph: IndexedGraph,
@@ -128,8 +139,8 @@ impl Plan {
                     (
                         i,
                         depict::geometry::Point {
-                            x: f64::from(a.position.x) / 28.,
-                            y: -f64::from(a.position.y) / 28.,
+                            x: f64::from(a.position.x) / WORLD_PER_DEPICT_UNIT,
+                            y: -f64::from(a.position.y) / WORLD_PER_DEPICT_UNIT,
                         },
                     )
                 })
@@ -141,7 +152,8 @@ impl Plan {
                 &ranks,
                 (!fixed.is_empty()).then_some(&fixed),
                 depict::Options {
-                    bond_length: f64::from(doc.drawing_style.bond_length_world) / 28.,
+                    bond_length: f64::from(doc.drawing_style.bond_length_world)
+                        / WORLD_PER_DEPICT_UNIT,
                     canonical_orientation: true,
                     use_ring_templates: true,
                     work_limit: work.remaining,
@@ -154,7 +166,10 @@ impl Plan {
             }
             for (i, p) in conformer.positions.iter().enumerate() {
                 if *at(&self.affected, i)? {
-                    let position = Point::new((p.x * 28.) as f32, (-p.y * 28.) as f32);
+                    let position = Point::new(
+                        (p.x * WORLD_PER_DEPICT_UNIT) as f32,
+                        (-p.y * WORLD_PER_DEPICT_UNIT) as f32,
+                    );
                     finite(position)?;
                     at_mut(&mut doc.atoms, i)?.position = position;
                 }
@@ -172,7 +187,7 @@ impl Plan {
         let mut boxes = saved_and_refreshed_boxes(doc, &preview)?;
         let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
         let bond_length = doc.drawing_style.bond_length_world;
-        let gap = (bond_length * 0.4).max(margin * 2. + 1.);
+        let gap = (bond_length * BOND_LABEL_GAP_RATIO).max(label_clearance(margin));
         let edges: HashSet<_> = doc
             .bonds
             .iter()
@@ -304,7 +319,7 @@ impl Plan {
             let vx = q.x - a.position.x;
             let vy = q.y - a.position.y;
             let turn = (ux * vy - uy * vx).abs() / (ux.hypot(uy) * vx.hypot(vy));
-            if !turn.is_finite() || turn < 0.15 {
+            if !turn.is_finite() || turn < MIN_VERTEX_TURN {
                 return Err("Generated layout hides a saturated carbon vertex".into());
             }
         }
@@ -331,12 +346,14 @@ fn required_clearance(
         + if edges.contains(&super::pair(i as u64, j as u64)) {
             gap
         } else {
-            margin * 2. + 1.
+            label_clearance(margin)
         })
 }
 
 fn stereo_error() -> String {
-    "Generated link/repeat layout involving specified or perceived component stereochemistry is unsupported; the source drawing is retained".into()
+    retained(
+        "Generated link/repeat layout involving specified or perceived component stereochemistry is unsupported",
+    )
 }
 
 #[cfg(test)]

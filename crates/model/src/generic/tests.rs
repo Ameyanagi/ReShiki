@@ -18,6 +18,58 @@ fn chain(elements: &[&str]) -> Document {
 }
 
 #[test]
+fn shared_alternative_labels_keep_cdxml_import_isotope_spelling() {
+    let mut site = AlternativeSite {
+        atom: 1,
+        choices: vec![
+            Alternative::Element {
+                symbol: "H".into(),
+                isotope: 2,
+            },
+            Alternative::Element {
+                symbol: "H".into(),
+                isotope: 3,
+            },
+            Alternative::Element {
+                symbol: "H".into(),
+                isotope: 4,
+            },
+            Alternative::Element {
+                symbol: "C".into(),
+                isotope: 13,
+            },
+            Alternative::Group {
+                label: "OMe".into(),
+            },
+            Alternative::Unresolved { label: "R1".into() },
+        ],
+        excluded: true,
+    };
+    assert_eq!(site.label(), "[NOT D,T,H,C,OMe,R1]");
+    assert_eq!(
+        AlternativeSite::label_without_isotope_aliases(site.excluded, &site.choices),
+        "[NOT H,H,H,C,OMe,R1]"
+    );
+    site.excluded = false;
+    assert_eq!(site.label(), "[D,T,H,C,OMe,R1]");
+    assert_eq!(
+        AlternativeSite::label_without_isotope_aliases(site.excluded, &site.choices),
+        "[H,H,H,C,OMe,R1]"
+    );
+}
+
+#[test]
+fn shared_crossing_bond_position_uses_first_undirected_match() {
+    let mut doc = chain(&["C", "C", "C"]);
+    let mut duplicate = doc.bonds[0].clone();
+    std::mem::swap(&mut duplicate.a, &mut duplicate.b);
+    doc.bonds.push(duplicate);
+    assert_eq!(doc.bond_position(1, 2), Some(0));
+    assert_eq!(doc.bond_position(2, 1), Some(0));
+    assert_eq!(doc.bond_position(1, 3), None);
+}
+
+#[test]
 fn touches_is_intersects_or_component_intersects() {
     let mut source = chain(&["O", "C", "C", "N"]);
     let connected = source.add_atom("C", Point::new(-42., 0.));

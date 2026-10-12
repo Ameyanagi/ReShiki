@@ -1,7 +1,8 @@
 //! Concrete fragment insertion and generic-site materializers.
 use super::{
-    Alternative, LinkNode, RepeatPattern, RepeatUnit, Work, bonds_at,
+    Alternative, EXPANDABLE_FLIPS, LinkNode, RepeatPattern, RepeatUnit, Work, bonds_at,
     definitions::pair,
+    errors::ID_LIMIT,
     expansion::{Mode, Site},
     graph::IndexedGraph,
     guards::reject_affected_stereo,
@@ -9,6 +10,8 @@ use super::{
 };
 use crate::document::{Document, Point};
 use std::collections::{HashMap, HashSet};
+
+const FRAGMENT_TEMPLATE_BOND_LENGTH: f64 = 42.;
 
 /// Allocation is checked once before appending. No growing-document scans occur
 /// inside a replication loop, and the reserved sentinel ID is never produced.
@@ -23,12 +26,10 @@ impl Ids {
             .chain(doc.groups.iter().map(|g| g.id))
             .max()
             .unwrap_or(0);
-        let next = maximum
-            .checked_add(1)
-            .ok_or("Generic object ID limit exceeded")?;
-        let count64 = u64::try_from(count).map_err(|_| "Generic object ID limit exceeded")?;
+        let next = maximum.checked_add(1).ok_or(ID_LIMIT)?;
+        let count64 = u64::try_from(count).map_err(|_| ID_LIMIT)?;
         if next.checked_add(count64).is_none() {
-            return Err("Generic object ID limit exceeded".into());
+            return Err(ID_LIMIT.into());
         }
         Ok(Self {
             next,
@@ -37,7 +38,7 @@ impl Ids {
     }
     fn take(&mut self) -> Result<u64, String> {
         if self.remaining == 0 || self.next == u64::MAX {
-            return Err("Generic object ID limit exceeded".into());
+            return Err(ID_LIMIT.into());
         }
         let id = self.next;
         self.next += 1;
@@ -202,7 +203,7 @@ fn insert_fragment(doc: &Document, id: u64, fragment: &Document) -> Result<Docum
         }
         (
             (delta.y as f64).atan2(delta.x as f64) - std::f64::consts::PI,
-            length as f64 / 42.,
+            length as f64 / FRAGMENT_TEMPLATE_BOND_LENGTH,
         )
     } else {
         (0., 1.)
@@ -335,7 +336,7 @@ pub(super) fn link(doc: &Document, node: &LinkNode, count: u32) -> Result<Docume
 pub(super) fn repeat(doc: &Document, unit: &RepeatUnit, count: u32) -> Result<Document, String> {
     if !matches!(unit.usage.as_str(), "SRU" | "Generic")
         || unit.pattern != RepeatPattern::HeadToTail
-        || !matches!(unit.flip.as_str(), "" | "NoFlip" | "Unspecified")
+        || !EXPANDABLE_FLIPS.contains(&unit.flip.as_str())
     {
         return Err("This polymer usage, repeat pattern or flip type is retained but cannot be finitely expanded".into());
     }
@@ -356,15 +357,11 @@ pub(super) fn repeat(doc: &Document, unit: &RepeatUnit, count: u32) -> Result<Do
     }) {
         return Err("Finite polymer expansion requires an ordinary repeat unit without specified atom stereochemistry".into());
     }
-    let head_bond = doc
-        .bonds
-        .iter()
-        .find(|b| pair(b.a, b.b) == pair(head.inside, head.outside))
+    let (_, head_bond) = doc
+        .bond_between(head.inside, head.outside)
         .ok_or("Missing head crossing bond")?;
-    let tail_bond = doc
-        .bonds
-        .iter()
-        .find(|b| pair(b.a, b.b) == pair(tail.inside, tail.outside))
+    let (_, tail_bond) = doc
+        .bond_between(tail.inside, tail.outside)
         .ok_or("Missing tail crossing bond")?;
     if head_bond.order != 1 || tail_bond.order != 1 {
         return Err("Finite polymer expansion requires single crossing bonds".into());
