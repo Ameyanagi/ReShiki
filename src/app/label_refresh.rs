@@ -16,6 +16,13 @@ pub(super) struct State {
     cache: Arc<Refresh>,
 }
 
+#[cfg(test)]
+impl State {
+    pub(super) fn pending_key(&self) -> Option<Key> {
+        self.pending
+    }
+}
+
 pub(super) async fn calculate(
     source: reshiki::document::Document,
     previous: Arc<Refresh>,
@@ -74,6 +81,7 @@ impl App {
         match result {
             Ok(computed) => {
                 computed.apply(&mut self.tab.doc);
+                self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
                 self.tab.chemistry_notice.clone_from(&computed.notice);
             }
             Err(error) => self.tab.chemistry_notice = Some(error),

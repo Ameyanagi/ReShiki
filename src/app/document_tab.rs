@@ -59,6 +59,8 @@ pub(super) struct DocumentTab {
     pub(super) clipboard_busy: bool,
     pub(super) labels_dirty: bool,
     pub(super) label_refresh: label_refresh::State,
+    /// Counts computed-label writes that need not bump revision; keys the mapping thumbnail.
+    pub(super) label_generation: u64,
     pub(super) chemistry_notice: Option<String>,
     pub(super) reactions: reactions::State,
     pub(super) naming: naming::State,
@@ -142,6 +144,7 @@ impl DocumentTab {
             clipboard_busy: false,
             labels_dirty: false,
             label_refresh: Default::default(),
+            label_generation: 0,
             chemistry_notice: None,
             reactions: Default::default(),
             naming: Default::default(),

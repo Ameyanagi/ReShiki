@@ -20,8 +20,44 @@ pub(super) struct State {
     serial: u64,
     pending: Option<(u64, u64)>,
     proposal: Option<Arc<Proposal>>,
+    preview: Option<Preview>,
 }
+
+struct Preview {
+    key: (u64, u64),
+    current: bool,
+    document: Option<Document>,
+    // Hue previews and Cancel write these without recording history/revision.
+    version: u32,
+    theme: Option<Box<reshiki::theme_files::ThemeFile>>,
+}
+
+impl Preview {
+    fn new(key: (u64, u64), proposal: &Proposal, doc: &Document) -> Self {
+        let current = proposal.current(doc);
+        let document = proposal.apply(doc, true).ok().map(|mut document| {
+            document.atom_labels.maps = true;
+            for atom in &mut document.atoms {
+                atom.display.mapping.show = Some(true);
+            }
+            document
+        });
+        Self {
+            key,
+            current,
+            document,
+            version: doc.version,
+            theme: doc.custom_theme.clone(),
+        }
+    }
+}
+
 impl State {
+    fn set_proposal(&mut self, proposal: Option<Arc<Proposal>>) {
+        self.proposal = proposal;
+        self.preview = None;
+    }
+
     pub(super) fn is_pending(&self) -> bool {
         self.pending.is_some()
     }
@@ -54,6 +90,28 @@ async fn calculate(source: Document, arrow: u64) -> Result<Arc<Proposal>, String
         .map(Arc::new)
 }
 impl App {
+    pub(super) fn sync_mapping_preview(&mut self) {
+        let Some(proposal) = &self.tab.mapping.proposal else {
+            self.tab.mapping.preview = None;
+            return;
+        };
+        let key = (self.tab.revision, self.tab.label_generation);
+        if let Some(preview) = &self.tab.mapping.preview
+            && preview.key == key
+            && preview.version == self.tab.doc.version
+            && preview.theme == self.tab.doc.custom_theme
+        {
+            #[cfg(test)]
+            {
+                let fresh = Preview::new(key, proposal, &self.tab.doc);
+                debug_assert_eq!(preview.current, fresh.current);
+                debug_assert_eq!(preview.document, fresh.document);
+            }
+            return;
+        }
+        self.tab.mapping.preview = Some(Preview::new(key, proposal, &self.tab.doc));
+    }
+
     fn mapping_atom(&self) -> Option<u64> {
         let ids: Vec<_> = self
             .tab
@@ -77,7 +135,7 @@ impl App {
                 self.tab.mapping.text = value;
             }
             Action::Auto => return self.start_auto_map(),
-            Action::Dismiss => self.tab.mapping.proposal = None,
+            Action::Dismiss => self.tab.mapping.set_proposal(None),
             Action::ReviewPair(index) => self.review_pair(index),
             Action::Position => self.position_labels(),
             Action::Apply => {
@@ -158,7 +216,7 @@ impl App {
                 }
                 .into();
                 self.error = false;
-                self.tab.mapping.proposal = Some(proposal);
+                self.tab.mapping.set_proposal(Some(proposal));
             }
             Ok(_) => {
                 self.status = "The drawing changed; run Auto-map again".into();
@@ -193,7 +251,7 @@ impl App {
         let serial = self.tab.mapping.serial;
         let epoch = self.tab.file_epoch;
         self.tab.mapping.pending = Some((epoch, serial));
-        self.tab.mapping.proposal = None;
+        self.tab.mapping.set_proposal(None);
         self.status = "Finding atom correspondence…".into();
         self.error = false;
         Task::perform(calculate(self.tab.doc.clone(), arrow), move |result| {
@@ -230,7 +288,7 @@ impl App {
             Ok(candidate) => {
                 self.tab.doc = candidate;
                 self.changed(before);
-                self.tab.mapping.proposal = None;
+                self.tab.mapping.set_proposal(None);
                 self.status = "Atom mapping updated".into();
                 self.error = false;
             }
@@ -324,7 +382,8 @@ impl App {
         proposal: &Proposal,
     ) -> Column<'a, Message> {
         use super::workspace::{command, horizontal_line, muted_text};
-        let current = proposal.current(&self.tab.doc);
+        // A test may install a proposal without updating; no preview means stale.
+        let current = self.tab.mapping.preview.as_ref().is_some_and(|p| p.current);
         let certainty = if !proposal.complete {
             "Budget reached · optimality and uniqueness unknown"
         } else if proposal.multiple_best {
@@ -346,13 +405,15 @@ impl App {
                 .size(11),
             )
             .push(text(PROPOSAL_HINT).size(11).style(muted_text));
-        if let Ok(mut preview) = proposal.apply(&self.tab.doc, true) {
-            preview.atom_labels.maps = true;
-            for a in &mut preview.atoms {
-                a.display.mapping.show = Some(true);
-            }
+        if let Some(document) = self
+            .tab
+            .mapping
+            .preview
+            .as_ref()
+            .and_then(|preview| preview.document.as_ref())
+        {
             body = body.push(
-                crate::canvas::layered::canvas(crate::canvas::DrawingThumbnail(preview))
+                crate::canvas::layered::canvas(crate::canvas::TemplateThumbnail(document))
                     .width(Length::Fill)
                     .height(120),
             );

@@ -32,6 +32,134 @@ fn pending_proposal(app: &mut App) -> (u64, u64, Arc<Proposal>) {
     (epoch, serial, proposal)
 }
 
+fn live_review(app: &App) -> (bool, Option<Document>) {
+    let proposal = app.tab.mapping.proposal.as_ref().unwrap();
+    let document = proposal.apply(&app.tab.doc, true).ok().map(|mut doc| {
+        doc.atom_labels.maps = true;
+        for atom in &mut doc.atoms {
+            atom.display.mapping.show = Some(true);
+        }
+        doc
+    });
+    (proposal.current(&app.tab.doc), document)
+}
+
+fn review(app: &App) -> (bool, Option<Document>) {
+    let preview = app.tab.mapping.preview.as_ref().unwrap();
+    assert_eq!(preview.key, (app.tab.revision, app.tab.label_generation));
+    let review = (preview.current, preview.document.clone());
+    assert_eq!(review, live_review(app));
+    review
+}
+
+#[test]
+fn review_thumbnail_tracks_labels_and_restores_after_undo() {
+    use reshiki::atom_labels::refresh::Refresh;
+    let mut app = app();
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    app.tab.labels_dirty = true;
+    let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+    let (current, thumbnail) = review(&app);
+    assert!(current);
+    let thumbnail = thumbnail.unwrap();
+    assert_eq!(thumbnail.atom(1).unwrap().label_h, 0);
+    assert_eq!(thumbnail.atom(2).unwrap().label_h, 0);
+    assert!(thumbnail.atom_labels.maps);
+    assert!(
+        thumbnail
+            .atoms
+            .iter()
+            .all(|atom| atom.display.mapping.show == Some(true))
+    );
+
+    let revision = app.tab.revision;
+    let key = app.tab.label_refresh.pending_key().unwrap();
+    let labels = Refresh::calculate(&app.tab.doc, &Arc::default()).map(Arc::new);
+    let _ = app.update(Message::LabelsReady(key, labels));
+    assert_eq!(app.tab.revision, revision);
+    let (current, thumbnail) = review(&app);
+    assert!(current, "Computed labels do not change proposal freshness");
+    let thumbnail = thumbnail.unwrap();
+    assert_eq!(thumbnail.atom(1).unwrap().label_h, 4);
+    assert_eq!(thumbnail.atom(2).unwrap().label_h, 4);
+    assert_eq!(Some(thumbnail.clone()), live_review(&app).1);
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Move(vec![1], 10., 0.)));
+    assert_eq!(review(&app), (false, None), "Drawing changed review state");
+    let _ = app.update(Message::Undo);
+    assert_eq!(review(&app), (true, Some(thumbnail.clone())));
+    assert!(app.tab.revision > revision);
+    let _ = app.update(Message::Redo);
+    assert_eq!(review(&app), (false, None));
+    let _ = app.update(Message::Undo);
+    assert_eq!(review(&app), (true, Some(thumbnail)));
+}
+
+#[test]
+fn background_analysis_refreshes_the_review_thumbnail_without_an_edit() {
+    use crate::app::Job;
+    use reshiki::engine::Response;
+    let mut app = app();
+    let id = app.tab.id;
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+    let before = review(&app).1.unwrap();
+    assert_eq!(before.atom(1).unwrap().label_h, 0);
+    let revision = app.tab.revision;
+    let mut checked = app.tab.doc.clone();
+    checked.atom_mut(1).unwrap().label_h = 4;
+    checked.atom_mut(2).unwrap().label_h = 4;
+    let front = Front::new(&mut app);
+    let _ = app.update(Message::Tab(
+        id,
+        Box::new(Message::EngineDone {
+            revision,
+            kind: Job::Analyze,
+            result: Box::new(Ok(Response {
+                document: Some(checked),
+                analysis: None,
+                output: None,
+                engine_version: "test".into(),
+                warnings: vec![],
+            })),
+        }),
+    ));
+    front.assert_unchanged(&app);
+    let (current, thumbnail) = app.in_tab(id, |app| review(app)).unwrap();
+    assert!(current);
+    assert_eq!(thumbnail.as_ref().unwrap().atom(1).unwrap().label_h, 4);
+    assert_eq!(thumbnail.as_ref().unwrap().atom(2).unwrap().label_h, 4);
+    let _ = app.update(Message::Tabs(Tabs::Select(id)));
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+    let (current, thumbnail) = review(&app);
+    assert!(current);
+    let thumbnail = thumbnail.unwrap();
+    assert_eq!(thumbnail.atom(1).unwrap().label_h, 4);
+    assert_eq!(thumbnail.atom(2).unwrap().label_h, 4);
+    assert_ne!(thumbnail, before);
+    assert_eq!(Some(thumbnail), live_review(&app).1);
+}
+
+#[test]
+fn review_thumbnail_tracks_uncommitted_hues_and_cancellation() {
+    use crate::app::color_popover::Action as Color;
+    let mut app = app();
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+    let before = review(&app).1.unwrap();
+    let revision = app.tab.revision;
+    for action in [Color::Color, Color::EditHues, Color::Step(1)] {
+        let _ = app.update(Message::StyleMenu(action));
+    }
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(review(&app), (false, None));
+    let _ = app.update(Message::StyleMenu(Color::Cancel));
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(review(&app), (true, Some(before)));
+    assert!(!app.tab.history.can_undo());
+}
+
 const BEFORE_ACTION: &str = "Mapping status before action";
 
 fn action_app() -> App {

@@ -883,6 +883,7 @@ impl App {
         if refresh_dimensions {
             self.refresh_numeric_dimensions();
         }
+        self.sync_mapping_preview();
         // Include inspector changes made by tool-specific handlers, which can
         // return early. Ordinary updates within a panel retain its scroll state.
         if !background

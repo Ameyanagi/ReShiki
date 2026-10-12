@@ -1,6 +1,9 @@
 //! Bounded maximum-cardinality graph matching. Chemistry-changing properties
 //! are preferences, never candidate filters. IDs only make traversal repeatable.
-use super::{MAX_MAP, check_edit, compatible, ids, reaction, unique};
+use super::{
+    MAX_MAP, cross_side_conflict, ids, reaction, same_isotope_element, unique,
+    validate_edited_atoms,
+};
 use crate::{document::Document, reactions::Role};
 use std::{
     cmp::Reverse,
@@ -98,9 +101,8 @@ impl Proposal {
                 .ok_or("A mapped atom is no longer available")?
                 .map_num = *number;
         }
-        for (id, _) in &self.assignments {
-            check_edit(&candidate, *id, doc)?;
-        }
+        let atoms: Vec<_> = self.assignments.iter().map(|(id, _)| *id).collect();
+        validate_edited_atoms(&candidate, &atoms, doc)?;
         candidate.validate()?;
         Ok(candidate)
     }
@@ -194,7 +196,8 @@ impl Graph {
     }
 }
 fn can_pair(a: &Atom, b: &Atom) -> bool {
-    a.element == b.element && a.isotope == b.isotope && (a.map == 0 || b.map == 0 || a.map == b.map)
+    same_isotope_element(&a.element, a.isotope, &b.element, b.isotope)
+        && (a.map == 0 || b.map == 0 || a.map == b.map)
 }
 fn budget_error() -> String {
     "Auto-map search budget reached before a full correspondence was found; add manual anchors"
@@ -569,14 +572,12 @@ pub fn propose(doc: &Document, arrow: u64, budget: Budget) -> Result<Proposal, S
     }
     let left_maps = unique(doc, &left_ids)?;
     let right_maps = unique(doc, &right_ids)?;
-    for (number, a) in &left_maps {
-        if let Some(b) = right_maps.get(number)
-            && !compatible(doc, *a, *b)
-        {
-            return Err(format!(
-                "Atom map {number} has different elements or isotopes across the reaction"
-            ));
-        }
+    // Both maps are ordered by number, preserving the first shared conflict.
+    let right_mapped_ids: Vec<_> = right_maps.values().copied().collect();
+    if let Some((number, _, _)) = cross_side_conflict(doc, &left_maps, &right_mapped_ids) {
+        return Err(format!(
+            "Atom map {number} has different elements or isotopes across the reaction"
+        ));
     }
     let participant_ids: HashSet<_> = left_ids.iter().chain(&right_ids).copied().collect();
     let bond_count = doc
