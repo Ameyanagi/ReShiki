@@ -276,7 +276,7 @@ fn pen_first_click_is_inert_and_point_drag_carries_adjacent_tangents() {
     };
     assert_eq!((actual, index, point), (id, 3, to));
     let mut committed = doc.clone();
-    committed.graphics[0].edit_point(index, point);
+    let _ = committed.graphics[0].edit_point(index, point);
     let moved = committed.graphics[0].edit_points();
     for index in [2, 3, 4] {
         assert_eq!(moved[index], points[index].offset(20., -10.));

@@ -90,7 +90,7 @@ fn curve_control_edit_preserves_other_points_and_frame_and_invalid_paths_are_rej
     let before = g.commands();
     let frame = (g.origin, g.axis_x, g.axis_y, g.depth);
     let replacement = Point::new(80., 10.);
-    g.edit_point(1, replacement);
+    let _ = g.edit_point(1, replacement);
     let points: Vec<_> = g.commands().iter().flat_map(PathCommand::points).collect();
     let original: Vec<_> = before.iter().flat_map(PathCommand::points).collect();
     assert!(points[1].distance(replacement) < 0.001);

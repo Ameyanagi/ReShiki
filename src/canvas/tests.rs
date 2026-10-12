@@ -1575,7 +1575,7 @@ fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
     assert_eq!(with_curve, original);
 
     let mut with_closed_path = with_curve.clone();
-    with_closed_path.graphics[0].edit_point(3, World::new(-50., 0.));
+    let _ = with_closed_path.graphics[0].edit_point(3, World::new(-50., 0.));
     with_closed_path.graphics[0].path.push(PathCommand::Close);
     canvas.doc = &with_closed_path;
     let original = with_closed_path.clone();

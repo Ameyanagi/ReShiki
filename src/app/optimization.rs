@@ -584,13 +584,7 @@ impl App {
 
     pub(super) fn optimization_action(&mut self, action: Action) -> Task<Message> {
         if matches!(action, Action::Begin) {
-            if self.tab.busy
-                || self.tab.cleanup.is_some()
-                || self.tab.optimization.is_some()
-                || self.tab.inline_text.is_some()
-                || self.tab.atom_text.is_some()
-                || self.tab.joining.is_some()
-            {
+            if self.tab.busy || self.tab.drawing_edit_active() {
                 return Task::none();
             }
             let prepared = match Prepared::new(&self.tab.doc, &self.tab.selected) {

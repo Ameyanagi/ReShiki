@@ -3,7 +3,7 @@ use super::{MoleculeCanvas, World};
 use crate::canvas::pick::{DRAG_SLOP_PX, HANDLE_PICK_PX};
 use reshiki::{
     document::Document,
-    graphics::{Graphic, GraphicKind, GraphicStyle},
+    graphics::{Graphic, GraphicStyle, PathSummary},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -34,14 +34,14 @@ impl PointDrag {
     }
 }
 
-pub(crate) fn active<'a>(doc: &'a Document, selected: &[u64]) -> Option<&'a Graphic> {
+pub(crate) fn active<'a>(
+    doc: &'a Document,
+    selected: &[u64],
+) -> Option<(&'a Graphic, PathSummary)> {
     let [id] = selected else { return None };
-    doc.graphics.iter().find(|g| {
-        g.id == *id
-            && matches!(g.kind, GraphicKind::Path | GraphicKind::Curve)
-            && !g.path_closed()
-            && g.path_handles().is_some()
-    })
+    let graphic = doc.graphics.iter().find(|graphic| graphic.id == *id)?;
+    let summary = graphic.path_summary()?;
+    (!summary.closed).then_some((graphic, summary))
 }
 
 pub(crate) fn apply(
@@ -51,7 +51,7 @@ pub(crate) fn apply(
     stroke: Stroke,
 ) -> Result<(Document, u64, usize), String> {
     let mut result = doc.clone();
-    if let Some(graphic) = active(doc, selected) {
+    if let Some((graphic, _)) = active(doc, selected) {
         let id = graphic.id;
         let graphic = result
             .graphics
@@ -69,10 +69,10 @@ pub(crate) fn apply(
         let id = result.next_id();
         let graphic = Graphic::pen_curve(id, stroke.start, stroke.end, style.clone());
         let index = graphic
-            .path_handles()
+            .path_summary()
             .ok_or("Invalid pen path")?
-            .into_iter()
-            .rfind(|h| h.node)
+            .nodes()
+            .next_back()
             .ok_or("Missing pen node")?
             .index;
         result.graphics.push(graphic);
@@ -89,10 +89,9 @@ impl MoleculeCanvas<'_> {
         if path.is_none() && !dragged {
             return None;
         }
-        let close = path.and_then(Graphic::path_handles).is_some_and(|handles| {
-            let nodes: Vec<_> = handles.into_iter().filter(|h| h.node).collect();
-            nodes.len() >= 3
-                && nodes.first().is_some_and(|node| {
+        let close = path.is_some_and(|(_, summary)| {
+            summary.can_close()
+                && summary.nodes().next().is_some_and(|node| {
                     start.distance(node.point) < self.camera.world_len(HANDLE_PICK_PX)
                 })
         });

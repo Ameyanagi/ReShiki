@@ -1,7 +1,7 @@
 //! Contextual pen authoring and node edits.
 use super::*;
 use iced::widget::{Column, column, row, text};
-use reshiki::graphics::{Graphic, PathHandle};
+use reshiki::graphics::{Graphic, PathHandle, PathSummary};
 
 const NODE_HINT: &str =
     "Round nodes carry adjacent controls. Square controls change each tangent independently.";
@@ -55,15 +55,12 @@ impl std::fmt::Display for Choice {
     }
 }
 impl App {
-    fn selected_path(&self) -> Option<&Graphic> {
+    fn selected_path(&self) -> Option<(&Graphic, PathSummary)> {
         let [id] = self.tab.selected.as_slice() else {
             return None;
         };
-        self.tab
-            .doc
-            .graphics
-            .iter()
-            .find(|g| g.id == *id && g.path_handles().is_some())
+        let graphic = self.tab.doc.graphics.iter().find(|g| g.id == *id)?;
+        Some((graphic, graphic.path_summary()?))
     }
     fn path_point(&self, graphic: &Graphic, handles: &[PathHandle]) -> Option<usize> {
         self.tab
@@ -83,10 +80,8 @@ impl App {
             .spacing(5)
         ]
         .spacing(8);
-        if let Some(graphic) = self.selected_path()
-            && let Some(handles) = graphic.path_handles()
-        {
-            panel = self.path_node_controls(panel, graphic, &handles);
+        if let Some((graphic, summary)) = self.selected_path() {
+            panel = self.path_node_controls(panel, graphic, &summary);
         }
         panel
             .push(text(DRAWING_HINT).size(11).style(muted_text))
@@ -96,29 +91,28 @@ impl App {
         &'a self,
         panel: Column<'a, Message>,
         graphic: &Graphic,
-        handles: &[PathHandle],
+        summary: &PathSummary,
     ) -> Column<'a, Message> {
         let send = |a| Message::Graphics(super::Action::Path(a));
-        let choices: Vec<_> = handles
-            .iter()
-            .filter(|h| h.node)
+        let choices: Vec<_> = summary
+            .nodes()
             .enumerate()
             .map(|(i, h)| Choice {
                 ordinal: i + 1,
                 index: h.index,
             })
             .collect();
-        let point = self.path_point(graphic, handles);
+        let point = self.path_point(graphic, &summary.handles);
         let node = choices
             .iter()
             .position(|choice| Some(choice.index) == point);
-        let closed = graphic.path_closed();
-        let following = node.is_some_and(|i| closed || i + 1 < choices.len());
+        let closed = summary.closed;
+        let following = node.is_some_and(|i| summary.has_following(i));
         panel
             .push(
                 text(format!(
                     "{} nodes · {}",
-                    choices.len(),
+                    summary.node_count(),
                     if closed { "Closed" } else { "Open" }
                 ))
                 .size(12),
@@ -138,8 +132,7 @@ impl App {
                     path_button("pen-insert", "Insert after")
                         .on_press_maybe(following.then(|| send(Action::Insert))),
                     path_button("pen-delete", "Delete node").on_press_maybe(
-                        (node.is_some() && choices.len() > if closed { 3 } else { 2 })
-                            .then(|| send(Action::Delete))
+                        (node.is_some() && summary.can_delete_node()).then(|| send(Action::Delete))
                     )
                 ]
                 .spacing(5),
@@ -157,7 +150,7 @@ impl App {
                 row![
                     path_button("pen-close", if closed { "Open path" } else { "Close path" })
                         .on_press_maybe(
-                            (closed || choices.len() >= 3).then(|| {
+                            (closed || summary.can_close()).then(|| {
                                 send(if closed { Action::Open } else { Action::Close })
                             })
                         ),
@@ -183,8 +176,8 @@ impl App {
             Action::Continue => {
                 let Some(id) = self
                     .selected_path()
-                    .filter(|graphic| !graphic.path_closed())
-                    .map(|graphic| graphic.id)
+                    .filter(|(_, summary)| !summary.closed)
+                    .map(|(graphic, _)| graphic.id)
                 else {
                     self.status = "Select one open continuous path".into();
                     self.error = true;
@@ -199,15 +192,13 @@ impl App {
             }
             _ => {}
         }
-        let Some(graphic) = self.selected_path() else {
+        let Some((graphic, summary)) = self.selected_path() else {
             self.status = "Select one continuous path".into();
             self.error = true;
             return;
         };
         let id = graphic.id;
-        let index = self
-            .path_point(graphic, &graphic.path_handles().unwrap_or_default())
-            .unwrap_or(0);
+        let index = self.path_point(graphic, &summary.handles).unwrap_or(0);
         if let Action::Node(index) = action {
             self.tab.path_point = Some((id, index));
             return;

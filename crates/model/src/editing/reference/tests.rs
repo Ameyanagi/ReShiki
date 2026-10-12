@@ -203,6 +203,56 @@ fn stretch_preserves_arbitrary_original_axis_and_translates_the_whole_branch() {
 }
 
 #[test]
+fn stretch_commit_refreshes_the_branch_and_apply_uses_the_current_topology() {
+    let mut doc = branch(0.);
+    let stale = Stretch::new(&doc, 1, 2).unwrap();
+    let attached_position = doc.atom(3).unwrap().position.offset(21., 0.);
+    let attached = doc.add_atom("C", attached_position);
+    doc.add_bond(3, attached, 1, "plain");
+    let committed = Stretch::commit(&doc, 1, 2, 63.).unwrap();
+    assert_eq!(
+        committed.atom(attached).unwrap().position,
+        attached_position.offset(21., 0.)
+    );
+    assert_eq!(committed, stale.apply(&doc, 63.).unwrap());
+    assert_eq!(committed.atom(1), doc.atom(1));
+    assert_eq!(committed.bonds, doc.bonds);
+}
+
+#[test]
+fn stretch_commit_preserves_resolution_length_geometry_and_validation_error_order() {
+    let mut doc = branch(0.);
+    let plan = Stretch::new(&doc, 1, 2).unwrap();
+    doc.version = 0;
+    assert_eq!(plan.translated(&doc, plan.length).unwrap().version, 0);
+    assert_eq!(
+        Stretch::commit(&doc, 1, 2, plan.length).unwrap_err(),
+        "Unsupported document version 0"
+    );
+    assert_eq!(
+        Stretch::commit(&doc, 1, 2, f32::NAN).unwrap_err(),
+        "Enter a positive bond length of at least 0.1 pt"
+    );
+    doc.translate(&doc.all_ids(), 10_000_000., 0.);
+    let plan = Stretch::new(&doc, 1, 2).unwrap();
+    let geometry_error =
+        "This length is too small for these drawing coordinates; choose a larger length";
+    assert_eq!(
+        plan.translated(&doc, plan.minimum).unwrap_err(),
+        geometry_error
+    );
+    assert_eq!(
+        Stretch::commit(&doc, 1, 2, plan.minimum).unwrap_err(),
+        geometry_error
+    );
+    doc.add_bond(3, 1, 1, "plain");
+    assert_eq!(
+        Stretch::commit(&doc, 1, 2, f32::NAN).unwrap_err(),
+        "A ring bond cannot change only its length while the rest of the ring stays rigid"
+    );
+}
+
+#[test]
 fn stretching_can_pin_either_end_without_reversing_bond_or_merging_a_nearby_atom() {
     let mut doc = branch(0.);
     doc.atom_mut(4).unwrap().position = Point::new(204., -80.);

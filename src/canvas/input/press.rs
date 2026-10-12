@@ -124,10 +124,13 @@ impl MoleculeCanvas<'_> {
         fixed: u64,
         moving: u64,
     ) -> Option<Action<Edit>> {
-        if let Ok(plan) = reshiki::editing::reference::Stretch::new(self.doc, fixed, moving) {
+        if let Some(plan) = state.scene.get_mut().stretch(self.doc, fixed, moving) {
             let hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
             if hit.iter().any(|id| plan.ids.contains(id)) {
-                state.gesture = Some(Gesture::StretchBond { start: p, plan });
+                state.gesture = Some(Gesture::StretchBond {
+                    start: p,
+                    plan: (*plan).clone(),
+                });
                 return Some(Action::publish(Edit::Hover(None)).and_capture());
             }
         }

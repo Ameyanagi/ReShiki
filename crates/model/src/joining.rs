@@ -45,6 +45,7 @@ enum Destination {
 }
 
 /// Source IDs that Move & attach will actually carry, before pruning data.
+/// See also [`crate::editing::reference::scope`], whose expansion order differs.
 fn moving_ids(doc: &Document, selected: &[u64]) -> Vec<u64> {
     // Moving a selected part of a molecule must never cut its external bonds.
     let mut moving: HashSet<_> = doc.expand_integral_groups(selected).into_iter().collect();

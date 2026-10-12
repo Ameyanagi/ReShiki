@@ -2,11 +2,45 @@
 use super::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand};
 use crate::document::Point;
 
+pub const MIN_OPEN_NODES: usize = 2;
+pub const MIN_CLOSED_NODES: usize = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PathHandle {
     pub index: usize,
     pub point: Point,
     pub node: bool,
+}
+
+/// A connected path's handles and the node rules shared by its editors.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PathSummary {
+    pub handles: Vec<PathHandle>,
+    pub closed: bool,
+}
+impl PathSummary {
+    /// Nodes in path order, with the closing seam represented only once.
+    pub fn nodes(&self) -> impl DoubleEndedIterator<Item = &PathHandle> {
+        self.handles.iter().filter(|handle| handle.node)
+    }
+    pub fn node_count(&self) -> usize {
+        self.nodes().count()
+    }
+    pub fn can_close(&self) -> bool {
+        self.node_count() >= MIN_CLOSED_NODES
+    }
+    pub fn can_delete_node(&self) -> bool {
+        self.node_count()
+            > if self.closed {
+                MIN_CLOSED_NODES
+            } else {
+                MIN_OPEN_NODES
+            }
+    }
+    /// Whether a zero-based node ordinal has a following segment.
+    pub fn has_following(&self, ordinal: usize) -> bool {
+        self.closed || ordinal.saturating_add(1) < self.node_count()
+    }
 }
 
 #[derive(Clone)]
@@ -82,13 +116,33 @@ impl Path {
                 });
             }
         }
-        (path.nodes.len() >= 2).then_some(path)
+        (path.nodes.len() >= MIN_OPEN_NODES).then_some(path)
     }
     fn node(&self, index: usize) -> Option<usize> {
         self.nodes
             .iter()
             .position(|n| n.index == index)
             .or_else(|| (self.closing_alias == Some(index)).then_some(0))
+    }
+    fn handle_point(&self, index: usize) -> Option<Point> {
+        self.node(index)
+            .and_then(|node| self.nodes.get(node))
+            .map(|node| node.point)
+            .or_else(|| {
+                self.segments.iter().find_map(|segment| {
+                    let (Some([first, second]), Some([a, b])) = (segment.indices, segment.controls)
+                    else {
+                        return None;
+                    };
+                    if index == first {
+                        Some(a)
+                    } else if index == second {
+                        Some(b)
+                    } else {
+                        None
+                    }
+                })
+            })
     }
     fn reindex(&mut self) {
         let Some(first) = self.nodes.first_mut() else {
@@ -185,6 +239,10 @@ impl Graphic {
     /// Handles for a single connected path. A closed seam has only one node.
     /// Imported compound paths retain the existing generic point editor.
     pub fn path_handles(&self) -> Option<Vec<PathHandle>> {
+        self.path_summary().map(|summary| summary.handles)
+    }
+    /// Resolve a connected path's handles and node rules together.
+    pub fn path_summary(&self) -> Option<PathSummary> {
         let path = Path::read(self)?;
         let mut result: Vec<_> = path
             .nodes
@@ -210,7 +268,10 @@ impl Graphic {
             }
         }
         result.sort_by_key(|h| h.index);
-        Some(result)
+        Some(PathSummary {
+            handles: result,
+            closed: path.closed,
+        })
     }
     pub fn path_closed(&self) -> bool {
         self.commands()
@@ -220,16 +281,27 @@ impl Graphic {
     /// Move a connected path handle, reporting a frame that cannot be edited.
     /// Failed edits leave the graphic unchanged.
     pub fn move_path_point(&mut self, index: usize, point: Point) -> Result<(), String> {
-        let mut path = Path::read(self).ok_or("Select one continuous path")?;
+        let path = Path::read(self).ok_or("Select one continuous path")?;
+        self.move_parsed_path_point(path, index, point)
+    }
+    pub(super) fn edit_connected_path_point(
+        &mut self,
+        index: usize,
+        point: Point,
+    ) -> Option<Result<(), String>> {
+        let path = Path::read(self)?;
+        Some(self.move_parsed_path_point(path, index, point))
+    }
+    fn move_parsed_path_point(
+        &mut self,
+        mut path: Path,
+        index: usize,
+        point: Point,
+    ) -> Result<(), String> {
         if !point.is_finite() {
             return Ok(());
         }
-        if !self.path_handles().is_some_and(|handles| {
-            handles.iter().any(|handle| {
-                (handle.index == index || path.closing_alias == Some(index) && handle.index == 0)
-                    && handle.point != point
-            })
-        }) {
+        if path.handle_point(index).is_none_or(|old| old == point) {
             return Ok(());
         }
         if let Some(node) = path.node(index) {
@@ -314,7 +386,13 @@ impl Graphic {
     pub fn delete_path_node(&mut self, index: usize) -> Result<usize, String> {
         let mut path = Path::read(self).ok_or("Select one continuous path")?;
         let node = path.node(index).ok_or("Select a round node")?;
-        if path.nodes.len() <= if path.closed { 3 } else { 2 } {
+        if path.nodes.len()
+            <= if path.closed {
+                MIN_CLOSED_NODES
+            } else {
+                MIN_OPEN_NODES
+            }
+        {
             return Err("Keep at least two open nodes or three closed nodes".into());
         }
         if !path.closed && node == 0 {
@@ -392,12 +470,12 @@ impl Graphic {
             return Ok(());
         }
         if closed {
-            if path.nodes.len() < 3 {
+            if path.nodes.len() < MIN_CLOSED_NODES {
                 return Err("A closed path needs at least three nodes".into());
             }
             if path.nodes.last().map(|n| n.point) == path.nodes.first().map(|n| n.point) {
                 path.nodes.pop();
-                if path.nodes.len() < 3 {
+                if path.nodes.len() < MIN_CLOSED_NODES {
                     return Err("A closed path needs at least three distinct nodes".into());
                 }
             } else {

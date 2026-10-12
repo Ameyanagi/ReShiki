@@ -7,6 +7,7 @@ use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, pick, tilt};
 use iced::{Point, Rectangle};
 use reshiki::arrows::ArrowHandle;
 use reshiki::graphics::{Graphic, GraphicKind};
+use std::borrow::Cow;
 
 impl MoleculeCanvas<'_> {
     pub(super) fn preview_tilt(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
@@ -162,7 +163,7 @@ impl MoleculeCanvas<'_> {
             if let Some(Gesture::GraphicPoint { id, index }) = &state.gesture
                 && let Some(g) = preview.to_mut().graphics.iter_mut().find(|g| g.id == *id)
             {
-                g.edit_point(*index, end);
+                let _ = g.edit_point(*index, end);
             }
             if let Some(Gesture::PathPoint(drag)) = &state.gesture
                 && let Some(g) = preview
@@ -171,7 +172,7 @@ impl MoleculeCanvas<'_> {
                     .iter_mut()
                     .find(|g| g.id == drag.id)
             {
-                g.edit_point(drag.index, drag.target(end));
+                let _ = g.edit_point(drag.index, drag.target(end));
             }
         }
     }
@@ -210,9 +211,18 @@ impl MoleculeCanvas<'_> {
             let p = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            // The press-time plan measures the drag, as release does. The
+            // branch moves with the plan resolved on the current drawing, as
+            // the commit resolves it, so an Undo during the drag still agrees.
             let length = plan.dragged_length(World::new(p.x - start.x, p.y - start.y));
-            if let Ok(candidate) = plan.apply(self.doc, length) {
-                *preview.to_mut() = candidate;
+            let current = state
+                .scene
+                .borrow_mut()
+                .stretch(self.doc, plan.fixed, plan.moving);
+            if let Some(current) = current
+                && let Ok(candidate) = current.translated(self.doc, length)
+            {
+                *preview = Cow::Owned(candidate);
                 *ring_selection = Some(plan.ids.clone());
             }
             return;

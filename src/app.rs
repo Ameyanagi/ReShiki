@@ -590,10 +590,7 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
-        if self.tab.doc != before {
-            self.tab.arrows.cancel_source();
-        }
-        self.tab.cleanup = None;
+        self.prepare_document_change(self.tab.doc != before);
         let reconciled = match reshiki::transaction::reconcile(&mut self.tab.doc, before) {
             Ok(reconciled) => reconciled,
             Err(rejection) => {
@@ -608,6 +605,35 @@ impl App {
             }
         };
         self.commit_changed(reconciled, continuing);
+    }
+    fn try_replace_document(
+        &mut self,
+        mut candidate: Document,
+        selected: Vec<u64>,
+    ) -> Result<(), String> {
+        let before = self.tab.doc.clone();
+        let reconciled = reshiki::transaction::reconcile(&mut candidate, before)
+            .map_err(|error| error.message().to_owned())?;
+        let changed = candidate != *reconciled.before();
+        // Reference edits used to reconcile twice (a preflight, then changed).
+        // Only the caption pass is not idempotent: run again, it detaches a
+        // linked caption that the first pass moved while its molecule stayed.
+        // Keep that pass so caption links come out as before.
+        reshiki::molecule_names::reconcile(&mut candidate, reconciled.before());
+        if changed {
+            self.tab.erase_stroke = false;
+        }
+        self.prepare_document_change(changed);
+        self.tab.doc = candidate;
+        self.tab.selected = selected;
+        self.commit_changed(reconciled, false);
+        Ok(())
+    }
+    fn prepare_document_change(&mut self, changed: bool) {
+        if changed {
+            self.tab.arrows.cancel_source();
+        }
+        self.tab.cleanup = None;
     }
     fn commit_changed(&mut self, reconciled: reshiki::transaction::Reconciled, continuing: bool) {
         self.tab.recent_molecules.record(

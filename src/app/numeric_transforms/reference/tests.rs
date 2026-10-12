@@ -21,6 +21,137 @@ fn act(app: &mut App, action: Action) {
 }
 
 #[test]
+fn rejected_document_replacement_keeps_selection_history_revision_and_status() {
+    for with_history in [false, true] {
+        let mut app = fixture();
+        if with_history {
+            act(&mut app, Action::Align(0.));
+        }
+        let original = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let can_undo = app.tab.history.can_undo();
+        let can_redo = app.tab.history.can_redo();
+        let revision = app.tab.revision;
+        app.status = "Status before replacement".into();
+        app.error = with_history;
+        app.tab.erase_stroke = true;
+        let mut candidate = original.clone();
+        candidate.atoms.push(candidate.atoms[0].clone());
+        assert_eq!(
+            app.try_replace_document(candidate, vec![3]),
+            Err("Duplicate or zero object ID".into())
+        );
+        assert_eq!(app.tab.doc, original);
+        assert_eq!(app.tab.selected, selected);
+        assert_eq!(app.tab.history.can_undo(), can_undo);
+        assert_eq!(app.tab.history.can_redo(), can_redo);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.status, "Status before replacement");
+        assert_eq!(app.error, with_history);
+        assert!(app.tab.erase_stroke);
+        if with_history {
+            assert!(app.tab.history.undo(&mut app.tab.doc));
+            assert!(!app.tab.history.can_undo());
+            assert!(app.tab.history.redo(&mut app.tab.doc));
+            assert_eq!(app.tab.doc, original);
+        }
+    }
+}
+
+#[test]
+fn reference_edits_that_leave_a_named_molecule_in_place_detach_its_offset_caption()
+-> Result<(), String> {
+    // A loaded drawing can link a caption away from its computed position.
+    // Reference edits reconcile the caption twice, as they always have: the
+    // first pass moves it back, and the second detaches it because no named
+    // atom moved.
+    for stretch_other in [false, true] {
+        let (mut app, _) = App::new();
+        let mut doc = Document::from_json(include_bytes!(
+            "../../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
+        ))?;
+        let named = [1, 2, 3];
+        let a = doc.add_atom("C", Point::new(200., 0.));
+        let b = doc.add_atom("C", Point::new(242., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let id = reshiki::molecule_names::show(
+            &mut doc,
+            &named,
+            "ethan-1-ol".into(),
+            "CCO".into(),
+            Default::default(),
+        )?;
+        let caption = |doc: &Document| doc.annotations.iter().find(|a| a.id == id).cloned();
+        // Insertion reconciles the new caption into its computed position.
+        let shown = doc.clone();
+        reshiki::molecule_names::reconcile(&mut doc, &shown);
+        assert_eq!(doc.molecule_names.len(), 1);
+        let computed = caption(&doc).ok_or("caption")?.position;
+        if let Some(caption) = doc.annotations.iter_mut().find(|a| a.id == id) {
+            caption.position = computed.offset(5., 5.);
+        }
+        let atoms =
+            |doc: &Document| -> Vec<_> { named.iter().map(|id| doc.atom(*id).cloned()).collect() };
+        let named_atoms = atoms(&doc);
+        app.tab.doc = doc;
+        app.tab.history = Default::default();
+        if stretch_other {
+            app.tab.selected = vec![a, b];
+            app.sync_numeric_transforms();
+            act(&mut app, Action::Length("21.6".into()));
+            act(&mut app, Action::Stretch);
+        } else {
+            app.tab.selected = vec![1, 2];
+            app.sync_numeric_transforms();
+            act(&mut app, Action::Turn("0".into()));
+            act(&mut app, Action::Rotate(false));
+        }
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(atoms(&app.tab.doc), named_atoms);
+        let caption = caption(&app.tab.doc).ok_or("caption")?;
+        assert_eq!(
+            (caption.text.as_str(), caption.position),
+            ("ethan-1-ol", computed)
+        );
+        assert!(app.tab.doc.molecule_names.is_empty());
+        assert!(app.tab.history.can_undo());
+    }
+    Ok(())
+}
+
+#[test]
+fn reference_actions_keep_parse_reference_scope_and_pivot_error_precedence() {
+    let mut app = fixture();
+    let original = app.tab.doc.clone();
+    app.tab.selected.clear();
+    act(&mut app, Action::Turn("invalid".into()));
+    act(&mut app, Action::Rotate(false));
+    assert_eq!(app.status, "Enter a finite rotation angle");
+    act(&mut app, Action::Turn("90".into()));
+    act(&mut app, Action::Rotate(false));
+    assert_eq!(app.status, "Select a reference bond or edge");
+    act(&mut app, Action::Target("invalid".into()));
+    act(&mut app, Action::AlignTarget);
+    assert_eq!(app.status, "Enter a finite target direction");
+    act(&mut app, Action::Align(0.));
+    assert_eq!(
+        app.status,
+        "Select both endpoints of a bond, or a shape with a straight edge"
+    );
+    app.tab.selected = vec![1, 2];
+    act(&mut app, Action::Pivot(Pivot::Pinned));
+    act(&mut app, Action::X("invalid".into()));
+    act(&mut app, Action::Align(f64::NAN));
+    assert_eq!(app.status, "Enter a finite pivot X coordinate");
+    act(&mut app, Action::Scope(Scope::Selected));
+    act(&mut app, Action::Align(f64::NAN));
+    const PARTIAL_SCOPE: &str = "Select the complete connected fragment to keep its exterior bonds and stereochemistry intact";
+    assert_eq!(app.status, PARTIAL_SCOPE);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
 fn exact_alignment_ui_expands_the_fragment_preserves_chemistry_and_is_one_undo() {
     let mut app = fixture();
     let original = app.tab.doc.clone();

@@ -3,7 +3,7 @@ mod arc;
 mod path;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
-pub use path::PathHandle;
+pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathSummary};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -506,17 +506,17 @@ impl Graphic {
         })
     }
 
-    pub fn edit_point(&mut self, index: usize, p: Point) {
+    /// Edit one handle, preserving a connected path if its frame rejects the edit.
+    pub fn edit_point(&mut self, index: usize, p: Point) -> Result<(), String> {
         if self.kind == GraphicKind::Arc {
             self.edit_arc_endpoint(index, p);
-            return;
+            return Ok(());
         }
         if self.kind == GraphicKind::Picture {
-            return;
+            return Ok(());
         }
-        if self.path_handles().is_some() {
-            let _ = self.move_path_point(index, p);
-            return;
+        if let Some(result) = self.edit_connected_path_point(index, p) {
+            return result;
         }
         let mut commands = self.commands();
         let mut n = 0;
@@ -530,6 +530,7 @@ impl Graphic {
         self.kind = GraphicKind::Path;
         self.reset_frame();
         self.path = commands;
+        Ok(())
     }
     pub fn validate(&self) -> Result<(), String> {
         self.style.validate()?;

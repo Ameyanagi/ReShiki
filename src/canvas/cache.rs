@@ -8,6 +8,8 @@ use std::{collections::HashSet, rc::Rc};
 pub(super) struct SceneCache {
     document: Option<Document>,
     scene: Option<Rc<[Primitive]>>,
+    stretch: Option<Rc<reshiki::editing::reference::Stretch>>,
+    stretch_key: Option<(u64, u64)>,
     ids: Vec<u64>,
     selection: Option<Option<SelectionBox>>,
     markers: Option<Rc<super::markers::Markers>>,
@@ -72,6 +74,8 @@ impl SceneCache {
         if self.document.as_ref() != Some(doc) {
             self.document = Some(doc.clone());
             self.scene = None;
+            self.stretch = None;
+            self.stretch_key = None;
             self.ids.clear();
             self.selection = None;
             self.markers = None;
@@ -99,6 +103,23 @@ impl SceneCache {
     pub fn whole_document(&mut self, doc: &Document, ids: &[u64]) -> bool {
         self.selected(doc, ids);
         self.whole
+    }
+
+    pub fn stretch(
+        &mut self,
+        doc: &Document,
+        fixed: u64,
+        moving: u64,
+    ) -> Option<Rc<reshiki::editing::reference::Stretch>> {
+        self.document(doc);
+        let key = (fixed, moving);
+        if self.stretch_key != Some(key) {
+            self.stretch = reshiki::editing::reference::Stretch::new(doc, fixed, moving)
+                .ok()
+                .map(Rc::new);
+            self.stretch_key = Some(key);
+        }
+        self.stretch.clone()
     }
 
     /// The selection extracted for a Ctrl/Cmd drag copy.

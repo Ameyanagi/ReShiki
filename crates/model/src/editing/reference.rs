@@ -94,8 +94,23 @@ pub fn edges(doc: &Document, selected: &[u64]) -> Vec<Edge> {
     out
 }
 
+fn include_complete_centroids(doc: &Document, ids: &mut HashSet<u64>) -> Result<(), ()> {
+    for atom in doc.atoms.iter().filter(|a| !a.centroid.is_empty()) {
+        let any = atom.centroid.iter().any(|id| ids.contains(id));
+        let all = atom.centroid.iter().all(|id| ids.contains(id));
+        if any && !all || ids.contains(&atom.id) && !all {
+            return Err(());
+        }
+        if all {
+            ids.insert(atom.id);
+        }
+    }
+    Ok(())
+}
+
 /// Expand connected molecules when requested. An explicitly partial selection is
 /// rejected rather than silently stretching exterior bonds or clearing stereo.
+/// See also the private `joining::moving_ids`, whose expansion order differs.
 pub fn scope(doc: &Document, selected: &[u64], connected: bool) -> Result<Vec<u64>, String> {
     let all: HashSet<_> = doc.object_ids().collect();
     if selected.is_empty() || selected.iter().any(|id| !all.contains(id)) {
@@ -127,18 +142,8 @@ pub fn scope(doc: &Document, selected: &[u64], connected: bool) -> Result<Vec<u6
             }
         }
     } else {
-        for atom in doc.atoms.iter().filter(|a| !a.centroid.is_empty()) {
-            let any = atom.centroid.iter().any(|id| ids.contains(id));
-            let all = atom.centroid.iter().all(|id| ids.contains(id));
-            if any && !all || ids.contains(&atom.id) && !all {
-                return Err(
-                    "Select the complete fragment and its derived attachment targets".into(),
-                );
-            }
-            if all {
-                ids.insert(atom.id);
-            }
-        }
+        include_complete_centroids(doc, &mut ids)
+            .map_err(|()| "Select the complete fragment and its derived attachment targets")?;
     }
     if doc
         .bonds
@@ -303,16 +308,8 @@ impl Stretch {
         let selected: Vec<_> = ids.iter().copied().collect();
         ids.extend(doc.expand_abbreviation_selection(&selected));
         ids.extend(crate::attachments::selection(doc, &selected));
-        for atom in doc.atoms.iter().filter(|a| !a.centroid.is_empty()) {
-            let any = atom.centroid.iter().any(|id| ids.contains(id));
-            let all = atom.centroid.iter().all(|id| ids.contains(id));
-            if any && !all || ids.contains(&atom.id) && !all {
-                return Err("This branch shares a derived attachment with fixed atoms".into());
-            }
-            if all {
-                ids.insert(atom.id);
-            }
-        }
+        include_complete_centroids(doc, &mut ids)
+            .map_err(|()| "This branch shares a derived attachment with fixed atoms")?;
         if ids.contains(&fixed)
             || doc.bonds.iter().any(|b| {
                 let boundary = ids.contains(&b.a) != ids.contains(&b.b);
@@ -352,28 +349,44 @@ impl Stretch {
             (difference * self.axis.1) as f32,
         ))
     }
-    pub fn apply(&self, doc: &Document, length: f32) -> Result<Document, String> {
-        // Resolve fresh IDs and topology at commit, never apply a stale branch.
-        let current = Self::new(doc, self.fixed, self.moving)?;
-        let delta = current.delta(length)?;
+    /// Translate a resolved preview plan without resolving topology or validating again.
+    pub fn translated(&self, doc: &Document, length: f32) -> Result<Document, String> {
+        let delta = self.delta(length)?;
         let mut candidate = doc.clone();
-        candidate.translate(&current.ids, delta.x, delta.y);
+        candidate.translate(&self.ids, delta.x, delta.y);
         let (a, b) = candidate
-            .atom(current.fixed)
-            .zip(candidate.atom(current.moving))
+            .atom(self.fixed)
+            .zip(candidate.atom(self.moving))
             .ok_or("The bond endpoints are unavailable")?;
         let x = f64::from(b.position.x) - f64::from(a.position.x);
         let y = f64::from(b.position.y) - f64::from(a.position.y);
-        if x * current.axis.0 + y * current.axis.1 <= 0.
-            || x.hypot(y) < f64::from(current.minimum) * 0.5
-        {
+        if x * self.axis.0 + y * self.axis.1 <= 0. || x.hypot(y) < f64::from(self.minimum) * 0.5 {
             return Err(
                 "This length is too small for these drawing coordinates; choose a larger length"
                     .into(),
             );
         }
+        Ok(candidate)
+    }
+
+    /// Resolve the bond on the current drawing, move its branch and validate.
+    /// Commits use this (directly or through [`Self::apply`]); previews use
+    /// [`Self::translated`] with the plan resolved at press.
+    pub fn commit(
+        doc: &Document,
+        fixed: u64,
+        moving: u64,
+        length: f32,
+    ) -> Result<Document, String> {
+        // Resolve fresh IDs and topology at commit, never apply a stale branch.
+        let current = Self::new(doc, fixed, moving)?;
+        let candidate = current.translated(doc, length)?;
         candidate.validate()?;
         Ok(candidate)
+    }
+
+    pub fn apply(&self, doc: &Document, length: f32) -> Result<Document, String> {
+        Self::commit(doc, self.fixed, self.moving, length)
     }
 }
 

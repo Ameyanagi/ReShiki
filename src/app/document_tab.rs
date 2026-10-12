@@ -109,6 +109,14 @@ pub(super) struct DocumentTab {
 }
 
 impl DocumentTab {
+    pub(super) fn drawing_edit_active(&self) -> bool {
+        self.cleanup.is_some()
+            || self.joining.is_some()
+            || self.optimization.is_some()
+            || self.inline_text.is_some()
+            || self.atom_text.is_some()
+    }
+
     pub(super) fn new(recovery: Option<Recovery>) -> Self {
         Self {
             id: TabId(0),

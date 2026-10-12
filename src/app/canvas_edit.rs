@@ -144,16 +144,12 @@ impl App {
             }
             Edit::GraphicPoint(id, index, p) => {
                 self.tab.path_point = Some((id, index));
-                if let Some(g) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) {
-                    if g.path_handles().is_some() {
-                        if let Err(error) = g.move_path_point(index, p) {
-                            self.status = error;
-                            self.error = true;
-                            return;
-                        }
-                    } else {
-                        g.edit_point(index, p);
-                    }
+                if let Some(g) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id)
+                    && let Err(error) = g.edit_point(index, p)
+                {
+                    self.status = error;
+                    self.error = true;
+                    return;
                 }
                 self.sync_arc();
             }
@@ -227,9 +223,7 @@ impl App {
                     self.error = true;
                     return;
                 }
-                match editing::reference::Stretch::new(&self.tab.doc, fixed, moving)
-                    .and_then(|plan| plan.apply(&self.tab.doc, length))
-                {
+                match editing::reference::Stretch::commit(&self.tab.doc, fixed, moving, length) {
                     Ok(candidate) => self.tab.doc = candidate,
                     Err(error) => {
                         self.status = error;

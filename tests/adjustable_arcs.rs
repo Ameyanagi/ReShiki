@@ -89,7 +89,7 @@ fn presets_and_arbitrary_sweeps_share_finite_cubics_bounds_and_hits() {
 fn endpoint_drags_remain_parametric_through_affine_transforms() {
     let mut g = arc(180., 180.);
     let initial = g.edit_points();
-    g.edit_point(1, Point::new(100., 110.));
+    let _ = g.edit_point(1, Point::new(100., 110.));
     assert_eq!(g.kind, GraphicKind::Arc);
     assert_eq!(g.arc.unwrap().sweep_degrees, 270.);
     assert!(g.edit_points()[0].distance(initial[0]) < 0.001);
@@ -99,16 +99,16 @@ fn endpoint_drags_remain_parametric_through_affine_transforms() {
     let mut transformed = g.clone();
     transformed.map_positions(transform);
     let pointer = Point::new(100., 30.);
-    g.edit_point(0, pointer);
-    transformed.edit_point(0, transform(pointer));
+    let _ = g.edit_point(0, pointer);
+    let _ = transformed.edit_point(0, transform(pointer));
     assert!((g.arc.unwrap().start_degrees - transformed.arc.unwrap().start_degrees).abs() < 0.001);
     close_points(points(&g).into_iter().map(transform), points(&transformed));
     let before = transformed.clone();
-    transformed.edit_point(2, Point::default());
+    let _ = transformed.edit_point(2, Point::default());
     assert_eq!(transformed, before);
     transformed.axis_y = transformed.axis_x;
     let before = transformed.clone();
-    transformed.edit_point(1, Point::default());
+    let _ = transformed.edit_point(1, Point::default());
     assert_eq!(
         transformed, before,
         "singular projected frames must not introduce NaN"
@@ -119,15 +119,15 @@ fn endpoint_drags_remain_parametric_through_affine_transforms() {
 fn full_circle_end_can_be_dragged_open_again_without_losing_the_start() {
     let mut g = arc(180., 180.);
     let start = g.edit_points()[0];
-    g.edit_point(1, start);
+    let _ = g.edit_point(1, start);
     assert_eq!(
         g.arc.unwrap().sweep_degrees,
         360.,
         "closing a half arc must create a full circle"
     );
-    g.edit_point(1, start);
+    let _ = g.edit_point(1, start);
     assert_eq!(g.arc.unwrap().sweep_degrees, 360.);
-    g.edit_point(1, Point::new(100., 110.));
+    let _ = g.edit_point(1, Point::new(100., 110.));
     assert_eq!(g.arc.unwrap().sweep_degrees, 270.);
     assert!(g.edit_points()[0].distance(start) < 0.001);
 }
