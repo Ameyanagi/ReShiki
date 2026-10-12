@@ -8,6 +8,226 @@ use iced::{Length, Theme};
 use iced::{Size, Vector};
 use reshiki::document::Point;
 
+fn armed_report() -> (App, Arc<Report>) {
+    let mut app = ethyl_acetate();
+    let report = predicted(&app.tab.doc, Nucleus::H1);
+    accept(&mut app, Arc::clone(&report));
+    app.tab.nmr.labels.visible = true;
+    (app, report)
+}
+
+fn assert_report(app: &App, report: &Arc<Report>) {
+    assert!(Arc::ptr_eq(
+        app.tab.nmr.job.result.as_ref().unwrap(),
+        report
+    ));
+    assert!(app.tab.nmr.job.notice.is_none());
+    assert!(app.tab.nmr.labels.visible);
+}
+
+fn assert_stale(app: &App) {
+    assert!(app.tab.nmr.job.result.is_none());
+    assert!(app.tab.nmr.job.pending.is_none());
+    assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(STALE_NOTICE));
+    assert!(!app.tab.nmr.labels.visible && !app.tab.nmr.labels.menu);
+}
+
+#[test]
+fn geometry_move_keeps_accepted_report() {
+    let (mut app, report) = armed_report();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].position.x += 42.;
+    app.changed(before);
+    let _ = app.update(Message::InspectorScroll(0.));
+    assert_report(&app, &report);
+}
+
+#[test]
+fn element_change_clears_accepted_report() {
+    let (mut app, _) = armed_report();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].element = "N".into();
+    app.changed(before);
+    assert_stale(&app);
+}
+
+#[test]
+fn generic_edit_clears_accepted_report() {
+    let mut app = app();
+    let bracket = generic_nmr_bracket(&mut app, 42.);
+    let report = predicted(&app.tab.doc, Nucleus::H1);
+    accept(&mut app, report);
+    let _ = app.update(Message::Generic(crate::app::generic::Action::DefineRepeat(
+        bracket,
+    )));
+    assert_stale(&app);
+}
+
+#[test]
+fn undo_and_redo_validate_accepted_reports() {
+    let (mut app, original) = armed_report();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].element = "N".into();
+    app.changed(before);
+    let edited = predicted(&app.tab.doc, Nucleus::H1);
+    accept(&mut app, edited);
+    let _ = app.update(Message::Undo);
+    assert_stale(&app);
+    accept(&mut app, original);
+    let _ = app.update(Message::Redo);
+    assert_stale(&app);
+}
+
+#[test]
+fn open_and_restore_keep_source_report_in_its_epoch() {
+    use reshiki::recovery::{Candidate, Snapshot};
+    for restore in [false, true] {
+        let (mut app, report) = armed_report();
+        let source = app.tab.id;
+        let epoch = app.tab.file_epoch;
+        if restore {
+            app.recovered.push(Candidate {
+                path: "nmr-cache-draft.json".into(),
+                snapshot: Snapshot {
+                    document: ethyl_acetate_doc(),
+                    source: None,
+                    saved_at: 1,
+                },
+            });
+            let _ = app.update(Message::Restore);
+        } else {
+            let _ = app.update(Message::FilePrepared(Some((
+                "nmr-cache-open.rsk".into(),
+                Ok(files::Prepared::Native(Box::new(ethyl_acetate_doc()))),
+            ))));
+        }
+        assert_ne!(app.tab.id, source);
+        assert!(app.tab.file_epoch > epoch);
+        assert!(app.tab.nmr.job.result.is_none());
+        let source_tab = app.strip().find(|tab| tab.id == source).unwrap();
+        assert_eq!(source_tab.file_epoch, epoch);
+        assert!(Arc::ptr_eq(
+            source_tab.nmr.job.result.as_ref().unwrap(),
+            &report
+        ));
+        assert!(source_tab.nmr.job.notice.is_none());
+    }
+}
+
+#[test]
+fn background_engine_chemistry_change_clears_accepted_report() {
+    use crate::app::{Job, tabs::tests::Front};
+    use reshiki::engine::Response;
+    let (mut app, _) = armed_report();
+    let source = app.tab.id;
+    let revision = app.tab.revision;
+    let mut document = app.tab.doc.clone();
+    document.atoms[0].element = "N".into();
+    let front = Front::new(&mut app);
+    let _ = app.update(Message::Tab(
+        source,
+        Box::new(Message::EngineDone {
+            revision,
+            kind: Job::Import,
+            result: Box::new(Ok(Response {
+                document: Some(document),
+                analysis: None,
+                output: None,
+                engine_version: "test".into(),
+                warnings: vec![],
+            })),
+        }),
+    ));
+    front.assert_unchanged(&app);
+    let source_tab = app.strip().find(|tab| tab.id == source).unwrap();
+    assert!(source_tab.nmr.job.result.is_none());
+    assert_eq!(source_tab.nmr.job.notice.as_deref(), Some(STALE_NOTICE));
+}
+
+#[test]
+fn continuing_drag_preserves_report_and_one_undo_step() {
+    let (mut app, report) = armed_report();
+    let original = app.tab.doc.clone();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].position.x += 10.;
+    app.changed_continuing(before, false);
+    let revision = app.tab.revision;
+    let _ = app.update(Message::InspectorScroll(0.));
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].position.x += 10.;
+    app.changed_continuing(before, true);
+    assert!(app.tab.revision > revision);
+    let _ = app.update(Message::InspectorScroll(0.));
+    assert_report(&app, &report);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert_report(&app, &report);
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].element = "N".into();
+    app.changed_continuing(before, true);
+    assert_stale(&app);
+}
+
+#[test]
+fn repeated_idle_messages_preserve_accepted_state() {
+    let (mut app, report) = armed_report();
+    app.tab.nmr.labels.menu = true;
+    let serial = app.tab.nmr.job.serial;
+    let revision = app.tab.revision;
+    for _ in 0..3 {
+        for message in [
+            Message::Canvas(crate::canvas::Edit::Hover(Some(Point::new(10., 20.)))),
+            Message::Tick,
+            Message::InspectorScroll(0.),
+            Message::Nmr(Action::Move(iced::Point::new(100., 120.))),
+            Message::Nmr(Action::Resize(Size::new(400., 300.))),
+            Message::Nmr(Action::RenderedSize(Size::new(400., 300.))),
+        ] {
+            let _ = app.update(message);
+            assert_report(&app, &report);
+            assert_eq!(app.tab.nmr.job.serial, serial);
+            assert_eq!(app.tab.revision, revision);
+            assert!(app.tab.nmr.labels.menu);
+        }
+    }
+}
+
+#[test]
+fn cached_validation_observes_direct_job_input_changes() {
+    for input in ["report", "result epoch", "pending"] {
+        let (mut app, report) = armed_report();
+        let _ = app.update(Message::InspectorScroll(0.));
+        match input {
+            "report" => {
+                let mut replacement = (*report).clone();
+                replacement.fingerprint = "changed fingerprint".into();
+                app.tab.nmr.job.result = Some(Arc::new(replacement));
+            }
+            "result epoch" => app.tab.nmr.job.result_epoch = None,
+            "pending" => {
+                app.tab.nmr.job.pending = Some(JobKey {
+                    serial: app.tab.nmr.job.serial,
+                    epoch: app.tab.file_epoch,
+                    ids: report.atom_ids.clone(),
+                    fingerprint: "changed fingerprint".into(),
+                });
+            }
+            _ => unreachable!(),
+        }
+        let _ = app.update(Message::InspectorScroll(0.));
+        assert_stale(&app);
+    }
+}
+
+#[test]
+fn cached_validation_observes_same_document_file_epoch_change() {
+    let (mut app, _) = armed_report();
+    let _ = app.update(Message::InspectorScroll(0.));
+    app.begin_file_epoch();
+    let _ = app.update(Message::InspectorScroll(0.));
+    assert_stale(&app);
+}
+
 #[cfg(windows)]
 #[test]
 #[ignore = "Opt-in Windows software renderer partial-damage check"]

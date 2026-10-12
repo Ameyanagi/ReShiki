@@ -13,7 +13,7 @@ pub(super) fn predicted(document: &Document, nucleus: Nucleus) -> Arc<Report> {
     Arc::new(engine::predict(&request, nucleus).unwrap())
 }
 
-pub(super) fn accept(app: &mut App, report: Arc<Report>) {
+pub(in crate::app) fn accept(app: &mut App, report: Arc<Report>) {
     assert!(app.tab.nmr.job.pending.is_none());
     let _ = app.nmr_action(Action::Predict(report.nucleus));
     let key = app.tab.nmr.job.pending.clone().unwrap();

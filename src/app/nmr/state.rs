@@ -14,6 +14,29 @@ pub(in crate::app) struct State {
     pub(super) dock: Dock,
     pub(super) labels: Labels,
     pub(super) job: Job,
+    checked: Option<Checked>,
+}
+
+struct Checked {
+    epoch: u64,
+    revision: u64,
+    pending: Option<JobKey>,
+    result: Option<Arc<Report>>,
+    result_epoch: Option<u64>,
+}
+
+impl Checked {
+    fn matches(&self, epoch: u64, revision: u64, job: &Job) -> bool {
+        self.epoch == epoch
+            && self.revision == revision
+            && self.pending == job.pending
+            && self.result_epoch == job.result_epoch
+            && match (&self.result, &job.result) {
+                (Some(checked), Some(current)) => Arc::ptr_eq(checked, current),
+                (None, None) => true,
+                _ => false,
+            }
+    }
 }
 
 pub(super) struct Palette {
@@ -44,6 +67,7 @@ pub(super) struct Job {
     pub(super) pending: Option<JobKey>,
     pub(super) result_epoch: Option<u64>,
     pub(super) result: Option<Arc<Report>>,
+    pub(super) presentation: Option<super::presentation::Presentation>,
     pub(super) notice: Option<String>,
 }
 
@@ -69,8 +93,10 @@ impl Default for State {
                 pending: None,
                 result_epoch: None,
                 result: None,
+                presentation: None,
                 notice: None,
             },
+            checked: None,
         }
     }
 }
@@ -151,7 +177,7 @@ impl State {
         self.palette.rendered_size = size;
     }
 
-    pub(in crate::app) fn invalidate_if_changed(&mut self, document: &Document, epoch: u64) {
+    fn is_stale(&self, document: &Document, epoch: u64) -> bool {
         let stale_pending = self.job.pending.as_ref().is_some_and(|key| {
             !identity_current(document, key.epoch == epoch, &key.ids, &key.fingerprint)
         });
@@ -163,13 +189,51 @@ impl State {
                 &report.fingerprint,
             )
         });
-        if stale_pending || stale_result {
+        stale_pending || stale_result
+    }
+
+    pub(in crate::app) fn invalidate_if_changed(&mut self, document: &Document, epoch: u64) {
+        // Commit observers run before revision advances and before computed
+        // labels are cleared. Never cache the document observed at this point.
+        self.checked = None;
+        if self.is_stale(document, epoch) {
             self.job.pending = None;
             self.job.result = None;
+            self.job.presentation = None;
             self.labels.visible = false;
             self.labels.menu = false;
             self.job.serial = self.job.serial.wrapping_add(1);
             self.job.notice = Some(STALE_NOTICE.into());
+        }
+    }
+
+    pub(in crate::app) fn invalidate_if_changed_cached(
+        &mut self,
+        document: &Document,
+        epoch: u64,
+        revision: u64,
+    ) {
+        if self
+            .checked
+            .as_ref()
+            .is_some_and(|checked| checked.matches(epoch, revision, &self.job))
+        {
+            #[cfg(test)]
+            debug_assert!(!self.is_stale(document, epoch));
+            return;
+        }
+        let checked = Checked {
+            epoch,
+            revision,
+            pending: self.job.pending.clone(),
+            // Holding the report prevents address reuse and also makes direct
+            // job.result writes observable without relying on setter methods.
+            result: self.job.result.clone(),
+            result_epoch: self.job.result_epoch,
+        };
+        self.invalidate_if_changed(document, epoch);
+        if checked.matches(epoch, revision, &self.job) {
+            self.checked = Some(checked);
         }
     }
 }

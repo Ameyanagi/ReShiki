@@ -874,9 +874,11 @@ impl App {
             self.keyboard_pointer_selection(point);
         }
         let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
-        self.tab
-            .nmr
-            .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
+        self.tab.nmr.invalidate_if_changed_cached(
+            &self.tab.doc,
+            self.tab.file_epoch,
+            self.tab.revision,
+        );
         self.sync_numeric_transforms();
         if refresh_dimensions {
             self.refresh_numeric_dimensions();

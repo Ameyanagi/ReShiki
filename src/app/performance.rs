@@ -78,6 +78,13 @@ fn editing_workloads() {
         measure(&format!("gallery_{copies}x_view"), || {
             black_box(app.view());
         });
+        app.tab.selected = vec![endpoint];
+        let request = reshiki::nmr::prepare(&app.tab.doc, &app.tab.selected).unwrap();
+        let report = reshiki::nmr::predict(&request, reshiki::nmr::Nucleus::H1).unwrap();
+        nmr::test_support::accept(&mut app, std::sync::Arc::new(report));
+        measure(&format!("gallery_{copies}x_idle_update_nmr"), || {
+            let _ = black_box(app.update(Message::InspectorScroll(0.)));
+        });
         if copies == 0 {
             let _ = app.context_key("o");
             let runtime = tokio::runtime::Runtime::new().unwrap();

@@ -1,6 +1,7 @@
 //! NMR panel builders, placement wrappers and accessible descriptions.
 use super::palette::{MAX_SIZE, MIN_SIZE, PANEL_PADDING, RESIZE_STEP};
 use super::panel::site_id_prefix;
+use super::presentation::{self, Presentation};
 use super::style::{outlined, quiet, result_row, rule, segment, surface, table_surface};
 use super::{Action, State, palette, panel, plot};
 use crate::app::{App, Message, workspace::muted_text};
@@ -12,6 +13,7 @@ use iced::widget::{
 use iced::{Alignment, Element, Length, Size};
 use reshiki::document::Document;
 use reshiki::nmr::{self as engine, Nucleus, Report};
+use std::borrow::Cow;
 
 const PLOT_DESCRIPTION: &str = concat!(
     "The plot marks chemical shifts only. ",
@@ -134,10 +136,16 @@ impl App {
             body = body.push(text(notice).size(12));
         }
         if let Some(report) = &state.job.result {
-            body = plot_section(body, state, report, &self.tab.selected);
+            let presentation = state
+                .job
+                .presentation
+                .as_ref()
+                .filter(|presentation| presentation.matches(report));
+            body = plot_section(body, state, report, presentation, &self.tab.selected);
             body = body.push(results_table(
                 state,
                 report,
+                presentation,
                 &self.tab.doc,
                 &self.tab.selected,
             ));
@@ -311,12 +319,16 @@ fn plot_section<'a>(
     mut body: Column<'a, Message>,
     state: &State,
     report: &'a Report,
+    presentation: Option<&'a Presentation>,
     selected: &'a [u64],
 ) -> Column<'a, Message> {
     if state.plot {
         body = body.push(text("Predicted shifts").size(12).style(muted_text));
-        body = if report.rows.iter().any(engine::Row::has_statistics) {
-            body.push(plot::view(report, selected))
+        body = if presentation.map_or_else(
+            || report.rows.iter().any(engine::Row::has_statistics),
+            |presentation| presentation.supported_count > 0,
+        ) {
+            body.push(plot::view_with_presentation(report, selected, presentation))
         } else {
             body.push(
                 text("No supported shifts to plot")
@@ -331,6 +343,7 @@ fn plot_section<'a>(
 fn results_table<'a>(
     state: &'a State,
     report: &'a Report,
+    presentation: Option<&'a Presentation>,
     document: &'a Document,
     selected: &'a [u64],
 ) -> Element<'a, Message> {
@@ -354,7 +367,7 @@ fn results_table<'a>(
         table = table.push(container(Space::new().height(1).width(Length::Fill)).style(rule));
         table = table.push(panel::table_row(
             index,
-            site_row(state, report, item, index, document, selected),
+            site_row(state, report, item, index, presentation, document, selected),
         ));
     }
     container(table).style(table_surface).into()
@@ -365,35 +378,23 @@ fn site_row<'a>(
     report: &'a Report,
     item: &'a engine::Row,
     index: usize,
+    presentation: Option<&'a Presentation>,
     document: &'a Document,
     selected: &'a [u64],
 ) -> reshiki::accessibility::Button<'a, Message> {
-    let label = if report.nucleus == Nucleus::H1 {
-        format!(
-            "#{} · {} H{}",
-            item.atom_id,
-            item.hydrogen_count,
-            if item.hydrogen_count > 1 {
-                " group"
-            } else {
-                ""
-            }
-        )
-    } else {
-        format!("C #{}", item.atom_id)
-    };
+    let site = presentation.and_then(|presentation| presentation.rows.get(index));
+    let label = site.map_or_else(
+        || Cow::Owned(presentation::row_label(report.nucleus, item)),
+        |site| Cow::Borrowed(site.label.as_str()),
+    );
+    let shift = site.map_or_else(
+        || Cow::Owned(presentation::row_shift(item)),
+        |site| Cow::Borrowed(site.shift.as_str()),
+    );
     let mut values = column![
         row![
             text(label).size(12).width(Length::Fill),
-            text(
-                item.statistics
-                    .as_ref()
-                    .map(|s| format!("{:.3}", s.median))
-                    .unwrap_or_else(|| "—".into())
-            )
-            .size(12)
-            .width(72)
-            .align_x(Alignment::End),
+            text(shift).size(12).width(72).align_x(Alignment::End),
         ]
         .spacing(8)
         .align_y(Alignment::Center)
@@ -404,19 +405,9 @@ fn site_row<'a>(
     }
     if state.details {
         values = values.push(
-            text(format!(
-                "Sphere {} · Refs {} · Obs. SD {} ppm",
-                item.radius
-                    .map(|r| r.to_string())
-                    .unwrap_or_else(|| "—".into()),
-                item.statistics
-                    .as_ref()
-                    .map(|s| s.support.to_string())
-                    .unwrap_or_else(|| "—".into()),
-                item.statistics
-                    .as_ref()
-                    .map(|s| format!("{:.3}", s.standard_deviation))
-                    .unwrap_or_else(|| "—".into()),
+            text(site.map_or_else(
+                || Cow::Owned(presentation::row_details(item)),
+                |site| Cow::Borrowed(site.details.as_str()),
             ))
             .size(10)
             .style(muted_text),
@@ -429,7 +420,10 @@ fn site_row<'a>(
             item.atom_id
         ),
         {
-            let mut description = site_description(report.nucleus, item);
+            let mut description = site.map_or_else(
+                || site_description(report.nucleus, item),
+                |site| site.description.clone(),
+            );
             if !document.atom_visible(item.atom_id)
                 && let Some(group) = document.abbreviation_containing(item.atom_id)
             {
@@ -446,7 +440,10 @@ fn site_row<'a>(
     .width(Length::Fill)
     .on_press(Message::Nmr(Action::SelectRow(index)))
     .checked(selected.contains(&item.atom_id))
-    .value(format!("{}. {}", report.data_version, report.conditions))
+    .value(presentation.map_or_else(
+        || format!("{}. {}", report.data_version, report.conditions),
+        |presentation| presentation.value.clone(),
+    ))
     .style(result_row(selected.contains(&item.atom_id)))
 }
 
@@ -661,7 +658,15 @@ pub(super) fn panel_description(state: &State) -> String {
         format!(
             "{} prediction: {} of {} atom-linked sites supported",
             report.nucleus.label(),
-            report.supported_count(),
+            state
+                .job
+                .presentation
+                .as_ref()
+                .filter(|presentation| presentation.matches(report))
+                .map_or_else(
+                    || report.supported_count(),
+                    |presentation| presentation.supported_count
+                ),
             report.rows.len()
         )
     } else {

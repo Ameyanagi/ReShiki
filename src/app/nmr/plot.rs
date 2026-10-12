@@ -1,5 +1,6 @@
 //! Chemical-shift sticks with atom-linked labels. Heights are deliberately
 //! uniform; the backend supplies shifts, not intensities or a spin simulation.
+use super::presentation::Presentation;
 use super::view::site_description;
 use super::{Action, Message, Nucleus, Report};
 use crate::canvas::overlay::ACCENT;
@@ -9,6 +10,7 @@ use iced::advanced::{
 };
 use iced::widget::{button, responsive, text};
 use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, touch};
+use std::borrow::Cow;
 
 pub(super) const HEIGHT: f32 = 112.;
 const MARGIN: f32 = 16.;
@@ -78,6 +80,46 @@ struct Group {
     lane: usize,
 }
 
+pub(super) struct Labels {
+    atoms: Vec<Label>,
+    counts: Vec<Label>,
+}
+
+struct Label {
+    text: String,
+    width: f32,
+}
+
+impl Label {
+    fn new(text: String) -> Self {
+        let width = crate::app::text_width(&text, LABEL_SIZE);
+        Self { text, width }
+    }
+}
+
+impl Labels {
+    pub(super) fn new(report: &Report) -> Self {
+        Self {
+            atoms: report
+                .rows
+                .iter()
+                .map(|row| Label::new(label_for(1, row.atom_id)))
+                .collect(),
+            counts: (0..=report.rows.len())
+                .map(|count| Label::new(format!("{count} sites")))
+                .collect(),
+        }
+    }
+
+    fn label(&self, count: usize, index: usize) -> Option<&Label> {
+        if count == 1 {
+            self.atoms.get(index)
+        } else {
+            self.counts.get(count)
+        }
+    }
+}
+
 fn label_for(count: usize, atom_id: u64) -> String {
     if count == 1 {
         format!("#{atom_id}")
@@ -86,6 +128,7 @@ fn label_for(count: usize, atom_id: u64) -> String {
     }
 }
 
+#[cfg(test)]
 fn group_label(report: &Report, indices: &[usize]) -> String {
     let mut rows = indices.iter().filter_map(|&index| report.rows.get(index));
     let Some(first) = rows.next() else {
@@ -95,17 +138,33 @@ fn group_label(report: &Report, indices: &[usize]) -> String {
     label_for(count, first.atom_id)
 }
 
+#[cfg(test)]
 fn marker_name(report: &Report, indices: &[usize]) -> String {
+    marker_name_with_presentation(report, indices, None)
+}
+
+fn marker_name_with_presentation(
+    report: &Report,
+    indices: &[usize],
+    presentation: Option<&Presentation>,
+) -> String {
     // Native accessibility snapshots reject names over 4096 bytes (the
     // validation in src/accessibility/tree.rs). A dense marker keeps all
     // owners in its action, while individual result rows provide complete
     // per-site detail instead of an unbounded combined description.
-    let rows = indices.iter().filter_map(|&index| report.rows.get(index));
+    let rows = indices
+        .iter()
+        .filter_map(|&index| report.rows.get(index).map(|row| (index, row)));
     let count = rows.clone().count();
     let mut description = rows
         .take(3)
-        .map(|row| {
-            let mut text = site_description(report.nucleus, row);
+        .map(|(index, row)| {
+            let mut text = presentation
+                .and_then(|presentation| presentation.rows.get(index))
+                .map_or_else(
+                    || site_description(report.nucleus, row),
+                    |site| site.description.clone(),
+                );
             if text.len() > MAX_SITE_NAME {
                 text.truncate(text.floor_char_boundary(MAX_SITE_NAME));
                 text.push('…');
@@ -128,7 +187,17 @@ fn marker_name(report: &Report, indices: &[usize]) -> String {
     format!("Predicted shift marker. {description}.{help}")
 }
 
+#[cfg(test)]
 fn groups(report: &Report, axis: Axis, width: f32) -> Vec<Group> {
+    groups_with_labels(report, axis, width, None)
+}
+
+fn groups_with_labels(
+    report: &Report,
+    axis: Axis,
+    width: f32,
+    labels: Option<&Labels>,
+) -> Vec<Group> {
     let mut shifts: Vec<_> = report.shifts().collect();
     shifts.sort_by(|a, b| b.1.total_cmp(&a.1));
     struct Placed {
@@ -148,8 +217,13 @@ fn groups(report: &Report, axis: Axis, width: f32) -> Vec<Group> {
         let mut center = shift;
         loop {
             let count = end - start + 1;
-            let label = label_for(count, row.atom_id);
-            let label_width = (crate::app::text_width(&label, LABEL_SIZE) + 6.).min(width);
+            let measured = labels
+                .and_then(|labels| labels.label(count, index))
+                .map_or_else(
+                    || crate::app::text_width(&label_for(count, row.atom_id), LABEL_SIZE),
+                    |label| label.width,
+                );
+            let label_width = (measured + 6.).min(width);
             let x =
                 (axis.x(center, width) - label_width / 2.).clamp(0., (width - label_width).max(0.));
             let previous_ends = ends;
@@ -213,8 +287,17 @@ fn groups(report: &Report, axis: Axis, width: f32) -> Vec<Group> {
         .collect()
 }
 
+#[cfg(test)]
 pub(super) fn view<'a>(report: &'a Report, selected: &'a [u64]) -> Element<'a, Message> {
-    responsive(move |size| view_at_width(report, selected, size.width))
+    view_with_presentation(report, selected, None)
+}
+
+pub(super) fn view_with_presentation<'a>(
+    report: &'a Report,
+    selected: &'a [u64],
+    presentation: Option<&'a Presentation>,
+) -> Element<'a, Message> {
+    responsive(move |size| view_at_width(report, selected, presentation, size.width))
         .height(HEIGHT)
         .into()
 }
@@ -231,12 +314,21 @@ fn marker_style(selected: bool) -> impl Fn(&Theme, button::Status) -> button::St
     }
 }
 
-fn view_at_width<'a>(report: &'a Report, selected: &'a [u64], width: f32) -> Element<'a, Message> {
+fn view_at_width<'a>(
+    report: &'a Report,
+    selected: &'a [u64],
+    presentation: Option<&'a Presentation>,
+    width: f32,
+) -> Element<'a, Message> {
     let axis = Axis::new(report);
     let mut children = Vec::new();
     let mut positions = Vec::new();
-    for group in groups(report, axis, width) {
-        let Some(first) = group.indices.first().and_then(|&i| report.rows.get(i)) else {
+    let labels = presentation.map(|presentation| &presentation.plot_labels);
+    for group in groups_with_labels(report, axis, width, labels) {
+        let Some(&index) = group.indices.first() else {
+            continue;
+        };
+        let Some(first) = report.rows.get(index) else {
             continue;
         };
         let selected = group
@@ -244,10 +336,15 @@ fn view_at_width<'a>(report: &'a Report, selected: &'a [u64], width: f32) -> Ele
             .iter()
             .filter_map(|&i| report.rows.get(i))
             .any(|r| selected.contains(&r.atom_id));
-        let label = group_label(report, &group.indices);
+        let label = labels
+            .and_then(|labels| labels.label(group.indices.len(), index))
+            .map_or_else(
+                || Cow::Owned(label_for(group.indices.len(), first.atom_id)),
+                |label| Cow::Borrowed(label.text.as_str()),
+            );
         let button = reshiki::accessibility::button(
             format!("nmr.marker.{}.{}", report.nucleus.code(), first.atom_id),
-            marker_name(report, &group.indices),
+            marker_name_with_presentation(report, &group.indices, presentation),
             text(label)
                 .size(LABEL_SIZE)
                 .font(iced::Font::with_name(reshiki::style::ui_font_family()))

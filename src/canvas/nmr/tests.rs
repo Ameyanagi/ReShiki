@@ -30,6 +30,7 @@ fn assignment_numbers_use_original_atoms_and_avoid_fixture_symbols_and_each_othe
         &doc,
         Context {
             report: &report,
+            supported: None,
             mode: LabelMode::Atom,
         },
         camera(),
@@ -97,6 +98,7 @@ fn shift_and_combined_modes_follow_moved_atom_without_changing_predictions_or_ex
             &doc,
             Context {
                 report: &report,
+                supported: None,
                 mode,
             },
             camera(),
@@ -111,6 +113,7 @@ fn shift_and_combined_modes_follow_moved_atom_without_changing_predictions_or_ex
         &doc,
         Context {
             report: &report,
+            supported: None,
             mode: LabelMode::Atom,
         },
         camera(),
@@ -121,6 +124,7 @@ fn shift_and_combined_modes_follow_moved_atom_without_changing_predictions_or_ex
         &doc,
         Context {
             report: &report,
+            supported: None,
             mode: LabelMode::Atom,
         },
         camera(),
@@ -144,6 +148,7 @@ fn proton_assignments_name_the_parent_and_unresolved_group_not_individual_proton
         &doc,
         Context {
             report: &report,
+            supported: None,
             mode: LabelMode::Both,
         },
         camera(),
@@ -176,6 +181,7 @@ fn offscreen_owners_do_not_leave_clamped_labels_on_empty_canvas() {
         &doc,
         Context {
             report: &report,
+            supported: None,
             mode: LabelMode::Both,
         },
         Camera {
@@ -194,6 +200,7 @@ fn missing_or_nonfinite_predictions_do_not_gain_labels_or_selected_halos() {
     report.rows[1].statistics.as_mut().unwrap().median = f64::NAN;
     let context = Context {
         report: &report,
+        supported: None,
         mode: LabelMode::Atom,
     };
     assert_eq!(context.supported_ids(), [4, 5]);
@@ -204,6 +211,38 @@ fn missing_or_nonfinite_predictions_do_not_gain_labels_or_selected_halos() {
             .collect::<Vec<_>>(),
         [4, 5]
     );
+}
+
+#[test]
+fn supported_owners_keep_report_order_and_borrow_sorted_marker_membership() {
+    let (_, mut report) = fixture(Nucleus::C13);
+    report.rows.reverse();
+    report.rows.push(report.rows[0].clone());
+    let sorted = [1, 2, 4, 5];
+    let context = Context {
+        report: &report,
+        mode: LabelMode::Atom,
+        supported: Some(&sorted),
+    };
+    assert_eq!(context.supported_ids(), [5, 4, 2, 1, 5]);
+    assert!(matches!(context.marker_ids(), std::borrow::Cow::Borrowed(ids) if ids == sorted));
+    let fallback = Context {
+        supported: None,
+        ..context
+    };
+    assert_eq!(fallback.marker_ids().as_ref(), sorted);
+}
+
+#[test]
+fn assignment_width_memo_is_bounded_and_matches_uncached_measurements() {
+    let mut widths = WidthMemo::default();
+    for id in 0..=MAX_WIDTHS {
+        let text = format!("#{id}");
+        let expected = crate::app::text_width(&text, TEXT_SIZE);
+        assert_eq!(widths.width(&text).to_bits(), expected.to_bits());
+        assert_eq!(widths.width(&text).to_bits(), expected.to_bits());
+        assert!(widths.widths.len() <= MAX_WIDTHS);
+    }
 }
 
 #[test]
@@ -226,6 +265,7 @@ fn collapsed_assignments_retain_original_owners_at_the_visible_group_anchor() {
         &doc,
         Context {
             report: &report,
+            supported: None,
             mode: LabelMode::Atom,
         },
         camera(),
@@ -257,6 +297,7 @@ fn crowded_label_uses_a_leader_only_when_displaced_from_its_real_owner() {
         &doc,
         Context {
             report: &report,
+            supported: None,
             mode: LabelMode::Atom,
         },
         camera(),
@@ -305,9 +346,24 @@ async fn actual_nmr_selection_is_a_filled_halo_and_ordinary_selection_is_unchang
         &mut renderer,
         Some(Context {
             report: &report,
+            supported: None,
             mode: LabelMode::Atom,
         }),
     );
+    let state = super::super::State::default();
+    let supported = [1, 2, 4, 5];
+    let context = Some(Context {
+        report: &report,
+        mode: LabelMode::Atom,
+        supported: Some(&supported),
+    });
+    for _ in 0..2 {
+        assert_eq!(
+            canvas_pixels_with_state(&mut renderer, &doc, context, &Theme::Light, &state),
+            nmr,
+            "Cached placements and borrowed supported owners preserve canvas pixels"
+        );
+    }
     let anchor = camera().screen(doc.atom(2).unwrap().position, bounds());
     let ring_ink = |pixels: &[u8]| {
         let mut count = 0;
@@ -348,6 +404,7 @@ async fn actual_nmr_selection_is_a_filled_halo_and_ordinary_selection_is_unchang
         &mut renderer,
         Some(Context {
             report: &report,
+            supported: None,
             mode: LabelMode::Atom,
         }),
     );
@@ -434,6 +491,22 @@ fn canvas_pixels(
     context: Option<Context<'_>>,
     theme: &iced::Theme,
 ) -> Vec<u8> {
+    canvas_pixels_with_state(
+        renderer,
+        doc,
+        context,
+        theme,
+        &super::super::State::default(),
+    )
+}
+
+fn canvas_pixels_with_state(
+    renderer: &mut iced::Renderer,
+    doc: &Document,
+    context: Option<Context<'_>>,
+    theme: &iced::Theme,
+    state: &super::super::State,
+) -> Vec<u8> {
     use iced::advanced::{Renderer as _, graphics::geometry::Renderer as _, renderer::Headless};
     use iced::widget::canvas::Program;
     let mut canvas = super::super::tests::chain_canvas(doc, super::super::ChainMode::Straight);
@@ -443,7 +516,7 @@ fn canvas_pixels(
     canvas.nmr = context;
     renderer.reset(bounds());
     for geometry in canvas.draw(
-        &super::super::State::default(),
+        state,
         renderer,
         theme,
         bounds(),
@@ -468,6 +541,7 @@ async fn assignment_ink_is_legible_on_light_and_dark_pages_and_independent_of_ch
     .expect("Actual renderer is required");
     let context = Context {
         report: &report,
+        supported: None,
         mode: LabelMode::Atom,
     };
     let mut unsupported_report = report.clone();
@@ -505,6 +579,7 @@ async fn assignment_ink_is_legible_on_light_and_dark_pages_and_independent_of_ch
             &doc,
             Some(Context {
                 report: &unsupported_report,
+                supported: None,
                 mode: LabelMode::Atom,
             }),
             &iced::Theme::Dark,

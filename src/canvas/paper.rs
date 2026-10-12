@@ -87,7 +87,7 @@ impl MoleculeCanvas<'_> {
         let selected = ring_selection.as_deref().unwrap_or(self.selected);
         let nmr_ids = self
             .nmr
-            .map(|context| context.supported_ids())
+            .map(|context| context.marker_ids())
             .unwrap_or_default();
         let cached_camera = (self.hidden_annotation.is_none()
             && (translation.is_some() || *preview == *self.doc))
@@ -112,7 +112,8 @@ impl MoleculeCanvas<'_> {
             );
             draw_document(frame, &preview, self.camera, bounds);
         }
-        self.draw_nmr_assignments(frame, &preview, selected, bounds);
+        let nmr_cache = (cached_camera.is_some() && translation.is_none()).then_some(&state.scene);
+        self.draw_nmr_assignments(frame, &preview, selected, bounds, nmr_cache);
         self.draw_editor_markers(frame, &preview, bounds);
         self.draw_orbital_target(frame, state, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);

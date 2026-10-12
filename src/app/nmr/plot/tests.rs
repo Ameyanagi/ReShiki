@@ -118,6 +118,59 @@ fn carbon_labels_stay_individual_and_stagger_close_real_shifts() {
 }
 
 #[test]
+fn cached_plot_widths_and_names_preserve_every_group() {
+    let mut reports = vec![carbon()];
+    let mut dense = carbon();
+    let prototype = dense.rows[0].clone();
+    dense.rows = (0..128)
+        .map(|index| {
+            let mut row = prototype.clone();
+            row.atom_id = u64::MAX - index;
+            row.statistics.as_mut().unwrap().median = 20.9;
+            row
+        })
+        .collect();
+    reports.push(dense);
+    let mut extreme = carbon();
+    for (row, shift) in extreme
+        .rows
+        .iter_mut()
+        .zip([f64::MAX, f64::MAX, f64::MAX, -f64::MAX])
+    {
+        row.statistics.as_mut().unwrap().median = shift;
+    }
+    reports.push(extreme);
+    for report in reports {
+        let report = std::sync::Arc::new(report);
+        let presentation = Presentation::new(&report);
+        for width in [0., 32., 240., 284., 304., 384., 460., 584.] {
+            let axis = Axis::new(&report);
+            let original = groups(&report, axis, width);
+            let cached = groups_with_labels(&report, axis, width, Some(&presentation.plot_labels));
+            assert_eq!(original.len(), cached.len());
+            for (original, cached) in original.iter().zip(&cached) {
+                assert_eq!(original.indices, cached.indices);
+                assert_eq!(original.center.to_bits(), cached.center.to_bits());
+                assert_eq!(original.lane, cached.lane);
+                assert_eq!(
+                    marker_name(&report, &original.indices),
+                    marker_name_with_presentation(&report, &cached.indices, Some(&presentation),),
+                );
+                let index = cached.indices[0];
+                assert_eq!(
+                    group_label(&report, &cached.indices),
+                    presentation
+                        .plot_labels
+                        .label(cached.indices.len(), index)
+                        .unwrap()
+                        .text,
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn dense_coincident_and_long_id_reports_keep_every_owner_in_cycleable_groups() {
     let mut report = carbon();
     let prototype = report.rows[0].clone();

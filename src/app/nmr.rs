@@ -55,6 +55,7 @@ fn identity_current(
 mod palette;
 mod panel;
 mod plot;
+mod presentation;
 mod state;
 mod style;
 mod view;
@@ -163,6 +164,7 @@ impl App {
         self.tab.nmr.collapsed = false;
         self.tab.nmr.job.nucleus = nucleus;
         self.tab.nmr.job.result = None;
+        self.tab.nmr.job.presentation = None;
         self.tab.nmr.labels.visible = false;
         self.tab.nmr.labels.menu = false;
         let request = match engine::prepare(&self.tab.doc, &self.tab.selected) {
@@ -209,7 +211,8 @@ impl App {
         }
         match result {
             Ok(report) => {
-                let supported = report.supported_count();
+                let presentation = presentation::Presentation::new(&report);
+                let supported = presentation.supported_count;
                 self.status = format!(
                     "{} NMR prediction · {supported}/{} supported atom-linked sites",
                     report.nucleus.label(),
@@ -218,6 +221,7 @@ impl App {
                 self.error = false;
                 self.tab.nmr.job.result_epoch = Some(key.epoch);
                 self.tab.nmr.job.result = Some(report);
+                self.tab.nmr.job.presentation = Some(presentation);
             }
             Err(error) => {
                 self.tab.nmr.job.notice = Some(error.clone());
@@ -311,9 +315,16 @@ impl App {
     pub(super) fn nmr_canvas(&self) -> Option<crate::canvas::nmr::Context<'_>> {
         let state = &self.tab.nmr;
         (state.open && state.labels.visible).then_some(())?;
+        let report = state.job.result.as_ref()?;
+        let presentation = state
+            .job
+            .presentation
+            .as_ref()
+            .filter(|presentation| presentation.matches(report));
         Some(crate::canvas::nmr::Context {
-            report: state.job.result.as_deref()?,
+            report,
             mode: state.labels.mode,
+            supported: presentation.map(|presentation| presentation.sorted_ids.as_slice()),
         })
     }
 
@@ -361,6 +372,6 @@ impl App {
 }
 
 #[cfg(test)]
-mod test_support;
+pub(super) mod test_support;
 #[cfg(test)]
 mod tests;

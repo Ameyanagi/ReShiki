@@ -37,7 +37,14 @@ fn indexed_markers_preserve_document_and_selection_order_and_abbreviation_visibi
             })
             .collect::<Vec<_>>();
         assert_eq!(markers.bonds, bonds);
-        assert_eq!(markers.atoms, atoms);
+        assert_eq!(
+            markers
+                .atoms
+                .iter()
+                .map(|(_, atom)| *atom)
+                .collect::<Vec<_>>(),
+            atoms
+        );
         assert_eq!(markers.captions, captions);
     }
 }

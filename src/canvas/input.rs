@@ -166,10 +166,11 @@ impl MoleculeCanvas<'_> {
             }
             if let Some(p) = cursor.position_in(bounds)
                 && let Ok(plan) = reshiki::editing::reference::Stretch::new(self.doc, fixed, moving)
-                && crate::canvas::hit::hit_selection(
+                && crate::canvas::hit::hit_selection_with_orbital(
                     self.doc,
                     self.camera.world(p, bounds),
                     self.camera.world_len(PICK_RADIUS_PX),
+                    state.scene.borrow_mut().foreground_orbital(self.doc),
                 )
                 .iter()
                 .any(|id| plan.ids.contains(id))

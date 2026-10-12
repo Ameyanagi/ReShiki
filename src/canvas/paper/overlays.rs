@@ -1,6 +1,6 @@
 //! Editing aids drawn over the document: handles, notices and badges, gesture outlines and hover, the erase cursor, the selection box and tilt bounds.
 
-use crate::canvas::hit::{bond_target_with, hit_selection};
+use crate::canvas::hit::{bond_target_with, hit_selection_with_orbital};
 use crate::canvas::overlay::{ACCENT, ACCENT_TINT, ARROW_SOURCE};
 use crate::canvas::{
     Gesture, Handle, MoleculeCanvas, SelectionBox, State, Tool, World, layered, markers, pick, rgb,
@@ -504,8 +504,12 @@ impl MoleculeCanvas<'_> {
                 }
                 None if cursor.is_over(bounds) && self.tool != Tool::Erase => {
                     let point = self.camera.world(p, bounds);
-                    let mut hit =
-                        hit_selection(self.doc, point, self.camera.world_len(pick::PICK_RADIUS_PX));
+                    let mut hit = hit_selection_with_orbital(
+                        self.doc,
+                        point,
+                        self.camera.world_len(pick::PICK_RADIUS_PX),
+                        state.scene.borrow_mut().foreground_orbital(self.doc),
+                    );
                     if self.tool.selects() && hit.is_empty() {
                         hit = reshiki::editing::ring_at(self.doc, point).unwrap_or_default();
                     }

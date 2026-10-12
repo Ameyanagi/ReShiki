@@ -9,8 +9,7 @@ use std::collections::{HashMap, HashSet};
 pub(super) struct Markers {
     multiple: bool,
     bonds: Vec<(World, World)>,
-    atoms: Vec<World>,
-    atom_ids: Vec<u64>,
+    atoms: Vec<(u64, World)>,
     captions: Vec<(World, Size)>,
 }
 
@@ -50,12 +49,7 @@ impl Markers {
             atoms: ids
                 .iter()
                 .filter(|id| !hidden.contains(id))
-                .filter_map(|id| atoms.get(id).map(|atom| atom.position))
-                .collect(),
-            atom_ids: ids
-                .iter()
-                .filter(|id| !hidden.contains(id) && atoms.contains_key(id))
-                .copied()
+                .filter_map(|id| atoms.get(id).map(|atom| (*id, atom.position)))
                 .collect(),
             captions: doc
                 .annotations
@@ -81,6 +75,7 @@ impl Markers {
 
     /// Only selected, supported NMR owners use the filled assignment halo.
     /// Ordinary selection and hover retain their existing outlined markers.
+    /// `nmr_ids` is the sorted supported-owner slice from the NMR context.
     pub fn draw_with_nmr(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -113,14 +108,15 @@ impl Markers {
                     );
                 }
             }
-            for (&atom, id) in self.atoms.iter().zip(&self.atom_ids) {
+            for &(id, atom) in &self.atoms {
                 let center = camera.screen(atom, bounds);
                 if !visible(center, center, 8. * scale + 3.) {
                     continue;
                 }
                 let circle = Path::circle(center, 8. * scale);
+                let nmr_owner = nmr_ids.binary_search(&id).is_ok();
                 if selected {
-                    let fill = if nmr_ids.contains(id) {
+                    let fill = if nmr_owner {
                         // A display tint keeps this soft halo visibly teal;
                         // low-alpha ink becomes nearly gray under linear-light
                         // compositing. The frame adapts it to the page once.
@@ -130,7 +126,7 @@ impl Markers {
                     };
                     frame.fill(&circle, fill);
                 }
-                if !selected || !nmr_ids.contains(id) {
+                if !selected || !nmr_owner {
                     frame.stroke(
                         &circle,
                         Stroke::default()

@@ -16,6 +16,26 @@ pub(super) fn region_selection(
 
 /// Bonds are manipulated through their two endpoint atoms; they have no separate ID.
 pub(super) fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
+    hit_selection_with_object(doc, p, r, || hit_object(doc, p, r))
+}
+
+pub(super) fn hit_selection_with_orbital(
+    doc: &Document,
+    p: World,
+    r: f32,
+    foreground_orbital: bool,
+) -> Vec<u64> {
+    hit_selection_with_object(doc, p, r, || {
+        hit_object_with_orbital(doc, p, r, foreground_orbital)
+    })
+}
+
+fn hit_selection_with_object(
+    doc: &Document,
+    p: World,
+    r: f32,
+    object: impl FnOnce() -> Option<u64>,
+) -> Vec<u64> {
     if let Some(i) = reshiki::atom_labels::indicators(doc).into_iter().find(|i| {
         (p.x - i.center.x).abs() < i.width / 2. + r && (p.y - i.center.y).abs() < i.height / 2. + r
     }) {
@@ -28,7 +48,7 @@ pub(super) fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
             reshiki::atom_labels::Owner::BondStereo(a, b) => vec![a, b],
         };
     }
-    if let Some(id) = hit_object(doc, p, r) {
+    if let Some(id) = object() {
         return vec![id];
     }
     reshiki::editing::nearest_bond(doc, p, r * 0.7)
@@ -97,13 +117,24 @@ pub(super) fn plane_endpoint(
     reshiki::projection::growth::Plane::at(doc, id)?.endpoint(cursor, drawing)
 }
 pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
-    // Only precompute label ownership when a foreground orbital may need to
-    // pass through it. Ordinary foreground graphics retain their fast path.
-    let orbital_label = doc
-        .graphics
+    hit_object_with_orbital(doc, p, r, foreground_orbital(doc))
+}
+
+pub(super) fn foreground_orbital(doc: &Document) -> bool {
+    doc.graphics
         .iter()
         .any(|g| g.layer >= 0 && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
-        .then(|| reshiki::scene::atom_label_hit(doc, p, 0.));
+}
+
+fn hit_object_with_orbital(
+    doc: &Document,
+    p: World,
+    r: f32,
+    foreground_orbital: bool,
+) -> Option<u64> {
+    // Only precompute label ownership when a foreground orbital may need to
+    // pass through it. Ordinary foreground graphics retain their fast path.
+    let orbital_label = foreground_orbital.then(|| reshiki::scene::atom_label_hit(doc, p, 0.));
     let graphic = |front| {
         doc.graphics
             .iter()
