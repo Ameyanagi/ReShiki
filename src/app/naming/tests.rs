@@ -126,6 +126,110 @@ async fn preview_insertion_is_native_editable_and_one_history_step() -> Result<(
 }
 
 #[tokio::test]
+async fn exhausted_ids_report_failed_name_preview_without_changing_the_drawing()
+-> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    app.tab.doc.add_atom("O", Point::new(120., 80.));
+    app.tab.doc.atoms[0].id = u64::MAX - 1;
+    app.tab.doc.validate()?;
+    let before = app.tab.doc.clone();
+    let mut attempted = before.clone();
+    assert!(editing::append(&mut attempted, &preview.document, Point::default()).is_empty());
+    assert_eq!(attempted, before);
+    app.tab.selected = before.all_ids();
+    app.tool = Tool::Text;
+    app.tab.camera.center = Point::new(320., -80.);
+    app.tab.camera.zoom = 2.;
+    let selected = app.tab.selected.clone();
+    let camera = app.tab.camera;
+    let revision = app.tab.revision;
+    let history = (
+        app.tab.history.can_undo(),
+        app.tab.history.can_redo(),
+        app.tab.history.frames(),
+    );
+    app.tab.naming.set_preview(preview);
+    let notice = "Keep the preview details";
+    app.tab.naming.notice = Some(notice.into());
+
+    let _ = app.naming_action(Action::Insert);
+
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(
+        (
+            app.tab.history.can_undo(),
+            app.tab.history.can_redo(),
+            app.tab.history.frames(),
+        ),
+        history
+    );
+    assert!(app.error);
+    assert_eq!(app.status, "Could not insert ethan-1-ol");
+    assert_eq!(app.tab.naming.notice.as_deref(), Some(notice));
+    assert_eq!(app.tool, Tool::Text);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    Ok(())
+}
+
+#[tokio::test]
+async fn name_preview_is_placed_beside_a_caption_only_drawing() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc.annotations.push(reshiki::document::Annotation {
+        id: 1,
+        position: Point::new(250., 80.),
+        text: "Existing caption".into(),
+        format: Default::default(),
+    });
+    app.tab.camera.center = Point::new(-100., -60.);
+    let before = app.tab.doc.clone();
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    let source = preview.document.clone();
+    let center = editing::center(&source, &source.all_ids());
+    let (_, existing_max) = before.bounds();
+    let (insert_min, _) = source.bounds();
+    let offset = Point::new(
+        existing_max.x + before.drawing_style.bond_length_world - insert_min.x,
+        app.tab.camera.center.y - center.y,
+    );
+    app.tab.naming.set_preview(preview);
+
+    let _ = app.naming_action(Action::Insert);
+
+    assert_eq!(app.tab.doc.annotations, before.annotations);
+    assert_eq!(app.tab.doc.atoms.len(), source.atoms.len());
+    for (inserted, original) in app.tab.doc.atoms.iter().zip(&source.atoms) {
+        assert_eq!(
+            inserted.position,
+            original.position.offset(offset.x, offset.y)
+        );
+    }
+    assert_eq!(
+        app.tab.selected,
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .map(|atom| atom.id)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    assert_eq!(app.tab.history.frames(), 1);
+    assert!(!app.error);
+    let status = "Inserted editable name result · Undo removes the insertion";
+    assert_eq!(app.status, status);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    Ok(())
+}
+
+#[tokio::test]
 async fn native_preview_and_exchange_retain_specified_and_unspecified_stereo() -> Result<(), String>
 {
     let engine = LocalEngine::default();

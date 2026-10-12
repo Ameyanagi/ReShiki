@@ -33,7 +33,6 @@ pub enum Action {
     Move(Point),
     Resize(Size),
     ResetPosition,
-    Layout(iced::Size),
     PanelSize(Size),
     Select(usize),
     SelectMarker(Vec<usize>),
@@ -57,7 +56,6 @@ pub(super) struct State {
     width: f32,
     height: f32,
     resized: bool,
-    available: Size,
     rendered_size: Size,
     dock_return: Option<(bool, InspectorTab)>,
     layout_transition: Option<Size>,
@@ -84,7 +82,6 @@ impl Default for State {
             width: 360.,
             height: 440.,
             resized: false,
-            available: Size::new(1280., 820.),
             rendered_size: Size::new(360., 440.),
             dock_return: None,
             layout_transition: None,
@@ -222,7 +219,6 @@ impl App {
             }
             Action::ResetPosition => self.tab.nmr.position = None,
             Action::Move(_) | Action::Resize(_) => {}
-            Action::Layout(size) => self.tab.nmr.available = size,
             Action::PanelSize(size) => self.tab.nmr.rendered_size = size,
             Action::SelectMarker(indices) => {
                 let Some(report) = &self.tab.nmr.result else {
@@ -324,19 +320,22 @@ impl App {
             }
             Action::Select(index) => {
                 if let Some(row) = self.tab.nmr.result.as_ref().and_then(|r| r.rows.get(index)) {
-                    self.tab.selected = std::iter::once(row.atom_id)
+                    let mut selected: Vec<_> = std::iter::once(row.atom_id)
                         .chain(row.hydrogen_ids.iter().copied())
                         .collect();
                     let collapsed = self.tab.doc.abbreviation_containing(row.atom_id);
                     if let Some(group) = collapsed
-                        && !self.tab.selected.contains(&group.anchor)
+                        && !selected.contains(&group.anchor)
                     {
-                        self.tab.selected.push(group.anchor);
+                        selected.push(group.anchor);
                     }
+                    let atom_id = row.atom_id;
+                    let hydrogen_count = row.hydrogen_count;
+                    self.set_selection(selected);
                     self.status = format!(
                         "NMR prediction linked to atom #{}{}",
-                        row.atom_id,
-                        if row.hydrogen_count > 1 && self.tab.nmr.nucleus == Nucleus::H1 {
+                        atom_id,
+                        if hydrogen_count > 1 && self.tab.nmr.nucleus == Nucleus::H1 {
                             " · unresolved attached-H group"
                         } else {
                             ""
@@ -482,14 +481,11 @@ impl App {
             layers = layers.push(palette::floating(
                 self.nmr_panel(true),
                 state.position,
-                Size::new(state.width, state.available.height),
+                state.width,
                 !state.collapsed,
             ));
         }
-        sensor(layers)
-            .on_show(|size| Message::Nmr(Action::Layout(size)))
-            .on_resize(|size| Message::Nmr(Action::Layout(size)))
-            .into()
+        layers.into()
     }
 
     pub(super) fn nmr_panel(&self, floating: bool) -> Element<'_, Message> {

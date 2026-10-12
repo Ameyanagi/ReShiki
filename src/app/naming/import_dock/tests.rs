@@ -84,6 +84,87 @@ async fn insert_without_caption_and_optional_preview_reuse_need_no_acknowledgeme
 }
 
 #[tokio::test]
+async fn exhausted_ids_report_failed_import_without_changing_the_drawing() -> Result<(), String> {
+    let mut app = ready();
+    let result = preview(&app, "CCO").await?;
+    app.tab.doc.add_atom("O", Point::new(120., 80.));
+    app.tab.doc.atoms[0].id = u64::MAX - 1;
+    app.tab.doc.validate()?;
+    let before = app.tab.doc.clone();
+    let mut attempted = before.clone();
+    assert!(editing::append(&mut attempted, &result.document, Point::default()).is_empty());
+    assert_eq!(attempted, before);
+    app.tab.selected = before.all_ids();
+    app.tool = Tool::Text;
+    app.tab.camera.center = Point::new(320., -80.);
+    app.tab.camera.zoom = 2.;
+    let selected = app.tab.selected.clone();
+    let camera = app.tab.camera;
+    let revision = app.tab.revision;
+    let history = (
+        app.tab.history.can_undo(),
+        app.tab.history.can_redo(),
+        app.tab.history.frames(),
+    );
+    app.tab.naming.set_preview(result);
+    let notice = "Keep the preview details";
+    app.tab.naming.notice = Some(notice.into());
+
+    let _ = app.insert_input();
+
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(
+        (
+            app.tab.history.can_undo(),
+            app.tab.history.can_redo(),
+            app.tab.history.frames(),
+        ),
+        history
+    );
+    assert!(app.error);
+    assert_eq!(app.status, "Could not insert ethanol");
+    assert_eq!(app.tab.naming.notice.as_deref(), Some(notice));
+    assert_eq!(app.tool, Tool::Text);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    Ok(())
+}
+
+#[tokio::test]
+async fn ready_import_selects_the_inserted_objects_and_records_one_undo() -> Result<(), String> {
+    let mut app = ready();
+    let existing = app.tab.doc.add_atom("N", Point::new(-160., 40.));
+    app.tab.selected = vec![existing];
+    let before = app.tab.doc.clone();
+    let result = preview(&app, "CCO").await?;
+    app.tab.naming.set_preview(result);
+
+    let _ = app.insert_input();
+
+    let inserted = app
+        .tab
+        .doc
+        .all_ids()
+        .into_iter()
+        .filter(|id| *id != existing)
+        .collect::<Vec<_>>();
+    assert_eq!(inserted.len(), 4);
+    assert_eq!(app.tab.selected, inserted);
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    assert_eq!(app.tab.history.frames(), 1);
+    assert!(!app.error);
+    assert_eq!(app.status, "Inserted ethanol · Undo removes it");
+    assert!(app.tab.naming.notice.is_none());
+    assert_eq!(app.tool, Tool::Select);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    Ok(())
+}
+
+#[tokio::test]
 async fn edited_preview_never_inserts_original_name_or_unapplied_smiles() -> Result<(), String> {
     let mut app = ready();
     let result = preview(&app, "CCN").await?;

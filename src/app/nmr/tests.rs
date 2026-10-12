@@ -294,7 +294,7 @@ impl NmrUi {
         let mut panel = palette::floating(
             app.nmr_panel(true),
             app.tab.nmr.position,
-            Size::new(app.tab.nmr.width, self.size.height),
+            app.tab.nmr.width,
             !app.tab.nmr.collapsed,
         );
         let mut tree = Tree::new(&panel);
@@ -491,7 +491,6 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         ));
         app.inspector_open = true;
         app.inspector_tab = InspectorTab::Properties;
-        app.tab.nmr.available = size;
         let mut ui = NmrUi::new(size).await;
         let snapshot = ui.snapshot(&app);
         let entry = snapshot
@@ -2727,6 +2726,85 @@ fn selected_carbon_status_text_pins_linked_atom() {
     assert!(app.error);
     assert_eq!(app.tab.nmr.notice.as_deref(), Some(NOTICE_SENTINEL));
     assert_eq!(app.tab.selected, [atom_id]);
+}
+
+#[test]
+fn nmr_row_and_marker_selection_refresh_caption_and_atom_controls() {
+    use crate::canvas::Edit;
+    use reshiki::atom_labels::Number;
+    use reshiki::document::Annotation;
+    use reshiki::typography::{TextFormat, TextStyle};
+
+    for marker in [false, true] {
+        let mut app = ethyl_acetate();
+        let atom_id = app.tab.doc.atoms[0].id;
+        let atom_style = TextStyle {
+            family: "Arial".into(),
+            size_pt: 13.,
+            italic: true,
+            ..Default::default()
+        };
+        let atom = app.tab.doc.atom_mut(atom_id).unwrap();
+        atom.text_style = Some(atom_style.clone());
+        atom.display.number = Some(Number {
+            text: "C-17".into(),
+            offset: None,
+            style: TextStyle::default(),
+        });
+        let caption_id = app.tab.doc.next_id();
+        let caption_format = TextFormat {
+            style: TextStyle {
+                family: "Times New Roman".into(),
+                size_pt: 24.,
+                bold: true,
+                ..Default::default()
+            },
+            width_pt: Some(150.),
+            ..Default::default()
+        };
+        app.tab.doc.annotations.push(Annotation {
+            id: caption_id,
+            position: Point::new(100., 340.),
+            text: "Styled caption before NMR selection".into(),
+            format: caption_format.clone(),
+        });
+        let report = predicted(&app.tab.doc, Nucleus::C13);
+        let index = report
+            .rows
+            .iter()
+            .position(|row| row.atom_id == atom_id)
+            .unwrap();
+        let row = &report.rows[index];
+        let selected: Vec<_> = std::iter::once(row.atom_id)
+            .chain(row.hydrogen_ids.iter().copied())
+            .collect();
+        let _ = app.update(Message::Nmr(Action::Predict(Nucleus::C13)));
+        let key = app.tab.nmr.pending.clone().unwrap();
+        let _ = app.update(Message::Canvas(Edit::Select(vec![caption_id])));
+        assert_eq!(app.tab.caption_target, Some(caption_id));
+        assert_eq!(app.tab.caption, "Styled caption before NMR selection");
+        assert_eq!(app.tab.caption_format, caption_format);
+        assert!(app.tab.labels.number.is_empty());
+
+        let _ = app.update(Message::Nmr(Action::Finished(key, Ok(report))));
+        let action = if marker {
+            Action::SelectMarker(vec![index])
+        } else {
+            Action::Select(index)
+        };
+        let _ = app.update(Message::Nmr(action));
+
+        assert_eq!(app.tab.selected, selected);
+        assert_eq!(app.tab.caption_target, None);
+        assert_eq!(
+            app.tab.caption_format,
+            TextFormat {
+                style: atom_style,
+                ..Default::default()
+            }
+        );
+        assert_eq!(app.tab.labels.number, "C-17");
+    }
 }
 
 // Current behavior: selecting a result preserves the error flag and notice.

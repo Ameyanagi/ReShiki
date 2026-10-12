@@ -968,6 +968,55 @@ fn arrow_edits_keep_bend_history_and_new_resets_jacs_defaults() {
 }
 
 #[test]
+fn canvas_selection_and_select_all_refresh_bond_and_arrow_controls() {
+    use reshiki::arrows::{ArrowStyle, Preset};
+    use reshiki::palette::Color;
+
+    for path in ["canvas select", "canvas select at", "select all"] {
+        let (mut app, _) = App::new();
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.doc.bonds[0].color = Color::Custom([18, 52, 86]);
+        let arrow_id = app.tab.doc.next_id();
+        let arrow_style = ArrowStyle {
+            width_pt: 1.5,
+            color: Color::Custom([171, 205, 239]),
+            ..ArrowStyle::preset(Preset::Fishhook)
+        };
+        app.tab.doc.arrows.push(Arrow::new(
+            arrow_id,
+            Point::new(80., 0.),
+            Point::new(160., 0.),
+            Preset::Fishhook,
+            arrow_style.clone(),
+        ));
+        app.tool = Tool::Bond(1);
+        let before = app.tab.doc.clone();
+        let ids = app.tab.doc.all_ids();
+        let message = match path {
+            "canvas select" => Message::Canvas(Edit::Select(ids.clone())),
+            "canvas select at" => Message::Canvas(Edit::SelectAt(ids.clone(), Point::default())),
+            _ => Message::SelectAll,
+        };
+        let _ = app.update(message);
+
+        assert_eq!(app.tab.selected, ids, "{path}");
+        assert_eq!(app.tab.bond_color_input, "#123456", "{path}");
+        assert_eq!(app.tab.arrow_style, Preset::Fishhook, "{path}");
+        assert_eq!(app.tab.arrows.style, arrow_style, "{path}");
+        assert_eq!(app.tab.arrows.numbers[arrows::Field::Line as usize], "1.5");
+        assert_eq!(app.tab.arrows.color, "#ABCDEF", "{path}");
+        assert_eq!(app.tab.doc, before, "{path}");
+        assert!(!app.tab.history.can_undo(), "{path}");
+        if path == "select all" {
+            assert_eq!(app.tool, Tool::Select);
+        }
+    }
+}
+
+#[test]
 fn arrow_width_in_mixed_selection_preserves_bonds_and_other_objects() {
     use arrows::{Action, Field};
 

@@ -103,22 +103,15 @@ impl App {
                 return;
             }
         }
-        let center = editing::center(&document, &document.all_ids());
-        let offset = if self.tab.doc.all_ids().is_empty() {
-            Point::new(
-                self.tab.camera.center.x - center.x,
-                self.tab.camera.center.y - center.y,
-            )
-        } else {
-            let (_, hi) = self.tab.doc.bounds();
-            let (lo, _) = document.bounds();
-            Point::new(
-                hi.x + self.tab.doc.drawing_style.bond_length_world - lo.x,
-                self.tab.camera.center.y - center.y,
-            )
-        };
         let before = self.tab.doc.clone();
-        self.tab.selected = editing::append(&mut self.tab.doc, &document, offset);
+        let Some(selected) = self.insert_beside_drawing(&document) else {
+            self.tab.doc = before;
+            self.error = true;
+            let title = &preview.record.title;
+            self.status = format!("Could not insert {title}");
+            return;
+        };
+        self.tab.selected = selected;
         self.changed(before);
         if self.error {
             return;

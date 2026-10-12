@@ -27,7 +27,7 @@ pub(super) fn menu<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, 
 pub(super) fn floating<'a>(
     content: impl Into<Element<'a, Message>>,
     position: Option<Point>,
-    size: Size,
+    width: f32,
     resizable: bool,
 ) -> Element<'a, Message> {
     Element::new(Palette {
@@ -35,7 +35,7 @@ pub(super) fn floating<'a>(
         dismiss: None,
         floating: Some(Floating {
             position,
-            size,
+            width,
             resizable,
         }),
     })
@@ -44,7 +44,7 @@ pub(super) fn floating<'a>(
 #[derive(Clone, Copy)]
 struct Floating {
     position: Option<Point>,
-    size: Size,
+    width: f32,
     resizable: bool,
 }
 
@@ -160,7 +160,7 @@ impl Widget<Message, Theme, Renderer> for Palette<'_> {
             let area = bounds(
                 available,
                 floating.position,
-                Size::new(floating.size.width, available.height),
+                Size::new(floating.width, available.height),
             );
             let measured = self.content.as_widget_mut().layout(
                 child,

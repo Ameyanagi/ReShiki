@@ -212,6 +212,7 @@ impl App {
                 | Message::EngineDone { .. }
                 | Message::InspectorAction(_)
                 | Message::Viewport(_)
+                | Message::Nmr(super::nmr::Action::PanelSize(_))
                 | Message::Updates(_)
                 | Message::Imports(import::Action::Loaded(..))
         ) {

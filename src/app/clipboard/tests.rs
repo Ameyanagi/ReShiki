@@ -349,3 +349,120 @@ fn external_metadata_warnings_remain_visible_after_paste_and_file_import() {
         assert!(!app.error);
     }
 }
+
+#[test]
+fn engine_insert_reports_exhausted_ids_without_changing_drawing_or_controls() -> Result<(), String>
+{
+    let (mut app, _) = App::new();
+    app.tab.doc.add_atom("O", Point::new(120., 80.));
+    app.tab.doc.atoms[0].id = u64::MAX - 1;
+    app.tab.doc.validate()?;
+    let before = app.tab.doc.clone();
+    let mut document = Document::default();
+    document.add_atom("N", Point::default());
+    let mut attempted = before.clone();
+    assert!(editing::append(&mut attempted, &document, Point::default()).is_empty());
+    assert_eq!(attempted, before);
+    app.tab.selected = before.all_ids();
+    app.tool = Tool::Text;
+    app.tab.camera.center = Point::new(320., -80.);
+    app.tab.camera.zoom = 2.;
+    app.tab.busy = true;
+    let selected = app.tab.selected.clone();
+    let camera = app.tab.camera;
+    let revision = app.tab.revision;
+    let history = (
+        app.tab.history.can_undo(),
+        app.tab.history.can_redo(),
+        app.tab.history.frames(),
+    );
+    let notice = "Keep the preview details";
+    app.tab.chemistry_notice = Some(notice.into());
+
+    let _ = app.update(Message::EngineDone {
+        revision,
+        kind: Job::Insert,
+        result: Box::new(Ok(Response {
+            document: Some(document),
+            analysis: None,
+            output: None,
+            engine_version: "test".into(),
+            warnings: vec!["Source layout retained".into()],
+        })),
+    });
+
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(
+        (
+            app.tab.history.can_undo(),
+            app.tab.history.can_redo(),
+            app.tab.history.frames(),
+        ),
+        history
+    );
+    assert!(app.error);
+    assert_eq!(app.status, "Could not insert structure");
+    assert_eq!(app.tab.chemistry_notice.as_deref(), Some(notice));
+    assert!(!app.tab.busy);
+    assert_eq!(app.tool, Tool::Text);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    Ok(())
+}
+
+#[test]
+fn engine_insert_keeps_placement_selection_status_and_one_undo() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let existing = app.tab.doc.add_atom("O", Point::new(-160., 40.));
+    app.tab.selected = vec![existing];
+    app.tab.camera.center = Point::new(320., -80.);
+    let before = app.tab.doc.clone();
+    let mut document = Document::default();
+    document.add_atom("N", Point::new(10., 20.));
+    document.add_atom("O", Point::new(52., 20.));
+    let center = editing::center(&document, &document.all_ids());
+    let (_, existing_max) = before.bounds();
+    let (insert_min, _) = document.bounds();
+    let offset = Point::new(
+        existing_max.x + before.drawing_style.bond_length_world - insert_min.x,
+        app.tab.camera.center.y - center.y,
+    );
+
+    let _ = app.update(Message::EngineDone {
+        revision: app.tab.revision,
+        kind: Job::Insert,
+        result: Box::new(Ok(Response {
+            document: Some(document.clone()),
+            analysis: None,
+            output: None,
+            engine_version: "test".into(),
+            warnings: vec!["Source layout retained".into()],
+        })),
+    });
+
+    let inserted = &app.tab.doc.atoms[1..];
+    for (inserted, original) in inserted.iter().zip(&document.atoms) {
+        assert_eq!(
+            inserted.position,
+            original.position.offset(offset.x, offset.y)
+        );
+    }
+    assert_eq!(
+        app.tab.selected,
+        inserted.iter().map(|atom| atom.id).collect::<Vec<_>>()
+    );
+    assert_eq!(app.tab.selected.len(), 2);
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    assert_eq!(app.tab.history.frames(), 1);
+    assert!(!app.error);
+    let status =
+        "Inserted structure · Drag to position · Delete or Undo to remove · Source layout retained";
+    assert_eq!(app.status, status);
+    assert_eq!(app.tool, Tool::Select);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}

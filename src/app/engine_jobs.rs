@@ -8,6 +8,8 @@ use reshiki::{
     engine::{ChemistryEngine, Request, Response},
 };
 
+const INSERT_STRUCTURE_FAILED: &str = "Could not insert structure";
+
 impl App {
     pub(super) fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
         if self.tab.busy {
@@ -132,24 +134,39 @@ impl App {
             }
         }
     }
+    /// Place a document beside the drawing, centered on the camera's row.
+    /// An empty drawing centers it on the camera instead. Returns the inserted
+    /// IDs, or `None` when append inserts nothing, leaving the drawing unchanged
+    /// if IDs are exhausted or a document is invalid.
+    pub(super) fn insert_beside_drawing(&mut self, document: &Document) -> Option<Vec<u64>> {
+        let center = editing::center(document, &document.all_ids());
+        let offset = if self.tab.doc.all_ids().is_empty() {
+            Point::new(
+                self.tab.camera.center.x - center.x,
+                self.tab.camera.center.y - center.y,
+            )
+        } else {
+            let (_, existing_max) = self.tab.doc.bounds();
+            let (insert_min, _) = document.bounds();
+            Point::new(
+                existing_max.x + self.tab.doc.drawing_style.bond_length_world - insert_min.x,
+                self.tab.camera.center.y - center.y,
+            )
+        };
+        let ids = editing::append(&mut self.tab.doc, document, offset);
+        (!ids.is_empty()).then_some(ids)
+    }
+
     fn structure_inserted(&mut self, response: Response) {
         if let Some(document) = response.document {
             let before = self.tab.doc.clone();
-            let center = editing::center(&document, &document.all_ids());
-            let offset = if self.tab.doc.all_ids().is_empty() {
-                Point::new(
-                    self.tab.camera.center.x - center.x,
-                    self.tab.camera.center.y - center.y,
-                )
-            } else {
-                let (_, existing_max) = self.tab.doc.bounds();
-                let (insert_min, _) = document.bounds();
-                Point::new(
-                    existing_max.x + self.tab.doc.drawing_style.bond_length_world - insert_min.x,
-                    self.tab.camera.center.y - center.y,
-                )
+            let Some(selected) = self.insert_beside_drawing(&document) else {
+                self.tab.doc = before;
+                self.error = true;
+                self.status = INSERT_STRUCTURE_FAILED.into();
+                return;
             };
-            self.tab.selected = editing::append(&mut self.tab.doc, &document, offset);
+            self.tab.selected = selected;
             self.changed(before);
             self.fit();
             self.tool = Tool::Select;

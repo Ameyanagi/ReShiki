@@ -195,11 +195,7 @@ impl App {
             }
             Edit::Select(ids) | Edit::SelectAt(ids, _) => {
                 let inspector_width = self.inspector_width();
-                self.tab.selected = ids;
-                self.sync_typography();
-                self.sync_graphics();
-                self.sync_arrows();
-                self.sync_bonds();
+                self.set_selection(ids);
                 // Auto-revealing object properties must not move the clicked
                 // target. The inspector occupies the right edge, so compensate
                 // for the centered camera's horizontal shift. Record the new
