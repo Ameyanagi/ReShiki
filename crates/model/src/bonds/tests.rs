@@ -229,39 +229,38 @@ fn bond_between_returns_the_first_match_with_its_index() {
 }
 
 #[test]
-fn reverse_drawn_keeps_each_callers_dative_semantics() {
+fn reverse_drawn_swaps_plain_datives_and_flips_projected_tips() {
     let mut plain_dative = Bond::plain(1, 2, DATIVE, "plain");
     plain_dative.stereo_atoms = vec![3, 4];
     plain_dative.double_position = DoublePosition::Left;
     let original = plain_dative.clone();
-    plain_dative.reverse_drawn(false);
-    assert_eq!(plain_dative, original);
-    plain_dative.reverse_drawn(true);
+    plain_dative.reverse_drawn();
     let mut reversed = original.clone();
     reversed.a = 2;
     reversed.b = 1;
     reversed.stereo_atoms = vec![4, 3];
     reversed.double_position = DoublePosition::Right;
     assert_eq!(plain_dative, reversed);
+    let mut reversed_directly = original.clone();
+    reversed_directly.reverse();
+    assert_eq!(plain_dative, reversed_directly);
 
-    for swap_plain_dative in [false, true] {
-        let mut projected = original.clone();
-        projected.projection = true;
-        projected.display = "wedge".into();
-        let mut expected = projected.clone();
-        expected.display = "wedge_end".into();
-        projected.reverse_drawn(swap_plain_dative);
-        assert_eq!(projected, expected);
+    let mut projected = original.clone();
+    projected.projection = true;
+    projected.display = "wedge".into();
+    let mut expected = projected.clone();
+    expected.display = "wedge_end".into();
+    projected.reverse_drawn();
+    assert_eq!(projected, expected);
 
-        for projection in [false, true] {
-            let mut ordinary = original.clone();
-            ordinary.order = 1;
-            ordinary.projection = projection;
-            let mut expected = reversed.clone();
-            expected.order = 1;
-            expected.projection = projection;
-            ordinary.reverse_drawn(swap_plain_dative);
-            assert_eq!(ordinary, expected);
-        }
+    for projection in [false, true] {
+        let mut ordinary = original.clone();
+        ordinary.order = 1;
+        ordinary.projection = projection;
+        let mut expected = reversed.clone();
+        expected.order = 1;
+        expected.projection = projection;
+        ordinary.reverse_drawn();
+        assert_eq!(ordinary, expected);
     }
 }

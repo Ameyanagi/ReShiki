@@ -134,7 +134,7 @@ impl App {
         self.tab.doc.invalidate_chemistry(&affected);
         for b in &mut self.tab.doc.bonds {
             if self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b) {
-                b.reverse_drawn(true);
+                b.reverse_drawn();
             }
         }
         self.changed(before);

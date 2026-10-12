@@ -1446,6 +1446,191 @@ fn bond_styles_position_color_and_direction_are_undoable() {
     assert_eq!(app.tab.doc, before);
 }
 
+fn dative_click_fixture() -> (App, u64, u64, Point) {
+    use reshiki::bonds::{DATIVE, DoublePosition};
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let donor = app.tab.doc.add_atom("N", Point::default());
+    let acceptor = app.tab.doc.add_atom("Co", Point::new(84., 0.));
+    let first_neighbor = app.tab.doc.add_atom("C", Point::new(0., 42.));
+    let second_neighbor = app.tab.doc.add_atom("C", Point::new(84., 42.));
+    app.tab.doc.add_bond(donor, acceptor, DATIVE, "plain");
+    app.tab.doc.add_bond(donor, first_neighbor, 1, "plain");
+    app.tab.doc.add_bond(acceptor, second_neighbor, 1, "plain");
+    app.tab.doc.bonds[0].stereo_atoms = vec![first_neighbor, second_neighbor];
+    app.tab.doc.bonds[0].double_position = DoublePosition::Left;
+    app.tab.doc.atom_mut(donor).unwrap().label_h = 2;
+    app.tab.doc.reconcile_molecule_groups();
+    let midpoint = Point::new(42., 0.);
+    assert!(
+        app.tab
+            .doc
+            .nearest(midpoint, 10. / app.tab.camera.zoom)
+            .is_none()
+    );
+    assert!(!app.tab.history.can_undo());
+    (app, donor, acceptor, midpoint)
+}
+
+#[test]
+fn matching_dative_click_swaps_direction_like_reverse_bonds_in_one_undo_step() {
+    use reshiki::bonds::{BondPreset, DoublePosition};
+    let (mut app, donor, acceptor, midpoint) = dative_click_fixture();
+    app.tool = Tool::StyledBond(BondPreset::Dative);
+    let original = app.tab.doc.clone();
+    let _ = app.update(Message::Canvas(Edit::Click(midpoint)));
+    let clicked = app.tab.doc.clone();
+    assert!(!app.error, "{}", app.status);
+    assert_eq!((clicked.bonds[0].a, clicked.bonds[0].b), (acceptor, donor));
+    assert_eq!(clicked.bonds[0].double_position, DoublePosition::Right);
+    // Both app paths invalidate captured stereo before reversing the bond;
+    // reverse_drawn's own stereo_atoms reversal is covered by the model test.
+    assert!(!original.bonds[0].stereo_atoms.is_empty());
+    assert!(clicked.bonds[0].stereo_atoms.is_empty());
+    assert!(clicked.atoms.iter().all(|atom| atom.label_h == 0));
+    assert_eq!(app.tab.selected, vec![donor, acceptor]);
+    assert_eq!(
+        app.status,
+        "Drawing changed · Check structure to refresh properties"
+    );
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, clicked);
+
+    let (mut reversed, _) = App::new();
+    reversed.tab.doc = original;
+    reversed.tab.selected = vec![donor, acceptor];
+    let _ = reversed.update(Message::ReverseBonds);
+    assert!(!reversed.error, "{}", reversed.status);
+    assert_eq!(reversed.tab.doc.bonds, clicked.bonds);
+    assert_eq!(reversed.tab.doc, clicked);
+}
+
+#[test]
+fn matching_dative_click_invalidates_computed_chemistry_like_reverse_bonds() {
+    use reshiki::bonds::BondPreset;
+    let (mut clicked, donor, acceptor, midpoint) = dative_click_fixture();
+    // With no captured stereo, the endpoint swap itself must count as chemistry.
+    clicked.tab.doc.bonds[0].stereo_atoms.clear();
+    clicked.tab.doc.atom_mut(donor).unwrap().cip_label = Some("R".into());
+    clicked.tab.doc.bonds[0].cip_label = Some("E".into());
+    let original = clicked.tab.doc.clone();
+    let (mut reversed, _) = App::new();
+    reversed.tab.doc = original.clone();
+    reversed.tab.selected = vec![donor, acceptor];
+    let cached = reshiki::engine::Analysis {
+        smiles: "cached".into(),
+        formula: "cached".into(),
+        mass: 0.,
+        exact_mass: 0.,
+        logp: 0.,
+        tpsa: 0.,
+        donors: 0,
+        acceptors: 0,
+        rings: 0,
+        unpaired_electrons: 0,
+        inchi: String::new(),
+        inchikey: String::new(),
+    };
+    for app in [&mut clicked, &mut reversed] {
+        app.tab.analysis = Some(cached.clone());
+        app.tab.chemistry_notice = Some("Cached chemistry notice".into());
+        // Hold label refresh so the dirty flag remains observable after update.
+        app.tab.busy = true;
+        app.tab.labels_dirty = false;
+    }
+    clicked.tool = Tool::StyledBond(BondPreset::Dative);
+    let _ = clicked.update(Message::Canvas(Edit::Click(midpoint)));
+    let _ = reversed.update(Message::ReverseBonds);
+    for app in [&clicked, &reversed] {
+        assert!(!app.error, "{}", app.status);
+        assert!(chemistry_changed(&original, &app.tab.doc));
+        assert!(app.tab.labels_dirty);
+        assert!(app.tab.analysis.is_none());
+        assert!(app.tab.chemistry_notice.is_none());
+        assert!(
+            app.tab
+                .doc
+                .atoms
+                .iter()
+                .all(|atom| atom.cip_label.is_none())
+        );
+        assert!(
+            app.tab
+                .doc
+                .bonds
+                .iter()
+                .all(|bond| bond.cip_label.is_none())
+        );
+    }
+    assert_eq!(clicked.tab.doc, reversed.tab.doc);
+    assert_eq!(clicked.status, reversed.status);
+}
+
+#[test]
+fn matching_projected_dative_click_flips_only_the_projection_tip() {
+    use reshiki::bonds::BondPreset;
+    for (preset, start, end) in [
+        (BondPreset::Wedge, "wedge", "wedge_end"),
+        (BondPreset::HashedWedge, "hash", "hash_end"),
+        (BondPreset::HollowWedge, "hollow_wedge", "hollow_wedge_end"),
+    ] {
+        let (mut app, donor, acceptor, midpoint) = dative_click_fixture();
+        app.tab.doc.bonds[0].projection = true;
+        app.tab.doc.bonds[0].display = start.into();
+        app.tab.doc.bonds[0].cip_label = Some("E".into());
+        app.tab.doc.atom_mut(donor).unwrap().cip_label = Some("R".into());
+        app.tool = Tool::StyledBond(preset);
+        let original = app.tab.doc.clone();
+        for display in [end, start] {
+            let _ = app.update(Message::Canvas(Edit::Click(midpoint)));
+            let mut expected = original.clone();
+            expected.bonds[0].display = display.into();
+            assert_eq!(app.tab.doc, expected);
+            assert_eq!(
+                (app.tab.doc.bonds[0].a, app.tab.doc.bonds[0].b),
+                (donor, acceptor)
+            );
+            assert_eq!(app.tab.selected, vec![donor, acceptor]);
+            assert!(!chemistry_changed(&original, &app.tab.doc));
+            assert!(!app.tab.labels_dirty);
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.status, "Drawing updated");
+        }
+    }
+}
+
+#[test]
+fn dative_tool_converts_projected_dative_to_plain_without_reversing() {
+    use reshiki::bonds::BondPreset;
+    for display in ["wedge", "wedge_end"] {
+        let (mut app, donor, acceptor, midpoint) = dative_click_fixture();
+        app.tab.doc.bonds[0].projection = true;
+        app.tab.doc.bonds[0].display = display.into();
+        app.tool = Tool::StyledBond(BondPreset::Dative);
+        let original = app.tab.doc.clone();
+        let _ = app.update(Message::Canvas(Edit::Click(midpoint)));
+        let mut expected = original.clone();
+        expected.bonds[0].projection = false;
+        expected.bonds[0].display = "plain".into();
+        assert_eq!(app.tab.doc, expected);
+        assert_eq!(
+            (app.tab.doc.bonds[0].a, app.tab.doc.bonds[0].b),
+            (donor, acceptor)
+        );
+        assert_eq!(app.tab.selected, vec![donor, acceptor]);
+        assert!(!app.error, "{}", app.status);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
 #[test]
 fn aromatic_bond_tools_preserve_circles_and_undo_direction_changes() -> anyhow::Result<()> {
     use anyhow::Context;

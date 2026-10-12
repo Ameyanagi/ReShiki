@@ -173,6 +173,19 @@ impl App {
                 self.tab.doc.add_bond(b.a, b.b, order, display);
                 self.apply_current_bond_preset(b.a, b.b);
             }
+            // Swapping a plain dative's donor and acceptor changes chemistry,
+            // so invalidate its atoms first, as Reverse bonds does.
+            if reverse
+                && self
+                    .tab
+                    .doc
+                    .bonds
+                    .iter()
+                    .find(|bond| bond.a == b.a && bond.b == b.b)
+                    .is_some_and(|bond| bond.is_dative() && !bond.is_projected_dative())
+            {
+                self.tab.doc.invalidate_chemistry(&[b.a, b.b]);
+            }
             if reverse
                 && let Some(bond) = self
                     .tab
@@ -181,7 +194,7 @@ impl App {
                     .iter_mut()
                     .find(|bond| bond.a == b.a && bond.b == b.b)
             {
-                bond.reverse_drawn(false);
+                bond.reverse_drawn();
             }
             self.tab.selected = vec![b.a, b.b];
         } else {

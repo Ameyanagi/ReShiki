@@ -414,12 +414,11 @@ impl Bond {
         self.stereo_atoms.reverse();
         self.double_position = self.double_position.reversed();
     }
-    /// Reverse what the user sees. The two callers differ on purpose: canvas
-    /// click-reverse passes false, so a plain dative stays as is
-    /// (reverse_projection is a no-op on it); the Reverse command passes true,
-    /// so a plain dative swaps donor and acceptor.
-    pub fn reverse_drawn(&mut self, swap_plain_dative: bool) {
-        if self.is_projected_dative() || (self.is_dative() && !swap_plain_dative) {
+    /// Reverse what the user sees, for both bond-tool clicks and Reverse bonds.
+    /// Plain datives swap donor and acceptor; projected datives flip only their
+    /// projection tip. Other bonds reverse their endpoints.
+    pub fn reverse_drawn(&mut self) {
+        if self.is_projected_dative() {
             self.reverse_projection();
         } else {
             self.reverse();
