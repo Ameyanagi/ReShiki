@@ -273,7 +273,7 @@ Every successful result has versions: {app, operation_api, engine_protocol, docu
 
 **Server info**
 
-Report ReShiki's versions, the limits this server enforces (budgets) and the import and export formats. Read-only.
+Report ReShiki's versions, the limits this server enforces (budgets), the import and export formats, the granted folders and the file extensions file_open and file_save accept. Read-only.
 
 | Hint | Value |
 | --- | --- |

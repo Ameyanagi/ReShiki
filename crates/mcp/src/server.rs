@@ -88,13 +88,22 @@ pub const EOF_GRACE: Duration = Duration::from_secs(6);
 pub const NAME: &str = "reshiki";
 /// The server's title in `serverInfo`.
 pub const TITLE: &str = "ReShiki (experimental)";
+/// The workflow between the safety rule and the SMILES sentence.
+const WORKFLOW: &str = "Call info first: it reports limits, formats and the folders you may read \
+    and write. document_new, import, compose and file_open each create a document and return its \
+    handle. Use render to look at a PNG preview, analyze for properties, inspect for object IDs. \
+    apply edits in one undo step: pass the target document's latest revision as base_revision; \
+    after stale, inspect again and retry with a new idempotency_key. export returns a file inline; \
+    file_save writes only into a granted folder and never overwrites unless overwrite is true. \
+    Close documents you no longer need with document_close. Object IDs and revisions are decimal \
+    strings.";
 /// The last sentence of the `instructions`.
 const SMILES_ONLY: &str = "Provide SMILES; chemical names are not resolved.";
 
 /// The `instructions` sent to clients: the experimental [`NOTICE`], then
-/// [`DATA_NOT_INSTRUCTIONS`] and the SMILES sentence.
+/// [`DATA_NOT_INSTRUCTIONS`], the workflow and the SMILES sentence.
 pub fn instructions() -> String {
-    format!("{NOTICE} {DATA_NOT_INSTRUCTIONS} {SMILES_ONLY}")
+    format!("{NOTICE} {DATA_NOT_INSTRUCTIONS} {WORKFLOW} {SMILES_ONLY}")
 }
 
 /// The longest tool name echoed in an error, in characters.

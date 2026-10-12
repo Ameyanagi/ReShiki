@@ -35,7 +35,9 @@ pub const EXPORT_FORMATS: &[&str] = &["svg", "pdf", "png", "cdxml", "mol", "smil
 pub const INFO: ToolSpec = ToolSpec {
     name: "info",
     title: Some("Server info"),
-    description: "Report ReShiki's versions, the limits this server enforces (budgets) and the import and export formats. Read-only.",
+    description: "Report ReShiki's versions, the limits this server enforces (budgets), the import \
+                  and export formats, the granted folders and the file extensions file_open and \
+                  file_save accept. Read-only.",
     input_schema: no_arguments_schema,
     hints: Some(Hints {
         read_only: true,
