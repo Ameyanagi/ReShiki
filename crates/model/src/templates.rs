@@ -664,10 +664,8 @@ fn reject_generic_join(
     part: &Document,
     targets: &[u64],
 ) -> Result<(), &'static str> {
-    if crate::generic::intersects(part, &part.all_ids())
-        || crate::generic::intersects(doc, targets)
-        || crate::generic::component_intersects(doc, targets)
-    {
+    // The fragment keeps its direct check; generic::touches would add a component scan.
+    if crate::generic::intersects(part, &part.all_ids()) || crate::generic::touches(doc, targets) {
         return Err(crate::generic::JOIN_NOTICE);
     }
     Ok(())
@@ -1150,9 +1148,7 @@ pub fn coordinate_atoms(source: &Document, donor: u64, metal: u64) -> Result<Doc
     }
     let d = source.atom(donor).ok_or("The donor atom is unavailable.")?;
     let m = source.atom(metal).ok_or("The metal atom is unavailable.")?;
-    if crate::generic::intersects(source, &[donor, metal])
-        || crate::generic::component_intersects(source, &[donor, metal])
-    {
+    if crate::generic::touches(source, &[donor, metal]) {
         return Err(crate::generic::JOIN_NOTICE.into());
     }
     for a in [d, m] {

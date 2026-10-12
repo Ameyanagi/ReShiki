@@ -69,6 +69,14 @@ fn mark_size(doc: &Document, atom: &crate::document::Atom, mark: &AtomMark) -> f
     }))
 }
 impl Target {
+    /// Lists referenced atoms in stored endpoint order.
+    pub fn atoms(&self) -> impl Iterator<Item = u64> {
+        let (first, second) = match *self {
+            Self::Atom { atom } | Self::LonePair { atom, .. } => (atom, None),
+            Self::Bond { a, b, .. } => (a, Some(b)),
+        };
+        std::iter::once(first).chain(second)
+    }
     pub fn center(&self, doc: &Document) -> Option<Point> {
         match *self {
             Self::Atom { atom } => doc.atom(atom).map(|a| a.position),
@@ -96,7 +104,8 @@ impl Target {
             Self::Bond { a, b, .. } => ids.contains(&a) && ids.contains(&b),
         }
     }
-    fn remap(&mut self, mapping: &HashMap<u64, u64>) -> bool {
+    /// Remaps referenced atoms, returning false when any atom is missing.
+    pub(crate) fn remap(&mut self, mapping: &HashMap<u64, u64>) -> bool {
         match self {
             Self::Atom { atom } | Self::LonePair { atom, .. } => {
                 let Some(id) = mapping.get(atom) else {
@@ -475,7 +484,7 @@ pub fn reconcile(doc: &mut Document) {
     // quadratic. Degree elevation retains its exact curve while giving each
     // attached end an independent neighboring control.
     for arrow in &mut doc.arrows {
-        if (arrow.start_anchor.is_some() || arrow.end_anchor.is_some())
+        if arrow.is_attached()
             && arrow.cubic.is_none()
             && matches!(arrow.kind.as_str(), "curved" | "fishhook")
         {
@@ -533,7 +542,7 @@ pub fn reconcile(doc: &mut Document) {
 /// Caller prepays target/ink lookups under its shared allowance.
 pub(crate) fn certify_resolved(doc: &Document) -> Result<(), String> {
     for arrow in &doc.arrows {
-        if (arrow.start_anchor.is_some() || arrow.end_anchor.is_some())
+        if arrow.is_attached()
             && arrow.cubic.is_none()
             && matches!(arrow.kind.as_str(), "curved" | "fishhook")
         {
@@ -678,7 +687,7 @@ pub const EXPORT_NOTICE: &str = "Arrow curves are preserved; editing attachment 
 pub fn export_notice(doc: &Document) -> Option<String> {
     doc.arrows
         .iter()
-        .any(|a| a.start_anchor.is_some() || a.end_anchor.is_some())
+        .any(Arrow::is_attached)
         .then(|| EXPORT_NOTICE.into())
 }
 #[cfg(test)]

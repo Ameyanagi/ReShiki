@@ -35,9 +35,7 @@ fn merge_atoms_with_position(
         .iter()
         .map(|id| doc.atom(*id).ok_or("Select only atoms to merge."))
         .collect::<Result<_, _>>()?;
-    if crate::generic::intersects(doc, selected)
-        || crate::generic::component_intersects(doc, selected)
-    {
+    if crate::generic::touches(doc, selected) {
         return Err(crate::generic::JOIN_NOTICE.into());
     }
     let first = atoms.first().copied().ok_or("Select atoms to merge.")?;

@@ -16,6 +16,55 @@ fn chain(elements: &[&str]) -> Document {
     }
     doc
 }
+
+#[test]
+fn touches_is_intersects_or_component_intersects() {
+    let mut source = chain(&["O", "C", "C", "N"]);
+    let connected = source.add_atom("C", Point::new(-42., 0.));
+    source.add_bond(1, connected, 1, "plain");
+    let unrelated = source.add_atom("C", Point::new(200., 100.));
+    let bracket = source.next_id();
+    source.graphics.push(crate::graphics::Graphic::dragged(
+        bracket,
+        crate::graphics::GraphicKind::Brackets,
+        Point::new(20., -30.),
+        Point::new(104., 30.),
+        Default::default(),
+        crate::graphics::BracketSides::Both,
+        false,
+    ));
+    let source = define_bracket(&source, bracket, "1-3", RepeatPattern::HeadToTail).unwrap();
+    assert!(intersects(&source, &[bracket]));
+    assert!(!component_intersects(&source, &[bracket]));
+    assert!(!intersects(&source, &[connected]));
+    assert!(component_intersects(&source, &[connected]));
+    assert!(!touches(&source, &[unrelated]));
+    for ids in [
+        vec![],
+        vec![bracket],
+        vec![connected],
+        vec![2],
+        vec![unrelated],
+    ] {
+        assert_eq!(
+            touches(&source, &ids),
+            intersects(&source, &ids) || component_intersects(&source, &ids)
+        );
+    }
+}
+
+#[test]
+fn owns_label_reports_alternative_and_link_sites() {
+    let source = chain(&["C", "C", "C", "C"]);
+    assert!(!source.generic.owns_label(1));
+    let source = atom_text::apply(&source, 1, "[Cl,Br]", Mode::Auto).unwrap();
+    let source = atom_text::apply(&source, 2, "[CH2]1-3", Mode::Auto).unwrap();
+    assert!(source.generic.owns_label(1));
+    assert!(source.generic.owns_label(2));
+    assert!(!source.generic.owns_label(3));
+    assert!(!source.generic.owns_label(u64::MAX));
+}
+
 #[test]
 fn two_mixed_anonymous_sites_are_independent_real_fragments() {
     let source = chain(&["*", "C", "C", "*"]);

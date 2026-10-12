@@ -137,13 +137,7 @@ pub(crate) fn preserved_expansion_selection(
             return Err(unsupported());
         }
     }
-    let anchor_ids = |a: &crate::arrow_anchors::Anchor| -> Vec<u64> {
-        match a.target {
-            crate::arrow_anchors::Target::Atom { atom }
-            | crate::arrow_anchors::Target::LonePair { atom, .. } => vec![atom],
-            crate::arrow_anchors::Target::Bond { a, b, .. } => vec![a, b],
-        }
-    };
+    let anchor_ids = |a: &crate::arrow_anchors::Anchor| -> Vec<u64> { a.target.atoms().collect() };
     for arrow in &doc.arrows {
         let refs: Vec<_> = arrow
             .start_anchor

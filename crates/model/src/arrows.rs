@@ -170,6 +170,10 @@ impl Arrow {
             style: Some(style),
         }
     }
+    /// Returns whether either endpoint has an attachment anchor.
+    pub fn is_attached(&self) -> bool {
+        self.start_anchor.is_some() || self.end_anchor.is_some()
+    }
     pub fn appearance(&self) -> ArrowStyle {
         self.style
             .clone()
@@ -401,7 +405,7 @@ impl Arrow {
         false
     }
     pub fn straighten(&mut self) {
-        if self.start_anchor.is_some() || self.end_anchor.is_some() {
+        if self.is_attached() {
             self.cubic = Some([
                 lerp(self.start, self.end, 1. / 3.),
                 lerp(self.start, self.end, 2. / 3.),

@@ -364,9 +364,7 @@ impl App {
             joining::Prepared,
             templates::{Anchor, Connection},
         };
-        if reshiki::generic::intersects(&self.tab.doc, &self.tab.selected)
-            || reshiki::generic::component_intersects(&self.tab.doc, &self.tab.selected)
-        {
+        if reshiki::generic::touches(&self.tab.doc, &self.tab.selected) {
             return Err(reshiki::generic::JOIN_NOTICE.into());
         }
         if let [source, target] = self.tab.selected.as_slice() {

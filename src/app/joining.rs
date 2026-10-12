@@ -80,10 +80,7 @@ impl App {
         {
             return false;
         }
-        let touched = |ids: &[u64]| {
-            reshiki::generic::intersects(doc, ids)
-                || reshiki::generic::component_intersects(doc, ids)
-        };
+        let touched = |ids: &[u64]| reshiki::generic::touches(doc, ids);
         if matches!(action, super::shortcuts::Action::MergeAtoms) {
             return selected.len() >= 3 && touched(selected);
         }
@@ -153,9 +150,7 @@ impl App {
     /// Use only selected chemical labels, falling back to the atom position when
     /// its label is hidden. Other objects and selection handles do not contribute.
     pub(super) fn merge_selected_atoms(&self) -> Result<(Document, Vec<u64>), String> {
-        if reshiki::generic::intersects(&self.tab.doc, &self.tab.selected)
-            || reshiki::generic::component_intersects(&self.tab.doc, &self.tab.selected)
-        {
+        if reshiki::generic::touches(&self.tab.doc, &self.tab.selected) {
             return Err(reshiki::generic::JOIN_NOTICE.into());
         }
         let mut bounds: Option<(Point, Point)> = None;

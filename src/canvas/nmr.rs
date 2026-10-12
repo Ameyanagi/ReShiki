@@ -116,11 +116,7 @@ pub(crate) fn placements(
             continue;
         };
         let collapsed = (!doc.atom_visible(atom.id))
-            .then(|| {
-                doc.abbreviations
-                    .iter()
-                    .find(|g| g.members.contains(&atom.id))
-            })
+            .then(|| doc.abbreviation_containing(atom.id))
             .flatten();
         let anchor = if let Some(group) = collapsed {
             let Some(anchor) = doc.atom(group.anchor) else {

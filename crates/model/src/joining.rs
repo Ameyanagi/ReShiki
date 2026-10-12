@@ -42,7 +42,7 @@ fn moving_ids(doc: &Document, selected: &[u64]) -> Vec<u64> {
 /// and in-place coordination deliberately do not expand integral groups.
 pub fn source_intersects_generic(doc: &Document, selected: &[u64]) -> bool {
     let moving = moving_ids(doc, selected);
-    crate::generic::intersects(doc, &moving) || crate::generic::component_intersects(doc, &moving)
+    crate::generic::touches(doc, &moving)
 }
 
 #[derive(Debug, Clone)]
@@ -65,9 +65,7 @@ impl Prepared {
         }
         let moving = moving_ids(doc, selected);
         // Selection and deletion must not prune unresolved definitions in the moving fragment.
-        if crate::generic::intersects(doc, &moving)
-            || crate::generic::component_intersects(doc, &moving)
-        {
+        if crate::generic::touches(doc, &moving) {
             return Err(crate::generic::JOIN_NOTICE.into());
         }
         let fragment = editing::selection(doc, &moving);
@@ -130,8 +128,8 @@ impl Prepared {
         {
             return false;
         }
-        if crate::generic::intersects(&self.original, &self.moving)
-            || crate::generic::component_intersects(&self.original, &self.moving)
+        // The fragment keeps its direct check; generic::touches would add a component scan.
+        if crate::generic::touches(&self.original, &self.moving)
             || crate::generic::intersects(&self.fragment, &self.fragment.all_ids())
         {
             return true;
@@ -143,8 +141,7 @@ impl Prepared {
             let Some(metal) = self.original.nearest(point, radius) else {
                 return false;
             };
-            return crate::generic::intersects(&self.original, &[donor, metal])
-                || crate::generic::component_intersects(&self.original, &[donor, metal]);
+            return crate::generic::touches(&self.original, &[donor, metal]);
         }
         let target = self.base.nearest(point, radius);
         let bond = target
@@ -168,8 +165,7 @@ impl Prepared {
             .into_iter()
             .chain(bond.into_iter().flat_map(|b| [b.a, b.b]))
             .collect();
-        crate::generic::intersects(&self.base, &targets)
-            || crate::generic::component_intersects(&self.base, &targets)
+        crate::generic::touches(&self.base, &targets)
     }
 
     pub fn place(
@@ -231,9 +227,7 @@ impl Prepared {
             .into_iter()
             .chain(bond.into_iter().flat_map(|b| [b.a, b.b]))
             .collect();
-        if crate::generic::intersects(&self.base, &target_ids)
-            || crate::generic::component_intersects(&self.base, &target_ids)
-        {
+        if crate::generic::touches(&self.base, &target_ids) {
             return Err(crate::generic::JOIN_NOTICE.into());
         }
         if source_ids

@@ -27,6 +27,11 @@ impl Generic {
     pub fn is_empty(&self) -> bool {
         self.alternatives.is_empty() && self.links.is_empty() && self.repeats.is_empty()
     }
+    /// Whether an alternative or link site owns this atom's label.
+    pub fn owns_label(&self, atom: u64) -> bool {
+        self.alternatives.iter().any(|site| site.atom == atom)
+            || self.links.iter().any(|site| site.atom == atom)
+    }
     pub fn extend(&mut self, other: Self) {
         self.alternatives.extend(other.alternatives);
         self.links.extend(other.links);
@@ -180,11 +185,7 @@ impl Default for Limits {
 }
 pub const NOTICE: &str = "Generic choices retained. Expand Generic Structures to choose concrete atoms, attachment positions or finite repeats before calculating identifiers or molecular properties.";
 pub fn present(doc: &Document) -> bool {
-    !doc.generic.is_empty()
-        || doc
-            .atoms
-            .iter()
-            .any(|a| a.attachment == Some(crate::attachments::Kind::Variable))
+    !doc.generic.is_empty() || doc.atoms.iter().any(|a| a.is_variable_attachment())
 }
 fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
@@ -1071,7 +1072,7 @@ fn expand_with_work(
         source
             .atoms
             .iter()
-            .filter(|a| a.attachment == Some(crate::attachments::Kind::Variable))
+            .filter(|a| a.is_variable_attachment())
             .map(|a| Site::Variable(a.id, a.centroid.clone())),
     );
     sites.extend(source.generic.links.iter().cloned().map(Site::Link));
@@ -1744,9 +1745,6 @@ fn component(doc: &Document, start: u64, allowed: &HashSet<u64>) -> HashSet<u64>
     }
     found
 }
-#[cfg(test)]
-mod tests;
-
 /// The bracket frame defines the atom membership; connectivity still comes
 /// exclusively from existing bonds crossing that explicit member set.
 pub fn define_bracket(
@@ -1858,9 +1856,14 @@ pub fn intersects(doc: &Document, ids: &[u64]) -> bool {
                     .any(|c| selected.contains(&c.inside) || selected.contains(&c.outside))
         })
         || doc.atoms.iter().any(|a| {
-            a.attachment == Some(crate::attachments::Kind::Variable)
+            a.is_variable_attachment()
                 && (selected.contains(&a.id) || a.centroid.iter().any(|id| selected.contains(id)))
         })
+}
+
+/// Whether IDs or their connected components reference generic chemistry.
+pub fn touches(doc: &Document, ids: &[u64]) -> bool {
+    intersects(doc, ids) || component_intersects(doc, ids)
 }
 
 /// Borrow chemical atom dependencies without copying alternative strings or
@@ -1881,7 +1884,7 @@ pub fn atom_references(doc: &Document) -> impl Iterator<Item = u64> + '_ {
         .chain(
             doc.atoms
                 .iter()
-                .filter(|atom| atom.attachment == Some(crate::attachments::Kind::Variable))
+                .filter(|atom| atom.is_variable_attachment())
                 .flat_map(|atom| std::iter::once(atom.id).chain(atom.centroid.iter().copied())),
         )
 }
@@ -1904,15 +1907,7 @@ pub fn component_intersects(doc: &Document, ids: &[u64]) -> bool {
         .filter(|arrow| selected.contains(&arrow.id))
     {
         for anchor in arrow.start_anchor.iter().chain(arrow.end_anchor.iter()) {
-            match anchor.target {
-                crate::arrow_anchors::Target::Atom { atom }
-                | crate::arrow_anchors::Target::LonePair { atom, .. } => {
-                    visited.insert(atom);
-                }
-                crate::arrow_anchors::Target::Bond { a, b, .. } => {
-                    visited.extend([a, b]);
-                }
-            }
+            visited.extend(anchor.target.atoms());
         }
     }
     if visited.iter().any(|id| unresolved.contains(id)) {
@@ -1943,3 +1938,6 @@ pub fn component_intersects(doc: &Document, ids: &[u64]) -> bool {
 
 #[cfg(test)]
 mod characterization_tests;
+
+#[cfg(test)]
+mod tests;

@@ -8,9 +8,7 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
     let opacity = crate::rear_opacity::present(source);
     let mut document = source.clone();
     for scope in &mut document.depth_appearance {
-        scope.rear_opacity = 1.;
-        scope.rear_overrides.clear();
-        scope.rear_weights.clear();
+        scope.clear_rear_opacity();
     }
     let mut charges = 0;
     let mut variables = 0;
@@ -21,14 +19,7 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
             atom.display.hide_charge = false;
             charges += 1;
         }
-        if atom.display.variable.is_some()
-            && !source
-                .generic
-                .alternatives
-                .iter()
-                .any(|s| s.atom == atom.id)
-            && !source.generic.links.iter().any(|s| s.atom == atom.id)
-        {
+        if atom.display.variable.is_some() && !source.generic.owns_label(atom.id) {
             variables += 1;
         }
     }

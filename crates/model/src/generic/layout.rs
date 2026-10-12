@@ -193,7 +193,7 @@ impl Presentation {
                         .saturating_add(d.rear_overrides.len())
                         .saturating_mul(64),
                 );
-            for map in [&d.weights, &d.overrides, &d.rear_weights, &d.rear_overrides] {
+            for map in d.member_maps() {
                 if !map.is_empty() {
                     copy = copy.saturating_add(256);
                 }
@@ -546,11 +546,7 @@ pub(super) fn protect_references(doc: &Document, work: &mut Work) -> Result<(), 
                 .chain(r.crossings.iter().flat_map(|c| [c.inside, c.outside]))
         }))
         .collect();
-    for a in doc
-        .atoms
-        .iter()
-        .filter(|a| a.attachment == Some(crate::attachments::Kind::Variable))
-    {
+    for a in doc.atoms.iter().filter(|a| a.is_variable_attachment()) {
         seeds.insert(a.id);
         seeds.extend(a.centroid.iter().copied());
     }
@@ -634,11 +630,7 @@ pub(super) fn protect_references(doc: &Document, work: &mut Work) -> Result<(), 
     Ok(())
 }
 fn anchor_touches(anchor: &crate::arrow_anchors::Anchor, ids: &HashSet<u64>) -> bool {
-    use crate::arrow_anchors::Target;
-    match anchor.target {
-        Target::Atom { atom } | Target::LonePair { atom, .. } => ids.contains(&atom),
-        Target::Bond { a, b, .. } => ids.contains(&a) || ids.contains(&b),
-    }
+    anchor.target.atoms().any(|id| ids.contains(&id))
 }
 fn reference_error(kind: &str) -> String {
     format!(
@@ -1697,12 +1689,9 @@ pub(super) fn normalize_arrows(
     let variables = source
         .atoms
         .iter()
-        .filter(|a| a.attachment == Some(crate::attachments::Kind::Variable))
+        .filter(|a| a.is_variable_attachment())
         .count();
-    let arrows = doc
-        .arrows
-        .iter()
-        .any(|a| a.start_anchor.is_some() || a.end_anchor.is_some());
+    let arrows = doc.arrows.iter().any(|a| a.is_attached());
     if !arrows && variables == 0 {
         return Ok(());
     }
@@ -1788,11 +1777,7 @@ fn variable_ink_clearance(
             ),
         ));
     }
-    for variable in source
-        .atoms
-        .iter()
-        .filter(|a| a.attachment == Some(crate::attachments::Kind::Variable))
-    {
+    for variable in source.atoms.iter().filter(|a| a.is_variable_attachment()) {
         let contact = source
             .bonds
             .iter()

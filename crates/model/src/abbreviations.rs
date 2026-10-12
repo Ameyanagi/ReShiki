@@ -259,6 +259,10 @@ impl Document {
     pub fn abbreviation(&self, anchor: u64) -> Option<&Abbreviation> {
         self.abbreviations.iter().find(|a| a.anchor == anchor)
     }
+    /// Returns the first abbreviation containing the atom as a member.
+    pub fn abbreviation_containing(&self, id: u64) -> Option<&Abbreviation> {
+        self.abbreviations.iter().find(|a| a.members.contains(&id))
+    }
     pub fn atom_visible(&self, id: u64) -> bool {
         !self
             .abbreviations
@@ -421,3 +425,6 @@ pub fn label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
             .then_some(g.anchor)
     })
 }
+
+#[cfg(test)]
+mod tests;

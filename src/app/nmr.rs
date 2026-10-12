@@ -319,12 +319,7 @@ impl App {
                     self.tab.selected = std::iter::once(row.atom_id)
                         .chain(row.hydrogen_ids.iter().copied())
                         .collect();
-                    let collapsed = self
-                        .tab
-                        .doc
-                        .abbreviations
-                        .iter()
-                        .find(|a| a.members.contains(&row.atom_id));
+                    let collapsed = self.tab.doc.abbreviation_containing(row.atom_id);
                     if let Some(group) = collapsed
                         && !self.tab.selected.contains(&group.anchor)
                     {
@@ -745,12 +740,8 @@ impl App {
                         {
                             let mut description = site_description(report.nucleus, item);
                             if !self.tab.doc.atom_visible(item.atom_id)
-                                && let Some(group) = self
-                                    .tab
-                                    .doc
-                                    .abbreviations
-                                    .iter()
-                                    .find(|group| group.members.contains(&item.atom_id))
+                                && let Some(group) =
+                                    self.tab.doc.abbreviation_containing(item.atom_id)
                             {
                                 description.push_str(&format!(
                                     ". Shown at abbreviation {} anchored on atom #{}",
