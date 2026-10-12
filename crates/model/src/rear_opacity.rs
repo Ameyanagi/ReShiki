@@ -34,6 +34,14 @@ pub struct Paint {
 }
 impl Paint {
     pub fn new(doc: &Document) -> Self {
+        if !present(doc) {
+            return Self {
+                nodes: BTreeMap::new(),
+                atoms: BTreeMap::new(),
+                visibility: None,
+                corners: BTreeMap::new(),
+            };
+        }
         let mut nodes: BTreeMap<_, _> = doc
             .atoms
             .iter()

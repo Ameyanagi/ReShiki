@@ -990,6 +990,14 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
 /// apply the canvas conversion once.
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let opacity = crate::rear_opacity::Paint::new(doc);
+    primitives_with_opacity(doc, &opacity)
+}
+/// Drawing primitives using shared rear-opacity paint. `opacity` must be
+/// `rear_opacity::Paint::new` of this same raw, unmaterialized document.
+pub fn primitives_with_opacity(
+    doc: &Document,
+    opacity: &crate::rear_opacity::Paint,
+) -> Vec<Primitive> {
     let paint = crate::depth_appearance::Paint::new(doc);
     let painted = paint.materialize(doc);
     let resolved = crate::canvas_theme::canonical_document(&painted);
@@ -999,7 +1007,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let AtomLabels {
         runs: labels,
         bounds: label_bounds,
-    } = collect_atom_labels(doc, &opacity);
+    } = collect_atom_labels(doc, opacity);
     let orbital_label_boxes: Vec<_> = if doc
         .graphics
         .iter()
@@ -1020,12 +1028,12 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     };
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
-    push_underlays(&mut out, doc, &graphics, &opacity, &orbital_label_boxes);
+    push_underlays(&mut out, doc, &graphics, opacity, &orbital_label_boxes);
     let RingStrokes {
         arcs,
         circles,
         crossing_gaps,
-    } = push_ring_strokes(&mut out, doc, &opacity);
+    } = push_ring_strokes(&mut out, doc, opacity);
     // Projection tip orientation is independent of dative donor→acceptor
     // direction. Normalize only a detached render copy, after collecting the
     // chemical labels from the original graph (reversing a dative graph would
@@ -1059,7 +1067,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         label_bounds: &label_bounds,
         joins: &joins,
         crossing_gaps: &crossing_gaps,
-        opacity: &opacity,
+        opacity,
     };
     let bond_paint_start = out.len();
     for (bond_index, b) in doc
@@ -1070,7 +1078,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     {
         push_bond(scene, &mut out, &mut joined, bond_index, b, None);
     }
-    push_junctions(&mut out, &mut joined, &joins, &crossing_gaps, doc, &opacity);
+    push_junctions(&mut out, &mut joined, &joins, &crossing_gaps, doc, opacity);
     push_joined_outlines(&mut out, joined);
     if !opacity.is_empty() {
         // Every opaque front shape covers its faded base, including differently
@@ -1081,7 +1089,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         out.extend(rear);
         out.extend(front);
     }
-    push_atom_labels(&mut out, doc, &labels, &opacity);
+    push_atom_labels(&mut out, doc, &labels, opacity);
     push_arrows_and_annotations(&mut out, doc);
     out.extend(
         graphics
@@ -1246,7 +1254,14 @@ fn push_ring_strokes(
     doc: &Document,
     opacity: &crate::rear_opacity::Paint,
 ) -> RingStrokes {
-    let arcs = crate::ring_arcs::render(doc);
+    // Ring knockouts decide crossings with a Paint of the canonical document
+    // they cut: its RGB colors can split one ring arc into several pieces, so
+    // near the visibility budget only that Paint falls back to opaque. The
+    // raw-document Paint still fades ring ink and bond gaps. Built once, for
+    // the first ring stroke.
+    let ring_paint = std::cell::OnceCell::new();
+    let ring_opacity = || ring_paint.get_or_init(|| crate::rear_opacity::Paint::new(doc));
+    let arcs = crate::ring_arcs::render_with_opacity(doc, ring_opacity);
     // A partial curve replaces the ring's circle, not its aromatic membership.
     // Retain every ring here so its other edges do not gain fallback dashes.
     let circles = crate::aromatic::circles(doc);
@@ -1258,7 +1273,7 @@ fn push_ring_strokes(
                 style: part.style,
                 filled: part.filled,
             };
-            let (stroke, gaps) = crate::crossings::ring_stroke(doc, circle, stroke);
+            let (stroke, gaps) = crate::crossings::ring_stroke(doc, circle, stroke, ring_opacity());
             out.extend(opacity.owned_parts(doc, &circle.atoms, vec![stroke]));
             for (index, gap) in gaps {
                 if let Some(gaps) = crossing_gaps.get_mut(index) {

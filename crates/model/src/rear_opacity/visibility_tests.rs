@@ -998,8 +998,8 @@ fn view_visibility_scene_construction_count_characterizes_c60_rear_opacity() {
     let before = visibility::construction_count();
     assert!(!scene::primitives(&doc).is_empty());
     let constructions = visibility::construction_count() - before;
-    // Current behavior: this fixture already meets q-25's target of one
-    // construction per scene; q-25 shares the paint for aromatic circles/arcs.
+    // One scene Paint per primitives() call; this fixture has no aromatic
+    // circles or ring arcs, so no ring-knockout Paint is built.
     assert_eq!(constructions, 1);
 }
 
@@ -1078,8 +1078,7 @@ fn view_visibility_scene_construction_count_characterizes_tilted_aromatic_ring()
         assert!(!scene::primitives(&doc).is_empty());
         counts.push(visibility::construction_count() - before);
     }
-    // Current behavior: primitives() builds one Paint and crossings::ring_stroke
-    // builds another for the ring's stroke, with or without ring arcs. q-25
-    // shares the scene Paint and changes both counts to one.
+    // q-25 builds the scene Paint once and the canonical-document Paint for
+    // ring knockouts once, instead of once per circle part or arc piece.
     assert_eq!(counts, vec![2, 2]);
 }

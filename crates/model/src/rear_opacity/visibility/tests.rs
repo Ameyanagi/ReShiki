@@ -30,7 +30,12 @@ fn opaque_ring_query_estimate_includes_managed_foreground_without_backbone_cross
         style: source.style,
         filled: source.filled,
     };
-    let (paint, _) = crate::crossings::ring_stroke(&doc, &circle, original.clone());
+    let (paint, _) = crate::crossings::ring_stroke(
+        &doc,
+        &circle,
+        original.clone(),
+        &crate::rear_opacity::Paint::new(&doc),
+    );
     let (
         Primitive::Path {
             commands: painted, ..

@@ -1,6 +1,7 @@
 //! Canvas-local derived data, invalidated by document contents rather than edit hooks.
 //! Keeping one snapshot covers imports, undo/redo, styles and in-place edits alike.
 use super::{Camera, Document, Rectangle, SelectionBox, nmr};
+use reshiki::rear_opacity::Paint;
 use reshiki::scene::{self, Primitive};
 use std::{collections::HashSet, rc::Rc};
 
@@ -10,6 +11,7 @@ pub(super) struct SceneCache {
     scene: Option<Rc<[Primitive]>>,
     stretch: Option<Rc<reshiki::editing::reference::Stretch>>,
     stretch_key: Option<(u64, u64)>,
+    opacity: Option<Rc<Paint>>,
     ids: Vec<u64>,
     selection: Option<Option<SelectionBox>>,
     markers: Option<Rc<super::markers::Markers>>,
@@ -76,6 +78,7 @@ impl SceneCache {
             self.scene = None;
             self.stretch = None;
             self.stretch_key = None;
+            self.opacity = None;
             self.ids.clear();
             self.selection = None;
             self.markers = None;
@@ -150,6 +153,14 @@ impl SceneCache {
         self.copy = None;
     }
 
+    /// Rear-opacity paint shared by rendering and picking for the same document.
+    pub fn opacity(&mut self, doc: &Document) -> Rc<Paint> {
+        self.document(doc);
+        self.opacity
+            .get_or_insert_with(|| Rc::new(Paint::new(doc)))
+            .clone()
+    }
+
     pub fn render(
         &mut self,
         doc: &Document,
@@ -160,9 +171,10 @@ impl SceneCache {
             .markers
             .get_or_insert_with(|| Rc::new(super::markers::Markers::new(doc, ids)))
             .clone();
+        let paint = self.opacity.get_or_insert_with(|| Rc::new(Paint::new(doc)));
         let scene = self
             .scene
-            .get_or_insert_with(|| scene::primitives(doc).into())
+            .get_or_insert_with(|| scene::primitives_with_opacity(doc, paint).into())
             .clone();
         (markers, scene)
     }

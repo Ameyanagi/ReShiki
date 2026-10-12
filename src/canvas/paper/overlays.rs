@@ -88,10 +88,12 @@ impl MoleculeCanvas<'_> {
             .or(cursor.position())
             .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let hovered = pointer.and_then(|p| {
-            reshiki::arrow_anchors::pick(
+            let paint = state.scene.borrow_mut().opacity(self.doc);
+            reshiki::arrow_anchors::pick_with_paint(
                 self.doc,
                 self.camera.world(p, bounds),
                 self.camera.world_len(pick::ARROW_TARGET_PICK_PX),
+                paint,
             )
         });
         for (target, color, radius) in [

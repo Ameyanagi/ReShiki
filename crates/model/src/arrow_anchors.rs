@@ -7,7 +7,10 @@ use crate::{
     style::DEFAULT,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -293,6 +296,24 @@ impl Pick {
 /// portion of an existing bond. No absent/imaginary bond is inferred.
 pub fn pick(doc: &Document, p: Point, radius: f32) -> Option<Pick> {
     let ink = crate::scene::attachment_ink::AttachmentInk::new(doc);
+    pick_with_ink(doc, &ink, p, radius)
+}
+/// Pick visible targets using `Paint::new` of this same raw document.
+pub fn pick_with_paint(
+    doc: &Document,
+    p: Point,
+    radius: f32,
+    paint: Rc<crate::rear_opacity::Paint>,
+) -> Option<Pick> {
+    let ink = crate::scene::attachment_ink::AttachmentInk::with_paint(doc, paint);
+    pick_with_ink(doc, &ink, p, radius)
+}
+fn pick_with_ink(
+    doc: &Document,
+    ink: &crate::scene::attachment_ink::AttachmentInk<'_>,
+    p: Point,
+    radius: f32,
+) -> Option<Pick> {
     for a in doc.atoms.iter().rev().filter(|a| doc.atom_visible(a.id)) {
         for m in a.marks.iter().rev().filter(|m| lone_pair(m.kind)) {
             let center = a.position.offset(m.offset.x, m.offset.y);

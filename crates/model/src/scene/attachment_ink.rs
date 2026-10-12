@@ -2,12 +2,12 @@
 //! the bond scene. Persistent links deliberately do not use this hit-test gate.
 use super::*;
 use crate::polygon::signed_area;
-use std::cell::OnceCell;
+use std::{cell::OnceCell, rc::Rc};
 
 pub(crate) struct AttachmentInk<'a> {
     doc: &'a Document,
     active: bool,
-    opacity: OnceCell<crate::rear_opacity::Paint>,
+    opacity: OnceCell<Rc<crate::rear_opacity::Paint>>,
     bonds: OnceCell<Vec<Vec<Primitive>>>,
     incidents: OnceCell<std::collections::HashMap<u64, Vec<(usize, f32)>>>,
 }
@@ -21,10 +21,17 @@ impl<'a> AttachmentInk<'a> {
             incidents: OnceCell::new(),
         }
     }
+    pub(crate) fn with_paint(doc: &'a Document, paint: Rc<crate::rear_opacity::Paint>) -> Self {
+        Self {
+            opacity: OnceCell::from(paint),
+            ..Self::new(doc)
+        }
+    }
     fn opacity(&self) -> Option<&crate::rear_opacity::Paint> {
         self.active.then(|| {
             self.opacity
-                .get_or_init(|| crate::rear_opacity::Paint::new(self.doc))
+                .get_or_init(|| Rc::new(crate::rear_opacity::Paint::new(self.doc)))
+                .as_ref()
         })
     }
     pub(crate) fn atom(&self, id: u64) -> bool {

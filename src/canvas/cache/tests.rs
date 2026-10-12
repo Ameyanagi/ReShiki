@@ -36,6 +36,25 @@ fn check(cache: &mut SceneCache, doc: &Document, ids: &[u64]) {
 }
 
 #[test]
+fn rear_opacity_is_shared_by_render_and_hover_until_the_document_changes() {
+    let mut cache = SceneCache::default();
+    let mut doc = drawing();
+    let ids = doc.all_ids();
+    let paint = cache.opacity(&doc);
+    assert!(Rc::ptr_eq(&paint, &cache.opacity(&doc.clone())));
+    check(&mut cache, &doc, &ids);
+    assert!(Rc::ptr_eq(&paint, &cache.opacity(&doc)));
+    check(&mut cache, &doc, &[]);
+    assert!(Rc::ptr_eq(&paint, &cache.opacity(&doc)));
+
+    doc.atoms[0].position.x -= 25.;
+    check(&mut cache, &doc, &ids);
+    let changed = cache.opacity(&doc);
+    assert!(!Rc::ptr_eq(&paint, &changed));
+    assert!(Rc::ptr_eq(&changed, &cache.opacity(&doc)));
+}
+
+#[test]
 fn document_edits_loads_and_history_cannot_reuse_stale_geometry() {
     let mut cache = SceneCache::default();
     let mut doc = drawing();

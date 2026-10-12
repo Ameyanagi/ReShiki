@@ -5,7 +5,7 @@ use crate::{
     graphics::{GraphicStyle, PathCommand},
     scene::Primitive,
 };
-use std::collections::HashSet;
+use std::{cell::OnceCell, collections::HashSet};
 
 fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
@@ -71,14 +71,28 @@ impl Arcs {
 }
 
 pub fn render(doc: &Document) -> Arcs {
-    render_with_crossings(doc, true)
+    let opacity = OnceCell::new();
+    render_with_opacity(doc, || {
+        opacity.get_or_init(|| crate::rear_opacity::Paint::new(doc))
+    })
+}
+/// Ring curves with crossing cuts from `opacity`, which is requested only
+/// when a curve stroke is emitted.
+pub fn render_with_opacity<'a>(
+    doc: &Document,
+    opacity: impl Fn() -> &'a crate::rear_opacity::Paint,
+) -> Arcs {
+    render_with_crossings(doc, || Some(opacity()))
 }
 /// Original curve pieces for visibility preflight. Their geometry must not
 /// depend on opaque crossing cuts that managed foreground ink can suppress.
 pub(crate) fn uncut(doc: &Document) -> Arcs {
-    render_with_crossings(doc, false)
+    render_with_crossings(doc, || None)
 }
-fn render_with_crossings(doc: &Document, apply_crossings: bool) -> Arcs {
+fn render_with_crossings<'a>(
+    doc: &Document,
+    mut opacity: impl FnMut() -> Option<&'a crate::rear_opacity::Paint>,
+) -> Arcs {
     let mut result = Arcs {
         primitives: vec![],
         owners: vec![],
@@ -184,8 +198,8 @@ fn render_with_crossings(doc: &Document, apply_crossings: bool) -> Arcs {
                 },
                 filled: false,
             };
-            let (stroke, gaps) = if apply_crossings {
-                crate::crossings::ring_stroke(doc, &ring, stroke)
+            let (stroke, gaps) = if let Some(opacity) = opacity() {
+                crate::crossings::ring_stroke(doc, &ring, stroke, opacity)
             } else {
                 (stroke, vec![])
             };
