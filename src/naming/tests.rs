@@ -1,6 +1,26 @@
 use super::*;
 
 #[test]
+fn typed_error_display_preserves_message_bytes() {
+    for message in [
+        "",
+        "Enter a chemical name of at most 2048 bytes without control characters",
+        "Local parser worker failed: fixture failure",
+        "Local name parsing was cancelled",
+        "Local name generation was cancelled",
+        "OPSIN details · complete stereochemistry",
+    ] {
+        for error in [
+            Error::Rejected(message.into()),
+            Error::Worker(message.into()),
+            Error::Cancelled(message.into()),
+        ] {
+            assert_eq!(error.to_string().as_bytes(), message.as_bytes());
+        }
+    }
+}
+
+#[test]
 fn graph_identity_preserves_stereo_isotopes_charges_and_tautomers() -> Result<(), String> {
     verify_identity("CCO", "OCC")?;
     verify_identity("[CH3:1][CH2:2][OH:3]", "CCO")?;

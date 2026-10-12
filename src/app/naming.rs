@@ -68,7 +68,7 @@ pub enum Action {
     CopyName,
     Caption,
     Alias(AliasAction),
-    Finished(Ticket, Box<Result<Outcome, String>>),
+    Finished(Ticket, Box<Result<Outcome, naming::Error>>),
 }
 
 #[derive(Debug, Clone)]
@@ -109,6 +109,45 @@ impl Preview {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NoticeKind {
+    Retry,
+    Unsupported,
+    Failed,
+    Info,
+}
+
+#[derive(Debug, Clone)]
+struct Notice {
+    kind: NoticeKind,
+    detail: String,
+}
+impl Notice {
+    fn new(kind: NoticeKind, detail: impl Into<String>) -> Self {
+        Self {
+            kind,
+            detail: detail.into(),
+        }
+    }
+
+    fn summary(&self) -> &str {
+        match self.kind {
+            NoticeKind::Retry | NoticeKind::Info => &self.detail,
+            NoticeKind::Unsupported => "Unsupported or ambiguous name. Try a more specific name.",
+            NoticeKind::Failed => "Could not import this name. See Details.",
+        }
+    }
+}
+impl From<naming::Error> for Notice {
+    fn from(error: naming::Error) -> Self {
+        match error {
+            naming::Error::Rejected(detail) => Self::new(NoticeKind::Unsupported, detail),
+            naming::Error::Worker(detail) => Self::new(NoticeKind::Failed, detail),
+            naming::Error::Cancelled(detail) => Self::new(NoticeKind::Retry, detail),
+        }
+    }
+}
+
 pub(super) struct State {
     name: String,
     local_cancel: Option<naming::Cancel>,
@@ -119,7 +158,7 @@ pub(super) struct State {
     smiles: String,
     acknowledged: bool,
     structure: Option<(Ticket, Record)>,
-    notice: Option<String>,
+    notice: Option<Notice>,
     label_target: Option<Vec<u64>>,
     add_name_below: bool,
     preview_open: bool,
@@ -188,14 +227,19 @@ async fn prepare_preview(
     engine: LocalEngine,
     record: Record,
     smiles: String,
-) -> Result<Preview, String> {
-    let identity = naming::canonical_smiles(&smiles)?;
-    let response = engine.request(Request::import_smiles(&smiles)).await?;
+) -> Result<Preview, naming::Error> {
+    let identity = naming::canonical_smiles(&smiles).map_err(naming::Error::Rejected)?;
+    let response = engine
+        .request(Request::import_smiles(&smiles))
+        .await
+        .map_err(naming::Error::Worker)?;
     let document = response
         .document
-        .ok_or("The parser returned no editable drawing")?;
-    let actual = naming::document_identity(&document)?.smiles;
-    naming::verify_identity(&identity, &actual)?;
+        .ok_or_else(|| naming::Error::Worker("The parser returned no editable drawing".into()))?;
+    let actual = naming::document_identity(&document)
+        .map_err(naming::Error::Rejected)?
+        .smiles;
+    naming::verify_identity(&identity, &actual).map_err(naming::Error::Rejected)?;
     Ok(Preview::new(record, document, response.warnings, identity))
 }
 
@@ -203,7 +247,7 @@ async fn resolve_preview(
     engine: LocalEngine,
     name: String,
     cancel: naming::Cancel,
-) -> Result<Outcome, String> {
+) -> Result<Outcome, naming::Error> {
     let record = naming::resolve_name(&name, cancel).await?;
     let preview = prepare_preview(engine, record.clone(), record.smiles.clone()).await?;
     Ok(Outcome::Names(vec![record], Some(Box::new(preview))))
@@ -213,11 +257,12 @@ async fn generate_for_atoms(
     document: Document,
     atoms: Vec<u64>,
     cancel: naming::Cancel,
-) -> Result<Outcome, String> {
+) -> Result<Outcome, naming::Error> {
     let identity =
         tokio::task::spawn_blocking(move || naming::selected_identity(&document, &atoms))
             .await
-            .map_err(|error| error.to_string())??;
+            .map_err(|error| naming::Error::Worker(error.to_string()))?
+            .map_err(naming::Error::Rejected)?;
     naming::generate_name(&identity, cancel)
         .await
         .map(Outcome::Structure)
@@ -266,7 +311,7 @@ impl App {
         (ticket, cancel)
     }
 
-    fn naming_finished(&mut self, ticket: Ticket, result: Result<Outcome, String>) {
+    fn naming_finished(&mut self, ticket: Ticket, result: Result<Outcome, naming::Error>) {
         if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
             || ticket.epoch != self.tab.file_epoch
         {
@@ -281,7 +326,10 @@ impl App {
         self.tab.naming.pending = None;
         self.tab.naming.local_cancel = None;
         if ticket.revision != self.tab.revision {
-            self.tab.naming.notice = Some("The drawing changed. Try again.".into());
+            self.tab.naming.notice = Some(Notice::new(
+                NoticeKind::Retry,
+                "The drawing changed. Try again.",
+            ));
             if caption {
                 self.status = "The molecule changed while naming. Show its name again".into();
                 self.error = true;
@@ -290,11 +338,12 @@ impl App {
         }
         match result {
             Err(error) => {
-                self.tab.naming.notice = Some(error.clone());
+                let notice = Notice::from(error);
                 if caption {
-                    self.status = error;
+                    self.status = notice.detail.clone();
                     self.error = true;
                 }
+                self.tab.naming.notice = Some(notice);
             }
             Ok(Outcome::Names(records, preview)) => {
                 self.tab.naming.candidates = records;
@@ -304,7 +353,10 @@ impl App {
                         self.insert_import_preview(caption);
                     }
                 } else if import_caption.is_some() {
-                    self.tab.naming.notice = Some("No supported structure was returned.".into());
+                    self.tab.naming.notice = Some(Notice::new(
+                        NoticeKind::Failed,
+                        "No supported structure was returned.",
+                    ));
                 }
             }
             Ok(Outcome::Preview(preview)) => self.tab.naming.set_preview(*preview),
@@ -328,7 +380,10 @@ impl App {
             }
             Action::Cancel => {
                 self.tab.naming.stop_request();
-                self.tab.naming.notice = Some("Local name parsing was cancelled".into());
+                self.tab.naming.notice = Some(Notice::new(
+                    NoticeKind::Retry,
+                    "Local name parsing was cancelled",
+                ));
             }
             Action::Resolve => {
                 if self.tab.naming.name.trim().is_empty() || self.tab.naming.pending.is_some() {
@@ -495,14 +550,16 @@ impl App {
             return;
         }
         if self.tab.naming.smiles != preview.identity {
-            self.tab.naming.notice =
-                Some("Apply the edited SMILES to the preview before insertion".into());
+            self.tab.naming.notice = Some(Notice::new(
+                NoticeKind::Retry,
+                "Apply the edited SMILES to the preview before insertion",
+            ));
             return;
         }
         let actual = naming::document_identity(&preview.document)
             .and_then(|i| naming::verify_identity(&preview.identity, &i.smiles));
         if let Err(error) = actual {
-            self.tab.naming.notice = Some(error);
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
             return;
         }
         let document = preview.document.clone();
@@ -530,17 +587,16 @@ impl App {
             return;
         };
         if !ticket.is_current(self.tab.revision, self.tab.file_epoch) {
-            self.tab.naming.notice = Some(
-                "The drawing changed. Generate its name again before inserting a caption".into(),
-            );
+            const DETAIL: &str =
+                "The drawing changed. Generate its name again before inserting a caption";
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Retry, DETAIL));
             return;
         }
         let current = naming::selected_identity(&self.tab.doc, &self.tab.selected);
         if !current.is_ok_and(|i| i.smiles == record.canonical_smiles) {
-            self.tab.naming.notice = Some(
-                "The selection changed. Select the named molecule before inserting a caption"
-                    .into(),
-            );
+            const DETAIL: &str =
+                "The selection changed. Select the named molecule before inserting a caption";
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Retry, DETAIL));
             return;
         }
         let atoms = editing::analysis_atoms(&self.tab.doc, &self.tab.selected);
@@ -567,7 +623,11 @@ impl App {
             button("naming.resolve", "Parse name locally", text("Parse name locally")).on_press_maybe((idle && !state.name.trim().is_empty()).then_some(Message::Naming(Action::Resolve))),
         ].spacing(10);
         if let Some(notice) = &state.notice {
-            content = content.push(text(notice).size(12).color(self.theme().palette().danger));
+            content = content.push(
+                text(&notice.detail)
+                    .size(12)
+                    .color(self.theme().palette().danger),
+            );
         }
         if !idle {
             content = content.push(text("Working…").size(12));

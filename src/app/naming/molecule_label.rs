@@ -56,7 +56,7 @@ impl App {
         );
         if let Err(error) = result {
             self.tab.doc = before;
-            self.tab.naming.notice = Some(error.clone());
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Failed, error.clone()));
             self.status = error;
             self.error = true;
             return;

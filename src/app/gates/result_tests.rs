@@ -142,7 +142,7 @@ async fn pending_message(app: &mut App, row: ResultRow, directory: &tempfile::Te
             };
             Message::Naming(naming::Action::Finished(
                 ticket,
-                Box::new(Err(FAILURE.into())),
+                Box::new(Err(reshiki::naming::Error::Worker(FAILURE.into()))),
             ))
         }
         ResultRow::Mapping => {

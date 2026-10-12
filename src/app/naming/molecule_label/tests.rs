@@ -87,13 +87,31 @@ fn stale_or_unsupported_completion_changes_no_drawing_or_history() {
             app.tab.revision += 1;
             Ok(Outcome::Structure(record()))
         } else {
-            Err("Unsupported fused-ring parent in local organic rules".into())
+            Err(naming::Error::Rejected(
+                "Unsupported fused-ring parent in local organic rules".into(),
+            ))
         };
         let _ = app.naming_action(Action::Finished(ticket, Box::new(result)));
         assert_eq!(app.tab.doc, before);
         assert!(!app.tab.history.can_undo());
         assert!(app.error);
         assert!(!app.status.is_empty());
+        let notice = app.tab.naming.notice.as_ref().unwrap();
+        if stale {
+            assert_eq!(notice.kind, NoticeKind::Retry);
+            assert_eq!(notice.detail, "The drawing changed. Try again.");
+            assert_eq!(
+                app.status,
+                "The molecule changed while naming. Show its name again"
+            );
+        } else {
+            assert_eq!(notice.kind, NoticeKind::Unsupported);
+            assert_eq!(
+                notice.detail,
+                "Unsupported fused-ring parent in local organic rules"
+            );
+            assert_eq!(app.status, notice.detail);
+        }
     }
 }
 
@@ -106,7 +124,9 @@ async fn actual_local_worker_name_is_accepted_only_for_the_target_graph() -> Res
     let _ = app.naming_action(Action::ShowMoleculeName(ids.clone()));
     let ticket = app.tab.naming.pending.unwrap().ticket();
     let identity = naming::selected_identity(&app.tab.doc, &ids)?;
-    let generated = naming::generate_name(&identity, naming::Cancel::default()).await?;
+    let generated = naming::generate_name(&identity, naming::Cancel::default())
+        .await
+        .map_err(|error| error.to_string())?;
     assert_eq!(generated.systematic_name.as_deref(), Some("ethan-1-ol"));
     let _ = app.naming_action(Action::Finished(
         ticket,

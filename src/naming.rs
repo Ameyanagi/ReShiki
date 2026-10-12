@@ -18,6 +18,28 @@ pub use catalog::{Alias, AliasSource, aliases_for_smiles};
 pub mod worker;
 pub use reverse::generate_name;
 
+/// Why a local name request produced no result. Display prints the message
+/// unchanged; the variant tells callers how to summarize it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Error {
+    /// The name or structure is outside what local naming supports.
+    Rejected(String),
+    /// The bounded worker could not be started, supervised or understood.
+    Worker(String),
+    /// The request was cancelled before it finished.
+    Cancelled(String),
+}
+impl std::fmt::Display for Error {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Rejected(message) | Self::Worker(message) | Self::Cancelled(message) => {
+                formatter.write_str(message)
+            }
+        }
+    }
+}
+impl std::error::Error for Error {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provenance {
     OpsinRust,

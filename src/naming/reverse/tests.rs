@@ -17,8 +17,17 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
     ] {
         let mut bad = reply.clone();
         bad[key] = value;
-        assert!(parse_response(&serde_json::to_vec(&bad).unwrap(), "CCO").is_err());
+        assert!(matches!(
+            parse_response(&serde_json::to_vec(&bad).unwrap(), "CCO"),
+            Err(Error::Worker(_))
+        ));
     }
+    let mut rejected = reply;
+    rejected["result"] = json!({"Err":"Unsupported fused-ring parent in local organic rules"});
+    assert_eq!(
+        parse_response(&serde_json::to_vec(&rejected).unwrap(), "CCO").unwrap_err(),
+        Error::Rejected("Unsupported fused-ring parent in local organic rules".into())
+    );
 }
 
 #[tokio::test]
@@ -73,7 +82,9 @@ async fn independent_decoder_canary_catches_connectivity_stereo_isotope_charge_a
         ("CC(=O)[O-]", "ethanoic acid"),
         ("C=CO", "ethanal"),
     ] {
-        let parsed = super::super::resolve_name(wrong_name, Cancel::default()).await?;
+        let parsed = super::super::resolve_name(wrong_name, Cancel::default())
+            .await
+            .map_err(|error| error.to_string())?;
         assert!(
             super::super::verify_identity(expected, &parsed.smiles).is_err(),
             "Lost semantics for {expected}"

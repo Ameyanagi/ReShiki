@@ -4,25 +4,6 @@ use super::super::workspace::muted_text;
 use super::*;
 use iced::widget::column;
 
-fn compact_notice(message: &str) -> &str {
-    if message.contains("changed")
-        || message.contains("cancelled")
-        || message.contains("Apply")
-        || message.contains("Finish")
-        || message.contains("omitted")
-    {
-        message
-    } else if message.contains("could not interpret")
-        || message.contains("unsupported")
-        || message.contains("does not support")
-        || message.contains("disconnected")
-    {
-        "Unsupported or ambiguous name. Try a more specific name."
-    } else {
-        "Could not import this name. See Details."
-    }
-}
-
 impl App {
     pub(in crate::app) fn cancel_name_import(&mut self) {
         if matches!(
@@ -58,28 +39,36 @@ impl App {
 
     pub(super) fn insert_import_preview(&mut self, caption: bool) {
         if !self.naming_can_edit() || self.tab.naming.pending.is_some() {
-            self.tab.naming.notice = Some("Finish the current edit, then try again.".into());
+            self.tab.naming.notice = Some(Notice::new(
+                NoticeKind::Retry,
+                "Finish the current edit, then try again.",
+            ));
             return;
         }
         let Some(preview) = self.tab.naming.preview.clone() else {
             return;
         };
         if self.tab.naming.smiles != preview.identity {
-            self.tab.naming.notice = Some("Apply the edited SMILES before inserting.".into());
+            self.tab.naming.notice = Some(Notice::new(
+                NoticeKind::Retry,
+                "Apply the edited SMILES before inserting.",
+            ));
             return;
         }
         if let Err(error) = naming::document_identity(&preview.document)
             .and_then(|actual| naming::verify_identity(&preview.identity, &actual.smiles))
         {
-            self.tab.naming.notice = Some(error);
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
             return;
         }
         let mut document = preview.document;
         let omit_caption = caption && preview.identity != preview.record.canonical_smiles;
         let caption_text = if let Some(index) = self.tab.naming.import_alias {
             let Some(alias) = preview.record.synonyms.get(index) else {
-                self.tab.naming.notice =
-                    Some("The alias choice changed. Choose its name again.".into());
+                self.tab.naming.notice = Some(Notice::new(
+                    NoticeKind::Retry,
+                    "The alias choice changed. Choose its name again.",
+                ));
                 return;
             };
             alias.name.clone()
@@ -99,7 +88,7 @@ impl App {
                 preview.record.canonical_smiles,
                 self.tab.caption_format.clone(),
             ) {
-                self.tab.naming.notice = Some(error);
+                self.tab.naming.notice = Some(Notice::new(NoticeKind::Failed, error));
                 return;
             }
         }
@@ -118,8 +107,12 @@ impl App {
         }
         self.tool = Tool::Select;
         self.fit();
-        self.tab.naming.notice =
-            omit_caption.then(|| "Edited structure inserted; original name omitted.".into());
+        self.tab.naming.notice = omit_caption.then(|| {
+            Notice::new(
+                NoticeKind::Info,
+                "Edited structure inserted; original name omitted.",
+            )
+        });
         self.status = if omit_caption {
             "Inserted edited structure · Original name omitted · Undo removes it".into()
         } else {
@@ -204,7 +197,7 @@ impl App {
         }
         if let Some(notice) = &state.notice {
             content = content.push(
-                text(compact_notice(notice))
+                text(notice.summary())
                     .size(12)
                     .color(self.theme().palette().danger),
             );
@@ -256,7 +249,7 @@ impl App {
                 );
             }
             if let Some(notice) = &state.notice {
-                content = content.push(text(notice).size(11));
+                content = content.push(text(&notice.detail).size(11));
             }
             if let Some(preview) = &state.preview {
                 content = content.push(
