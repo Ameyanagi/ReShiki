@@ -3,6 +3,17 @@
 #[cfg(target_os = "linux")]
 use std::fs;
 
+#[cfg(target_os = "macos")]
+const RLIMIT_DATA: i32 = 2;
+#[cfg(target_os = "macos")]
+const RLIMIT_AS: i32 = 5;
+#[cfg(target_os = "macos")]
+const HOST_VM_INFO: i32 = 2;
+#[cfg(target_os = "macos")]
+const HOST_VM_INFO_COUNT: usize = 15;
+#[cfg(target_os = "macos")]
+const RLIM_INFINITY_FLOOR: u64 = 1 << 60;
+
 #[cfg(any(target_os = "linux", target_os = "macos", test))]
 fn minimum(values: impl IntoIterator<Item = Option<u64>>) -> Option<u64> {
     values.into_iter().flatten().min()
@@ -56,13 +67,7 @@ fn process_limits_headroom(limits: &str, status: &str) -> Option<u64> {
         ]
         .into_iter()
         .map(|(name, usage)| {
-            let limit = limits
-                .lines()
-                .find_map(|line| line.strip_prefix(name))?
-                .split_whitespace()
-                .next()?
-                .parse::<u64>()
-                .ok()?;
+            let limit = first_number_after(limits, name)?;
             Some(observed_limit_headroom(limit, kib_field(status, usage)))
         }),
     )
@@ -160,19 +165,19 @@ fn mach_memory() -> (Option<u64>, Option<u64>) {
         return (total, None);
     }
     let mut page = 0usize;
-    // HOST_VM_INFO's legacy layout is fixed at 15 natural_t words. Only the
-    // free/inactive page fields are read; free already includes speculative
-    // pages. Layout, flavor and ownership checked against the Darwin SDK's
+    // HOST_VM_INFO's legacy layout has HOST_VM_INFO_COUNT (15) natural_t words.
+    // Only the free/inactive page fields are read; free already includes
+    // speculative pages. Layout, flavor and ownership checked against the Darwin SDK's
     // mach/{vm_statistics.h,host_info.h,mach_host.h,mach_init.h}.
-    let mut values = [0u32; 15];
+    let mut values = [0u32; HOST_VM_INFO_COUNT];
     let mut count = values.len() as u32;
     // SAFETY: page and the complete aligned 15-word buffer are writable for
     // these synchronous calls. The APIs neither retain nor free their pointers.
     let ok = unsafe {
         host_page_size(host.0, &mut page) == 0
-            && host_statistics(host.0, 2, values.as_mut_ptr().cast(), &mut count) == 0
+            && host_statistics(host.0, HOST_VM_INFO, values.as_mut_ptr().cast(), &mut count) == 0
     };
-    let available = if ok && count == 15 && page > 0 {
+    let available = if ok && count == HOST_VM_INFO_COUNT as u32 && page > 0 {
         let [free, _, inactive, ..] = values;
         available_pages(free, inactive, page as u64)
     } else {
@@ -191,7 +196,7 @@ fn process_headroom() -> Option<u64> {
     unsafe extern "C" {
         fn getrlimit(resource: i32, limit: *mut Limit) -> i32;
     }
-    let limit = [2, 5]
+    let limit = [RLIMIT_DATA, RLIMIT_AS]
         .into_iter()
         .filter_map(|resource| {
             let mut limit = Limit {
@@ -201,7 +206,7 @@ fn process_headroom() -> Option<u64> {
             // SAFETY: Darwin rlimit has two u64 fields. The stack object is writable
             // for the complete call; getrlimit neither retains nor frees its pointer.
             let result = unsafe { getrlimit(resource, &mut limit) };
-            (result == 0 && limit.current < (1u64 << 60)).then_some(limit.current)
+            (result == 0 && limit.current < RLIM_INFINITY_FLOOR).then_some(limit.current)
         })
         .min()?;
     let pid = std::process::id().to_string();
@@ -256,15 +261,18 @@ pub(super) fn memory_headroom() -> Option<u64> {
 }
 
 #[cfg(any(target_os = "linux", test))]
-fn kib_field(input: &str, name: &str) -> Option<u64> {
-    input
-        .lines()
-        .find_map(|line| line.strip_prefix(name))?
+fn first_number_after(text: &str, prefix: &str) -> Option<u64> {
+    text.lines()
+        .find_map(|line| line.strip_prefix(prefix))?
         .split_whitespace()
         .next()?
         .parse::<u64>()
-        .ok()?
-        .checked_mul(1024)
+        .ok()
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn kib_field(input: &str, name: &str) -> Option<u64> {
+    first_number_after(input, name)?.checked_mul(1024)
 }
 
 #[cfg(any(target_os = "macos", test))]

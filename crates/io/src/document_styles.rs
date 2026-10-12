@@ -273,7 +273,7 @@ pub fn apply(
             }
         }
     }
-    doc.version = doc.version.max(15);
+    doc.require_version(reshiki_model::document::EDITOR_BASELINE);
     doc.drawing_style = style;
     doc.validate()?;
     Ok(doc)

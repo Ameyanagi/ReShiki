@@ -326,7 +326,7 @@ pub fn assign(doc: &mut Document, arrow: u64, selected: &[u64], role: Role) -> R
     candidate.reactions.retain(|r| r.arrow != arrow);
     candidate.reactions.push(reaction);
     reconcile(&mut candidate)?;
-    candidate.version = 15;
+    candidate.version = crate::document::REACTIONS;
     candidate.validate()?;
     *doc = candidate;
     Ok(())

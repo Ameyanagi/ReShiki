@@ -421,13 +421,13 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.depth_appearance.extend(part.depth_appearance);
     doc.generic.extend(part.generic);
     if crate::rear_opacity::present(doc) {
-        doc.version = doc.version.max(22);
+        doc.require_version(crate::document::REAR_OPACITY);
     }
     if !doc.reactions.is_empty() {
-        doc.version = doc.version.max(15);
+        doc.require_version(crate::document::REACTIONS);
     }
     if !doc.abbreviations.is_empty() {
-        doc.version = doc.version.max(11);
+        doc.require_version(crate::document::ABBREVIATION_EDITING);
     }
 }
 

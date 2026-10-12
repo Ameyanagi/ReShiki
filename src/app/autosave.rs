@@ -432,7 +432,9 @@ impl App {
         self.target_tab();
         let before = self.tab.doc.clone();
         self.tab.doc = candidate.snapshot.document;
-        self.tab.doc.version = self.tab.doc.version.max(15);
+        self.tab
+            .doc
+            .require_version(reshiki::document::EDITOR_BASELINE);
         self.sync_drawing_defaults();
         self.tab.styles.editor = None;
         self.theme_library.editor = None;

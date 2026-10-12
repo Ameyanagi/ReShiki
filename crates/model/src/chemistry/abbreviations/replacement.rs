@@ -337,7 +337,7 @@ pub fn replace_with_policy(
     if let Some(color) = highlight {
         crate::highlights::apply(&mut result, &[target], Some(color));
     }
-    result.version = result.version.max(15);
+    result.require_version(crate::document::EDITOR_BASELINE);
     crate::ring_fills::prune(&mut result);
     validate_with_policy(&result, policy)?;
     Ok(result)

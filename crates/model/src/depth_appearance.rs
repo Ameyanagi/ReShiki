@@ -341,7 +341,7 @@ pub fn set_rear_opacity(doc: &mut Document, ids: &[u64], opacity: f32) -> Result
     if opacity < 1. {
         count += add_alpha_only_scopes(doc, groups, &covered, opacity);
         if count > 0 {
-            doc.version = doc.version.max(22);
+            doc.require_version(crate::document::REAR_OPACITY);
         }
     }
     Ok(count)

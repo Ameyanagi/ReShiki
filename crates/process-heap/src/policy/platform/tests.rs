@@ -1,4 +1,27 @@
 use super::*;
+
+#[test]
+fn first_number_uses_only_the_first_prefix_match_and_first_token() {
+    assert_eq!(
+        first_number_after("Other: 8\nField:  12 34 bytes\nField: 56\n", "Field:"),
+        Some(12)
+    );
+    assert_eq!(first_number_after("Other: 8\n", "Field:"), None);
+    assert_eq!(first_number_after("Field:\nField: 56\n", "Field:"), None);
+    assert_eq!(
+        first_number_after("Field: unlimited 12\nField: 56\n", "Field:"),
+        None
+    );
+    assert_eq!(
+        first_number_after("Field: 18446744073709551615 bytes\n", "Field:"),
+        Some(u64::MAX)
+    );
+    assert_eq!(
+        first_number_after("Field: 18446744073709551616\nField: 56\n", "Field:"),
+        None
+    );
+}
+
 #[test]
 fn platform_samples_are_checked_and_constrained_by_the_smallest_ceiling() {
     assert_eq!(

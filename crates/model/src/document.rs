@@ -173,7 +173,48 @@ fn forward() -> String {
     "forward".into()
 }
 
+/// Collapsed abbreviations; older drawings carrying them are rejected.
+pub const ABBREVIATIONS: u32 = 10;
+/// Version that creating or appending abbreviations raises a drawing to: the
+/// format version (per-bond crossing depth) when abbreviation editing landed.
+pub const ABBREVIATION_EDITING: u32 = 11;
+/// Reaction membership and roles.
+pub const REACTIONS: u32 = 15;
+/// Lowest version the editor's write paths give a drawing: new drawings, open,
+/// recovery, page setup, printing, cleanup, styles, abbreviation detection and
+/// chemistry output. Each stamped the then-current version when reactions
+/// landed; saved files are now marked with [`VERSION`].
+pub const EDITOR_BASELINE: u32 = REACTIONS;
+/// Embedded custom themes and palette hues.
+pub const CUSTOM_THEMES: u32 = 16;
+/// Custom colors stored exactly as shown on either canvas.
+pub const EXACT_COLORS: u32 = 17;
+/// Persisted rear-side opacity for editable 3D molecules.
+pub const REAR_OPACITY: u32 = 22;
+
 /// The newest document format this build reads. Saved files are marked with it.
+///
+/// | Version | Added |
+/// | --- | --- |
+/// | 1 | Original native drawings. |
+/// | 2 | Arrow styles. |
+/// | 10 | Collapsed abbreviations. |
+/// | 11 | Per-bond crossing depth. |
+/// | 12 | Physical publication page layouts. |
+/// | 13 | Embedded pictures. |
+/// | 14 | Document drawing styles. |
+/// | 15 | Reaction membership and roles. |
+/// | 16 | Embedded custom themes (later also palette hues). |
+/// | 17 | Exact custom colors on either canvas; newer-version probing. |
+/// | 18 | Persistent atom and bond highlights. |
+/// | 19 | Editable 3D depth appearance and captured projection stereo (#146; 0.11.0). |
+/// | 20 | Retained EMF picture sources (#296); cubic arrow controls on a parallel branch. |
+/// | 21 | Arrow target links and attachment IDs (cubic-arrow branch). |
+/// | 22 | Persisted rear-side opacity (parallel branch). |
+/// | 23 | Not used. |
+/// | 24 | EMF sources, cubic arrows, target links and rear opacity integrated (#297). |
+/// | 25 | Linked molecule-name captions and reaction atom-map labels (#298). |
+/// | 26 | Generic structures and coordination joining (#300). |
 pub const VERSION: u32 = 26;
 
 fn newer_version(version: u64) -> String {
@@ -242,7 +283,7 @@ impl Default for Document {
             generic: Default::default(),
             ring_fills: vec![],
             depth_appearance: vec![],
-            version: 15,
+            version: EDITOR_BASELINE,
             drawing_style: Default::default(),
             canvas_theme: Default::default(),
             color_theme: Default::default(),
@@ -263,6 +304,10 @@ impl Default for Document {
     }
 }
 impl Document {
+    /// Raise the in-memory document version to at least this feature's floor.
+    pub fn require_version(&mut self, floor: u32) {
+        self.version = self.version.max(floor);
+    }
     /// Read a native drawing. The version is read first, so a drawing from a
     /// newer ReShiki is reported as such instead of as a parse error.
     pub fn from_json(bytes: &[u8]) -> Result<Self, String> {
@@ -290,7 +335,6 @@ impl Document {
     /// canvases, so a dark drawing stores what it showed. Ink and palette colors
     /// already follow the canvas.
     pub fn migrate(&mut self) {
-        const EXACT_COLORS: u32 = 17;
         if self.version >= EXACT_COLORS || self.canvas_theme.is_light() {
             return;
         }
@@ -306,7 +350,7 @@ impl Document {
     /// the version raised to at least 15, and computed labels cleared.
     pub fn from_native_file(bytes: &[u8]) -> Result<Self, String> {
         let mut doc = Self::from_json(bytes)?;
-        doc.version = doc.version.max(15);
+        doc.require_version(EDITOR_BASELINE);
         crate::atom_labels::clear_computed(&mut doc);
         Ok(doc)
     }

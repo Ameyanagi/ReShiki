@@ -292,7 +292,7 @@ impl Document {
             .collect()
     }
     pub fn validate_abbreviations(&self) -> Result<(), String> {
-        if self.version < 10 && !self.abbreviations.is_empty() {
+        if self.version < crate::document::ABBREVIATIONS && !self.abbreviations.is_empty() {
             return Err("Abbreviations require document version 10".into());
         }
         if self.abbreviations.is_empty() {
@@ -345,7 +345,7 @@ impl Document {
         self.abbreviations
             .retain(|a| !a.members.iter().any(|id| abbreviation.members.contains(id)));
         self.abbreviations.push(abbreviation);
-        self.version = self.version.max(11);
+        self.require_version(crate::document::ABBREVIATION_EDITING);
         Ok(())
     }
     pub fn expand_abbreviations(&mut self, ids: &[u64]) -> usize {

@@ -22,9 +22,17 @@ pub const MAX_WORK_UNITS: usize = 200_000_000;
 const FALLBACK_MEMORY: u64 = 1024 * MIB as u64;
 const REFERENCE_RATE: u64 = 5_000_000;
 const MAX_POOL_BYTES: usize = 1280 * MIB;
+const HEAP_SHARE_DIVISOR: u64 = 4;
+const POOL_SHARE_DIVISOR: u64 = 2;
+const MIN_GEOMETRY_SECONDS: u64 = 60;
+const MAX_GEOMETRY_SECONDS: u64 = 120;
+const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(10);
+const WORK_UNITS_PER_RATE: u64 = 10;
 
 /// Injectable machine observations. Missing observations use the historical
-/// 256 MiB / 60 s / 50 million unit defaults. Observed exhausted memory denies
+/// 256 MiB heap (`FALLBACK_MEMORY / HEAP_SHARE_DIVISOR`), 60 s geometry timeout
+/// (`MIN_GEOMETRY_SECONDS` at `REFERENCE_RATE`), and 50 million work unit defaults
+/// (`REFERENCE_RATE * WORK_UNITS_PER_RATE`). Observed exhausted memory denies
 /// reservations; a missing or zero throughput sample uses the reference rate.
 #[derive(Clone, Copy, Debug)]
 pub struct Capabilities {
@@ -54,26 +62,27 @@ impl Capabilities {
             .lookup_operations_per_second
             .filter(|&n| n > 0)
             .unwrap_or(REFERENCE_RATE);
-        let heap_bytes = usize::try_from(memory / 4)
+        let heap_bytes = usize::try_from(memory / HEAP_SHARE_DIVISOR)
             .unwrap_or(MAX_HEAP_BYTES)
             .clamp(MIN_HEAP_BYTES, MAX_HEAP_BYTES);
         // The probe is a throughput proxy, not a claim about a molecule's solve
         // time. Independent wall-clock and work ceilings remain mandatory.
+        // The historical reference timeout is also the minimum geometry timeout.
         let seconds = REFERENCE_RATE
-            .saturating_mul(60)
+            .saturating_mul(MIN_GEOMETRY_SECONDS)
             .checked_div(rate)
-            .unwrap_or(60)
-            .clamp(60, 120);
-        let work_units = usize::try_from(rate.saturating_mul(10))
+            .unwrap_or(MIN_GEOMETRY_SECONDS)
+            .clamp(MIN_GEOMETRY_SECONDS, MAX_GEOMETRY_SECONDS);
+        let work_units = usize::try_from(rate.saturating_mul(WORK_UNITS_PER_RATE))
             .unwrap_or(MAX_WORK_UNITS)
             .clamp(MIN_WORK_UNITS, MAX_WORK_UNITS);
-        let pool_bytes = usize::try_from(memory / 2)
+        let pool_bytes = usize::try_from(memory / POOL_SHARE_DIVISOR)
             .unwrap_or(MAX_POOL_BYTES)
             .min(MAX_POOL_BYTES);
         Budget {
             heap_bytes,
             geometry_timeout: Duration::from_secs(seconds),
-            analysis_timeout: Duration::from_secs(10),
+            analysis_timeout: ANALYSIS_TIMEOUT,
             work_units,
             pool_bytes,
         }

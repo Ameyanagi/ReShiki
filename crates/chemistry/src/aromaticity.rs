@@ -7,7 +7,7 @@ use super::{
     ELEMENTS, Element,
     graph::{Graph, Valence, pi_electron_count},
 };
-use reshiki_process_heap::policy::{Budget, Cancellation, Capabilities};
+use reshiki_process_heap::policy::{Budget, Cancellation, Capabilities, MIB};
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     time::Instant,
@@ -15,6 +15,21 @@ use std::{
 
 #[cfg(test)]
 mod tests;
+
+/// Estimated working memory per atom.
+const BYTES_PER_ATOM: usize = 128;
+/// Estimated working memory per bond.
+const BYTES_PER_BOND: usize = 64;
+/// Estimated working memory per atom slot in the supplied rings.
+const BYTES_PER_RING_SLOT: usize = 32;
+/// Estimated working memory per supplied ring.
+const BYTES_PER_RING: usize = 128;
+/// Fixed working-memory allowance for aromaticity perception.
+const BASE_ESTIMATE: usize = 8 * MIB;
+/// Additional headroom held by the process reservation.
+const RESERVATION_OVERHEAD: usize = 16 * MIB;
+/// Work units between cancellation and deadline checks.
+const CHECK_INTERVAL_UNITS: usize = 1024;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Donor {
@@ -76,7 +91,7 @@ impl Work {
             .checked_sub(amount)
             .ok_or("Aromaticity work limit exceeded")?;
         self.checkpoint = self.checkpoint.saturating_add(amount);
-        if self.checkpoint >= 1024 {
+        if self.checkpoint >= CHECK_INTERVAL_UNITS {
             self.checkpoint = 0;
             self.check()?;
         }
@@ -278,6 +293,35 @@ pub fn perceive_with_budget(
     run_with_budget(graph, rings, None, budget, cancellation)
 }
 
+fn estimated_bytes(graph: &Graph, rings: &[Vec<usize>]) -> Option<usize> {
+    let ring_slots = rings
+        .iter()
+        .try_fold(0usize, |sum, ring| sum.checked_add(ring.len()))?;
+    graph
+        .atoms
+        .len()
+        .checked_mul(BYTES_PER_ATOM)
+        .and_then(|n| {
+            graph
+                .bonds
+                .len()
+                .checked_mul(BYTES_PER_BOND)
+                .and_then(|b| n.checked_add(b))
+        })
+        .and_then(|n| {
+            ring_slots
+                .checked_mul(BYTES_PER_RING_SLOT)
+                .and_then(|r| n.checked_add(r))
+        })
+        .and_then(|n| {
+            rings
+                .len()
+                .checked_mul(BYTES_PER_RING)
+                .and_then(|r| n.checked_add(r))
+        })
+        .and_then(|n| n.checked_add(BASE_ESTIMATE))
+}
+
 fn run_with_budget(
     graph: &Graph,
     rings: &[Vec<usize>],
@@ -285,32 +329,14 @@ fn run_with_budget(
     budget: Budget,
     cancellation: Cancellation,
 ) -> Result<Aromaticity, String> {
-    let ring_slots = rings
-        .iter()
-        .try_fold(0usize, |sum, ring| sum.checked_add(ring.len()))
-        .ok_or("Aromaticity memory estimate overflow")?;
-    let estimated = graph
-        .atoms
-        .len()
-        .checked_mul(128)
-        .and_then(|n| {
-            graph
-                .bonds
-                .len()
-                .checked_mul(64)
-                .and_then(|b| n.checked_add(b))
-        })
-        .and_then(|n| ring_slots.checked_mul(32).and_then(|r| n.checked_add(r)))
-        .and_then(|n| rings.len().checked_mul(128).and_then(|r| n.checked_add(r)))
-        .and_then(|n| n.checked_add(8 * 1024 * 1024))
-        .ok_or("Aromaticity memory estimate overflow")?;
+    let estimated = estimated_bytes(graph, rings).ok_or("Aromaticity memory estimate overflow")?;
     if estimated > budget.heap_bytes() {
         return Err(
             "Aromaticity estimated memory budget exceeded; chemistry analysis is incomplete".into(),
         );
     }
     let reserved_bytes = estimated
-        .checked_add(16 * 1024 * 1024)
+        .checked_add(RESERVATION_OVERHEAD)
         .ok_or("Aromaticity reservation size overflow")?;
     if reserved_bytes > budget.reservation_ceiling() {
         return Err(

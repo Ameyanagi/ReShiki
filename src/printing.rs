@@ -101,7 +101,7 @@ pub fn snapshot(doc: &Document, ids: &[u64], scope: Scope) -> Result<Document, S
         }
         result.page_layout = Some(layout);
     }
-    result.version = result.version.max(15);
+    result.require_version(crate::document::EDITOR_BASELINE);
     result.validate()?;
     Ok(result)
 }
