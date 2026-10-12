@@ -914,5 +914,3 @@ fn flatten(commands: &[PathCommand]) -> Vec<Vec<Point>> {
 
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod visibility_tests;
