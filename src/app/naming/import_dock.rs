@@ -27,7 +27,7 @@ impl App {
     pub(in crate::app) fn cancel_name_import(&mut self) {
         if matches!(
             self.tab.naming.pending,
-            Some(Pending::Import(..) | Pending::Request(_) | Pending::Preview(_))
+            Some(Pending::Import { .. } | Pending::Request(_) | Pending::Preview(_))
         ) {
             let _ = self.naming_action(Action::Cancel);
         }
@@ -45,10 +45,10 @@ impl App {
             self.insert_import_preview(caption);
             return Task::none();
         }
-        let ticket = self.naming_ticket();
-        self.tab.naming.pending = Some(Pending::Import(ticket, caption));
-        let cancel = naming::Cancel::default();
-        self.tab.naming.local_cancel = Some(cancel.clone());
+        let (ticket, cancel) = self.begin_naming(|ticket| Pending::Import {
+            ticket,
+            add_caption: caption,
+        });
         let engine = self.engine.clone();
         let name = self.tab.naming.name.clone();
         Task::perform(resolve_preview(engine, name, cancel), move |result| {

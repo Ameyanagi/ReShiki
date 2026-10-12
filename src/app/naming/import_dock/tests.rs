@@ -43,7 +43,13 @@ async fn one_insert_resolves_and_commits_structure_and_verified_caption_together
     let before = app.tab.doc.clone();
     let _ = app.insert_input();
     let pending = app.tab.naming.pending.unwrap();
-    assert!(matches!(pending, Pending::Import(_, true)));
+    assert!(matches!(
+        pending,
+        Pending::Import {
+            add_caption: true,
+            ..
+        }
+    ));
     assert!(!app.tab.naming.preview_open);
     let _ = app.insert_input();
     assert_eq!(app.tab.naming.pending, Some(pending));

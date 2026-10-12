@@ -1,7 +1,13 @@
 //! Local deterministic name/structure conversion with native identity checks.
-use crate::{chemistry, document::Document, editing};
+use crate::{
+    chemistry,
+    document::Document,
+    editing,
+    molecule_names::{self, IdentityRejection, MAX_NAMING_ATOMS, MAX_SMILES_BYTES, is_tetrahedral},
+};
 use std::collections::HashSet;
 
+mod client;
 mod local;
 pub use local::{Cancel, resolve_name};
 mod catalog;
@@ -52,60 +58,32 @@ pub struct Identity {
 }
 
 fn canonical_state(state: &chemistry::stereo::perception::State) -> Result<String, String> {
-    if state.graph.atoms.is_empty() || state.graph.atoms.len() > 512 {
+    if state.graph.atoms.is_empty() || state.graph.atoms.len() > MAX_NAMING_ATOMS {
         return Err("Naming supports molecular graphs with 1–512 atoms".into());
     }
-    if state
-        .graph
-        .atoms
-        .iter()
-        .any(|a| a.atomic_number == 0 || a.radical_electrons != 0)
-        || state
-            .graph
-            .bonds
-            .iter()
-            .any(|b| !(1..=4).contains(&b.order))
-        || !state.metadata.groups.is_empty()
-    {
-        return Err(
+    // molecule_names::identity keeps its component checks and one semantics
+    // message; this adapter retains the naming-specific diagnostics and order.
+    molecule_names::canonical_identity(state).map_err(|error| match error {
+        IdentityRejection::UnsupportedAtomsOrBonds => {
             "Naming does not support query atoms, radicals, exotic bonds or relative stereo groups"
-                .into(),
-        );
-    }
-    if state.properties.atoms.iter().any(|a| a.unknown)
-        || state
-            .metadata
-            .bonds
-            .iter()
-            .any(|b| b.unknown_stereo || b.stereo == 1)
-    {
-        return Err("Resolve unknown stereochemistry before generating a name; wavy stereo cannot be sent as unspecified stereo".into());
-    }
-    if state.metadata.atoms.iter().any(|m| m.chiral_tag > 2)
-        || state.metadata.bonds.iter().any(|m| m.stereo > 5)
-    {
-        return Err("Naming supports tetrahedral and ordinary alkene stereochemistry only; other stereo classes cannot be discarded".into());
-    }
-    let mut state = state.clone();
-    for atom in &mut state.metadata.atoms {
-        atom.map_number = 0;
-        atom.map_present = false;
-    }
-    chemistry::smiles::write::write(
-        &state,
-        chemistry::smiles::write::Options {
-            ignore_maps: true,
-            ..Default::default()
-        },
-    )
-    .map(|s| s.text)
-    .map_err(|e| e.to_string())
+                .into()
+        }
+        IdentityRejection::UnknownStereo => {
+            const MESSAGE: &str = "Resolve unknown stereochemistry before generating a name; wavy stereo cannot be sent as unspecified stereo";
+            MESSAGE.into()
+        }
+        IdentityRejection::NonclassicalStereo => {
+            const MESSAGE: &str = "Naming supports tetrahedral and ordinary alkene stereochemistry only; other stereo classes cannot be discarded";
+            MESSAGE.into()
+        }
+        IdentityRejection::Write(message) => message,
+    })
 }
 
 /// Canonical isomeric graph identity, including isotope, charge and specified
 /// stereo. Map numbers and atom order are not molecular identity.
 pub fn canonical_smiles(text: &str) -> Result<String, String> {
-    if text.len() > 32_768 || text.contains('|') || text.contains('>') {
+    if text.len() > MAX_SMILES_BYTES || text.contains('|') || text.contains('>') {
         return Err(
             "Naming requires ordinary molecular SMILES without reaction or CX extensions".into(),
         );
@@ -113,6 +91,7 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
     bound_atom_tokens(text)?;
     // Native import cleans unusable winding and can discard non-tetrahedral
     // classes. Check the raw graph first, before that cleanup changes identity.
+    // Unlike has_nonclassical_stereo, this raw check intentionally covers atoms only.
     let raw = chemistry::smiles::parse(text).map_err(|e| e.to_string())?;
     if raw.metadata.atoms.iter().any(|m| m.chiral_tag > 2) {
         return Err("Naming does not support allene or coordination stereo classes; no plain graph was substituted".into());
@@ -121,7 +100,7 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
         .metadata
         .atoms
         .iter()
-        .filter(|m| matches!(m.chiral_tag, 1 | 2))
+        .filter(|m| is_tetrahedral(m.chiral_tag))
         .count();
     let imported = chemistry::smiles::read(text).map_err(|e| e.to_string())?;
     if specified_atoms
@@ -131,7 +110,7 @@ pub fn canonical_smiles(text: &str) -> Result<String, String> {
             .metadata
             .atoms
             .iter()
-            .filter(|m| matches!(m.chiral_tag, 1 | 2))
+            .filter(|m| is_tetrahedral(m.chiral_tag))
             .count()
     {
         return Err("Native import could not retain every specified tetrahedral center; no name or graph was assigned".into());
@@ -164,7 +143,7 @@ fn bound_atom_tokens(text: &str) -> Result<(), String> {
             }
             i += 1;
         }
-        if atoms > 512 {
+        if atoms > MAX_NAMING_ATOMS {
             return Err(
                 "Naming supports at most 512 input atom tokens; no oversized graph was imported"
                     .into(),
@@ -198,14 +177,10 @@ pub fn selected_identity(document: &Document, selected: &[u64]) -> Result<Identi
 }
 
 pub fn document_identity(document: &Document) -> Result<Identity, String> {
-    if document.atoms.is_empty() || document.atoms.len() > 512 {
+    if document.atoms.is_empty() || document.atoms.len() > MAX_NAMING_ATOMS {
         return Err("Naming supports molecular graphs with 1–512 atoms".into());
     }
-    if document
-        .bonds
-        .iter()
-        .any(|b| !b.projection && b.display == "wavy")
-    {
+    if molecule_names::has_unknown_wavy_bond(document) {
         return Err("Resolve wavy/unknown stereochemistry before generating a name".into());
     }
     let molecule = chemistry::document::prepare(document).map_err(|e| e.to_string())?;

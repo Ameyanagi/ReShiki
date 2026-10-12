@@ -1,5 +1,13 @@
+#[cfg(unix)]
+use super::client::CancelOnDrop as StopOnDrop;
+use super::client::transient_measurement_error;
 use super::*;
 use serde_json::json;
+#[cfg(unix)]
+use std::{
+    process::{Command, Stdio},
+    time::{Duration, Instant},
+};
 
 fn reply(smiles: &str) -> serde_json::Value {
     json!({"operation":"parse","protocol":worker::PROTOCOL,"backend":worker::BACKEND,"port_version":worker::PORT_VERSION,"upstream_version":worker::UPSTREAM_VERSION,"upstream_commit":worker::UPSTREAM_COMMIT,"resource_fingerprint":worker::RESOURCE_FINGERPRINT,"options":worker::OPTIONS,"name":"example","status":"SUCCESS","message":"","warnings":[],"cxsmiles":smiles})

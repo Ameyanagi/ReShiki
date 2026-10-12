@@ -11,6 +11,83 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+/// Maximum molecular graph size accepted by local naming and caption identity.
+pub const MAX_NAMING_ATOMS: usize = 512;
+/// Maximum serialized SMILES size accepted by naming and caption associations.
+pub const MAX_SMILES_BYTES: usize = 32_768;
+
+/// Chemical semantics that cannot be discarded when associating a name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IdentityRejection {
+    UnsupportedAtomsOrBonds,
+    UnknownStereo,
+    NonclassicalStereo,
+    /// Preserve the SMILES writer's own diagnostic at both call sites.
+    Write(String),
+}
+
+pub fn has_nonclassical_stereo(state: &chemistry::stereo::perception::State) -> bool {
+    state.metadata.atoms.iter().any(|atom| atom.chiral_tag > 2)
+        || state.metadata.bonds.iter().any(|bond| bond.stereo > 5)
+}
+
+pub fn is_tetrahedral(tag: u8) -> bool {
+    matches!(tag, 1 | 2)
+}
+
+pub fn has_unknown_wavy_bond(doc: &Document) -> bool {
+    doc.bonds
+        .iter()
+        .any(|bond| !bond.projection && bond.display == "wavy")
+}
+
+/// Shared canonical isomeric identity without atom maps. The naming adapter
+/// and caption identity retain their own document bounds and error messages.
+pub fn canonical_identity(
+    state: &chemistry::stereo::perception::State,
+) -> Result<String, IdentityRejection> {
+    if state
+        .graph
+        .atoms
+        .iter()
+        .any(|atom| atom.atomic_number == 0 || atom.radical_electrons != 0)
+        || state
+            .graph
+            .bonds
+            .iter()
+            .any(|bond| !(1..=4).contains(&bond.order))
+        || !state.metadata.groups.is_empty()
+    {
+        return Err(IdentityRejection::UnsupportedAtomsOrBonds);
+    }
+    if state.properties.atoms.iter().any(|atom| atom.unknown)
+        || state
+            .metadata
+            .bonds
+            .iter()
+            .any(|bond| bond.unknown_stereo || bond.stereo == 1)
+    {
+        return Err(IdentityRejection::UnknownStereo);
+    }
+    if has_nonclassical_stereo(state) {
+        return Err(IdentityRejection::NonclassicalStereo);
+    }
+    let mut state = state.clone();
+    for atom in &mut state.metadata.atoms {
+        atom.map_number = 0;
+        atom.map_present = false;
+    }
+    chemistry::smiles::write::write(
+        &state,
+        chemistry::smiles::write::Options {
+            ignore_maps: true,
+            ..Default::default()
+        },
+    )
+    .map(|smiles| smiles.text)
+    .map_err(|error| IdentityRejection::Write(error.to_string()))
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MoleculeName {
     pub annotation: u64,
@@ -80,56 +157,28 @@ fn identity(doc: &Document, atoms: &[u64]) -> Result<String, String> {
     #[cfg(test)]
     IDENTITY_ENTRIES.with(|v| v.set(v.get() + 1));
     let seed = atoms.first().copied().ok_or("Select a molecule")?;
-    if atoms.len() > 512 || !same_atoms(&component(doc, seed), atoms) {
+    if atoms.len() > MAX_NAMING_ATOMS || !same_atoms(&component(doc, seed), atoms) {
         return Err("The named molecule changed its connected component".into());
     }
     // Use the shared fragment path so abbreviations and unresolved semantic
     // metadata cannot disappear before chemical validation.
     let part = crate::editing::analysis_document(doc, atoms);
-    if part
-        .bonds
-        .iter()
-        .any(|bond| !bond.projection && bond.display == "wavy")
-    {
+    if has_unknown_wavy_bond(&part) {
         return Err("Unknown stereochemistry invalidates a generated name".into());
     }
-    let mut state = chemistry::document::prepare(&part)
+    let state = chemistry::document::prepare(&part)
         .map_err(|error| error.to_string())?
         .state;
-    if state
-        .graph
-        .atoms
-        .iter()
-        .any(|atom| atom.atomic_number == 0 || atom.radical_electrons != 0)
-        || state
-            .graph
-            .bonds
-            .iter()
-            .any(|bond| !(1..=4).contains(&bond.order))
-        || !state.metadata.groups.is_empty()
-        || state.properties.atoms.iter().any(|atom| atom.unknown)
-        || state
-            .metadata
-            .bonds
-            .iter()
-            .any(|bond| bond.unknown_stereo || bond.stereo == 1 || bond.stereo > 5)
-        || state.metadata.atoms.iter().any(|atom| atom.chiral_tag > 2)
-    {
-        return Err("Unsupported chemical semantics invalidate a generated name".into());
-    }
-    for atom in &mut state.metadata.atoms {
-        atom.map_number = 0;
-        atom.map_present = false;
-    }
-    chemistry::smiles::write::write(
-        &state,
-        chemistry::smiles::write::Options {
-            ignore_maps: true,
-            ..Default::default()
-        },
-    )
-    .map(|smiles| smiles.text)
-    .map_err(|error| error.to_string())
+    // Unlike naming::canonical_state, caption identity reports one semantics
+    // message for every rejection; keep its document pre-checks above separate.
+    canonical_identity(&state).map_err(|error| match error {
+        IdentityRejection::Write(message) => message,
+        IdentityRejection::UnsupportedAtomsOrBonds
+        | IdentityRejection::UnknownStereo
+        | IdentityRejection::NonclassicalStereo => {
+            "Unsupported chemical semantics invalidate a generated name".into()
+        }
+    })
 }
 
 fn position(doc: &Document, atoms: &[u64], caption: &Annotation) -> Option<Point> {
@@ -263,13 +312,13 @@ pub fn validate(doc: &Document) -> Result<(), String> {
         if !captions.insert(name.annotation)
             || !doc.annotations.iter().any(|a| a.id == name.annotation)
             || name.atoms.is_empty()
-            || name.atoms.len() > 512
+            || name.atoms.len() > MAX_NAMING_ATOMS
             || name
                 .atoms
                 .iter()
                 .any(|id| !atoms.insert(*id) || doc.atom(*id).is_none())
             || name.smiles.is_empty()
-            || name.smiles.len() > 32_768
+            || name.smiles.len() > MAX_SMILES_BYTES
             || name.text.trim().is_empty()
             || name.text.len() > 32_768
         {

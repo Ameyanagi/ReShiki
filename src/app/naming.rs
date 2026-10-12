@@ -23,13 +23,18 @@ pub struct Ticket {
     revision: u64,
     serial: u64,
 }
+impl Ticket {
+    fn is_current(self, revision: u64, epoch: u64) -> bool {
+        self.revision == revision && self.epoch == epoch
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Request(Ticket),
     Preview(Ticket),
     Caption(Ticket),
-    Import(Ticket, bool),
+    Import { ticket: Ticket, add_caption: bool },
 }
 impl Pending {
     fn ticket(self) -> Ticket {
@@ -37,7 +42,7 @@ impl Pending {
             Self::Request(ticket)
             | Self::Preview(ticket)
             | Self::Caption(ticket)
-            | Self::Import(ticket, _) => ticket,
+            | Self::Import { ticket, .. } => ticket,
         }
     }
 }
@@ -154,18 +159,22 @@ impl State {
         self.pending.is_some()
     }
 
-    pub(super) fn invalidate_name(&mut self) {
+    fn stop_request(&mut self) {
+        if let Some(cancel) = self.local_cancel.take() {
+            cancel.stop();
+        }
         self.serial = self.serial.wrapping_add(1);
         self.pending = None;
         self.label_target = None;
+    }
+
+    pub(super) fn invalidate_name(&mut self) {
+        self.stop_request();
         self.candidates.clear();
         self.preview = None;
         self.notice = None;
         self.acknowledged = false;
         self.import_alias = None;
-        if let Some(cancel) = self.local_cancel.take() {
-            cancel.stop();
-        }
     }
     fn set_preview(&mut self, preview: Preview) {
         self.smiles = preview.identity.clone();
@@ -200,6 +209,20 @@ async fn resolve_preview(
     Ok(Outcome::Names(vec![record], Some(Box::new(preview))))
 }
 
+async fn generate_for_atoms(
+    document: Document,
+    atoms: Vec<u64>,
+    cancel: naming::Cancel,
+) -> Result<Outcome, String> {
+    let identity =
+        tokio::task::spawn_blocking(move || naming::selected_identity(&document, &atoms))
+            .await
+            .map_err(|error| error.to_string())??;
+    naming::generate_name(&identity, cancel)
+        .await
+        .map(Outcome::Structure)
+}
+
 impl App {
     fn name_preview_styles(&self) -> PreviewStyles<'_> {
         PreviewStyles {
@@ -232,6 +255,71 @@ impl App {
         ticket
     }
 
+    fn begin_naming(
+        &mut self,
+        pending: impl FnOnce(Ticket) -> Pending,
+    ) -> (Ticket, naming::Cancel) {
+        let ticket = self.naming_ticket();
+        self.tab.naming.pending = Some(pending(ticket));
+        let cancel = naming::Cancel::default();
+        self.tab.naming.local_cancel = Some(cancel.clone());
+        (ticket, cancel)
+    }
+
+    fn naming_finished(&mut self, ticket: Ticket, result: Result<Outcome, String>) {
+        if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
+            || ticket.epoch != self.tab.file_epoch
+        {
+            return;
+        }
+        let caption = matches!(self.tab.naming.pending, Some(Pending::Caption(_)));
+        let import_caption = match self.tab.naming.pending {
+            Some(Pending::Import { add_caption, .. }) => Some(add_caption),
+            _ => None,
+        };
+        let target = self.tab.naming.label_target.take();
+        self.tab.naming.pending = None;
+        self.tab.naming.local_cancel = None;
+        if ticket.revision != self.tab.revision {
+            self.tab.naming.notice = Some("The drawing changed. Try again.".into());
+            if caption {
+                self.status = "The molecule changed while naming. Show its name again".into();
+                self.error = true;
+            }
+            return;
+        }
+        match result {
+            Err(error) => {
+                self.tab.naming.notice = Some(error.clone());
+                if caption {
+                    self.status = error;
+                    self.error = true;
+                }
+            }
+            Ok(Outcome::Names(records, preview)) => {
+                self.tab.naming.candidates = records;
+                if let Some(preview) = preview {
+                    self.tab.naming.set_preview(*preview);
+                    if let Some(caption) = import_caption {
+                        self.insert_import_preview(caption);
+                    }
+                } else if import_caption.is_some() {
+                    self.tab.naming.notice = Some("No supported structure was returned.".into());
+                }
+            }
+            Ok(Outcome::Preview(preview)) => self.tab.naming.set_preview(*preview),
+            Ok(Outcome::Structure(record)) => {
+                if caption {
+                    if let Some(atoms) = target {
+                        self.place_molecule_name(&atoms, record);
+                    }
+                } else {
+                    self.tab.naming.structure = Some((ticket, record));
+                }
+            }
+        }
+    }
+
     pub(super) fn naming_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Name(name) => {
@@ -239,22 +327,15 @@ impl App {
                 self.tab.naming.name = name;
             }
             Action::Cancel => {
-                if let Some(cancel) = self.tab.naming.local_cancel.take() {
-                    cancel.stop();
-                }
-                self.tab.naming.serial = self.tab.naming.serial.wrapping_add(1);
-                self.tab.naming.pending = None;
-                self.tab.naming.label_target = None;
+                self.tab.naming.stop_request();
                 self.tab.naming.notice = Some("Local name parsing was cancelled".into());
             }
             Action::Resolve => {
                 if self.tab.naming.name.trim().is_empty() || self.tab.naming.pending.is_some() {
                     return Task::none();
                 }
-                let ticket = self.naming_ticket();
+                let (ticket, cancel) = self.begin_naming(Pending::Request);
                 let name = self.tab.naming.name.clone();
-                let cancel = naming::Cancel::default();
-                self.tab.naming.local_cancel = Some(cancel.clone());
                 self.tab.naming.preview = None;
                 self.tab.naming.candidates.clear();
                 let engine = self.engine.clone();
@@ -266,23 +347,12 @@ impl App {
                 if self.tab.naming.pending.is_some() {
                     return Task::none();
                 }
-                let ticket = self.naming_ticket();
-                let cancel = naming::Cancel::default();
-                self.tab.naming.local_cancel = Some(cancel.clone());
+                let (ticket, cancel) = self.begin_naming(Pending::Request);
                 self.tab.naming.structure = None;
                 let document = self.tab.doc.clone();
                 let selected = self.tab.selected.clone();
                 return Task::perform(
-                    async move {
-                        let identity = tokio::task::spawn_blocking(move || {
-                            naming::selected_identity(&document, &selected)
-                        })
-                        .await
-                        .map_err(|e| e.to_string())??;
-                        naming::generate_name(&identity, cancel)
-                            .await
-                            .map(Outcome::Structure)
-                    },
+                    generate_for_atoms(document, selected, cancel),
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
@@ -323,61 +393,7 @@ impl App {
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
-            Action::Finished(ticket, result) => {
-                if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
-                    || ticket.epoch != self.tab.file_epoch
-                {
-                    return Task::none();
-                }
-                let caption = matches!(self.tab.naming.pending, Some(Pending::Caption(_)));
-                let import_caption = match self.tab.naming.pending {
-                    Some(Pending::Import(_, value)) => Some(value),
-                    _ => None,
-                };
-                let target = self.tab.naming.label_target.take();
-                self.tab.naming.pending = None;
-                self.tab.naming.local_cancel = None;
-                if ticket.revision != self.tab.revision {
-                    self.tab.naming.notice = Some("The drawing changed. Try again.".into());
-                    if caption {
-                        self.status =
-                            "The molecule changed while naming. Show its name again".into();
-                        self.error = true;
-                    }
-                    return Task::none();
-                }
-                match *result {
-                    Err(error) => {
-                        self.tab.naming.notice = Some(error.clone());
-                        if caption {
-                            self.status = error;
-                            self.error = true;
-                        }
-                    }
-                    Ok(Outcome::Names(records, preview)) => {
-                        self.tab.naming.candidates = records;
-                        if let Some(preview) = preview {
-                            self.tab.naming.set_preview(*preview);
-                            if let Some(caption) = import_caption {
-                                self.insert_import_preview(caption);
-                            }
-                        } else if import_caption.is_some() {
-                            self.tab.naming.notice =
-                                Some("No supported structure was returned.".into());
-                        }
-                    }
-                    Ok(Outcome::Preview(preview)) => self.tab.naming.set_preview(*preview),
-                    Ok(Outcome::Structure(record)) => {
-                        if caption {
-                            if let Some(atoms) = target {
-                                self.place_molecule_name(&atoms, record);
-                            }
-                        } else {
-                            self.tab.naming.structure = Some((ticket, record));
-                        }
-                    }
-                }
-            }
+            Action::Finished(ticket, result) => self.naming_finished(ticket, *result),
             Action::PreviewEdit(edit) => self.edit_name_preview(edit),
             Action::Acknowledge(value) => self.tab.naming.acknowledged = value,
             Action::Insert => self.insert_name_preview(),
@@ -507,13 +523,13 @@ impl App {
     }
 
     fn insert_name_caption(&mut self, alias: Option<usize>) {
-        if !self.naming_can_edit() || self.tab.naming.pending.is_some() {
+        if !self.naming_can_show_molecule() {
             return;
         }
         let Some((ticket, record)) = self.tab.naming.structure.clone() else {
             return;
         };
-        if ticket.revision != self.tab.revision || ticket.epoch != self.tab.file_epoch {
+        if !ticket.is_current(self.tab.revision, self.tab.file_epoch) {
             self.tab.naming.notice = Some(
                 "The drawing changed. Generate its name again before inserting a caption".into(),
             );

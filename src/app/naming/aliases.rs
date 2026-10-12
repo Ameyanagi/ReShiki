@@ -27,7 +27,8 @@ impl App {
             }
             AliasTarget::Structure => {
                 let (ticket, record) = self.tab.naming.structure.as_ref()?;
-                (ticket.revision == self.tab.revision && ticket.epoch == self.tab.file_epoch)
+                ticket
+                    .is_current(self.tab.revision, self.tab.file_epoch)
                     .then_some(record)
             }
         }
@@ -143,8 +144,7 @@ impl App {
     pub(super) fn generated_name_controls(&self) -> Element<'_, Message> {
         let mut content = column![].spacing(8);
         if let Some((ticket, record)) = &self.tab.naming.structure {
-            let current =
-                ticket.revision == self.tab.revision && ticket.epoch == self.tab.file_epoch;
+            let current = ticket.is_current(self.tab.revision, self.tab.file_epoch);
             if !current {
                 content = content.push(text("Previous name · The drawing changed. Generate the selection name again before using it.").size(12));
             }

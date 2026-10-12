@@ -9,6 +9,7 @@ use std::{
 pub(super) const PROTOCOL: u32 = 2;
 pub(super) const WIRE_LIMIT: usize = 32_768;
 pub(super) const OUTPUT_LIMIT: usize = 65_536;
+pub(super) const MAX_NAME_BYTES: usize = 2_048;
 pub(super) const HEAP_BYTES: usize = 96 * 1024 * 1024;
 pub(super) const BACKEND: &str = "opsin-rust";
 pub(super) const PORT_VERSION: &str = opsin::PORT_VERSION;
@@ -95,12 +96,18 @@ pub(super) fn executable() -> Result<PathBuf, String> {
     Ok(current)
 }
 
-fn parse(name: String) -> Result<Response, String> {
-    if name.is_empty() || name.len() > 2_048 || name.chars().any(char::is_control) {
-        return Err(
-            "Enter a chemical name of at most 2048 bytes without control characters".into(),
-        );
+pub(super) fn check_name(name: &str, error: &str) -> Result<(), String> {
+    if name.is_empty() || name.len() > MAX_NAME_BYTES || name.chars().any(char::is_control) {
+        return Err(error.into());
     }
+    Ok(())
+}
+
+fn parse(name: String) -> Result<Response, String> {
+    check_name(
+        &name,
+        "Enter a chemical name of at most 2048 bytes without control characters",
+    )?;
     // Grammar initialization is inside the bounded native allocator, never a foreign runtime.
     let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
     let result = parser.parse(&name, &opsin::ParseOptions::strict());

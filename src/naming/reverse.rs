@@ -1,19 +1,7 @@
-use super::{Cancel, Identity, Provenance, Record, local, rules, worker};
-use std::process::{Command, Stdio};
+use super::{Cancel, Identity, Provenance, Record, client, rules, worker};
+use client::CancelOnDrop;
 
-const LIMITS: reshiki_process::Limits = reshiki_process::Limits {
-    address_bytes: 8 * 1024 * 1024 * 1024,
-    memory_bytes: 384 * 1024 * 1024,
-    cpu_seconds: 20,
-    file_bytes: 8 * 1024 * 1024,
-};
 static SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
-struct StopOnDrop(Cancel);
-impl Drop for StopOnDrop {
-    fn drop(&mut self) {
-        self.0.stop();
-    }
-}
 
 fn generate_worker(smiles: &str, cancel: &Cancel) -> Result<String, String> {
     if cancel.stopped() {
@@ -28,21 +16,11 @@ fn generate_worker(smiles: &str, cancel: &Cancel) -> Result<String, String> {
     if request.len() > worker::WIRE_LIMIT {
         return Err("Local naming request exceeds its wire limit".into());
     }
-    let directory = tempfile::Builder::new()
-        .prefix("reshiki-name-rules-")
-        .tempdir()
-        .map_err(|e| e.to_string())?;
-    let mut command = Command::new(worker::executable()?);
-    command
-        .arg(crate::workers::NAMING_WORKER)
-        .current_dir(directory.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let bytes = local::run_child(&mut command, &request, cancel, LIMITS)?;
+    let bytes = client::run_worker("reshiki-name-rules-", &request, cancel, worker::executable)?;
     parse_response(&bytes, smiles)
 }
 fn parse_response(bytes: &[u8], smiles: &str) -> Result<String, String> {
+    // Keep this wire cap narrower than local::parse_reply's output cap.
     if bytes.len() > worker::WIRE_LIMIT {
         return Err("Local rule response exceeds its wire limit".into());
     }
@@ -58,9 +36,7 @@ fn parse_response(bytes: &[u8], smiles: &str) -> Result<String, String> {
         return Err("Local rule result has inconsistent profile or input identity".into());
     }
     let name = response.result?;
-    if name.is_empty() || name.len() > 2048 || name.chars().any(char::is_control) {
-        return Err("Local naming rules returned an invalid name".into());
-    }
+    worker::check_name(&name, "Local naming rules returned an invalid name")?;
     Ok(name)
 }
 
@@ -68,19 +44,17 @@ fn parse_response(bytes: &[u8], smiles: &str) -> Result<String, String> {
 /// the native graph. Decoder equivalence is separate from the rule tests.
 pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record, String> {
     let expected = super::canonical_smiles(&identity.smiles)?;
-    let stop = StopOnDrop(cancel.clone());
-    let permit = tokio::select! {
-        p=SLOTS.acquire()=>p.map_err(|_|"Local naming rules are unavailable")?,
-        ()=cancel.cancelled()=>return Err("Local name generation was cancelled".into()),
-    };
-    let input = expected.clone();
-    let worker_cancel = cancel.clone();
-    let candidate = tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        generate_worker(&input, &worker_cancel)
-    })
-    .await
-    .map_err(|e| format!("Local naming worker failed: {e}"))??;
+    let stop = CancelOnDrop(cancel.clone());
+    let candidate = client::on_slot(
+        &expected,
+        &cancel,
+        &SLOTS,
+        "Local naming rules are unavailable",
+        "Local name generation was cancelled",
+        "Local naming worker failed",
+        generate_worker,
+    )
+    .await?;
     if cancel.stopped() {
         return Err("Local name generation was cancelled".into());
     }
@@ -88,8 +62,11 @@ pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record
     // while this guard continues to cover cancellation of the whole pipeline.
     let decoder = Cancel::default();
     let reconstructed = tokio::select! {
-        r=super::resolve_name(&candidate,decoder.clone())=>r?,
-        ()=cancel.cancelled()=>{decoder.stop();return Err("Local name generation was cancelled".into());},
+        result = super::resolve_name(&candidate, decoder.clone()) => result?,
+        () = cancel.cancelled() => {
+            decoder.stop();
+            return Err("Local name generation was cancelled".into());
+        },
     };
     super::verify_identity(&expected, &reconstructed.smiles)
         .map_err(|e| format!("Local rule reconstruction failed: {e}"))?;

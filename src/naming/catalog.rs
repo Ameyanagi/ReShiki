@@ -8,6 +8,8 @@ use std::{collections::HashMap, sync::OnceLock};
 pub const VERSION: &str = "ReShiki retained aliases 1";
 const MAX_ENTRIES: usize = 40;
 const MAX_ALIASES: usize = 5;
+const MAX_CATALOG_BYTES: usize = 65_536;
+const MAX_ALIAS_BYTES: usize = 128;
 const DATA: &str = include_str!("catalog/data.json");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,7 +78,7 @@ fn index() -> Result<&'static Index, String> {
 fn load() -> Result<Index, String> {
     // These are compile-time bytes. Keep initialization finite and fail closed
     // on conflicting aliases, duplicate identities or invalid graph data.
-    if DATA.len() > 65_536 {
+    if DATA.len() > MAX_CATALOG_BYTES {
         return Err("The bundled alias catalog exceeds its byte limit".into());
     }
     let catalog: Catalog = serde_json::from_str(DATA)
@@ -97,7 +99,7 @@ fn load() -> Result<Index, String> {
         let mut aliases = Vec::new();
         for alias in entry.aliases {
             if alias.name.is_empty()
-                || alias.name.len() > 128
+                || alias.name.len() > MAX_ALIAS_BYTES
                 || alias.name.chars().any(char::is_control)
             {
                 return Err("The offline alias text is invalid".into());
