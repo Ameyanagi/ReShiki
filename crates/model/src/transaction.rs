@@ -156,14 +156,15 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
 
 /// Consumed, immutable model proof. This is not constructible from a Document.
 pub struct PreparedInsertion {
-    data: crate::generic::PreparedData,
+    document: Document,
+    prepared: crate::generic::PreparedExpansion,
 }
 impl PreparedInsertion {
     pub fn count(&self) -> usize {
-        self.data.count
+        self.prepared.count()
     }
     pub fn bounds(&self) -> (crate::document::Point, crate::document::Point) {
-        self.data.bounds
+        self.prepared.bounds()
     }
 }
 /// Consume the one-shot transport before a host creates its output tab.
@@ -172,7 +173,7 @@ pub fn take_expansion(
 ) -> Result<PreparedInsertion, Rejection> {
     prepared
         .take()
-        .map(|data| PreparedInsertion { data })
+        .map(|document| PreparedInsertion { document, prepared })
         .map_err(Rejection::Invalid)
 }
 /// Install the exact measured native result into a fresh empty drawing. Ordinary
@@ -183,22 +184,12 @@ pub fn install_expansion(
     before: Document,
     prepared: PreparedInsertion,
 ) -> Result<Reconciled, Rejection> {
-    if *doc != before
-        || before.object_ids().next().is_some()
-        || !before.bonds.is_empty()
-        || !before.groups.is_empty()
-        || !before.molecule_names.is_empty()
-        || !before.depth_appearance.is_empty()
-        || !before.abbreviations.is_empty()
-        || !before.reactions.is_empty()
-        || !before.ring_fills.is_empty()
-        || !before.generic.is_empty()
-    {
+    if *doc != before || before.has_content() {
         return Err(Rejection::Invalid(
             "Prepared expansion requires a fresh empty drawing".into(),
         ));
     }
-    *doc = prepared.data.document;
+    *doc = prepared.document;
     Ok(Reconciled { before })
 }
 

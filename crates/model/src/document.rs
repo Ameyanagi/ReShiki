@@ -1,4 +1,7 @@
-use crate::typography::{TextFormat, TextStyle};
+use crate::{
+    generic::Generic,
+    typography::{TextFormat, TextStyle},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
 
@@ -554,6 +557,80 @@ impl Document {
             .chain(self.annotations.iter().map(|a| a.id))
             .chain(self.arrows.iter().map(|a| a.id))
             .chain(self.graphics.iter().map(|a| a.id))
+    }
+    /// Clear drawing content while retaining document settings and preferences.
+    pub fn clear_content(&mut self) {
+        let Self {
+            generic,
+            canvas_theme: _,
+            color_theme: _,
+            custom_theme: _,
+            drawing_style: _,
+            page_layout: _,
+            abbreviations,
+            atom_labels: _,
+            ring_fills,
+            depth_appearance,
+            version: _,
+            atoms,
+            bonds,
+            annotations,
+            molecule_names,
+            arrows,
+            graphics,
+            groups,
+            reactions,
+            recent_colors: _,
+        } = self;
+        atoms.clear();
+        bonds.clear();
+        annotations.clear();
+        arrows.clear();
+        graphics.clear();
+        groups.clear();
+        abbreviations.clear();
+        reactions.clear();
+        ring_fills.clear();
+        depth_appearance.clear();
+        molecule_names.clear();
+        *generic = Generic::default();
+    }
+    /// Whether the document contains any drawing content.
+    pub fn has_content(&self) -> bool {
+        let Self {
+            generic,
+            canvas_theme: _,
+            color_theme: _,
+            custom_theme: _,
+            drawing_style: _,
+            page_layout: _,
+            abbreviations,
+            atom_labels: _,
+            ring_fills,
+            depth_appearance,
+            version: _,
+            atoms,
+            bonds,
+            annotations,
+            molecule_names,
+            arrows,
+            graphics,
+            groups,
+            reactions,
+            recent_colors: _,
+        } = self;
+        !atoms.is_empty()
+            || !bonds.is_empty()
+            || !annotations.is_empty()
+            || !arrows.is_empty()
+            || !graphics.is_empty()
+            || !groups.is_empty()
+            || !abbreviations.is_empty()
+            || !reactions.is_empty()
+            || !ring_fills.is_empty()
+            || !depth_appearance.is_empty()
+            || !molecule_names.is_empty()
+            || !generic.is_empty()
     }
     pub fn validate(&self) -> Result<(), String> {
         crate::projection::validate(self)?;

@@ -29,6 +29,28 @@ pub(super) struct AssemblyCounts {
 }
 impl Presentation {
     pub(super) fn inspect(doc: &Document, work: &mut Work) -> Result<Self, String> {
+        let Document {
+            generic,
+            canvas_theme: _,
+            color_theme: _,
+            custom_theme,
+            drawing_style,
+            page_layout,
+            abbreviations,
+            atom_labels: _,
+            ring_fills,
+            depth_appearance,
+            version: _,
+            atoms,
+            bonds,
+            annotations,
+            molecule_names,
+            arrows,
+            graphics,
+            groups,
+            reactions,
+            recent_colors,
+        } = doc;
         fn records<T>(n: usize) -> usize {
             n.saturating_mul(std::mem::size_of::<T>())
         }
@@ -55,14 +77,14 @@ impl Presentation {
             Ok(size)
         }
         let mut copy = std::mem::size_of::<Document>()
-            .saturating_add(doc.drawing_style.name.len())
-            .saturating_add(doc.drawing_style.font_family.len());
+            .saturating_add(drawing_style.name.len())
+            .saturating_add(drawing_style.font_family.len());
         let mut atom = std::mem::size_of::<crate::document::Atom>() + 128;
         let mut bond = std::mem::size_of::<crate::document::Bond>() + 128;
         let mut retained_pictures = HashSet::new();
         let mut named_members = 0usize;
         let mut attached_ends = 0usize;
-        for a in &doc.atoms {
+        for a in atoms {
             work.charge(1)?;
             let mut size = std::mem::size_of::<crate::document::Atom>()
                 .saturating_add(a.element.len())
@@ -86,7 +108,7 @@ impl Presentation {
             copy = copy.saturating_add(size);
             atom = atom.max(size);
         }
-        for b in &doc.bonds {
+        for b in bonds {
             work.charge(1)?;
             let size = std::mem::size_of::<crate::document::Bond>()
                 .saturating_add(b.display.len())
@@ -98,7 +120,7 @@ impl Presentation {
             copy = copy.saturating_add(size);
             bond = bond.max(size);
         }
-        for a in &doc.annotations {
+        for a in annotations {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::document::Annotation>())
@@ -110,7 +132,7 @@ impl Presentation {
                 copy = copy.saturating_add(style(&span.style));
             }
         }
-        for a in &doc.arrows {
+        for a in arrows {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::document::Arrow>())
@@ -120,7 +142,7 @@ impl Presentation {
                 .saturating_add(usize::from(a.start_anchor.is_some()))
                 .saturating_add(usize::from(a.end_anchor.is_some()));
         }
-        for name in &doc.molecule_names {
+        for name in molecule_names {
             work.charge(1)?;
             named_members = named_members.saturating_add(name.atoms.len());
             copy = copy
@@ -129,7 +151,7 @@ impl Presentation {
                 .saturating_add(name.smiles.len())
                 .saturating_add(name.text.len());
         }
-        for g in &doc.graphics {
+        for g in graphics {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::graphics::Graphic>())
@@ -146,13 +168,13 @@ impl Presentation {
                 }
             }
         }
-        for g in &doc.groups {
+        for g in groups {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::grouping::Group>())
                 .saturating_add(records::<u64>(g.members.len()));
         }
-        for g in &doc.abbreviations {
+        for g in abbreviations {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::abbreviations::Abbreviation>())
@@ -161,13 +183,13 @@ impl Presentation {
                 .saturating_add(optional_style(g.label_style.as_ref()))
                 .saturating_add(records::<u64>(g.members.len()));
         }
-        for f in &doc.ring_fills {
+        for f in ring_fills {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::ring_fills::RingFill>())
                 .saturating_add(records::<u64>(f.atoms.len()));
         }
-        for d in &doc.depth_appearance {
+        for d in depth_appearance {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::depth_appearance::Scope>())
@@ -186,7 +208,7 @@ impl Presentation {
                 }
             }
         }
-        for r in &doc.reactions {
+        for r in reactions {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::reactions::Reaction>())
@@ -199,15 +221,13 @@ impl Presentation {
             }
         }
         copy = copy
-            .saturating_add(records::<crate::color_contrast::Rgb>(
-                doc.recent_colors.len(),
-            ))
+            .saturating_add(records::<crate::color_contrast::Rgb>(recent_colors.len()))
             .saturating_add(
-                doc.page_layout
+                page_layout
                     .as_ref()
                     .map_or(0, |_| std::mem::size_of::<crate::pages::Layout>()),
             );
-        for s in &doc.generic.alternatives {
+        for s in &generic.alternatives {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<super::AlternativeSite>())
@@ -221,8 +241,8 @@ impl Presentation {
                 });
             }
         }
-        copy = copy.saturating_add(records::<super::LinkNode>(doc.generic.links.len()));
-        for r in &doc.generic.repeats {
+        copy = copy.saturating_add(records::<super::LinkNode>(generic.links.len()));
+        for r in &generic.repeats {
             work.charge(1)?;
             copy = copy
                 .saturating_add(std::mem::size_of::<super::RepeatUnit>())
@@ -240,7 +260,7 @@ impl Presentation {
                 copy = copy.saturating_add(label.len());
             }
         }
-        if let Some(t) = &doc.custom_theme {
+        if let Some(t) = custom_theme {
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::theme_files::ThemeFile>())
                 .saturating_add(t.id.len())
@@ -277,12 +297,12 @@ impl Presentation {
             atom,
             bond,
             named_members,
-            names: doc.molecule_names.len(),
+            names: molecule_names.len(),
             attached_ends,
         };
         work.charge(copy.saturating_add(result.reference_work(
             doc,
-            doc.atoms.len(),
+            atoms.len(),
             drawing_size(doc),
         )))?;
         Ok(result)
@@ -2312,7 +2332,30 @@ pub(super) fn certify_translation(
         relative(a.position, old.position, z.position, new.position)?;
     }
     let mut restored = part.clone();
-    for (actual, old) in restored.atoms.iter_mut().zip(&source.atoms) {
+    // Fields bound to `_` are compared verbatim by the final document equality.
+    let Document {
+        generic,
+        canvas_theme: _,
+        color_theme: _,
+        custom_theme: _,
+        drawing_style: _,
+        page_layout: _,
+        abbreviations,
+        atom_labels: _,
+        ring_fills,
+        depth_appearance,
+        version: _,
+        atoms,
+        bonds,
+        annotations,
+        molecule_names,
+        arrows,
+        graphics,
+        groups,
+        reactions,
+        recent_colors: _,
+    } = &mut restored;
+    for (actual, old) in atoms.iter_mut().zip(&source.atoms) {
         check_shift(old.position, actual.position)?;
         if actual.position != old.position.offset(shift.x, shift.y) {
             return Err("Prepared atom lost its common translation".into());
@@ -2328,14 +2371,14 @@ pub(super) fn certify_translation(
             }
         }
     }
-    for b in &mut restored.bonds {
+    for b in bonds {
         undo(&mut b.a)?;
         undo(&mut b.b)?;
         for id in &mut b.stereo_atoms {
             undo(id)?;
         }
     }
-    for (actual, old) in restored.annotations.iter_mut().zip(&source.annotations) {
+    for (actual, old) in annotations.iter_mut().zip(&source.annotations) {
         check_shift(old.position, actual.position)?;
         if actual.position != old.position.offset(shift.x, shift.y) {
             return Err("Prepared annotation lost its common translation".into());
@@ -2343,7 +2386,7 @@ pub(super) fn certify_translation(
         undo(&mut actual.id)?;
         actual.position = old.position;
     }
-    for (actual, old) in restored.arrows.iter_mut().zip(&source.arrows) {
+    for (actual, old) in arrows.iter_mut().zip(&source.arrows) {
         check_shift(old.start, actual.start)?;
         check_shift(old.end, actual.end)?;
         if let Some((a, b)) = old.control.zip(actual.control) {
@@ -2415,7 +2458,7 @@ pub(super) fn certify_translation(
         actual.control = old.control;
         actual.cubic = old.cubic;
     }
-    for (actual, old) in restored.graphics.iter_mut().zip(&source.graphics) {
+    for (actual, old) in graphics.iter_mut().zip(&source.graphics) {
         check_shift(old.origin, actual.origin)?;
         if actual.origin != old.origin.offset(shift.x, shift.y) {
             return Err("Prepared graphic lost its common translation".into());
@@ -2423,38 +2466,34 @@ pub(super) fn certify_translation(
         undo(&mut actual.id)?;
         actual.origin = old.origin;
     }
-    for g in &mut restored.groups {
+    for g in groups {
         undo(&mut g.id)?;
         for id in &mut g.members {
             undo(id)?;
         }
     }
-    for g in &mut restored.abbreviations {
+    for g in abbreviations {
         undo(&mut g.anchor)?;
         for id in &mut g.members {
             undo(id)?;
         }
     }
-    for f in &mut restored.ring_fills {
+    for f in ring_fills {
         for id in &mut f.atoms {
             undo(id)?;
         }
     }
-    for r in &mut restored.reactions {
+    for r in reactions {
         r.remap(&inverse).ok_or("Missing reaction remap")?;
     }
-    for n in &mut restored.molecule_names {
+    for n in molecule_names {
         undo(&mut n.annotation)?;
         for id in &mut n.atoms {
             undo(id)?;
         }
     }
-    restored.depth_appearance =
-        crate::depth_appearance::remap(&restored.depth_appearance, &inverse);
-    restored
-        .generic
-        .remap(&inverse)
-        .ok_or("Missing generic remap")?;
+    *depth_appearance = crate::depth_appearance::remap(depth_appearance, &inverse);
+    generic.remap(&inverse).ok_or("Missing generic remap")?;
     if &restored != source {
         return Err("Prepared tile changed noncoordinate native data".into());
     }

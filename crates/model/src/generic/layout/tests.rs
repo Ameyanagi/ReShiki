@@ -1191,7 +1191,7 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
         let before = unsettled.clone();
         let generated = generic::prepare_expansion(&unsettled, Limits::default()).unwrap();
         let bounds = generated.bounds();
-        let mut doc = generated.take().unwrap().document;
+        let mut doc = generated.take().unwrap();
         assert!(doc.arrows.iter().all(|a| {
             a.start_anchor
                 .as_ref()
@@ -1237,7 +1237,7 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
     let prepared = generic::prepare_expansion(&stale_cache, Limits::default()).unwrap();
     assert_eq!(prepared.count(), 2);
     let bounds = prepared.bounds();
-    let output = prepared.take().unwrap().document;
+    let output = prepared.take().unwrap();
     assert_eq!(
         output
             .atoms
@@ -1318,7 +1318,7 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
     let original = future_cip.clone();
     let prepared = generic::prepare_expansion(&future_cip, Limits::default()).unwrap();
     let bounds = prepared.bounds();
-    let mut output = prepared.take().unwrap().document;
+    let mut output = prepared.take().unwrap();
     assert!(output.atoms.iter().all(|a| a.cip_label.is_none()));
     assert!(output.bonds.iter().all(|b| b.cip_label.is_none()));
     let fresh =
@@ -1343,7 +1343,7 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
     let handle = poisoned.clone();
     assert!(
         std::panic::catch_unwind(move || {
-            let _held = handle.data.lock().unwrap();
+            let _held = handle.data.document.lock().unwrap();
             panic!("intentional transport poison");
         })
         .is_err()
@@ -1383,7 +1383,7 @@ fn native_variable_arene_unique_drawing_fits_default_work_and_measured_ink() {
     // Direct pose coverage below still exercises every one of the six sites.
     assert_eq!(prepared.count(), 1);
     let bounds = prepared.bounds();
-    let output = prepared.take().unwrap().document;
+    let output = prepared.take().unwrap();
     assert_eq!((output.atoms.len(), output.bonds.len()), (8, 8));
     assert_eq!(output.generic, Default::default());
     assert!(
@@ -1587,7 +1587,7 @@ fn materialized_visible_element_is_charged_before_label_measurement() {
     );
     let prepared = generic::prepare_expansion(&source, Limits::default()).unwrap();
     let bounds = prepared.bounds();
-    let output = prepared.take().unwrap().document;
+    let output = prepared.take().unwrap();
     union_actual_ink_contained(&output, bounds);
     assert_eq!(source, before);
 }
