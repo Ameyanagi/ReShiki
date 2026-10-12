@@ -1,9 +1,12 @@
 use crate::document::{Atom, Bond, Document, Point};
 use crate::style::DEFAULT as STYLE;
+use bond_pass::{BondInputs, BondPass, DativeHandling, Resolve};
 use charge_placement::{ChargeLayout, place_automatic_charge};
-use depth_field::{DepthField, bond_depth_field};
+use depth_field::{DepthField, bond_depth_field_with_faces};
 pub(crate) use occlusion::{OcclusionSource, occlusion_ink};
+use projected_bonds::FaceIndex;
 pub(crate) mod attachment_ink;
+mod bond_pass;
 mod charge_placement;
 pub(crate) mod depth_field;
 mod occlusion;
@@ -817,9 +820,12 @@ fn label_box_end(
 
 /// Resolve automatic positioning identically for drawing and repeated-click edits.
 pub fn effective_double_position(doc: &Document, bond: &Bond) -> crate::bonds::DoublePosition {
+    double_position(&FaceIndex::new(doc), bond)
+}
+pub(crate) fn double_position(faces: &FaceIndex<'_>, bond: &Bond) -> crate::bonds::DoublePosition {
     use crate::bonds::DoublePosition as P;
     match bond.double_position {
-        P::Auto => match automatic_double_side(doc, bond) {
+        P::Auto => match automatic_double_side(faces, bond) {
             Some(side) if side < 0. => P::Left,
             Some(_) => P::Right,
             // Keep the bold stroke on the atom-to-atom skeleton. Centering
@@ -830,12 +836,13 @@ pub fn effective_double_position(doc: &Document, bond: &Bond) -> crate::bonds::D
         position => position,
     }
 }
-fn automatic_double_side(doc: &Document, bond: &Bond) -> Option<f32> {
+fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Option<f32> {
     if matches!(bond.order, 2 | 7)
-        && let Some(side) = projected_bonds::automatic_side(doc, bond)
+        && let Some(side) = faces.automatic_side(bond)
     {
         return Some(side);
     }
+    let doc = faces.doc();
     let center = ring_center(doc, bond.a, bond.b)?;
     let a = doc.atom(bond.a)?.position;
     let b = doc.atom(bond.b)?.position;
@@ -900,44 +907,29 @@ pub fn primitives_with_opacity(
     doc: &Document,
     opacity: &crate::rear_opacity::Paint,
 ) -> Vec<Primitive> {
-    let paint = crate::depth_appearance::Paint::new(doc);
-    let painted = paint.materialize(doc);
-    let resolved = crate::canvas_theme::canonical_document(&painted);
-    let doc = resolved.as_ref();
+    let inputs = BondInputs::prepare(
+        doc,
+        opacity,
+        Resolve::Scene,
+        DativeHandling::ReverseProjection,
+    );
+    let doc = inputs.doc();
     let style = &doc.drawing_style;
     let mut out = vec![];
-    let AtomLabels {
-        runs: labels,
-        bounds: label_bounds,
-    } = collect_atom_labels(doc, opacity);
-    let orbital_label_boxes = orbital_label_boxes(doc, &labels, opacity);
+    let orbital_label_boxes = orbital_label_boxes(doc, &inputs.labels().runs, opacity);
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
     push_underlays(&mut out, doc, &graphics, opacity, &orbital_label_boxes);
-    let RingStrokes {
-        arcs,
-        circles,
-        crossing_gaps,
-    } = push_ring_strokes(&mut out, doc, opacity);
-    let projection_paint = projection_render_copy(doc);
-    let doc = projection_paint.as_ref();
+    let rings = push_ring_strokes(&mut out, doc, opacity);
+    let pass = BondPass::new(&inputs);
+    let doc = pass.doc;
     // Fill joined bond outlines together. Separate antialiased polygons leave
     // translucent seams even when their mathematical corners agree exactly.
-    let joins = crate::bond_joins::Joins::new(doc);
     let mut joined: std::collections::BTreeMap<
         (crate::palette::Color, u32),
         Vec<crate::graphics::PathCommand>,
     > = Default::default();
-    let scene = BondScene {
-        doc,
-        style,
-        arcs: &arcs,
-        circles: &circles,
-        label_bounds: &label_bounds,
-        joins: &joins,
-        crossing_gaps: &crossing_gaps,
-        opacity,
-    };
+    let scene = pass.scene(style, &rings, opacity);
     let bond_paint_start = out.len();
     for (bond_index, b) in doc
         .bonds
@@ -947,12 +939,19 @@ pub fn primitives_with_opacity(
     {
         push_bond(scene, &mut out, &mut joined, bond_index, b, None);
     }
-    push_junctions(&mut out, &mut joined, &joins, &crossing_gaps, doc, opacity);
+    push_junctions(
+        &mut out,
+        &mut joined,
+        &pass.joins,
+        &rings.crossing_gaps,
+        doc,
+        opacity,
+    );
     push_joined_outlines(&mut out, joined);
     if opacity.has_visibility() {
         paint_rear_before_front(&mut out, bond_paint_start);
     }
-    push_atom_labels(&mut out, doc, &labels, opacity);
+    push_atom_labels(&mut out, doc, &pass.labels.runs, opacity);
     push_arrows_and_annotations(&mut out, doc);
     out.extend(
         graphics
@@ -1068,6 +1067,17 @@ struct RingStrokes {
     arcs: crate::ring_arcs::Arcs,
     circles: Vec<crate::aromatic::Circle>,
     crossing_gaps: Vec<Vec<crate::crossings::Gap>>,
+}
+impl RingStrokes {
+    /// Occlusion uses stored ring geometry without ring ink or crossing gaps,
+    /// unlike the scene/picking stage in push_ring_strokes.
+    fn without_gaps(doc: &Document) -> Self {
+        Self {
+            arcs: crate::ring_arcs::render(doc),
+            circles: crate::aromatic::circles(doc),
+            crossing_gaps: vec![vec![]; doc.bonds.len()],
+        }
+    }
 }
 fn push_ring_strokes(
     out: &mut Vec<Primitive>,
@@ -1311,6 +1321,7 @@ struct BondScene<'a, 'd> {
     circles: &'a [crate::aromatic::Circle],
     label_bounds: &'a std::collections::HashMap<u64, Vec<(Point, Point)>>,
     joins: &'a crate::bond_joins::Joins<'d>,
+    faces: &'a FaceIndex<'d>,
     crossing_gaps: &'a [Vec<crate::crossings::Gap>],
     opacity: &'a crate::rear_opacity::Paint,
 }
@@ -1474,7 +1485,7 @@ fn finish_bond_paint(
                 .depth
                 .as_ref()
                 .map(|r| r.field)
-                .unwrap_or_else(|| bond_depth_field(scene.doc, b));
+                .unwrap_or_else(|| bond_depth_field_with_faces(scene.faces, b));
             sources.push((field, vec![piece.primitive.clone()]));
         }
     }
@@ -1571,12 +1582,12 @@ fn push_bond_rails(
     depth: bool,
 ) {
     let BondScene {
-        doc,
         style,
         arcs,
         circles,
         label_bounds,
         joins,
+        faces,
         ..
     } = scene;
     let BondFrame {
@@ -1591,13 +1602,13 @@ fn push_bond_rails(
     } = frame;
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
     let inward = if b.order == 4 {
-        automatic_double_side(doc, b).unwrap_or(1.)
+        automatic_double_side(faces, b).unwrap_or(1.)
     } else {
         1.
     };
     use crate::bonds::DoublePosition;
     let position = if matches!(b.order, 2 | 7) {
-        effective_double_position(doc, b)
+        double_position(faces, b)
     } else {
         DoublePosition::Center
     };
@@ -1628,8 +1639,7 @@ fn push_bond_rails(
         let projected =
             if matches!(order, 2 | 7) && b.double_position == DoublePosition::Auto && *offset != 0.
             {
-                projected_bonds::rail_depth(
-                    doc,
+                faces.rail_depth(
                     b,
                     start,
                     end,

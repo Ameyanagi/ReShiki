@@ -1,5 +1,6 @@
 //! Depth interpolation for scene ink and view-occlusion geometry.
 //! Positive Z faces the viewer; the existing arithmetic preserves paint output.
+use super::projected_bonds::FaceIndex;
 use crate::document::{Bond, Document, Point};
 
 /// Exclusive plane-fit residual bound after evaluating depth as f32.
@@ -99,6 +100,11 @@ impl DepthField {
 }
 
 pub(crate) fn bond_depth_field(doc: &Document, bond: &Bond) -> DepthField {
+    bond_depth_field_with_faces(&FaceIndex::new(doc), bond)
+}
+
+pub(crate) fn bond_depth_field_with_faces(faces: &FaceIndex<'_>, bond: &Bond) -> DepthField {
+    let doc = faces.doc();
     let (Some(a), Some(b)) = (doc.atom(bond.a), doc.atom(bond.b)) else {
         return DepthField::Constant(0.);
     };
@@ -109,7 +115,8 @@ pub(crate) fn bond_depth_field(doc: &Document, bond: &Bond) -> DepthField {
         wb: b.depth,
     };
     if matches!(bond.order, 2 | 7) && bond.double_position == crate::bonds::DoublePosition::Auto {
-        crate::scene::projected_bonds::face_atoms(doc, bond)
+        faces
+            .face_atoms(bond)
             .and_then(|ids| {
                 let vertices: Vec<_> = ids.iter().filter_map(|id| doc.atom(*id)).collect();
                 let n = vertices.len().max(1) as f32;

@@ -342,3 +342,198 @@ fn rear_opacity_preserves_cage_xyz_and_exact_projected_rail_at_100_percent() {
         assert_eq!(scene::svg(&doc), svg);
     }
 }
+
+fn assert_same_face(actual: Option<&Face>, expected: Option<&Face>) {
+    match (actual, expected) {
+        (Some(a), Some(b)) => {
+            assert_eq!(a.atoms, b.atoms);
+            assert_eq!(a.points, b.points);
+            assert_eq!(a.side, b.side);
+            assert_eq!(a.tangent, b.tangent);
+            assert_eq!(a.inward, b.inward);
+            assert_eq!(a.origin, b.origin);
+            assert_eq!(a.end, b.end);
+            assert_eq!(a.tangent_xyz, b.tangent_xyz);
+            assert_eq!(a.inward_xyz, b.inward_xyz);
+        }
+        (None, None) => {}
+        _ => panic!("Memoization changed face presence"),
+    }
+}
+
+fn assert_same_rail(actual: Option<Option<RailDepth>>, expected: Option<Option<RailDepth>>) {
+    match (actual, expected) {
+        (Some(Some(a)), Some(Some(b))) => {
+            assert_eq!(a.points, b.points);
+            assert_eq!(a.support, b.support);
+            match (a.field, b.field) {
+                (
+                    DepthField::Bond { a, b, wa, wb },
+                    DepthField::Bond {
+                        a: c,
+                        b: d,
+                        wa: wc,
+                        wb: wd,
+                    },
+                ) => assert_eq!((a, b, wa, wb), (c, d, wc, wd)),
+                _ => panic!("Projected rail lost its bond depth field"),
+            }
+        }
+        (Some(None), Some(None)) | (None, None) => {}
+        _ => panic!("Memoization changed rail presence or collapse"),
+    }
+}
+
+fn indexed_secondary(index: &FaceIndex<'_>, bond: &Bond) -> Option<Option<RailDepth>> {
+    let doc = index.doc();
+    let side = match scene::effective_double_position(doc, bond) {
+        DoublePosition::Left => -1.,
+        DoublePosition::Right => 1.,
+        _ => panic!("Projected ring lost its backbone"),
+    };
+    let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+    index.rail_depth(
+        bond,
+        doc.atom(bond.a).unwrap().position,
+        doc.atom(bond.b).unwrap().position,
+        spacing * side,
+        spacing * 0.75,
+        doc.drawing_style.line_width() / 2.,
+    )
+}
+
+#[test]
+fn memoized_faces_and_rails_agree_with_single_queries() {
+    let mut edge_on = ring(0.);
+    for atom in &mut edge_on.atoms {
+        atom.depth = atom.position.y;
+        atom.position.y = 0.;
+    }
+    let documents = [
+        Document::from_json(
+            include_str!("../../../../../tests/fixtures/projected-double-bonds/c60.rsk").as_bytes(),
+        )
+        .unwrap(),
+        Document::from_json(
+            include_str!("../../../../../tests/fixtures/projected-double-bonds/c70.rsk").as_bytes(),
+        )
+        .unwrap(),
+        ring(70.),
+        edge_on,
+    ];
+    let mut collapsed = false;
+    for doc in &documents {
+        let index = FaceIndex::new(doc);
+        for bond in &doc.bonds {
+            let mut queries = vec![bond.clone()];
+            if bond.order == 2 {
+                let mut reversed = bond.clone();
+                reversed.reverse();
+                queries.push(reversed);
+            }
+            for query in &queries {
+                for _ in 0..2 {
+                    let cached = index.face(query);
+                    assert_same_face(cached.as_deref(), face(doc, query).as_ref());
+                    if let Some(cached) = cached {
+                        assert!(Rc::ptr_eq(&cached, &index.face(query).unwrap()));
+                    }
+                    assert_eq!(index.automatic_side(query), automatic_side(doc, query));
+                    assert_eq!(index.face_atoms(query), face_atoms(doc, query));
+                    if query.order == 2 {
+                        let actual = indexed_secondary(&index, query);
+                        collapsed |= matches!(actual, Some(None));
+                        let side = index.automatic_side(query).unwrap();
+                        let spacing = doc.drawing_style.bond_length_world
+                            * doc.drawing_style.bond_spacing_ratio;
+                        let expected = rail_depth(
+                            doc,
+                            query,
+                            doc.atom(query.a).unwrap().position,
+                            doc.atom(query.b).unwrap().position,
+                            spacing * side,
+                            spacing * 0.75,
+                            doc.drawing_style.line_width() / 2.,
+                        );
+                        assert_same_rail(actual, expected);
+                    }
+                }
+            }
+        }
+    }
+    assert!(collapsed, "Agreement must cover Some(None) collapsed rails");
+}
+
+#[test]
+fn indexed_face_choice_is_stable_under_reordering_and_bond_reversal() {
+    let doc: Document = serde_json::from_str(include_str!(
+        "../../../../../tests/fixtures/projected-double-bonds/c70.rsk"
+    ))
+    .unwrap();
+    let mut reordered = doc.clone();
+    reordered.atoms.reverse();
+    reordered.bonds.reverse();
+    for bond in &mut reordered.bonds {
+        bond.reverse();
+    }
+    let index = FaceIndex::new(&doc);
+    let reordered_index = FaceIndex::new(&reordered);
+    for bond in doc.bonds.iter().filter(|b| b.order == 2) {
+        let reversed = reordered
+            .bonds
+            .iter()
+            .find(|b| b.a == bond.b && b.b == bond.a)
+            .unwrap();
+        let original_face = index.face(bond).unwrap();
+        let reversed_face = reordered_index.face(reversed).unwrap();
+        assert_eq!(original_face.atoms, reversed_face.atoms);
+        assert_eq!(original_face.points, reversed_face.points);
+        assert_eq!(original_face.side, -reversed_face.side);
+        match (
+            indexed_secondary(&index, bond).unwrap(),
+            indexed_secondary(&reordered_index, reversed).unwrap(),
+        ) {
+            (Some(a), Some(b)) => {
+                assert!(a.points.0.distance(b.points.1) < 0.002);
+                assert!(a.points.1.distance(b.points.0) < 0.002);
+            }
+            (None, None) => {}
+            _ => panic!("Reversal changed indexed secondary visibility"),
+        }
+    }
+}
+
+#[test]
+fn indexed_search_budget_is_per_query() {
+    let mut dense = Document::default();
+    for index in 0..100 {
+        let id = dense.add_atom("C", Point::new(index as f32, (index % 3) as f32));
+        dense.atom_mut(id).unwrap().depth = (index % 7) as f32;
+    }
+    let ids = dense.all_ids();
+    for (index, a) in ids.iter().enumerate() {
+        for b in ids.iter().skip(index + 1) {
+            dense.add_bond(*a, *b, 1, "plain");
+        }
+    }
+    let ring_start = dense.bonds.len();
+    let ring_ids = editing::ring(&mut dense, Point::new(1000., 1000.), 6, false, 0.);
+    projection::tilt(&mut dense, &ring_ids, 70., true);
+    let index = FaceIndex::new(&dense);
+    for bond in dense.bonds.iter().take(5) {
+        assert_eq!(index.paths(bond), paths(&dense, bond));
+        assert!(index.paths(bond).is_empty());
+        assert_same_face(index.face(bond).as_deref(), face(&dense, bond).as_ref());
+        assert!(index.face(bond).is_none());
+        assert!(index.memo.borrow().contains_key(&(bond.a, bond.b)));
+    }
+    let ring_bond = &dense.bonds[ring_start];
+    assert_same_face(
+        index.face(ring_bond).as_deref(),
+        face(&dense, ring_bond).as_ref(),
+    );
+    assert!(
+        index.face(ring_bond).is_some(),
+        "An exhausted query spent the next query's budget"
+    );
+}

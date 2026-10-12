@@ -5,7 +5,11 @@ use crate::{
     polygon::closed_edges,
     projection::vector::{V, cross, dot, sub, unit, xyz},
 };
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::{
+    cell::{OnceCell, RefCell},
+    collections::{BTreeMap, HashMap, VecDeque},
+    rc::Rc,
+};
 
 const MAX_RING: usize = 24;
 const SEARCH_BUDGET: usize = 4096;
@@ -20,6 +24,7 @@ fn cross_xy(a: Point, b: Point) -> f32 {
     a.x * b.y - a.y * b.x
 }
 
+#[cfg_attr(test, derive(Clone))]
 struct Face {
     atoms: Vec<u64>,
     points: Vec<Point>,
@@ -32,17 +37,23 @@ struct Face {
     inward_xyz: V,
 }
 
-/// Enumerate shortest alternate paths with sorted neighbors. The canonical
-/// endpoint order makes equal-sized incident faces stable under bond reversal
-/// and insertion-order changes; camera angle never changes the chosen face.
-fn paths(doc: &Document, bond: &Bond) -> Vec<Vec<u64>> {
-    let (from, to) = (bond.a.min(bond.b), bond.a.max(bond.b));
+type FaceMemo = HashMap<(u64, u64), Option<Rc<Face>>>;
+
+/// Built once per immutable document. Adjacency is shared, but each face search
+/// gets its own budget. Stored endpoint order keys the direction-dependent face.
+/// The depth flag and adjacency are computed on first use, so a single query
+/// costs no more than before.
+pub(crate) struct FaceIndex<'d> {
+    doc: &'d Document,
+    depth: OnceCell<bool>,
+    neighbors: OnceCell<BTreeMap<u64, Vec<u64>>>,
+    memo: RefCell<FaceMemo>,
+}
+
+fn adjacency(doc: &Document) -> BTreeMap<u64, Vec<u64>> {
     let mut neighbors: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     for b in &doc.bonds {
-        if !matches!(b.order, 1 | 2 | 4 | 7)
-            || !doc.bond_visible(b.a, b.b)
-            || (b.a.min(b.b), b.a.max(b.b)) == (from, to)
-        {
+        if !matches!(b.order, 1 | 2 | 4 | 7) || !doc.bond_visible(b.a, b.b) {
             continue;
         }
         neighbors.entry(b.a).or_default().push(b.b);
@@ -52,6 +63,22 @@ fn paths(doc: &Document, bond: &Bond) -> Vec<Vec<u64>> {
         adjacent.sort_unstable();
         adjacent.dedup();
     }
+    neighbors
+}
+
+/// Unmemoized single query over fresh adjacency; tests only.
+#[cfg(test)]
+fn paths(doc: &Document, bond: &Bond) -> Vec<Vec<u64>> {
+    paths_in(&adjacency(doc), bond)
+}
+
+/// Enumerate shortest alternate paths with sorted neighbors. The canonical
+/// endpoint order makes equal-sized incident faces stable under bond reversal
+/// and insertion-order changes; camera angle never changes the chosen face.
+/// The shared adjacency contains the queried bond: both walks skip its
+/// endpoint pair before charging the budget, as if it had never been added.
+fn paths_in(neighbors: &BTreeMap<u64, Vec<u64>>, bond: &Bond) -> Vec<Vec<u64>> {
+    let (from, to) = (bond.a.min(bond.b), bond.a.max(bond.b));
     let mut budget = SEARCH_BUDGET;
     let mut distances = HashMap::from([(to, 0)]);
     let mut queue = VecDeque::from([to]);
@@ -68,7 +95,13 @@ fn paths(doc: &Document, bond: &Bond) -> Vec<Vec<u64>> {
         {
             continue;
         }
-        for next in neighbors.get(&id).into_iter().flatten().copied() {
+        for next in neighbors
+            .get(&id)
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|next| (id.min(*next), id.max(*next)) != (from, to))
+        {
             if budget == 0 {
                 return vec![];
             }
@@ -100,7 +133,14 @@ fn paths(doc: &Document, bond: &Bond) -> Vec<Vec<u64>> {
         let Some(depth) = distances.get(&id).copied() else {
             continue;
         };
-        for next in neighbors.get(&id).into_iter().flatten().rev().copied() {
+        for next in neighbors
+            .get(&id)
+            .into_iter()
+            .flatten()
+            .rev()
+            .copied()
+            .filter(|next| (id.min(*next), id.max(*next)) != (from, to))
+        {
             if distances.get(&next).is_some_and(|d| *d + 1 == depth) {
                 let mut path = path.clone();
                 path.push(next);
@@ -111,16 +151,57 @@ fn paths(doc: &Document, bond: &Bond) -> Vec<Vec<u64>> {
     result
 }
 
-fn face(doc: &Document, bond: &Bond) -> Option<Face> {
-    // Ordinary 2D diagrams, including components translated in depth, keep
-    // their established screen-space positioning and spacing exactly.
-    if !doc.atoms.iter().any(|a| a.depth.abs() > 0.001) {
-        return None;
+impl<'d> FaceIndex<'d> {
+    pub(crate) fn new(doc: &'d Document) -> Self {
+        Self {
+            doc,
+            depth: OnceCell::new(),
+            neighbors: OnceCell::new(),
+            memo: RefCell::new(HashMap::new()),
+        }
     }
+
+    pub(crate) fn doc(&self) -> &'d Document {
+        self.doc
+    }
+
+    fn paths(&self, bond: &Bond) -> Vec<Vec<u64>> {
+        paths_in(self.neighbors.get_or_init(|| adjacency(self.doc)), bond)
+    }
+
+    fn face(&self, bond: &Bond) -> Option<Rc<Face>> {
+        // Ordinary 2D diagrams, including components translated in depth, keep
+        // their established screen-space positioning and spacing exactly.
+        if !*self
+            .depth
+            .get_or_init(|| self.doc.atoms.iter().any(|a| a.depth.abs() > 0.001))
+        {
+            return None;
+        }
+        let key = (bond.a, bond.b);
+        if let Some(face) = self.memo.borrow().get(&key) {
+            return face.clone();
+        }
+        let face = find_face(self, bond).map(Rc::new);
+        self.memo.borrow_mut().insert(key, face.clone());
+        face
+    }
+
+    pub(crate) fn face_atoms(&self, bond: &Bond) -> Option<Vec<u64>> {
+        Some(self.face(bond)?.atoms.clone())
+    }
+
+    pub(super) fn automatic_side(&self, bond: &Bond) -> Option<f32> {
+        Some(self.face(bond)?.side)
+    }
+}
+
+fn find_face(faces: &FaceIndex<'_>, bond: &Bond) -> Option<Face> {
+    let doc = faces.doc;
     let a = xyz(doc.atom(bond.a)?);
     let b = xyz(doc.atom(bond.b)?);
     let t = unit(sub(b, a))?;
-    let paths = paths(doc, bond);
+    let paths = faces.paths(bond);
     let (low, high) = paths
         .iter()
         .flatten()
@@ -206,6 +287,11 @@ fn face(doc: &Document, bond: &Bond) -> Option<Face> {
     None
 }
 
+#[cfg(test)]
+fn face(doc: &Document, bond: &Bond) -> Option<Face> {
+    FaceIndex::new(doc).face(bond).map(|face| (*face).clone())
+}
+
 fn convex(points: &[Point], tolerance: f32) -> bool {
     let mut orientation = 0.;
     for ((a, b), c) in points
@@ -226,12 +312,16 @@ fn convex(points: &[Point], tolerance: f32) -> bool {
     true
 }
 
+/// Unmemoized single query; tests check the index against it.
+#[cfg(test)]
 pub(crate) fn face_atoms(doc: &Document, bond: &Bond) -> Option<Vec<u64>> {
-    Some(face(doc, bond)?.atoms)
+    FaceIndex::new(doc).face_atoms(bond)
 }
 
+/// Unmemoized single query; tests check the index against it.
+#[cfg(test)]
 pub(super) fn automatic_side(doc: &Document, bond: &Bond) -> Option<f32> {
-    Some(face(doc, bond)?.side)
+    FaceIndex::new(doc).automatic_side(bond)
 }
 
 /// `None` keeps the established 2D fallback; `Some(None)` means a valid face
@@ -258,6 +348,8 @@ pub(crate) struct RailDepth {
     pub field: DepthField,
     pub support: Vec<u64>,
 }
+/// Unmemoized single query; tests check the index against it.
+#[cfg(test)]
 pub(crate) fn rail_depth(
     doc: &Document,
     bond: &Bond,
@@ -267,53 +359,70 @@ pub(crate) fn rail_depth(
     trim: f32,
     half_width: f32,
 ) -> Option<Option<RailDepth>> {
-    let face = face(doc, bond)?;
-    let d = offset * face.side;
-    let tangent_length = face.tangent.distance(Point::default());
-    let gap = cross_xy(face.tangent, face.inward).abs() * d.abs() / tangent_length.max(0.001);
-    if gap < doc.drawing_style.line_width() / 2. {
-        return Some(None);
+    FaceIndex::new(doc).rail_depth(bond, start, end, offset, trim, half_width)
+}
+
+impl FaceIndex<'_> {
+    /// `None` keeps the established 2D fallback; `Some(None)` means a valid
+    /// face whose rail is too collapsed to draw.
+    pub(crate) fn rail_depth(
+        &self,
+        bond: &Bond,
+        start: Point,
+        end: Point,
+        offset: f32,
+        trim: f32,
+        half_width: f32,
+    ) -> Option<Option<RailDepth>> {
+        let doc = self.doc;
+        let face = self.face(bond)?;
+        let d = offset * face.side;
+        let tangent_length = face.tangent.distance(Point::default());
+        let gap = cross_xy(face.tangent, face.inward).abs() * d.abs() / tangent_length.max(0.001);
+        if gap < doc.drawing_style.line_width() / 2. {
+            return Some(None);
+        }
+        let first = start.offset(
+            face.inward.x * d + face.tangent.x * trim,
+            face.inward.y * d + face.tangent.y * trim,
+        );
+        let last = end.offset(
+            face.inward.x * d - face.tangent.x * trim,
+            face.inward.y * d - face.tangent.y * trim,
+        );
+        // Inward offset rails are shortened against the actual projected face.
+        // Explicit outward or centered rails retain their chosen arrangement.
+        let points = if d > 0. && trim > 0. {
+            clip(first, last, &face.points, half_width)
+        } else {
+            Some((first, last))
+        };
+        let axis = minus(xy(face.end), xy(face.origin));
+        let length = dot([axis.x, axis.y, 0.], [axis.x, axis.y, 0.]);
+        if length <= 0.000001 || !length.is_finite() {
+            return Some(None);
+        }
+        let lift = |p: Point| {
+            let delta = minus(p, xy(face.origin));
+            let t = (delta.x * axis.x + delta.y * axis.y) / length;
+            face.origin[2] + t * (face.end[2] - face.origin[2])
+        };
+        let first_z = lift(start) + d * face.inward_xyz[2] + trim * face.tangent_xyz[2];
+        let last_z = lift(end) + d * face.inward_xyz[2] - trim * face.tangent_xyz[2];
+        if !first_z.is_finite() || !last_z.is_finite() {
+            return Some(None);
+        }
+        Some(points.map(|points| RailDepth {
+            points,
+            field: DepthField::Bond {
+                a: first,
+                b: last,
+                wa: first_z,
+                wb: last_z,
+            },
+            support: face.atoms.clone(),
+        }))
     }
-    let first = start.offset(
-        face.inward.x * d + face.tangent.x * trim,
-        face.inward.y * d + face.tangent.y * trim,
-    );
-    let last = end.offset(
-        face.inward.x * d - face.tangent.x * trim,
-        face.inward.y * d - face.tangent.y * trim,
-    );
-    // Inward offset rails are shortened against the actual projected face.
-    // Explicit outward or centered rails retain their chosen arrangement.
-    let points = if d > 0. && trim > 0. {
-        clip(first, last, &face.points, half_width)
-    } else {
-        Some((first, last))
-    };
-    let axis = minus(xy(face.end), xy(face.origin));
-    let length = dot([axis.x, axis.y, 0.], [axis.x, axis.y, 0.]);
-    if length <= 0.000001 || !length.is_finite() {
-        return Some(None);
-    }
-    let lift = |p: Point| {
-        let delta = minus(p, xy(face.origin));
-        let t = (delta.x * axis.x + delta.y * axis.y) / length;
-        face.origin[2] + t * (face.end[2] - face.origin[2])
-    };
-    let first_z = lift(start) + d * face.inward_xyz[2] + trim * face.tangent_xyz[2];
-    let last_z = lift(end) + d * face.inward_xyz[2] - trim * face.tangent_xyz[2];
-    if !first_z.is_finite() || !last_z.is_finite() {
-        return Some(None);
-    }
-    Some(points.map(|points| RailDepth {
-        points,
-        field: DepthField::Bond {
-            a: first,
-            b: last,
-            wa: first_z,
-            wb: last_z,
-        },
-        support: face.atoms,
-    }))
 }
 
 fn clip(first: Point, last: Point, points: &[Point], margin: f32) -> Option<(Point, Point)> {

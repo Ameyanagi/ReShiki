@@ -147,32 +147,17 @@ fn rendered_bond_parts(
     doc: &Document,
     opacity: &crate::rear_opacity::Paint,
 ) -> Vec<Vec<Primitive>> {
-    // Exactly the scene's detached color/style resolution and molecular bond
-    // pass. Ring strokes provide crossing gaps; their own ink is not attributed
-    // to an arbitrary bond. Unrelated labels, pictures and arrows cannot make a
-    // hidden chemical bond eligible. The one-time result is shared by all
-    // candidate bonds of this pointer/commit query.
-    let paint = crate::depth_appearance::Paint::new(doc);
-    let painted = paint.materialize(doc);
-    let resolved = crate::canvas_theme::canonical_document(&painted);
-    let doc = resolved.as_ref();
-    let RingStrokes {
-        arcs,
-        circles,
-        crossing_gaps,
-    } = push_ring_strokes(&mut Vec::new(), doc, opacity);
-    let labels = collect_atom_labels(doc, opacity);
-    let joins = crate::bond_joins::Joins::new(doc);
-    let scene = BondScene {
-        doc,
-        style: &doc.drawing_style,
-        arcs: &arcs,
-        circles: &circles,
-        label_bounds: &labels.bounds,
-        joins: &joins,
-        crossing_gaps: &crossing_gaps,
-        opacity,
-    };
+    // The scene's detached color/style preparation and molecular bond pass,
+    // except that dative projection bonds keep their stored direction (see
+    // DativeHandling). Ring strokes provide crossing gaps; their own ink is not
+    // attributed to an arbitrary bond. Unrelated labels, pictures and arrows
+    // cannot make a hidden chemical bond eligible. The one-time result is
+    // shared by all candidate bonds of this pointer/commit query.
+    let inputs = BondInputs::prepare(doc, opacity, Resolve::Scene, DativeHandling::AsStored);
+    let rings = push_ring_strokes(&mut Vec::new(), inputs.doc(), opacity);
+    let pass = BondPass::new(&inputs);
+    let doc = pass.doc;
+    let scene = pass.scene(&doc.drawing_style, &rings, opacity);
     doc.bonds
         .iter()
         .enumerate()

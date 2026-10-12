@@ -1,6 +1,9 @@
 //! Vector ink sources for chemical depth occlusion.
 
-use super::{BondScene, DepthField, Document, Primitive, collect_atom_labels, push_bond};
+use super::{
+    BondInputs, BondPass, DativeHandling, DepthField, Document, Primitive, Resolve, RingStrokes,
+    push_bond,
+};
 
 /// Real vector ink grouped with its chemical owners, layer, and current depth.
 pub(crate) struct OcclusionSource {
@@ -18,21 +21,11 @@ pub(crate) fn occlusion_ink(doc: &Document) -> Vec<OcclusionSource> {
     drawing.depth_appearance.clear();
     let doc = &drawing;
     let opacity = crate::rear_opacity::Paint::new(doc);
-    let arcs = crate::ring_arcs::render(doc);
-    let circles = crate::aromatic::circles(doc);
-    let labels = collect_atom_labels(doc, &opacity);
-    let joins = crate::bond_joins::Joins::new(doc);
-    let gaps = vec![vec![]; doc.bonds.len()];
-    let scene = BondScene {
-        doc,
-        style: &doc.drawing_style,
-        arcs: &arcs,
-        circles: &circles,
-        label_bounds: &labels.bounds,
-        joins: &joins,
-        crossing_gaps: &gaps,
-        opacity: &opacity,
-    };
+    let inputs = BondInputs::prepare(doc, &opacity, Resolve::AsGiven, DativeHandling::AsStored);
+    let rings = RingStrokes::without_gaps(inputs.doc());
+    let pass = BondPass::new(&inputs);
+    let doc = pass.doc;
+    let scene = pass.scene(&doc.drawing_style, &rings, &opacity);
     let mut ink = vec![];
     for (index, bond) in doc
         .bonds
@@ -62,7 +55,7 @@ pub(crate) fn occlusion_ink(doc: &Document) -> Vec<OcclusionSource> {
     }
     for atom in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
         let mut parts = vec![];
-        for part in labels.runs.get(&atom.id).into_iter().flatten() {
+        for part in pass.labels.runs.get(&atom.id).into_iter().flatten() {
             // Unknown/custom font outlines conservatively do not hide ink.
             // Default label outlines preserve counters instead of using a box.
             if let Primitive::Text {
