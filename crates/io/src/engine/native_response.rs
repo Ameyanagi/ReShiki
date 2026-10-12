@@ -4,7 +4,10 @@
 //! supplies the pinned standalone InChI helper and prepares both molecular and
 //! drawing states from the same request snapshot. All chemical work and drawing
 //! serialization run on blocking tasks; only the bounded helper exchange is async.
-use super::{Analysis, Request, Response};
+use super::{
+    Analysis, Request, Response,
+    export_notices::{self, Route},
+};
 use crate::{
     chemistry::{
         self, document as molecular,
@@ -16,9 +19,6 @@ use crate::{
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
 use std::{path::PathBuf, sync::Arc, time::Duration};
-
-#[cfg(test)]
-mod tests;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -152,27 +152,18 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
             let output = if request.format.as_deref() == Some("mol") {
                 molfile::write_document(document)?
             } else {
-                let xml = exchange::drawing::write_preserving(document, (&request).into())?;
-                if request.format.as_deref() == Some("cdx") {
-                    STANDARD.encode(exchange::to_cdx(&xml).map_err(Error::Chemistry)?)
-                } else {
-                    xml
-                }
+                encode_drawing(document, &request, true)?
             };
             Ok(Response {
                 document: Some(document.clone()),
                 analysis: None,
                 output: Some(output),
                 engine_version: chemistry::RDKIT_VERSION.into(),
-                warnings: {
-                    let mut warnings = vec![crate::attachments::ANALYSIS_NOTICE.into()];
-                    if request.format.as_deref() == Some("mol")
-                        && crate::rear_opacity::present(document)
-                    {
-                        warnings.push(crate::rear_opacity::EXPORT_NOTICE.into());
-                    }
-                    warnings
-                },
+                warnings: export_notices::notices(
+                    document,
+                    request.format.as_deref().ok_or(Error::MissingFormat)?,
+                    Route::AttachmentEarlyExport,
+                ),
             })
         })
         .await?;
@@ -214,22 +205,17 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
     {
         return tokio::task::spawn_blocking(move || {
             let document = request.document.as_ref().ok_or(Error::MissingDocument)?;
-            let xml = exchange::drawing::write_preserving(document, request.as_ref().into())?;
-            let output = if request.format.as_deref() == Some("cdx") {
-                STANDARD.encode(exchange::to_cdx(&xml).map_err(Error::Chemistry)?)
-            } else {
-                xml
-            };
+            let output = encode_drawing(document, &request, true)?;
             Ok(Response {
                 document: Some(document.clone()),
                 analysis: None,
                 output: Some(output),
                 engine_version: chemistry::RDKIT_VERSION.into(),
-                warnings: std::iter::once(
-                    "Drawing exported; chemical assignments remain unvalidated.".into(),
-                )
-                .chain(crate::arrow_anchors::export_notice(document))
-                .collect(),
+                warnings: export_notices::notices(
+                    document,
+                    request.format.as_deref().ok_or(Error::MissingFormat)?,
+                    Route::UnpreparedFallback,
+                ),
             })
         })
         .await?;
@@ -427,50 +413,37 @@ fn finish(
     };
     if request.operation == "export" {
         let document = response.document.as_ref().ok_or(Error::MissingDocument)?;
-        if !draft.figure_only && !document.reactions.is_empty() {
-            response.warnings.push("This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme.".into());
-        }
-        if matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
-            && let Some(notice) = crate::arrow_anchors::export_notice(document)
-        {
-            response.warnings.push(notice);
-        }
-        let format = request.format.as_deref();
-        if matches!(format, Some("mol" | "smiles" | "inchi"))
-            && request
-                .document
-                .as_ref()
-                .is_some_and(crate::rear_opacity::present)
-        {
-            response
-                .warnings
-                .push(crate::rear_opacity::EXPORT_NOTICE.into());
-        }
+        let format = request.format.as_deref().ok_or(Error::MissingFormat)?;
+        response.warnings = export_notices::notices(
+            document,
+            format,
+            Route::Prepared {
+                source: request.document.as_ref().ok_or(Error::MissingDocument)?,
+                figure_only: draft.figure_only,
+            },
+        );
         if document.bonds.iter().any(|bond| match format {
-            Some("mol") => matches!(bond.order, 0 | 6 | 7),
-            Some("smiles") => matches!(bond.order, 0 | 7),
-            Some("inchi") => matches!(bond.order, 0 | 5 | 6 | 7),
+            "mol" => matches!(bond.order, 0 | 6 | 7),
+            "smiles" => matches!(bond.order, 0 | 7),
+            "inchi" => matches!(bond.order, 0 | 5 | 6 | 7),
             _ => false,
         }) {
             return Err(Error::Exotic);
         }
         response.output = Some(match format {
-            Some("smiles") => response
+            "smiles" => response
                 .analysis
                 .as_ref()
                 .ok_or(Error::Empty)?
                 .smiles
                 .clone(),
-            Some("inchi") => response
+            "inchi" => response
                 .analysis
                 .as_ref()
                 .ok_or(Error::Empty)?
                 .inchi
                 .clone(),
-            Some("mol") => {
-                if document.bonds.iter().any(|bond| bond.is_projected_dative()) {
-                    response.warnings.push("MOL retains directed dative chemistry and metal charge, but omits solid/hashed coordination projection appearance. Use native ReShiki or figure export to retain that drawing.".into());
-                }
+            "mol" => {
                 let molecule = &prepared.ok_or(Error::MissingPrepared)?.molecule;
                 if molfile::has_projected_coordinates(
                     request.document.as_ref().ok_or(Error::MissingDocument)?,
@@ -480,18 +453,7 @@ fn finish(
                     molfile::write_absolute(molecule, Default::default())?
                 }
             }
-            Some("cdxml" | "cdx") => {
-                if document.bonds.iter().any(|bond| bond.is_projected_dative()) {
-                    response.warnings.push("CDXML/CDX retains directed coordination chemistry and ReShiki projection attributes. ChemDraw 26 displays dative arrows and removes wedge/hash paint on save. Use native ReShiki or figure export for faithful projection appearance.".into());
-                }
-                let xml = exchange::drawing::write(document, request.into())?;
-                if format == Some("cdx") {
-                    STANDARD.encode(exchange::to_cdx(&xml).map_err(Error::Chemistry)?)
-                } else {
-                    xml
-                }
-            }
-            None => return Err(Error::MissingFormat),
+            "cdxml" | "cdx" => encode_drawing(document, request, false)?,
             _ => return Err(Error::Export),
         });
     }
@@ -503,3 +465,23 @@ fn finish(
     }
     Ok(response)
 }
+
+fn encode_drawing(
+    document: &Document,
+    request: &Request,
+    preserving: bool,
+) -> Result<String, Error> {
+    let xml = if preserving {
+        exchange::drawing::write_preserving(document, request.into())?
+    } else {
+        exchange::drawing::write(document, request.into())?
+    };
+    if request.format.as_deref() == Some("cdx") {
+        Ok(STANDARD.encode(exchange::to_cdx(&xml).map_err(Error::Chemistry)?))
+    } else {
+        Ok(xml)
+    }
+}
+
+#[cfg(test)]
+mod tests;
