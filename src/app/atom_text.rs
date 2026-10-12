@@ -322,29 +322,13 @@ pub(super) fn background(message: &Message) -> bool {
     matches!(
         message,
         Message::Tick
-            | Message::EngineDone { .. }
             | Message::Viewport(_)
             | Message::Assistant(_)
             | Message::Updates(_)
             | Message::Close(_)
             | Message::Cancel
             | Message::Discard
-            | Message::Saved(..)
-            | Message::Opened(_)
-            | Message::Exported(_)
-            | Message::FigureExported(_)
-            | Message::ClipboardRead { .. }
-            | Message::ClipboardWritten { .. }
-            | Message::CopyAsPrepared(..)
-            | Message::CopyAsWritten(..)
-            | Message::Pictures(super::pictures::Action::Loaded(..))
-            | Message::Imports(super::import::Action::Loaded(..))
-            | Message::Naming(super::naming::Action::Finished(..))
-            | Message::Nmr(super::nmr::Action::Finished(..) | super::nmr::Action::Exported(..))
-            | Message::Printing(
-                super::printing::Action::Prepared(..) | super::printing::Action::Finished(..)
-            )
-    )
+    ) || super::results::admitted(super::results::Modal::AtomText, message)
 }
 
 #[cfg(test)]

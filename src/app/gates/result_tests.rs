@@ -725,3 +725,18 @@ async fn pending_completions_pin_continue_handle_drop_and_defer_for_every_modal(
         }
     }
 }
+
+#[tokio::test]
+async fn every_constructible_completion_is_classified() {
+    let (_, key) = previewing(drawing());
+    let cases = predicate_cases(key).await;
+    for (name, message, expected) in cases {
+        let owner = crate::app::results::async_result(&message);
+        assert!(owner.is_some(), "{name}: completion is classified");
+        assert_eq!(
+            owner == Some(crate::app::results::Owner::Document),
+            expected[0],
+            "{name}: document ownership"
+        );
+    }
+}

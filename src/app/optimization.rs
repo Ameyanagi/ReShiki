@@ -570,12 +570,9 @@ impl App {
                         | Edit::RelaxRotate { .. }
                 )
                 | Message::Tool(Tool::Select | Tool::Tilt)
-                | Message::Autosaved(..)
-                | Message::FilePrepared(_)
                 | Message::Updates(_)
         ) || super::gates::preview_passthrough(message)
-            || super::tabs::document_result(message)
-            || super::updates::background(message)
+            || super::results::admitted(super::results::Modal::Optimization, message)
             || self.answers_save_dialog(message);
         if allowed {
             None

@@ -207,6 +207,7 @@ impl App {
     }
 
     /// Background delivery calls these handlers without front-tab input or focus handling.
+    /// These arms must handle every Owner::Document completion in results.rs.
     pub(super) fn update_document_result(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Optimization(action) => return self.optimization_action(action),

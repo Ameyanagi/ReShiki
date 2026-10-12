@@ -26,25 +26,14 @@ pub enum Action {
 /// Already-started work and window/save lifecycle events keep running while
 /// the dialog owns input. Document results retain their usual epoch guards.
 pub(super) fn background(message: &Message) -> bool {
-    super::tabs::document_result(message)
-        || matches!(
-            message,
-            Message::Tick
-                | Message::Viewport(_)
-                | Message::Close(_)
-                | Message::Cancel
-                | Message::Discard
-                | Message::Opened(_)
-                | Message::ThemeFile(
-                    super::theme_files::Action::Loaded(..) | super::theme_files::Action::Saved(..)
-                )
-                | Message::Assistant(
-                    super::assistant::Action::Connected(..)
-                        | super::assistant::Action::PreferencesSaved(_)
-                        | super::assistant::Action::ImageRead { .. }
-                        | super::assistant::Action::TextPasted { .. }
-                )
-        )
+    matches!(
+        message,
+        Message::Tick
+            | Message::Viewport(_)
+            | Message::Close(_)
+            | Message::Cancel
+            | Message::Discard
+    ) || super::results::admitted(super::results::Modal::UpdatesDialog, message)
 }
 
 pub struct State {

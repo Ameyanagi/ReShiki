@@ -678,33 +678,9 @@ impl App {
     }
 }
 
-/// Engine and clipboard results that change a drawing, dropped for a closed tab.
+/// Results owned by a drawing (see `results`): delivered to their tab, dropped for a closed tab.
 pub(super) fn document_result(message: &Message) -> bool {
-    use super::{assistant, document_styles, import, pictures, printing};
-    matches!(
-        message,
-        Message::EngineDone { .. }
-            | Message::Optimization(super::optimization::Action::WorkerDone(..))
-            | Message::Nmr(super::nmr::Action::Finished(..) | super::nmr::Action::Exported(..))
-            | Message::Exported(_)
-            | Message::FigureExported(_)
-            | Message::Printing(printing::Action::Prepared(..) | printing::Action::Finished(..))
-            | Message::DrawingStyle(
-                document_styles::Action::Loaded(..) | document_styles::Action::Saved(..)
-            )
-            | Message::Assistant(assistant::Action::Poll | assistant::Action::Done { .. })
-            | Message::LabelsReady(..)
-            | Message::Mapping(super::reaction_mapping::Action::Ready(..))
-            | Message::InspectorAction(super::inspector::Action::PropertiesCalculated(..))
-            | Message::Imports(import::Action::Loaded(..))
-            | Message::Naming(super::naming::Action::Finished(..))
-            | Message::ClipboardWritten { .. }
-            | Message::CopyAsPrepared(..)
-            | Message::CopyAsWritten(..)
-            | Message::ClipboardRead { .. }
-            | Message::Pasted(_)
-            | Message::Pictures(pictures::Action::Loaded(..))
-    )
+    super::results::async_result(message) == Some(super::results::Owner::Document)
 }
 
 /// An exported structure file is written even after its tab left the front.
