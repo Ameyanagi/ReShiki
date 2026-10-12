@@ -159,9 +159,7 @@ fn analyzed(
 /// never changes the session document, so its revision stays the same and
 /// its computed-label cache is not refreshed.
 ///
-/// `{value: {analysis, analyzed_atoms}, warnings, validation, versions}`.
-/// `analysis` has the fields of [`AnalysisJson`]; `analyzed_atoms` lists the
-/// [`Part::atoms`]. An engine error is [`ErrorKind::Failed`] with its message.
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn analyze(
     ctx: Context,
     store: Arc<dyn Documents>,

@@ -194,9 +194,8 @@ pub(crate) async fn export_bytes(
 
 /// Exports the document with read access, through [`export_bytes`].
 ///
-/// The file is `drawing.<format>` with the format's MIME type.
-/// `{value: {receipt: {format, byte_len, detail}}, warnings, validation,
-/// versions}`.
+/// The successful result and attached file contract is in
+/// [`super::catalog::RESULTS`].
 pub(crate) async fn export(
     ctx: Context,
     store: Arc<dyn Documents>,

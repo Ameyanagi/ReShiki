@@ -30,9 +30,11 @@ mod convert;
 mod host;
 mod io;
 mod mcp_usage;
+mod reference;
 mod render;
 
 pub use mcp_usage::{MCP_USAGE, heap};
+pub use reference::agent_reference;
 
 use args::Command;
 use host::{CliError, Session, labelled};

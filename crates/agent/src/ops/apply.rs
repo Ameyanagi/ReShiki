@@ -248,9 +248,7 @@ impl Report {
         }
     }
 
-    /// `{value: {effect: "applied", document, revision, recorded, inserted,
-    /// id_remap, deleted}, warnings, validation, versions}`, with the label
-    /// refresh's notice as a warning.
+    /// The successful result documented in [`super::catalog::RESULTS`].
     fn result(self, applied: &Applied) -> ToolResult {
         ToolResult::valid(
             Outcome {
@@ -543,10 +541,7 @@ fn edit(
 ///   [`ErrorKind::Cancelled`] (no response), and a retry with the same key
 ///   replays the stored receipt.
 ///
-/// `{value: {effect: "applied", document, revision, recorded, inserted,
-/// id_remap: [{source, inserted}], deleted}, warnings, validation,
-/// versions}`. `inserted` and `deleted` may share IDs (see the module docs);
-/// both are empty for undo and redo.
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn apply(
     mut ctx: Context,
     store: Arc<dyn Documents>,

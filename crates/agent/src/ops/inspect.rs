@@ -405,9 +405,7 @@ fn summary_json(
 
 /// Summarizes the document with read access.
 ///
-/// `{document, revision, bounds: {min, max}, expanded_ids, counts, truncated,
-/// atoms, bonds, annotations, arrows, graphics, abbreviations, reactions,
-/// groups, note, versions}`, at most [`Budgets::max_output_bytes`] as JSON.
+/// The successful flat result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn inspect(
     ctx: Context,
     store: Arc<dyn Documents>,

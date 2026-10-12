@@ -132,7 +132,82 @@ pub enum AccessError {
     },
 }
 
+/// One file-error reason, as [`AccessError::REASONS`] documents it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Reason {
+    /// What [`AccessError::code`] returns; error messages start with it.
+    pub code: &'static str,
+    /// The operation error code the reason is reported under.
+    pub error: &'static str,
+    pub meaning: &'static str,
+}
+
 impl AccessError {
+    /// Every reason [`AccessError::code`] returns, in declaration order, for
+    /// reference documentation.
+    pub const REASONS: &[Reason] = &[
+        Reason {
+            code: "path_invalid",
+            error: "invalid_arguments",
+            meaning: "The path is not a plain absolute path to an allowed file name: for \
+                example a relative path, '..', a file: URI, or Windows UNC or device syntax.",
+        },
+        Reason {
+            code: "path_not_granted",
+            error: "access_denied",
+            meaning: "The path is not inside a folder granted for this access; the message \
+                lists the granted folders.",
+        },
+        Reason {
+            code: "path_escapes_root",
+            error: "access_denied",
+            meaning: "Resolving the path left the granted folder, or the operating system \
+                refused it.",
+        },
+        Reason {
+            code: "not_a_regular_file",
+            error: "failed",
+            meaning: "The path names a folder, FIFO, device or other special file.",
+        },
+        Reason {
+            code: "file_too_large",
+            error: "budget",
+            meaning: "The file is larger than the size limit.",
+        },
+        Reason {
+            code: "file_exists",
+            error: "failed",
+            meaning: "The file already exists and overwrite is not true.",
+        },
+        Reason {
+            code: "file_not_found",
+            error: "failed",
+            meaning: "The file or a parent folder does not exist, or a parent is not a folder.",
+        },
+        Reason {
+            code: "extension_not_allowed",
+            error: "access_denied",
+            meaning: "The extension is not one the tool reads or writes; the message lists \
+                the allowed ones.",
+        },
+        Reason {
+            code: "os_denied",
+            error: "access_denied",
+            meaning: "The operating system refused access.",
+        },
+        Reason {
+            code: "no_clobber_unsupported",
+            error: "failed",
+            meaning: "The folder's file system has no hard links, so a new file cannot be \
+                created without risking an overwrite; overwrite: true replaces instead.",
+        },
+        Reason {
+            code: "io_error",
+            error: "failed",
+            meaning: "Any other I/O error.",
+        },
+    ];
+
     /// A stable code for clients and tests.
     pub fn code(&self) -> &'static str {
         match self {

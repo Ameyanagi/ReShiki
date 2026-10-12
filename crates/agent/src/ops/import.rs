@@ -218,9 +218,7 @@ async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Rea
 
 /// Imports into a new session document, through [`import_document`].
 ///
-/// `{value: {document, revision, counts: {atoms, bonds, arrows, annotations,
-/// graphics}, analysis}, warnings, validation, versions}`; `analysis` is
-/// `null` when the engine returned none.
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn import(
     ctx: Context,
     store: Arc<dyn Documents>,

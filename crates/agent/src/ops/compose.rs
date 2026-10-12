@@ -162,10 +162,7 @@ async fn layout(
 /// within the layout, which [`Proposal::validate`] bounds (at most 32
 /// molecules).
 ///
-/// `{value: {document, revision, atoms, bonds, arrows, bounds, review_issues,
-/// changes}, warnings, validation, versions}`. `bounds` is the drawing's
-/// `[min, max]` corners in world units, or `null`. A layout error is
-/// [`ErrorKind::Failed`] with its message.
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn compose(
     mut ctx: Context,
     store: Arc<dyn Documents>,

@@ -67,31 +67,35 @@ The operation budgets are `Budgets::default()` in
 `Limits::from_budgets` in `crates/mcp/src/framing.rs`. The `info` tool and
 `reshiki --cli info` report the operation budgets.
 
-| Limit                      | Value                                                      | When exceeded                                                    |
-| -------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------- |
-| Request line               | 24 MiB (25,165,824 bytes) before the newline               | JSON-RPC -32600 `Request exceeds N bytes`; serving continues     |
-| Request ID                 | 256 bytes for a string ID                                  | -32600 without an ID                                             |
-| Input text                 | 16 MiB (16,777,216 bytes) per import, file or CLI input    | `budget`                                                         |
-| CDX base64                 | 22,369,624 bytes, the base64 length of a 16 MiB CDX        | `budget`                                                         |
-| Documents                  | 16 per server                                              | `budget`                                                         |
-| Objects                    | 100,000 per document                                       | `budget`                                                         |
-| Object IDs                 | 5,000 per request                                          | `budget`                                                         |
-| Session weight             | 2,000,000: objects + 1, summed over documents and history  | `budget`, checked before any change                              |
-| Pictures                   | 128 MiB of unique picture data per server                  | `budget`                                                         |
-| History depth              | 20 undo steps per document                                 | The oldest step is dropped                                       |
-| Inspect                    | 5,000 objects per result                                   | `truncated: true`; counts stay complete                          |
-| Idempotency                | 32 receipts per document; keys of at most 128 bytes        | The oldest receipt is dropped; a longer key is invalid           |
-| Idle documents             | Expire after 60 minutes without use                        | `unknown_document`                                               |
-| Concurrency and queue      | 2 operations run; 8 more wait                              | `busy`                                                           |
-| Outstanding requests       | 12 (concurrency + queue + 2), holding at most 48 MiB       | The reader stops reading until a request completes               |
-| Deadline                   | 120 s per operation, checked cooperatively                 | `timeout` at the next checkpoint                                 |
-| Output                     | 16 MiB of raw output per result (about 21.3 MiB in base64) | `budget`                                                         |
-| MCP result                 | 48 MiB serialized                                          | `budget`: request a smaller render or fewer objects              |
-| Preview render             | 1600 × 1000 by default; sides 1-8192; 16,000,000 pixels    | `invalid_arguments` for a side, `budget` for the pixels          |
-| PNG export                 | 16,000,000 pixels                                          | Resolution steps down from the style's dpi until it fits         |
-| Error messages             | 500 characters                                             | Cut, so errors never echo large input                            |
-| `agent-access.json`        | 64 KiB                                                     | Exit 2 at startup                                                |
-| Heap (`--mcp` and `--cli`) | 2 GiB; `RESHIKI_AGENT_HEAP_MB` sets 256-16384 MiB          | stderr `RESHIKI_HEAP_LIMIT <budget> <used> <requested>`, exit 75 |
+The [generated budget table](agent-reference.md#budgets) lists the default
+operation limits and their units. Session weight counts objects plus one for
+each document and history frame. Picture memory counts unique picture data
+across documents and history.
+
+| Limit                                                                       | When exceeded                                            |
+| --------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Input text, CDX base64, documents, objects, object IDs, pictures and output | `budget`                                                 |
+| Session weight                                                              | `budget`, checked before any change                      |
+| History depth                                                               | The oldest step is dropped                               |
+| Inspect                                                                     | `truncated: true`; counts stay complete                  |
+| Idempotency                                                                 | The oldest receipt is dropped; a longer key is invalid   |
+| Idle documents                                                              | `unknown_document`                                       |
+| Concurrency and queue                                                       | `busy`                                                   |
+| Deadline                                                                    | `timeout` at the next cooperative checkpoint             |
+| Preview render                                                              | `invalid_arguments` for a side, `budget` for the pixels  |
+| PNG export                                                                  | Resolution steps down from the style's dpi until it fits |
+
+MCP framing and process limits also apply:
+
+| Limit                      | Value                                                | When exceeded                                                    |
+| -------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
+| Request line               | 24 MiB (25,165,824 bytes) before the newline         | JSON-RPC -32600 `Request exceeds N bytes`; serving continues     |
+| Request ID                 | 256 bytes for a string ID                            | -32600 without an ID                                             |
+| Outstanding requests       | 12 (concurrency + queue + 2), holding at most 48 MiB | The reader stops reading until a request completes               |
+| MCP result                 | 48 MiB serialized                                    | `budget`: request a smaller render or fewer objects              |
+| Error messages             | 500 characters                                       | Cut, so errors never echo large input                            |
+| `agent-access.json`        | 64 KiB                                               | Exit 2 at startup                                                |
+| Heap (`--mcp` and `--cli`) | See the [generated MCP help](agent-reference.md#mcp) | stderr `RESHIKI_HEAP_LIMIT <budget> <used> <requested>`, exit 75 |
 
 An invalid `RESHIKI_AGENT_HEAP_MB` is a usage error (exit 2) before anything
 is read. The heap ceiling counts the server or command's own allocations; the

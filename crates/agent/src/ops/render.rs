@@ -184,7 +184,7 @@ fn png_size(png: &[u8]) -> Option<(u32, u32)> {
 /// back as the file `drawing.svg`. Either must fit
 /// [`Budgets::max_output_bytes`].
 ///
-/// `{value: {width, height, byte_len}, warnings, validation, versions}`.
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn render(
     ctx: Context,
     store: Arc<dyn Documents>,

@@ -59,8 +59,10 @@ closes the pipe or terminates the process.
 Every limit is a budget the `info` tool reports. The main ones are 2
 operations at once with 8 more queued, a 120 s cooperative deadline per call,
 16 MiB of text per import, 16 session documents of up to 100,000 objects,
-16 MiB of output per result and a 2 GiB heap. The full table is in
-[runtime safety](runtime-safety.md#budgets).
+16 MiB of output per result and a 2 GiB heap. The
+[generated budget table](agent-reference.md#budgets) lists every operation
+budget, and [runtime safety](runtime-safety.md#budgets) says what happens when
+one is exceeded.
 
 ## Server identity and capabilities
 
@@ -78,25 +80,11 @@ completions, sends no progress notifications and publishes no
 
 ## Tools
 
-`tools/list` returns these 13 tools in this order. Every tool sets all four
-annotation hints explicitly, with `openWorldHint: false`. The catalog is pinned
-byte for byte by `tests/fixtures/agent-contract/ops-catalog.json`.
-
-| Tool             | Effect                  | What it does                                                                                   |
-| ---------------- | ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `info`           | Read-only               | Versions, budgets, formats, file extensions and granted folders                                |
-| `document_new`   | Creates a document      | An empty session document                                                                      |
-| `document_list`  | Read-only               | Live session documents with handle, revision and object count                                  |
-| `document_close` | Destructive, idempotent | Discards a session document and its history                                                    |
-| `import`         | Creates a document      | SMILES, MOL, RXN, reaction SMILES, InChI, CDXML, base64 CDX or a native drawing's JSON         |
-| `inspect`        | Read-only               | Atoms, bonds, text, arrows, graphics, abbreviations, reactions and groups, with IDs and bounds |
-| `analyze`        | Read-only               | SMILES, formula, mass, logP, TPSA, H-bond counts, rings, InChI and InChIKey                    |
-| `render`         | Read-only               | A PNG or SVG preview of the drawing or of the objects `ids` selects                            |
-| `export`         | Read-only               | An SVG, PDF, PNG, CDXML, MOL, SMILES or InChI file, inline, as the app's Export makes it       |
-| `file_open`      | Creates a document      | Opens a structure file or `.rsk` drawing from a folder granted for reading                     |
-| `file_save`      | Destructive             | Saves a document as `.rsk` or an export format into a folder granted for writing               |
-| `compose`        | Creates a document      | Lays out an assistant Proposal: molecules and reactions from SMILES, or one sketch diagram     |
-| `apply`          | Destructive             | Inserts, deletes, undoes or redoes, as one undo step                                           |
+The [generated tool reference](agent-reference.md#tools) lists the tools in
+`tools/list` order, with their annotation hints, parameters and result shapes.
+Every tool sets all four annotation hints explicitly, with
+`openWorldHint: false`. `tests/fixtures/agent-contract/ops-catalog.json` pins
+the catalog byte for byte.
 
 Each tool's description in `tools/list` gives its arguments and result
 fields. Conventions shared by the tools:
@@ -202,12 +190,9 @@ earlier installations' data, the executable's folder, Unix `/proc`, `/sys`
 and `/dev`, and the Windows system folder cannot be granted. A folder that
 cannot be granted or an invalid `agent-access.json` prints one stderr line
 and exits 2 (`GRANT_EXIT_CODE`) before stdin is read. `info` lists the
-granted folders and these extensions:
-
-| Tool        | Extensions                                                                                            |
-| ----------- | ----------------------------------------------------------------------------------------------------- |
-| `file_open` | `.rsk`, `.reshiki`, `.moruno`, `.mol`, `.rxn`, `.rsmi`, `.cdxml`, `.cdx`, `.smi`, `.smiles`, `.inchi` |
-| `file_save` | `.rsk`, `.mol`, `.cdxml`, `.smi`, `.smiles`, `.inchi`, `.svg`, `.pdf`, `.png`                         |
+granted folders and accepted extensions. The
+[generated file-format table](agent-reference.md#file-formats) shows which
+extensions `file_open` and `file_save` accept.
 
 `file_save` never creates folders and keeps an existing file unless
 `overwrite` is true. [Runtime safety](runtime-safety.md#containment) describes
