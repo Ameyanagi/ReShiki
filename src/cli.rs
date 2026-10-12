@@ -33,6 +33,11 @@ mod io;
 mod mcp_usage;
 mod reference;
 mod render;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "no command writes a skill folder yet")
+)]
+mod skill;
 
 pub use mcp_usage::{MCP_USAGE, heap};
 pub use reference::agent_reference;
