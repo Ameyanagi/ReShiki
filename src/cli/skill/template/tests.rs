@@ -328,15 +328,7 @@ fn sh_reads_each_posix_recipe_as_the_executable_and_valid_arguments() {
             assert_eq!(program, executable);
             assert_eq!(cli, "--cli");
             let parsed = crate::cli::args::parse(name, rest);
-            if name == "skill" {
-                // The skill command is not in the command table yet.
-                assert_eq!(
-                    parsed,
-                    Err("unknown command `skill`; run `reshiki --cli help`".into())
-                );
-            } else {
-                assert!(parsed.is_ok(), "{line}: {parsed:?}");
-            }
+            assert!(parsed.is_ok(), "{line}: {parsed:?}");
         }
     }
 }

@@ -1,14 +1,14 @@
 //! The CLI's file and standard-input access: [`read_input`] and
-//! [`write_output`] are the only filesystem calls in `src/cli`.
+//! [`write_output`] and [`write_skill`] keep filesystem calls in `src/cli` here.
 //!
 //! Paths given on the command line carry the user's own authority: unlike
 //! the MCP file tools, there are no folder grants and no extension
 //! allowlist.
 use reshiki_agent::ops::budget::Budgets;
 use std::{
-    fs::File,
+    fs::{self, File},
     io::{self, Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 use tempfile::NamedTempFile;
 
@@ -73,6 +73,74 @@ pub(crate) fn write_output(path: &Path, bytes: &[u8], force: bool) -> Result<(),
         )),
         Err(error) => Err(failed(error.error)),
     }
+}
+
+/// Writes the skill `files` (paths relative to the skill, `/`-separated)
+/// into `folder/name` and returns that path.
+///
+/// `folder` must be an existing directory and is never created. Without
+/// `force` an existing `folder/name` is an error and nothing is written.
+/// With it, `folder/name` and each generated subfolder that exists must be
+/// a real directory, never a symbolic link, checked before any file is
+/// written: [`write_output`] writes through the lexical parent, which a
+/// symbolic link would redirect. Missing folders are made one level at a
+/// time and each file goes through [`write_output`], so a failure part-way
+/// leaves the files already written. Nothing is ever deleted.
+pub(crate) fn write_skill(
+    folder: &Path,
+    name: &str,
+    files: &[(&str, Vec<u8>)],
+    force: bool,
+) -> Result<PathBuf, String> {
+    let metadata = fs::metadata(folder)
+        .map_err(|error| format!("cannot open the folder {}: {error}", folder.display()))?;
+    if !metadata.is_dir() {
+        return Err(format!("{} is not a folder", folder.display()));
+    }
+    let root = folder.join(name);
+    let mut directories = vec![root.clone()];
+    for (path, _) in files {
+        let mut directory = root.clone();
+        let mut parts: Vec<_> = path.split('/').collect();
+        parts.pop();
+        for part in parts {
+            directory.push(part);
+            if !directories.contains(&directory) {
+                directories.push(directory.clone());
+            }
+        }
+    }
+    let mut missing = Vec::new();
+    for directory in &directories {
+        match fs::symlink_metadata(directory) {
+            Ok(_) if directory == &root && !force => {
+                return Err(format!(
+                    "{} exists; pass --force to replace",
+                    root.display()
+                ));
+            }
+            Ok(metadata) if !metadata.file_type().is_dir() => {
+                return Err(format!(
+                    "{} is a symbolic link or not a folder; refusing to write the skill",
+                    directory.display()
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => missing.push(directory),
+            Err(error) => return Err(format!("cannot open {}: {error}", directory.display())),
+        }
+    }
+    for directory in missing {
+        fs::create_dir(directory)
+            .map_err(|error| format!("cannot create {}: {error}", directory.display()))?;
+    }
+    for (path, bytes) in files {
+        let target = path
+            .split('/')
+            .fold(root.clone(), |target, part| target.join(part));
+        write_output(&target, bytes, force)?;
+    }
+    Ok(root)
 }
 
 /// An empty temporary file in `parent`. On Unix its mode is 0666 less the

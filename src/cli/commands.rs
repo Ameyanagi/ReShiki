@@ -255,6 +255,58 @@ const SCHEMA: CommandSpec = CommandSpec {
     body: schema_help,
 };
 
+const SKILL_FOLDER: OptionSpec = OptionSpec {
+    value: Some("FOLDER"),
+    help: "Write the skill folder NAME inside FOLDER, which must exist.",
+    equivalent: None,
+    ..OUTPUT
+};
+const SKILL_NAME: OptionSpec = OptionSpec {
+    flag: "--name",
+    value: Some("NAME"),
+    help: "Name the skill and its folder.",
+    default: Some(|| json!(DEFAULT_SKILL_NAME)),
+    sets: None,
+    equivalent: None,
+};
+const SKILL_EXECUTABLE: OptionSpec = OptionSpec {
+    flag: "--executable",
+    value: Some("PATH"),
+    help: "Absolute path of the ReShiki executable the skill runs; default: this executable.",
+    default: None,
+    sets: None,
+    equivalent: None,
+};
+const SKILL_FORCE: OptionSpec = OptionSpec {
+    help: "Replace the generated files of an existing skill folder; other files stay.",
+    equivalent: None,
+    ..FORCE
+};
+const SKILL_RECEIPT: OptionSpec = OptionSpec {
+    help: "Print one receipt JSON line after writing the skill.",
+    ..RECEIPT
+};
+
+/// The skill name without `--name`.
+pub(crate) const DEFAULT_SKILL_NAME: &str = "reshiki";
+
+const SKILL: CommandSpec = CommandSpec {
+    name: "skill",
+    summary: "Write an Agent Skill folder that teaches AI agents to use ReShiki",
+    usage: "reshiki --cli skill -o FOLDER [--name NAME] [--executable PATH]
+                           [--force] [--receipt]",
+    options: &[
+        SKILL_FOLDER,
+        SKILL_NAME,
+        SKILL_EXECUTABLE,
+        SKILL_FORCE,
+        SKILL_RECEIPT,
+    ],
+    tools: &[],
+    operand: None,
+    body: skill_help,
+};
+
 const HELP: CommandSpec = CommandSpec {
     name: "help",
     summary: "Show this help, or a command's help: reshiki --cli help <command>",
@@ -270,8 +322,9 @@ const HELP: CommandSpec = CommandSpec {
 };
 
 /// Commands in overview-help order; option order is the parsing grammar.
-pub(crate) const COMMANDS: &[CommandSpec] =
-    &[CONVERT, RENDER, COMPOSE, ANALYZE, INFO, TOOLS, SCHEMA, HELP];
+pub(crate) const COMMANDS: &[CommandSpec] = &[
+    CONVERT, RENDER, COMPOSE, ANALYZE, INFO, TOOLS, SCHEMA, SKILL, HELP,
+];
 
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
 const OPTIONS_RULE: &str = "Options are allowed once each; -- ends the options.";
@@ -556,4 +609,37 @@ reshiki --mcp publishes. It is printed as one JSON line without the
 experimental label, so it can be saved and used as a schema file.
 ";
     format!("Usage: {}\n\n{body}", SCHEMA.usage)
+}
+
+fn skill_help() -> String {
+    let body = "\
+Writes an Agent Skill that teaches AI agents to use ReShiki: the folder
+FOLDER/NAME with SKILL.md, references/cli.md, references/mcp-tools.md,
+references/limits-and-errors.md, references/setup.md,
+assets/proposal-schema.json and assets/examples/esterification.json.
+Review the files before you install the skill. Nothing is sent over the
+network.
+
+Options:
+  -o FOLDER          The folder that holds skills, such as ~/.claude/skills,
+                     .claude/skills, ~/.agents/skills or .agents/skills. It
+                     must exist; it is never created.
+  --name NAME        The skill's name and folder name (default reshiki):
+                     1 to 64 lowercase letters, digits and hyphens, with no
+                     leading, trailing or double hyphen. It must not contain
+                     claude or anthropic.
+  --executable PATH  The absolute path of the ReShiki executable that the
+                     recipes and setup snippets run (default: this
+                     executable, as the system reports its path).
+  --force            Replace the generated files if FOLDER/NAME exists; other
+                     files in it are kept. A symbolic link in place of
+                     FOLDER/NAME or one of its generated folders is refused.
+  --receipt          Print one JSON line to stdout after writing:
+                     {\"skill\": {\"path\", \"name\", \"files\"}, \"api\": {…}}.
+
+Without --force, an existing FOLDER/NAME is an error and nothing is
+written. A failure part-way leaves the files already written. Without
+--receipt, stdout stays empty.
+";
+    format!("Usage: {}\n\n{body}", SKILL.usage)
 }

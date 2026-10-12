@@ -19,62 +19,19 @@ pub fn agent_reference() -> String {
         "# Agent reference\n\n\
 <!-- Generated: cargo run --example agent_reference -- docs/agent-reference.md -->\n\n\
 Generated from ReShiki's command help, tool catalog and schemas.\n\n\
-## Command line\n\n\
-### Overview\n\n",
+## Command line\n\n",
     );
-    let overview = help(None);
-    fence(&mut text, "text", &overview);
-    for spec in COMMANDS {
-        text.push_str(&format!("### reshiki --cli {}\n\n", spec.name));
-        let body = help(Some(spec));
-        if body == overview {
-            text.push_str("Prints the [overview](#overview).\n\n");
-        } else {
-            fence(&mut text, "text", &body);
-        }
-    }
+    command_sections(&mut text, "###");
     text.push_str("## MCP\n\n");
     fence(&mut text, "text", &MCP_USAGE);
     text.push_str(&format!("## Tools\n\n{RESULT_CONVENTIONS}\n\n"));
     let catalog = catalog_json();
     for tool in catalog.as_array().into_iter().flatten() {
-        tool_section(&mut text, tool);
+        tool_section(&mut text, tool, "###");
     }
-    text.push_str(
-        "## Budgets\n\nDefault operation budgets, as reported by `info`.\n\n\
-| Budget | Value | Unit |\n| --- | --- | --- |\n",
-    );
-    budget_rows(&mut text, "", &budgets_json(&Budgets::default()));
-    text.push_str("\n## Error codes\n\n| Code | Meaning |\n| --- | --- |\n");
-    for kind in ErrorKind::ALL {
-        row(&mut text, &[code(kind.code()), cell(kind.meaning())]);
-    }
-    text.push_str(
-        "\n## File-error reasons\n\n\
-A file error's message starts with one of these reasons, followed by a colon.\n\n\
-| Reason | Error code | Meaning |\n| --- | --- | --- |\n",
-    );
-    for reason in AccessError::REASONS {
-        row(
-            &mut text,
-            &[code(reason.code), code(reason.error), cell(reason.meaning)],
-        );
-    }
-    text.push_str(
-        "\n## File formats\n\n\
-Extensions accepted by `file_open` and `file_save`; a dash means unsupported.\n\n\
-| Extension | Import format | Export format |\n| --- | --- | --- |\n",
-    );
-    for format in FILE_FORMATS {
-        row(
-            &mut text,
-            &[
-                code(&format!(".{}", format.ext)),
-                format.import.map_or_else(|| "—".into(), code),
-                format.export.map_or_else(|| "—".into(), code),
-            ],
-        );
-    }
+    budget_section(&mut text);
+    error_sections(&mut text);
+    file_formats_section(&mut text);
     // Empty app input: only independently versioned contracts are rendered.
     let versions = Versions::current("");
     text.push_str("\n## Versions\n\n| Contract | Version |\n| --- | --- |\n");
@@ -91,10 +48,75 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.\n\
     text
 }
 
-fn tool_section(text: &mut String, tool: &Value) {
+/// The overview and command help, with headings local to each reference.
+pub(in crate::cli) fn command_sections(text: &mut String, heading: &str) {
+    text.push_str(&format!("{heading} Overview\n\n"));
+    let overview = help(None);
+    fence(text, "text", &overview);
+    for spec in COMMANDS {
+        text.push_str(&format!("{heading} reshiki --cli {}\n\n", spec.name));
+        let body = help(Some(spec));
+        if body == overview {
+            text.push_str("Prints the [overview](#overview).\n\n");
+        } else {
+            fence(text, "text", &body);
+        }
+    }
+}
+
+/// All default budget keys, in the order serialized by `info`.
+pub(in crate::cli) fn budget_section(text: &mut String) {
+    text.push_str(
+        "## Budgets\n\nDefault operation budgets, as reported by `info`.\n\n\
+| Budget | Value | Unit |\n| --- | --- | --- |\n",
+    );
+    budget_rows(text, "", &budgets_json(&Budgets::default()));
+}
+
+/// The operation codes and the reasons prefixed to file-error messages.
+pub(in crate::cli) fn error_sections(text: &mut String) {
+    text.push_str("\n## Error codes\n\n| Code | Meaning |\n| --- | --- |\n");
+    for kind in ErrorKind::ALL {
+        row(text, &[code(kind.code()), cell(kind.meaning())]);
+    }
+    text.push_str(
+        "\n## File-error reasons\n\n\
+A file error's message starts with one of these reasons, followed by a colon.\n\n\
+| Reason | Error code | Meaning |\n| --- | --- | --- |\n",
+    );
+    for reason in AccessError::REASONS {
+        row(
+            text,
+            &[code(reason.code), code(reason.error), cell(reason.meaning)],
+        );
+    }
+}
+
+/// The extensions accepted by MCP file tools, including unsupported sides.
+pub(in crate::cli) fn file_formats_section(text: &mut String) {
+    text.push_str(
+        "\n## File formats\n\n\
+Extensions accepted by `file_open` and `file_save`; a dash means unsupported.\n\n\
+| Extension | Import format | Export format |\n| --- | --- | --- |\n",
+    );
+    for format in FILE_FORMATS {
+        row(
+            text,
+            &[
+                code(&format!(".{}", format.ext)),
+                format.import.map_or_else(|| "—".into(), code),
+                format.export.map_or_else(|| "—".into(), code),
+            ],
+        );
+    }
+}
+
+/// One tool under a `heading` (`##`, `###`): title, description, hints,
+/// parameters and result shape.
+pub(in crate::cli) fn tool_section(text: &mut String, tool: &Value, heading: &str) {
     let name = string(tool, "name");
     text.push_str(&format!(
-        "### {name}\n\n**{}**\n\n{}\n\n",
+        "{heading} {name}\n\n**{}**\n\n{}\n\n",
         string(tool, "title"),
         string(tool, "description"),
     ));
@@ -227,19 +249,19 @@ fn budget_rows(text: &mut String, prefix: &str, budgets: &Value) {
     }
 }
 
-fn string<'a>(value: &'a Value, key: &str) -> &'a str {
+pub(in crate::cli) fn string<'a>(value: &'a Value, key: &str) -> &'a str {
     value.get(key).and_then(Value::as_str).unwrap_or_default()
 }
 
-fn row(text: &mut String, cells: &[String]) {
+pub(in crate::cli) fn row(text: &mut String, cells: &[String]) {
     text.push_str(&format!("| {} |\n", cells.join(" | ")));
 }
 
-fn cell(text: &str) -> String {
+pub(in crate::cli) fn cell(text: &str) -> String {
     text.replace('|', "\\|").replace(['\r', '\n'], " ")
 }
 
-fn code(text: &str) -> String {
+pub(in crate::cli) fn code(text: &str) -> String {
     format!("`{}`", cell(text))
 }
 

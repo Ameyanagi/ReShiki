@@ -20,6 +20,7 @@ Commands:
   info     Print versions, limits and formats as one JSON line
   tools    Print the agent tool catalog as one JSON line
   schema   Print a JSON Schema: reshiki --cli schema proposal
+  skill    Write an Agent Skill folder that teaches AI agents to use ReShiki
   help     Show this help, or a command's help: reshiki --cli help <command>
 
 Options are allowed once each; -- ends the options.
@@ -191,6 +192,42 @@ Usage: reshiki --cli schema NAME
 NAME is proposal: the Proposal JSON Schema compose reads, the same schema
 reshiki --mcp publishes. It is printed as one JSON line without the
 experimental label, so it can be saved and used as a schema file.
+```
+
+### reshiki --cli skill
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli skill -o FOLDER [--name NAME] [--executable PATH]
+                           [--force] [--receipt]
+
+Writes an Agent Skill that teaches AI agents to use ReShiki: the folder
+FOLDER/NAME with SKILL.md, references/cli.md, references/mcp-tools.md,
+references/limits-and-errors.md, references/setup.md,
+assets/proposal-schema.json and assets/examples/esterification.json.
+Review the files before you install the skill. Nothing is sent over the
+network.
+
+Options:
+  -o FOLDER          The folder that holds skills, such as ~/.claude/skills,
+                     .claude/skills, ~/.agents/skills or .agents/skills. It
+                     must exist; it is never created.
+  --name NAME        The skill's name and folder name (default reshiki):
+                     1 to 64 lowercase letters, digits and hyphens, with no
+                     leading, trailing or double hyphen. It must not contain
+                     claude or anthropic.
+  --executable PATH  The absolute path of the ReShiki executable that the
+                     recipes and setup snippets run (default: this
+                     executable, as the system reports its path).
+  --force            Replace the generated files if FOLDER/NAME exists; other
+                     files in it are kept. A symbolic link in place of
+                     FOLDER/NAME or one of its generated folders is refused.
+  --receipt          Print one JSON line to stdout after writing:
+                     {"skill": {"path", "name", "files"}, "api": {…}}.
+
+Without --force, an existing FOLDER/NAME is an error and nothing is
+written. A failure part-way leaves the files already written. Without
+--receipt, stdout stays empty.
 ```
 
 ### reshiki --cli help

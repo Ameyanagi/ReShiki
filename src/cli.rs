@@ -33,10 +33,6 @@ mod io;
 mod mcp_usage;
 mod reference;
 mod render;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "no command writes a skill folder yet")
-)]
 mod skill;
 
 pub use mcp_usage::{MCP_USAGE, heap};
@@ -152,6 +148,7 @@ async fn run_command(
         Command::Schema(args::Schema::Proposal) => {
             writeln!(out, "{}", reshiki_agent::schema()).map_err(CliError::Stdout)
         }
+        Command::Skill(skill) => skill::run(skill, out),
         Command::Info => info(out, err).await,
         Command::Convert(convert) => convert::run(convert, out, err, terminal).await,
         Command::Render(render) => render::run(render, out, err, terminal).await,

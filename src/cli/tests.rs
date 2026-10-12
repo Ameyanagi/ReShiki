@@ -1,5 +1,5 @@
 use super::{
-    args::{Compose, Convert, Export, Input, Output, Render, Schema, Source, parse},
+    args::{Compose, Convert, Export, Input, Output, Render, Schema, Skill, Source, parse},
     *,
 };
 use reshiki_agent::ops::{
@@ -74,6 +74,7 @@ async fn help_describes_one_command() {
         ("info", "Usage: reshiki --cli info"),
         ("tools", "Usage: reshiki --cli tools"),
         ("schema", "Usage: reshiki --cli schema NAME"),
+        ("skill", "Usage: reshiki --cli skill -o FOLDER"),
         ("help", "Usage: reshiki --cli <command> [options]"),
     ] {
         let (code, out, err) = call(&["help", topic]).await;
@@ -247,6 +248,171 @@ async fn json_help_lists_every_command_and_option_in_order() {
             assert_eq!(option["sets"], json!(spec.sets));
             assert_eq!(option["equivalent"], json!(spec.equivalent));
         }
+    }
+}
+
+#[cfg(unix)]
+const SKILL_EXECUTABLE: &str = "/opt/reshiki/reshiki";
+#[cfg(windows)]
+const SKILL_EXECUTABLE: &str = r"C:\ReShiki\reshiki.exe";
+
+#[test]
+fn skill_command_lines_parse_without_resolving_the_executable() {
+    assert_eq!(
+        parsed(&["skill", "-o", "FOLDER"]),
+        Ok(Command::Skill(Skill {
+            folder: "FOLDER".into(),
+            name: "reshiki".into(),
+            executable: None,
+            force: false,
+            receipt: false,
+        }))
+    );
+    assert_eq!(
+        parsed(&[
+            "skill",
+            "--name",
+            "chem-2",
+            "--executable",
+            SKILL_EXECUTABLE,
+            "--force",
+            "-o",
+            "FOLDER",
+            "--receipt",
+            "--"
+        ]),
+        Ok(Command::Skill(Skill {
+            folder: "FOLDER".into(),
+            name: "chem-2".into(),
+            executable: Some(SKILL_EXECUTABLE.into()),
+            force: true,
+            receipt: true,
+        }))
+    );
+    for name in ["a", "1", &"a".repeat(64)] {
+        assert!(parsed(&["skill", "-o", "FOLDER", "--name", name]).is_ok());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn skill_usage_errors_exit_2_before_writing() {
+    for (tokens, message) in [
+        (vec!["skill"], "skill writes a folder; pass -o FOLDER"),
+        (
+            vec!["skill", "-o", "-"],
+            "skill writes a folder; pass -o FOLDER",
+        ),
+        (
+            vec!["skill", "-o", ""],
+            "skill writes a folder; pass -o FOLDER",
+        ),
+        (vec!["skill", "-o"], "-o needs a value"),
+        (
+            vec!["skill", "-o", "FOLDER", "x"],
+            "skill takes no input; unexpected `x`",
+        ),
+        (
+            vec!["skill", "-o", "FOLDER", "--", "-x"],
+            "skill takes no input; unexpected `-x`",
+        ),
+        (
+            vec!["skill", "-o", "FOLDER", "--executable", "relative"],
+            "--executable must be an absolute path",
+        ),
+        (
+            vec!["skill", "-o", "FOLDER", "--executable", "/line\nbreak"],
+            "--executable must not contain control characters",
+        ),
+        (
+            vec!["skill", "-o", "FOLDER", "--from", "mol"],
+            "skill does not take --from",
+        ),
+        // Flags only skill takes stay unknown options to the file commands.
+        (
+            vec!["convert", "a.mol", "--to", "svg", "--name", "reshiki"],
+            "unknown option `--name`",
+        ),
+        (
+            vec!["analyze", "a.mol", "--executable", SKILL_EXECUTABLE],
+            "unknown option `--executable`",
+        ),
+        (
+            vec!["skill", "-o", "FOLDER", "-o", "FOLDER"],
+            "-o given more than once",
+        ),
+        (
+            vec!["skill", "-o", "FOLDER", "--name", "a", "--name", "b"],
+            "--name given more than once",
+        ),
+        (
+            vec![
+                "skill",
+                "-o",
+                "FOLDER",
+                "--executable",
+                SKILL_EXECUTABLE,
+                "--executable",
+                SKILL_EXECUTABLE,
+            ],
+            "--executable given more than once",
+        ),
+        (
+            vec!["skill", "-o", "FOLDER", "--force", "--force"],
+            "--force given more than once",
+        ),
+        (
+            vec!["skill", "-o", "FOLDER", "--receipt", "--receipt"],
+            "--receipt given more than once",
+        ),
+    ] {
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, USAGE, "{tokens:?}: {err}");
+        assert!(out.is_empty());
+        assert_eq!(err, format!("reshiki: {message}\n"));
+    }
+    for name in [
+        "",
+        "Reshiki",
+        "--",
+        "-reshiki",
+        "reshiki-",
+        "re--shiki",
+        "claude",
+        "my-claude-tools",
+        "anthropic",
+        "é",
+        "a/b",
+        &"a".repeat(65),
+    ] {
+        let (code, out, err) = call(&["skill", "-o", "FOLDER", "--name", name]).await;
+        assert_eq!(code, USAGE, "{name}: {err}");
+        assert!(out.is_empty());
+        assert!(
+            err.starts_with("reshiki: --name must be 1-64 lowercase letters"),
+            "{err}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn skill_name_and_executable_require_utf8() {
+    use std::os::unix::ffi::OsStrExt;
+    for (flag, message) in [
+        ("--name", "--name must be UTF-8"),
+        ("--executable", "--executable must be UTF-8"),
+    ] {
+        let args = vec![
+            "skill".into(),
+            "-o".into(),
+            "FOLDER".into(),
+            flag.into(),
+            std::ffi::OsStr::from_bytes(b"/invalid/\xff").to_owned(),
+        ];
+        let (code, out, err) = call_os(args).await;
+        assert_eq!(code, USAGE);
+        assert!(out.is_empty());
+        assert_eq!(err, format!("reshiki: {message}\n"));
     }
 }
 
@@ -1015,6 +1181,10 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
     (
         "schema",
         include_str!("../../tests/fixtures/cli-help/schema.txt"),
+    ),
+    (
+        "skill",
+        include_str!("../../tests/fixtures/cli-help/skill.txt"),
     ),
 ];
 

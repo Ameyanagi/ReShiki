@@ -23,6 +23,7 @@ pub(crate) enum Command {
     Info,
     Tools,
     Schema(Schema),
+    Skill(Skill),
     Convert(Convert),
     Render(Render),
     Compose(Compose),
@@ -94,6 +95,16 @@ pub(crate) struct Compose {
     pub(crate) export: Export,
 }
 
+/// `skill`: an existing parent folder and the generated skill's identity.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Skill {
+    pub(crate) folder: PathBuf,
+    pub(crate) name: String,
+    pub(crate) executable: Option<PathBuf>,
+    pub(crate) force: bool,
+    pub(crate) receipt: bool,
+}
+
 /// Parses `name` and the tokens after it; `Err` is the usage message.
 pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> {
     let lossy = name.to_string_lossy();
@@ -108,6 +119,7 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "tools" if rest.is_empty() => Ok(Command::Tools),
         "tools" => Err("tools takes no arguments".into()),
         "schema" => schema(&options(spec, rest)?),
+        "skill" => skill(&options(spec, rest)?),
         "convert" => convert(&options(spec, rest)?),
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
@@ -188,6 +200,8 @@ struct Options {
     output: Option<OsString>,
     width: Option<OsString>,
     height: Option<OsString>,
+    name: Option<OsString>,
+    executable: Option<OsString>,
     pages: bool,
     force: bool,
     receipt: bool,
@@ -235,6 +249,8 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
                 "--to" => options.to = Some(value),
                 "--width" => options.width = Some(value),
                 "--height" => options.height = Some(value),
+                "--name" => options.name = Some(value),
+                "--executable" => options.executable = Some(value),
                 _ => options.output = Some(value),
             }
         } else {
@@ -247,6 +263,67 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
         }
     }
     Ok(options)
+}
+
+/// A portable Agent Skill name, also used as exactly one directory component.
+pub(super) fn valid_skill_name(name: &str) -> bool {
+    (1..=64).contains(&name.len())
+        && name
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+        && !name.starts_with('-')
+        && !name.ends_with('-')
+        && !name.contains("--")
+        && !name.contains("claude")
+        && !name.contains("anthropic")
+}
+
+/// `skill`: the folder that receives NAME, the name and the executable path.
+fn skill(options: &Options) -> Result<Command, String> {
+    if let Some(input) = &options.input {
+        return Err(format!(
+            "skill takes no input; unexpected `{}`",
+            input.to_string_lossy()
+        ));
+    }
+    let folder = options
+        .output
+        .as_ref()
+        .filter(|path| !path.is_empty() && *path != "-")
+        .ok_or("skill writes a folder; pass -o FOLDER")?;
+    let name = options
+        .name
+        .as_deref()
+        .unwrap_or(OsStr::new(commands::DEFAULT_SKILL_NAME))
+        .to_str()
+        .ok_or("--name must be UTF-8")?;
+    if !valid_skill_name(name) {
+        let message = "--name must be 1-64 lowercase letters, digits or hyphens, with no leading, \
+trailing or double hyphen, and cannot contain claude or anthropic";
+        return Err(message.into());
+    }
+    let executable = options
+        .executable
+        .as_ref()
+        .map(|path| {
+            let text = path.to_str().ok_or("--executable must be UTF-8")?;
+            if text.chars().any(char::is_control) {
+                return Err("--executable must not contain control characters");
+            }
+            let path = PathBuf::from(path);
+            if !path.is_absolute() {
+                return Err("--executable must be an absolute path");
+            }
+            Ok(path)
+        })
+        .transpose()?;
+    Ok(Command::Skill(Skill {
+        folder: PathBuf::from(folder),
+        name: name.into(),
+        executable,
+        force: options.force,
+        receipt: options.receipt,
+    }))
 }
 
 /// The one input source and its format.

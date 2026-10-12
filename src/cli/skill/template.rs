@@ -391,14 +391,14 @@ fn powershell_block<'a>(
 }
 
 /// `text` as one POSIX shell word: in single quotes, each `'` as `'\''`.
-fn posix_word(text: &str) -> String {
+pub(super) fn posix_word(text: &str) -> String {
     format!("'{}'", text.replace('\'', r"'\''"))
 }
 
 /// The PowerShell call of the program at `path`: `& '…'` with each single
 /// quote doubled, including U+2018 to U+201B, which PowerShell also reads as
 /// single quotes. Nothing else is special inside single quotes.
-fn powershell_call(path: &str) -> String {
+pub(super) fn powershell_call(path: &str) -> String {
     let mut call = String::from("& '");
     for c in path.chars() {
         if matches!(c, '\'' | '\u{2018}'..='\u{201B}') {
@@ -428,7 +428,7 @@ fn string<'a>(value: &'a Value, key: &str) -> &'a str {
 
 /// Inline code showing `text` verbatim: its delimiter is longer than any
 /// backtick run inside, padded when `text` starts or ends with a backtick.
-fn code(text: &str) -> String {
+pub(super) fn code(text: &str) -> String {
     let ticks = "`".repeat(longest_backtick_run(text) + 1);
     let pad = if text.starts_with('`') || text.ends_with('`') {
         " "
@@ -440,7 +440,7 @@ fn code(text: &str) -> String {
 
 /// A fenced block of `body`, which ends with a newline, then a blank line.
 /// The fence is longer than any backtick run inside.
-fn fence(text: &mut String, language: &str, body: &str) {
+pub(super) fn fence(text: &mut String, language: &str, body: &str) {
     let ticks = "`".repeat(longest_backtick_run(body).max(2) + 1);
     text.push_str(&format!("{ticks}{language}\n{body}{ticks}\n\n"));
 }
