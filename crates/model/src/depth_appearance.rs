@@ -167,8 +167,13 @@ fn component_groups(doc: &Document, ids: &[u64], covalent_only: bool) -> Vec<Vec
             adjacent.entry(bond.b).or_default().push(bond.a);
         }
     }
+    let mut starts: Vec<_> = remaining.iter().copied().collect();
+    starts.sort_unstable();
     let mut result = Vec::new();
-    while let Some(start) = remaining.iter().copied().min() {
+    for start in starts {
+        if !remaining.contains(&start) {
+            continue;
+        }
         let mut pending = vec![start];
         let mut members = Vec::new();
         while let Some(id) = pending.pop() {
@@ -202,6 +207,15 @@ fn covalent_groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
         .filter(|members| members.iter().any(|id| selected.contains(id)))
         .collect()
 }
+
+/// Rear-opacity targets: whole covalent molecules of real, non-centroid atoms
+/// containing any seed ID, returned in globally sorted order.
+pub fn covalent_component_ids(doc: &Document, ids: &[u64]) -> Vec<u64> {
+    let mut members: Vec<_> = covalent_groups(doc, ids).into_iter().flatten().collect();
+    members.sort_unstable();
+    members
+}
+
 /// Capture retained compatibility metadata: the legacy covalent rear
 /// classification from XYZ. Not used for visibility.
 pub(crate) fn capture_legacy_rear_weights(doc: &Document, ids: &[u64]) -> BTreeMap<u64, f32> {
@@ -418,12 +432,18 @@ fn add_alpha_only_scopes(
 
 /// None denotes mixed selected values; untouched components are 100% opaque.
 pub fn rear_opacity(doc: &Document, ids: &[u64]) -> Option<f32> {
-    let mut values = ids.iter().map(|id| {
-        doc.depth_appearance
-            .iter()
-            .find(|scope| scope.atoms.contains(id))
-            .map_or(1., |scope| scope.rear_opacity_for(*id))
-    });
+    let scoped = doc.depth_appearance.iter().map(|scope| scope.atoms.len());
+    let mut opacity_by_id = HashMap::with_capacity(scoped.sum());
+    for scope in &doc.depth_appearance {
+        for &id in &scope.atoms {
+            opacity_by_id
+                .entry(id)
+                .or_insert_with(|| scope.rear_opacity_for(id));
+        }
+    }
+    let mut values = ids
+        .iter()
+        .map(|id| opacity_by_id.get(id).copied().unwrap_or(1.));
     let first = values.next().unwrap_or(1.);
     values.all(|v| v == first).then_some(first)
 }

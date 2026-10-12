@@ -416,7 +416,7 @@ impl App {
         self.inspector_section_lazy(section, title, summary, expanded, || content)
     }
 
-    fn inspector_section_lazy<'a, Content: Into<Element<'a, Message>>>(
+    pub(super) fn inspector_section_lazy<'a, Content: Into<Element<'a, Message>>>(
         &'a self,
         section: Section,
         title: &'static str,
@@ -628,58 +628,8 @@ impl App {
                 }
             },
         ));
-        let depth_ids = self.depth_ids();
-        if self.rear_opacity_visible(&depth_ids) {
-            use super::depth_appearance::{Action, Draft};
-            let value = self.rear_opacity_input(&depth_ids);
-            let revision = self.tab.revision;
-            let file_epoch = self.tab.file_epoch;
-            let apply = Message::DepthAppearance(Action::ApplyRear);
-            body = body.push(
-                self.inspector_section(
-                    Section::ProjectionAppearance,
-                    "3D appearance",
-                    "",
-                    true,
-                    column![
-                        text("Rear opacity (%)").size(12),
-                        row![
-                            reshiki::accessibility::text_input(
-                                "projection-rear-opacity",
-                                "Rear opacity percent",
-                                "Mixed",
-                                &value
-                            )
-                            .style(crate::appearance::input_style)
-                            .on_input(move |value| Message::DepthAppearance(Action::RearInput(
-                                Draft {
-                                    ids: depth_ids.clone(),
-                                    revision,
-                                    file_epoch,
-                                    value
-                                }
-                            )))
-                            .on_submit(apply.clone())
-                            .width(Length::Fixed(80.))
-                            .size(12),
-                            reshiki::accessibility::button(
-                                "projection-rear-opacity-apply",
-                                "Apply rear opacity",
-                                text("Apply").size(12)
-                            )
-                            .padding([7, 9])
-                            .style(super::workspace::control(false))
-                            .on_press(apply),
-                        ]
-                        .spacing(8)
-                        .align_y(Alignment::Center),
-                        text("100% keeps all ink. 0% hides occluded rear cage ink. Exposed outlines stay solid.")
-                            .size(11)
-                            .style(muted_text),
-                    ]
-                    .spacing(6),
-                ),
-            );
+        if let Some(section) = self.rear_opacity_section(self.depth_ids()) {
+            body = body.push(section);
         }
         body.push(
             self.inspector_section(

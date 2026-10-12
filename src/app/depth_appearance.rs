@@ -1,6 +1,11 @@
-use super::{App, Message};
-use iced::Task;
-use std::collections::{HashMap, HashSet};
+use super::{App, Message, inspector::Section, workspace::muted_text};
+use iced::widget::{column, row, text};
+use iced::{Alignment, Element, Length, Task};
+use reshiki::document::Document;
+use std::collections::HashSet;
+
+const REAR_OPACITY_HINT: &str =
+    "100% keeps all ink. 0% hides occluded rear cage ink. Exposed outlines stay solid.";
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -25,7 +30,7 @@ impl App {
             && draft.revision == self.tab.revision
             && draft.file_epoch == self.tab.file_epoch
     }
-    pub(super) fn rear_opacity_input(&self, ids: &[u64]) -> String {
+    fn rear_opacity_text(&self, ids: &[u64]) -> String {
         if let Some(draft) = self
             .tab
             .rear_opacity_draft
@@ -38,7 +43,8 @@ impl App {
             .map(|alpha| format!("{}", alpha * 100.))
             .unwrap_or_default()
     }
-    pub(super) fn rear_opacity_visible(&self, ids: &[u64]) -> bool {
+    fn rear_opacity_visible(&self, ids: &[u64]) -> bool {
+        let ids: HashSet<_> = ids.iter().copied().collect();
         self.tab
             .doc
             .atoms
@@ -59,132 +65,185 @@ impl App {
     /// not particles or chemical connectivity.
     pub(super) fn depth_ids(&self) -> Vec<u64> {
         let document = self.display_document();
-        let real: HashSet<_> = document
-            .atoms
-            .iter()
-            .filter(|atom| atom.centroid.is_empty())
-            .map(|atom| atom.id)
-            .collect();
-        let mut ids: HashSet<_> = if self.tab.selected.is_empty() {
-            real.clone()
+        let seeds = if self.tab.selected.is_empty() {
+            document.atoms.iter().map(|atom| atom.id).collect()
         } else {
-            document
-                .expand_abbreviation_selection(&self.tab.selected)
-                .into_iter()
-                .filter(|id| real.contains(id))
-                .collect()
+            document.expand_abbreviation_selection(&self.tab.selected)
         };
-        let mut adjacent: HashMap<u64, Vec<u64>> = HashMap::new();
-        for bond in &document.bonds {
-            if bond.is_covalent() && real.contains(&bond.a) && real.contains(&bond.b) {
-                adjacent.entry(bond.a).or_default().push(bond.b);
-                adjacent.entry(bond.b).or_default().push(bond.a);
-            }
+        reshiki::depth_appearance::covalent_component_ids(document, &seeds)
+    }
+
+    pub(super) fn rear_opacity_section(&self, ids: Vec<u64>) -> Option<Element<'_, Message>> {
+        if !self.rear_opacity_visible(&ids) {
+            return None;
         }
-        let mut pending: Vec<_> = ids.iter().copied().collect();
-        while let Some(id) = pending.pop() {
-            for neighbor in adjacent.get(&id).into_iter().flatten() {
-                if ids.insert(*neighbor) {
-                    pending.push(*neighbor);
-                }
-            }
-        }
-        let mut ids: Vec<_> = ids.into_iter().collect();
-        ids.sort_unstable();
-        ids
+        Some(self.inspector_section_lazy(
+            Section::ProjectionAppearance,
+            "3D appearance",
+            "",
+            true,
+            || {
+                let value = self.rear_opacity_text(&ids);
+                let revision = self.tab.revision;
+                let file_epoch = self.tab.file_epoch;
+                let apply = Message::DepthAppearance(Action::ApplyRear);
+                column![
+                    text("Rear opacity (%)").size(12),
+                    row![
+                        reshiki::accessibility::text_input(
+                            "projection-rear-opacity",
+                            "Rear opacity percent",
+                            "Mixed",
+                            &value
+                        )
+                        .style(crate::appearance::input_style)
+                        .on_input(move |value| {
+                            Message::DepthAppearance(Action::RearInput(Draft {
+                                ids: ids.clone(),
+                                revision,
+                                file_epoch,
+                                value,
+                            }))
+                        })
+                        .on_submit(apply.clone())
+                        .width(Length::Fixed(80.))
+                        .size(12),
+                        reshiki::accessibility::button(
+                            "projection-rear-opacity-apply",
+                            "Apply rear opacity",
+                            text("Apply").size(12)
+                        )
+                        .padding([7, 9])
+                        .style(super::workspace::control(false))
+                        .on_press(apply),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+                    text(REAR_OPACITY_HINT).size(11).style(muted_text),
+                ]
+                .spacing(6)
+            },
+        ))
     }
 
     pub(super) fn depth_appearance_action(&mut self, action: Action) -> Task<Message> {
+        match action {
+            Action::RearInput(draft) => self.rear_opacity_input(draft),
+            Action::ApplyRear => self.apply_rear_opacity(),
+            Action::Enhance(true) => self.edit_depth_appearance(
+                "Depth enhancement on · Rear atoms and bonds fade with depth",
+                |app, ids| {
+                    reshiki::depth_appearance::enable(
+                        &mut app.tab.doc,
+                        ids,
+                        reshiki::depth_appearance::DEFAULT_STRENGTH,
+                    )
+                },
+            ),
+            Action::Enhance(false) => self.edit_depth_appearance(
+                "Depth appearance frozen · Positions and colors remain editable",
+                |app, ids| Ok(reshiki::depth_appearance::freeze(&mut app.tab.doc, ids)),
+            ),
+            Action::Clear => self.edit_depth_appearance(
+                "Depth appearance cleared · Original ink and opacity restored",
+                |app, ids| Ok(reshiki::depth_appearance::clear(&mut app.tab.doc, ids)),
+            ),
+            Action::OriginalInk => self.edit_depth_appearance(
+                "Selected atoms and bonds use their original ink",
+                |app, _| {
+                    reshiki::depth_appearance::override_fade(
+                        &mut app.tab.doc,
+                        &app.tab.selected,
+                        Some(0.),
+                    )
+                },
+            ),
+        }
+    }
+
+    fn depth_targets(&mut self) -> Option<Vec<u64>> {
         let ids = self.depth_ids();
         if ids.is_empty() {
             self.status = "Select a molecule to edit its depth appearance".into();
             self.error = true;
-            return Task::none();
-        }
-        if let Action::RearInput(draft) = &action {
-            if self.rear_draft_current(draft, &ids) {
-                self.tab.rear_opacity_draft = Some(draft.clone());
-            }
-            return Task::none();
-        }
-        let rear = if matches!(action, Action::ApplyRear) {
-            let Some(draft) = self
-                .tab
-                .rear_opacity_draft
-                .as_ref()
-                .filter(|draft| self.rear_draft_current(draft, &ids))
-            else {
-                return Task::none();
-            };
-            let value = draft
-                .value
-                .trim()
-                .parse::<f32>()
-                .ok()
-                .filter(|v| v.is_finite() && (0. ..=100.).contains(v));
-            let Some(value) = value else {
-                self.status = "Rear opacity must be between 0% and 100%".into();
-                self.error = true;
-                return Task::none();
-            };
-            Some(value / 100.)
-        } else {
             None
+        } else {
+            Some(ids)
+        }
+    }
+
+    fn rear_opacity_input(&mut self, draft: Draft) -> Task<Message> {
+        let Some(ids) = self.depth_targets() else {
+            return Task::none();
+        };
+        if self.rear_draft_current(&draft, &ids) {
+            self.tab.rear_opacity_draft = Some(draft);
+        }
+        Task::none()
+    }
+
+    fn apply_rear_opacity(&mut self) -> Task<Message> {
+        let Some(ids) = self.depth_targets() else {
+            return Task::none();
+        };
+        let Some(draft) = self
+            .tab
+            .rear_opacity_draft
+            .as_ref()
+            .filter(|draft| self.rear_draft_current(draft, &ids))
+        else {
+            return Task::none();
+        };
+        let value = draft
+            .value
+            .trim()
+            .parse::<f32>()
+            .ok()
+            .filter(|v| v.is_finite() && (0. ..=100.).contains(v));
+        let Some(value) = value else {
+            self.status = "Rear opacity must be between 0% and 100%".into();
+            self.error = true;
+            return Task::none();
+        };
+        let rear = value / 100.;
+        let before = self.tab.doc.clone();
+        let result = reshiki::depth_appearance::set_rear_opacity(&mut self.tab.doc, &ids, rear);
+        if self.commit_depth_edit(before, result) {
+            self.status = format!(
+                "Rear opacity {}% · Chemical structure and XYZ retained",
+                rear * 100.
+            );
+        }
+        Task::none()
+    }
+
+    fn edit_depth_appearance(
+        &mut self,
+        status: &'static str,
+        edit: impl FnOnce(&mut Self, &[u64]) -> Result<usize, String>,
+    ) -> Task<Message> {
+        let Some(ids) = self.depth_targets() else {
+            return Task::none();
         };
         let before = self.tab.doc.clone();
-        let result = match &action {
-            Action::Enhance(true) => reshiki::depth_appearance::enable(
-                &mut self.tab.doc,
-                &ids,
-                reshiki::depth_appearance::DEFAULT_STRENGTH,
-            ),
-            Action::Enhance(false) => {
-                Ok(reshiki::depth_appearance::freeze(&mut self.tab.doc, &ids))
-            }
-            Action::Clear => Ok(reshiki::depth_appearance::clear(&mut self.tab.doc, &ids)),
-            Action::ApplyRear => reshiki::depth_appearance::set_rear_opacity(
-                &mut self.tab.doc,
-                &ids,
-                rear.unwrap_or(1.),
-            ),
-            Action::RearInput(_) => Ok(0),
-            Action::OriginalInk => reshiki::depth_appearance::override_fade(
-                &mut self.tab.doc,
-                &self.tab.selected,
-                Some(0.),
-            ),
-        };
+        let result = edit(self, &ids);
+        if self.commit_depth_edit(before, result) {
+            self.status = status.into();
+        }
+        Task::none()
+    }
+
+    fn commit_depth_edit(&mut self, before: Document, result: Result<usize, String>) -> bool {
         if let Err(error) = result {
             self.tab.doc = before;
             self.status = error;
             self.error = true;
-            return Task::none();
+            return false;
         }
         self.tab.rear_opacity_draft = None;
         self.error = false;
         self.changed(before);
-        if !self.error {
-            self.status = match action {
-                Action::ApplyRear => {
-                    self.status = format!(
-                        "Rear opacity {}% · Chemical structure and XYZ retained",
-                        rear.unwrap_or(1.) * 100.
-                    );
-                    return Task::none();
-                }
-                Action::RearInput(_) => "Rear opacity input",
-                Action::Enhance(true) => {
-                    "Depth enhancement on · Rear atoms and bonds fade with depth"
-                }
-                Action::Enhance(false) => {
-                    "Depth appearance frozen · Positions and colors remain editable"
-                }
-                Action::Clear => "Depth appearance cleared · Original ink and opacity restored",
-                Action::OriginalInk => "Selected atoms and bonds use their original ink",
-            }
-            .into();
-        }
-        Task::none()
+        !self.error
     }
 }
 

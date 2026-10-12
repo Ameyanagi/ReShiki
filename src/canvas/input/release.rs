@@ -56,37 +56,10 @@ impl MoleculeCanvas<'_> {
                     target,
                 }
             }
-            Gesture::Graphic { start } => {
-                if self.tool == Tool::Graphic(GraphicKind::Path) {
-                    if !inside {
-                        return Some(Action::request_redraw().and_capture());
-                    }
-                    let Some(stroke) = self.pen_stroke(start, p) else {
-                        return Some(Action::request_redraw().and_capture());
-                    };
-                    return Some(Action::publish(Edit::PenSegment(stroke)).and_capture());
-                }
-                if !inside
-                    || (start.distance(p) < self.camera.world_len(DRAG_SLOP_PX)
-                        && !matches!(
-                            self.tool,
-                            Tool::Graphic(GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
-                        ))
-                {
-                    return Some(Action::request_redraw().and_capture());
-                }
-                let constrain = state.modifiers.shift() || self.graphics.constrain;
-                if matches!(self.tool, Tool::Graphic(GraphicKind::Orbital(_))) {
-                    Edit::Orbital(
-                        start,
-                        p,
-                        constrain,
-                        self.graphics.snap && !state.modifiers.alt(),
-                    )
-                } else {
-                    Edit::Graphic(start, p, constrain)
-                }
-            }
+            Gesture::Graphic { start } => match self.release_graphic(state, start, p, inside) {
+                ControlFlow::Continue(edit) => edit,
+                ControlFlow::Break(action) => return Some(action),
+            },
             Gesture::ArrowHandle { id, index } => {
                 match self.release_arrow_handle(state, id, index, p, bounds, inside) {
                     ControlFlow::Continue(edit) => edit,
@@ -131,13 +104,9 @@ impl MoleculeCanvas<'_> {
                 ControlFlow::Break(action) => return Some(action),
             },
             Gesture::StretchBond { start, plan } => {
-                if !inside || start.distance(p) < self.camera.world_len(CLICK_SLOP_PX) {
-                    return Some(Action::request_redraw().and_capture());
-                }
-                Edit::StretchBond {
-                    fixed: plan.fixed,
-                    moving: plan.moving,
-                    length: plan.dragged_length(World::new(p.x - start.x, p.y - start.y)),
+                match self.release_stretch(start, plan, p, inside) {
+                    ControlFlow::Continue(edit) => edit,
+                    ControlFlow::Break(action) => return Some(action),
                 }
             }
             Gesture::Select { start } => {
@@ -167,6 +136,45 @@ impl MoleculeCanvas<'_> {
             edit => edit,
         };
         Some(Action::publish(edit).and_capture())
+    }
+    fn release_graphic(
+        &self,
+        state: &State,
+        start: World,
+        p: World,
+        inside: bool,
+    ) -> ControlFlow<Action<Edit>, Edit> {
+        if self.tool == Tool::Graphic(GraphicKind::Path) {
+            if !inside {
+                return ControlFlow::Break(Action::request_redraw().and_capture());
+            }
+            let Some(stroke) = self.pen_stroke(start, p) else {
+                return ControlFlow::Break(Action::request_redraw().and_capture());
+            };
+            return ControlFlow::Break(Action::publish(Edit::PenSegment(stroke)).and_capture());
+        }
+        if !inside
+            || (start.distance(p) < self.camera.world_len(DRAG_SLOP_PX)
+                && !matches!(
+                    self.tool,
+                    Tool::Graphic(GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
+                ))
+        {
+            return ControlFlow::Break(Action::request_redraw().and_capture());
+        }
+        let constrain = state.modifiers.shift() || self.graphics.constrain;
+        ControlFlow::Continue(
+            if matches!(self.tool, Tool::Graphic(GraphicKind::Orbital(_))) {
+                Edit::Orbital(
+                    start,
+                    p,
+                    constrain,
+                    self.graphics.snap && !state.modifiers.alt(),
+                )
+            } else {
+                Edit::Graphic(start, p, constrain)
+            },
+        )
     }
     fn release_arrow_handle(
         &self,
@@ -258,6 +266,22 @@ impl MoleculeCanvas<'_> {
                 x,
                 y,
             }
+        })
+    }
+    fn release_stretch(
+        &self,
+        start: World,
+        plan: reshiki::editing::reference::Stretch,
+        p: World,
+        inside: bool,
+    ) -> ControlFlow<Action<Edit>, Edit> {
+        if !inside || start.distance(p) < self.camera.world_len(CLICK_SLOP_PX) {
+            return ControlFlow::Break(Action::request_redraw().and_capture());
+        }
+        ControlFlow::Continue(Edit::StretchBond {
+            fixed: plan.fixed,
+            moving: plan.moving,
+            length: plan.dragged_length(World::new(p.x - start.x, p.y - start.y)),
         })
     }
     fn release_ring(

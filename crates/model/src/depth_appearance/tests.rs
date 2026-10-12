@@ -74,3 +74,22 @@ fn alpha_only_scope_validates_without_rgb_fade() {
     doc.depth_appearance.push(scope);
     assert_eq!(validate(&doc), Ok(()));
 }
+
+#[test]
+fn covalent_component_ids_returns_sorted_whole_molecules() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(0., 0.));
+    let b = doc.add_atom("C", Point::new(0., 40.));
+    let c = doc.add_atom("O", Point::new(40., 0.));
+    let d = doc.add_atom("O", Point::new(40., 40.));
+    let attached = doc.add_atom("Fe", Point::new(80., 0.));
+    doc.add_bond(a, c, 1, "plain");
+    doc.add_bond(b, d, 1, "plain");
+    doc.add_bond(c, attached, 5, "plain");
+    assert!(
+        doc.bonds
+            .iter()
+            .any(|bond| bond.connects(c, attached) && !bond.is_covalent())
+    );
+    assert_eq!(covalent_component_ids(&doc, &[d, c]), vec![a, b, c, d]);
+}

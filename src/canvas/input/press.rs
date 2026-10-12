@@ -66,14 +66,7 @@ impl MoleculeCanvas<'_> {
             return self.press_tilt(state, p, point);
         }
         if let Tool::StretchBond { fixed, moving } = self.tool {
-            if let Ok(plan) = reshiki::editing::reference::Stretch::new(self.doc, fixed, moving) {
-                let hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
-                if hit.iter().any(|id| plan.ids.contains(id)) {
-                    state.gesture = Some(Gesture::StretchBond { start: p, plan });
-                    return Some(Action::publish(Edit::Hover(None)).and_capture());
-                }
-            }
-            return Some(Action::request_redraw().and_capture());
+            return self.press_stretch(state, p, fixed, moving);
         }
         if let Some(action) = self.press_arrow_handle(state, p) {
             return Some(action);
@@ -122,6 +115,23 @@ impl MoleculeCanvas<'_> {
             Gesture::Select { start: p }
         });
         Some(Action::publish(Edit::Hover(None)).and_capture())
+    }
+
+    fn press_stretch(
+        &self,
+        state: &mut State,
+        p: World,
+        fixed: u64,
+        moving: u64,
+    ) -> Option<Action<Edit>> {
+        if let Ok(plan) = reshiki::editing::reference::Stretch::new(self.doc, fixed, moving) {
+            let hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
+            if hit.iter().any(|id| plan.ids.contains(id)) {
+                state.gesture = Some(Gesture::StretchBond { start: p, plan });
+                return Some(Action::publish(Edit::Hover(None)).and_capture());
+            }
+        }
+        Some(Action::request_redraw().and_capture())
     }
 
     fn press_arrow_handle(&self, state: &mut State, p: World) -> Option<Action<Edit>> {

@@ -9,7 +9,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Vector, keyboard, mouse};
 use reshiki::arrows::ArrowHandle;
 use reshiki::document::Document;
-use reshiki::graphics::{GraphicKind, PathCommand};
+use reshiki::graphics::{Graphic, GraphicKind, PathCommand, PathHandle};
 use std::ops::ControlFlow;
 
 enum HandleShape {
@@ -310,12 +310,14 @@ impl MoleculeCanvas<'_> {
         selected: &[u64],
         bounds: Rectangle,
     ) {
-        if self.tool == Tool::EditPoints
-            || self.tool == Tool::Graphic(reshiki::graphics::GraphicKind::Path)
-        {
+        let edit_points = self.tool == Tool::EditPoints;
+        if !edit_points && self.tool != Tool::Graphic(GraphicKind::Path) {
+            return;
+        }
+        if edit_points {
             for indicator in reshiki::atom_labels::indicators(preview)
                 .into_iter()
-                .filter(|i| self.tool == Tool::EditPoints && i.owner.selected(selected))
+                .filter(|i| i.owner.selected(selected))
             {
                 if let Some(anchor) = indicator.owner.anchor(preview) {
                     let center = self.camera.screen(indicator.center, bounds);
@@ -326,11 +328,11 @@ impl MoleculeCanvas<'_> {
                     draw_handle(frame, center, HandleShape::Circle(4.), false);
                 }
             }
-            for a in preview.atoms.iter().filter(|a| {
-                self.tool == Tool::EditPoints
-                    && selected.contains(&a.id)
-                    && preview.atom_visible(a.id)
-            }) {
+            for a in preview
+                .atoms
+                .iter()
+                .filter(|a| selected.contains(&a.id) && preview.atom_visible(a.id))
+            {
                 for m in &a.marks {
                     let center = self
                         .camera
@@ -342,78 +344,92 @@ impl MoleculeCanvas<'_> {
                     draw_handle(frame, center, HandleShape::Circle(4.), false);
                 }
             }
-            for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
-                if let Some(handles) = graphic.path_handles() {
-                    if self.tool == Tool::EditPoints {
-                        let mut anchor = World::default();
-                        for command in graphic.commands() {
-                            if let PathCommand::Cubic(a, b, end) = command {
-                                for (from, to) in [(anchor, a), (end, b)] {
-                                    draw_direction_line(
-                                        frame,
-                                        self.camera.screen(from, bounds),
-                                        self.camera.screen(to, bounds),
-                                    );
-                                }
-                                anchor = end;
-                            } else if let Some(point) = command.points().last() {
-                                anchor = *point;
-                            }
-                        }
-                    }
-                    for handle in handles
-                        .into_iter()
-                        .filter(|h| self.tool == Tool::EditPoints || h.node)
-                    {
-                        let point = self.camera.screen(handle.point, bounds);
-                        let shape = if handle.node {
-                            HandleShape::Circle(4.5)
-                        } else {
-                            HandleShape::Square
-                        };
-                        let chosen = self.graphics.point == Some((graphic.id, handle.index));
-                        draw_handle(frame, point, shape, chosen);
-                    }
-                    continue;
-                }
-                if self.tool != Tool::EditPoints {
-                    continue;
-                }
-                if graphic.kind == reshiki::graphics::GraphicKind::Arc {
-                    for p in graphic.edit_points() {
-                        draw_handle(
+        }
+        for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
+            if let Some(handles) = graphic.path_handles() {
+                self.draw_path_handles(frame, graphic, handles, bounds, edit_points);
+            } else if edit_points {
+                self.draw_graphic_points(frame, graphic, bounds);
+            }
+        }
+    }
+
+    fn draw_path_handles(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        graphic: &Graphic,
+        handles: Vec<PathHandle>,
+        bounds: Rectangle,
+        controls: bool,
+    ) {
+        if controls {
+            let mut anchor = World::default();
+            for command in graphic.commands() {
+                if let PathCommand::Cubic(a, b, end) = command {
+                    for (from, to) in [(anchor, a), (end, b)] {
+                        draw_direction_line(
                             frame,
-                            self.camera.screen(p, bounds),
-                            HandleShape::Circle(5.0),
-                            false,
+                            self.camera.screen(from, bounds),
+                            self.camera.screen(to, bounds),
                         );
                     }
-                    continue;
+                    anchor = end;
+                } else if let Some(point) = command.points().last() {
+                    anchor = *point;
                 }
-                let mut anchor = World::default();
-                for c in graphic.commands() {
-                    let points = c.points();
-                    if let PathCommand::Cubic(a, b, end) = c {
-                        for (from, to) in [(anchor, a), (b, end)] {
-                            draw_direction_line(
-                                frame,
-                                self.camera.screen(from, bounds),
-                                self.camera.screen(to, bounds),
-                            );
-                        }
-                        anchor = end;
-                    } else if let Some(p) = points.last() {
-                        anchor = *p;
-                    }
-                    for p in points {
-                        draw_handle(
-                            frame,
-                            self.camera.screen(p, bounds),
-                            HandleShape::Circle(4.0),
-                            false,
-                        );
-                    }
+            }
+        }
+        for handle in handles.into_iter().filter(|h| controls || h.node) {
+            let point = self.camera.screen(handle.point, bounds);
+            let shape = if handle.node {
+                HandleShape::Circle(4.5)
+            } else {
+                HandleShape::Square
+            };
+            let chosen = self.graphics.point == Some((graphic.id, handle.index));
+            draw_handle(frame, point, shape, chosen);
+        }
+    }
+
+    fn draw_graphic_points(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        graphic: &Graphic,
+        bounds: Rectangle,
+    ) {
+        if graphic.kind == GraphicKind::Arc {
+            for p in graphic.edit_points() {
+                draw_handle(
+                    frame,
+                    self.camera.screen(p, bounds),
+                    HandleShape::Circle(5.0),
+                    false,
+                );
+            }
+            return;
+        }
+        let mut anchor = World::default();
+        for c in graphic.commands() {
+            let points = c.points();
+            if let PathCommand::Cubic(a, b, end) = c {
+                for (from, to) in [(anchor, a), (b, end)] {
+                    draw_direction_line(
+                        frame,
+                        self.camera.screen(from, bounds),
+                        self.camera.screen(to, bounds),
+                    );
                 }
+                anchor = end;
+            } else if let Some(p) = points.last() {
+                anchor = *p;
+            }
+            for p in points {
+                draw_handle(
+                    frame,
+                    self.camera.screen(p, bounds),
+                    HandleShape::Circle(4.0),
+                    false,
+                );
             }
         }
     }

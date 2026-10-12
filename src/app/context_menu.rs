@@ -221,10 +221,15 @@ impl App {
         }
     }
 
-    fn main_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
-        use Entry::Separator;
+    /// Feature commands leading the selection context menu.
+    fn feature_entries(&self, atoms: bool) -> Vec<Entry> {
         let command = Entry::command;
-        let submenu = Entry::page;
+        let selected_atoms = self
+            .tab
+            .selected
+            .iter()
+            .filter(|id| self.tab.doc.atom(**id).is_some())
+            .count();
         let mut entries = vec![];
         if atoms {
             entries.extend(
@@ -240,15 +245,7 @@ impl App {
                 true,
             ));
         }
-        if atoms
-            && self
-                .tab
-                .selected
-                .iter()
-                .filter(|id| self.tab.doc.atom(**id).is_some())
-                .count()
-                == 1
-        {
+        if atoms && selected_atoms == 1 {
             entries.push(command(
                 "Edit atom map…",
                 Message::Mapping(super::reaction_mapping::Action::Open),
@@ -263,15 +260,7 @@ impl App {
                     .any(|id| self.tab.doc.atom(*id).is_some_and(|a| a.map_num != 0)),
             ));
         }
-        if atoms
-            && self
-                .tab
-                .selected
-                .iter()
-                .filter(|id| self.tab.doc.atom(**id).is_some())
-                .count()
-                > 1
-        {
+        if atoms && selected_atoms > 1 {
             entries.push(command(
                 "Create group label…",
                 Message::AtomText(super::atom_text::Action::ContractSelection),
@@ -285,23 +274,31 @@ impl App {
                 true,
             ));
         }
+        if atoms && let Some(target) = self.context_name_target() {
+            let shown = reshiki::molecule_names::label(&self.tab.doc, &target).is_some();
+            entries.push(command(
+                if shown {
+                    "Hide chemical name"
+                } else {
+                    "Show chemical name"
+                },
+                Message::Naming(if shown {
+                    super::naming::Action::HideMoleculeName(target)
+                } else {
+                    super::naming::Action::ShowMoleculeName(target)
+                }),
+                self.naming_can_show_molecule(),
+            ));
+        }
+        entries
+    }
+
+    fn main_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
+        use Entry::Separator;
+        let command = Entry::command;
+        let submenu = Entry::page;
+        let mut entries = self.feature_entries(atoms);
         if atoms {
-            if let Some(target) = self.context_name_target() {
-                let shown = reshiki::molecule_names::label(&self.tab.doc, &target).is_some();
-                entries.push(command(
-                    if shown {
-                        "Hide chemical name"
-                    } else {
-                        "Show chemical name"
-                    },
-                    Message::Naming(if shown {
-                        super::naming::Action::HideMoleculeName(target)
-                    } else {
-                        super::naming::Action::ShowMoleculeName(target)
-                    }),
-                    self.naming_can_show_molecule(),
-                ));
-            }
             let connected: Vec<_> =
                 reshiki::editing::groups(&self.tab.doc, &self.tab.doc.all_ids())
                     .into_iter()
