@@ -432,12 +432,7 @@ pub(crate) async fn inspect(
                 ),
             ));
         }
-        Ok(ToolResult {
-            value,
-            images: Vec::new(),
-            files: Vec::new(),
-            is_error: false,
-        })
+        Ok(ToolResult::plain(value))
     })
     .await
 }

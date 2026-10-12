@@ -78,6 +78,16 @@ impl OpError {
                 .collect(),
         }
     }
+
+    /// A failed operation with a bounded, client-facing message.
+    pub fn failed(message: impl AsRef<str>) -> Self {
+        Self::new(ErrorKind::Failed, message)
+    }
+
+    /// Invalid arguments with a bounded, client-facing message.
+    pub fn invalid(message: impl AsRef<str>) -> Self {
+        Self::new(ErrorKind::InvalidArguments, message)
+    }
 }
 
 impl fmt::Display for OpError {

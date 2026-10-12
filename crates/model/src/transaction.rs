@@ -110,6 +110,15 @@ pub struct Reconciled {
     before: Document,
 }
 
+/// What committing an accepted edit will record and clear.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Outcome {
+    /// History will record the edit; `false` when the document is unchanged.
+    pub recorded: bool,
+    /// [`chemistry_changed`] holds, so computed labels will be cleared.
+    pub chemistry_changed: bool,
+}
+
 /// What [`Reconciled::commit`] changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Committed {
@@ -199,6 +208,19 @@ impl Reconciled {
         &self.before
     }
 
+    /// Predicts [`Self::commit`] without changing the document or history.
+    ///
+    /// A chemistry change still differs from `before` after computed labels
+    /// are cleared. Continuing frames change which snapshot history keeps,
+    /// but not whether it records the edit.
+    pub fn outcome(&self, doc: &Document) -> Outcome {
+        let chemistry_changed = chemistry_changed(&self.before, doc);
+        Outcome {
+            recorded: chemistry_changed || self.before != *doc,
+            chemistry_changed,
+        }
+    }
+
     /// Clears computed labels after a chemistry change and records the edit.
     ///
     /// History records nothing when the document equals the snapshot. Otherwise
@@ -207,14 +229,15 @@ impl Reconciled {
     /// recorded frame clears redo.
     pub fn commit(self, doc: &mut Document, history: &mut History, continuing: bool) -> Committed {
         let drawing_style_changed = self.before.drawing_style != doc.drawing_style;
-        let chemistry_changed = chemistry_changed(&self.before, doc);
-        if chemistry_changed {
+        let outcome = self.outcome(doc);
+        if outcome.chemistry_changed {
             crate::atom_labels::clear_computed(doc);
         }
         let recorded = history.commit_continuing(self.before, doc, continuing);
+        debug_assert_eq!(recorded, outcome.recorded, "outcome must predict History");
         Committed {
             recorded,
-            chemistry_changed,
+            chemistry_changed: outcome.chemistry_changed,
             drawing_style_changed,
         }
     }

@@ -165,24 +165,13 @@ async fn info(out: &mut dyn Write, err: &mut dyn Write) -> Result<(), CliError> 
     writeln!(out, "{}", labelled(value)).map_err(CliError::Stdout)
 }
 
-/// The import format the app picks for a file with `extension`, as
-/// `prepare` in src/app/files.rs does: a native extension is `reshiki`; mol,
-/// rxn, rsmi, cdxml, cdx and inchi are themselves; anything else, including
-/// smi, smiles and no extension, is `smiles`. Case is ignored.
+/// The import format the app picks for a file with `extension`
+/// ([`crate::compatibility::structure_format`], as `prepare` in
+/// src/app/files.rs uses it): a native extension is `reshiki`; mol, rxn,
+/// rsmi, cdxml, cdx and inchi are themselves; anything else, including smi,
+/// smiles and no extension, is `smiles`. Case is ignored.
 pub fn input_format(extension: &str) -> &'static str {
-    let extension = extension.to_ascii_lowercase();
-    if crate::compatibility::is_native_extension(&extension) {
-        return "reshiki";
-    }
-    match extension.as_str() {
-        "mol" => "mol",
-        "rxn" => "rxn",
-        "rsmi" => "rsmi",
-        "cdxml" => "cdxml",
-        "cdx" => "cdx",
-        "inchi" => "inchi",
-        _ => "smiles",
-    }
+    crate::compatibility::structure_format(extension).unwrap_or("smiles")
 }
 
 /// The `--from` values: the import tool's `format` enum.

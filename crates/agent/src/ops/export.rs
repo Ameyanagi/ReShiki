@@ -6,16 +6,15 @@ use super::{
     documents::EXPORT_FORMATS,
     error::{ErrorKind, OpError},
     exec::Context,
-    import::warnings,
     policy::Access,
     result::{Blob, ToolResult},
     store::Documents,
-    wire::{DocHandle, ExportReceiptJson, Principal, envelope_json, handle_schema, nullable},
+    wire::{DocHandle, ExportReceiptJson, Principal, handle_schema, nullable, warnings},
 };
 use crate::{
     document::Document,
     engine::{LocalEngine, Request},
-    envelope::{Envelope, ExportReceipt, ValidationStatus, Versions, Warning},
+    envelope::{ExportReceipt, Versions, Warning},
     export::Publication,
     tool_spec::{Hints, ToolSpec},
 };
@@ -126,10 +125,6 @@ struct Exported {
     receipt: ExportReceiptJson,
 }
 
-fn failed(message: impl AsRef<str>) -> OpError {
-    OpError::new(ErrorKind::Failed, message)
-}
-
 /// The file bytes, receipt and warnings of `doc` as `format`, made as the app
 /// exports a drawing.
 ///
@@ -178,7 +173,7 @@ pub(crate) async fn export_bytes(
         })
     };
     ctx.checkpoint()?;
-    let (bytes, detail, messages) = made.map_err(failed)?;
+    let (bytes, detail, messages) = made.map_err(OpError::failed)?;
     if bytes.len() > budgets.max_output_bytes {
         return Err(OpError::new(
             ErrorKind::Budget,
@@ -224,24 +219,18 @@ pub(crate) async fn export(
         .await?;
     let (bytes, receipt, warnings) =
         export_bytes(&ctx, &engine, doc, format, pages.unwrap_or(false), &budgets).await?;
-    let value = envelope_json(&Envelope {
-        value: Exported {
+    Ok(ToolResult::valid(
+        Exported {
             receipt: ExportReceiptJson::from(&receipt),
         },
         warnings,
-        validation: ValidationStatus::Valid,
         versions,
-    });
-    Ok(ToolResult {
-        value,
-        images: Vec::new(),
-        files: vec![Blob {
-            mime: format.mime(),
-            name: format!("drawing.{}", format.name()),
-            bytes,
-        }],
-        is_error: false,
-    })
+    )
+    .with_files(vec![Blob {
+        mime: format.mime(),
+        name: format!("drawing.{}", format.name()),
+        bytes,
+    }]))
 }
 
 #[cfg(test)]

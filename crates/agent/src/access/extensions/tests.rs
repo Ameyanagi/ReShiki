@@ -25,6 +25,19 @@ fn every_operation_format_has_an_extension() {
 }
 
 #[test]
+fn import_rows_agree_with_shared_structure_formats() {
+    for row in FILE_FORMATS.iter().filter(|row| row.import.is_some()) {
+        let shared = reshiki_io::compatibility::structure_format(row.ext);
+        if matches!(row.ext, "smi" | "smiles") {
+            assert_eq!(row.import, Some("smiles"), "{}", row.ext);
+            assert_eq!(shared, None, "{}", row.ext);
+        } else {
+            assert_eq!(shared, row.import, "{}", row.ext);
+        }
+    }
+}
+
+#[test]
 fn extensions_are_unique_lower_case_and_used() {
     let mut seen = HashSet::new();
     for row in FILE_FORMATS {

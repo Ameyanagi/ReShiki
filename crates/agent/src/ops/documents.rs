@@ -125,12 +125,7 @@ fn ok<const N: usize>(fields: [(&str, Value); N], versions: &Versions) -> ToolRe
         .map(|(name, value)| (name.to_owned(), value))
         .collect();
     value.insert("versions".into(), versions_json(versions));
-    ToolResult {
-        value,
-        images: Vec::new(),
-        files: Vec::new(),
-        is_error: false,
-    }
+    ToolResult::plain(value)
 }
 
 /// `{operation_api, stability, versions, budgets, formats: {import, export},

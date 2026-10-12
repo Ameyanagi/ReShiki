@@ -1,4 +1,4 @@
-//! Read earlier installations without changing their files.
+//! Read earlier installations and share file-import compatibility rules.
 use std::{
     ffi::OsString,
     io::Write,
@@ -18,6 +18,28 @@ pub fn is_native_extension(extension: &str) -> bool {
     NATIVE_EXTENSIONS
         .iter()
         .any(|native| extension.eq_ignore_ascii_case(native))
+}
+
+/// The structure import format for a known extension, ignoring ASCII case.
+pub fn structure_format(extension: &str) -> Option<&'static str> {
+    if is_native_extension(extension) {
+        Some("reshiki")
+    } else {
+        ["mol", "rxn", "rsmi", "cdxml", "cdx", "inchi"]
+            .into_iter()
+            .find(|format| extension.eq_ignore_ascii_case(format))
+    }
+}
+
+/// Structure file contents as import text: binary CDX as standard base64.
+/// Only the exact format name `cdx` is binary; every other name uses UTF-8.
+pub fn import_text(format: &str, bytes: Vec<u8>) -> Result<String, String> {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    if format == "cdx" {
+        Ok(STANDARD.encode(bytes))
+    } else {
+        String::from_utf8(bytes).map_err(|error| format!("The file is not valid UTF-8: {error}"))
+    }
 }
 
 /// Where the application data directory comes from.

@@ -1,9 +1,8 @@
 //! The file formats the agent's file tools read and write, by extension: the
 //! one table both the tools and the grants' extension checks derive from.
 //!
-//! Reading follows the app's mapping: native drawings as the app opens a
-//! file (src/app/files.rs `prepare`), structures as the Import tab reads
-//! them (src/app/import.rs `STRUCTURES`), plus reaction SMILES and InChI.
+//! Reading follows the shared structure-format mapping, with explicit
+//! `.smi` and `.smiles` rows for the agent's extension allowlist.
 //! Writing follows the operation export formats, which exclude EMF and CDX,
 //! plus native `.rsk` drawings (`Document::file_json`).
 use super::{AccessError, echo};

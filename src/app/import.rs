@@ -195,12 +195,7 @@ impl Plan {
 
 /// Structure file contents as the engine reads them: binary CDX as base64.
 pub(super) fn contents(format: &str, bytes: Vec<u8>) -> Result<String, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD};
-    if format == "cdx" {
-        Ok(STANDARD.encode(bytes))
-    } else {
-        String::from_utf8(bytes).map_err(|error| format!("The file is not valid UTF-8: {error}"))
-    }
+    reshiki::compatibility::import_text(format, bytes)
 }
 
 /// A drawing holding just this picture, sized as a newly inserted picture.

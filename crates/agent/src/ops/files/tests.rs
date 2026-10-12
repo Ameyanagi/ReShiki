@@ -11,6 +11,7 @@ use crate::{
         wire::RequestId,
     },
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::{
     collections::BTreeMap,
     fs,

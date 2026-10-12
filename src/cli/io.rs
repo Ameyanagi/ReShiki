@@ -41,15 +41,10 @@ pub(crate) fn read_input(path: Option<&Path>, limit: usize) -> Result<Vec<u8>, S
     Ok(bytes)
 }
 
-/// Input bytes as import text, as the app reads a structure file
-/// (src/app/import.rs `contents`): cdx as base64, anything else as UTF-8.
+/// Input bytes through [`crate::compatibility::import_text`]: cdx as base64,
+/// anything else as UTF-8.
 pub(crate) fn text(format: &str, bytes: Vec<u8>) -> Result<String, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD};
-    if format == "cdx" {
-        Ok(STANDARD.encode(bytes))
-    } else {
-        String::from_utf8(bytes).map_err(|error| format!("The file is not valid UTF-8: {error}"))
-    }
+    crate::compatibility::import_text(format, bytes)
 }
 
 /// Writes `bytes` to `path` through a synced temporary file beside it, so

@@ -122,15 +122,7 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             .map_err(|e| format!("Could not open document: {e}"))?;
         Ok(Prepared::Native(Box::new(doc)))
     } else {
-        let format = match extension.as_str() {
-            "mol" => "mol",
-            "rxn" => "rxn",
-            "rsmi" => "rsmi",
-            "cdxml" => "cdxml",
-            "cdx" => "cdx",
-            "inchi" => "inchi",
-            _ => "smiles",
-        };
+        let format = reshiki::compatibility::structure_format(&extension).unwrap_or("smiles");
         Ok(Prepared::Import {
             format,
             contents: super::import::contents(format, contents)?,

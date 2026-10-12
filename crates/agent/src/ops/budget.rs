@@ -1,6 +1,9 @@
 //! Resource budgets for the operation API and the document cost helpers they
 //! are measured with.
-use crate::document::Document;
+use crate::{
+    canvas_tools::{PREVIEW_HEIGHT, PREVIEW_WIDTH},
+    document::Document,
+};
 use std::{collections::HashSet, time::Duration};
 
 /// Object IDs per request, mirroring the `replace_ids` limit of
@@ -72,6 +75,16 @@ pub struct RenderBudget {
     pub max_pixels: u64,
 }
 
+impl RenderBudget {
+    pub const DEFAULT: Self = Self {
+        default_width: PREVIEW_WIDTH,
+        default_height: PREVIEW_HEIGHT,
+        min_side: 1,
+        max_side: 8192,
+        max_pixels: crate::pictures::MAX_PIXELS,
+    };
+}
+
 impl Default for Budgets {
     fn default() -> Self {
         let text = reshiki_io::exchange::LIMIT;
@@ -83,16 +96,10 @@ impl Default for Budgets {
             max_objects: 100_000,
             max_ids: MAX_IDS,
             max_session_weight: 2_000_000,
-            max_session_picture_bytes: 128 * 1024 * 1024,
+            max_session_picture_bytes: 128 * MIB as u64,
             history_depth: 20,
             max_inspect_objects: 5_000,
-            render: RenderBudget {
-                default_width: 1600,
-                default_height: 1000,
-                min_side: 1,
-                max_side: 8192,
-                max_pixels: crate::pictures::MAX_PIXELS,
-            },
+            render: RenderBudget::DEFAULT,
             export_png_pixels: 16_000_000,
             max_output_bytes: 16 * MIB,
             concurrency: 2,

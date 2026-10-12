@@ -6,7 +6,11 @@ mod support;
 
 use reshiki_agent::{
     Proposal, canvas_tools,
-    ops::catalog::{SPECS, catalog_json, decode_check},
+    ops::{
+        budget::{Budgets, RenderBudget},
+        catalog::{SPECS, catalog_json, decode_check},
+        inspect::MAX_TEXT_CHARS,
+    },
     tool_spec::valid_name,
 };
 use serde_json::{Value, json};
@@ -236,6 +240,62 @@ fn the_operation_catalog_bytes_are_pinned() {
         .strip_suffix('\n')
         .expect("ops-catalog.json ends in one LF");
     assert_eq!(catalog_json().to_string(), golden);
+}
+
+#[test]
+fn tool_description_limits_match_defaults() {
+    let description = |name| {
+        SPECS
+            .iter()
+            .find(|spec| spec.name == name)
+            .unwrap()
+            .description
+    };
+    let number = |text: &str, marker: &str| -> u64 {
+        text.split_once(marker)
+            .unwrap()
+            .1
+            .trim_start()
+            .chars()
+            .take_while(|character| character.is_ascii_digit() || *character == ',')
+            .filter(|character| *character != ',')
+            .collect::<String>()
+            .parse()
+            .unwrap()
+    };
+    let budgets = Budgets::default();
+    let new = description("document_new");
+    assert_eq!(
+        number(new, "without use (") * 60,
+        budgets.idle_ttl.as_secs()
+    );
+    assert_eq!(number(new, "max_documents ("), budgets.max_documents as u64);
+    assert_eq!(
+        number(description("inspect"), "Annotation text over "),
+        MAX_TEXT_CHARS as u64,
+    );
+    assert_eq!(
+        number(description("apply"), "idempotency_key (at most "),
+        budgets.max_idempotency_key_bytes as u64,
+    );
+    let render = description("render");
+    assert_eq!(
+        number(render, "scaled up to ") as f32,
+        canvas_tools::MAX_UPSCALE
+    );
+    let defaults = render.split_once("pixels (null for ").unwrap().1;
+    assert_eq!(
+        number(defaults, ""),
+        u64::from(budgets.render.default_width)
+    );
+    assert_eq!(
+        number(defaults, " × "),
+        u64::from(budgets.render.default_height)
+    );
+    let sides = render.split_once("each side ").unwrap().1;
+    assert_eq!(number(sides, ""), u64::from(budgets.render.min_side));
+    assert_eq!(number(sides, " to "), u64::from(budgets.render.max_side));
+    assert_eq!(budgets.render, RenderBudget::DEFAULT);
 }
 
 /// The pointers below `at` of every object-level subschema of `schema` that

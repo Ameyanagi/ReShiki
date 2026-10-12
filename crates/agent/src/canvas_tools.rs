@@ -6,6 +6,13 @@ use serde_json::{Value, json};
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::Sender;
 
+/// The width [`image`] fits a preview within, in pixels.
+pub const PREVIEW_WIDTH: u32 = 1600;
+/// The height [`image`] fits a preview within, in pixels.
+pub const PREVIEW_HEIGHT: u32 = 1000;
+/// How far [`image_within`] scales a small drawing up.
+pub const MAX_UPSCALE: f32 = 3.;
+
 #[derive(Debug, Clone, Default)]
 pub struct Snapshot {
     pub document: Document,
@@ -176,7 +183,7 @@ fn inspect_schema() -> Value {
 }
 /// A fixed pixel budget keeps visual inspection inexpensive even on a large canvas.
 pub fn image(document: &Document) -> Result<Vec<u8>, String> {
-    image_within(document, 1600, 1000)
+    image_within(document, PREVIEW_WIDTH, PREVIEW_HEIGHT)
 }
 /// Renders `document` on white, scaled up to 3x and down to fit within
 /// `max_width` x `max_height` pixels.
@@ -192,7 +199,7 @@ pub fn image_within(
     let tree = crate::export::parse_svg(crate::scene::svg(document))?;
     let scale = (max_width as f32 / tree.size().width())
         .min(max_height as f32 / tree.size().height())
-        .min(3.);
+        .min(MAX_UPSCALE);
     let width = (tree.size().width() * scale)
         .ceil()
         .clamp(1., max_width as f32) as u32;

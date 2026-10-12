@@ -5,18 +5,17 @@ use super::{
     catalog::arguments,
     error::{ErrorKind, OpError},
     exec::Context,
-    import::warnings,
     policy::Access,
     progress,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, Principal, Revision, envelope_json, handle_schema, nullable},
+    wire::{DocHandle, Principal, Revision, handle_schema, nullable, warnings},
 };
 use crate::{
     DrawingSettings, Proposal, composition,
     document::{Document, Point},
     engine::LocalEngine,
-    envelope::{Envelope, ValidationStatus, Versions},
+    envelope::Versions,
     progress::Event,
     render_progress, review, scene, sketch,
     tool_spec::{Hints, ToolSpec},
@@ -77,10 +76,6 @@ pub(crate) struct Compose {
     style_document: Option<DocHandle>,
 }
 
-fn invalid(message: impl AsRef<str>) -> OpError {
-    OpError::new(ErrorKind::InvalidArguments, message)
-}
-
 /// Decodes the arguments before any work runs.
 ///
 /// The proposal is decoded and validated exactly as the assistant's Codex
@@ -93,13 +88,13 @@ pub(crate) fn decode(args: Value) -> Result<Compose, OpError> {
         style_document,
     } = arguments(args)?;
     let proposal: Proposal =
-        serde_json::from_value(proposal).map_err(|error| invalid(error.to_string()))?;
-    proposal.validate().map_err(invalid)?;
+        serde_json::from_value(proposal).map_err(|error| OpError::invalid(error.to_string()))?;
+    proposal.validate().map_err(OpError::invalid)?;
     if !proposal.replace_ids.is_empty() {
-        return Err(invalid(REPLACE_IDS));
+        return Err(OpError::invalid(REPLACE_IDS));
     }
     if !proposal.has_drawing() {
-        return Err(invalid(NO_DRAWING));
+        return Err(OpError::invalid(NO_DRAWING));
     }
     Ok(Compose {
         proposal,
@@ -126,10 +121,6 @@ struct Composed {
     revision: Revision,
     #[serde(flatten)]
     report: Report,
-}
-
-fn failed(message: impl AsRef<str>) -> OpError {
-    OpError::new(ErrorKind::Failed, message)
 }
 
 /// Lays out `proposal`, forwarding structure progress when the client asked
@@ -203,7 +194,7 @@ pub(crate) async fn compose(
     ctx.checkpoint()?;
     let rendered = layout(&ctx, &engine, &proposal, &settings).await;
     ctx.checkpoint()?;
-    let mut doc = rendered.map_err(failed)?;
+    let mut doc = rendered.map_err(OpError::failed)?;
     let max_objects = budgets.max_objects;
     let (doc, report, messages) = ctx
         .blocking(move || {
@@ -235,22 +226,15 @@ pub(crate) async fn compose(
         })
         .await?;
     let created = ctx.effect(move || store.create(&who, doc)).await?;
-    let value = envelope_json(&Envelope {
-        value: Composed {
+    Ok(ToolResult::valid(
+        Composed {
             document: created.handle,
             revision: created.revision,
             report,
         },
-        warnings: warnings(messages),
-        validation: ValidationStatus::Valid,
+        warnings(messages),
         versions,
-    });
-    Ok(ToolResult {
-        value,
-        images: Vec::new(),
-        files: Vec::new(),
-        is_error: false,
-    })
+    ))
 }
 
 #[cfg(test)]

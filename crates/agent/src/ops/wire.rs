@@ -15,7 +15,8 @@
 //! contract harness (`crates/agent/tests/support/json_schema.rs`).
 use super::budget::MAX_IDS;
 use crate::{
-    envelope::{Envelope, ExportReceipt, IdRemap, ValidationStatus, Versions},
+    engine::Analysis,
+    envelope::{Envelope, ExportReceipt, IdRemap, ValidationStatus, Versions, Warning},
     transaction::Rejection,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
@@ -269,6 +270,64 @@ pub fn envelope_json<T: Serialize>(envelope: &Envelope<T>) -> Map<String, Value>
         ("validation".to_owned(), validation),
         ("versions".to_owned(), versions_json(&envelope.versions)),
     ])
+}
+
+/// Each message as an envelope [`Warning`], in order.
+pub(crate) fn warnings(messages: Vec<String>) -> Vec<Warning> {
+    messages
+        .into_iter()
+        .map(|message| Warning { message })
+        .collect()
+}
+
+/// Engine [`Analysis`] on the wire.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AnalysisJson {
+    pub smiles: String,
+    pub formula: String,
+    pub mass: f64,
+    pub exact_mass: f64,
+    pub logp: f64,
+    pub tpsa: f64,
+    pub donors: u32,
+    pub acceptors: u32,
+    pub rings: u32,
+    pub unpaired_electrons: u32,
+    pub inchi: String,
+    pub inchikey: String,
+}
+
+impl From<Analysis> for AnalysisJson {
+    fn from(analysis: Analysis) -> Self {
+        let Analysis {
+            smiles,
+            formula,
+            mass,
+            exact_mass,
+            logp,
+            tpsa,
+            donors,
+            acceptors,
+            rings,
+            unpaired_electrons,
+            inchi,
+            inchikey,
+        } = analysis;
+        Self {
+            smiles,
+            formula,
+            mass,
+            exact_mass,
+            logp,
+            tpsa,
+            donors,
+            acceptors,
+            rings,
+            unpaired_electrons,
+            inchi,
+            inchikey,
+        }
+    }
 }
 
 /// An [`IdRemap`] on the wire: `[{source, inserted}]` with decimal-string IDs.

@@ -181,6 +181,93 @@ fn commit_reports_style_change_and_noop_records_nothing() {
 }
 
 #[test]
+fn outcome_matches_history_recording_for_every_edit_and_continuing_state() {
+    type Edit = fn(&mut Document);
+    let edits: [(&str, Edit, bool, bool); 4] = [
+        ("unchanged", |_| {}, false, false),
+        ("presentation", |doc| doc.bonds[0].color = BLUE, true, false),
+        (
+            "computed label",
+            |doc| doc.atoms[0].label_h += 1,
+            true,
+            false,
+        ),
+        (
+            "chemistry",
+            |doc| doc.atoms[0].element = "N".into(),
+            true,
+            true,
+        ),
+    ];
+    for (name, edit, recorded, chemistry_changed) in edits {
+        for continuing in [false, true] {
+            // Empty history, an undo frame, and an empty undo stack with redo.
+            for state in 0..3 {
+                let (mut before, _) = ethane(1);
+                before.atoms[0].label_h = 3;
+                before.atoms[0].cip_label = Some("R".into());
+                before.bonds[0].cip_label = Some("E".into());
+                let history = || {
+                    let mut history = History::with_limit(1);
+                    if state == 1 {
+                        assert!(history.commit(Document::default(), &before));
+                    } else if state == 2 {
+                        let mut later = before.clone();
+                        later.drawing_style.name = "Custom".into();
+                        assert!(history.commit(before.clone(), &later));
+                        assert!(history.undo(&mut later));
+                        assert_eq!(later, before);
+                    }
+                    history
+                };
+                let context = format!("{name}, continuing {continuing}, history {state}");
+                let mut doc = before.clone();
+                edit(&mut doc);
+                let reconciled = reconcile(&mut doc, before.clone()).unwrap();
+                let unchanged = doc.clone();
+                let outcome = reconciled.outcome(&doc);
+                assert_eq!(doc, unchanged, "{context}");
+                assert_eq!(
+                    outcome,
+                    Outcome {
+                        recorded,
+                        chemistry_changed
+                    },
+                    "{context}"
+                );
+
+                let mut expected_doc = doc.clone();
+                if chemistry_changed {
+                    crate::atom_labels::clear_computed(&mut expected_doc);
+                }
+                let mut expected_history = history();
+                let actual_recorded =
+                    expected_history.commit_continuing(before.clone(), &expected_doc, continuing);
+                assert_eq!(outcome.recorded, actual_recorded, "{context}");
+                let mut committed_history = history();
+                let committed = reconciled.commit(&mut doc, &mut committed_history, continuing);
+                assert_eq!(committed.recorded, actual_recorded, "{context}");
+                assert_eq!(
+                    committed.chemistry_changed, outcome.chemistry_changed,
+                    "{context}"
+                );
+                assert_eq!(doc, expected_doc, "{context}");
+                assert_eq!(
+                    committed_history.undo_frames().collect::<Vec<_>>(),
+                    expected_history.undo_frames().collect::<Vec<_>>(),
+                    "{context}",
+                );
+                assert_eq!(
+                    committed_history.redo_frames().collect::<Vec<_>>(),
+                    expected_history.redo_frames().collect::<Vec<_>>(),
+                    "{context}",
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn continuing_commits_keep_the_first_snapshot() {
     let mut doc = Document::default();
     let a = doc.add_atom("C", Point::default());
