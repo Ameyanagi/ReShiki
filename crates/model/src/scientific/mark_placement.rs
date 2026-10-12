@@ -4,6 +4,7 @@ use super::{AtomMark, MarkKind, Part, styled_mark_parts};
 use crate::{
     document::{Atom, Document, Point},
     graphics::{PathCommand, flattened},
+    polygon::closed_edges,
     scene::Primitive,
 };
 
@@ -208,12 +209,7 @@ fn intersects(obstacle: &Obstacle, bounds: Box2) -> bool {
     }
     let center = Point::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5);
     let mut inside = false;
-    for (a, b) in obstacle
-        .points
-        .iter()
-        .zip(obstacle.points.iter().cycle().skip(1))
-        .take(obstacle.points.len())
-    {
+    for (a, b) in closed_edges(&obstacle.points) {
         if (a.y > center.y) != (b.y > center.y)
             && center.x < (b.x - a.x) * (center.y - a.y) / (b.y - a.y) + a.x
         {

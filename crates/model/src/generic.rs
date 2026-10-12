@@ -875,7 +875,7 @@ fn assemble_expansion(
         // Supplementary cap: all attempts still debit the SAME Work before
         // baseline deepclone and scene/normalization/glyph calculation.
         for attempt in 0..3 {
-            if !shift.x.is_finite() || !shift.y.is_finite() {
+            if !shift.is_finite() {
                 return Err("Prepared expansion grid is nonfinite".into());
             }
             let total_atoms = result.atoms.len().saturating_add(tile.document.atoms.len());
@@ -1759,7 +1759,7 @@ pub fn define_bracket(
         .iter()
         .find(|g| g.id == bracket && g.kind.brackets())
         .ok_or("Select one bracket around the repeating unit")?;
-    let det = graphic.axis_x.x * graphic.axis_y.y - graphic.axis_x.y * graphic.axis_y.x;
+    let det = graphic.frame_determinant();
     if det.abs() < 0.01 {
         return Err("Draw a bracket with a nonzero enclosed area".into());
     }
@@ -1767,13 +1767,8 @@ pub fn define_bracket(
         .atoms
         .iter()
         .filter(|a| {
-            let p = Point::new(
-                a.position.x - graphic.origin.x,
-                a.position.y - graphic.origin.y,
-            );
-            let x = (p.x * graphic.axis_y.y - p.y * graphic.axis_y.x) / det;
-            let y = (graphic.axis_x.x * p.y - graphic.axis_x.y * p.x) / det;
-            (0.0..=1.).contains(&x) && (0.0..=1.).contains(&y)
+            let p = graphic.world_to_local(a.position, det);
+            (0.0..=1.).contains(&p.x) && (0.0..=1.).contains(&p.y)
         })
         .map(|a| a.id)
         .collect();

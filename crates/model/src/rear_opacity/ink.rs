@@ -1,6 +1,7 @@
 //! Resolve alpha-affected ink once: fill and stroke must not blend twice.
 use super::{PathCommand, Point, Primitive, flatten};
 use crate::graphics::{GraphicStyle, LinePattern};
+use crate::polygon::signed_area;
 use resvg::tiny_skia::{self, PathBuilder, PathSegment};
 
 pub(super) fn single_paint(part: Primitive) -> Primitive {
@@ -56,24 +57,10 @@ pub(super) fn single_paint(part: Primitive) -> Primitive {
         filled: true,
     }
 }
-fn area(points: &[Point]) -> f64 {
-    let Some(origin) = points.first() else {
-        return 0.;
-    };
-    points
-        .iter()
-        .zip(points.iter().cycle().skip(1))
-        .take(points.len())
-        .map(|(a, b)| {
-            (f64::from(a.x) - f64::from(origin.x)) * (f64::from(b.y) - f64::from(origin.y))
-                - (f64::from(a.y) - f64::from(origin.y)) * (f64::from(b.x) - f64::from(origin.x))
-        })
-        .sum()
-}
 fn outer_sign(contours: &[Vec<Point>]) -> f64 {
     contours
         .iter()
-        .map(|p| area(p))
+        .map(|p| signed_area(p))
         .max_by(|a, b| a.abs().total_cmp(&b.abs()))
         .unwrap_or(0.)
         .signum()
@@ -119,8 +106,8 @@ fn stroke(commands: &[PathCommand], style: &GraphicStyle) -> Option<Vec<PathComm
                 let a = point(a);
                 let z = point(z);
                 commands.push(PathCommand::Cubic(
-                    super::mix(cursor, a, 2. / 3.),
-                    super::mix(z, a, 2. / 3.),
+                    cursor.lerp(a, 2. / 3.),
+                    z.lerp(a, 2. / 3.),
                     z,
                 ));
                 cursor = z;

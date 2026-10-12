@@ -868,8 +868,9 @@ fn view_visibility_svg_raster_keeps_full_rim_stroke_and_real_hidden_alpha_on_bot
                 let width = doc.drawing_style.line_width();
                 for t in [0., 0.1, 0.25, 0.5, 0.75, 0.9, 1.] {
                     for side in [-0.2, 0., 0.2] {
-                        let p =
-                            mix(a, b, t).offset(normal.x * width * side, normal.y * width * side);
+                        let p = a
+                            .lerp(b, t)
+                            .offset(normal.x * width * side, normal.y * width * side);
                         let original = pixel(&reference, p, ref_lo, ref_hi, ref_size);
                         let actual = sample(p);
                         assert!(
@@ -919,7 +920,7 @@ fn view_visibility_exposed_miter_sectors_retain_opaque_compound_ink() {
     let a = doc.atom(13).unwrap().position;
     let b = doc.atom(5).unwrap().position;
     let length = a.distance(b);
-    let p = mix(a, b, 0.1).offset(
+    let p = a.lerp(b, 0.1).offset(
         -(b.y - a.y) / length * doc.drawing_style.line_width() * 0.2,
         (b.x - a.x) / length * doc.drawing_style.line_width() * 0.2,
     );

@@ -17,6 +17,17 @@ impl Point {
     pub fn offset(self, dx: f32, dy: f32) -> Self {
         Self::new(self.x + dx, self.y + dy)
     }
+    /// Linearly interpolates from this point to another.
+    pub fn lerp(self, other: Self, t: f32) -> Self {
+        Self::new(
+            self.x + (other.x - self.x) * t,
+            self.y + (other.y - self.y) * t,
+        )
+    }
+    /// Returns whether both coordinates are finite.
+    pub fn is_finite(self) -> bool {
+        self.x.is_finite() && self.y.is_finite()
+    }
 }
 
 fn is_zero_u64(value: &u64) -> bool {

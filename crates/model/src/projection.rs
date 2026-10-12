@@ -2,6 +2,7 @@
 use crate::document::{Document, Point};
 use std::collections::HashSet;
 pub mod growth;
+pub(crate) mod vector;
 
 pub fn validate(doc: &Document) -> Result<(), String> {
     for atom in &doc.atoms {

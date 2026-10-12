@@ -1,6 +1,7 @@
 //! New mechanism-arrow targets use the same opacity/crossing/rail clipping as
 //! the bond scene. Persistent links deliberately do not use this hit-test gate.
 use super::*;
+use crate::polygon::signed_area;
 use std::cell::OnceCell;
 
 pub(crate) struct AttachmentInk<'a> {
@@ -200,7 +201,7 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
             *alpha > 0. && intersects_fraction(primitive, origin, axis, at)
         }
         Primitive::Line(a, b, width) => *width > 0. && range(&[*a, *b], *width * 0.5),
-        Primitive::Polygon(points) => area(points).abs() > 1e-10 && range(points, 0.),
+        Primitive::Polygon(points) => signed_area(points).abs() > 1e-10 && range(points, 0.),
         Primitive::Path {
             commands,
             style,
@@ -210,27 +211,16 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
             // flattening for pointer tests. This is an ink eligibility test,
             // not a new per-pixel visibility certificate.
             crate::graphics::flattened(commands).iter().any(|path| {
-                (*filled && style.fill.is_some() && area(path).abs() > 1e-10 && range(path, 0.))
+                (*filled
+                    && style.fill.is_some()
+                    && signed_area(path).abs() > 1e-10
+                    && range(path, 0.))
                     || (style.width() > 0.
                         && path.windows(2).any(|line| range(line, style.width() * 0.5)))
             })
         }
         Primitive::Picture(_) | Primitive::Text { .. } => false,
     }
-}
-fn area(points: &[Point]) -> f64 {
-    let Some(origin) = points.first() else {
-        return 0.;
-    };
-    points
-        .iter()
-        .zip(points.iter().cycle().skip(1))
-        .take(points.len())
-        .map(|(a, b)| {
-            (f64::from(a.x) - f64::from(origin.x)) * (f64::from(b.y) - f64::from(origin.y))
-                - (f64::from(a.y) - f64::from(origin.y)) * (f64::from(b.x) - f64::from(origin.x))
-        })
-        .sum()
 }
 
 #[cfg(test)]

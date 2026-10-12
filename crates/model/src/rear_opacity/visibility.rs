@@ -2,6 +2,7 @@
 //! Geometry is recomputed from retained XYZ; RGB/frozen paint is not a camera.
 use super::{Field, PathCommand, Point, Primitive, flatten, ink};
 use crate::document::{Bond, Document};
+use crate::polygon::closed_edges;
 use std::collections::{BTreeMap, BTreeSet};
 #[cfg(test)]
 thread_local! {
@@ -136,11 +137,7 @@ impl Ink {
     fn winding(&self, p: V) -> i32 {
         let mut winding = 0_i32;
         for contour in &self.contours {
-            for (&a, &b) in contour
-                .iter()
-                .zip(contour.iter().cycle().skip(1))
-                .take(contour.len())
-            {
+            for (a, b) in closed_edges(contour) {
                 if f64::from(a.y) <= p[1]
                     && f64::from(b.y) > p[1]
                     && cross_xy(
@@ -181,11 +178,7 @@ impl Ink {
         let dy = f64::from(b.y) - f64::from(a.y);
         let mut events = vec![];
         for contour in &self.contours {
-            for (&p, &q) in contour
-                .iter()
-                .zip(contour.iter().cycle().skip(1))
-                .take(contour.len())
-            {
+            for (p, q) in closed_edges(contour) {
                 let ex = f64::from(q.x) - f64::from(p.x);
                 let ey = f64::from(q.y) - f64::from(p.y);
                 let det = dx * ey - dy * ex;
@@ -593,12 +586,7 @@ fn rims(
         }
         for (p, id) in &points {
             memberships.insert(*id, shell);
-            if low
-                .iter()
-                .zip(low.iter().cycle().skip(1))
-                .take(low.len())
-                .any(|(a, b)| on_segment(*p, a.0, b.0, epsilon))
-            {
+            if closed_edges(&low).any(|(a, b)| on_segment(*p, a.0, b.0, epsilon)) {
                 atoms.insert(*id, (shell, *p));
             }
         }
@@ -611,10 +599,7 @@ fn rims(
                 continue;
             };
             let (a, b) = (a.position, b.position);
-            if low
-                .iter()
-                .zip(low.iter().cycle().skip(1))
-                .take(low.len())
+            if closed_edges(&low)
                 .any(|(x, y)| on_segment(a, x.0, y.0, epsilon) && on_segment(b, x.0, y.0, epsilon))
             {
                 bonds.insert((bond.a.min(bond.b), bond.a.max(bond.b)), (shell, a, b));
@@ -1075,11 +1060,7 @@ fn shell(
             angles.push((y.atan2(x), *n));
         }
         angles.sort_by(|a, b| a.0.total_cmp(&b.0));
-        for (a, b) in angles
-            .iter()
-            .zip(angles.iter().cycle().skip(1))
-            .take(angles.len())
-        {
+        for (a, b) in closed_edges(&angles) {
             let d = (b.0 - a.0).rem_euclid(std::f64::consts::TAU);
             if d < 1e-5 {
                 return None;
@@ -1143,18 +1124,11 @@ fn shell(
     let mut mean = 0.;
     let mut orientation = 0.;
     for face in &faces {
-        let layer = face
-            .iter()
-            .zip(face.iter().cycle().skip(1))
-            .take(face.len())
-            .filter_map(|(a, b)| layers.get(&((*a).min(*b), (*a).max(*b))))
+        let layer = closed_edges(face)
+            .filter_map(|(a, b)| layers.get(&(a.min(b), a.max(b))))
             .copied()
             .max()?;
-        for (&a, &b) in face
-            .iter()
-            .zip(face.iter().cycle().skip(1))
-            .take(face.len())
-        {
+        for (a, b) in closed_edges(face) {
             *counts.entry((a.min(b), a.max(b))).or_default() += 1;
         }
         let mut fc = [0.; 3];
@@ -1165,11 +1139,7 @@ fn shell(
         }
         let mut normal = [0.; 3];
         let mut length = 0.;
-        for (&a, &b) in face
-            .iter()
-            .zip(face.iter().cycle().skip(1))
-            .take(face.len())
-        {
+        for (a, b) in closed_edges(face) {
             let n = cross(sub(*points.get(&a)?, fc), sub(*points.get(&b)?, fc));
             for (n, x) in normal.iter_mut().zip(n) {
                 *n += x;
@@ -1229,11 +1199,7 @@ fn shell(
                 return None;
             }
         }
-        for (&a, &b) in face
-            .iter()
-            .zip(face.iter().cycle().skip(1))
-            .take(face.len())
-        {
+        for (a, b) in closed_edges(face) {
             let (mut a, mut b) = (*points.get(&a)?, *points.get(&b)?);
             if dot(cross(sub(a, fc), sub(b, fc)), normal) < 0. {
                 std::mem::swap(&mut a, &mut b);

@@ -1,27 +1,14 @@
 //! Secondary rails in a retained ring face, projected without rescaling XY.
-use crate::document::{Atom, Bond, Document, Point};
+use crate::{
+    document::{Bond, Document, Point},
+    polygon::closed_edges,
+    projection::vector::{V, cross, dot, sub, unit, xyz},
+};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
-type V = [f32; 3];
 const MAX_RING: usize = 24;
 const SEARCH_BUDGET: usize = 4096;
 
-fn xyz(a: &Atom) -> V {
-    [a.position.x, a.position.y, a.depth]
-}
-fn sub([x, y, z]: V, [a, b, c]: V) -> V {
-    [x - a, y - b, z - c]
-}
-fn dot(a: V, b: V) -> f32 {
-    a.into_iter().zip(b).map(|(a, b)| a * b).sum()
-}
-fn cross([x, y, z]: V, [a, b, c]: V) -> V {
-    [y * c - z * b, z * a - x * c, x * b - y * a]
-}
-fn unit(v: V) -> Option<V> {
-    let length = dot(v, v).sqrt();
-    (length.is_finite() && length > 0.001).then(|| v.map(|x| x / length))
-}
 fn xy([x, y, _]: V) -> Point {
     Point::new(x, y)
 }
@@ -171,9 +158,7 @@ fn face(doc: &Document, bond: &Bond) -> Option<Face> {
             continue;
         };
         let normal = cross(t, inward);
-        let mean_length = atoms
-            .iter()
-            .zip(atoms.iter().cycle().skip(1))
+        let mean_length = closed_edges(&atoms)
             .map(|(a, b)| dot(sub(xyz(a), xyz(b)), sub(xyz(a), xyz(b))).sqrt())
             .sum::<f32>()
             / n;
@@ -332,10 +317,9 @@ pub(crate) fn rail_depth(
 
 fn clip(first: Point, last: Point, points: &[Point], margin: f32) -> Option<(Point, Point)> {
     let origin = points.first().copied()?;
-    let area = points
-        .iter()
-        .zip(points.iter().cycle().skip(1))
-        .map(|(a, b)| cross_xy(minus(*a, origin), minus(*b, origin)))
+    // Keep f32 arithmetic here; polygon::signed_area evaluates and accumulates in f64.
+    let area = closed_edges(points)
+        .map(|(a, b)| cross_xy(minus(a, origin), minus(b, origin)))
         .sum::<f32>();
     if !area.is_finite() || area.abs() < 0.001 || !simple(points) {
         return None;
@@ -343,10 +327,10 @@ fn clip(first: Point, last: Point, points: &[Point], margin: f32) -> Option<(Poi
     let orientation = area.signum();
     let direction = minus(last, first);
     let (mut low, mut high) = (0_f32, 1_f32);
-    for (a, b) in points.iter().zip(points.iter().cycle().skip(1)) {
-        let edge = minus(*b, *a);
+    for (a, b) in closed_edges(points) {
+        let edge = minus(b, a);
         let alpha = orientation * cross_xy(edge, direction);
-        let beta = orientation * cross_xy(edge, minus(first, *a)) - margin * a.distance(*b);
+        let beta = orientation * cross_xy(edge, minus(first, a)) - margin * a.distance(b);
         if !alpha.is_finite() || !beta.is_finite() {
             return None;
         }
@@ -370,19 +354,19 @@ fn clip(first: Point, last: Point, points: &[Point], margin: f32) -> Option<(Poi
 }
 
 fn simple(points: &[Point]) -> bool {
-    let edges: Vec<_> = points.iter().zip(points.iter().cycle().skip(1)).collect();
+    let edges: Vec<_> = closed_edges(points).collect();
     for (i, (a, b)) in edges.iter().enumerate() {
         for (j, (c, d)) in edges.iter().enumerate().skip(i + 2) {
             if i == 0 && j + 1 == points.len() {
                 continue;
             }
-            let edge = minus(**b, **a);
-            let other = minus(**d, **c);
+            let edge = minus(*b, *a);
+            let other = minus(*d, *c);
             let denominator = cross_xy(edge, other);
             if denominator.abs() <= 0.00001 {
                 continue;
             }
-            let between = minus(**c, **a);
+            let between = minus(*c, *a);
             let t = cross_xy(between, other) / denominator;
             let u = cross_xy(between, edge) / denominator;
             if (0. ..=1.).contains(&t) && (0. ..=1.).contains(&u) {

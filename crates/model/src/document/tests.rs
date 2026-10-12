@@ -1,4 +1,24 @@
 use super::*;
+
+#[test]
+fn point_lerp_matches_endpoints_and_midpoint() {
+    let a = Point::new(-4., 6.);
+    let b = Point::new(8., -2.);
+    assert_eq!(a.lerp(b, 0.), a);
+    assert_eq!(a.lerp(b, 1.), b);
+    assert_eq!(a.lerp(b, 0.5), Point::new(2., 2.));
+}
+
+#[test]
+fn point_is_finite_rejects_nan_and_infinity() {
+    assert!(Point::default().is_finite());
+    assert!(Point::new(f32::MIN, f32::MAX).is_finite());
+    for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        assert!(!Point::new(value, 0.).is_finite());
+        assert!(!Point::new(0., value).is_finite());
+    }
+}
+
 #[test]
 fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
     let mut doc = Document::default();

@@ -36,15 +36,11 @@ impl Edge {
                 .map(|(_, a, b)| (a, b)),
         }
         .ok_or("Choose an existing reference bond or straight edge")?;
-        if !finite(pair.0) || !finite(pair.1) || pair.0.distance(pair.1) < 0.001 {
+        if !pair.0.is_finite() || !pair.1.is_finite() || pair.0.distance(pair.1) < 0.001 {
             return Err("The reference edge must have a positive length".into());
         }
         Ok(pair)
     }
-}
-
-fn finite(p: Point) -> bool {
-    p.x.is_finite() && p.y.is_finite()
 }
 
 fn straight_edges(commands: &[PathCommand]) -> Vec<(usize, Point, Point)> {
@@ -199,7 +195,7 @@ pub fn rotate(
     degrees: f32,
     duplicate: bool,
 ) -> Result<(Document, Vec<u64>), String> {
-    if !finite(pivot) || !degrees.is_finite() {
+    if !pivot.is_finite() || !degrees.is_finite() {
         return Err("Enter a finite pivot and angle".into());
     }
     let ids = scope(doc, ids, false)?;

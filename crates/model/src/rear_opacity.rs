@@ -4,6 +4,7 @@
 use crate::{
     document::{Bond, Document, Point},
     graphics::PathCommand,
+    polygon::closed_edges,
     scene::Primitive,
 };
 use std::collections::BTreeMap;
@@ -136,7 +137,7 @@ impl Paint {
         let t = t.clamp(0., 1.);
         if self.visibility.as_ref().is_some_and(|v| {
             v.occluded(
-                mix(a.position, b.position, t),
+                a.position.lerp(b.position, t),
                 lerp(a.depth, b.depth, t),
                 &[bond.a, bond.b],
                 bond.z_order,
@@ -427,18 +428,14 @@ fn split_intervals(
 /// Polygon clipping in drawing coordinates; f64 evaluations keep equality visible.
 fn clip_values(points: &[Point], value: impl Fn(Point) -> f64) -> Vec<Point> {
     let mut out = vec![];
-    for (&a, &b) in points
-        .iter()
-        .zip(points.iter().cycle().skip(1))
-        .take(points.len())
-    {
+    for (a, b) in closed_edges(points) {
         let (va, vb) = (value(a), value(b));
         let (ia, ib) = (va >= 0., vb >= 0.);
         if ia {
             out.push(a);
         }
         if ia != ib && va.is_finite() && vb.is_finite() {
-            out.push(mix(a, b, (va / (va - vb)).clamp(0., 1.) as f32));
+            out.push(a.lerp(b, (va / (va - vb)).clamp(0., 1.) as f32));
         }
     }
     out
@@ -451,10 +448,8 @@ fn mask_clip(points: &[Point], mask: &[Point], outside: bool) -> Vec<Vec<Point>>
             vec![]
         };
     }
-    let area: f64 = mask
-        .iter()
-        .zip(mask.iter().cycle().skip(1))
-        .take(mask.len())
+    // Keep origin-free arithmetic here; polygon::signed_area subtracts the first vertex.
+    let area: f64 = closed_edges(mask)
         .map(|(a, b)| f64::from(a.x) * f64::from(b.y) - f64::from(a.y) * f64::from(b.x))
         .sum();
     if area.abs() < 1e-10 {
@@ -467,11 +462,7 @@ fn mask_clip(points: &[Point], mask: &[Point], outside: bool) -> Vec<Vec<Point>>
     let sign = area.signum();
     let mut inside = points.to_vec();
     let mut out = vec![];
-    for (&a, &b) in mask
-        .iter()
-        .zip(mask.iter().cycle().skip(1))
-        .take(mask.len())
-    {
+    for (a, b) in closed_edges(mask) {
         let edge = |p: Point| {
             sign * ((f64::from(b.x) - f64::from(a.x)) * (f64::from(p.y) - f64::from(a.y))
                 - (f64::from(b.y) - f64::from(a.y)) * (f64::from(p.x) - f64::from(a.x)))
@@ -593,7 +584,7 @@ fn split_curve(
                 intervals.push((low, 1.));
             }
             for (s, e) in intervals {
-                let mask = Primitive::Polygon(capsule(mix(a, b, s), mix(a, b, e), width + 0.04));
+                let mask = Primitive::Polygon(capsule(a.lerp(b, s), a.lerp(b, e), width + 0.04));
                 let clipped = band(&mask, a, b, s, e);
                 let mask = clipped.first().map(contours).unwrap_or_default();
                 for contour in &original {
@@ -614,9 +605,6 @@ fn split_curve(
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
-}
-fn mix(a: Point, b: Point, t: f32) -> Point {
-    Point::new(lerp(a.x, b.x, t), lerp(a.y, b.y, t))
 }
 
 #[derive(Clone, Copy)]
@@ -732,21 +720,17 @@ fn cut(a: Point, b: Point, field: Field) -> Point {
     let side = field.at(a) > 0.5;
     for _ in 0..24 {
         let t = (low + high) / 2.;
-        if (field.at(mix(a, b, t)) > 0.5) == side {
+        if (field.at(a.lerp(b, t)) > 0.5) == side {
             low = t;
         } else {
             high = t;
         }
     }
-    mix(a, b, (low + high) / 2.)
+    a.lerp(b, (low + high) / 2.)
 }
 fn polygon(points: &[Point], field: Field, rear: bool) -> Vec<Point> {
     let mut clipped = vec![];
-    for (&a, &b) in points
-        .iter()
-        .zip(points.iter().cycle().skip(1))
-        .take(points.len())
-    {
+    for (a, b) in closed_edges(points) {
         let ia = inside(field, a, rear);
         let ib = inside(field, b, rear);
         if ia {
@@ -863,6 +847,11 @@ fn half(part: &Primitive, field: Field, rear: bool) -> Vec<Primitive> {
         _ => vec![part.clone()],
     }
 }
+const REAR_FLATTEN_TOLERANCE: f32 = 0.02;
+const REAR_FLATTEN_DEPTH: u8 = 12;
+
+// Deliberate sibling of scientific/label_clearance.rs `flatten` (hypot, 1e-8 cutoff,
+// 0.03/depth 14, ignores commands before a Move); do not merge them.
 fn flatten(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     fn cubic(out: &mut Vec<Point>, p: Point, a: Point, b: Point, z: Point, depth: u8) {
         let distance = |v: Point| {
@@ -874,13 +863,13 @@ fn flatten(commands: &[PathCommand]) -> Vec<Vec<Point>> {
                 ((v.x - p.x) * y - (v.y - p.y) * x).abs() / length
             }
         };
-        if depth >= 12 || distance(a).max(distance(b)) <= 0.02 {
+        if depth >= REAR_FLATTEN_DEPTH || distance(a).max(distance(b)) <= REAR_FLATTEN_TOLERANCE {
             out.push(z);
             return;
         }
-        let (pa, ab, bz) = (mix(p, a, 0.5), mix(a, b, 0.5), mix(b, z, 0.5));
-        let (left, right) = (mix(pa, ab, 0.5), mix(ab, bz, 0.5));
-        let middle = mix(left, right, 0.5);
+        let (pa, ab, bz) = (p.lerp(a, 0.5), a.lerp(b, 0.5), b.lerp(z, 0.5));
+        let (left, right) = (pa.lerp(ab, 0.5), ab.lerp(bz, 0.5));
+        let middle = left.lerp(right, 0.5);
         cubic(out, p, pa, left, middle, depth + 1);
         cubic(out, middle, right, bz, z, depth + 1);
     }

@@ -4,9 +4,12 @@ use super::Part;
 use crate::{
     document::Point,
     graphics::{Graphic, PathCommand},
+    polygon::closed_edges,
     style::DEFAULT,
 };
 type Box2 = (Point, Point);
+const CLEARANCE_FLATTEN_TOLERANCE: f32 = 0.03;
+const CLEARANCE_FLATTEN_DEPTH: u8 = 14;
 
 pub(crate) fn readable_orbital_parts(graphic: &Graphic, labels: &[Box2]) -> Vec<Part> {
     if labels.is_empty() {
@@ -117,13 +120,10 @@ fn trim(part: Part, boxes: &[Box2]) -> Vec<Part> {
     out
 }
 
+// Closes the contour (last vertex to first), unlike graphics::inside_polygon's windows(2).
 fn contains(points: &[Point], p: Point) -> bool {
     let mut inside = false;
-    for (a, b) in points
-        .iter()
-        .zip(points.iter().cycle().skip(1))
-        .take(points.len())
-    {
+    for (a, b) in closed_edges(points) {
         if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
             inside = !inside;
         }
@@ -131,9 +131,6 @@ fn contains(points: &[Point], p: Point) -> bool {
     inside
 }
 
-fn lerp(a: Point, b: Point, t: f32) -> Point {
-    a.offset((b.x - a.x) * t, (b.y - a.y) * t)
-}
 fn inside_interval(a: Point, b: Point, (lo, hi): Box2) -> Option<(f32, f32)> {
     let mut enter: f32 = 0.;
     let mut leave: f32 = 1.;
@@ -160,10 +157,10 @@ fn outside_segment(a: Point, b: Point, bounds: Box2) -> Vec<(Point, Point)> {
     };
     let mut out = Vec::with_capacity(2);
     if enter > 0. {
-        out.push((a, lerp(a, b, enter)));
+        out.push((a, a.lerp(b, enter)));
     }
     if leave < 1. {
-        out.push((lerp(a, b, leave), b));
+        out.push((a.lerp(b, leave), b));
     }
     out
 }
@@ -178,20 +175,12 @@ fn half_polygon(points: &[Point], axis: usize, bound: f32, below: bool) -> Vec<P
         }
     };
     let mut out = Vec::new();
-    for (a, b) in points
-        .iter()
-        .zip(points.iter().cycle().skip(1))
-        .take(points.len())
-    {
-        if keep(*a) {
-            out.push(*a);
+    for (a, b) in closed_edges(points) {
+        if keep(a) {
+            out.push(a);
         }
-        if keep(*a) != keep(*b) {
-            out.push(lerp(
-                *a,
-                *b,
-                (bound - coordinate(*a)) / (coordinate(*b) - coordinate(*a)),
-            ));
+        if keep(a) != keep(b) {
+            out.push(a.lerp(b, (bound - coordinate(a)) / (coordinate(b) - coordinate(a))));
         }
     }
     out
@@ -219,6 +208,8 @@ fn outside_polygon(points: &[Point], (lo, hi): Box2) -> Vec<Vec<Point>> {
     out
 }
 
+// Deliberate sibling of rear_opacity::flatten (sqrt, 1e-6 cutoff, 0.02/depth 12, pushes a
+// cubic end without a preceding Move); do not merge them.
 fn flatten(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     let mut paths: Vec<Vec<Point>> = Vec::new();
     for command in commands {
@@ -258,16 +249,18 @@ fn flatten_cubic(out: &mut Vec<Point>, start: Point, a: Point, b: Point, end: Po
             ((p.x - start.x) * dy - (p.y - start.y) * dx).abs() / length
         }
     };
-    if depth == 14 || deviation(a).max(deviation(b)) <= 0.03 {
+    if depth == CLEARANCE_FLATTEN_DEPTH
+        || deviation(a).max(deviation(b)) <= CLEARANCE_FLATTEN_TOLERANCE
+    {
         out.push(end);
         return;
     }
-    let a0 = lerp(start, a, 0.5);
-    let a1 = lerp(a, b, 0.5);
-    let a2 = lerp(b, end, 0.5);
-    let b0 = lerp(a0, a1, 0.5);
-    let b1 = lerp(a1, a2, 0.5);
-    let middle = lerp(b0, b1, 0.5);
+    let a0 = start.lerp(a, 0.5);
+    let a1 = a.lerp(b, 0.5);
+    let a2 = b.lerp(end, 0.5);
+    let b0 = a0.lerp(a1, 0.5);
+    let b1 = a1.lerp(a2, 0.5);
+    let middle = b0.lerp(b1, 0.5);
     flatten_cubic(out, start, a0, b0, middle, depth + 1);
     flatten_cubic(out, middle, b1, a2, end, depth + 1);
 }

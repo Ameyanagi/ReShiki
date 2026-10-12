@@ -11,6 +11,56 @@ fn fixture() -> Document {
 fn near(a: Point, b: Point) {
     assert!(a.distance(b) < 0.001, "{a:?} != {b:?}");
 }
+
+#[test]
+fn world_to_local_inverts_the_drawing_frame() {
+    let mut graphic = Graphic::dragged(
+        1,
+        super::GraphicKind::Curve,
+        Point::new(17., -9.),
+        Point::new(100., 80.),
+        GraphicStyle::default(),
+        super::BracketSides::Both,
+        false,
+    );
+    graphic.axis_x = Point::new(4., 1.5);
+    graphic.axis_y = Point::new(-2., 3.);
+    let determinant = graphic.frame_determinant();
+    assert_eq!(
+        determinant,
+        graphic.axis_x.x * graphic.axis_y.y - graphic.axis_x.y * graphic.axis_y.x
+    );
+    assert_eq!(determinant, 15.);
+    for (u, v) in [(0., 0.), (0.25, 0.75), (-2., 3.)] {
+        let world = Point::new(
+            graphic.origin.x + graphic.axis_x.x * u + graphic.axis_y.x * v,
+            graphic.origin.y + graphic.axis_x.y * u + graphic.axis_y.y * v,
+        );
+        let local = graphic.world_to_local(world, determinant);
+        assert!((local.x - u).abs() < 1e-5);
+        assert!((local.y - v).abs() < 1e-5);
+    }
+}
+
+#[test]
+fn reset_frame_restores_the_identity_frame() {
+    let mut graphic = Graphic::dragged(
+        1,
+        super::GraphicKind::Curve,
+        Point::new(17., -9.),
+        Point::new(100., 80.),
+        GraphicStyle::default(),
+        super::BracketSides::Both,
+        false,
+    );
+    graphic.axis_x = Point::new(4., 1.5);
+    graphic.axis_y = Point::new(-2., 3.);
+    graphic.reset_frame();
+    assert_eq!(graphic.origin, Point::default());
+    assert_eq!(graphic.axis_x, Point::new(1., 0.));
+    assert_eq!(graphic.axis_y, Point::new(0., 1.));
+}
+
 fn point(command: &PathCommand, start: Point, t: f32) -> Point {
     let lerp =
         |a: Point, b: Point, t: f32| Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);

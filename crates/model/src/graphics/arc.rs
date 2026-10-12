@@ -135,16 +135,16 @@ impl Graphic {
     }
 
     pub(super) fn edit_arc_endpoint(&mut self, index: usize, p: Point) {
-        if index > 1 || !p.x.is_finite() || !p.y.is_finite() {
+        if index > 1 || !p.is_finite() {
             return;
         }
-        let determinant = self.axis_x.x * self.axis_y.y - self.axis_x.y * self.axis_y.x;
+        let determinant = self.frame_determinant();
         if determinant.abs() < 0.000_001 {
             return; // An edge-on projected ellipse has no invertible frame.
         }
-        let delta = Point::new(p.x - self.origin.x, p.y - self.origin.y);
-        let x = (delta.x * self.axis_y.y - delta.y * self.axis_y.x) / determinant;
-        let mut y = (self.axis_x.x * delta.y - self.axis_x.y * delta.x) / determinant;
+        let local = self.world_to_local(p, determinant);
+        let x = local.x;
+        let mut y = local.y;
         if self.arc.is_none() {
             y *= 0.5;
         }

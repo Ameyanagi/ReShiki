@@ -1,31 +1,10 @@
 //! Bond growth in a Cp/aromatic ring's retained plane. No conformer inference.
+use super::vector::{V, cross, dot, sub, unit, xyz};
 use crate::{
     bonds::BondPreset,
     chains::BondDrawing,
-    document::{Atom, Document, Point},
+    document::{Document, Point},
 };
-
-type V = [f32; 3];
-fn xyz(a: &Atom) -> V {
-    [a.position.x, a.position.y, a.depth]
-}
-fn sub(a: V, b: V) -> V {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-fn dot(a: V, b: V) -> f32 {
-    a.iter().zip(b).map(|(a, b)| a * b).sum()
-}
-fn cross(a: V, b: V) -> V {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-fn unit(a: V) -> Option<V> {
-    let length = dot(a, a).sqrt();
-    (length.is_finite() && length > 0.001).then(|| a.map(|v| v / length))
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Endpoint {

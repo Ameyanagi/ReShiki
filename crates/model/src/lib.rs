@@ -47,6 +47,7 @@ pub mod molecule_names;
 pub mod pages;
 pub mod palette;
 pub mod pictures;
+mod polygon;
 pub mod projection;
 pub mod reaction_mapping;
 pub mod reactions;
