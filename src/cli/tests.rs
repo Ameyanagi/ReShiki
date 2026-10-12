@@ -2,7 +2,11 @@ use super::{
     args::{Compose, Convert, Export, Input, Output, Render, Source, parse},
     *,
 };
-use reshiki_agent::ops::documents::{EXPORT_FORMATS, IMPORT_FORMATS};
+use reshiki_agent::ops::{
+    budget::Budgets,
+    documents::{EXPORT_FORMATS, IMPORT_FORMATS},
+};
+use serde_json::Value;
 use std::path::PathBuf;
 
 async fn call(tokens: &[&str]) -> (i32, String, String) {
@@ -788,36 +792,30 @@ async fn binary_output_never_goes_to_a_terminal() {
     }
 }
 
-const HELP_GOLDENS: &[(&str, Topic, &str)] = &[
+const HELP_GOLDENS: &[(&str, &str)] = &[
     // Current behavior: overview help omits exit status 75 and RESHIKI_AGENT_HEAP_MB.
     (
         "help",
-        Topic::Help,
         include_str!("../../tests/fixtures/cli-help/help.txt"),
     ),
     (
         "convert",
-        Topic::Convert,
         include_str!("../../tests/fixtures/cli-help/convert.txt"),
     ),
     (
         "render",
-        Topic::Render,
         include_str!("../../tests/fixtures/cli-help/render.txt"),
     ),
     (
         "compose",
-        Topic::Compose,
         include_str!("../../tests/fixtures/cli-help/compose.txt"),
     ),
     (
         "analyze",
-        Topic::Analyze,
         include_str!("../../tests/fixtures/cli-help/analyze.txt"),
     ),
     (
         "info",
-        Topic::Info,
         include_str!("../../tests/fixtures/cli-help/info.txt"),
     ),
 ];
@@ -834,8 +832,8 @@ fn help_builders_match_golden_text() {
         include_str!("../../tests/fixtures/cli-help/help.txt"),
         "help",
     );
-    for &(name, topic, golden) in HELP_GOLDENS {
-        assert_help_golden(&help(Some(topic)), golden, name);
+    for &(name, golden) in HELP_GOLDENS {
+        assert_help_golden(&help(commands::find(name)), golden, name);
     }
 }
 
@@ -849,7 +847,7 @@ async fn help_commands_match_golden_stdout() {
         include_str!("../../tests/fixtures/cli-help/help.txt"),
         "help",
     );
-    for &(name, _, golden) in HELP_GOLDENS {
+    for &(name, golden) in HELP_GOLDENS {
         let (code, out, err) = call(&["help", name]).await;
         assert_eq!(code, SUCCESS, "help {name}");
         assert!(err.is_empty(), "help {name}: {err}");

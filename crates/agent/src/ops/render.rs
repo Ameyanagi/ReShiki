@@ -22,6 +22,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
+/// The `format` values the render operation accepts.
+pub const FORMATS: &[&str] = &["png", "svg"];
+
 pub const RENDER: ToolSpec = ToolSpec {
     name: "render",
     title: Some("Render preview"),
@@ -40,7 +43,7 @@ fn schema() -> Value {
         "type": "object",
         "properties": {
             "document": handle_schema(),
-            "format": {"type": "string", "enum": ["png", "svg"]},
+            "format": {"type": "string", "enum": FORMATS},
             "max_width": nullable(side_schema()),
             "max_height": nullable(side_schema()),
             "ids": nullable(ids_schema()),

@@ -1,18 +1,13 @@
-//! The `reshiki --cli` grammar:
-//!
-//! ```text
-//! reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FMT] [--to FMT] [-o OUTPUT|-] [--pages] [--force] [--receipt]
-//! reshiki --cli render (INPUT | - | --smiles TEXT) [--from FMT] [--to png|svg] [-o OUTPUT|-] [--width N] [--height N] [--force]
-//! reshiki --cli compose (PROPOSAL | -) [--to FMT] [-o OUTPUT|-] [--pages] [--force] [--receipt]
-//! reshiki --cli analyze (INPUT | - | --smiles TEXT) [--from FMT]
-//! reshiki --cli info
-//! reshiki --cli help [COMMAND]
-//! ```
+//! Token parsing for the grammar in [`commands::COMMANDS`], described by
+//! `reshiki --cli help`.
 //!
 //! Tokens stay [`OsString`]s, so paths need not be UTF-8. `--` ends the
 //! options, each option is allowed at most once, and every problem is a
 //! usage error (exit 2) found before anything is read or run.
-use super::{input_format, input_formats, output_formats, render_formats};
+use super::{
+    commands::{self, CommandSpec},
+    input_format, input_formats, output_formats, render_formats,
+};
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
@@ -21,23 +16,12 @@ use std::{
 /// A parsed command line.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Command {
-    Help(Option<Topic>),
+    Help(Option<&'static CommandSpec>),
     Info,
     Convert(Convert),
     Render(Render),
     Compose(Compose),
     Analyze(Input),
-}
-
-/// A command `help` describes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Topic {
-    Convert,
-    Render,
-    Compose,
-    Analyze,
-    Info,
-    Help,
 }
 
 /// Where the input comes from.
@@ -99,50 +83,28 @@ pub(crate) struct Compose {
     pub(crate) export: Export,
 }
 
-/// Every option; each command takes those in its own list.
-const OPTIONS: &[&str] = &[
-    "--smiles",
-    "--from",
-    "--to",
-    "-o",
-    "--width",
-    "--height",
-    "--pages",
-    "--force",
-    "--receipt",
-];
-const CONVERT_OPTIONS: &[&str] = &[
-    "--smiles",
-    "--from",
-    "--to",
-    "-o",
-    "--pages",
-    "--force",
-    "--receipt",
-];
-const RENDER_OPTIONS: &[&str] = &[
-    "--smiles", "--from", "--to", "-o", "--width", "--height", "--force",
-];
-const COMPOSE_OPTIONS: &[&str] = &["--to", "-o", "--pages", "--force", "--receipt"];
-const ANALYZE_OPTIONS: &[&str] = &["--smiles", "--from"];
-
 /// Parses `name` and the tokens after it; `Err` is the usage message.
 pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> {
     let lossy = name.to_string_lossy();
-    match lossy.as_ref() {
-        "help" | "--help" | "-h" => help(rest),
+    if matches!(lossy.as_ref(), "--help" | "-h") {
+        return help(rest);
+    }
+    let spec = commands::find(&lossy).ok_or_else(|| unknown_command(&lossy))?;
+    match spec.name {
+        "help" => help(rest),
         "info" if rest.is_empty() => Ok(Command::Info),
         "info" => Err("info takes no arguments".into()),
-        "convert" => convert(&options("convert", CONVERT_OPTIONS, rest)?),
-        "render" => render(&options("render", RENDER_OPTIONS, rest)?),
-        "compose" => compose(&options("compose", COMPOSE_OPTIONS, rest)?),
-        "analyze" => {
-            input("analyze", &options("analyze", ANALYZE_OPTIONS, rest)?).map(Command::Analyze)
-        }
-        _ => Err(format!(
-            "unknown command `{lossy}`; run `reshiki --cli help`"
-        )),
+        "convert" => convert(&options(spec, rest)?),
+        "render" => render(&options(spec, rest)?),
+        "compose" => compose(&options(spec, rest)?),
+        "analyze" => input(spec.name, &options(spec, rest)?).map(Command::Analyze),
+        _ => Err(unknown_command(&lossy)),
     }
+}
+
+/// The usage message for a command name that is not in the table.
+fn unknown_command(name: &str) -> String {
+    format!("unknown command `{name}`; run `reshiki --cli help`")
 }
 
 /// `help [COMMAND]`.
@@ -154,19 +116,8 @@ fn help(rest: &[OsString]) -> Result<Command, String> {
             Err("help takes at most one command".into())
         };
     };
-    let topic = match topic.to_string_lossy().as_ref() {
-        "convert" => Topic::Convert,
-        "render" => Topic::Render,
-        "compose" => Topic::Compose,
-        "analyze" => Topic::Analyze,
-        "info" => Topic::Info,
-        "help" => Topic::Help,
-        other => {
-            return Err(format!(
-                "unknown command `{other}`; run `reshiki --cli help`"
-            ));
-        }
-    };
+    let name = topic.to_string_lossy();
+    let topic = commands::find(&name).ok_or_else(|| unknown_command(&name))?;
     Ok(Command::Help(Some(topic)))
 }
 
@@ -186,8 +137,9 @@ struct Options {
     receipt: bool,
 }
 
-/// Splits `tokens` into options from `allowed` and one positional input.
-fn options(command: &str, allowed: &[&str], tokens: &[OsString]) -> Result<Options, String> {
+/// Splits `tokens` into the command's options and one positional input.
+fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
+    let command = spec.name;
     let mut options = Options::default();
     let mut seen: Vec<&str> = Vec::new();
     let mut ended = false;
@@ -207,34 +159,41 @@ fn options(command: &str, allowed: &[&str], tokens: &[OsString]) -> Result<Optio
             options.input = Some(token.clone());
             continue;
         }
-        let Some(&name) = OPTIONS.iter().find(|name| token == **name) else {
+        let Some(known) = commands::COMMANDS
+            .iter()
+            .flat_map(|command| command.options)
+            .find(|option| token == option.flag)
+        else {
             return Err(format!("unknown option `{}`", token.to_string_lossy()));
         };
-        if !allowed.contains(&name) {
+        let name = known.flag;
+        let Some(option) = spec.options.iter().find(|option| option.flag == name) else {
             return Err(format!("{command} does not take {name}"));
-        }
+        };
         if seen.contains(&name) {
             return Err(format!("{name} given more than once"));
         }
         seen.push(name);
-        match name {
-            "--pages" => options.pages = true,
-            "--force" => options.force = true,
-            "--receipt" => options.receipt = true,
-            _ => {
-                // The next token is the value, whatever it looks like.
-                let value = tokens
-                    .next()
-                    .cloned()
-                    .ok_or_else(|| format!("{name} needs a value"))?;
-                match name {
-                    "--smiles" => options.smiles = Some(value),
-                    "--from" => options.from = Some(value),
-                    "--to" => options.to = Some(value),
-                    "--width" => options.width = Some(value),
-                    "--height" => options.height = Some(value),
-                    _ => options.output = Some(value),
-                }
+        if option.value.is_some() {
+            // The next token is the value, whatever it looks like.
+            let value = tokens
+                .next()
+                .cloned()
+                .ok_or_else(|| format!("{name} needs a value"))?;
+            match name {
+                "--smiles" => options.smiles = Some(value),
+                "--from" => options.from = Some(value),
+                "--to" => options.to = Some(value),
+                "--width" => options.width = Some(value),
+                "--height" => options.height = Some(value),
+                _ => options.output = Some(value),
+            }
+        } else {
+            match name {
+                "--pages" => options.pages = true,
+                "--force" => options.force = true,
+                "--receipt" => options.receipt = true,
+                _ => {}
             }
         }
     }
@@ -274,7 +233,7 @@ fn input(command: &str, options: &Options) -> Result<Input, String> {
         (_, Some(from)) => {
             let from = from.to_string_lossy();
             let formats = input_formats();
-            if !formats.iter().any(|format| *format == from) {
+            if !formats.contains(&from.as_ref()) {
                 return Err(format!(
                     "unknown input format `{from}`; supported: {}",
                     formats.join(", ")
@@ -304,7 +263,7 @@ fn convert(options: &Options) -> Result<Command, String> {
 /// `render`: the input, the image format and destination, then the size.
 fn render(options: &Options) -> Result<Command, String> {
     let input = input("render", options)?;
-    let (format, output) = destination(options, &render_formats())?;
+    let (format, output) = destination(options, render_formats())?;
     Ok(Command::Render(Render {
         input,
         format,
@@ -346,7 +305,7 @@ fn side(name: &str, value: Option<&OsStr>) -> Result<Option<u32>, String> {
 /// The file convert and compose write: the format and destination, then
 /// `--pages` for pdf only and `--receipt` only with `-o FILE`.
 fn export(options: &Options) -> Result<Export, String> {
-    let (format, output) = destination(options, &output_formats())?;
+    let (format, output) = destination(options, output_formats())?;
     if options.pages && format != "pdf" {
         return Err("--pages is valid only with pdf output".into());
     }
@@ -364,7 +323,7 @@ fn export(options: &Options) -> Result<Export, String> {
 
 /// Where the output goes and its format, one of `formats`: `--to`, or the
 /// extension of `-o FILE` (`.smi` is smiles).
-fn destination(options: &Options, formats: &[String]) -> Result<(String, Output), String> {
+fn destination(options: &Options, formats: &[&str]) -> Result<(String, Output), String> {
     let output = match &options.output {
         Some(path) if path == "-" => Output::Stdout,
         Some(path) if path.is_empty() => return Err("-o needs a file name".into()),
@@ -387,7 +346,7 @@ fn destination(options: &Options, formats: &[String]) -> Result<(String, Output)
             return Err("writing to standard output needs --to FORMAT".into());
         }
     };
-    if !formats.contains(&format) {
+    if !formats.contains(&format.as_str()) {
         return Err(format!(
             "unsupported output format `{format}`; supported: {}",
             formats.join(", ")
