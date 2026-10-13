@@ -716,7 +716,69 @@ fn assistant_example(app: &mut App, d: &Driver<'_>) {
     let _ = app.update(Message::Assistant(assistant::Action::ImageExample));
 }
 
-pub(in crate::app::workspace) const STATES: [(&str, Scene); 36] = [
+// Atom labels.
+
+/// The atom-label popup on an M2+ text label bonded to a ring.
+fn atom_label_editor(app: &mut App, _: &Driver<'_>) {
+    let mut doc = benzene();
+    let top = doc
+        .atoms
+        .iter()
+        .min_by(|a, b| a.position.y.total_cmp(&b.position.y))
+        .unwrap()
+        .clone();
+    let metal = doc.add_atom("C", top.position.offset(0., -42.));
+    doc.add_bond(top.id, metal, 1, "plain");
+    let doc =
+        reshiki::atom_text::apply(&doc, metal, "M2+", reshiki::atom_text::Mode::Text).unwrap();
+    show(app, doc, 2., 0.);
+    select(app, vec![metal]);
+    settle(
+        app,
+        Message::AtomText(crate::app::atom_text::Action::Begin(Some(metal))),
+    );
+}
+
+/// Stored scripts in both the popup and the canvas behind it.
+fn atom_label_editor_formatted(app: &mut App, _: &Driver<'_>) {
+    use reshiki::typography::{Script, ScriptRun};
+    let mut doc = benzene();
+    let top = doc
+        .atoms
+        .iter()
+        .min_by(|a, b| a.position.y.total_cmp(&b.position.y))
+        .unwrap()
+        .clone();
+    let metal = doc.add_atom("C", top.position.offset(0., -42.));
+    doc.add_bond(top.id, metal, 1, "plain");
+    let group = doc.add_atom("C", top.position.offset(84., -42.));
+    doc.add_bond(metal, group, 1, "plain");
+    for (id, label, script) in [
+        (metal, "M2+", Script::Superscript),
+        (group, "R1", Script::Subscript),
+    ] {
+        doc = reshiki::atom_text::apply_with_scripts(
+            &doc,
+            id,
+            label,
+            &[ScriptRun {
+                start: 1,
+                end: label.len(),
+                script,
+            }],
+            reshiki::atom_text::Mode::Text,
+        )
+        .unwrap();
+    }
+    show(app, doc, 2., 0.);
+    select(app, vec![metal]);
+    settle(
+        app,
+        Message::AtomText(crate::app::atom_text::Action::Begin(Some(metal))),
+    );
+}
+
+pub(in crate::app::workspace) const STATES: [(&str, Scene); 38] = [
     ("nmr-proton", nmr_proton),
     ("nmr-carbon-labels", nmr_carbon_labels),
     ("nmr-label-menu", nmr_label_menu),
@@ -753,6 +815,8 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 36] = [
     ("assistant-install", assistant_install),
     ("assistant-sign-in", assistant_sign_in),
     ("assistant-example", assistant_example),
+    ("atom-label-editor", atom_label_editor),
+    ("atom-label-editor-formatted", atom_label_editor_formatted),
 ];
 
 pub(in crate::app::workspace) fn needs_naming(name: &str) -> bool {

@@ -448,7 +448,7 @@ fn enumerate(
     seed.generic = Generic::default();
     for link in &source.generic.links {
         if let Some(atom) = seed.atom_mut(link.atom) {
-            atom.display.variable = None;
+            atom.display.set_variable(None);
         }
     }
     let mut products = vec![seed];

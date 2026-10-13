@@ -227,3 +227,26 @@ fn generic_refresh_blocks_link_and_alternative_components_without_metadata_copie
         );
     }
 }
+
+#[test]
+fn refresh_preserves_manual_dummy_label_scripts() {
+    let mut source = alcohol();
+    let id = source.add_atom("*", Point::new(126., 0.));
+    source = crate::atom_text::apply_with_scripts(
+        &source,
+        id,
+        "M2+",
+        &[crate::typography::ScriptRun {
+            start: 1,
+            end: 3,
+            script: crate::typography::Script::Superscript,
+        }],
+        crate::atom_text::Mode::Text,
+    )
+    .unwrap();
+    let before = source.atom(id).unwrap().display.clone();
+    let refresh = Refresh::calculate(&source, &Refresh::default()).unwrap();
+    refresh.apply(&mut source);
+    assert_eq!(source.atom(id).unwrap().display, before);
+    source.validate().unwrap();
+}

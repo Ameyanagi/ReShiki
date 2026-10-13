@@ -199,23 +199,26 @@ fn atom_label_runs_with_charge_layout(
         && a.element == "*"
         && a.display.variable.is_some()
         && !doc.generic.owns_label(a.id))
-    .then(|| crate::typography::label_runs(label))
+    .then(|| crate::typography::effective_label_runs(&a.display))
     .filter(|runs| {
-        runs.iter()
-            .any(|(_, script)| *script != crate::typography::Script::Normal)
+        !a.display.label_scripts.is_empty()
+            || runs
+                .iter()
+                .any(|(_, script)| *script != crate::typography::Script::Normal)
     });
     let condensed = (internal_group.is_some() || a.element == "*" || is_link)
         .then(|| crate::atom_labels::condensed_label(label))
         .flatten();
+    let core_end = condensed.map_or(label.len(), |(core, _)| core.len());
     let layout = scripts
         .as_ref()
-        .filter(|_| condensed.is_none())
-        .map(|scripts| free_label_layout(label, scripts, 0..label.len(), &style));
+        .filter(|_| condensed.is_none() || !a.display.label_scripts.is_empty())
+        .map(|scripts| free_label_layout(label, scripts, 0..core_end, &style));
     let normal: String = scripts
         .iter()
         .flatten()
         .filter(|(_, script)| *script == crate::typography::Script::Normal)
-        .filter_map(|(range, _)| label.get(range.clone()))
+        .filter_map(|(range, _)| label.get(range.start..range.end.min(core_end)))
         .collect();
     let source = label;
     let label = condensed.map_or(label, |(core, _)| core);
@@ -310,6 +313,17 @@ fn free_label_layout(
         script: Script::Normal,
         ..style.clone()
     };
+    // Formula inference identifies the optional charge separator, even when
+    // manual formatting raises a larger span. Other raised spaces are literal.
+    let charge_space = crate::typography::label_runs(label)
+        .last()
+        .filter(|(_, script)| *script == Script::Superscript)
+        .and_then(|(source, _)| {
+            label
+                .get(source.clone())
+                .is_some_and(|text| text.starts_with(' '))
+                .then_some(source.start)
+        });
     let mut drawn = String::new();
     let mut spans = vec![];
     for (source, script) in scripts {
@@ -318,11 +332,11 @@ fn free_label_layout(
         let Some(content) = (start < end).then(|| label.get(start..end)).flatten() else {
             continue;
         };
-        let start = drawn.len();
-        for c in content.chars() {
+        let drawn_start = drawn.len();
+        for (offset, c) in content.char_indices() {
             if *script == Script::Superscript {
                 match c {
-                    ' ' => continue,
+                    ' ' if charge_space == Some(start + offset) => continue,
                     '-' | '⁻' => drawn.push('−'),
                     '⁺' => drawn.push('+'),
                     _ => drawn.push(c),
@@ -331,9 +345,9 @@ fn free_label_layout(
                 drawn.push(c);
             }
         }
-        if *script != Script::Normal && start < drawn.len() {
+        if *script != Script::Normal && drawn_start < drawn.len() {
             spans.push(TextSpan {
-                start,
+                start: drawn_start,
                 end: drawn.len(),
                 style: TextStyle {
                     script: *script,
@@ -342,6 +356,7 @@ fn free_label_layout(
             });
         }
     }
+    let normal_size = STYLE.world(style.size_pt);
     let mut layout = crate::typography::layout(
         &drawn,
         &TextFormat {
@@ -356,7 +371,20 @@ fn free_label_layout(
         .fragments
         .iter()
         .find(|run| run.style.script == Script::Normal)
-        .map_or(0., |run| run.position.y);
+        .map_or_else(
+            || {
+                if layout
+                    .fragments
+                    .iter()
+                    .any(|run| run.style.script == Script::Superscript)
+                {
+                    normal_size * 0.3
+                } else {
+                    0.
+                }
+            },
+            |run| run.position.y,
+        );
     for run in &mut layout.fragments {
         run.position.y -= normal_y;
     }

@@ -687,6 +687,9 @@ impl Document {
         let empty_neighbors = HashSet::new();
         for a in &self.atoms {
             a.display.validate()?;
+            if a.element != "*" && !a.display.label_scripts.is_empty() {
+                return Err("Atom label scripts require wildcard atoms".into());
+            }
             if a.map_num > i32::MAX as u32 {
                 return Err("Atom maps must be from 1 to 2147483647, or 0 to clear".into());
             }

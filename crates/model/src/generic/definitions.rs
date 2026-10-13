@@ -171,7 +171,7 @@ pub fn prune(doc: &mut Document) {
     doc.generic.links.retain(|s| !removed.contains(&s.atom));
     for id in removed {
         if let Some(atom) = doc.atom_mut(id) {
-            atom.display.variable = None;
+            atom.display.set_variable(None);
         }
     }
     let bonds: HashSet<_> = doc.bonds.iter().map(|b| pair(b.a, b.b)).collect();

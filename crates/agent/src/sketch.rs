@@ -308,7 +308,7 @@ impl Sketch {
                 atom.text_style.as_mut().ok_or("Missing atom style")?.color =
                     crate::palette::Color::imported(color);
             }
-            atom.display.variable = a.variable.clone();
+            atom.display.set_variable(a.variable.clone());
         }
         for b in &self.bonds {
             doc.add_bond(b.a as u64 + 1, b.b as u64 + 1, b.order, &b.display);

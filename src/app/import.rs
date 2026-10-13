@@ -559,7 +559,7 @@ impl App {
             .size(12)
             .padding(8)
             .wrapping(text::Wrapping::WordOrGlyph)
-            .style(editor_style);
+            .style(crate::appearance::editor_style);
         let editor = reshiki::accessibility::editor(
             INPUT,
             "Structure or reaction to import",
@@ -738,26 +738,6 @@ impl App {
             )
             .push(container(tag).center(Length::Fill))
             .into()
-    }
-}
-
-fn editor_style(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
-    use iced::widget::text_input::Status as Input;
-    let field = crate::appearance::input_style(
-        theme,
-        match status {
-            text_editor::Status::Active => Input::Active,
-            text_editor::Status::Hovered => Input::Hovered,
-            text_editor::Status::Focused { is_hovered } => Input::Focused { is_hovered },
-            text_editor::Status::Disabled => Input::Disabled,
-        },
-    );
-    text_editor::Style {
-        background: field.background,
-        border: field.border,
-        placeholder: field.placeholder,
-        value: field.value,
-        selection: field.selection,
     }
 }
 

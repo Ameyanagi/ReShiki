@@ -447,6 +447,170 @@ fn all_normal_free_labels_keep_their_existing_primitive() -> Result<(), String> 
 }
 
 #[test]
+fn manual_label_scripts_override_formula_inference_in_core_and_condensed_suffix()
+-> Result<(), String> {
+    use crate::typography::{Script, ScriptRun};
+    let run = |start, end, script| ScriptRun { start, end, script };
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::new(20., 30.));
+    for (label, scripts, normal, subscript, superscript) in [
+        ("R1", vec![run(1, 2, Script::Superscript)], "R", "", "1"),
+        ("R1", vec![run(0, 2, Script::Normal)], "R1", "", ""),
+        ("CO2Et", vec![run(0, 5, Script::Normal)], "CO2Et", "", ""),
+        ("CO2Et", vec![run(0, 1, Script::Subscript)], "O2Et", "C", ""),
+        (
+            "NH42+",
+            vec![run(2, 3, Script::Subscript), run(3, 5, Script::Superscript)],
+            "NH",
+            "4",
+            "2+",
+        ),
+        (
+            "SO4 2⁻",
+            vec![run(2, 3, Script::Subscript), run(3, 8, Script::Superscript)],
+            "SO",
+            "4",
+            "2−",
+        ),
+    ] {
+        let doc = crate::atom_text::apply_with_scripts(
+            &source,
+            id,
+            label,
+            &scripts,
+            crate::atom_text::Mode::Text,
+        )?;
+        let before = doc.clone();
+        let mut actual_normal = String::new();
+        let mut actual_subscript = String::new();
+        let mut actual_superscript = String::new();
+        for primitive in atom_label_runs(doc.atom(id).ok_or("Atom")?, &doc) {
+            let Primitive::Text {
+                text, size, style, ..
+            } = primitive
+            else {
+                return Err("Unexpected label primitive".into());
+            };
+            assert!(!style.formula, "{label}: {style:?}");
+            assert_eq!(size, style.size(), "{label}");
+            match style.script {
+                Script::Normal => actual_normal.push_str(&text),
+                Script::Subscript => actual_subscript.push_str(&text),
+                Script::Superscript => actual_superscript.push_str(&text),
+            }
+        }
+        assert_eq!(
+            (
+                actual_normal.as_str(),
+                actual_subscript.as_str(),
+                actual_superscript.as_str()
+            ),
+            (normal, subscript, superscript),
+            "{label}"
+        );
+        assert_eq!(doc, before);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_fully_manual_superscript_label_is_raised_from_the_normal_baseline() -> Result<(), String> {
+    use crate::typography::{Script, ScriptRun};
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::new(20., 30.));
+    let normal = crate::atom_text::apply(&source, id, "M", crate::atom_text::Mode::Text)?;
+    let scripted = crate::atom_text::apply_with_scripts(
+        &source,
+        id,
+        "M",
+        &[ScriptRun {
+            start: 0,
+            end: 1,
+            script: Script::Superscript,
+        }],
+        crate::atom_text::Mode::Text,
+    )?;
+    let normal_runs = atom_label_runs(normal.atom(id).ok_or("Normal atom")?, &normal);
+    let [
+        Primitive::Text {
+            position: normal_position,
+            size: normal_size,
+            ..
+        },
+    ] = normal_runs.as_slice()
+    else {
+        return Err("Normal run".into());
+    };
+    let normal_position = *normal_position;
+    let normal_size = *normal_size;
+    let runs = atom_label_runs(scripted.atom(id).ok_or("Scripted atom")?, &scripted);
+    let [
+        Primitive::Text {
+            position,
+            size,
+            style,
+            ..
+        },
+    ] = runs.as_slice()
+    else {
+        return Err("Scripted run".into());
+    };
+    assert_eq!(style.script, Script::Superscript);
+    assert!(*size < normal_size);
+    assert!(position.y < normal_position.y);
+    Ok(())
+}
+
+#[test]
+fn manual_superscript_word_spaces_are_literal_except_for_a_trailing_charge_separator()
+-> Result<(), String> {
+    use crate::typography::{Script, ScriptRun};
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    for (label, start, end, expected_normal, expected_superscript) in [
+        ("custom ligand", 0, 13, "", "custom ligand"),
+        ("X ‡", 1, 5, "X", " ‡"),
+        ("X A B", 1, 5, "X", " A B"),
+        ("SO4 2-", 3, 6, "SO4", "2−"),
+        ("SO4 2-", 0, 6, "", "SO42−"),
+    ] {
+        let doc = crate::atom_text::apply_with_scripts(
+            &source,
+            id,
+            label,
+            &[ScriptRun {
+                start,
+                end,
+                script: Script::Superscript,
+            }],
+            crate::atom_text::Mode::Text,
+        )?;
+        let mut normal = String::new();
+        let mut superscript = String::new();
+        for primitive in atom_label_runs(doc.atom(id).ok_or("Atom")?, &doc) {
+            let Primitive::Text { text, style, .. } = primitive else {
+                return Err("Unexpected label primitive".into());
+            };
+            match style.script {
+                Script::Normal => normal.push_str(&text),
+                Script::Superscript => superscript.push_str(&text),
+                Script::Subscript => return Err("Unexpected inferred subscript".into()),
+            }
+        }
+        assert_eq!(
+            (normal.as_str(), superscript.as_str()),
+            (expected_normal, expected_superscript),
+            "{label}"
+        );
+        assert_eq!(
+            doc.atom(id).ok_or("Atom")?.display.variable.as_deref(),
+            Some(label)
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn generic_alternative_and_link_labels_keep_their_existing_runs() -> Result<(), String> {
     let mut source = Document::default();
     let id = source.add_atom("C", Point::default());

@@ -90,7 +90,7 @@ pub fn apply_label(doc: &Document, id: u64, text: &str) -> Result<Option<Documen
         a.charge = 0;
         a.aromatic = false;
         a.label_h = 0;
-        a.display.variable = Some(text.into());
+        a.display.set_variable(Some(text.into()));
         result.generic.alternatives.push(AlternativeSite {
             atom: id,
             choices,
@@ -147,7 +147,7 @@ pub fn apply_label(doc: &Document, id: u64, text: &str) -> Result<Option<Documen
         .atom_mut(id)
         .ok_or("Missing link atom")?
         .display
-        .variable = Some(text.into());
+        .set_variable(Some(text.into()));
     result.generic.links.push(LinkNode { atom: id, min, max });
     result.validate()?;
     Ok(Some(result))

@@ -104,6 +104,7 @@ impl App {
     }
     fn style_bar(&self) -> Element<'_, Message> {
         let style = self.current_text_style();
+        let script = self.toolbar_script();
         let toggle = |label: &'static str,
                       help: &'static str,
                       active: bool,
@@ -167,8 +168,8 @@ impl App {
             toggle(
                 "x₂",
                 "Subscript",
-                style.script == Script::Subscript,
-                StyleChange::Script(if style.script == Script::Subscript {
+                script == Script::Subscript,
+                StyleChange::Script(if script == Script::Subscript {
                     Script::Normal
                 } else {
                     Script::Subscript
@@ -177,8 +178,8 @@ impl App {
             toggle(
                 "x²",
                 "Superscript",
-                style.script == Script::Superscript,
-                StyleChange::Script(if style.script == Script::Superscript {
+                script == Script::Superscript,
+                StyleChange::Script(if script == Script::Superscript {
                     Script::Normal
                 } else {
                     Script::Superscript

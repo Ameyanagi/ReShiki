@@ -177,15 +177,18 @@ impl Writer<'_> {
                     .text_style
                     .clone()
                     .unwrap_or_else(|| doc.drawing_style.text_style());
-                let runs = crate::typography::label_runs(label);
+                let manual = !a.display.label_scripts.is_empty();
+                let runs = crate::typography::effective_label_runs(&a.display);
                 let condensed = crate::atom_labels::condensed_label(label).is_some();
                 // ChemDraw's Formula face draws an uncharged condensed label
                 // (CCl2, CO2Et) exactly like these runs, so it keeps that face.
-                let formula = condensed
+                let formula = !manual
+                    && condensed
                     && runs
                         .iter()
                         .all(|(_, script)| *script != Script::Superscript);
-                let spans = if !formula && runs.iter().any(|(_, script)| *script != Script::Normal)
+                let spans = if !formula
+                    && (manual || runs.iter().any(|(_, script)| *script != Script::Normal))
                 {
                     // Explicit scripts preserve the visible typography without
                     // asking ChemDraw to reinterpret counts or charge text.
@@ -207,7 +210,7 @@ impl Writer<'_> {
                     style.formula |= condensed;
                     Vec::new()
                 };
-                self.text(
+                let text = self.text(
                     node,
                     label,
                     &TextFormat {
@@ -217,6 +220,14 @@ impl Writer<'_> {
                     },
                     [("p", self.position(a.position))],
                 )?;
+                if manual {
+                    // Standard object names survive CDX without adding a
+                    // rendered annotation or changing chemical interpretation.
+                    // This distinguishes deliberate scripts that happen to
+                    // match the automatic formula look from automatic export.
+                    self.tree
+                        .set(text, "Name", "ReShiki manual label scripts")?;
+                }
                 continue;
             }
             if crate::attachments::hidden(a, doc) {

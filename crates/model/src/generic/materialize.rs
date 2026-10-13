@@ -76,7 +76,7 @@ pub(super) fn materialize(
                     a.element = symbol.clone();
                     a.isotope = *isotope;
                     a.no_implicit = false;
-                    a.display.variable = None;
+                    a.display.set_variable(None);
                     result.invalidate_chemistry(&[s.atom]);
                     Ok(result)
                 }
@@ -134,7 +134,7 @@ pub(super) fn group(doc: &Document, id: u64, label: &str) -> Result<Document, St
         .atom_mut(id)
         .ok_or("Missing alternative atom")?
         .display
-        .variable = None;
+        .set_variable(None);
     if label != "OPh" {
         let mut result = crate::chemistry::abbreviations::replace(&clean, &[id], label)
             .map_err(|e| e.to_string())?;
@@ -227,7 +227,7 @@ fn insert_fragment(doc: &Document, id: u64, fragment: &Document) -> Result<Docum
             .offset((x * cos - y * sin) as f32, (x * sin + y * cos) as f32);
         if old == root.id {
             a.display = anchor.display.clone();
-            a.display.variable = None;
+            a.display.set_variable(None);
             a.text_style = anchor.text_style.clone();
             a.map_num = anchor.map_num;
             a.depth = anchor.depth;
@@ -294,7 +294,7 @@ pub(super) fn link(doc: &Document, node: &LinkNode, count: u32) -> Result<Docume
         .atom_mut(node.atom)
         .ok_or("Missing link atom")?
         .display
-        .variable = None;
+        .set_variable(None);
     if count == 1 {
         return Ok(result);
     }
@@ -308,7 +308,7 @@ pub(super) fn link(doc: &Document, node: &LinkNode, count: u32) -> Result<Docume
     for i in 1..count {
         let mut copy = atom.clone();
         copy.id = allocator.take()?;
-        copy.display.variable = None;
+        copy.display.set_variable(None);
         copy.cip_label = None;
         copy.stereo = None;
         let ratio = i as f32 / count as f32;

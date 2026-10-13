@@ -572,3 +572,27 @@ fn analysis_covers_whole_abbreviations_in_document_order_without_labels() {
     assert!(part.bonds.iter().all(|b| b.cip_label.is_none()));
     assert_eq!(doc, before);
 }
+
+#[test]
+fn selection_and_paste_preserve_manual_label_scripts() {
+    let mut source = Document::default();
+    let id = source.add_atom("*", Point::default());
+    source = crate::atom_text::apply_with_scripts(
+        &source,
+        id,
+        "R1",
+        &[crate::typography::ScriptRun {
+            start: 1,
+            end: 2,
+            script: crate::typography::Script::Subscript,
+        }],
+        crate::atom_text::Mode::Text,
+    )
+    .unwrap();
+    let part = super::selection(&source, &[id]);
+    let mut destination = source.clone();
+    let ids = super::append(&mut destination, &part, Point::new(84., 0.));
+    let pasted = destination.atom(ids[0]).unwrap();
+    assert_eq!(pasted.display, source.atom(id).unwrap().display);
+    destination.validate().unwrap();
+}

@@ -25,6 +25,7 @@ fn display(value: NativeAtomDisplay) -> Result<AtomDisplay> {
         color_override: false,
         hide_charge: false,
         variable: None,
+        label_scripts: Vec::new(),
         carbons: Some(value.carbons),
         hydrogens: Some(value.hydrogens),
         hydrogen_position: value.hydrogen_position,
@@ -293,7 +294,7 @@ impl CdxmlScene {
             let atom = document
                 .atom_mut(id)
                 .ok_or(SceneError::Invalid("Missing generic label atom"))?;
-            atom.display.variable = Some(label);
+            atom.display.set_variable(Some(label));
             atom.cip_label = None;
         }
         for attachment in self.attachments {

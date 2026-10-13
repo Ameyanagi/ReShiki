@@ -52,14 +52,14 @@ impl Drawing {
                 .ok_or_else(|| invalid("Missing alternative atom"))?;
             atom.element = "*".into();
             atom.no_implicit = true;
-            atom.display.variable = Some(label);
+            atom.display.set_variable(Some(label));
         }
         for link in &generic.links {
             let atom = self
                 .document
                 .atom_mut(link.atom)
                 .ok_or_else(|| invalid("Missing link atom"))?;
-            atom.display.variable = Some(link.label(&atom.element));
+            atom.display.set_variable(Some(link.label(&atom.element)));
         }
         for index in 0..self.document.generic.repeats.len() {
             let unit = self

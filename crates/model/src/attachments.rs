@@ -100,7 +100,7 @@ pub fn interchange_graph(doc: &Document) -> Result<Document, String> {
     copy.generic = Default::default();
     for a in &mut copy.atoms {
         if a.element != "*" {
-            a.display.variable = None;
+            a.display.set_variable(None);
         }
     }
     for a in &mut copy.atoms {

@@ -71,6 +71,65 @@ fn scene(text: &str) -> CdxmlScene {
     assemble_cdxml(&prepare_cdxml(text).unwrap()).unwrap()
 }
 
+#[test]
+fn imported_free_label_scripts_keep_normal_gaps_and_merge_equal_styles() {
+    let xml = presentation::parse(
+        "<CDXML><t><s face='64'>α</s><s face='0'>R</s><s face='32'>1</s><s face='33'>2</s></t></CDXML>",
+    )
+    .unwrap();
+    let root = xml.root_element();
+    let reader = TextReader::new(root).unwrap();
+    let text = reader
+        .read(
+            root.children().find(|node| node.has_tag_name("t")).unwrap(),
+            None,
+            true,
+        )
+        .unwrap();
+    assert_eq!(text.text, "αR12");
+    assert_eq!(
+        imported_label_scripts(&text, false).unwrap(),
+        vec![
+            ScriptRun {
+                start: 0,
+                end: 2,
+                script: Script::Superscript,
+            },
+            ScriptRun {
+                start: 3,
+                end: 5,
+                script: Script::Subscript,
+            },
+        ]
+    );
+}
+
+#[test]
+fn drawing_variable_detection_keeps_hidden_wildcards_and_fragment_wrappers() {
+    for node in [
+        "<n id='3' p='0 0' NodeType='Unspecified'><t><s face='64'>*</s></t></n>",
+        "<n id='3' p='0 0' NodeType='Unspecified'><fragment id='4'><n id='5' p='0 0'/></fragment><t><s face='64'>Me</s></t></n>",
+    ] {
+        let xml = format!("<CDXML><page><fragment id='1'>{node}</fragment></page></CDXML>");
+        let (unchanged, variables) = super::super::drawing_variables(&xml).unwrap();
+        assert_eq!(unchanged, xml);
+        assert!(variables.0.is_empty());
+    }
+}
+
+#[test]
+fn element_charge_labels_keep_the_chemical_import_path_without_manual_scripts() {
+    let imported = import_cdxml(
+        "<CDXML BondLength='30'><page><fragment id='1'><n id='3' p='0 0' Element='46' Charge='2' NumHydrogens='0'><t><s face='0'>Pd</s><s face='64'>2+</s></t></n></fragment></page></CDXML>",
+    )
+    .unwrap();
+    let atom = imported.document.atoms.first().unwrap();
+    assert_eq!(atom.element, "Pd");
+    assert_eq!(atom.charge, 2);
+    assert!(atom.display.variable.is_none());
+    assert!(atom.display.label_scripts.is_empty());
+}
+
 enum Fault {
     /// Inserted into the prepared expanded XML.
     Inject(&'static str),

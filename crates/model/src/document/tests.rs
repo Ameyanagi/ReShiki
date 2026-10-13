@@ -1,6 +1,76 @@
 use super::*;
 
 #[test]
+fn manual_atom_label_scripts_round_trip_native_files_and_empty_runs_are_omitted()
+-> Result<(), String> {
+    use crate::typography::{Script, ScriptRun};
+    let mut doc = Document::default();
+    let id = doc.add_atom("*", Point::default());
+    let display = &mut doc.atom_mut(id).ok_or("Atom")?.display;
+    display.set_variable(Some("R₁".into()));
+    display.label_scripts = vec![ScriptRun {
+        start: 1,
+        end: 4,
+        script: Script::Superscript,
+    }];
+    doc.validate()?;
+    let json = doc.file_json()?;
+    assert!(String::from_utf8_lossy(&json).contains("label_scripts"));
+    let reopened = Document::from_native_file(&json)?;
+    assert_eq!(
+        reopened.atom(id).ok_or("Reopened atom")?.display,
+        doc.atom(id).ok_or("Atom")?.display
+    );
+    assert_eq!(reopened.version, VERSION);
+    doc.atom_mut(id)
+        .ok_or("Atom")?
+        .display
+        .label_scripts
+        .clear();
+    let json = doc.file_json()?;
+    assert!(!String::from_utf8_lossy(&json).contains("label_scripts"));
+    let reopened = Document::from_native_file(&json)?;
+    assert!(
+        reopened
+            .atom(id)
+            .ok_or("Reopened atom")?
+            .display
+            .label_scripts
+            .is_empty()
+    );
+    assert_eq!(
+        crate::typography::effective_label_runs(&reopened.atom(id).ok_or("Reopened atom")?.display),
+        crate::typography::label_runs("R₁")
+    );
+    Ok(())
+}
+
+#[test]
+fn element_atoms_cannot_store_manual_label_scripts_even_on_link_nodes() -> Result<(), String> {
+    use crate::typography::{Script, ScriptRun};
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    let left = source.add_atom("C", Point::new(-42., 0.));
+    let right = source.add_atom("C", Point::new(42., 0.));
+    source.add_bond(left, id, 1, "plain");
+    source.add_bond(id, right, 1, "plain");
+    let mut doc = crate::atom_text::apply(&source, id, "CH2 1-3", crate::atom_text::Mode::Auto)?;
+    let atom = doc.atom_mut(id).ok_or("Atom")?;
+    assert_ne!(atom.element, "*");
+    atom.display.label_scripts = vec![ScriptRun {
+        start: 2,
+        end: 3,
+        script: Script::Subscript,
+    }];
+    assert_eq!(
+        doc.validate(),
+        Err("Atom label scripts require wildcard atoms".into())
+    );
+    assert!(Document::from_native_file(&doc.file_json()?).is_err());
+    Ok(())
+}
+
+#[test]
 fn point_lerp_matches_endpoints_and_midpoint() {
     let a = Point::new(-4., 6.);
     let b = Point::new(8., -2.);

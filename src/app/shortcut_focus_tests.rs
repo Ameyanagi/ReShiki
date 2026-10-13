@@ -379,7 +379,7 @@ async fn first_escape_cancels_focused_atom_label_without_applying_the_draft() {
     );
     assert!(messages.iter().any(|message| matches!(
         message,
-        Message::AtomText(super::atom_text::Action::Input(_))
+        Message::AtomText(super::atom_text::Action::Editor(_))
     )));
     apply(&mut app, messages);
     assert!(ui.input(&app, "atom-text").1);

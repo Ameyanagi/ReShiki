@@ -234,6 +234,17 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 | Cmd/Ctrl+Z / Shift+Z      | Undo / redo; Windows also supports Ctrl+Y |
 | Cmd/Ctrl+Enter            | Finish editing a label or caption         |
 
+## Atom label editor
+
+| Keys           | Action                                                 |
+| -------------- | ------------------------------------------------------ |
+| Cmd/Ctrl+-     | Turn subscript on or off for the selected characters   |
+| Cmd/Ctrl++ / = | Turn superscript on or off for the selected characters |
+| Cmd/Ctrl+T     | Plain: remove the formatting                           |
+| Enter / Escape | Apply / cancel                                         |
+
+With nothing selected, these keys format the whole label. Chemical abbreviations and group labels cannot be formatted.
+
 ## Selection and drawing constraints
 
 | Keys or gesture                            | Action                                                                                    |

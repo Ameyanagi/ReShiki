@@ -200,6 +200,32 @@ fn unicode_ranges_keep_formatting_during_edits() {
 }
 
 #[test]
+fn shared_editor_bookkeeping_tracks_repeated_utf8_glyph_deletion_and_paste() {
+    let old = "触触触\nH2O";
+    let mut editor = text_editor::Content::with_text(old);
+    editor.perform(Input::Move(Motion::DocumentStart));
+    editor.perform(Input::Move(Motion::Right));
+    let (updated, replaced) =
+        perform_editor_action(&mut editor, old, Input::Edit(Edit::Delete)).unwrap();
+    assert_eq!(updated, "触触\nH2O");
+    assert_eq!(replaced, "触".len().."触触".len());
+    editor.perform(Input::Move(Motion::DocumentEnd));
+    editor.perform(Input::Select(Motion::Left));
+    assert_eq!(
+        editor_range(&editor, &updated),
+        Some(updated.len() - 1..updated.len())
+    );
+    let (pasted, replaced) = perform_editor_action(
+        &mut editor,
+        &updated,
+        Input::Edit(Edit::Paste("温度".to_owned().into())),
+    )
+    .unwrap();
+    assert_eq!(pasted, "触触\nH2温度");
+    assert_eq!(replaced, updated.len() - 1..updated.len());
+}
+
+#[test]
 fn recovery_includes_drafts_and_cancel_removes_them() {
     let mut app = app();
     let dir = tempfile::tempdir().unwrap();

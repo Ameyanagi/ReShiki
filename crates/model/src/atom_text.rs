@@ -1,5 +1,10 @@
 //! Text at an atom endpoint: an element, a real collapsed group, or a named dummy.
-use crate::{abbreviations::PRESETS, document::Document, editing::ELEMENTS};
+use crate::{
+    abbreviations::PRESETS,
+    document::Document,
+    editing::ELEMENTS,
+    typography::{Script, ScriptRun},
+};
 fn known_group(text: &str) -> bool {
     PRESETS.contains(&text) || crate::common_groups::LABELS.contains(&text)
 }
@@ -66,11 +71,22 @@ pub(crate) fn charged_label(text: &str) -> bool {
 
 /// Returns a complete candidate; failures never partially modify the drawing.
 pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document, String> {
+    apply_entry(doc, id, text, mode, true)
+}
+
+fn apply_entry(
+    doc: &Document,
+    id: u64,
+    text: &str,
+    mode: Mode,
+    allow_generic: bool,
+) -> Result<Document, String> {
     if text.chars().any(char::is_control) {
         return Err("Use a single line of printable text".into());
     }
     let text = text.trim();
-    if mode != Mode::Text
+    if allow_generic
+        && mode != Mode::Text
         && let Some(candidate) = crate::generic::apply_label(doc, id, text)?
     {
         return Ok(candidate);
@@ -127,7 +143,7 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
         clean.generic.alternatives.retain(|s| s.atom != id);
         clean.generic.links.retain(|s| s.atom != id);
         if let Some(atom) = clean.atom_mut(id) {
-            atom.display.variable = None;
+            atom.display.set_variable(None);
         }
         let mut result = crate::chemistry::abbreviations::replace(
             &clean,
@@ -199,7 +215,7 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
         a.radical_electrons = 0;
         a.stereo = None;
     }
-    a.display.variable = variable;
+    a.display.set_variable(variable);
     if let Some(h) = &explicit {
         a.explicit_h = h.hydrogens;
         a.no_implicit = true;
@@ -222,6 +238,131 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
     }
     result.validate()?;
     Ok(result)
+}
+
+/// Apply manually formatted input as one complete candidate. With no manual
+/// runs, entry retains the ordinary element, group and generic-label grammar.
+pub fn apply_with_scripts(
+    doc: &Document,
+    id: u64,
+    text: &str,
+    runs: &[ScriptRun],
+    mode: Mode,
+) -> Result<Document, String> {
+    if mode == Mode::Group || runs.is_empty() {
+        return apply(doc, id, text, mode);
+    }
+    if text.chars().any(char::is_control) {
+        return Err("Use a single line of printable text".into());
+    }
+    // Store the trimmed label, as plain entry does, with the runs moved along.
+    let lead = text.len() - text.trim_start().len();
+    let text = text.trim();
+    let runs: Vec<ScriptRun> = runs
+        .iter()
+        .map(|run| ScriptRun {
+            start: run.start.clamp(lead, lead + text.len()) - lead,
+            end: run.end.clamp(lead, lead + text.len()) - lead,
+            script: run.script,
+        })
+        .collect();
+    let runs = crate::typography::normalize_label_scripts(text, &runs)?;
+    if runs.is_empty() {
+        return apply(doc, id, text, mode);
+    }
+    if mode == Mode::Auto
+        && let Some(chemical) = manual_chemical_text(text, &runs)
+    {
+        let element = ELEMENTS.contains(&chemical.as_str()) || chemical == "*";
+        // A manually lowered digit is a count, never an element charge.
+        let lowered_count = runs.iter().any(|run| {
+            run.script == Script::Subscript
+                && text.get(run.start..run.end).is_some_and(|s| {
+                    s.chars().any(|c| {
+                        c.is_ascii_digit()
+                            || ('₀'..='₉').contains(&c)
+                            || matches!(
+                                c,
+                                '⁰' | '¹' | '²' | '³' | '⁴' | '⁵' | '⁶' | '⁷' | '⁸' | '⁹'
+                            )
+                    })
+                })
+        });
+        let lowered_element_count = lowered_count
+            && chemical
+                .find(|c: char| !c.is_ascii_alphabetic())
+                .and_then(|end| chemical.get(..end))
+                .is_some_and(|symbol| symbol != "H" && ELEMENTS.contains(&symbol));
+        let explicit = if element || lowered_element_count {
+            None
+        } else {
+            hydride::parse(&chemical)?
+        };
+        if element || explicit.is_some() {
+            return apply_entry(doc, id, &chemical, Mode::Auto, false);
+        }
+    }
+    let mut result = apply(doc, id, text, Mode::Text)?;
+    let atom = result
+        .atom_mut(id)
+        .ok_or("The atom is no longer available")?;
+    atom.display.set_variable(Some(text.to_owned()));
+    atom.display.label_scripts = runs;
+    result.validate()?;
+    Ok(result)
+}
+
+/// A trailing manual superscript distinguishes a charge from an H count:
+/// NH with lowered 4 and raised 2+ enters the unambiguous grammar NH4+2.
+fn manual_chemical_text(text: &str, runs: &[ScriptRun]) -> Option<String> {
+    let Some(charge) = runs
+        .last()
+        .filter(|run| run.script == Script::Superscript && run.end == text.len())
+    else {
+        return (!runs.iter().any(|run| run.script == Script::Superscript))
+            .then(|| text.trim().to_owned());
+    };
+    if runs
+        .iter()
+        .any(|run| run.script == Script::Superscript && run.start != charge.start)
+    {
+        return None;
+    }
+    let suffix: String = text
+        .get(charge.start..charge.end)?
+        .trim()
+        .chars()
+        .map(|c| match c {
+            '₀' | '⁰' => '0',
+            '₁' | '¹' => '1',
+            '₂' | '²' => '2',
+            '₃' | '³' => '3',
+            '₄' | '⁴' => '4',
+            '₅' | '⁵' => '5',
+            '₆' | '⁶' => '6',
+            '₇' | '⁷' => '7',
+            '₈' | '⁸' => '8',
+            '₉' | '⁹' => '9',
+            '⁺' => '+',
+            '⁻' | '−' => '-',
+            other => other,
+        })
+        .collect();
+    let (sign, count) = if let Some(count) = suffix.strip_prefix('+') {
+        ('+', count)
+    } else if let Some(count) = suffix.strip_prefix('-') {
+        ('-', count)
+    } else if let Some(count) = suffix.strip_suffix('+') {
+        ('+', count)
+    } else {
+        ('-', suffix.strip_suffix('-')?)
+    };
+    if !count.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let body = text.get(..charge.start)?.trim_end();
+    let count = if count.is_empty() { "1" } else { count };
+    Some(format!("{body}{sign}{count}"))
 }
 
 #[cfg(test)]

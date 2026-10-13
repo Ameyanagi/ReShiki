@@ -94,6 +94,16 @@ A charged label gets no automatic hydrogens. Type the element alone to restore t
 
 ChemDraw reads `Pd2+` as two palladium atoms; ReShiki reads it as one Pd²⁺ because a single atom cannot be two atoms.
 
+## Format part of an atom label
+
+Select characters in the label box and press **Cmd+-** for subscript or **Cmd++** for superscript (**Ctrl** on Windows and Linux; **Cmd/Ctrl+=** also works). You can also use **X₂** and **X²** under the box. **Plain** (**Cmd/Ctrl+T**) removes the formatting. With nothing selected, the change applies to the whole label. Once you format characters, **Appearance** under the box shows the result.
+
+In **Automatic** mode, `Pd` with a superscripted `2+` becomes a palladium atom with charge +2, and `NH` with a subscripted `4` and a superscripted `+` becomes ammonium. Other formatted text, such as M with a superscripted 2+ or R with a subscripted 1, stays a text label with your formatting. **Text label** always keeps the text and formatting as typed. Chemical abbreviations and group labels cannot be formatted.
+
+To format a whole text label without opening the editor, select its atom and use **x₂** or **x²** in the Style bar.
+
+The formatting is saved in the .rsk file and copied to ChemDraw files. Formatted text labels in ChemDraw files keep their formatting when you open them.
+
 ## Attach to several atoms
 
 Select the target atoms, right-click → **Attachment points…**, and choose **Multi-center attachment** for simultaneous participation, such as η6-arene or η3-allyl. **Variable attachment** represents alternative attachment positions. Draw a bond from the new point to a metal or substituent. These are distinct from a plain dummy atom or drawing centroid.

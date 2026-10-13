@@ -438,3 +438,24 @@ fn bracket_authoring_errors_are_exact_and_leave_the_source_unchanged() {
         assert_eq!(source, before);
     }
 }
+
+#[test]
+fn generic_replacement_clears_manual_label_scripts() {
+    let mut source = Document::default();
+    let id = source.add_atom("*", Point::default());
+    source = crate::atom_text::apply_with_scripts(
+        &source,
+        id,
+        "M2+",
+        &[crate::typography::ScriptRun {
+            start: 1,
+            end: 3,
+            script: crate::typography::Script::Superscript,
+        }],
+        crate::atom_text::Mode::Text,
+    )
+    .unwrap();
+    let result = super::apply_label(&source, id, "C,N").unwrap().unwrap();
+    assert!(result.atom(id).unwrap().display.label_scripts.is_empty());
+    result.validate().unwrap();
+}

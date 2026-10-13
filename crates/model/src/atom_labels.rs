@@ -2,7 +2,7 @@
 //! Indicator appearance never changes the molecular graph or map numbers.
 use crate::{
     document::{Atom, Bond, Document, Point},
-    typography::TextStyle,
+    typography::{ScriptRun, TextStyle},
 };
 use serde::{Deserialize, Serialize};
 pub mod refresh;
@@ -204,6 +204,9 @@ pub struct AtomDisplay {
     /// A free text label on a wildcard atom, without assigning an element.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variable: Option<String>,
+    /// Manual scripts on the variable label; empty uses formula inference.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub label_scripts: Vec<ScriptRun>,
     pub carbons: Option<Carbons>,
     pub hydrogens: Option<bool>,
     pub hydrogen_position: HydrogenPosition,
@@ -256,6 +259,11 @@ impl Default for StereoDisplay {
     }
 }
 impl AtomDisplay {
+    /// Replacing a label also discards formatting tied to its old byte offsets.
+    pub fn set_variable(&mut self, variable: Option<String>) {
+        self.variable = variable;
+        self.label_scripts.clear();
+    }
     pub fn is_default(&self) -> bool {
         self == &Self::default()
     }
@@ -264,6 +272,13 @@ impl AtomDisplay {
             v.trim().is_empty() || v.chars().count() > 32 || v.chars().any(char::is_control)
         }) {
             return Err("Atom text labels must contain 1–32 printable characters".into());
+        }
+        if !self.label_scripts.is_empty() {
+            let text = self
+                .variable
+                .as_deref()
+                .ok_or("Atom label scripts require a variable label")?;
+            crate::typography::validate_label_scripts(text, &self.label_scripts)?;
         }
         self.stereo.validate()?;
         self.mapping.validate()?;
