@@ -15,7 +15,7 @@ use std::{
     io,
     process::{Command as Child, Stdio},
     sync::{
-        Arc, Condvar, Mutex,
+        Arc, Condvar, Mutex, MutexGuard,
         atomic::{AtomicBool, Ordering},
     },
     thread,
@@ -25,6 +25,17 @@ use tokio::sync::mpsc;
 
 const HANDOFF: Duration = Duration::from_secs(2);
 const UI_REPLY: Duration = Duration::from_millis(750);
+// Ordering: client deadlines that wait for a UI answer (HANDOFF and
+// PROXY_CALL_TIMEOUT) exceed UI_REPLY, the server's wait for that answer.
+// PREPARE_EXPIRY exceeds HANDOFF, so an uncommitted prepare outlives the
+// proxy's commit window. ACCEPT_POLL also bounds the quick probes (first open
+// attempt, abandon, ack), which do not wait for the UI.
+const PREPARE_EXPIRY: Duration = Duration::from_secs(5);
+const ACCEPT_POLL: Duration = Duration::from_millis(100);
+const BUSY_BACKOFF: Duration = Duration::from_millis(10);
+const RETRY_INTERVAL: Duration = Duration::from_millis(40);
+const PROXY_CALL_TIMEOUT: Duration = Duration::from_secs(1);
+const WATCH_INTERVAL: Duration = Duration::from_millis(250);
 const LEASE_LIMIT: usize = 32;
 const REQUEST_LIMIT: usize = 64;
 
@@ -81,6 +92,11 @@ struct Session {
     committed: bool,
     created: Instant,
 }
+impl Session {
+    fn owned_by(&self, owner: Process, token: [u8; 16]) -> bool {
+        self.binding.has_token(token) && self.owner == owner
+    }
+}
 #[derive(Default)]
 struct Records {
     ordinary: VecDeque<Ordinary>,
@@ -120,14 +136,10 @@ impl Fences {
             if !request.valid(&peer) || request.generation != Some(core.generation) {
                 return Status::Rejected;
             }
-            let held = self.0.iter().any(|fence| {
-                fence.owner == request.sender
-                    && fence
-                        .binding
-                        .lease
-                        .as_ref()
-                        .is_some_and(|lease| lease.token == token)
-            });
+            let held = self
+                .0
+                .iter()
+                .any(|fence| fence.owner == request.sender && fence.binding.has_token(token));
             if !held {
                 let binding = core.records.lock().ok().and_then(|records| {
                     records
@@ -136,9 +148,12 @@ impl Fences {
                         .find(|entry| {
                             entry.owner == request.sender
                                 && entry.reply.get(Duration::ZERO) == Status::Prepared
-                                && entry.binding.lease.as_ref().is_some_and(|lease| {
-                                    lease.token == token && lease.phase() == Phase::Prepared
-                                })
+                                && entry.binding.has_token(token)
+                                && entry
+                                    .binding
+                                    .lease
+                                    .as_ref()
+                                    .is_some_and(|lease| lease.phase() == Phase::Prepared)
                         })
                         .map(|entry| entry.binding.clone())
                 });
@@ -169,12 +184,10 @@ impl Fences {
             && records.sessions.iter().any(|entry| {
                 entry.owner == owner
                     && entry.committed
-                    && entry
-                        .binding
+                    && binding
                         .lease
                         .as_ref()
-                        .zip(binding.lease.as_ref())
-                        .is_some_and(|(a, b)| a.token == b.token)
+                        .is_some_and(|lease| entry.binding.has_token(lease.token))
             })
         {
             self.0.push(Fence {
@@ -203,11 +216,7 @@ impl Core {
                 entry.owner == owner
                     && !entry.committed
                     && Arc::ptr_eq(&entry.reply, &reply)
-                    && entry
-                        .binding
-                        .lease
-                        .as_ref()
-                        .is_some_and(|lease| lease.token == token)
+                    && entry.binding.has_token(token)
             })
         {
             if let Some(lease) = records
@@ -238,165 +247,190 @@ impl Core {
         };
         match request.command {
             Command::Open { paths } => {
-                if let Some(previous) = records
-                    .ordinary
-                    .iter()
-                    .find(|entry| entry.id == request.id && entry.owner == request.sender)
-                {
-                    if previous.paths != paths {
-                        return Status::Rejected;
-                    }
-                    let reply = previous.reply.clone();
-                    drop(records);
-                    return reply.get(UI_REPLY);
-                }
-                if records.ordinary.len() == REQUEST_LIMIT {
-                    if records
-                        .ordinary
-                        .front()
-                        .is_some_and(|entry| entry.reply.get(Duration::ZERO) != Status::Pending)
-                    {
-                        records.ordinary.pop_front();
-                    } else {
-                        return Status::Busy;
-                    }
-                }
-                let files = match paths
-                    .iter()
-                    .map(NativePath::decode)
-                    .collect::<io::Result<Vec<_>>>()
-                {
-                    Ok(files) => files,
-                    Err(_) => return Status::Rejected,
-                };
-                let reply = Reply::new();
-                if self
-                    .events
-                    .try_send(Event::Open(files, reply.clone()))
-                    .is_err()
-                {
-                    return Status::Busy;
-                }
-                records.ordinary.push_back(Ordinary {
-                    id: request.id,
-                    owner: request.sender,
-                    paths,
-                    reply: reply.clone(),
-                });
-                drop(records);
-                reply.get(UI_REPLY)
+                self.dispatch_open(records, request.id, request.sender, paths)
             }
-            Command::Prepare { token, path, host } => {
-                if let Some(previous) = records.sessions.iter().find(|entry| {
-                    entry
-                        .binding
-                        .lease
-                        .as_ref()
-                        .is_some_and(|lease| lease.token == token)
-                }) {
-                    if previous.owner != request.sender
-                        || previous.request != request.id
-                        || previous.binding.host != host
-                        || NativePath::encode(&previous.binding.path).ok().as_ref() != Some(&path)
-                    {
-                        return Status::Rejected;
-                    }
-                    if previous.binding.lease.as_ref().is_some_and(|lease| {
-                        matches!(lease.phase(), Phase::Closed | Phase::Rejected | Phase::Lost)
-                    }) {
-                        return Status::Rejected;
-                    }
-                    let reply = previous.reply.clone();
-                    drop(records);
-                    return self.prepare_reply(token, request.sender, reply);
-                }
-                if records.sessions.len() >= LEASE_LIMIT || !peer.is_alive() {
-                    return Status::Busy;
-                }
-                let path = match path.decode() {
-                    Ok(path) => path,
-                    Err(_) => return Status::Rejected,
-                };
-                let lease = Lease::new(token, move || peer.is_alive());
-                let binding = Binding {
-                    path,
-                    host,
-                    lease: Some(lease),
-                };
-                let reply = Reply::new();
-                if self
-                    .events
-                    .try_send(Event::Prepare(binding.clone(), reply.clone()))
-                    .is_err()
-                {
-                    return Status::Busy;
-                }
-                records.sessions.push(Session {
-                    binding,
-                    owner: request.sender,
-                    request: request.id,
-                    reply: reply.clone(),
-                    committed: false,
-                    created: Instant::now(),
-                });
-                drop(records);
-                self.prepare_reply(token, request.sender, reply)
+            command @ Command::Prepare { .. } => {
+                self.dispatch_prepare(records, request.id, request.sender, command, peer)
             }
-            command => {
-                let (token, kind) = match command {
-                    Command::Commit { token } => (token, 0),
-                    Command::Query { token } => (token, 1),
-                    Command::Ack { token } => (token, 2),
-                    Command::Abandon { token } => (token, 3),
-                    _ => return Status::Rejected,
-                };
-                let Some(index) = records.sessions.iter().position(|entry| {
-                    entry
-                        .binding
-                        .lease
-                        .as_ref()
-                        .is_some_and(|lease| lease.token == token)
-                        && entry.owner == request.sender
-                }) else {
-                    return Status::Unknown;
-                };
-                let Some(entry) = records.sessions.get_mut(index) else {
-                    return Status::Unknown;
-                };
-                let Some(lease) = entry.binding.lease.as_ref() else {
+            command => self.dispatch_session(&mut records, request.sender, command),
+        }
+    }
+    fn dispatch_open(
+        &self,
+        mut records: MutexGuard<'_, Records>,
+        id: [u8; 16],
+        owner: Process,
+        paths: Vec<NativePath>,
+    ) -> Status {
+        if let Some(previous) = records
+            .ordinary
+            .iter()
+            .find(|entry| entry.id == id && entry.owner == owner)
+        {
+            if previous.paths != paths {
+                return Status::Rejected;
+            }
+            let reply = previous.reply.clone();
+            drop(records);
+            return reply.get(UI_REPLY);
+        }
+        if records.ordinary.len() == REQUEST_LIMIT {
+            if records
+                .ordinary
+                .front()
+                .is_some_and(|entry| entry.reply.get(Duration::ZERO) != Status::Pending)
+            {
+                records.ordinary.pop_front();
+            } else {
+                return Status::Busy;
+            }
+        }
+        let files = match paths
+            .iter()
+            .map(NativePath::decode)
+            .collect::<io::Result<Vec<_>>>()
+        {
+            Ok(files) => files,
+            Err(_) => return Status::Rejected,
+        };
+        let reply = Reply::new();
+        if self
+            .events
+            .try_send(Event::Open(files, reply.clone()))
+            .is_err()
+        {
+            return Status::Busy;
+        }
+        records.ordinary.push_back(Ordinary {
+            id,
+            owner,
+            paths,
+            reply: reply.clone(),
+        });
+        drop(records);
+        reply.get(UI_REPLY)
+    }
+    fn dispatch_prepare(
+        &self,
+        mut records: MutexGuard<'_, Records>,
+        id: [u8; 16],
+        owner: Process,
+        command: Command,
+        peer: native::Peer,
+    ) -> Status {
+        let Command::Prepare { token, path, host } = command else {
+            return Status::Rejected;
+        };
+        // A token collision must still reject a different owner before any
+        // capacity/liveness checks; do not scope Prepare deduplication by owner.
+        if let Some(previous) = records
+            .sessions
+            .iter()
+            .find(|entry| entry.binding.has_token(token))
+        {
+            if previous.owner != owner
+                || previous.request != id
+                || previous.binding.host != host
+                || NativePath::encode(&previous.binding.path).ok().as_ref() != Some(&path)
+            {
+                return Status::Rejected;
+            }
+            if previous.binding.lease.as_ref().is_some_and(|lease| {
+                matches!(lease.phase(), Phase::Closed | Phase::Rejected | Phase::Lost)
+            }) {
+                return Status::Rejected;
+            }
+            let reply = previous.reply.clone();
+            drop(records);
+            return self.prepare_reply(token, owner, reply);
+        }
+        if records.sessions.len() >= LEASE_LIMIT || !peer.is_alive() {
+            return Status::Busy;
+        }
+        let path = match path.decode() {
+            Ok(path) => path,
+            Err(_) => return Status::Rejected,
+        };
+        let lease = Lease::new(token, move || peer.is_alive());
+        let binding = Binding {
+            path,
+            host,
+            lease: Some(lease),
+        };
+        let reply = Reply::new();
+        if self
+            .events
+            .try_send(Event::Prepare(binding.clone(), reply.clone()))
+            .is_err()
+        {
+            return Status::Busy;
+        }
+        records.sessions.push(Session {
+            binding,
+            owner,
+            request: id,
+            reply: reply.clone(),
+            committed: false,
+            created: Instant::now(),
+        });
+        drop(records);
+        self.prepare_reply(token, owner, reply)
+    }
+    fn dispatch_session(&self, records: &mut Records, owner: Process, command: Command) -> Status {
+        let token = match command {
+            Command::Commit { token }
+            | Command::Query { token }
+            | Command::Ack { token }
+            | Command::Abandon { token } => token,
+            _ => return Status::Rejected,
+        };
+        let Some(index) = records
+            .sessions
+            .iter()
+            .position(|entry| entry.owned_by(owner, token))
+        else {
+            return Status::Unknown;
+        };
+        let Some(entry) = records.sessions.get_mut(index) else {
+            return Status::Unknown;
+        };
+        let Some(lease) = entry.binding.lease.as_ref() else {
+            return Status::Rejected;
+        };
+        match command {
+            Command::Commit { .. } if !entry.committed => {
+                if entry.reply.get(Duration::ZERO) != Status::Prepared
+                    || lease.phase() != Phase::Prepared
+                {
                     return Status::Rejected;
-                };
-                if kind == 0 && !entry.committed {
-                    if entry.reply.get(Duration::ZERO) != Status::Prepared
-                        || lease.phase() != Phase::Prepared
-                    {
-                        return Status::Rejected;
-                    }
-                    if self
-                        .events
-                        .try_send(Event::Commit(entry.binding.clone()))
-                        .is_err()
-                    {
-                        return Status::Busy;
-                    }
-                    entry.committed = true;
-                } else if kind == 3
-                    && !entry.committed
-                    && lease.transition(Phase::Prepared, Phase::Rejected)
+                }
+                if self
+                    .events
+                    .try_send(Event::Commit(entry.binding.clone()))
+                    .is_err()
                 {
-                    entry.reply.set(Status::Rejected);
+                    return Status::Busy;
                 }
-                let phase = lease.phase();
-                let committed = entry.committed;
-                if kind == 2 && matches!(phase, Phase::Closed | Phase::Rejected | Phase::Lost) {
-                    records.sessions.remove(index);
-                }
-                if committed && phase == Phase::Prepared {
-                    Status::Pending
-                } else {
-                    Status::Session(phase)
-                }
+                entry.committed = true;
             }
+            Command::Abandon { .. }
+                if !entry.committed && lease.transition(Phase::Prepared, Phase::Rejected) =>
+            {
+                entry.reply.set(Status::Rejected);
+            }
+            _ => {}
+        }
+        let phase = lease.phase();
+        let committed = entry.committed;
+        if matches!(command, Command::Ack { .. })
+            && matches!(phase, Phase::Closed | Phase::Rejected | Phase::Lost)
+        {
+            records.sessions.remove(index);
+        }
+        if committed && phase == Phase::Prepared {
+            Status::Pending
+        } else {
+            Status::Session(phase)
         }
     }
     fn reap(&self) {
@@ -411,7 +445,7 @@ impl Core {
                     return false;
                 }
                 if !entry.committed
-                    && entry.created.elapsed() > Duration::from_secs(5)
+                    && entry.created.elapsed() > PREPARE_EXPIRY
                     && lease.transition(Phase::Prepared, Phase::Rejected)
                 {
                     entry.reply.set(Status::Rejected);
@@ -449,9 +483,9 @@ impl Host {
                 while !stopping.load(Ordering::Acquire) {
                     core.reap();
                     fences.reap();
-                    let Ok((mut stream, peer)) = listener.accept(Duration::from_millis(100)) else {
+                    let Ok((mut stream, peer)) = listener.accept(ACCEPT_POLL, HANDOFF) else {
                         // A temporarily full pipe must not spin the CPU.
-                        thread::sleep(Duration::from_millis(10));
+                        thread::sleep(BUSY_BACKOFF);
                         continue;
                     };
                     let Ok(request) = protocol::read::<Request>(&mut stream) else {
@@ -522,7 +556,7 @@ impl Client {
                 }
                 _ => {}
             }
-            thread::sleep(Duration::from_millis(40));
+            thread::sleep(RETRY_INTERVAL);
         }
         false
     }
@@ -563,14 +597,8 @@ fn private_nonce(args: &[std::ffi::OsString]) -> io::Result<Option<[u8; 16]>> {
             let text = args
                 .next()
                 .and_then(|arg| arg.to_str())
-                .filter(|text| text.len() == 32 && text.is_ascii())
                 .ok_or(io::ErrorKind::InvalidInput)?;
-            let mut token = [0; 16];
-            for (index, byte) in token.iter_mut().enumerate() {
-                *byte = u8::from_str_radix(&text[index * 2..index * 2 + 2], 16)
-                    .map_err(|_| io::ErrorKind::InvalidInput)?;
-            }
-            return Ok(Some(token));
+            return protocol::parse_token(text).map(Some);
         }
     }
     Ok(None)
@@ -672,7 +700,7 @@ pub(crate) fn launch(args: &[std::ffi::OsString], startup: &Arguments) -> Option
         client.process,
         Command::Open { paths },
     );
-    if client.open_request(&mut request, Instant::now() + Duration::from_millis(100)) {
+    if client.open_request(&mut request, Instant::now() + ACCEPT_POLL) {
         std::process::exit(0);
     }
     match endpoint.elect() {
@@ -696,12 +724,9 @@ pub(crate) fn launch(args: &[std::ffi::OsString], startup: &Arguments) -> Option
 fn bootstrap(private: Option<[u8; 16]>) -> io::Result<()> {
     let mut child = Child::new(std::env::current_exe()?);
     if let Some(token) = private {
-        child.arg("--desktop-private").arg(
-            token
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>(),
-        );
+        child
+            .arg("--desktop-private")
+            .arg(protocol::token_hex(&token));
     } else {
         child.arg("--desktop-host");
     }
@@ -758,7 +783,7 @@ fn office_proxy(
     let mut deadline = Instant::now() + HANDOFF;
     let mut abandoned: Option<(Client, [u8; 16])> = None;
     let (generation, owner) = loop {
-        match client.call(&request, Duration::from_secs(1)) {
+        match client.call(&request, PROXY_CALL_TIMEOUT) {
             Ok((response, owner)) if response.status == Status::Prepared => {
                 if !private {
                     abandoned = None;
@@ -801,7 +826,7 @@ fn office_proxy(
             private = true;
             deadline = Instant::now() + HANDOFF;
         }
-        thread::sleep(Duration::from_millis(40));
+        thread::sleep(RETRY_INTERVAL);
     };
     let commit = Request::new(
         token,
@@ -828,10 +853,10 @@ fn office_proxy(
                 old.process,
                 Command::Abandon { token },
             );
-            if old.call(&abandon, Duration::from_millis(100)).is_ok() {
+            if old.call(&abandon, ACCEPT_POLL).is_ok() {
                 let _ = old.call(
                     &Request::new(token, Some(generation), old.process, Command::Ack { token }),
-                    Duration::from_millis(100),
+                    ACCEPT_POLL,
                 );
             } else {
                 abandoned = Some((old, generation));
@@ -866,7 +891,7 @@ fn office_proxy(
                 _ => {}
             }
         }
-        thread::sleep(Duration::from_millis(250));
+        thread::sleep(WATCH_INTERVAL);
     }
 }
 

@@ -45,3 +45,39 @@ fn invalid_native_files_report_errors_without_adding_a_tab() {
     assert!(app.tab.path.is_none());
     assert!(app.tabs.background.is_empty());
 }
+
+#[tokio::test]
+async fn finder_read_task_keeps_its_original_tab_tag_after_the_front_tab_changes() {
+    use iced::futures::StreamExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("missing.rsk");
+    let (mut app, _) = App::new();
+    let original = app.tab.id;
+    let task = app.update(Message::MacFiles(Action::Open(Ok(vec![path.clone()]))));
+    app.add_tab();
+    let front = app.tab.id;
+    assert_ne!(front, original);
+
+    let mut stream = iced_runtime::task::into_stream(task).expect("Finder starts a read task");
+    loop {
+        let action = stream
+            .next()
+            .await
+            .expect("The read returns its completion");
+        let iced_runtime::Action::Output(message) = action else {
+            continue;
+        };
+        let Message::Tab(id, message) = message else {
+            panic!("Finder read completions must carry their originating tab tag");
+        };
+        assert_eq!(id, original);
+        let Message::FilePrepared(Some((opened, result))) = *message else {
+            panic!("The read returns FilePrepared");
+        };
+        assert_eq!(opened, path);
+        assert!(result.is_err());
+        break;
+    }
+    assert_eq!(app.tab.id, front);
+}

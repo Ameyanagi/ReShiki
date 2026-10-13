@@ -1,15 +1,19 @@
 //! UI-side ownership acknowledgement; the transport cannot accept a request
 //! merely because it queued bytes. A committed open is retained until processed.
 use super::{
-    App, Message, files,
+    App, Message,
+    document_tab::TabId,
+    event_slot, files,
     office::{Binding, Phase},
 };
 use crate::desktop::{Event, protocol::Status};
-use iced::{Subscription, Task, futures::SinkExt};
-use std::sync::Mutex;
+use iced::{Subscription, Task};
+use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 
-static EVENTS: Mutex<Option<Receiver<Event>>> = Mutex::new(None);
+static EVENTS: event_slot::Slot<Receiver<Event>> = event_slot::Slot::new();
+const EVENT_CAPACITY: usize = 16;
+const LEASE_POLL: Duration = Duration::from_secs(1);
 const LOST_PROXY_STATUS: &str =
     "The Office launch session ended. Save this retained drawing to another file.";
 #[derive(Debug, Clone)]
@@ -29,26 +33,11 @@ pub(super) struct State {
 }
 
 pub(crate) fn install_document_events(events: Receiver<Event>) {
-    if let Ok(mut slot) = EVENTS.lock() {
-        *slot = Some(events);
-    }
+    EVENTS.install(events);
 }
 pub(super) fn subscription(app: &App) -> Subscription<Message> {
-    let requests = Subscription::run(|| {
-        iced::stream::channel(16, async |mut output| {
-            let events = EVENTS.lock().ok().and_then(|mut slot| slot.take());
-            if let Some(mut events) = events {
-                while let Some(event) = events.recv().await {
-                    if output
-                        .send(Message::Desktop(Action::Request(event)))
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
-            }
-        })
+    let requests = event_slot::subscription(&EVENTS, EVENT_CAPACITY, |event| {
+        Message::Desktop(Action::Request(event))
     });
     Subscription::batch([
         requests,
@@ -57,8 +46,7 @@ pub(super) fn subscription(app: &App) -> Subscription<Message> {
                 .as_ref()
                 .is_some_and(|binding| binding.lease.is_some())
         }) {
-            iced::time::every(std::time::Duration::from_secs(1))
-                .map(|_| Message::Desktop(Action::Poll))
+            iced::time::every(LEASE_POLL).map(|_| Message::Desktop(Action::Poll))
         } else {
             Subscription::none()
         },
@@ -77,6 +65,15 @@ fn activate() -> Task<Message> {
     })
 }
 impl App {
+    pub(super) fn desktop_update(&mut self, action: Action) -> Task<Message> {
+        Task::batch([
+            self.desktop_action(action),
+            self.start_label_refresh(),
+            self.start_autosave(),
+            self.accessibility_refresh(),
+        ])
+    }
+
     pub(super) fn desktop_import_started(&mut self) {
         if self.desktop.opening && self.tab.busy && !self.desktop.imports.contains(&self.tab.id) {
             self.desktop.imports.push(self.tab.id);
@@ -120,20 +117,10 @@ impl App {
                 ]);
             }
             Action::Request(Event::Prepare(binding, reply)) => {
-                let conflict = self.strip().any(|tab| {
-                    tab.path
-                        .as_ref()
-                        .is_some_and(|path| binding.same_path(path))
-                        && (tab.office.is_some()
-                            || self.edited(tab)
-                            || self.file_io.saving && self.file_io.saving_tab == Some(tab.id))
-                });
-                if conflict
-                    || binding
-                        .lease
-                        .as_ref()
-                        .is_none_or(|lease| !lease.alive() || lease.phase() != Phase::Prepared)
-                {
+                let conflict = self.office_path_conflict(&binding);
+                // Desktop prepare requires a launcher lease. OfficePrepared
+                // also accepts standalone bindings, for which preparable is true.
+                if conflict || binding.lease.is_none() || !binding.preparable() {
                     reply.set(Status::Rejected);
                 } else if self.desktop_busy() {
                     reply.set(Status::Busy);
@@ -143,9 +130,7 @@ impl App {
             }
             Action::Request(Event::Commit(binding)) => {
                 if self.desktop_busy() {
-                    if let Some(lease) = &binding.lease {
-                        lease.transition(Phase::Prepared, Phase::Rejected);
-                    }
+                    binding.reject();
                     return Task::none();
                 }
                 self.desktop.opening = true;
@@ -170,20 +155,24 @@ impl App {
                     .map(|tab| tab.id)
                     .collect::<Vec<_>>();
                 for id in lost {
-                    self.office.closing.retain(|queued| *queued != id);
-                    self.in_tab(id, |app| {
-                        app.tab.office = None;
-                        app.tab.path = None;
-                        app.tab.saved = reshiki::document::Document::default();
-                        app.begin_file_epoch();
-                        app.request_autosave();
-                        app.status = LOST_PROXY_STATUS.into();
-                        app.error = true;
-                    });
+                    self.retain_lost_office_tab(id);
                 }
             }
         }
         Task::none()
+    }
+
+    fn retain_lost_office_tab(&mut self, id: TabId) {
+        self.office.closing.retain(|queued| *queued != id);
+        self.in_tab(id, |app| {
+            app.tab.office = None;
+            app.tab.path = None;
+            app.tab.saved = reshiki::document::Document::default();
+            app.begin_file_epoch();
+            app.request_autosave();
+            app.status = LOST_PROXY_STATUS.into();
+            app.error = true;
+        });
     }
 }
 

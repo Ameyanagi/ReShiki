@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn libreoffice_and_ordinary_saves_do_not_require_or_touch_ole_receipts() {
-    for host in [Some("LibreOffice"), None] {
+    for host in [Some(Host::LibreOffice), None] {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("drawing.rsk");
         let receipt = path.with_extension("office-saved");
@@ -30,7 +30,7 @@ fn native_office_save_waits_for_matching_ole_receipt() {
     let destination = path.clone();
     let worker = std::thread::spawn(move || {
         sender
-            .send(save(&destination, native, Some("Office")))
+            .send(save(&destination, native, Some(Host::Office)))
             .unwrap();
     });
     let deadline = Instant::now() + Duration::from_secs(2);
@@ -68,7 +68,7 @@ fn native_office_save_does_not_accept_a_libreoffice_receipt() {
             directory.path().join("accepted.json"),
             br#"{"version":1,"accepted_sha256":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"}"#,
         ).unwrap();
-    let error = save(&path, b"test", Some("Office")).unwrap_err();
+    let error = save(&path, b"test", Some(Host::Office)).unwrap_err();
     assert!(error.contains("Office has not accepted this update"));
     assert_eq!(std::fs::read(&path).unwrap(), b"test");
 }
@@ -83,7 +83,7 @@ fn an_overlapping_reader_can_close_before_the_atomic_save_deadline() {
         std::thread::sleep(Duration::from_millis(100));
         drop(reader);
     });
-    save(&path, b"accepted drawing", Some("LibreOffice")).unwrap();
+    save(&path, b"accepted drawing", Some(Host::LibreOffice)).unwrap();
     release.join().unwrap();
     assert_eq!(std::fs::read(&path).unwrap(), b"accepted drawing");
     assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);

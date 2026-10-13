@@ -11,6 +11,23 @@ pub(super) const FRAME_LIMIT: usize = 256 * 1024;
 pub(super) const PATH_LIMIT: usize = 64;
 const VERSION: u16 = 1;
 
+pub(super) fn token_hex(token: &[u8; 16]) -> String {
+    token.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+pub(super) fn parse_token(text: &str) -> io::Result<[u8; 16]> {
+    if text.len() != 32 || !text.is_ascii() {
+        return Err(io::ErrorKind::InvalidInput.into());
+    }
+    let mut token = [0; 16];
+    // Preserve pair-wise radix parsing, including a leading '+' in a pair.
+    for (index, byte) in token.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&text[index * 2..index * 2 + 2], 16)
+            .map_err(|_| io::ErrorKind::InvalidInput)?;
+    }
+    Ok(token)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) struct Process {
     pub pid: u32,

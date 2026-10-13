@@ -1,6 +1,7 @@
 //! Document tabs: the strip in the header, switching and closing, and the
 //! results of work that a tab started before it left the front.
 use super::document_tab::{DocumentTab, TabId};
+use super::files::same_file;
 use super::workspace::{caret, control, hover_hint, text_width};
 use super::{App, Job, Message, Pending};
 use iced::widget::{Space, button, column, container, hover, row, text, tooltip};
@@ -58,14 +59,6 @@ const DOT: f32 = 7.;
 const SPACING: f32 = 6.;
 /// The width of the + and ▾ buttons, which share a place.
 const BUTTON: f32 = 24.;
-
-/// Two paths name the same file, also through links or different spellings.
-fn same_file(a: &Path, b: &Path) -> bool {
-    a == b
-        || std::fs::canonicalize(a)
-            .ok()
-            .is_some_and(|a| std::fs::canonicalize(b).ok() == Some(a))
-}
 
 /// Which tabs show when the strip is `room` wide, and the width limit for
 /// tabs of natural widths `widths`. Wide tabs shrink first. Below the minimum

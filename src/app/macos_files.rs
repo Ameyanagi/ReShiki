@@ -1,10 +1,11 @@
 //! Finder and Dock requests to open drawings, which open as tabs.
-use super::{App, Message};
-use iced::{Subscription, Task, futures::SinkExt};
-use std::sync::Mutex;
+use super::{App, Message, event_slot};
+use iced::{Subscription, Task};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-static EVENTS: Mutex<Option<UnboundedReceiver<reshiki_macos::OpenRequest>>> = Mutex::new(None);
+static EVENTS: event_slot::Slot<UnboundedReceiver<reshiki_macos::OpenRequest>> =
+    event_slot::Slot::new();
+const EVENT_CAPACITY: usize = 16;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -12,27 +13,12 @@ pub enum Action {
 }
 
 pub(crate) fn install_document_events(events: UnboundedReceiver<reshiki_macos::OpenRequest>) {
-    if let Ok(mut slot) = EVENTS.lock() {
-        *slot = Some(events);
-    }
+    EVENTS.install(events);
 }
 
 pub(super) fn subscription() -> Subscription<Message> {
-    Subscription::run(|| {
-        iced::stream::channel(16, async |mut output| {
-            let events = EVENTS.lock().ok().and_then(|mut slot| slot.take());
-            if let Some(mut events) = events {
-                while let Some(request) = events.recv().await {
-                    if output
-                        .send(Message::MacFiles(Action::Open(request)))
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
-            }
-        })
+    event_slot::subscription(&EVENTS, EVENT_CAPACITY, |request| {
+        Message::MacFiles(Action::Open(request))
     })
 }
 

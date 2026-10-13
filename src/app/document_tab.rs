@@ -109,6 +109,12 @@ pub(super) struct DocumentTab {
 }
 
 impl DocumentTab {
+    pub(super) fn detach_office(&mut self) {
+        if let Some(binding) = self.office.take() {
+            binding.finish();
+        }
+    }
+
     pub(super) fn drawing_edit_active(&self) -> bool {
         self.cleanup.is_some()
             || self.joining.is_some()

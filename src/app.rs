@@ -31,6 +31,7 @@ mod document_styles;
 mod document_tab;
 use document_tab::DocumentTab;
 mod engine_jobs;
+mod event_slot;
 mod figure_export;
 mod file_shortcuts;
 mod files;
@@ -780,18 +781,10 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        #[cfg(any(windows, target_os = "linux"))]
-        if let Message::Desktop(action) = message {
-            return Task::batch([
-                self.desktop_action(action),
-                self.start_label_refresh(),
-                self.start_autosave(),
-                self.accessibility_refresh(),
-            ]);
-        }
-        if let Message::Accessibility(action) = message {
-            return self.accessibility_action(action);
-        }
+        let message = match self.update_untagged(message) {
+            ControlFlow::Break(task) => return task,
+            ControlFlow::Continue(message) => message,
+        };
         let keyboard_before = (
             self.tab.keyboard_drawing.target(),
             self.tab.keyboard_drawing.marked(),
@@ -815,6 +808,21 @@ impl App {
             Task::batch([task, self.accessibility_refresh()])
         }
     }
+
+    /// Native desktop ownership and accessibility actions belong to the window.
+    /// Handle them before tab routing, modal gates and the routing tail; their
+    /// tasks must not acquire a document tag.
+    fn update_untagged(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
+        #[cfg(any(windows, target_os = "linux"))]
+        if let Message::Desktop(action) = message {
+            return ControlFlow::Break(self.desktop_update(action));
+        }
+        if let Message::Accessibility(action) = message {
+            return ControlFlow::Break(self.accessibility_action(action));
+        }
+        ControlFlow::Continue(message)
+    }
+
     fn update_routed(&mut self, mut message: Message) -> Task<Message> {
         #[cfg(all(target_os = "linux", feature = "wayland-qa"))]
         let qa_event = wayland_qa::event(&message);
@@ -859,13 +867,10 @@ impl App {
     }
 
     fn update_front(&mut self, message: Message, background: bool) -> Task<Message> {
-        if let Message::OfficePrepared(binding, opened) = message {
-            return self.office_prepared(binding, opened);
-        }
-        #[cfg(target_os = "macos")]
-        if let Message::MacFiles(action) = message {
-            return self.mac_file_action(action);
-        }
+        let message = match self.update_ungated(message) {
+            ControlFlow::Break(task) => return task,
+            ControlFlow::Continue(message) => message,
+        };
         let previous = self.inspector_tab;
         let pointer_selection = match &message {
             Message::Canvas(Edit::Select(_)) => Some(
@@ -936,6 +941,20 @@ impl App {
         } else {
             task
         }
+    }
+
+    /// Open completions bypass modal gates inside the routed front update,
+    /// including its background-tab path. Their tasks still receive tab tags
+    /// and run the routing tail that closes Office tabs and replays held results.
+    fn update_ungated(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
+        if let Message::OfficePrepared(binding, opened) = message {
+            return ControlFlow::Break(self.office_prepared(binding, opened));
+        }
+        #[cfg(target_os = "macos")]
+        if let Message::MacFiles(action) = message {
+            return ControlFlow::Break(self.mac_file_action(action));
+        }
+        ControlFlow::Continue(message)
     }
 
     fn update_inner(&mut self, message: Message) -> Task<Message> {

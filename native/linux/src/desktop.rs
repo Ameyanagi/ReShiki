@@ -21,6 +21,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+const SOCKET_NAME: &str = "desktop.sock";
+const HOST_LOCK: &str = "host.lock";
+const RETRY_SLEEP: Duration = Duration::from_millis(10);
+const BACKLOG: i32 = 16;
+
 fn denied() -> io::Error {
     io::ErrorKind::PermissionDenied.into()
 }
@@ -82,6 +87,9 @@ impl Endpoint {
     }
 
     pub fn private(&self, token: [u8; 16]) -> io::Result<Self> {
+        // The private suffix must stay byte-identical to the app's
+        // protocol::token_hex and the Windows backend (lowercase {:02x} per
+        // byte). This crate cannot import app code, so the copies stay in step.
         let suffix = token
             .iter()
             .map(|byte| format!("{byte:02x}"))
@@ -112,6 +120,9 @@ impl Endpoint {
         self.path_claim(path, "write")
     }
     fn path_claim(&self, path: &Path, role: &str) -> io::Result<Option<Election>> {
+        // The claim hash must stay byte-identical to the Windows backend:
+        // canonicalize-or-original path, std DefaultHasher, {:016x}. Only the
+        // name around it is platform-specific.
         let mut hash = DefaultHasher::new();
         std::fs::canonicalize(path)
             .unwrap_or_else(|_| path.to_owned())
@@ -147,16 +158,16 @@ impl Endpoint {
     }
 
     pub fn elect(&self) -> io::Result<Option<Election>> {
-        self.lock(&self.directory, "host.lock")
+        self.lock(&self.directory, HOST_LOCK)
     }
 
     pub fn listen(&self, election: &Election) -> io::Result<Listener> {
         let a = self.directory.metadata()?;
         let b = election.directory.metadata()?;
-        if election.name != "host.lock" || (a.dev(), a.ino()) != (b.dev(), b.ino()) {
+        if election.name != HOST_LOCK || (a.dev(), a.ino()) != (b.dev(), b.ino()) {
             return Err(denied());
         }
-        let path = self.path("desktop.sock");
+        let path = self.path(SOCKET_NAME);
         match std::fs::symlink_metadata(&path) {
             Ok(meta) => {
                 if !meta.file_type().is_socket()
@@ -185,7 +196,7 @@ impl Endpoint {
             None,
         )?;
         net::bind(&fd, &SocketAddrUnix::new(&path)?)?;
-        net::listen(&fd, 16)?;
+        net::listen(&fd, BACKLOG)?;
         let listener = UnixListener::from(fd);
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
         listener.set_nonblocking(true)?;
@@ -199,7 +210,7 @@ impl Endpoint {
 
     pub fn connect(&self, timeout: Duration) -> io::Result<(Stream, Peer)> {
         let deadline = Instant::now() + timeout;
-        let path = self.path("desktop.sock");
+        let path = self.path(SOCKET_NAME);
         loop {
             let meta = metadata(&path, self.uid, 0o600)?;
             if !meta.file_type().is_socket() {
@@ -230,7 +241,7 @@ impl Endpoint {
             if Instant::now() >= deadline {
                 return Err(io::ErrorKind::TimedOut.into());
             }
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::sleep(RETRY_SLEEP);
         }
     }
 
@@ -303,7 +314,11 @@ pub struct Listener {
     inode: (u64, u64),
 }
 impl Listener {
-    pub fn accept(&mut self, timeout: Duration) -> io::Result<(Stream, Peer)> {
+    pub fn accept(
+        &mut self,
+        timeout: Duration,
+        stream_deadline: Duration,
+    ) -> io::Result<(Stream, Peer)> {
         let deadline = Instant::now() + timeout;
         loop {
             match self.socket.accept() {
@@ -312,7 +327,7 @@ impl Listener {
                     return Ok((
                         Stream {
                             socket,
-                            deadline: Instant::now() + Duration::from_secs(2),
+                            deadline: Instant::now() + stream_deadline,
                         },
                         peer,
                     ));
@@ -323,13 +338,13 @@ impl Listener {
             if Instant::now() >= deadline {
                 return Err(io::ErrorKind::TimedOut.into());
             }
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::sleep(RETRY_SLEEP);
         }
     }
 }
 impl Drop for Listener {
     fn drop(&mut self) {
-        let path = self.endpoint.path("desktop.sock");
+        let path = self.endpoint.path(SOCKET_NAME);
         if std::fs::symlink_metadata(&path).is_ok_and(|meta| {
             (meta.dev(), meta.ino()) == self.inode && meta.file_type().is_socket()
         }) {

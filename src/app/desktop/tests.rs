@@ -214,3 +214,113 @@ fn lease_liveness_polling_exists_only_while_an_office_tab_owns_a_proxy() {
     assert_eq!(lease.phase(), Phase::Closed);
     assert_eq!(count(&app), 1);
 }
+
+#[tokio::test]
+async fn desktop_open_task_emits_untagged_read_and_finished_after_the_front_tab_changes() {
+    use iced::futures::StreamExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("missing.rsk");
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::Desktop(Action::Ready));
+    let original = app.tab.id;
+    let reply = Reply::new();
+    let task = app.update(Message::Desktop(Action::Request(Event::Open(
+        vec![path.clone()],
+        reply.clone(),
+    ))));
+    assert_eq!(reply.get(Duration::ZERO), Status::Accepted);
+    app.add_tab();
+    let front = app.tab.id;
+    assert_ne!(front, original);
+
+    let mut stream = iced_runtime::task::into_stream(task).expect("Desktop starts a read task");
+    let mut opened = false;
+    loop {
+        let action = stream
+            .next()
+            .await
+            .expect("The read returns FilePrepared followed by Finished");
+        // Dropping window actions does not execute the activation request.
+        let iced_runtime::Action::Output(message) = action else {
+            continue;
+        };
+        match message {
+            Message::FilePrepared(Some((read, result))) => {
+                assert!(!opened);
+                assert_eq!(read, path);
+                assert!(result.is_err());
+                opened = true;
+            }
+            Message::Desktop(Action::Finished) => {
+                assert!(opened, "Finished follows the owned read completion");
+                break;
+            }
+            Message::Tab(..) => panic!("Desktop tasks must remain untagged"),
+            _ => panic!("The open task returns only FilePrepared and Finished"),
+        }
+    }
+    assert_eq!(app.tab.id, front);
+}
+
+#[test]
+fn desktop_ready_leaves_the_queued_office_close_for_a_routed_completion() {
+    let (mut app, _) = App::new();
+    let id = app.tab.id;
+    let lease = Lease::new([7; 16], || true);
+    assert!(lease.transition(Phase::Prepared, Phase::Open));
+    app.tab.office = Some(Binding {
+        path: "closing.rsk".into(),
+        host: Host::Office,
+        lease: Some(lease.clone()),
+    });
+    app.office.closing.push(id);
+
+    let _ = app.update(Message::Desktop(Action::Ready));
+    assert!(app.desktop.ready);
+    assert_eq!(app.office.closing, [id]);
+    assert!(app.tab_index(id).is_some());
+    assert_eq!(lease.phase(), Phase::Open);
+
+    let _ = app.update(Message::OfficePrepared(
+        Binding::standalone("cancelled.rsk".into(), Host::LibreOffice),
+        None,
+    ));
+    assert!(app.office.closing.is_empty());
+    assert!(app.tab_index(id).is_none());
+    assert_eq!(lease.phase(), Phase::Closed);
+}
+
+#[test]
+fn desktop_prepare_rejects_missing_or_invalid_leases_before_not_ready_busy() {
+    let (mut app, _) = App::new();
+    assert!(!app.desktop.ready);
+    let prepare = |app: &mut App, binding: Binding| {
+        let reply = Reply::new();
+        let _ = app.update(Message::Desktop(Action::Request(Event::Prepare(
+            binding,
+            reply.clone(),
+        ))));
+        reply.get(Duration::ZERO)
+    };
+    let watched = |lease| Binding {
+        path: "watched.rsk".into(),
+        host: Host::Office,
+        lease: Some(lease),
+    };
+    let standalone = Binding::standalone("standalone.rsk".into(), Host::Office);
+    assert!(standalone.preparable());
+    assert_eq!(prepare(&mut app, standalone), Status::Rejected);
+    assert_eq!(
+        prepare(&mut app, watched(Lease::new([8; 16], || true))),
+        Status::Busy
+    );
+    assert_eq!(
+        prepare(&mut app, watched(Lease::new([9; 16], || false))),
+        Status::Rejected
+    );
+    let rejected = Lease::new([10; 16], || true);
+    assert!(rejected.transition(Phase::Prepared, Phase::Rejected));
+    assert_eq!(prepare(&mut app, watched(rejected)), Status::Rejected);
+    assert!(!app.desktop.ready);
+}

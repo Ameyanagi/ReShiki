@@ -3,6 +3,18 @@ use crate::app::{App, Message, Pending, inline_text};
 use reshiki::document::{Document, Point};
 use rfd::MessageDialogResult as Answer;
 
+#[test]
+fn each_office_host_selects_its_save_backend() {
+    for (host, expected) in [
+        (None, SaveBackend::Atomic),
+        (Some(Host::Office), SaveBackend::OfficeOle),
+        (Some(Host::LibreOffice), SaveBackend::LibreOfficeRetry),
+        (Some(Host::Microsoft365), SaveBackend::Addin),
+    ] {
+        assert_eq!(save_backend(host), expected);
+    }
+}
+
 fn prepared() -> Opened {
     let mut document = Document::default();
     document.add_atom("O", Point::default());

@@ -115,11 +115,27 @@ impl Binding {
         self.lease.as_ref().is_none_or(Lease::writable)
     }
 
+    #[cfg(any(windows, target_os = "linux", test))]
+    pub(crate) fn has_token(&self, token: [u8; 16]) -> bool {
+        self.lease
+            .as_ref()
+            .is_some_and(|lease| lease.token == token)
+    }
+
+    pub(crate) fn preparable(&self) -> bool {
+        self.lease
+            .as_ref()
+            .is_none_or(|lease| lease.alive() && lease.phase() == Phase::Prepared)
+    }
+
     pub(crate) fn same_path(&self, path: &Path) -> bool {
-        self.path == path
-            || std::fs::canonicalize(&self.path)
-                .ok()
-                .is_some_and(|source| std::fs::canonicalize(path).ok() == Some(source))
+        files::same_file(&self.path, path)
+    }
+
+    pub(crate) fn reject(&self) {
+        if let Some(lease) = &self.lease {
+            lease.transition(Phase::Prepared, Phase::Rejected);
+        }
     }
 
     pub(crate) fn finish(&self) {
@@ -138,9 +154,18 @@ pub(super) struct State {
 
 impl App {
     pub(super) fn detach_office(&mut self) {
-        if let Some(binding) = self.tab.office.take() {
-            binding.finish();
-        }
+        self.tab.detach_office();
+    }
+
+    pub(super) fn office_path_conflict(&self, binding: &Binding) -> bool {
+        self.strip().any(|tab| {
+            tab.path
+                .as_ref()
+                .is_some_and(|path| binding.same_path(path))
+                && (tab.office.is_some()
+                    || self.edited(tab)
+                    || self.file_io.saving && self.file_io.saving_tab == Some(tab.id))
+        })
     }
 
     pub(super) fn finish_office_closes(&mut self) -> Task<Message> {
@@ -160,9 +185,7 @@ impl App {
         opened: files::Opened,
     ) -> Task<Message> {
         let Some((path, result)) = opened else {
-            if let Some(lease) = &binding.lease {
-                lease.transition(Phase::Prepared, Phase::Rejected);
-            }
+            binding.reject();
             return Task::none();
         };
         let result = match result {
@@ -170,25 +193,9 @@ impl App {
             Ok(_) => Err("Office editing requires a native ReShiki drawing".into()),
             Err(error) => Err(error),
         };
-        let conflict = self.strip().any(|tab| {
-            tab.path
-                .as_ref()
-                .is_some_and(|path| binding.same_path(path))
-                && (tab.office.is_some()
-                    || self.edited(tab)
-                    || self.file_io.saving && self.file_io.saving_tab == Some(tab.id))
-        });
-        if self.exit.frozen()
-            || self.updates.restarting
-            || conflict
-            || !binding
-                .lease
-                .as_ref()
-                .is_none_or(|lease| lease.alive() && lease.phase() == Phase::Prepared)
-        {
-            if let Some(lease) = &binding.lease {
-                lease.transition(Phase::Prepared, Phase::Rejected);
-            }
+        let conflict = self.office_path_conflict(&binding);
+        if self.exit.frozen() || self.updates.restarting || conflict || !binding.preparable() {
+            binding.reject();
             self.status =
                 "This drawing already belongs to another edit session, or the editor is closing"
                     .into();
@@ -198,9 +205,7 @@ impl App {
         match result {
             Ok(doc) => {
                 if path != binding.path {
-                    if let Some(lease) = &binding.lease {
-                        lease.transition(Phase::Prepared, Phase::Rejected);
-                    }
+                    binding.reject();
                     self.status = "Office edit source does not match the opened file".into();
                     self.error = true;
                     return Task::none();
@@ -216,9 +221,7 @@ impl App {
                 task
             }
             Err(error) => {
-                if let Some(lease) = &binding.lease {
-                    lease.transition(Phase::Prepared, Phase::Rejected);
-                }
+                binding.reject();
                 self.status = error;
                 self.error = true;
                 Task::none()

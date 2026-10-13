@@ -16,17 +16,7 @@ impl App {
         let message = self.early_results_gate(message)?;
         let message = self.exit_gate(message)?;
         #[cfg(any(windows, target_os = "linux"))]
-        if self.desktop.opening
-            && matches!(
-                message,
-                Message::Close(_)
-                    | Message::Tabs(tabs::Action::Close(_))
-                    | Message::Updates(updates::Action::Install)
-            )
-        {
-            self.status = "Finish opening the requested drawings before closing the editor".into();
-            return Break(Task::none());
-        }
+        let message = self.desktop_opening_gate(message)?;
         let message = self.background_results_gate(message)?;
         if let Some(task) = self.optimization_gate(&message) {
             return Break(task);
@@ -99,6 +89,24 @@ impl App {
             if tabs::document_result(&message) {
                 self.defer_document_result(self.tab.id, message);
             }
+            return Break(Task::none());
+        }
+        Continue(message)
+    }
+
+    /// While the editor reads drawings a desktop launch handed over, closing
+    /// the window or a tab and installing an update wait.
+    #[cfg(any(windows, target_os = "linux"))]
+    fn desktop_opening_gate(&mut self, message: Message) -> Gate {
+        if self.desktop.opening
+            && matches!(
+                message,
+                Message::Close(_)
+                    | Message::Tabs(tabs::Action::Close(_))
+                    | Message::Updates(updates::Action::Install)
+            )
+        {
+            self.status = "Finish opening the requested drawings before closing the editor".into();
             return Break(Task::none());
         }
         Continue(message)

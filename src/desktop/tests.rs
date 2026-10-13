@@ -47,13 +47,7 @@ fn test_child(
     TestChild(
         Child::new(std::env::current_exe().unwrap())
             .args(["--ignored", "--exact", role, "--nocapture"])
-            .env(
-                "RESHIKI_IPC_TEST_NONCE",
-                nonce
-                    .iter()
-                    .map(|byte| format!("{byte:02x}"))
-                    .collect::<String>(),
-            )
+            .env("RESHIKI_IPC_TEST_NONCE", protocol::token_hex(&nonce))
             .env("RESHIKI_IPC_TEST_FILE", source)
             .env("RESHIKI_IPC_TEST_MARKER", marker)
             .stdout(Stdio::null())
@@ -98,6 +92,40 @@ fn native_path_round_trip_and_bounds_preserve_filename_units() {
         assert_eq!(NativePath::encode(&path).unwrap().decode().unwrap(), path);
         assert!(NativePath::Unix(vec![0; 10]).decode().is_err());
         assert!(NativePath::Unix(vec![65; 4097]).decode().is_err());
+    }
+}
+
+#[test]
+fn token_text_preserves_hex_format_and_existing_radix_acceptance() {
+    let token = [
+        0x00, 0x01, 0x0f, 0x10, 0x7f, 0x80, 0xfe, 0xff, 0x02, 0x03, 0x04, 0x05, 0xa6, 0xb7, 0xc8,
+        0xd9,
+    ];
+    let text = protocol::token_hex(&token);
+    assert_eq!(text, "00010f107f80feff02030405a6b7c8d9");
+    assert_eq!(protocol::parse_token(&text).unwrap(), token);
+    assert_eq!(protocol::parse_token(&text.to_uppercase()).unwrap(), token);
+    // from_str_radix accepts a leading '+' within each two-character pair.
+    assert_eq!(protocol::parse_token(&"+f".repeat(16)).unwrap(), [15; 16]);
+    for invalid in [
+        String::new(),
+        "0".repeat(31),
+        "0".repeat(33),
+        "é".repeat(16),
+        "gg".repeat(16),
+        "-1".repeat(16),
+        " 1".repeat(16),
+    ] {
+        assert_eq!(
+            protocol::parse_token(&invalid).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidInput
+        );
+        assert_eq!(
+            private_nonce(&["--desktop-private".into(), invalid.into()])
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidInput
+        );
     }
 }
 
@@ -638,14 +666,14 @@ fn native_pipe_or_socket_has_an_elected_authenticated_owner_and_deadlines() {
     );
     let mut listener = endpoint.listen(&election).unwrap();
     let server = thread::spawn(move || {
-        let (mut stream, peer) = listener.accept(Duration::from_secs(2)).unwrap();
+        let (mut stream, peer) = listener.accept(Duration::from_secs(2), HANDOFF).unwrap();
         assert!(peer.is_alive());
         let mut bytes = [0; 3];
         stream.read_exact(&mut bytes).unwrap();
         assert_eq!(&bytes, b"one");
         stream.write_all(b"two").unwrap();
         drop(stream);
-        let (mut silent, _) = listener.accept(Duration::from_secs(2)).unwrap();
+        let (mut silent, _) = listener.accept(Duration::from_secs(2), HANDOFF).unwrap();
         let start = Instant::now();
         assert!(silent.read_exact(&mut [0; 1]).is_err());
         assert!(start.elapsed() < Duration::from_secs(4));
@@ -696,7 +724,7 @@ fn office_fake_host_child() {
     });
     let mut fences = Fences::default();
     loop {
-        if let Ok((mut stream, peer)) = listener.accept(Duration::from_millis(100))
+        if let Ok((mut stream, peer)) = listener.accept(ACCEPT_POLL, HANDOFF)
             && let Ok(request) = protocol::read::<Request>(&mut stream)
         {
             let status = fences.dispatch(&endpoint, &core, request, peer);
@@ -776,7 +804,7 @@ fn watched_office_proxy_process_stays_alive_until_its_session_closes() {
         let mut dropped_commit_reply = false;
         let mut dropped_queries = 0;
         while !stopping.load(Ordering::Acquire) {
-            if let Ok((mut stream, peer)) = listener.accept(Duration::from_millis(100))
+            if let Ok((mut stream, peer)) = listener.accept(ACCEPT_POLL, HANDOFF)
                 && let Ok(request) = protocol::read::<Request>(&mut stream)
             {
                 let commit = matches!(request.command, Command::Commit { .. });
@@ -823,13 +851,7 @@ fn watched_office_proxy_process_stays_alive_until_its_session_closes() {
             "desktop::tests::office_proxy_child",
             "--nocapture",
         ])
-        .env(
-            "RESHIKI_IPC_TEST_NONCE",
-            nonce
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>(),
-        )
+        .env("RESHIKI_IPC_TEST_NONCE", protocol::token_hex(&nonce))
         .env("RESHIKI_IPC_TEST_FILE", &source)
         .stdout(Stdio::null())
         .stderr(Stdio::null())

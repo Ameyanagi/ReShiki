@@ -245,9 +245,7 @@ impl App {
     /// Removes a closed tab's draft; a write still running for it finishes
     /// first, and its result, which finds no tab, starts the removal.
     pub(super) fn retire(&mut self, mut tab: DocumentTab) -> Task<Message> {
-        if let Some(binding) = tab.office.take() {
-            binding.finish();
-        }
+        tab.detach_office();
         self.retire_assistant(tab.id);
         let Some(recovery) = tab.recovery else {
             return Task::none();
