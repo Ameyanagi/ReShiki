@@ -603,3 +603,190 @@ fn a_shared_repeated_participant_rejects_pairing_without_an_undo_frame() {
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
 }
+
+#[test]
+fn edit_atom_map_reopens_a_collapsed_atom_maps_section() {
+    use crate::app::inspector::{Action as Inspector, Section};
+    let mut app = app();
+    app.tab.selected = vec![1];
+    let _ = app.update(Message::InspectorAction(Inspector::Section(
+        Section::AtomMaps,
+        false,
+    )));
+    assert_eq!(
+        app.tab.inspector_ui.expanded(Section::AtomMaps),
+        Some(false)
+    );
+    assert!(app.update(Message::Mapping(Action::Open)).units() > 0);
+    assert_eq!(app.inspector_tab, InspectorTab::Reactions);
+    assert_eq!(app.tab.inspector_ui.expanded(Section::AtomMaps), Some(true));
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer Atom maps accessibility ids"]
+async fn atom_map_controls_and_review_rows_publish_unique_ids() -> Result<(), String> {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    use reshiki::accessibility::Collect;
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let mut app = app();
+    app.tab.selected = vec![1];
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+    let size = iced::Size::new(288., 2400.);
+    let mut ui = iced_runtime::UserInterface::build(
+        app.mapping_section(),
+        size,
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    let mut collect = Collect::new(iced::Rectangle::with_size(size));
+    ui.operate(&renderer, &mut operation::black_box(&mut collect));
+    let snapshot = collect.snapshot();
+    assert!(
+        snapshot.duplicate_ids.is_empty(),
+        "{:?}",
+        snapshot.duplicate_ids
+    );
+    let node = |id: &str| {
+        snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == id)
+            .unwrap_or_else(|| panic!("Missing {id}"))
+    };
+    for id in [
+        "inspector-section-AtomMaps",
+        "mapping.show",
+        "mapping.atom",
+        "mapping.set",
+        "mapping.clear",
+        "mapping.auto",
+        "mapping.pair",
+        "mapping.align",
+        "mapping.labels.move",
+        "mapping.labels.reset",
+        "mapping.review.0",
+        "mapping.apply",
+        "mapping.discard",
+    ] {
+        let node = node(id);
+        assert!(!node.name.is_empty(), "Unnamed {id}");
+        assert!(node.visible_bounds.is_some(), "Invisible {id}");
+    }
+    assert_eq!(
+        node("mapping.show").checked,
+        Some(app.tab.doc.atom_labels.maps)
+    );
+    // Review rows name both atoms of the pair by element and id.
+    assert_eq!(node("mapping.review.0").name, "Map 1 · C #1 → C #2");
+    assert!(node("mapping.apply").enabled);
+    Ok(())
+}
+
+fn carbon_chain(doc: &mut Document, x: f32) -> Vec<u64> {
+    let mut ids: Vec<u64> = vec![];
+    for index in 0..12_u8 {
+        let y = if index % 2 == 0 { 0. } else { 15. };
+        let id = doc.add_atom("C", Point::new(x + 26. * f32::from(index), y));
+        if let Some(&previous) = ids.last() {
+            doc.add_bond(previous, id, 1, "plain");
+        }
+        ids.push(id);
+    }
+    ids
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer Edit atom map reveal check"]
+async fn edit_atom_map_reveals_its_field_above_a_long_review() -> Result<(), String> {
+    use iced::advanced::{
+        renderer::Headless,
+        widget::operation::{self, Outcome},
+    };
+    use iced::futures::StreamExt;
+    use reshiki::accessibility::Collect;
+    type Ui<'a> = iced_runtime::UserInterface<'a, Message, iced::Theme, iced::Renderer>;
+    fn field_visible(ui: &mut Ui<'_>, renderer: &iced::Renderer, size: iced::Size) -> bool {
+        let mut collect = Collect::new(iced::Rectangle::with_size(size));
+        ui.operate(renderer, &mut operation::black_box(&mut collect));
+        collect
+            .snapshot()
+            .nodes
+            .iter()
+            .find(|node| node.id == "mapping.atom")
+            .and_then(|node| {
+                node.visible_bounds
+                    .map(|visible| (visible.height - node.bounds.height).abs() < 0.5)
+            })
+            .unwrap_or(false)
+    }
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    // Twelve pairs: the review is taller than the inspector's viewport.
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let reactant = carbon_chain(&mut app.tab.doc, 0.);
+    let product = carbon_chain(&mut app.tab.doc, 600.);
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(360., 0.),
+        Point::new(540., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    reactions::assign(&mut app.tab.doc, arrow, &reactant, Role::Reactant)?;
+    reactions::assign(&mut app.tab.doc, arrow, &product, Role::Product)?;
+    app.tab.saved = app.tab.doc.clone();
+    let proposal = Arc::new(mapping::propose(&app.tab.doc, arrow, Budget::default())?);
+    app.tab.mapping.serial = app.tab.mapping.serial.wrapping_add(1);
+    let (epoch, serial) = (app.tab.file_epoch, app.tab.mapping.serial);
+    app.tab.mapping.pending = Some((epoch, serial));
+    let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+    assert_eq!(
+        app.tab.mapping.proposal.as_ref().map(|p| p.pairs.len()),
+        Some(12)
+    );
+    app.tab.selected = vec![reactant[0]];
+    let task = app.mapping_action(Action::Open);
+    let size = iced::Size::new(1040., 680.);
+    let mut ui = iced_runtime::UserInterface::build(
+        app.view(),
+        size,
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    // Run each widget operation as the event loop does, then look at the field.
+    let mut steps = vec![];
+    let mut stream = iced_runtime::task::into_stream(task).ok_or("Open scrolls the inspector")?;
+    while let Some(action) = stream.next().await {
+        let iced_runtime::Action::Widget(operation) = action else {
+            continue;
+        };
+        let mut current = Some(operation);
+        while let Some(mut operation) = current.take() {
+            ui.operate(&renderer, operation.as_mut());
+            if let Outcome::Chain(next) = operation.finish() {
+                current = Some(next);
+            }
+        }
+        steps.push(field_visible(&mut ui, &renderer, size));
+    }
+    assert_eq!(
+        steps,
+        [false, true],
+        "The end of the page leaves the field above the view; the reveal shows it"
+    );
+    Ok(())
+}

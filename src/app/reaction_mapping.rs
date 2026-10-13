@@ -1,15 +1,20 @@
 //! The reaction inspector edits chemical map numbers and reviews detached fits.
+use super::inspector::Section;
+use super::workspace::{
+    accessible_checkbox, accessible_command, horizontal_line, hover_hint, muted_text,
+};
 use super::{App, InspectorTab, Message, Tool};
-use iced::widget::{Column, button, checkbox, column, container, row, text};
-use iced::{Element, Length, Task};
+use iced::widget::{Column, column, row, text, tooltip};
+use iced::{Alignment, Element, Length, Task};
 use reshiki::{
     document::Document,
     reaction_mapping::{self as mapping, Budget, Proposal},
 };
 use std::sync::Arc;
 
-const EDITOR_HINT: &str =
-    "Existing maps are anchors. Agents are excluded. Alignment moves complete product molecules.";
+const EDITOR_HINT: &str = "Auto-map keeps maps you set. Reagents are not mapped.";
+const ALIGN_HINT: &str = "Moves complete product molecules";
+const MOVE_HINT: &str = "Drag the map numbers on the canvas · Escape finishes";
 const PROPOSAL_HINT: &str =
     "Graph matching suggests correspondence; it does not determine a reaction mechanism.";
 
@@ -131,7 +136,7 @@ impl App {
     pub(super) fn mapping_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Ready(epoch, serial, result) => self.mapping_ready(epoch, serial, result),
-            Action::Open => self.open_mapping(),
+            Action::Open => return self.open_mapping(),
             Action::Text(value) => {
                 self.tab.mapping.atom = self.mapping_atom();
                 self.tab.mapping.text = value;
@@ -229,7 +234,7 @@ impl App {
             }
         }
     }
-    fn open_mapping(&mut self) {
+    fn open_mapping(&mut self) -> Task<Message> {
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Reactions;
         self.tool = Tool::Select;
@@ -239,6 +244,22 @@ impl App {
             .and_then(|id| self.tab.doc.atom(id))
             .map(|a| a.map_num.to_string())
             .unwrap_or_default();
+        // The Atom maps section ends the page, after the role list: open it
+        // and scroll to it, then reveal its field, which an open review can
+        // push above the end of the page.
+        self.tab
+            .inspector_ui
+            .update(super::inspector::Action::Section(Section::AtomMaps, true));
+        iced::widget::operation::snap_to(
+            "inspector-content",
+            iced::widget::operation::RelativeOffset::END,
+        )
+        .chain(
+            iced::advanced::widget::operate(reshiki::accessibility::FocusControl::reveal(
+                "mapping.atom",
+            ))
+            .discard(),
+        )
     }
     fn start_auto_map(&mut self) -> Task<Message> {
         if self.tab.mapping.pending.is_some() || self.tab.busy {
@@ -300,90 +321,123 @@ impl App {
             }
         }
     }
-    pub(super) fn mapping_panel(&self) -> Element<'_, Message> {
-        let mut body = self.map_editor();
-        if let Some(proposal) = &self.tab.mapping.proposal {
-            body = self.proposal_review(body, proposal);
-        }
-        container(body).padding([0, 0]).width(Length::Fill).into()
-    }
-    fn map_editor(&self) -> Column<'_, Message> {
-        use super::workspace::{command, muted_text};
+    /// The Atom maps section, after the role list it depends on.
+    pub(super) fn mapping_section(&self) -> Element<'_, Message> {
         let ready = self
             .reaction_arrow()
             .and_then(|arrow| mapping::reaction(&self.tab.doc, arrow).ok())
             .is_some_and(|r| r.ready());
+        let mapped = self.tab.doc.atoms.iter().filter(|a| a.map_num != 0).count();
+        let summary = match mapped {
+            _ if !ready => "Assign reactants and products first".to_owned(),
+            0 => "No atoms mapped".to_owned(),
+            1 => "1 atom mapped".to_owned(),
+            n => format!("{n} atoms mapped"),
+        };
+        let mut body = self.map_editor(ready);
+        if let Some(proposal) = &self.tab.mapping.proposal {
+            body = self.proposal_review(body, proposal);
+        }
+        self.inspector_section(Section::AtomMaps, "Atom maps", summary, true, body)
+    }
+    fn map_editor(&self, ready: bool) -> Column<'_, Message> {
         let atom = self.mapping_atom().and_then(|id| self.tab.doc.atom(id));
         let value = if atom.is_some_and(|a| self.tab.mapping.atom == Some(a.id)) {
             self.tab.mapping.text.clone()
         } else {
             atom.map(|a| a.map_num.to_string()).unwrap_or_default()
         };
+        let shown = self.tab.doc.atom_labels.maps;
+        let pair = ready
+            && self
+                .tab
+                .selected
+                .iter()
+                .filter(|id| self.tab.doc.atom(**id).is_some())
+                .count()
+                == 2;
+        let auto = if self.tab.mapping.pending.is_some() {
+            "Mapping…"
+        } else {
+            "Auto-map"
+        };
         column![
-            text("Atom mapping").size(16),
-            checkbox(self.tab.doc.atom_labels.maps)
-                .label("Show maps")
-                .text_size(12)
-                .on_toggle(|value| Message::Mapping(Action::Show(value))),
-            text("Atom map").size(12),
-            row![
-                crate::appearance::text_input("Select one atom", &value)
-                    .on_input(|value| Message::Mapping(Action::Text(value)))
-                    .on_submit(Message::Mapping(Action::Apply))
-                    .size(12)
-                    .padding(7),
-                command("Set", Message::Mapping(Action::Apply))
-                    .on_press_maybe(atom.map(|_| Message::Mapping(Action::Apply))),
-                command("Clear", Message::Mapping(Action::Clear)).on_press_maybe(
-                    atom.filter(|a| a.map_num != 0)
-                        .map(|_| Message::Mapping(Action::Clear))
-                ),
-            ]
-            .spacing(4),
-            command("Pair selected atoms", Message::Mapping(Action::Pair)).on_press_maybe(
-                (ready
-                    && self
-                        .tab
-                        .selected
-                        .iter()
-                        .filter(|id| self.tab.doc.atom(**id).is_some())
-                        .count()
-                        == 2)
-                    .then_some(Message::Mapping(Action::Pair))
+            accessible_checkbox(
+                "mapping.show",
+                "Show maps",
+                shown,
+                Some(Message::Mapping(Action::Show(!shown)))
             ),
             row![
-                command(
-                    if self.tab.mapping.pending.is_some() {
-                        "Mapping…"
-                    } else {
-                        "Auto-map"
-                    },
-                    Message::Mapping(Action::Auto)
+                text("Atom map").size(12),
+                reshiki::accessibility::text_input(
+                    "mapping.atom",
+                    "Atom map",
+                    "Select one atom",
+                    &value
                 )
-                .on_press_maybe(
+                .style(crate::appearance::input_style)
+                .on_input(|value| Message::Mapping(Action::Text(value)))
+                .on_submit(Message::Mapping(Action::Apply))
+                .size(12)
+                .padding(5)
+                .width(Length::Fill),
+                // Narrower padding leaves the field room for its placeholder.
+                accessible_command("mapping.set", "Set atom map", "Set")
+                    .padding([7, 6])
+                    .on_press_maybe(atom.map(|_| Message::Mapping(Action::Apply))),
+                accessible_command("mapping.clear", "Clear atom map", "Clear")
+                    .padding([7, 6])
+                    .on_press_maybe(
+                        atom.filter(|a| a.map_num != 0)
+                            .map(|_| Message::Mapping(Action::Clear))
+                    ),
+            ]
+            .spacing(4)
+            .align_y(Alignment::Center),
+            row![
+                accessible_command("mapping.auto", auto, auto).on_press_maybe(
                     (ready && self.tab.mapping.pending.is_none() && !self.tab.busy)
                         .then_some(Message::Mapping(Action::Auto))
-                )
-                .width(Length::Fill),
-                command("Move map labels", Message::Mapping(Action::Position)).width(Length::Fill),
+                ),
+                accessible_command("mapping.pair", "Pair selected atoms", "Pair selected atoms")
+                    .on_press_maybe(pair.then_some(Message::Mapping(Action::Pair))),
             ]
             .spacing(4),
-            command("Align mapped structures", Message::Mapping(Action::Align))
+            hover_hint(
+                accessible_command(
+                    "mapping.align",
+                    "Align mapped structures",
+                    "Align mapped structures"
+                )
                 .on_press_maybe(ready.then_some(Message::Mapping(Action::Align))),
-            command(
-                "Reset map label positions",
-                Message::Mapping(Action::ResetPositions)
+                ALIGN_HINT,
+                tooltip::Position::Top,
             ),
+            row![
+                hover_hint(
+                    accessible_command("mapping.labels.move", "Move labels", "Move labels")
+                        .on_press(Message::Mapping(Action::Position)),
+                    MOVE_HINT,
+                    tooltip::Position::Top,
+                ),
+                accessible_command(
+                    "mapping.labels.reset",
+                    "Reset label positions",
+                    "Reset label positions"
+                )
+                .on_press(Message::Mapping(Action::ResetPositions)),
+            ]
+            .spacing(4),
             text(EDITOR_HINT).size(11).style(muted_text),
         ]
-        .spacing(7)
+        .spacing(6)
     }
     fn proposal_review<'a>(
         &'a self,
         mut body: Column<'a, Message>,
         proposal: &Proposal,
     ) -> Column<'a, Message> {
-        use super::workspace::{command, horizontal_line, muted_text};
         // A test may install a proposal without updating; no preview means stale.
         let current = self.tab.mapping.preview.as_ref().is_some_and(|p| p.current);
         let certainty = if !proposal.complete {
@@ -395,7 +449,7 @@ impl App {
         };
         body = body
             .push(horizontal_line())
-            .push(text("Review atom maps").size(14))
+            .push(text("Review atom maps").size(13))
             .push(text(certainty).size(11).style(muted_text))
             .push(
                 text(format!(
@@ -405,8 +459,7 @@ impl App {
                     proposal.unmatched_products,
                 ))
                 .size(11),
-            )
-            .push(text(PROPOSAL_HINT).size(11).style(muted_text));
+            );
         if let Some(document) = self
             .tab
             .mapping
@@ -420,13 +473,15 @@ impl App {
                     .height(120),
             );
         }
-        for (index, (a, _)) in proposal.pairs.iter().enumerate() {
-            let element = self.tab.doc.atom(*a).map_or("?", |a| a.element.as_str());
+        let atom = |id: u64| {
+            let element = self.tab.doc.atom(id).map_or("?", |a| a.element.as_str());
+            format!("{element} #{id}")
+        };
+        for (index, (a, b)) in proposal.pairs.iter().enumerate() {
             let number = proposal.number(*a).unwrap_or_default();
+            let label = format!("Map {number} · {} → {}", atom(*a), atom(*b));
             body = body.push(
-                button(text(format!("Map {number} · {element} → {element}")).size(12))
-                    .padding([7, 9])
-                    .style(super::workspace::control(false))
+                accessible_command(format!("mapping.review.{index}"), label.clone(), label)
                     .on_press_maybe(current.then_some(Message::Mapping(Action::ReviewPair(index)))),
             );
         }
@@ -435,14 +490,23 @@ impl App {
         }
         body.push(
             row![
-                command(
-                    "Apply reviewed proposal",
-                    Message::Mapping(Action::ApplyProposal)
-                )
-                .on_press_maybe(current.then_some(Message::Mapping(Action::ApplyProposal))),
-                command("Discard", Message::Mapping(Action::Dismiss)),
+                hover_hint(
+                    reshiki::accessibility::button(
+                        "mapping.apply",
+                        "Apply maps",
+                        text("Apply maps").size(12)
+                    )
+                    .padding([6, 14])
+                    .style(crate::appearance::primary)
+                    .on_press_maybe(current.then_some(Message::Mapping(Action::ApplyProposal))),
+                    PROPOSAL_HINT,
+                    tooltip::Position::Top,
+                ),
+                accessible_command("mapping.discard", "Discard", "Discard")
+                    .on_press(Message::Mapping(Action::Dismiss)),
             ]
-            .spacing(4),
+            .spacing(4)
+            .align_y(Alignment::Center),
         )
     }
 }

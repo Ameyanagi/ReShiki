@@ -29,6 +29,7 @@ pub enum Section {
     ExportNative,
     RepeatingUnit,
     GenericStructure,
+    AtomMaps,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

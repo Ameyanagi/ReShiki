@@ -323,10 +323,11 @@ fn oxidation(app: &mut App) {
     let _ = app.update(Message::Mapping(reaction_mapping::Action::Open));
 }
 
-/// Auto-map's proposal waiting for review in the Reactions inspector.
+/// Auto-map's proposal waiting for review at the end of the Atom maps
+/// section, which follows the role list.
 fn reaction_auto_map(app: &mut App, d: &Driver<'_>) {
     auto_mapped(app);
-    d.scroll_inspector(-6.);
+    d.scroll_inspector(-60.);
 }
 
 fn auto_mapped(app: &mut App) {
@@ -334,8 +335,10 @@ fn auto_mapped(app: &mut App) {
     settle(app, Message::Mapping(reaction_mapping::Action::Auto));
 }
 
-/// The applied proposal with map numbers shown on the drawing.
-fn reaction_maps(app: &mut App, _: &Driver<'_>) {
+/// The applied proposal with map numbers shown on the drawing, and the
+/// Atom maps section at the end of the Reactions inspector.
+fn reaction_maps(app: &mut App, d: &Driver<'_>) {
+    d.scroll_inspector(-60.);
     auto_mapped(app);
     for action in [
         reaction_mapping::Action::ApplyProposal,

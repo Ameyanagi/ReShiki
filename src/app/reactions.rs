@@ -148,7 +148,7 @@ impl App {
             )
             .padding([12, 16]),
             scrollable(
-                container(column![self.mapping_panel(), self.reactions_panel()].spacing(16))
+                container(column![self.reactions_panel(), self.mapping_section()].spacing(16))
                     .padding([0, 16])
             )
             .id("inspector-content")

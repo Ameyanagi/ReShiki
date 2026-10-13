@@ -879,7 +879,12 @@ impl App {
             Message::Canvas(Edit::SelectAt(ids, _)) => Message::Canvas(Edit::Select(ids)),
             message => message,
         };
-        let opening_transform = matches!(&message, Message::Canvas(Edit::BeginTransform(_)));
+        // These open the inspector at the section they edit and scroll to it.
+        let reveals_section = matches!(
+            &message,
+            Message::Canvas(Edit::BeginTransform(_))
+                | Message::Mapping(reaction_mapping::Action::Open)
+        );
         let refresh_dimensions = matches!(
             &message,
             Message::EngineDone { .. } | Message::LabelsReady(..)
@@ -915,7 +920,7 @@ impl App {
         // Include inspector changes made by tool-specific handlers, which can
         // return early. Ordinary updates within a panel retain its scroll state.
         if !background
-            && !opening_transform
+            && !reveals_section
             && previous != self.inspector_tab
             && self.inspector_tab != InspectorTab::Assistant
         {

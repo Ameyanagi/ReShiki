@@ -459,3 +459,71 @@ fn resetting_an_office_tab_preserves_docked_nmr_camera_and_cancels_reference_str
     );
     assert_eq!(lease.phase(), office::Phase::Open);
 }
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer reference accessibility ids"]
+async fn reference_grid_fields_publish_unique_ids_with_units_in_their_names() -> Result<(), String>
+{
+    use iced::advanced::{renderer::Headless, widget::operation};
+    use reshiki::accessibility::Collect;
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let mut app = fixture();
+    act(&mut app, Action::Open(true));
+    act(&mut app, Action::Pivot(Pivot::Pinned));
+    let size = iced::Size::new(268., 1600.);
+    let mut ui = iced_runtime::UserInterface::build(
+        app.reference_transform_panel(),
+        size,
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    let mut collect = Collect::new(iced::Rectangle::with_size(size));
+    ui.operate(&renderer, &mut operation::black_box(&mut collect));
+    let snapshot = collect.snapshot();
+    assert!(
+        snapshot.duplicate_ids.is_empty(),
+        "{:?}",
+        snapshot.duplicate_ids
+    );
+    let node = |id: &str| {
+        snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == id)
+            .unwrap_or_else(|| panic!("Missing {id}"))
+    };
+    for (id, name) in [
+        ("reference-x", "Pivot X (pt)"),
+        ("reference-y", "Pivot Y (pt)"),
+        ("reference-direction", "Direction (°)"),
+        ("reference-turn", "Turn (°)"),
+        ("reference-length", "Length (pt)"),
+    ] {
+        let node = node(id);
+        assert_eq!(node.name, name);
+        assert!(node.visible_bounds.is_some(), "Invisible {id}");
+    }
+    for id in [
+        "reference-controls",
+        "reference-pin-center",
+        "reference-horizontal",
+        "reference-vertical",
+        "reference-to-angle",
+        "reference-rotate",
+        "reference-copy-rotate",
+        "reference-swap-fixed",
+        "reference-stretch",
+        "reference-stretch-drag",
+    ] {
+        assert!(node(id).visible_bounds.is_some(), "Invisible {id}");
+    }
+    assert_eq!(node("reference-controls").expanded, Some(true));
+    assert_eq!(node("reference-turn").value.as_deref(), Some("90"));
+    Ok(())
+}

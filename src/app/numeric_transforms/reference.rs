@@ -1,9 +1,10 @@
 //! Reference-edge operations use their own small draft, leaving the existing
 //! relative numeric fields and shortcuts unchanged.
 use super::{Action as NumericAction, App, Message, control, hover_hint};
+use crate::app::workspace::{accessible_unit_field, muted_text, text_width};
 use crate::canvas::Tool;
-use iced::widget::{Column, column, row, text, tooltip};
-use iced::{Element, Length};
+use iced::widget::{Column, Row, Space, column, container, row, text, tooltip};
+use iced::{Alignment, Element, Length};
 use reshiki::{
     document::{Document, Point},
     editing::{
@@ -16,6 +17,9 @@ const STRETCH_HINT: &str =
     "Keeps this bond's original direction; the moving branch stays rigid. No atom merging.";
 const ALIGN_MISSING_REFERENCE: &str =
     "Select both endpoints of a bond, or a shape with a straight edge";
+const REFERENCE_HINT: &str = "Select a bond's two atoms or a shape, then choose its reference.";
+/// Row labels of the reference grid; the widest sets its label column.
+const LABELS: [&str; 6] = ["Reference", "Moves", "Pivot", "Direction", "Turn", "Length"];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Scope {
@@ -141,6 +145,46 @@ fn reference_button<'a>(
         .padding([6, 9])
         .style(control(false))
         .on_press_maybe(enabled.then_some(message(action)))
+}
+fn label_width() -> f32 {
+    LABELS
+        .iter()
+        .map(|label| text_width(label, 12.))
+        .fold(0., f32::max)
+        + 2.
+}
+/// `label | control` on one centered row, like the Transform grid above.
+fn labeled<'a>(
+    label: &'a str,
+    width: f32,
+    control: impl Into<Element<'a, Message>>,
+) -> Row<'a, Message> {
+    row![container(text(label).size(12)).width(width), control.into()]
+        .spacing(4)
+        .align_y(Alignment::Center)
+        .width(Length::Fill)
+}
+/// Controls without a label start in the control column.
+fn indented<'a>(width: f32, control: impl Into<Element<'a, Message>>) -> Row<'a, Message> {
+    row![Space::new().width(width), control.into()].spacing(4)
+}
+/// A numeric field with its unit inside, as in the Transform grid; `submit`
+/// is what Enter sends.
+fn unit_field<'a>(
+    id: &'static str,
+    name: &str,
+    unit: &'static str,
+    placeholder: &str,
+    value: &str,
+    input: fn(String) -> Action,
+    submit: Option<Action>,
+) -> Element<'a, Message> {
+    let field =
+        reshiki::accessibility::text_input(id, format!("{name} ({unit})"), placeholder, value)
+            .style(crate::appearance::input_style)
+            .on_input(move |s| message(input(s)))
+            .on_submit_maybe(submit.map(message));
+    accessible_unit_field(field, unit)
 }
 fn number(input: &str, label: &str) -> Result<f32, String> {
     input
@@ -417,16 +461,21 @@ impl App {
             stretch,
         } = view;
         let enabled = chosen.is_some();
+        let width = label_width();
         body = body
-            .push(text("Select a bond's two atoms or a shape, then choose its reference.").size(11))
-            .push(
+            .push(text(REFERENCE_HINT).size(11).style(muted_text))
+            .push(labeled(
+                "Reference",
+                width,
                 crate::appearance::pick_list(choices, chosen, |c| message(Action::Reference(c)))
-                    .placeholder("Reference bond / edge")
+                    .placeholder("Bond or edge")
                     .text_size(12)
                     .padding(6)
                     .width(Length::Fill),
-            )
-            .push(
+            ))
+            .push(labeled(
+                "Moves",
+                width,
                 crate::appearance::pick_list(
                     [Scope::Connected, Scope::Selected],
                     Some(state.scope),
@@ -435,8 +484,10 @@ impl App {
                 .text_size(12)
                 .padding(6)
                 .width(Length::Fill),
-            )
-            .push(
+            ))
+            .push(labeled(
+                "Pivot",
+                width,
                 crate::appearance::pick_list(
                     [Pivot::Center, Pivot::Start, Pivot::Middle, Pivot::Pinned],
                     Some(state.pivot),
@@ -445,33 +496,48 @@ impl App {
                 .text_size(12)
                 .padding(6)
                 .width(Length::Fill),
-            );
-        body = body.push(reference_button(
-            "reference-pin-center",
-            "Pin selected center",
-            Action::PinCenter,
-            !self.tab.selected.is_empty(),
-        ));
+            ))
+            .push(indented(
+                width,
+                reference_button(
+                    "reference-pin-center",
+                    "Pin selected center",
+                    Action::PinCenter,
+                    !self.tab.selected.is_empty(),
+                ),
+            ));
         if state.pivot == Pivot::Pinned {
-            body = body.push(
-                row![
-                    text("X").size(12),
-                    crate::appearance::text_input("pt", &state.x)
-                        .on_input(|s| message(Action::X(s)))
-                        .size(12)
-                        .padding(5),
-                    text("Y").size(12),
-                    crate::appearance::text_input("pt", &state.y)
-                        .on_input(|s| message(Action::Y(s)))
-                        .size(12)
-                        .padding(5),
-                    text("pt").size(11)
-                ]
-                .spacing(4),
-            );
+            body = body
+                .push(labeled(
+                    "X",
+                    width,
+                    unit_field(
+                        "reference-x",
+                        "Pivot X",
+                        "pt",
+                        "",
+                        &state.x,
+                        Action::X,
+                        None,
+                    ),
+                ))
+                .push(labeled(
+                    "Y",
+                    width,
+                    unit_field(
+                        "reference-y",
+                        "Pivot Y",
+                        "pt",
+                        "",
+                        &state.y,
+                        Action::Y,
+                        None,
+                    ),
+                ));
         }
         body = body
-            .push(
+            .push(indented(
+                width,
                 row![
                     reference_button(
                         "reference-horizontal",
@@ -487,14 +553,20 @@ impl App {
                     )
                 ]
                 .spacing(5),
-            )
-            .push(
+            ))
+            .push(labeled(
+                "Direction",
+                width,
                 row![
-                    crate::appearance::text_input("Direction °", &state.target)
-                        .on_input(|s| message(Action::Target(s)))
-                        .on_submit(message(Action::AlignTarget))
-                        .size(12)
-                        .padding(5),
+                    unit_field(
+                        "reference-direction",
+                        "Direction",
+                        "°",
+                        "",
+                        &state.target,
+                        Action::Target,
+                        Some(Action::AlignTarget),
+                    ),
                     reference_button(
                         "reference-to-angle",
                         "To angle",
@@ -502,20 +574,24 @@ impl App {
                         enabled
                     )
                 ]
-                .spacing(5),
-            )
-            .push(
-                row![
-                    text("Turn").size(12),
-                    crate::appearance::text_input("°", &state.turn)
-                        .on_input(|s| message(Action::Turn(s)))
-                        .size(12)
-                        .padding(5),
-                    text("°").size(11)
-                ]
-                .spacing(5),
-            )
-            .push(
+                .spacing(5)
+                .align_y(Alignment::Center),
+            ))
+            .push(labeled(
+                "Turn",
+                width,
+                unit_field(
+                    "reference-turn",
+                    "Turn",
+                    "°",
+                    "",
+                    &state.turn,
+                    Action::Turn,
+                    None,
+                ),
+            ))
+            .push(indented(
+                width,
                 row![
                     reference_button("reference-rotate", "Rotate", Action::Rotate(false), enabled),
                     reference_button(
@@ -526,9 +602,9 @@ impl App {
                     )
                 ]
                 .spacing(5),
-            );
+            ));
         match stretch {
-            Ok(plan) => body = self.reference_stretch_controls(body, plan),
+            Ok(plan) => body = self.reference_stretch_controls(body, plan, width),
             Err(error) if enabled => body = body.push(text(error).size(11)),
             Err(_) => {}
         }
@@ -538,6 +614,7 @@ impl App {
         &'a self,
         body: Column<'a, Message>,
         plan: Stretch,
+        width: f32,
     ) -> Column<'a, Message> {
         let state = &self.tab.numeric_transforms.reference;
         let fixed = self
@@ -549,36 +626,53 @@ impl App {
             "{:.2}",
             plan.length * self.tab.doc.drawing_style.points_per_world()
         );
-        let end = if state.swap_fixed {
-            "reference end"
-        } else {
-            "reference start"
-        };
-        body.push(text(format!("Stretch · fixed: {end} ({fixed}) · {length} pt")).size(11))
-            .push(reference_button(
-                "reference-swap-fixed",
-                "Swap fixed end",
-                Action::SwapFixed,
-                true,
-            ))
-            .push(
-                row![
-                    crate::appearance::text_input(&length, &state.length)
-                        .on_input(|s| message(Action::Length(s)))
-                        .on_submit(message(Action::Stretch))
-                        .size(12)
-                        .padding(5),
-                    text("pt").size(11),
-                    reference_button(
-                        "reference-stretch",
-                        "Set length",
-                        Action::Stretch,
-                        !state.length.is_empty()
-                    )
-                ]
-                .spacing(5),
-            )
-            .push(hover_hint(
+        let end = if state.swap_fixed { "end" } else { "start" };
+        body.push(
+            row![
+                // No-break spaces keep the value and the fixed atom whole
+                // when the line wraps beside the button.
+                text(format!(
+                    "Length {length}\u{a0}pt · {fixed}\u{a0}({end}) stays fixed"
+                ))
+                .size(11)
+                .style(muted_text)
+                .width(Length::Fill),
+                reference_button(
+                    "reference-swap-fixed",
+                    "Swap fixed end",
+                    Action::SwapFixed,
+                    true,
+                ),
+            ]
+            .spacing(5)
+            .align_y(Alignment::Center),
+        )
+        .push(labeled(
+            "Length",
+            width,
+            row![
+                unit_field(
+                    "reference-length",
+                    "Length",
+                    "pt",
+                    &length,
+                    &state.length,
+                    Action::Length,
+                    Some(Action::Stretch),
+                ),
+                reference_button(
+                    "reference-stretch",
+                    "Set length",
+                    Action::Stretch,
+                    !state.length.is_empty()
+                )
+            ]
+            .spacing(5)
+            .align_y(Alignment::Center),
+        ))
+        .push(indented(
+            width,
+            hover_hint(
                 reference_button(
                     "reference-stretch-drag",
                     "Drag to stretch",
@@ -587,7 +681,8 @@ impl App {
                 ),
                 STRETCH_HINT,
                 tooltip::Position::Top,
-            ))
+            ),
+        ))
     }
 }
 
