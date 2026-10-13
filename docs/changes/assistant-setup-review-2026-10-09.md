@@ -1,6 +1,6 @@
 # Assistant setup and guided image review
 
-Status: under review in [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
+Status: merged, unreleased, in [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
 Author: @Ameyanagi, project creator and maintainer. Addresses
 [issue #93](https://github.com/Ameyanagi/ReShiki/issues/93).
 

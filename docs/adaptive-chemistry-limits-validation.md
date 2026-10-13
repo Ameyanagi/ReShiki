@@ -1,6 +1,6 @@
 # Adaptive chemistry limits: desktop validation
 
-**Under review in [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279)**,
+**Merged, unreleased, in [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279)**,
 addressing [#245](https://github.com/Ameyanagi/ReShiki/issues/245)
 and [#248](https://github.com/Ameyanagi/ReShiki/issues/248). Contribution: @Ameyanagi,
 project creator and maintainer. These results describe the tested candidate;

@@ -1,6 +1,6 @@
 # Offline NMR desktop review
 
-Offline NMR prediction opens atom-linked ¹H parent-group medians and ¹³C shifts in a compact nonmodal palette. The drawing keeps its viewport and camera; reference columns and method information expand on demand. Native review of the compact revision is complete. [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) remains under review.
+Offline NMR prediction opens atom-linked ¹H parent-group medians and ¹³C shifts in a compact nonmodal palette. The drawing keeps its viewport and camera; reference columns and method information expand on demand. Native review of the compact revision is complete. [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) is merged, unreleased.
 
 ## Matched native before and after
 
@@ -24,7 +24,7 @@ Clicking row **C #4** selects the original carbonyl atom. Undo remains disabled 
 
 ![Carbon row selects the original carbonyl atom](images/nmr/compact/carbonyl-selection.jpg)
 
-**Details…** expands the reference columns and scrollable method information. Native review exercised the expanded height buttons from 250 to 270 and back to 250 pixels, then scrolled through method, conditions, limitations and attribution. The drawing remained at 250%. **Compact** returns to the small view.
+**Details** expands the reference columns and scrollable method information. Native review exercised the expanded height buttons from 250 to 270 and back to 250 pixels, then scrolled through method, conditions, limitations and attribution. The drawing remained at 250%. Choosing **Details** again returns to the small view.
 
 ![Expanded reference columns at the same drawing zoom](images/nmr/compact/details.jpg)
 

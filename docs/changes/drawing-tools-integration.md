@@ -1,4 +1,4 @@
-# Drawing tools, geometry and floating NMR (integration under review)
+# Drawing tools, geometry and floating NMR (merged, unreleased)
 
 Projected cages previously lost visible rim ink when fading used a depth midplane. Mechanism curves shared one bend control, pen continuation could lose its selection, and geometry/default controls required repeated manual adjustment. This integration brings the reviewed fixes together on the retained MOL XYZ/implicit-H and dual EMF import base.
 
@@ -67,4 +67,4 @@ The packet retains **19 untouched JPEGs, 19 AX records and three actual native s
 
 The finite stdlib verifier checks literal hashes, packet-relative correlation and the whole restored/Stretch document at binary32, including the byte-identical fresh save. The original checker rejected the loaded arrow's canonical offsets; its failure remains preserved. The approved successor reconstructs the exact source-defined owner/mark/offset arithmetic: the departure endpoint and adjacent control move by one binary32 ULP in y, while the arrival pair does not move. Targets, direction, gap and styles remain strict; no general tolerance was widened. The checker is not a general arrow reconciler, Rust loader, pixel/GUI replay, prediction, signature or performance verifier. Temporary corruption controls test semantic rejection after refreshing their temporary hashes; frozen originals remain untouched. ROOT's final public-packet review remains a separate gate.
 
-Contributed by @Ameyanagi; integration under review. Original author commits and all source/data notices remain intact. @Ameyanagi remains **project creator and maintainer**. Reusable caption: **Clear projected cage outlines, editable mechanisms and precise branch geometry coexist with a compact offline NMR report.**
+Contributed by @Ameyanagi; merged, unreleased, in [PR #297](https://github.com/Ameyanagi/ReShiki/pull/297). Original author commits and all source/data notices remain intact. @Ameyanagi remains **project creator and maintainer**. Reusable caption: **Clear projected cage outlines, editable mechanisms and precise branch geometry coexist with a compact offline NMR report.**

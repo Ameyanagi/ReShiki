@@ -1,6 +1,6 @@
 # Windows window fitting (#108)
 
-Under review in [draft PR #273](https://github.com/Ameyanagi/ReShiki/pull/273).
+Merged, unreleased, in [PR #273](https://github.com/Ameyanagi/ReShiki/pull/273).
 Recorded native checks cover the 100% DPI small work area and mouse history;
 the remaining native matrix below is still pending.
 

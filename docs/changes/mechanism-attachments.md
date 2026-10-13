@@ -1,8 +1,8 @@
 # Optional mechanism-arrow target attachments
 
-Under review for [#92](https://github.com/Ameyanagi/ReShiki/issues/92), contributed
-by @Ameyanagi and stacked on [PR #276](https://github.com/Ameyanagi/ReShiki/pull/276).
-The draft PR link will be added when opened. This work remains unreleased, and
+Merged, unreleased, for [#92](https://github.com/Ameyanagi/ReShiki/issues/92) in
+[PR #286](https://github.com/Ameyanagi/ReShiki/pull/286) through [PR #297](https://github.com/Ameyanagi/ReShiki/pull/297), contributed by @Ameyanagi and stacked on
+[PR #276](https://github.com/Ameyanagi/ReShiki/pull/276). This work remains unreleased, and
 the user's personal visual acceptance remains pending.
 
 ## Problem
@@ -25,12 +25,12 @@ or an electron-accounting assertion.
 
 ## Solution
 
-**Attach targets (two clicks)** offers source-then-destination placement for
+**Attach ends to atoms and bonds** offers source-then-destination placement for
 electron-pair and fishhook arrows. An atom, an existing visible bond or a
 positioned lone pair can be a target. The first click highlights the source
 without changing the document or history; the second creates one editable cubic
 arrow in one Undo step. Escape cancels a pending source. Turning the checkbox
-off restores free clicking; Alt-click bypasses attachment, and dragging remains
+off restores free clicking; Option/Alt-click bypasses attachment, and dragging remains
 free placement.
 
 | Pending source                                                                                                                                                                          | Editable arrow and attachment actions                                                                                                                                              |
@@ -128,7 +128,8 @@ executable SHA256:
 1. Open `before.rsk`, set 250%, turn F8 off and select **Curved / electron pair**.
 2. Click between the oxygen lone-pair dots (world 0, -29.166668; original screen
    969, 892), then the carbon tip (world -36.373, -21; original screen 787, 932).
-   On the candidate, leave **Attach targets (two clicks)** enabled.
+   On the candidate, leave **Attach targets (two clicks)** (now **Attach ends
+   to atoms and bonds**) enabled.
 3. On the baseline, each click creates an independent free arrow. On the
    candidate, the first click only highlights a source; the second creates one
    arrow. Deselect it to obtain the matched after view. One Undo removes that

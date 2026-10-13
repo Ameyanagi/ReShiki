@@ -1,6 +1,6 @@
 # Drawing-tool defaults review
 
-Under review in [PR #277](https://github.com/Ameyanagi/ReShiki/pull/277) for
+Merged, unreleased, in [PR #277](https://github.com/Ameyanagi/ReShiki/pull/277) for
 [#250](https://github.com/Ameyanagi/ReShiki/issues/250),
 [#90](https://github.com/Ameyanagi/ReShiki/issues/90) and
 [#249](https://github.com/Ameyanagi/ReShiki/issues/249). Original contributions:
@@ -245,5 +245,4 @@ performed in this macOS review.
 Original code, tests, fixtures, documentation and ReShiki captures are offered
 under `MIT OR Apache-2.0` according to [CONTRIBUTING](../CONTRIBUTING.md).
 ChemDraw behavior was observed as a reference only. No third-party code, data
-or artwork was copied or bundled. Credit @Ameyanagi; preserve under-review
-status until the PR merges.
+or artwork was copied or bundled. Credit @Ameyanagi.

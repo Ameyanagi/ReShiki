@@ -1,6 +1,6 @@
 # Wayland fixture publication precondition
 
-Status: under review with [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
+Status: merged, unreleased, with [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
 Author: @Ameyanagi, project creator and maintainer. This follow-up changes the
 private Python compositor fixture, without changing ReShiki's clipboard or
 Assistant implementation.

@@ -1,6 +1,6 @@
 # Compact NMR palette validation
 
-Native desktop review of the compact revision is complete on the exact preserved executable below. [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) remains under review. The [matched before/after captures](nmr-visual-review.md#matched-native-before-and-after) document the revision after user review rejected the previous full-width results dock.
+Native desktop review of the compact revision is complete on the exact preserved executable below. [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) is merged, unreleased. The [matched before/after captures](nmr-visual-review.md#matched-native-before-and-after) document the revision after user review rejected the previous full-width results dock.
 
 ## Reviewed source and preserved bundle
 

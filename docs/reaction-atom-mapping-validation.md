@@ -51,11 +51,11 @@ Starting with the saved old native input, the operator:
 3. Cleared its map and ran **Auto-map**. The detached review showed two pairs,
    `C → C` and `O → O`, zero unmatched atoms and one best mapping under the
    graph score. The main canvas carbon stayed unmapped before Apply.
-4. Chose **Apply reviewed proposal**. Carbon map 1 returned; one Undo removed
+4. Chose **Apply reviewed proposal** (now **Apply maps**). Carbon map 1 returned; one Undo removed
    it and Redo restored it. **Show maps** off/on changed the ink.
 5. Dragged reactant oxygen's map 2 handle, used Undo/Redo, and saved the actual
    [custom-label native result](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/native-custom-label-after.rsk).
-   **Reset map label positions** restored automatic placement; Undo restored
+   **Reset map label positions** (now **Reset label positions**) restored automatic placement; Undo restored
    the custom placement. Closing the saved tab and opening its exact path in
    a fresh tab retained the custom offset, with Undo/Redo disabled.
 

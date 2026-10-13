@@ -59,7 +59,7 @@ The final native session did not read the clipboard or export an ordinary SVG/PD
 
 Predict atom-linked ¹H group medians and ¹³C shifts offline in a compact floating panel or NMR inspector. A linked shift plot and optional atom-number / ppm labels make assignments visible on the drawing; reference details and limitations remain available on demand.
 
-Contribution: @Ameyanagi; under review. Original creator/maintainer credit and third-party notices retained.
+Contribution: @Ameyanagi; merged, unreleased, in [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272). Original creator/maintainer credit and third-party notices retained.
 
 Project creator and maintainer: @Ameyanagi. [Contributor record](../contributors.md).
 

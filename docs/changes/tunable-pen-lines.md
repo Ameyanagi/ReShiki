@@ -1,17 +1,17 @@
 # Connected pen paths and direct node editing
 
-Under review in [PR #288](https://github.com/Ameyanagi/ReShiki/pull/288) for [issue #67](https://github.com/Ameyanagi/ReShiki/issues/67),
+Merged, unreleased, in [PR #288](https://github.com/Ameyanagi/ReShiki/pull/288) through [PR #297](https://github.com/Ameyanagi/ReShiki/pull/297) for [issue #67](https://github.com/Ameyanagi/ReShiki/issues/67),
 contributed by @Ameyanagi. Stacked on
 [mechanism-arrow curvature, PR #276](https://github.com/Ameyanagi/ReShiki/pull/276),
 branch `feat/mechanism-curve-controls`, base `5e68c9b4`. This work remains
-unreleased until review, merge and release.
+unreleased until a release is published.
 
 Draw one connected path with straight and cubic segments. Drag the first
 segment, click for a line, or drag a new node to set a curve. **Finish** ends
 authoring; click the first node or use **Close path** to close the outline.
 In **Edit curve points**, round nodes carry their adjacent tangents and square
 controls adjust one tangent independently. Properties offers **Insert after**,
-**Delete node**, **Straight segment**, **Curved segment**, **Open path** and
+**Delete node**, **Straight** and **Curved** under **Next segment**, **Open path** and
 **Continue drawing**. A stationary handle click selects without changing the
 path; a drag preserves the initial grab offset. Continue retains the selected
 open path from both Select and Edit Points. Existing Escape cancels a gesture;

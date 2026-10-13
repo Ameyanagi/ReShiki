@@ -1,6 +1,6 @@
 # Export an SVG picture for Office
 
-Choose **Figure → SVG · Office picture** for Word or PowerPoint. It resolves text to vector outlines and preserves the SVG's physical dimensions, canvas background and figure padding. Text in this picture cannot be edited as text; keep the native drawing for changes. Ordinary **SVG** retains editable text and its existing bytes. Embedded pictures keep their existing image representation.
+Choose **Figure → SVG for Office** for Word or PowerPoint. It resolves text to vector outlines and preserves the SVG's physical dimensions, canvas background and figure padding. Text in this picture cannot be edited as text; keep the native drawing for changes. Ordinary **SVG** retains editable text and its existing bytes. Embedded pictures keep their existing image representation.
 
 The original controlled O–SiMe₃ drawing reproduces clipped label tops and displaced text relative to the bonds in actual Mac Word and PowerPoint. The outlined file shows complete labels, subscript and correct bond endpoints, including after saving and reopening. Both applications are **16.113.4 / 16.113.26100421**, using Picture from File without resizing, cropping, styling or repositioning.
 
@@ -23,9 +23,9 @@ The export suite passed eight active tests, snapshot routing three, and menu sel
 
 A later [CI renderer follow-up](office-svg-ci-validation.md) separates the always-on menu state checks from the opt-in accessibility layout test. This changes test/workflow files only; the captured production app, all 533 compiled production inputs and raw evidence remain unchanged. The historical source verifier must use the documented pre-correction checkout.
 
-Reproduce by opening the [unchanged native input](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/office-svg-placement/single-baseline-after-export.rsk), using its Imported/Custom style and Arial 10, then exporting **SVG** and **SVG · Office picture**. Insert each through Picture from File without resizing, save and reopen. Native schema stays version 19; the input retains six atoms, five single bonds and its SiMe₃ abbreviation.
+Reproduce by opening the [unchanged native input](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/office-svg-placement/single-baseline-after-export.rsk), using its Imported/Custom style and Arial 10, then exporting **SVG** and **SVG · Office picture** (now **SVG for Office**). Insert each through Picture from File without resizing, save and reopen. Native schema stays version 19; the input retains six atoms, five single bonds and its SiMe₃ abbreviation.
 
-**Under review; [draft PR #290](https://github.com/Ameyanagi/ReShiki/pull/290).** Contributor: @Ameyanagi, project creator and maintainer. Addresses the Office SVG placement part of [#64](https://github.com/Ameyanagi/ReShiki/issues/64), alongside the separate [EMF draft PR #285](https://github.com/Ameyanagi/ReShiki/pull/285). Controlled Windows PowerPoint and Word insertion, native save/close and same-process fresh-document reopening pass for this example; this does not close #64.
+**Merged, unreleased, in [PR #290](https://github.com/Ameyanagi/ReShiki/pull/290).** Contributor: @Ameyanagi, project creator and maintainer. Addresses the Office SVG placement part of [#64](https://github.com/Ameyanagi/ReShiki/issues/64), alongside the separate [EMF draft PR #285](https://github.com/Ameyanagi/ReShiki/pull/285). Controlled Windows PowerPoint and Word insertion, native save/close and same-process fresh-document reopening pass for this example; this does not close #64.
 
 ## Controlled Windows Office acceptance
 

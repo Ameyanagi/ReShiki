@@ -1,6 +1,6 @@
 # Ctrl+J coordination: Windows native check
 
-Under review in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283), addressing
+Merged, unreleased, in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283), addressing
 [#246](https://github.com/Ameyanagi/ReShiki/issues/246). Contribution: @Ameyanagi,
 project creator and maintainer. This supplements the unchanged
 [macOS shortcut record](coordination-join-shortcut.md).

@@ -1,4 +1,4 @@
-# MOL 3D import review — under review, unreleased
+# MOL 3D import review — merged, unreleased
 
 MOL import retains the source 3D conformation for the existing tilt controls
 and draws removable ordinary hydrogens implicitly. Isotopic, charged, radical,
@@ -104,8 +104,8 @@ dataset or new dependency is added.
 
 Release caption: “MOL import retains the original 3D conformation for rotation
 and draws ordinary hydrogens implicitly while protecting isotope and stereo
-information.” Reuse the matched pair above; this remains under review until
-the PR is merged and a release is published.
+information.” Reuse the matched pair above; this remains unreleased until
+a release is published.
 
 ## Archived evidence
 

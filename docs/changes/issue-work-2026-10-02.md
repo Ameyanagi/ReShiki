@@ -147,7 +147,7 @@ See [drawing-style behavior](../drawing-styles.md).
 | [#110](https://github.com/Ameyanagi/ReShiki/issues/110)                                                                | Copy as prepares a selection or whole-drawing snapshot, checks tab/revision/selection before publication, and serializes ordinary Copy with Copy as even if the source tab closes. Conversion failures leave the clipboard untouched. [Tests](../../src/app/clipboard.rs) cover stale and closed-tab results; format tests cover figures, molecules and reactions.                                                                                                                                | Final renderer output and native macOS whole/selected menus verify all eleven rows. Actual ChemDoodle reaction menu actions, clipboard payloads and the receiver search passed for the stated public fixture; other format/platform combinations remain separate.                                                          |
 
 **#56 follow-up (2026-10-03).** `49141b5` adds
-[`SaveOutcome`](../../src/template_library.rs): a committed save remains
+[`SaveOutcome`](../../crates/io/src/template_library.rs): a committed save remains
 successful if explicit unlock reports an error, with a library notice warning.
 The application applies the saved library and Undo state without retrying the
 save or cancelling a pending close. Failed writes retain their primary error;

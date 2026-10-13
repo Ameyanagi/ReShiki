@@ -1,7 +1,7 @@
 # Independent mechanism-arrow curvature
 
-Under review for [#91](https://github.com/Ameyanagi/ReShiki/issues/91), contributed
-by @Ameyanagi. The PR link will be added when opened.
+Merged, unreleased, in [PR #276](https://github.com/Ameyanagi/ReShiki/pull/276) for [#91](https://github.com/Ameyanagi/ReShiki/issues/91),
+contributed by @Ameyanagi.
 
 Adjust either end direction of a curved mechanism arrow independently without
 moving its endpoints. Selected curves have round endpoints, square controls on

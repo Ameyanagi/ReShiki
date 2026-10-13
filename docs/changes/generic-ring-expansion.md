@@ -25,7 +25,8 @@ create a different molecule.
 
 Open the [nine-atom/eight-bond arene input](../../tests/fixtures/generic-structures/variable-arene-native-refused-v26.rsk)
 or [ten-atom/nine-bond substituted input](../../tests/fixtures/generic-structures/variable-methoxytoluene-v26.rsk)
-and choose **Properties → Labels & chemistry → Chemical abbreviations → Expand Generic Structures**.
+and choose **Expand generic structures** in the right-click menu or the
+**Generic structure** card in **Properties**.
 
 | Input                                             | Before                                                           | After                                      |
 | ------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------ |

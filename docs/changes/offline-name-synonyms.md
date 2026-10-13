@@ -12,7 +12,7 @@ recorded below.
 ## User behavior
 
 **Import → Name → Details** resolves a name without requiring Preview. It
-shows **Curated aliases · offline**, separate from generated systematic names.
+shows **CURATED ALIASES · OFFLINE**, separate from generated systematic names.
 **Copy** copies only the chosen alias. **Use below** chooses the next Insert's
 linked caption without rewriting the input. Editing the input clears old
 aliases; with Details still open, **Resolve name** requests the new result

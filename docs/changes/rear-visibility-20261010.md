@@ -1,4 +1,4 @@
-# Rear opacity keeps exposed cage outlines solid (under review)
+# Rear opacity keeps exposed cage outlines solid
 
 The earlier rear-opacity implementation faded everything beyond a depth
 midplane. On a projected C60 cage, that also faded parts of the visible outer
@@ -24,7 +24,7 @@ its signed executable is
 Original source, compiler, package and desktop receipts are retained in the
 [evidence package](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-visibility-20261010/README.md).
 
-Use **Properties → 3D appearance → Rear opacity (%) → Apply**. At 25%,
+Use **Properties → 3D appearance → Rear opacity → Apply**. At 25%,
 occluded rear ink is faint; at 0%, it disappears while the exposed rim stays
 solid. At 100%, the existing opaque rendering is preserved. Rotate with
 **3D tilt** to recompute visibility from current retained XYZ, then clear the
@@ -83,7 +83,7 @@ source/compiler/native receipts and every captured Mac shipping dependency.
 It checks bytes and these three native graphs; it does not rerender screenshots
 or prove pixel visibility.
 
-Under review in [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289),
+Merged, unreleased, in [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289) through [PR #297](https://github.com/Ameyanagi/ReShiki/pull/297),
 contributed by @Ameyanagi. Reusable caption: **Rear opacity hides occluded cage
 ink while keeping the exposed outline solid, including after 3D tilt.**
 

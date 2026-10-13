@@ -4,8 +4,7 @@ Align a bond or straight shape edge horizontally, vertically or to an arbitrary
 directed angle, then rotate copies about a shared point. Stretch a bridge bond
 along its original direction while keeping the moving branch rigid. The
 [control guide](../reference-geometry.md) describes scope, pivots and restrictions.
-This work is under review; the PR link will be added when published. Contribution:
-@Ameyanagi.
+Merged, unreleased, in [PR #278](https://github.com/Ameyanagi/ReShiki/pull/278). Contribution: @Ameyanagi.
 
 Select a screenshot to inspect its controls at the original resolution.
 

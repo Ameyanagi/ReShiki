@@ -75,6 +75,14 @@ saved by 0.11.0.
   [Image](images/reflected-hydrogen-labels/after.png) ·
   [#308](https://github.com/Ameyanagi/ReShiki/pull/308) · @Ameyanagi.
 
+- **Charges and formatting in atom labels.** Type an element with its charge,
+  such as `Pd2+` or `Cl-`, to set the charge of the atom. In the label editor,
+  **X₂** and **X²** format the selected characters, and `.rsk` and ChemDraw
+  files keep that formatting. Text labels such as `M2+` and `R1` are drawn as
+  M²⁺ and R₁, and a bond can start or end on a short caption, which then
+  becomes an atom label.
+  [How to use](https://reshiki.com/guide/labels/) · @Ameyanagi.
+
 - **Join three or more atoms.** **Join** (Ctrl+J, ⌘J on macOS) merges three or
   more selected atoms into the first one you selected, and **Merge atoms** also
   merges four atoms that form two bonds. Surrounding atoms stay in place.
@@ -326,8 +334,6 @@ saved by 0.11.0.
   are verified, and internal test-signed Nightly artifacts are kept.
   [Setup guide](signpath-setup.md) ·
   [#270](https://github.com/Ameyanagi/ReShiki/pull/270) · @Ameyanagi.
-- **Windows review builds.** A source-pinned workflow builds Windows apps for
-  review. [#301](https://github.com/Ameyanagi/ReShiki/pull/301) · @Ameyanagi.
 - **Assistant image benchmark.** A source-tree tool records graph identity,
   unfinished drafts and failures for eight original synthetic images. The
   cohort is small and does not measure accuracy on real scans.
