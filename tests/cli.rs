@@ -205,6 +205,23 @@ fn analyze_prints_one_json_line() {
 }
 
 #[test]
+fn analyze_reads_cpp7_mol_with_trimmed_leading_spaces() {
+    let dir = tempfile::tempdir().expect("working folder");
+    fs::write(
+        dir.path().join("cpp7-trimmed.mol"),
+        include_bytes!("fixtures/mol/cpp7-trimmed.mol"),
+    )
+    .expect("trimmed MOL fixture");
+    let output = cli(dir.path(), &["analyze", "cpp7-trimmed.mol"]);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let stdout = text(&output.stdout);
+    let line = stdout.strip_suffix('\n').expect("one line");
+    assert!(!line.contains('\n'), "{stdout}");
+    let result: serde_json::Value = serde_json::from_str(line).expect("analyze JSON");
+    assert_eq!(result["value"]["analysis"]["formula"], "C42H28");
+}
+
+#[test]
 fn unknown_commands_exit_2_quickly() {
     let dir = tempfile::tempdir().expect("working folder");
     let stderr = assert_usage(&dir, &["bogus"]);
