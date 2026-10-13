@@ -31,6 +31,9 @@ const guides = {
     "selection-cleanup",
   ],
   labels: ["abbreviations", "atom-labels", "typography"],
+  names: ["chemical-naming-rust"],
+  nmr: ["nmr-prediction"],
+  "generic-structures": ["generic-structures"],
   reactions: ["arrows", "reactions"],
   assistant: ["assistant"],
   figures: [
