@@ -278,9 +278,15 @@ saved by 0.11.0.
   grant; `reshiki --cli` converts, renders, composes and analyzes from a
   terminal. Not in ReShiki 0.11.0; tools and results may change.
   [Setup guide](https://reshiki.com/guide/agents/) ·
-  [Reference](agent-api.md) ·
+  [Overview](agent-api.md) ·
+  [Command line](agent-cli.md) ·
   [Privacy](privacy-policy.md#optional-agent-api-and-command-line-experimental) ·
   [Acceptance record](agent-api-p1-validation.md) · @Ameyanagi.
+- **Agent skill (experimental):** `reshiki --cli skill -o FOLDER` writes an
+  Agent Skill that teaches Claude Code, Codex and other agents to use ReShiki:
+  the workflow, command recipes with your executable's path, the tool
+  reference and the Proposal schema. Write it again after updating ReShiki.
+  [Agent skill](agent-skill.md) · @Ameyanagi.
 
 ## Known limits and pending checks
 

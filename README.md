@@ -46,6 +46,8 @@ Open **Help → Open shortcut examples** for a single editable reference file. D
 
 The AI assistant is optional and uses your local Codex sign-in. [Install Codex and connect the assistant](docs/assistant-setup.md) for text and image requests; ordinary drawing and chemistry work offline without it.
 
+Experimental (Nightly): AI agents such as Claude Code and Codex can drive ReShiki through its MCP server or command line. [Connect AI agents](https://reshiki.com/guide/agents/)
+
 ## Acknowledging ReShiki
 
 ReShiki does not require a citation. If you would like to acknowledge its use, please include the following in the Acknowledgments section:

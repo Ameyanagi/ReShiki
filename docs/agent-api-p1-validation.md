@@ -88,8 +88,19 @@ The server must work in every MCP revision it advertises: 2026-07-28,
 2025-11-25 and 2025-06-18
 ([versioning](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning)).
 It accepts no older revision; an `initialize` that asks for 2025-03-26 gets
-2025-11-25. [Protocol revisions](agent-api.md#protocol-revisions) lists the
-tests of each revision.
+2025-11-25 ([protocol revisions](agent-api.md#protocol-revisions)). These
+tests cover each revision:
+
+| Revision   | Tests                                                                                                                                                                                                                                               |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-28 | Golden transcripts (`crates/mcp/tests/transcripts/modern.jsonl`, `tests/fixtures/mcp/stdio-modern.jsonl`, `tools-modern.jsonl`); the rmcp client interop test in `tests/mcp_stdio.rs`; the malformed corpus; the packaged smoke test on six targets |
+| 2025-11-25 | Golden transcripts (`legacy-2025-11-25.jsonl`, `tests/fixtures/mcp/stdio-legacy.jsonl`, `tools-legacy.jsonl`, `tests/mcp_tools.rs`); the malformed corpus; the packaged smoke test                                                                  |
+| 2025-06-18 | Golden transcript (`legacy-2025-06-18.jsonl`); the malformed corpus; the packaged smoke test                                                                                                                                                        |
+
+The golden transcripts pin the server's replies. The packaged smoke test,
+`scripts/agent_api_client.py`, is an independent standard-library client that
+runs each revision against every release package. The manual client checks
+are recorded in the client table below.
 
 | Check                      | Command                                                                                                                                           | Passes when                                                                                                                                                                                                                                                                                                                         | Local                                  | CI                                                                                                                          |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -175,6 +186,10 @@ G4 cites the tests that own each behavior instead of repeating them.
 | Filesystem fence        | `uv run --locked python -m unittest tests.test_agent_fs_fence`                                                | Each agent crate's `clippy.toml` disallows direct filesystem calls, and the agent, MCP and launch sources use no fenced token outside the access module          | Passed: 5 tests                | —                                    |
 | Documentation build     | `bun run docs:build`                                                                                          | Every page builds and the link check prints `Verified <n> local documentation links and assets.`                                                                 | Passed: 8,276 links and assets | —                                    |
 | Privacy-policy sign-off | The owner reviews [the agent API section](privacy-policy.md#optional-agent-api-and-command-line-experimental) | The owner confirms it matches the behavior above: grants for MCP, the user's authority for the CLI, no listener, no network, and what clients may forward        | —                              | Pending. TODO (owner): name and date |
+
+The tool catalog the documentation describes is pinned too:
+`the_operation_catalog_bytes_are_pinned` in `crates/agent/tests/contract.rs`
+compares it byte for byte with `tests/fixtures/agent-contract/ops-catalog.json`.
 
 ## G8: no regression in existing app behavior
 

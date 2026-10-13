@@ -1,5 +1,10 @@
 # Set up Codex for the assistant
 
+> **Which one do I need?**
+>
+> - [Draw with the assistant](assistant.md): ReShiki asks Codex for drawings inside the app.
+> - [Connect AI agents](https://reshiki.com/guide/agents/): an agent you already use (Claude Code, Claude Desktop, Codex) drives ReShiki without opening it.
+
 **Codex is optional.** Drawing, chemistry checks, imports, and exports work without it. Install Codex only if you want ReShiki's assistant to turn instructions or reference images into editable drawings, or help improve a layout.
 
 ## Why ReShiki uses Codex

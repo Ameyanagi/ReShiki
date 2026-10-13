@@ -7,6 +7,11 @@ description: Let Claude Code, Claude Desktop or Codex import, analyze, lay out a
 The agent API is experimental. It is available in Nightly builds since 2026-10-08 and is not in ReShiki 0.11.0. Its tools, results and commands may change in any build. To try it, [install a Nightly build](/guide/install/#nightly-builds).
 :::
 
+> **Which one do I need?**
+>
+> - [Draw with the assistant](/guide/assistant/): ReShiki asks Codex for drawings inside the app.
+> - [Connect AI agents](/guide/agents/): an agent you already use (Claude Code, Claude Desktop, Codex) drives ReShiki without opening it.
+
 ReShiki can run without its window as an [MCP](https://modelcontextprotocol.io/) server: a background process that AI clients such as Claude Code, Claude Desktop and Codex start and give tools to. The same operations are available from a terminal with `reshiki --cli`.
 
 ## What an agent can do
@@ -19,7 +24,8 @@ ReShiki can run without its window as an [MCP](https://modelcontextprotocol.io/)
 
 Limits in this version:
 
-- The agent composes at the SMILES level: molecules, reactions and whole schemes. It does not edit individual atoms, bonds or styles, and it does not look up chemical names, so it must supply SMILES.
+- The agent composes at the SMILES level: molecules, reactions and whole schemes. It does not edit individual atoms, bonds or styles.
+- The app can import chemical names, but the agent API cannot yet; the agent must supply SMILES.
 - It cannot see or change drawings open in the ReShiki app. Its drawings live in the server until it saves them; open a saved `.rsk` file in ReShiki to keep editing.
 - It reads and writes files only in folders you grant.
 
@@ -142,13 +148,53 @@ tool_timeout_sec = 120
 
 You can instead run `codex mcp add reshiki -- /Applications/ReShiki.app/Contents/MacOS/reshiki --mcp --allow-write /Users/you/ReShiki-Agent`, then add the two timeouts to the entry it writes. Codex waits 10 s for a server to start and 60 s for a tool call by default ([Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)). ReShiki allows each call up to 120 s, so a large layout or render can outlast Codex’s default.
 
+### Approvals
+
+`file_save`, `apply` and `document_close` are marked destructive: they write a file, change a drawing or discard one. Your client can ask you before it runs them. These settings are optional.
+
+**Claude Code:** add ask rules to `~/.claude/settings.json`. The rules use the server name from `claude mcp add`, and `/permissions` shows them ([Claude Code permissions](https://code.claude.com/docs/en/permissions)).
+
+```json
+{
+  "permissions": {
+    "ask": ["mcp__reshiki__file_save", "mcp__reshiki__apply", "mcp__reshiki__document_close"]
+  }
+}
+```
+
+**Codex:** add `default_tools_approval_mode = "writes"` to the `[mcp_servers.reshiki]` entry. Codex then asks before every ReShiki tool that is not marked read-only, which also includes `import`, `compose`, `document_new` and `file_open`. An `approval_mode` in `[mcp_servers.reshiki.tools.<tool>]` overrides it for one tool ([Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)).
+
+```toml
+[mcp_servers.reshiki]
+command = "/Applications/ReShiki.app/Contents/MacOS/reshiki"
+args = ["--mcp", "--allow-write", "/Users/you/ReShiki-Agent"]
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+default_tools_approval_mode = "writes"
+```
+
 ## 4. Try it
 
 Ask your agent, for example:
 
 > Use ReShiki to draw the esterification of acetic acid with ethanol, show me a preview, and save it as esterification.rsk and esterification.svg in my ReShiki-Agent folder.
 
-The agent imports or composes the structures, renders a preview, and saves the files into the granted folder. Open the `.rsk` file in ReShiki to continue editing.
+The agent imports or composes the structures, renders a preview, and saves the files into the granted folder. The scheme looks like this one, which ReShiki composed from the [example Proposal](/doc-images/agent-api-p1/esterification.json):
+
+![Acetic acid and ethanol give ethyl acetate and water, with H₂SO₄ and heat over the arrow](/doc-images/agent-api-p1/esterification.png)
+
+Open the `.rsk` file in ReShiki to continue editing.
+
+## 5. Install the ReShiki skill (optional)
+
+A skill teaches your agent ReShiki’s command line, the compose, render and revise workflow, and the Proposal format. Write it into your agent’s skills folder, which must exist:
+
+```sh
+mkdir -p ~/.claude/skills
+/Applications/ReShiki.app/Contents/MacOS/reshiki --cli skill -o ~/.claude/skills
+```
+
+For Codex, use `~/.agents/skills`. Read the files before you install a skill. [Agent skill](/developer/agent-skill/) covers Windows, claude.ai and updates.
 
 ## Use the command line
 
@@ -163,20 +209,65 @@ reshiki --cli compose proposal.json -o scheme.svg
 reshiki --cli help convert
 ```
 
-Use the full executable path from step 1 in place of `reshiki`. On Windows, pipe or redirect the output, as in `| Write-Output` or `> info.json`; without that, a release build’s output and error messages do not appear. MCP clients are unaffected. The [agent API reference](/developer/agent-api/#command-line) lists every option and exit code.
+Use the full executable path from step 1 in place of `reshiki`. On Windows, pipe or redirect the output, as in `| Write-Output` or `> info.json`; without that, a release build’s output and error messages do not appear. MCP clients are unaffected.
+
+`compose` lays out a Proposal: the JSON layout plan ReShiki’s assistant uses, with molecules and reactions from SMILES. Start from the [example Proposal](/doc-images/agent-api-p1/esterification.json); `reshiki --cli schema proposal` prints its schema. The [command-line reference](/developer/agent-cli/) lists every command, option and exit code.
+
+## Exit codes
+
+When the server stops, the client reports that it failed or closed. Its exit code tells you why:
+
+| Exit | Cause                                                                                                                | What to do                                                                        |
+| ---- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 0    | The client closed the connection, and every request was answered                                                     | Nothing                                                                           |
+| 1    | The client stopped reading or closed the connection early, or the server could not start                             | Restart the client                                                                |
+| 2    | A usage error, a folder that cannot be granted, an invalid `agent-access.json` or an invalid `RESHIKI_AGENT_HEAP_MB` | [Check the server by hand](#check-the-server-by-hand); it prints the cause        |
+| 75   | The memory ceiling was reached                                                                                       | Raise `RESHIKI_AGENT_HEAP_MB` in the client’s settings, or ask for a smaller task |
+
+`RESHIKI_AGENT_HEAP_MB` is the memory ceiling in MiB: 256 to 16384, default 2048. Set it in the client’s settings for the server, then restart the client:
+
+- **Claude Code:** remove the server and add it again with `--env`. Keep another option, such as `--transport stdio`, between `--env` and the server name.
+
+  ```sh
+  claude mcp remove reshiki --scope user
+  claude mcp add --env RESHIKI_AGENT_HEAP_MB=4096 --transport stdio --scope user reshiki -- /Applications/ReShiki.app/Contents/MacOS/reshiki --mcp --allow-write /Users/you/ReShiki-Agent
+  ```
+
+- **Claude Desktop:** add `"env": { "RESHIKI_AGENT_HEAP_MB": "4096" }` next to `command` and `args`.
+- **Codex:** add a `[mcp_servers.reshiki.env]` table with `RESHIKI_AGENT_HEAP_MB = "4096"`.
 
 ## Troubleshooting
 
-| Problem                                   | What to do                                                                                                                                                                                                    |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The server does not start on macOS        | Open ReShiki once from Finder after downloading it, and keep it in `/Applications`, so macOS does not block a client from starting it.                                                                        |
-| Files in Documents or Desktop are refused | macOS checks the client app’s privacy permissions, not ReShiki’s. Allow the client in **System Settings → Privacy & Security**, or grant a folder outside Documents, Desktop and iCloud Drive.                |
-| The server fails to start                 | Run the client’s command in a terminal with `--log-level debug` and empty input (`< /dev/null` on macOS and Linux). It prints the version and granted folders, or one line naming the folder it cannot grant. |
-| `path_not_granted`                        | The file is outside the granted folders. Add the folder to the client’s configuration, then restart the client.                                                                                               |
-| Codex reports a timeout                   | Set `tool_timeout_sec = 120` and `startup_timeout_sec = 20` for ReShiki.                                                                                                                                      |
-| Claude Code cuts off a result             | Raise `MAX_MCP_OUTPUT_TOKENS`, or ask for a smaller render or part of the drawing.                                                                                                                            |
-| Updating ReShiki on Windows               | Quit MCP clients first, so no `reshiki.exe --mcp` is running while the installer replaces ReShiki.                                                                                                            |
-| The agent still sees the old version      | Restart the client after any ReShiki update, so it starts the new executable.                                                                                                                                 |
+| Problem                                   | What to do                                                                                                                                                                                     |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The server does not start on macOS        | Open ReShiki once from Finder after downloading it, and keep it in `/Applications`, so macOS does not block a client from starting it.                                                         |
+| Files in Documents or Desktop are refused | macOS checks the client app’s privacy permissions, not ReShiki’s. Allow the client in **System Settings → Privacy & Security**, or grant a folder outside Documents, Desktop and iCloud Drive. |
+| The server fails to start                 | [Check the server by hand](#check-the-server-by-hand), and look up its [exit code](#exit-codes).                                                                                               |
+| `path_not_granted`                        | The file is outside the granted folders. Add the folder to the client’s configuration, then restart the client.                                                                                |
+| Codex reports a timeout                   | Set `tool_timeout_sec = 120` and `startup_timeout_sec = 20` for ReShiki.                                                                                                                       |
+| Claude Code cuts off a result             | Raise `MAX_MCP_OUTPUT_TOKENS`, or ask for a smaller render or part of the drawing.                                                                                                             |
+| Updating ReShiki on Windows               | Quit MCP clients first, so no `reshiki.exe --mcp` is running while the installer replaces ReShiki.                                                                                             |
+| The agent still sees the old version      | Restart the client after any ReShiki update, so it starts the new executable. If you installed the skill, [write it again](/developer/agent-skill/#keep-it-current).                           |
+
+### Check the server by hand
+
+Run the client’s command in a terminal with `--log-level debug` and empty input. The server prints its version and granted folders, or one line naming the folder it cannot grant, and exits.
+
+On macOS and Linux:
+
+```sh
+/Applications/ReShiki.app/Contents/MacOS/reshiki --mcp --log-level debug --allow-write /Users/you/ReShiki-Agent < /dev/null
+```
+
+On Windows, a release build shows no output in a terminal, so write it to a file. In Command Prompt (in PowerShell, type `cmd` first):
+
+```bat
+cmd /c ""C:\Users\you\AppData\Local\Programs\ReShiki\reshiki.exe" --mcp --log-level debug --allow-write "C:\Users\you\ReShiki-Agent" < NUL 2> reshiki-mcp.txt"
+echo %ERRORLEVEL%
+type reshiki-mcp.txt
+```
+
+`echo %ERRORLEVEL%` shows the [exit code](#exit-codes), and `type` shows the server’s messages.
 
 ## Privacy
 

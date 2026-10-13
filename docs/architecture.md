@@ -418,5 +418,7 @@ flowchart LR
 - `HeadlessHost` owns session documents in memory. Its executor bounds concurrency, queueing and deadlines; every edit is one atomic store commit. P2 adds an `AppHost` for drawings open in the app.
 - Operations call the same `LocalEngine`, composition and export code as the app. Only `file_open` and `file_save` touch files, through `access`, which resolves each request against directory handles opened once at startup.
 - `reshiki --cli` runs each command on an in-process `HeadlessHost` through the same `ToolHost::call`, and reads and writes its command-line paths with the user's own permissions.
+- `src/cli/commands.rs` holds one table of commands and their options. It drives the parser in `src/cli/args.rs`, the help text and `reshiki --cli help --json`. `src/cli/reference.rs` renders [the agent reference](agent-reference.md) from the help, the tool catalog and the schemas (`cargo run --example agent_reference -- docs/agent-reference.md`), and a test fails when the committed page is out of date. `src/cli/skill.rs` writes the [Agent Skill](agent-skill.md); `src/cli/io.rs` is the only module in `src/cli` that touches the filesystem.
+- The experimental API stays out of the published Rust API: `reshiki_agent::ops` is `#[doc(hidden)]` and `reshiki-mcp` is an unpublished crate.
 
 Budgets, containment and residual risks are recorded in [runtime safety](runtime-safety.md#agent-api-p1-experimental).

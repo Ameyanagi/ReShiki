@@ -177,9 +177,11 @@ in ReShiki 0.11.0) follow the same rule as `--graphics-info`: release builds hav
 no console, so their output and error messages appear only when piped or
 redirected, for example `.\reshiki.exe --cli info | Write-Output` or
 `.\reshiki.exe --cli convert --smiles CCO -o ethanol.mol 2> errors.txt`. Piping
-also makes PowerShell wait for the command to finish. MCP clients connect pipes
-when they start `reshiki.exe --mcp`, so the MCP server is unaffected. See
-[Connect AI agents](https://reshiki.com/guide/agents/).
+also makes PowerShell wait for the command to finish, and `$LASTEXITCODE` then
+holds its exit status. MCP clients connect pipes when they start
+`reshiki.exe --mcp`, so the MCP server is unaffected. See
+[Connect AI agents](https://reshiki.com/guide/agents/) and the
+[command-line reference](agent-cli.md#windows).
 
 ## Verification scope
 
