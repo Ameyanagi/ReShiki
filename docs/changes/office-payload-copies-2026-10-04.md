@@ -84,7 +84,7 @@ chemistry/platform changes. No native data or PNG was invented for this check.
 
 Exact runtime/source/package/worker hashes, commands, counts and evidence
 locations are in the adjacent
-[validation manifest](office-payload-copies-2026-10-04-manifest.json).
+[validation manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/office-payload-copies-2026-10-04-manifest.json).
 Large ODF/PNG artifacts remain outside Git in
 `/tmp/reshiki-improvements-20261004/evidence/uno-c07/container-evidence/`.
 That directory retains both installed OXT packages, packet provenance,
@@ -229,3 +229,11 @@ abnormal read/close/dispose/error paths are established by controlled parity
 regressions, not native fault injection. No visible drawing or UI change is
 intended; validation uses bytes, protocol/error sequencing and persisted object
 properties instead of appearance comparisons.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/office-payload-copies-2026-10-04-manifest.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/office-payload-copies-2026-10-04-manifest.json) on the evidence archive branch.
+
+| Archived files                                                                                                                                                                                       | What they record                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| [docs/changes/office-payload-copies-2026-10-04-manifest.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/office-payload-copies-2026-10-04-manifest.json) | Exact runtime/source/package/worker hashes, commands, counts and external evidence locations for Office/UNO validation. |

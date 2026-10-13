@@ -4,7 +4,7 @@ Review base: `feat/mechanism-curve-controls` at 5e68c9b4 (production 477b97f4).
 Pen production reviewed in the desktop app: 2b3fdb40, signed SHA256 b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c.
 The later e10c876f parent merge changes only Curves reference-test provenance.
 See [the visual review](../../../docs/changes/tunable-pen-lines.md) and
-[public artifact hashes](../../../docs/changes/tunable-pen-lines-evidence.json).
+[public artifact hashes](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-evidence.json).
 
 `before.rsk`, retained before implementation in f160a13b, contains an open
 multi-cubic path with alternating bends and a closed asymmetric outline.

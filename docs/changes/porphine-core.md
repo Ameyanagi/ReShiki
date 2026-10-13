@@ -18,7 +18,7 @@ candidate returns one template. Both search captures use an empty drawing at
 | [![Porphyrin search finds no template in the historical app](../images/porphine-core/template-search-before.jpg)](../images/porphine-core/template-search-before.jpg) | [![Porphyrin search finds the new free-base template](../images/porphine-core/template-search-after.jpg)](../images/porphine-core/template-search-after.jpg) |
 
 Select the result and place it into a blank drawing. The actual
-[placed native file](fixtures/porphine-core/porphine-placed-desktop.rsk) contains
+[placed native file](../../tests/fixtures/porphine-core/porphine-placed-desktop.rsk) contains
 24 atoms and 28 bonds, C20H14N4, two hydrogen-bond donors and two acceptors.
 One Undo leaves the drawing empty; Redo restores every native field exactly.
 
@@ -35,7 +35,7 @@ reference for this drawing.
 
 ## Actual manual route from the supplied carbon seed
 
-This desktop check starts from [source-seed.rsk](fixtures/porphine-core/source-seed.rsk),
+This desktop check starts from [source-seed.rsk](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/source-seed.rsk),
 a supplied carbon five-ring and meso arm. It does not measure construction from
 an empty drawing or establish a speed advantage over the
 [user's twelve-stage guide](https://note.com/budhalocyanine/n/n7fe04cbb8f4e).
@@ -45,25 +45,25 @@ The following are grouped operations, not a mouse/key count.
    length from 21.6 to 14.4 pt. Only C5 moves, along the original arbitrary axis.
 2. Select all six atoms, reference C2→C3, and use **Pinned point** X=0/Y=0.
    Press **Horizontal**. The original edge is 17.30000061°; the
-   [aligned save](fixtures/porphine-core/porphine-seed-aligned-desktop.rsk)
+   [aligned save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/porphine-seed-aligned-desktop.rsk)
    has exactly the expected fixture coordinates. Carbon H caches hydrate when
    the drawing is checked; they are not chemical edits.
 3. With the same pin, **Copy + rotate** 90° three times, using the newly selected
    copy each time. Actual saves contain 12 atoms/12 bonds after
-   [one copy](fixtures/porphine-core/porphine-seed-copy-90-desktop.rsk) and
-   [24/24 after three copies](fixtures/porphine-core/porphine-four-seeds-desktop.rsk).
+   [one copy](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/porphine-seed-copy-90-desktop.rsk) and
+   [24/24 after three copies](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/porphine-four-seeds-desktop.rsk).
    Every copied coordinate matches a quarter-turn sign swap about (0,0) exactly.
 4. Draw four single closing links: 5–22, 26–28, 32–34, 38–1. The
-   [closed carbon scaffold](fixtures/porphine-core/porphine-closed-carbon-scaffold-desktop.rsk)
+   [closed carbon scaffold](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/porphine-closed-carbon-scaffold-desktop.rsk)
    has 24 atoms/28 bonds with unchanged atom coordinates. Change inward atoms
    21, 27, 33 and 39 to N. Assign double bonds 1–2, 3–4, 23–24, 25–27,
    29–30, 31–32, 35–36, 34–39, 37–38, 5–22 and 26–28. The
-   [manually constructed save](fixtures/porphine-core/porphine-manually-constructed-desktop.rsk)
+   [manually constructed save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/porphine-manually-constructed-desktop.rsk)
    has the template's canonical SMILES and full InChIKey, with implicit N–H only
    at 21 and 33. All 28 core bonds remain 14.4 pt within f32 precision.
 5. The supplied seed's lower N–H label inherits **Below**. Select N33 and set
    **Atom labels → Hydrogen position → Above**. The
-   [inward-label save](fixtures/porphine-core/porphine-manually-constructed-inward-labels-desktop.rsk)
+   [inward-label save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/porphine-manually-constructed-inward-labels-desktop.rsk)
    differs only in that display field; geometry and chemistry are unchanged.
 
 [![Four carbon seeds copied by successive exact quarter turns around the shared origin](../images/porphine-core/four-rotated-seeds.jpg)](../images/porphine-core/four-rotated-seeds.jpg)
@@ -80,7 +80,7 @@ five UI actions.
 
 ## Keep the macrocycle and phenyl ring rigid
 
-Open [source-phenyl.rsk](fixtures/porphine-core/source-phenyl.rsk), an own one-meso-phenyl
+Open [source-phenyl.rsk](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/source-phenyl.rsk), an own one-meso-phenyl
 example with 30 atoms/35 bonds and formula C26H18N4. Choose reference C5→C25,
 **Connected fragment**, with reference start C5 fixed, then **Drag to stretch**.
 The actual 152% desktop drag from screen (1250,750) to (1295,705) moved only
@@ -90,7 +90,7 @@ phenyl atoms 25–30 by approximately (+14.775924,−14.775924) drawing units.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [![Meso-phenyl bridge before its length is stretched, with formula and properties shown](../images/porphine-core/phenyl-before.jpg)](../images/porphine-core/phenyl-before.jpg) | [![Meso-phenyl bridge stretched along its original direction while the macrocycle and phenyl remain rigid](../images/porphine-core/phenyl-stretched-after.jpg)](../images/porphine-core/phenyl-stretched-after.jpg) |
 
-The [actual drag save](fixtures/porphine-core/porphine-phenyl-stretched-desktop.rsk)
+The [actual drag save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/porphine-phenyl-stretched-desktop.rsk)
 has bridge length **21.56445045 pt**, distinct from the renderer's numeric
 21.6 pt example. All 24 core atom fields and all bonds remain exact; the six
 phenyl atoms translate rigidly within 0.000008 drawing unit. C26H18N4 and full
@@ -103,7 +103,7 @@ checks rather than a different geometry.
 | [![Reference bridge controls with fixed C5 and the original 14.4-point length](../images/porphine-core/phenyl-stretch-controls.jpg)](../images/porphine-core/phenyl-stretch-controls.jpg) | [![Ring reference C2 to C3 explains why only its length cannot change while the rest of the ring stays rigid](../images/porphine-core/ring-stretch-refused.jpg)](../images/porphine-core/ring-stretch-refused.jpg) |
 
 Selecting ring C2→C3 exposes the restriction and no stretch action. The
-[refusal save](fixtures/porphine-core/porphine-ring-stretch-refused-desktop.rsk)
+[refusal save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/porphine-ring-stretch-refused-desktop.rsk)
 is exactly equal to the preceding stretched drawing.
 
 ## Persistence, reference comparison and validation
@@ -125,12 +125,12 @@ orientation by dragging, but no such gesture or manual ChemDraw construction
 was performed in this reference check. Vendor artwork, screenshots and
 coordinates remain private and are not included in this contribution.
 
-The [coordinate audit](fixtures/porphine-core/coordinate-checks.json) and
-[standalone verifier](fixtures/porphine-core/verify_coordinates.py) use ordinary
+The [coordinate audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/coordinate-checks.json) and
+[standalone verifier](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/verify_coordinates.py) use ordinary
 JSON arithmetic with no application imports. The
-[independent chemical receipts](fixtures/porphine-core/identity-oracles.json)
+[independent chemical receipts](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core/identity-oracles.json)
 record RDKit and preserved signed-CLI agreement. The
-[image/native provenance](../images/porphine-core/provenance.json) records exact
+[image/native provenance](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/porphine-core/provenance.json) records exact
 file hashes, the `3d58e6ca` source checkpoint and signed executable SHA256
 `2bc9889b78d85970c23172b4e85b5ffafae3be969c1bdf53a4880b8925e4976d`.
 
@@ -152,3 +152,12 @@ The change supplies one chemically defined free-base template and demonstrates
 editable construction and one meso attachment. Metal complexes, derivative
 libraries, from-blank step counts and timing comparisons are not part of these
 validated results.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures/porphine-core](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core), [docs/images/porphine-core](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/porphine-core) on the evidence archive branch.
+
+| Archived files                                                                                                                                       | What they record                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [docs/changes/fixtures/porphine-core](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/porphine-core) | Manual seed construction, meso-phenyl stretch/refusal saves, coordinate checks and independent chemical receipts. |
+| [docs/images/porphine-core](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/porphine-core)                     | Exact image/native-file hashes, source checkpoint and signed executable identity.                                 |

@@ -59,7 +59,9 @@ const historicalTopicSet = new Set(historicalTopics);
 await rm(path.join(content, "reference"), { recursive: true, force: true });
 await rm(destination, { recursive: true, force: true });
 await mkdir(destination, { recursive: true });
-for (const name of (await readdir(source)).filter((name) => name.endsWith(".md")).sort()) {
+for (const name of (await readdir(source))
+  .filter((name) => name.endsWith(".md") && name !== "README.md")
+  .sort()) {
   let body = await readFile(path.join(source, name), "utf8");
   const title = /^# (.+)$/m.exec(body)?.[1];
   if (!title) throw new Error(`Missing page title in ${name}`);

@@ -15,9 +15,9 @@ mapping accuracy across a reaction database.
 ## Imported maps: actual before and after
 
 The controlled input is
-[`[CH3:1][OH:2]>O>[CH2:1]=[O:2]`](evidence/reaction-atom-mapping/mapped-methanol-oxidation.rsmi).
+[`[CH3:1][OH:2]>O>[CH2:1]=[O:2]`](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/mapped-methanol-oxidation.rsmi).
 The old app imported it and saved
-[native-before.rsk](evidence/reaction-atom-mapping/native-before.rsk). Its five
+[native-before.rsk](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/native-before.rsk). Its five
 atoms, two bonds, one reaction and maps `[0, 1, 1, 2, 2]` were already correct;
 the water agent was unmapped. The verified new app opened that exact native
 file unchanged, and all four positive maps became visible.
@@ -37,7 +37,7 @@ shortcut patch. It was not the exact base of this branch. The new candidate
 was built from `51fa0991da2507bb00b27c1b420e807468de6423` plus the frozen,
 uncommitted mapping implementation on `feat/reaction-atom-mapping`. Mapping
 import/model/indicator sources were checked against that base before editing.
-[Provenance](evidence/reaction-atom-mapping/provenance.json) records both
+[Provenance](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/provenance.json) records both
 executable hashes and the exact capture/build distinctions; no final PR commit
 is claimed for this development capture.
 
@@ -54,7 +54,7 @@ Starting with the saved old native input, the operator:
 4. Chose **Apply reviewed proposal**. Carbon map 1 returned; one Undo removed
    it and Redo restored it. **Show maps** off/on changed the ink.
 5. Dragged reactant oxygen's map 2 handle, used Undo/Redo, and saved the actual
-   [custom-label native result](evidence/reaction-atom-mapping/native-custom-label-after.rsk).
+   [custom-label native result](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/native-custom-label-after.rsk).
    **Reset map label positions** restored automatic placement; Undo restored
    the custom placement. Closing the saved tab and opening its exact path in
    a fresh tab retained the custom offset, with Undo/Redo disabled.
@@ -89,10 +89,10 @@ retains the previously typed draft `7` after Undo while the canvas map restores
 
 ## Proper rigid alignment: actual native save
 
-The [authored oxidation fixture](evidence/reaction-atom-mapping/authored-oxidation-after.rsk)
+The [authored oxidation fixture](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/authored-oxidation-after.rsk)
 contains `[CH3][CH2][OH]>>[CH3][CH]=O`, maps 1/2/3, and an independent custom
 number `Cα`. It is test-writer output, not a native save or external producer
-return. The [controlled input](evidence/reaction-atom-mapping/alignment-input.rsk)
+return. The [controlled input](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/alignment-input.rsk)
 changes only product IDs 5/6/7 coordinates by a proper +90° rotation about
 their centroid. The verified app opened it, ran **Align mapped structures**,
 then Undo/Redo and native Save As.
@@ -101,7 +101,7 @@ then Undo/Redo and native Save As.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | ![The whole oxidation product is rotated sideways while custom Cα and reactant maps remain visible](images/reaction-atom-mapping/alignment-before.jpg) | ![The complete product rotates into the mapped reactant orientation without losing maps or Cα](images/reaction-atom-mapping/alignment-after.jpg) |
 
-The [actual native aligned save](evidence/reaction-atom-mapping/alignment-native-after.rsk)
+The [actual native aligned save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/alignment-native-after.rsk)
 is 4,685 bytes, SHA-256
 `d88fb3c0bf83bc0dffa7e68cf5deea447740d626fdc9cb7b58f6d65a0bb49239`.
 Against input
@@ -124,13 +124,13 @@ fresh process was performed or claimed.
 
 ## Portable verification and focused checks
 
-Run from any checkout location, with Python 3.9+ and no additional packages:
+This historical command uses archived [verify.py](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/verify.py); restore the cited evidence to a matching source checkout before running it with Python 3.9+ and no additional packages.
 
 ```sh
 python3 -B docs/evidence/reaction-atom-mapping/verify.py
 ```
 
-The [verifier](evidence/reaction-atom-mapping/verify.py) checks the hashes of
+The [verifier](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/verify.py) checks the hashes of
 all 15 copied images/data files, exact authored atoms/H/charge/isotope/maps,
 bond orders, roles/coefficient/agent expectations, baseline coordinates,
 custom-number ownership/style, the controlled +90° derivative and the native
@@ -139,7 +139,7 @@ including correlated changes to both comparison files, wrong map-label owner,
 overwritten `Cα`, a distance-preserving reflection, scaling and bond distortion.
 Negative controls use in-memory copies and bypass artifact hashes so they test
 semantic checks rather than merely detecting changed bytes. The script writes
-no files and launches no application. [Recorded result](evidence/reaction-atom-mapping/verify-results.json).
+no files and launches no application. [Recorded result](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping/verify-results.json).
 
 Focused default-feature checks passed on the frozen implementation:
 
@@ -189,3 +189,11 @@ captures are offered under `MIT OR Apache-2.0`, following
 [CONTRIBUTING.md](../CONTRIBUTING.md). No third-party code or data is copied into
 this evidence package. Daylight/RDKit documentation links in the usage guide
 are references, not bundled implementations or producer outputs.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/evidence/reaction-atom-mapping](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping) on the evidence archive branch.
+
+| Archived files                                                                                                                                       | What they record                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [docs/evidence/reaction-atom-mapping](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/evidence/reaction-atom-mapping) | Mapped inputs, native/custom-label/alignment saves, executable/capture provenance and the finite portable verifier/results. |

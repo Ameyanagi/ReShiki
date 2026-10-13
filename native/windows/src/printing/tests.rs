@@ -21,10 +21,8 @@ fn spectrum_bounds(image: &image::RgbaImage) -> [u32; 4] {
 fn imported_spectrum_preview_and_reexport_keep_frame_colors_and_vectors() {
     let _guard = METAFILE_TEST.lock().unwrap();
     for source in [
-        &include_bytes!("../../../../docs/changes/fixtures/emf-import/controlled-spectrum.emf")[..],
-        &include_bytes!(
-            "../../../../docs/changes/fixtures/emf-import/controlled-spectrum-shifted.emf"
-        )[..],
+        &include_bytes!("../../../../tests/fixtures/emf-import/controlled-spectrum.emf")[..],
+        &include_bytes!("../../../../tests/fixtures/emf-import/controlled-spectrum-shifted.emf")[..],
     ] {
         assert_imported_spectrum(source);
     }

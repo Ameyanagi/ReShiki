@@ -1,4 +1,0 @@
-libEGL warning: DRI3 error: Could not get DRI3 device
-libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
-MESA: info: vulkan: No DRI3 support detected - required for presentation
-Note: you can probably enable DRI3 in your Xorg config

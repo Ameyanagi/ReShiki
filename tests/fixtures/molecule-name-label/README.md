@@ -3,7 +3,7 @@
 These are new follow-up assets. Existing `chemical-naming-rust` captures,
 fixtures, source manifests, licenses and raw receipts are unchanged. Desktop
 captures were made by the root native verification session, using the exact
-signed bundle recorded in [the provenance receipt](validation/bundle-provenance.json.raw).
+signed bundle recorded in [the provenance receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label/validation/bundle-provenance.json.raw).
 The [native acceptance receipt](native-acceptance-v1.json.raw) reports all seven
 checks passing. Its original SHA256 is
 `1333368130459d3ff76cef6ae09fe91f92a57fdb7158ef46cc0e947b3de926a4`.
@@ -14,18 +14,19 @@ checks passing. Its original SHA256 is
 | [ethanol-generated-caption.rsk](ethanol-generated-caption.rsk) | Same exact atoms/bonds, one `ethan-1-ol` caption and link |
 | [ethanol-structure-only.rsk](ethanol-structure-only.rsk) | 3 atoms, 2 bonds, no annotation or name link |
 
-The image files are under `docs/images/molecule-name-label`. The `before-*`
+Feature images remain under `docs/images/molecule-name-label`; supplementary
+workflow captures are in the [image archive](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/molecule-name-label). The `before-*`
 images are actual earlier desktop captures, not generated concepts. All other
 images and adjacent `*-ax.txt` snapshots correspond to the new native review.
 The [artifact index](artifact-index.json) maps repository files to their
 original paths, byte counts and SHA256 values. Files ending in `.json.raw`
 preserve the original JSON bytes and hashes; they are not reformatted copies.
 
-The [final focused validation receipt](validation/validation-final.json.raw)
+The [final focused validation receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label/validation/validation-final.json.raw)
 records 57 distinct passing tests, strict Clippy, formatting, exact-source
-build and package checks. The [frozen source manifest](validation/frozen-source-v2.json.raw)
-contains the tested source hashes. `build2.log` is the complete successful Cargo
-JSON stream. `default-app-v2.d` is the original source-qualified depfile. The raw
+build and package checks. The [frozen source manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label/validation/frozen-source-v2.json.raw)
+contains the tested source hashes. [build2.log](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label/validation/build2.log) is the complete successful Cargo
+JSON stream. [default-app-v2.d](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label/validation/default-app-v2.d) is the original source-qualified depfile. The raw
 executable SHA256 is
 `c2c7ea9272c90e9020e93b00927878a776a6c653571193ee68b59e29d3921bb2`;
 the signed executable SHA256 is
@@ -33,9 +34,9 @@ the signed executable SHA256 is
 Receipts describe a locked default-feature debug build for macOS arm64.
 Subsequent documentation/asset changes do not change executable inputs, as
 verified in the [runtime source bridge](runtime-source-bridge.json). The
-[full normal commit-hook log](validation/full-commit-hooks.log) records
+[full normal commit-hook log](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label/validation/full-commit-hooks.log) records
 all-feature Cargo check and strict Clippy, Cargo fmt, oxfmt and oxlint passing.
-The [root independent verification](validation/root-focused-verification-v1.json.raw)
+The [root independent verification](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label/validation/root-focused-verification-v1.json.raw)
 checks the named focused-test passes and original log hashes.
 
 Every failed attempt is preserved beside its successful rerun:

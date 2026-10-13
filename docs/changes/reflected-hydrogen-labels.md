@@ -22,7 +22,7 @@ ink. Genuine overlaps still receive the normal clearance adjustment.
 
 ## Native before and after
 
-Open the [original porphine fixture](fixtures/reflected-hydrogen-labels/porphine-source.rsk),
+Open the [original porphine fixture](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reflected-hydrogen-labels/porphine-source.rsk),
 select the complete molecule, and click **Flip vertically** in the arrangement
 toolbar. Both N–H labels should remain inside the ring. Use the toolbar's
 **Undo**, then **Redo**, and save to a new file. Quit the app, relaunch it, and
@@ -37,7 +37,7 @@ disabled for the fresh document.
 
 Actual native macOS testing passed the vertical flip, toolbar Undo/Redo, Save As,
 and fresh-process reopen at **176% zoom, JACS style, Arial 10 pt**. The
-[saved reflected fixture](fixtures/reflected-hydrogen-labels/porphine-vertical-reflection-after-fix.rsk)
+[saved reflected fixture](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reflected-hydrogen-labels/porphine-vertical-reflection-after-fix.rsk)
 is the document from that interaction, not a separately generated illustration.
 
 Both comparison captures start from the same original fixture and vertical
@@ -115,3 +115,11 @@ requirement. Successful file conversion alone is not clipboard acceptance.
 **Caption:** Reflect or rotate a molecule while keeping fixed hydrogen labels
 on the corresponding side. Porphine's two N–H labels remain inward after a
 vertical flip, Undo/Redo, and reopening the saved drawing.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures/reflected-hydrogen-labels](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/reflected-hydrogen-labels) on the evidence archive branch.
+
+| Archived files                                                                                                                                                               | What they record                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [docs/changes/fixtures/reflected-hydrogen-labels](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/reflected-hydrogen-labels) | Typed and saved native drawings used to compare reflected hydrogen-label placement. |

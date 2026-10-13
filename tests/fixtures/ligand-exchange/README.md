@@ -10,7 +10,7 @@ image wrappers. They contain no external templates or source code.
 - `returned.cdx`: ReShiki's two-Cp drawing, pasted into the external editor,
   selected and copied back. It retains 13 nodes, 12 bonds, ten aromatic bonds,
   two five-member attachment targets, two hidden −1 charges and two closed
-  12-point ellipse curves. Source: `docs/changes/fixtures/pi-ligands-copy.rsk`.
+  12-point ellipse curves. Source: `tests/fixtures/ligand-exchange/pi-ligands-copy.rsk`.
   The source metal charge is zero; this tests preservation, not a complete
   chemical assignment for a neutral complex.
 - `gallery-returned.cdx`: the complete `assets/examples/shortcut-examples.rsk`

@@ -41,7 +41,7 @@ The images are renderer evidence, not native desktop screenshots.
 
 ## Reproduction and source provenance
 
-The [ACS reference fixture](fixtures/template-journal-size-acs-reference.rsk)
+The [ACS reference fixture](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/template-journal-size-acs-reference.rsk)
 is the unmodified captured starting document. Open it, choose built-in
 Cyclohexane in Templates, apply Nature from the Drawing style journal dropdown,
 and insert in empty space on the right. Repeat with the style change before the
@@ -265,3 +265,11 @@ cross-platform desktop checks are not claimed.
 
 Reusable release caption: Built-in templates placed in empty space now follow
 the current journal drawing size while personal templates keep their saved size.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) on the evidence archive branch.
+
+| Archived files                                                                                                           | What they record                                                    |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) | The ACS reference native drawing used for template-size comparison. |

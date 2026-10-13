@@ -20,7 +20,7 @@ The six public images are original native JPEGs in
 [`docs/images/rear-opacity`](../../../docs/images/rear-opacity), with capture
 conditions and title/tab differences explained in the
 [review](../../../docs/rear-opacity-review.md). Private incidental-UI captures
-are excluded. The [manifest](evidence-manifest.json) pins all public copies.
+are excluded. The [manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-opacity/evidence-manifest.json) pins all public copies.
 
 Run `python3 scripts/evidence/verify_rear_opacity_evidence.py` from the repository root
 to check all eleven complete native documents, their frozen hashes,
@@ -31,7 +31,7 @@ independent signed-CLI outputs with Pillow when those separately retained
 exports are available; they are excluded from this compact public package.
 Saved files establish data equality; the desktop receipt establishes observed
 input actions and history state. The immutable
-[independent audit](validation/independent-desktop-verification.json) also pins
+[independent audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-opacity/validation/independent-desktop-verification.json) also pins
 the six JPEGs, signed app, 1,069 compiled source inputs and 15 fresh artifacts.
 
 The C60 fixture originates from the existing project-owned

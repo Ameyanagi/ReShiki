@@ -519,7 +519,8 @@ async fn molecule_shortcut_visual_evidence() {
     app.tab.selected = ids;
     let directory = std::path::Path::new("docs/images/reaction-selection-shortcuts");
     std::fs::create_dir_all(directory).unwrap();
-    let fixtures = std::path::Path::new("docs/changes/fixtures");
+    // Scratch drawings are for manual review before retaining evidence.
+    let fixtures = std::path::Path::new("target/reaction-selection-shortcuts");
     std::fs::create_dir_all(fixtures).unwrap();
     std::fs::write(
         fixtures.join("reaction-shortcuts-input.rsk"),

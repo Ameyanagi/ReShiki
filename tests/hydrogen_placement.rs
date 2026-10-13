@@ -95,7 +95,7 @@ fn explicit_hydrogen_count_is_stacked_without_losing_subscript_charge_or_isotope
 #[tokio::test]
 async fn paracetamol_formula_and_editable_round_trip_are_unchanged() {
     let doc: Document = serde_json::from_str(include_str!(
-        "../docs/changes/fixtures/automatic-hydrogen.rsk"
+        "fixtures/hydrogen-placement/automatic-hydrogen.rsk"
     ))
     .unwrap();
     let engine = LocalEngine::default();

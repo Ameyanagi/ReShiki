@@ -40,10 +40,8 @@ fn physical_extent_uses_frame_not_reference_resolution() {
 #[test]
 fn real_windows_vector_and_raster_fixture_has_its_authored_physical_size() {
     for bytes in [
-        &include_bytes!("../../../docs/changes/fixtures/emf-import/controlled-spectrum.emf")[..],
-        &include_bytes!(
-            "../../../docs/changes/fixtures/emf-import/controlled-spectrum-shifted.emf"
-        )[..],
+        &include_bytes!("../../../tests/fixtures/emf-import/controlled-spectrum.emf")[..],
+        &include_bytes!("../../../tests/fixtures/emf-import/controlled-spectrum-shifted.emf")[..],
     ] {
         let dimensions = validate(bytes).unwrap();
         assert!((dimensions.width_pt * 25.4 / 72. - 100.).abs() < 0.001);

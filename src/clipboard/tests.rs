@@ -319,7 +319,7 @@ async fn internal_condensed_labels_keep_editable_text_and_formula_formatting() -
 {
     use anyhow::{Context, ensure};
     let source: Document = serde_json::from_str(include_str!(
-        "../../docs/changes/fixtures/internal-labels.rsk"
+        "../../tests/fixtures/internal-labels/internal-labels.rsk"
     ))?;
     let (outcome, representations) = prepare_copy(Default::default(), source, false)
         .await
@@ -379,7 +379,7 @@ async fn projected_arene_with_bold_edge_has_editable_clipboard_and_native_depth(
 -> anyhow::Result<()> {
     use anyhow::{Context, ensure};
     let source: Document = serde_json::from_str(include_str!(
-        "../../docs/changes/fixtures/arene-bold-join.rsk"
+        "../../tests/fixtures/bond-joins/arene-bold-join.rsk"
     ))?;
     let (outcome, representations) = prepare_copy(Default::default(), source.clone(), false)
         .await

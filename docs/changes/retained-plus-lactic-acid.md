@@ -95,7 +95,7 @@ fixtures rather than a new general mapping oracle.
 
 ## Fresh cleanup package acceptance
 
-A separate [fresh native supplement](fixtures/names-maps-final-native-v1/README.md)
+A separate [fresh native supplement](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/names-maps-final-native-v1/README.md)
 qualifies source tree `bfbce003804680bd18aa39048490b035a09975dc` and the ordinary
 default review app signed as `8d96eff1…`. It preserves the original source22a
 packet, its matched comparison and test-count qualification. Root repeated local
@@ -115,3 +115,11 @@ unique chemical-test count. Normal source commit `699fa744` passed all eight hoo
 table-formatting correction; cell content/alignment, all 690 compiled inputs and
 78 resources remain exact. The old raw receipt retains its historical pending
 remark and first formatter failure. Exact publication-head CI remains pending.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures/names-maps-final-native-v1](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/names-maps-final-native-v1) on the evidence archive branch.
+
+| Archived files                                                                                                                                                                 | What they record                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| [docs/changes/fixtures/names-maps-final-native-v1](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/names-maps-final-native-v1) | The inherited names/reaction-maps trial, qualified source/artifact records and original native saves. |

@@ -44,9 +44,9 @@ MIT OR Apache-2.0 terms without relicensing third-party data.
 
 ### Native comparison
 
-| Before: existing local name details                                                                                | After: curated aliases in Details                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Baseline Import Name Details without curated alias controls](../images/offline-name-synonyms/before-details.png) | ![Final v3 ethanol Details with source-labelled ethanol and ethyl alcohol aliases](../images/offline-name-synonyms/after-details.png) |
+| Before: existing local name details                                                                                                                                                           | After: curated aliases in Details                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [Baseline Import Name Details without curated alias controls](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/offline-name-synonyms/before-details.png) | ![Final v3 ethanol Details with source-labelled ethanol and ethyl alcohol aliases](../images/offline-name-synonyms/after-details.png) |
 
 Both views use the input `ethanol`, light appearance, Arial 10 / JACS and 100%
 canvas zoom. Each published image uses the same crop `(1960, 272, 2560, 1380)`
@@ -57,7 +57,7 @@ alias controls and is not the final candidate.
 
 ![Final v3 direct Insert retains the ethanol graph and its chosen ethyl alcohol caption without Preview](../images/offline-name-synonyms/compact-caption.png)
 
-![The final v3 application reopens the saved ethyl alcohol drawing with no Undo or Redo history](../images/offline-name-synonyms/fresh-reopen.png)
+[The final v3 application reopens the saved ethyl alcohol drawing with no Undo or Redo history](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/offline-name-synonyms/fresh-reopen.png)
 
 The final v3 native session verified Copy by pasting the copied alias back into
 the input, **Use below**, restoration of the original caption choice, and direct
@@ -68,7 +68,7 @@ images resize the full native capture to 1280 × 852; the canvas is at 250%.
 
 ![Qualified v2 S-lactic selection shows its generated systematic name separately from the two curated aliases](../images/offline-name-synonyms/positive-lactic-names.png)
 
-![Final v3 refreshed R-lactic Details offers only D-lactic acid while the drawing stays empty](../images/offline-name-synonyms/r-lactic-details.png)
+[Final v3 refreshed R-lactic Details offers only D-lactic acid while the drawing stays empty](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/offline-name-synonyms/r-lactic-details.png)
 
 The S-lactic image is from the qualified v2 session at 250%, resized to
 1280 × 852. Its selection intentionally identifies the generated-name target.
@@ -89,16 +89,16 @@ pending button state natively; the actual renderer regression verifies it.
 
 ### Identity, caption and producer evidence
 
-The [compact native audit](fixtures/offline-name-synonyms/native-audit.json)
+The [compact native audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/offline-name-synonyms/native-audit.json)
 records fixture hashes, independent graph/caption checks and which history
 observations came from the GUI operator. Saved files do not contain Undo stacks.
 
-| Native fixture                                                                                                  | Independently checked content                                                                                                                         |
-| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [v2 direct insert](fixtures/offline-name-synonyms/ethanol-ethyl-alcohol-native.rsk)                             | Neutral C2H6O, 3 atoms / 2 single bonds, one `ethyl alcohol` annotation and one complete CCO association                                              |
-| [v2 generated alias replacement](fixtures/offline-name-synonyms/ethanol-generated-alias-replacement-native.rsk) | The only two persisted changes are annotation text and association text, both `ethyl alcohol` → `ethanol`; graph, IDs and formatting remain exact     |
-| [v2 (+)-lactic acid](fixtures/offline-name-synonyms/positive-lactic-acid-native.rsk)                            | Neutral C3H6O3, 6 atoms / 5 bonds, explicit S graph `C[C@H](O)C(=O)O`, one complete linked caption; finite parity check independent of display caches |
-| [final v3 direct insert](fixtures/offline-name-synonyms/ethanol-ethyl-alcohol-final-v3.rsk)                     | Independently checked ethanol graph and complete linked caption; bytes happen to equal the v2 direct-insert fixture                                   |
+| Native fixture                                                                                                                                                                                         | Independently checked content                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [v2 direct insert](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/offline-name-synonyms/ethanol-ethyl-alcohol-native.rsk)                             | Neutral C2H6O, 3 atoms / 2 single bonds, one `ethyl alcohol` annotation and one complete CCO association                                              |
+| [v2 generated alias replacement](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/offline-name-synonyms/ethanol-generated-alias-replacement-native.rsk) | The only two persisted changes are annotation text and association text, both `ethyl alcohol` → `ethanol`; graph, IDs and formatting remain exact     |
+| [v2 (+)-lactic acid](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/offline-name-synonyms/positive-lactic-acid-native.rsk)                            | Neutral C3H6O3, 6 atoms / 5 bonds, explicit S graph `C[C@H](O)C(=O)O`, one complete linked caption; finite parity check independent of display caches |
+| [final v3 direct insert](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/offline-name-synonyms/ethanol-ethyl-alcohol-final-v3.rsk)                     | Independently checked ethanol graph and complete linked caption; bytes happen to equal the v2 direct-insert fixture                                   |
 
 Signed executable SHA-256 for the v2 S-lactic and generated-caption captures:
 `01f96ea9cf2e41cd65fc0bd28fe66d570fa7da13a6e5080628a25b6a9aff1fe7`.
@@ -158,3 +158,12 @@ Reusable figure caption: Choose a provenance-labelled offline alias, insert the
 editable molecule and its linked caption together, then replace the caption
 without duplicating or changing the molecular graph. The generated systematic
 name remains separately identified.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures/offline-name-synonyms](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/offline-name-synonyms), [docs/images/offline-name-synonyms](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/offline-name-synonyms) on the evidence archive branch.
+
+| Archived files                                                                                                                                                       | What they record                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [docs/changes/fixtures/offline-name-synonyms](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/offline-name-synonyms) | Native alias/caption saves, fixture hashes, independent graph checks and GUI history observations. |
+| [docs/images/offline-name-synonyms](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/offline-name-synonyms)                     | Baseline Details, fresh-process caption reopen and refreshed R-lactic Details captures.            |

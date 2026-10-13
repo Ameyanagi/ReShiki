@@ -54,11 +54,19 @@ Untitled preservation, saved edit contents, diagnostic wording, real focus,
 file-manager interaction, Wayland and Office-host save-back remain unobserved.**
 Identical A/B contents and title changes cannot establish those behaviors.
 
-[Machine-readable evidence](fixtures/linux-tab-routing-20261011/evidence.json)
+[Machine-readable evidence](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/linux-tab-routing-20261011/evidence.json)
 records the package hashes, cleanup facts and original receipt/log hashes. The
-[successful runtime log](fixtures/linux-tab-routing-20261011/runtime-pass.jsonl)
-and [application warning log](fixtures/linux-tab-routing-20261011/ordinary-host.stderr.log)
+[successful runtime log](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/linux-tab-routing-20261011/runtime-pass.jsonl)
+and [application warning log](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/linux-tab-routing-20261011/ordinary-host.stderr.log)
 are byte-exact copies. The
-[first failed harness log](fixtures/linux-tab-routing-20261011/harness-first-failure.sanitized.jsonl)
+[first failed harness log](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/linux-tab-routing-20261011/harness-first-failure.sanitized.jsonl)
 replaces only the private task-directory prefix with `<TASK_ROOT>`; original
 private records remain unchanged.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures/linux-tab-routing-20261011](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/linux-tab-routing-20261011) on the evidence archive branch.
+
+| Archived files                                                                                                                                                                 | What they record                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| [docs/changes/fixtures/linux-tab-routing-20261011](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/linux-tab-routing-20261011) | Package/cleanup facts, successful runtime observations, application warnings and the first failed harness attempt. |

@@ -118,7 +118,7 @@ fn fixed_hydrogen_positions_rotate_in_pinned_copies_without_changing_the_source(
 fn fixed_hydrogen_positions_keep_reflected_porphine_labels_inward() {
     use crate::atom_labels::HydrogenPosition::{Above, Below};
     let before = Document::from_native_file(include_bytes!(
-        "../../../../docs/changes/fixtures/porphine-core/porphine-placed-desktop.rsk"
+        "../../../../tests/fixtures/porphine-core/porphine-placed-desktop.rsk"
     ))
     .unwrap();
     let mut doc = before.clone();

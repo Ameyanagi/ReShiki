@@ -11,7 +11,7 @@ see the [October 3 evidence record](ui-declutter-native-2026-10-03.md).
 
 The five published PNGs are unchanged, inspected **renderer output**, not
 native desktop screenshots. Their sizes and SHA-256 values are in the
-[image manifest](../images/issue-work-2026-10-02/manifest.json).
+[image manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/issue-work-2026-10-02/manifest.json).
 
 ## Variable-font weight (#103)
 
@@ -252,3 +252,11 @@ this issue-work set.
 Published images add no new font binaries or runtime dependencies. Large
 scratch galleries, executables, external-application screenshots and local
 profiles are intentionally absent from this evidence page.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/images/issue-work-2026-10-02](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/issue-work-2026-10-02) on the evidence archive branch.
+
+| Archived files                                                                                                                                   | What they record                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| [docs/images/issue-work-2026-10-02](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/issue-work-2026-10-02) | Capture sources, dimensions and hashes for the issue-work images. |

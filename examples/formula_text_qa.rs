@@ -40,8 +40,9 @@ fn main() -> Result<()> {
             )?;
         }
         if automatic {
-            let mut review: Document =
-                serde_json::from_str(include_str!("../docs/changes/fixtures/arene-bold-join.rsk"))?;
+            let mut review: Document = serde_json::from_str(include_str!(
+                "../tests/fixtures/bond-joins/arene-bold-join.rsk"
+            ))?;
             reshiki::editing::append(&mut review, &doc, Point::new(130., -30.));
             fs::write(
                 out.join("Drawing and text review.rsk"),

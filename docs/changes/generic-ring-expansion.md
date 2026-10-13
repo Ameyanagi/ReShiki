@@ -51,7 +51,7 @@ The ordinary locked default-feature build and macOS bundle pass source,
 dependency, architecture and strict ad-hoc-signature checks. Later evidence or
 documentation commits are not relabeled as the screenshot producer.
 
-The [receipt](../evidence/generic-ring-expansion/native-review-receipt.json)
+The [receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/generic-ring-expansion/native-review-receipt.json)
 records input, output and image hashes, actual build identity, displayed zooms
 and measured saved-file geometry. The [historical combined review](coordination-join-integration.md)
 retains its original defect evidence.
@@ -79,9 +79,9 @@ substituted ring attachment distances are 1, 2 and 3 edges. Host rings and the
 fixed methyl group retain their geometry up to tiling translation and f32
 rounding; internal methoxy geometry remains rigid.
 
-Download the actual [anisole output](../evidence/generic-ring-expansion/anisole-one-product-after.rsk),
-[three-product output](../evidence/generic-ring-expansion/methoxytoluene-three-products-after.rsk)
-or [five-product before output](../evidence/generic-ring-expansion/methoxytoluene-five-products-before.rsk).
+Download the actual [anisole output](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/generic-ring-expansion/anisole-one-product-after.rsk),
+[three-product output](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/generic-ring-expansion/methoxytoluene-three-products-after.rsk)
+or [five-product before output](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/generic-ring-expansion/methoxytoluene-five-products-before.rsk).
 Fresh-process reopen captures show [anisole and its formula](../images/generic-ring-expansion/anisole-reopened.jpg)
 and [all three products and their graph counts](../images/generic-ring-expansion/methoxytoluene-reopened.jpg).
 
@@ -102,3 +102,11 @@ for retained restrictions.
 Join selection/placement accuracy and Co(en)3 appearance remain TODO;
 [issue #246](https://github.com/Ameyanagi/ReShiki/issues/246) stays open. Combined
 native Windows and measured above-100% DPI acceptance remain pending.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/evidence/generic-ring-expansion](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/evidence/generic-ring-expansion) on the evidence archive branch.
+
+| Archived files                                                                                                                                         | What they record                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| [docs/evidence/generic-ring-expansion](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/evidence/generic-ring-expansion) | Anisole and methoxytoluene native results and the qualified native review receipt. |

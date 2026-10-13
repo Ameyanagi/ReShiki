@@ -59,8 +59,8 @@ The candidate image is PID 10884's initial blank editor before drawing.
 The baseline's numeric window measurement was taken later after temporarily
 enlarging and restoring the RDP viewport to reach its console. It is explicitly
 separate from the initial image; unchanged initial bounds are not claimed.
-[Capture hashes and crop provenance](../images/windows-window-fit/capture-provenance.json)
-and [native measured results](../images/windows-window-fit/measured-results.json)
+[Capture hashes and crop provenance](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/windows-window-fit/capture-provenance.json)
+and [native measured results](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/windows-window-fit/measured-results.json)
 retain that distinction. Absolute executable/profile paths are omitted from
 the public measurement record; relative artifact labels replace them.
 
@@ -191,3 +191,11 @@ Reusable images: [initial before](../images/windows-window-fit/before.png),
 [Undo](../images/windows-window-fit/undo.png). They demonstrate the recorded
 100% small-desktop case; native higher-DPI and full interaction acceptance
 remains pending.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/images/windows-window-fit](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/windows-window-fit) on the evidence archive branch.
+
+| Archived files                                                                                                                             | What they record                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| [docs/images/windows-window-fit](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/windows-window-fit) | Capture hashes/crop provenance and measured native Windows bounds/DPI results. |

@@ -23,14 +23,14 @@ the directed edge to 23.75°.
 
 [![The same benzene reference set to a directed angle of 23.75 degrees](../images/reference-geometry/angle-controls-after.jpg)](../images/reference-geometry/angle-controls-after.jpg)
 
-Open [ring-input.rsk](fixtures/reference-geometry/ring-input.rsk), select all six
+Open [ring-input.rsk](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/ring-input.rsk), select all six
 atoms, then choose **Properties → Transform → Reference: align / stretch**,
 **C1→C2**, **Connected fragment**, **Center of moved objects**. Press Horizontal,
 then Vertical; Undo returns to Horizontal. Enter 23.75 and press To angle. Root
 desktop verification confirmed that repeating To angle adds no document history:
 one Undo returns to Horizontal and Redo restores the directed angle. Actual saves:
-[Horizontal](fixtures/reference-geometry/ring-horizontal-desktop.rsk) and
-[23.75°](fixtures/reference-geometry/ring-23-75-desktop.rsk).
+[Horizontal](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/ring-horizontal-desktop.rsk) and
+[23.75°](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/ring-23-75-desktop.rsk).
 
 ## Change only a bridge length
 
@@ -44,16 +44,16 @@ the new deterministic length edit; they do not depict that source regression.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [![Four-atom alcohol branch with existing whole-drawing Rotate and Scale controls](../images/reference-geometry/stretch-controls-before.jpg)](../images/reference-geometry/stretch-controls-before.jpg) | [![The first bond stretched to 21.6 points with downstream geometry unchanged](../images/reference-geometry/stretch-controls-after.jpg)](../images/reference-geometry/stretch-controls-after.jpg) |
 
-Open [branch-input.rsk](fixtures/reference-geometry/branch-input.rsk), select its
+Open [branch-input.rsk](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/branch-input.rsk), select its
 four atoms and choose C1→C2. With the reference start fixed, press Drag to stretch
 and drag the moving endpoint off-axis. The actual desktop drag went from screen
 (799,1070) to (900,1240), producing
-[24.47894017 pt](fixtures/reference-geometry/branch-drag-desktop.rsk) while C1
+[24.47894017 pt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/branch-drag-desktop.rsk) while C1
 stayed exactly at (0,0). One Undo restored the original 14.4 pt bond. Entering
 21.6 and pressing Set length produced
-[the numeric result](fixtures/reference-geometry/branch-21-6-desktop.rsk).
+[the numeric result](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/branch-21-6-desktop.rsk).
 Undo, Swap fixed end, then Set length 21.6 produced
-[the opposite fixed-end result](fixtures/reference-geometry/branch-end-fixed-desktop.rsk),
+[the opposite fixed-end result](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/branch-end-fixed-desktop.rsk),
 with C2, C3 and O4 unchanged. Each moving branch translates rigidly; no other bond
 length or angle changes. Rings cannot use this single-edge rigid operation.
 
@@ -69,13 +69,13 @@ plane; it does not flatten a 3D projection. The original input is
 
 [![The same ordered wedge reference aligned horizontally](../images/reference-geometry/wedge-horizontal-after.jpg)](../images/reference-geometry/wedge-horizontal-after.jpg)
 
-Open [stereo-input.rsk](fixtures/reference-geometry/stereo-input.rsk), select all
+Open [stereo-input.rsk](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/stereo-input.rsk), select all
 four atoms, and choose C2→C1. Horizontal and Vertical preserve all bonds, endpoint
 order, wedge display, charges, explicit-H semantics and AtomStereo neighbors.
-The [baseline manual drag](fixtures/reference-geometry/stereo-manual-rotation-before.rsk)
+The [baseline manual drag](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/stereo-manual-rotation-before.rsk)
 ended at 87.16944875°; it was free rotation, and is not evidence of grid snapping.
-The new [Horizontal](fixtures/reference-geometry/stereo-horizontal-desktop.rsk)
-and [Vertical](fixtures/reference-geometry/stereo-vertical-desktop.rsk) results
+The new [Horizontal](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/stereo-horizontal-desktop.rsk)
+and [Vertical](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/stereo-vertical-desktop.rsk) results
 have axis errors below 0.000001°. Vertical chooses −90°, a valid nearest-axis
 orientation. Root verified Undo back to Horizontal and Redo to Vertical.
 
@@ -90,8 +90,8 @@ same. The captures were collected later from separately frozen baseline
 constraint regression and baseline control were retained before implementation.
 The baseline manual wedge drag and new exact command are different operations.
 
-[Capture provenance](../images/reference-geometry/provenance.json) records image
-and native-file hashes. The [independent coordinate audit](fixtures/reference-geometry/coordinate-checks.json)
+[Capture provenance](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/reference-geometry/provenance.json) records image
+and native-file hashes. The [independent coordinate audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry/coordinate-checks.json)
 checks the seven actual candidate saves: IDs and chemical fields unchanged,
 rotation pivot drift below 0.000001 drawing unit, all-pair distance error below
 0.000006, and rigid-branch residual below 0.000006. Decimal/f32 tolerances are
@@ -107,3 +107,12 @@ during a held drag were not performed in this desktop session. The
 cases, including quarter-turn copies; it is renderer evidence rather than a
 claim of native interaction coverage. Strict Clippy, formatting, all-feature
 check and the locked candidate build passed before these docs-only additions.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures/reference-geometry](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry), [docs/images/reference-geometry](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/reference-geometry) on the evidence archive branch.
+
+| Archived files                                                                                                                                                 | What they record                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [docs/changes/fixtures/reference-geometry](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/reference-geometry) | Ring, bridge and wedge native inputs/results and independent coordinate checks. |
+| [docs/images/reference-geometry](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/reference-geometry)                     | Image and native-file hashes for the frozen baseline and candidate captures.    |

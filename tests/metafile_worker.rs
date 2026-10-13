@@ -29,7 +29,7 @@ fn main() -> anyhow::Result<()> {
         child.wait()?;
         return Ok(());
     }
-    let source = include_bytes!("../docs/changes/fixtures/emf-import/controlled-spectrum.emf");
+    let source = include_bytes!("fixtures/emf-import/controlled-spectrum.emf");
     let directory = tempfile::tempdir()?;
     let path = directory.path().join("controlled-spectrum.EMF");
     std::fs::write(&path, source)?;

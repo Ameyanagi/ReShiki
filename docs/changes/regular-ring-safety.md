@@ -35,16 +35,16 @@ outside the application-rendered drawing. The overlaid-ring defect is mostly
 invisible in the figure; its four coincident atom pairs are the important graph
 measurement.
 
-| Input and action                                                                                                            | Base result                                               | Fixed result                                             |
-| --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------- |
-| [Four-bond carbon](fixtures/regular-ring-safety/saturated-input.rsk): click the center with the regular six-ring tool       | 10 atoms / 10 bonds; central C valence 6                  | Rejected; original 5 atoms / 4 bonds; C valence 4        |
-| [Explicit CH4](fixtures/regular-ring-safety/explicit-h-input.rsk): click the carbon with the same tool                      | 6 atoms / 6 bonds; total C valence 6 including explicit H | Rejected; original 1 atom / 0 bonds; total C valence 4   |
-| [Cyclohexane](fixtures/regular-ring-safety/overlay-input.rsk): start at the first bond midpoint and drag to the ring center | 10 atoms / 11 bonds; 4 coincident pairs                   | Rejected; original 6 atoms / 6 bonds; 0 coincident pairs |
+| Input and action                                                                                                                                                                                                   | Base result                                               | Fixed result                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- | -------------------------------------------------------- |
+| [Four-bond carbon](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/saturated-input.rsk): click the center with the regular six-ring tool       | 10 atoms / 10 bonds; central C valence 6                  | Rejected; original 5 atoms / 4 bonds; C valence 4        |
+| [Explicit CH4](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/explicit-h-input.rsk): click the carbon with the same tool                      | 6 atoms / 6 bonds; total C valence 6 including explicit H | Rejected; original 1 atom / 0 bonds; total C valence 4   |
+| [Cyclohexane](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/overlay-input.rsk): start at the first bond midpoint and drag to the ring center | 10 atoms / 11 bonds; 4 coincident pairs                   | Rejected; original 6 atoms / 6 bonds; 0 coincident pairs |
 
 The defective saved graphs are retained as
-[saturated-before.rsk](fixtures/regular-ring-safety/saturated-before.rsk),
-[explicit-h-before.rsk](fixtures/regular-ring-safety/explicit-h-before.rsk), and
-[overlay-before.rsk](fixtures/regular-ring-safety/overlay-before.rsk).
+[saturated-before.rsk](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/saturated-before.rsk),
+[explicit-h-before.rsk](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/explicit-h-before.rsk), and
+[overlay-before.rsk](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/overlay-before.rsk).
 Fixed outputs equal the input documents byte-for-byte after serialization.
 
 Capture provenance:
@@ -91,8 +91,8 @@ overfilled carbon endpoints, and coincident vertices still reject atomically.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![Valid phosphorus attachment and bold double-bond fusion are both rejected without changing the two-atom inputs.](../images/regular-ring-safety/valid-attachments-before.png) | ![Phosphorus attachment succeeds with bond valence three, and bold double-bond fusion succeeds while retaining the original edge.](../images/regular-ring-safety/valid-attachments-after.png) |
 
-Inputs: [neutral phosphorus with one carbon bond](fixtures/regular-ring-safety/phosphorus-input.rsk)
-and [bold double bond](fixtures/regular-ring-safety/styled-input.rsk).
+Inputs: [neutral phosphorus with one carbon bond](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/phosphorus-input.rsk)
+and [bold double bond](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/styled-input.rsk).
 Run `cargo run --example regular_ring_safety_qa -- OUTPUT_DIRECTORY --valid-attachments`.
 The phosphorus gesture starts at `(0, 0)` toward `(80, 0)`; the double-bond gesture
 starts at its midpoint `(0, 0)` toward `(0, 80)`. Both use a regular six-ring and
@@ -124,8 +124,8 @@ retain the original attachment node, members, atoms, and bonds exactly.
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![A remote multi-center or variable attachment blocks phosphorus ring placement; both input graphs are unchanged.](../images/regular-ring-safety/semantic-attachments-before.png) | ![Both phosphorus rings are accepted with valence three while their semantic attachment nodes remain intact.](../images/regular-ring-safety/semantic-attachments-after.png) |
 
-Inputs: [multi-center targets](fixtures/regular-ring-safety/multi-center-input.rsk)
-and [variable targets](fixtures/regular-ring-safety/variable-input.rsk).
+Inputs: [multi-center targets](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/multi-center-input.rsk)
+and [variable targets](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety/variable-input.rsk).
 Reproduce with `cargo run --example regular_ring_safety_qa -- OUTPUT_DIRECTORY --semantic-attachments`.
 Both gestures start at P `(0, 0)` toward `(80, 0)`, regular six-ring,
 5-world-unit hit radius. Before, both reject at 5 atoms / 3 bonds, P valence 1,
@@ -203,3 +203,11 @@ the automated canvas regression below.
 Release caption: **Regular rings reject saturated/protected attachment sites and
 coincident duplicate vertices without changing your drawing.** Reuse the after
 image above with its alt text.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures/regular-ring-safety](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety) on the evidence archive branch.
+
+| Archived files                                                                                                                                                   | What they record                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [docs/changes/fixtures/regular-ring-safety](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/regular-ring-safety) | Native inputs, attachments, refused operations and history results for regular-ring checks. |

@@ -20,7 +20,7 @@ The before app uses the unchanged source of the latest published Nightly
 macOS arm64 build of `43e3d80dde9c9f1da1be04e2525182aea390cc75`.
 The signed after executable SHA-256 is
 `1cfb668bc9c42997863c3c83207b671cd914038bfb1059f524d5a087ef2cdd5a`.
-[The provenance receipt](../images/assistant-setup/provenance.json) records both
+[The provenance receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/assistant-setup/provenance.json) records both
 executables, the retained build-manifest hash, all image hashes and exact actions.
 All 1,065 retained source-content hashes match this reviewed source. Local
 workspace build inputs were refreshed before the exclusive Cargo build, and its
@@ -70,10 +70,10 @@ reference](../../assets/assistant/README.md):
    formula **C2H6O**, **3 atoms · 2 bonds**, canonical SMILES **CCO**. The filename
    is clean and Undo is disabled. Close without another Save or model request.
 
-The exact [saved native graph](../images/assistant-setup/guided-ethanol.rsk)
+The exact [saved native graph](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/assistant-setup/guided-ethanol.rsk)
 independently scores as `CCO`: three heavy atoms, two single bonds, neutral, one
 fragment, with no localized atom, hydrogen, bond, stereochemistry, fragment or
-abbreviation errors. [The score](../images/assistant-setup/guided-ethanol-score.json)
+abbreviation errors. [The score](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/assistant-setup/guided-ethanol-score.json)
 uses RDKit 2026.03.6 and the separately authored ethanol reference from #94's
 independent scorer. This saved-graph check is separate from the model's visible
 review statement. SaveAs, Undo/Redo, native UI reopening and clean quit were
@@ -110,7 +110,7 @@ All fixture captures are blank **100%**, **JACS / ACS**, **Arial 10 pt**, keyboa
 drawing on, **2560 × 1704 JPEG**. Active/inactive window-title appearance is
 preserved. Every foreground fixture app exited with code 0; process-name checks found
 no matching fixture child afterward. The [fixture guide](assistant-setup-fixture-review.md)
-and [hash/action receipt](../images/assistant-setup/provenance.json) separate these
+and [hash/action receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/assistant-setup/provenance.json) separate these
 simulated states from the real signed-in guided exercise.
 
 ## Validation and remaining desktop scope
@@ -171,3 +171,11 @@ Release caption: **Assistant guides Codex setup and a small image exercise, with
 clear upload guidance and an editable draft that waits for your Apply.** Reuse
 the Ready/local-example screenshots above; keep the known-example and model-review
 limits when describing them outside this review.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/images/assistant-setup](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/assistant-setup) on the evidence archive branch.
+
+| Archived files                                                                                                                       | What they record                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| [docs/images/assistant-setup](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/assistant-setup) | Executable/capture provenance, the guided ethanol native graph and its independent score. |

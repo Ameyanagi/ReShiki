@@ -23,7 +23,7 @@ modes and blobs, including the layout and Help source. This supports retaining
 the static layout evidence; it is not a claim that these images were captured
 on `783b154`. The changed keyboard behavior has a separate native retest.
 
-The [asset manifest](../images/ui-declutter/native-2026-10-03/manifest.json)
+The [asset manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/ui-declutter/native-2026-10-03/manifest.json)
 contains every image's original SHA-256, dimensions, fixture identity, source
 receipt and executable hash. All 31 images preserve their original JPEG or PNG
 bytes, without cropping, retouching or re-encoding. Historical [renderer
@@ -155,3 +155,11 @@ Help opening, gallery opening and loaded interactions need their separate
 Nightly timing disposition. The original 17 criteria remain in the
 [acceptance record](ui-declutter-validation.md); no issue or release is marked
 complete by this documentation update.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/images/ui-declutter](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/ui-declutter) on the evidence archive branch.
+
+| Archived files                                                                                                                 | What they record                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| [docs/images/ui-declutter](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/ui-declutter) | Capture/source provenance for native before/after layouts and actual renderer views. |

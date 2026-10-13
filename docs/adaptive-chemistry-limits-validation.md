@@ -21,13 +21,13 @@ bundles were preserved separately from the shared build target.
 
 The candidate executable SHA-256 is
 `23a492c762aedec1e8f8cf0133a48919c843776c31b01b8775fd7c0de31e0884`.
-Its [build receipt](fixtures/chemistry-limits/app-source-provenance.json) identifies
+Its [build receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/app-source-provenance.json) identifies
 all 15 compiled workspace artifacts as coming from
 this candidate worktree and rebuilt (`fresh: false`). An independent read-only
 audit verified all 1,063 retained source-file hashes and the executable hash
 before adding this documentation. Later documentation commits do not describe a
 new executable. The original receipts and captures are also retained outside
-the repository; the [independent audit](fixtures/chemistry-limits/independent-native-audit.json)
+the repository; the [independent audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/independent-native-audit.json)
 records the candidate, artifact count and fixture hashes.
 
 All six JPEGs below are unchanged copies of actual application captures, at
@@ -35,7 +35,7 @@ All six JPEGs below are unchanged copies of actual application captures, at
 UI. Both comparisons use JACS / ACS drawing style and Arial 10 pt. Raw images
 are reusable release-note material; the input and saved native files are
 included alongside the audit.
-The [capture receipt](fixtures/chemistry-limits/capture-provenance.json) records
+The [capture receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/capture-provenance.json) records
 the raw JPEG dimensions, hashes and capture-condition differences.
 
 A later CI follow-up moves only the worker's unchanged `cfg(test)` module below
@@ -54,7 +54,7 @@ the JPEG and native-file bytes are unchanged.
 
 ## 513 original atoms: former size rejection to 3D preview
 
-Open the same [native input](fixtures/chemistry-limits/geometry-explicit-h-513-3d.rsk)
+Open the same [native input](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/geometry-explicit-h-513-3d.rsk)
 in each preserved application, clear selection, and use **Cmd+Shift+D** on macOS
 (**Ctrl+Shift+D** on Windows/Linux) or **3D optimize…**. This command is existing;
 the change adds no shortcut. Keep the default MMFF94s force field. Both captures
@@ -73,10 +73,10 @@ than new embedding of an unseeded large molecule.
 
 The candidate's actual Properties panel shows **Paused · Existing 3D geometry**,
 MMFF94s and **−36.920 kcal/mol**. The retained
-[worker request](fixtures/chemistry-limits/packaged-app-worker-513-request.json)
+[worker request](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/packaged-app-worker-513-request.json)
 uses a 512-MiB allocator budget, capacity for 640 original atoms and 4,096
 coordinates, one conformer and 500 iterations. Its
-[response](fixtures/chemistry-limits/packaged-app-worker-513-response.json)
+[response](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/packaged-app-worker-513-response.json)
 contains 515 coordinates: the 513 originals plus two temporary hydrogens, both
 mapped to original zero-based atom index 170. It reports
 `energy = -36.9198750543448` and **`converged = false`**. A complete finite preview
@@ -84,7 +84,7 @@ is not a claim of convergence or a global minimum.
 
 The operator clicked **Tilt up** once, **Apply**, **Undo** once (restoring the
 original with a clean title), **Redo**, then **Save As** the
-[desktop native result](fixtures/chemistry-limits/geometry-explicit-h-513-desktop.rsk).
+[desktop native result](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/geometry-explicit-h-513-desktop.rsk).
 The following raw capture is after Redo and before Save As; its modified indicator
 and transient property calculation are visible. This separate interaction
 capture also changes orientation by one tilt, unlike the matched preview pair.
@@ -114,16 +114,16 @@ Independent native-file checks establish:
   [`finish_preserving`](../crates/model/src/chemistry/document/output.rs) and
   the [view projection](../crates/io/src/geometry/view.rs).
 
-The [second independent geometry check](fixtures/chemistry-limits/desktop-513-independent-check.json)
+The [second independent geometry check](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/desktop-513-independent-check.json)
 records the proper-rotation fit and normalized chemical fields. Native Cancel
 was **not** exercised during this desktop session; queued cancellation and
 reservation recovery were covered by the retained
-[model/worker control](fixtures/chemistry-limits/queue-control.log).
+[model/worker control](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/queue-control.log).
 
 ## Large fused-ring import: work-limit error to saved drawing
 
 Create a blank drawing with F8 on and use **File → Open** on the identical
-[SMILES file](fixtures/chemistry-limits/fused-repeat37.smi) in each application.
+[SMILES file](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/fused-repeat37.smi) in each application.
 The issue originally used the Import panel; this desktop comparison checks the
 file-open import path with the same generated input:
 
@@ -145,7 +145,7 @@ focus marker because F8 was on in both initial runs.
 
 One **Undo** returned to a completely blank drawing with a clean title. **Redo**
 restored the graph. The operator then turned F8 off and saved the
-[native result](fixtures/chemistry-limits/fused-repeat37-desktop.rsk). This clean
+[native result](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/fused-repeat37-desktop.rsk). This clean
 saved capture uses 10% zoom and has no keyboard focus marker:
 
 ![The imported fused-ring drawing after Undo, Redo and Save As, with keyboard drawing turned off.](images/chemistry-limits/limits-fused-import-saved.jpg)
@@ -173,7 +173,7 @@ They are not an allocator cap for the whole application or a cross-process
 reservation service. Unknown observations have bounded fallbacks; an observed
 exhausted memory constraint denies admission.
 
-The [retained sample](fixtures/chemistry-limits/final-resolved-profile.log) observed
+The [retained sample](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/final-resolved-profile.log) observed
 7,214,923,776 bytes of headroom and 3,533,459 lookup operations/s, resolving to
 512 MiB, an 84-second geometry deadline, a 10-second aromaticity deadline,
 35,334,590 work units and a 1,280-MiB aggregate reservation pool. This is a
@@ -190,7 +190,7 @@ two-ring rule above 300 fused rings remain unchanged. The repeat-37 regression
 uses 385,972 charged work units instead of exceeding the former 50-million-unit
 budget. Dense inputs can still exhaust their operational budget and return an
 error without a partially perceived graph. See the
-[retained reference log](fixtures/chemistry-limits/aromaticity-reference.log).
+[retained reference log](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits/aromaticity-reference.log).
 
 Seeded backend probes at 513 and 640 original carbon atoms cover Generate,
 Evaluate and pinned Relax under MMFF94, MMFF94s and UFF. The largest retained
@@ -208,3 +208,11 @@ runtime acceptance remains separate; cross-compilation and source inspection
 do not replace it. No new third-party material, external fixture dataset or
 dependency is bundled by this change; existing component notices remain in
 [NOTICE](../NOTICE).
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/fixtures/chemistry-limits](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits) on the evidence archive branch.
+
+| Archived files                                                                                                                             | What they record                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| [docs/fixtures/chemistry-limits](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/fixtures/chemistry-limits) | Source/capture provenance, 513-atom native geometry inputs and saves, fused-repeat import inputs, and worker/profile logs. |

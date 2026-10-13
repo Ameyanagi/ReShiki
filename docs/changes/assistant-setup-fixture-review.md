@@ -34,7 +34,7 @@ and make it executable with `chmod +x /absolute/path/to/fixture`. The signed-out
 broken and stalled fixtures use the system's available Python 3 through
 `/usr/bin/env`; this is a test dependency only. The setup child receives the normal
 Codex app-server arguments, which these scripts intentionally ignore.
-[The evidence receipt](../images/assistant-setup/provenance.json) pins the exact
+[The evidence receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/assistant-setup/provenance.json) pins the exact
 review fixture hashes. Exact documented scripts and four offline subprocess
 preflights were checked separately. Native interaction now confirms the following:
 
@@ -128,3 +128,11 @@ bytes, and record fixture name/hash, source commit, signed executable hash,
 platform, blank input, zoom, keyboard drawing state and exact actions. The linked
 review now records the observed native results without treating these fixtures
 as an actual account logout or removed Codex installation.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/images/assistant-setup](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/assistant-setup) on the evidence archive branch.
+
+| Archived files                                                                                                                       | What they record                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| [docs/images/assistant-setup](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/assistant-setup) | Exact fixture hashes and actions for the simulated Assistant setup states. |

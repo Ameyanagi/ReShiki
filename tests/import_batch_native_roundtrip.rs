@@ -7,12 +7,11 @@ use reshiki::{
 };
 
 const ALKANE_NATIVE: &[u8] =
-    include_bytes!("../docs/changes/evidence/mol-import-3d/candidate-alkane-3d-desktop.rsk");
-const EMF_NATIVE: &[u8] = include_bytes!(
-    "../docs/changes/fixtures/emf-import/windows-native-20261010/desktop-import-20261010.rsk"
-);
+    include_bytes!("fixtures/mol-import-3d/candidate-alkane-3d-desktop.rsk");
+const EMF_NATIVE: &[u8] =
+    include_bytes!("fixtures/emf-import/windows-native-20261010/desktop-import-20261010.rsk");
 const ORIGINAL_EMF: &[u8] =
-    include_bytes!("../docs/changes/fixtures/emf-import/windows-native-20261010/source.emf");
+    include_bytes!("fixtures/emf-import/windows-native-20261010/source.emf");
 const PROTECTED_H_MOL: &str = include_str!("fixtures/mol-import-3d/mixed-isotope-r-v2000.mol");
 
 fn atom(document: &Document, id: u64) -> anyhow::Result<&Atom> {

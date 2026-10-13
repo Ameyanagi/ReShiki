@@ -202,7 +202,7 @@ fn generated_union_picture_preflight_counts_emf_and_shared_png_once() {
     // Existing producer-owned fixture is read byte-identically. Do not rewrite
     // its old native version or invent a second EMF inventory.
     let imported = Document::from_json(include_bytes!(
-        "../../../../../docs/changes/fixtures/emf-import/retained-source.rsk"
+        "../../../../../tests/fixtures/emf-import/retained-source.rsk"
     ))
     .unwrap();
     let mut source = atom_text::apply(&chain(&["C", "C", "C"]), 2, "[CH2]1-3", Mode::Auto).unwrap();
