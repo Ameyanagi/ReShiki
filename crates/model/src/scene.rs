@@ -195,17 +195,57 @@ fn atom_label_runs_with_charge_layout(
                 .filter(|_| a.element == "*" || is_link)
         })
         .unwrap_or(&a.element);
+    let scripts = (internal_group.is_none()
+        && a.element == "*"
+        && a.display.variable.is_some()
+        && !doc.generic.owns_label(a.id))
+    .then(|| crate::typography::label_runs(label))
+    .filter(|runs| {
+        runs.iter()
+            .any(|(_, script)| *script != crate::typography::Script::Normal)
+    });
     let condensed = (internal_group.is_some() || a.element == "*" || is_link)
         .then(|| crate::atom_labels::condensed_label(label))
         .flatten();
+    let layout = scripts
+        .as_ref()
+        .filter(|_| condensed.is_none())
+        .map(|scripts| free_label_layout(label, scripts, 0..label.len(), &style));
+    let normal: String = scripts
+        .iter()
+        .flatten()
+        .filter(|(_, script)| *script == crate::typography::Script::Normal)
+        .filter_map(|(range, _)| label.get(range.clone()))
+        .collect();
+    let source = label;
     let label = condensed.map_or(label, |(core, _)| core);
-    let element_width = text_width(label, size);
+    let element_width = layout
+        .as_ref()
+        .map_or_else(|| text_width(label, size), |layout| layout.width);
     let origin = a.position.offset(
         -element_width / 2.0,
-        -crate::style::label_vertical_center(label, size, &style),
+        -crate::style::label_vertical_center(
+            if layout.is_some() { &normal } else { label },
+            size,
+            &style,
+        ),
     );
     let runs = if show_element {
-        vec![text(origin, label.to_string(), size)]
+        if let Some(layout) = layout {
+            layout
+                .fragments
+                .into_iter()
+                .map(|run| Primitive::Text {
+                    position: origin.offset(run.position.x, run.position.y),
+                    text: run.text,
+                    size: run.style.size(),
+                    color: run.style.color.rgb(),
+                    style: run.style,
+                })
+                .collect()
+        } else {
+            vec![text(origin, label.to_string(), size)]
+        }
     } else {
         vec![]
     };
@@ -229,8 +269,11 @@ fn atom_label_runs_with_charge_layout(
         right,
         mark_y,
     };
-    if let Some((_, suffix)) = condensed {
-        push_condensed_suffix(a, doc, frame, &mut cursor, suffix);
+    if let Some((core, suffix)) = condensed {
+        let layout = scripts
+            .as_ref()
+            .map(|scripts| free_label_layout(source, scripts, core.len()..source.len(), &style));
+        push_condensed_suffix(a, doc, frame, &mut cursor, suffix, layout);
     }
     if internal_group.is_some() {
         return cursor.runs;
@@ -251,6 +294,73 @@ fn atom_label_runs_with_charge_layout(
         place_automatic_charge(a, doc, frame, core, charge);
     }
     cursor.runs
+}
+
+/// Source ranges remain unchanged for exchange; only drawn charge glyphs are
+/// normalized here. Slicing full-label runs preserves the count exception.
+fn free_label_layout(
+    label: &str,
+    scripts: &[(std::ops::Range<usize>, crate::typography::Script)],
+    range: std::ops::Range<usize>,
+    style: &crate::typography::TextStyle,
+) -> crate::typography::Layout {
+    use crate::typography::{Script, TextFormat, TextSpan, TextStyle};
+    let style = TextStyle {
+        formula: false,
+        script: Script::Normal,
+        ..style.clone()
+    };
+    let mut drawn = String::new();
+    let mut spans = vec![];
+    for (source, script) in scripts {
+        let start = source.start.max(range.start);
+        let end = source.end.min(range.end);
+        let Some(content) = (start < end).then(|| label.get(start..end)).flatten() else {
+            continue;
+        };
+        let start = drawn.len();
+        for c in content.chars() {
+            if *script == Script::Superscript {
+                match c {
+                    ' ' => continue,
+                    '-' | '⁻' => drawn.push('−'),
+                    '⁺' => drawn.push('+'),
+                    _ => drawn.push(c),
+                }
+            } else {
+                drawn.push(c);
+            }
+        }
+        if *script != Script::Normal && start < drawn.len() {
+            spans.push(TextSpan {
+                start,
+                end: drawn.len(),
+                style: TextStyle {
+                    script: *script,
+                    ..style.clone()
+                },
+            });
+        }
+    }
+    let mut layout = crate::typography::layout(
+        &drawn,
+        &TextFormat {
+            style,
+            spans,
+            ..Default::default()
+        },
+    );
+    // layout reserves a superscript top margin; anchor the normal glyphs at
+    // the same vertical position as the previous unscripted atom label.
+    let normal_y = layout
+        .fragments
+        .iter()
+        .find(|run| run.style.script == Script::Normal)
+        .map_or(0., |run| run.position.y);
+    for run in &mut layout.fragments {
+        run.position.y -= normal_y;
+    }
+    layout
 }
 
 /// A contracted abbreviation: the whole label is laid out as formula text
@@ -356,6 +466,7 @@ fn push_condensed_suffix(
     frame: LabelFrame<'_>,
     cursor: &mut LabelCursor,
     suffix: &str,
+    layout: Option<crate::typography::Layout>,
 ) {
     let LabelFrame {
         style,
@@ -365,16 +476,18 @@ fn push_condensed_suffix(
         size,
         ..
     } = frame;
-    let layout = crate::typography::layout(
-        suffix,
-        &crate::typography::TextFormat {
-            style: crate::typography::TextStyle {
-                formula: true,
-                ..style.clone()
+    let layout = layout.unwrap_or_else(|| {
+        crate::typography::layout(
+            suffix,
+            &crate::typography::TextFormat {
+                style: crate::typography::TextStyle {
+                    formula: true,
+                    ..style.clone()
+                },
+                ..Default::default()
             },
-            ..Default::default()
-        },
-    );
+        )
+    });
     let mut parts: Vec<_> = layout
         .fragments
         .into_iter()

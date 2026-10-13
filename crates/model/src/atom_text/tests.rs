@@ -208,6 +208,63 @@ fn charged_elements_have_specific_guidance_and_text_mode_stays_literal() -> Resu
 }
 
 #[test]
+fn text_and_unrecognized_automatic_entries_show_scripts_without_assigning_chemistry()
+-> Result<(), String> {
+    let mut source = Document::default();
+    let left = source.add_atom("C", Point::default());
+    let id = source.add_atom("Pd", Point::new(42., 0.));
+    let right = source.add_atom("C", Point::new(84., 0.));
+    source.add_bond(left, id, 1, "plain");
+    source.add_bond(id, right, 1, "plain");
+    for (text, mode, core, suffix, superscript) in [
+        ("Pd2+", Mode::Text, "Pd", "2+", true),
+        ("M2+", Mode::Auto, "M", "2+", true),
+        ("R1", Mode::Auto, "R", "1", false),
+        ("L2", Mode::Auto, "L", "2", false),
+    ] {
+        let result = apply(&source, id, text, mode)?;
+        let atom = result.atom(id).ok_or("Atom")?;
+        assert_eq!(atom.element, "*", "{text}");
+        assert_eq!(atom.charge, 0, "{text}");
+        assert_eq!(atom.explicit_h, 0, "{text}");
+        assert!(atom.no_implicit, "{text}");
+        assert_eq!(atom.display.variable.as_deref(), Some(text));
+        assert_eq!(
+            atom.position,
+            source.atom(id).ok_or("Original atom")?.position
+        );
+        assert_eq!(result.bonds, source.bonds, "{text}");
+        assert!(result.abbreviations.is_empty(), "{text}");
+        assert!(result.generic.is_empty(), "{text}");
+        assert_eq!(entry(atom), text);
+        let runs: Vec<_> = crate::scene::primitives(&result)
+            .into_iter()
+            .filter_map(|primitive| match primitive {
+                crate::scene::Primitive::Text {
+                    text,
+                    size,
+                    position,
+                    ..
+                } => Some((text, size, position)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(runs.len(), 2, "{text}: {runs:?}");
+        let normal = runs.first().ok_or("Normal run")?;
+        let script = runs.last().ok_or("Script run")?;
+        assert_eq!(normal.0, core, "{text}");
+        assert_eq!(script.0, suffix, "{text}");
+        assert_eq!(normal.1, crate::style::DEFAULT.font_size(), "{text}");
+        assert!(script.1 < normal.1, "{text}");
+        assert_eq!(script.2.y < normal.2.y, superscript, "{text}");
+        if !superscript {
+            assert!(script.2.y > normal.2.y, "{text}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn charged_entry_preserves_implicit_hydrogens_and_imported_isotopes() -> Result<(), String> {
     for element in ["N", "Pt", "H"] {
         let mut source = Document::default();

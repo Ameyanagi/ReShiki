@@ -319,6 +319,68 @@ pub struct Layout {
     pub height: f32,
 }
 
+/// Formula-style free labels, with a final single digit interpreted as charge
+/// unless it directly follows a letter/bracket in a label with multiple tokens.
+/// Runs cover the unchanged source text, including an optional charge space.
+pub fn label_runs(text: &str) -> Vec<(Range<usize>, Script)> {
+    let mut charge = text.len();
+    let mut tail = text.char_indices().rev();
+    if let Some((sign, '+' | '-' | '−' | '⁺' | '⁻')) = tail.next() {
+        charge = sign;
+        if let Some((digit, '1'..='9')) = tail.next() {
+            let before = text.get(..digit).unwrap_or_default();
+            let count = before
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphabetic() || matches!(c, ')' | ']'))
+                && before.chars().filter(|c| c.is_uppercase()).count() > 1;
+            if !count {
+                charge = digit;
+            }
+        }
+        if text.get(..charge).is_some_and(|s| s.ends_with(' ')) {
+            charge -= 1;
+        }
+        if !text
+            .get(..charge)
+            .is_some_and(|s| s.chars().any(|c| !c.is_whitespace()))
+        {
+            charge = text.len();
+        }
+    }
+    if text
+        .get(..charge)
+        .is_some_and(|s| s.chars().any(char::is_whitespace))
+    {
+        return vec![(0..text.len(), Script::Normal)];
+    }
+    let mut runs: Vec<(Range<usize>, Script)> = vec![];
+    let mut previous = ' ';
+    let mut subscript = false;
+    for (start, c) in text.char_indices() {
+        let script = if start >= charge {
+            Script::Superscript
+        } else if c.is_ascii_digit()
+            && (previous.is_alphabetic() || matches!(previous, ')' | ']') || subscript)
+        {
+            Script::Subscript
+        } else {
+            Script::Normal
+        };
+        let end = start + c.len_utf8();
+        if let Some((range, last)) = runs.last_mut()
+            && *last == script
+        {
+            range.end = end;
+        } else {
+            runs.push((start..end, script));
+        }
+        previous = c;
+        subscript = script == Script::Subscript;
+    }
+    runs
+}
+
 /// One layout feeds canvas, hit testing, selection, SVG, PDF and PNG.
 pub fn layout(text: &str, format: &TextFormat) -> Layout {
     let mut lines: Vec<Vec<(char, TextStyle, f32)>> = vec![vec![]];
@@ -440,3 +502,6 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
         height: y,
     }
 }
+
+#[cfg(test)]
+mod tests;

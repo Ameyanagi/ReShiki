@@ -177,14 +177,42 @@ impl Writer<'_> {
                     .text_style
                     .clone()
                     .unwrap_or_else(|| doc.drawing_style.text_style());
-                // Preserve the same chemical typography as the visible label.
-                // This does not assign elements or expand a named dummy.
-                style.formula |= crate::atom_labels::condensed_label(label).is_some();
+                let runs = crate::typography::label_runs(label);
+                let condensed = crate::atom_labels::condensed_label(label).is_some();
+                // ChemDraw's Formula face draws an uncharged condensed label
+                // (CCl2, CO2Et) exactly like these runs, so it keeps that face.
+                let formula = condensed
+                    && runs
+                        .iter()
+                        .all(|(_, script)| *script != Script::Superscript);
+                let spans = if !formula && runs.iter().any(|(_, script)| *script != Script::Normal)
+                {
+                    // Explicit scripts preserve the visible typography without
+                    // asking ChemDraw to reinterpret counts or charge text.
+                    style.script = Script::Normal;
+                    style.formula = false;
+                    runs.into_iter()
+                        .map(|(range, script)| TextSpan {
+                            start: range.start,
+                            end: range.end,
+                            style: TextStyle {
+                                script,
+                                ..style.clone()
+                            },
+                        })
+                        .collect()
+                } else {
+                    // Labels without scripts and uncharged condensed labels keep
+                    // the existing export path, formula face included.
+                    style.formula |= condensed;
+                    Vec::new()
+                };
                 self.text(
                     node,
                     label,
                     &TextFormat {
                         style,
+                        spans,
                         ..Default::default()
                     },
                     [("p", self.position(a.position))],
@@ -747,3 +775,6 @@ impl Writer<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;
