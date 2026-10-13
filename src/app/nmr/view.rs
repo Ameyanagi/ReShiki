@@ -18,7 +18,8 @@ use reshiki::nmr::{self as engine, Nucleus, Report};
 use std::borrow::Cow;
 
 const FLOATING_TITLE: &str = "NMR prediction";
-const DOCKED_TITLE: &str = "NMR prediction";
+/// The section heading inside the Predict tab, which already names the task.
+const DOCKED_TITLE: &str = "NMR";
 /// The panel's line while nothing is predicted or calculating.
 const EMPTY_STATE: &str = "Select a molecule, or draw one, to predict its NMR shifts.";
 

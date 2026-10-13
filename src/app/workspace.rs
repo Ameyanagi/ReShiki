@@ -1548,7 +1548,7 @@ impl App {
             InspectorTab::Names => 340.,
             InspectorTab::DrawingStyle | InspectorTab::Reactions => 320.,
             InspectorTab::Properties
-            | InspectorTab::Nmr
+            | InspectorTab::Predict
             | InspectorTab::Import
             | InspectorTab::Export => 300.,
             _ => 256.,
@@ -1592,18 +1592,20 @@ impl App {
                 .style(panel)
                 .into();
         }
-        let mut tabs = row![].spacing(2);
+        let mut tabs = row![];
         for (label, tab) in [
             ("Properties", InspectorTab::Properties),
-            ("NMR", InspectorTab::Nmr),
+            ("Predict", InspectorTab::Predict),
             ("Templates", InspectorTab::Templates),
             ("Import", InspectorTab::Import),
             ("Export", InspectorTab::Export),
         ] {
             tabs = tabs.push(
-                // Compact labels leave all five tabs reachable at 256 px.
+                // Compact labels keep all five tabs inside the 256 px panels
+                // (about 238 px of tabs in 244 px); 11 px labels would need
+                // about 297 px, more than even the 300 px panels offer.
                 button(text(label).size(10))
-                    .padding([7, 4])
+                    .padding([7, 3])
                     .style(control(
                         self.inspector_tab == tab
                             || (tab == InspectorTab::Properties
@@ -1627,7 +1629,7 @@ impl App {
             InspectorTab::ThemeGenerator => self.theme_generator_panel(),
             InspectorTab::Properties if self.tab.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
-            InspectorTab::Nmr => self.nmr_inspector(),
+            InspectorTab::Predict => self.nmr_inspector(),
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
@@ -1636,7 +1638,7 @@ impl App {
             InspectorTab::Export => self.export_panel(),
         };
         let mut content = column![
-            container(tabs).padding([8, 8]),
+            container(tabs).padding([8, 6]),
             scrollable(container(body).padding([8, 16]))
                 .id("inspector-content")
                 .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))

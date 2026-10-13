@@ -328,7 +328,7 @@ fn composed_docked_nmr_tab_switch_restores_camera_and_reset_cancels_stretch() {
         (camera.center, camera.zoom)
     );
     assert!(app.inspector_open);
-    assert_eq!(app.inspector_tab, crate::app::InspectorTab::Nmr);
+    assert_eq!(app.inspector_tab, crate::app::InspectorTab::Predict);
     assert_eq!(app.tab.doc, original);
     assert!(!app.tab.history.can_undo());
     act(&mut app, Action::StretchDrag);
@@ -384,7 +384,7 @@ fn resetting_an_office_tab_preserves_docked_nmr_camera_and_cancels_reference_str
     act(&mut app, Action::StretchDrag);
     assert!(app.reference_stretch_active(1, 2));
     assert!(app.inspector_open);
-    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
 
     app.reset_tab();
 
@@ -423,7 +423,7 @@ fn resetting_an_office_tab_preserves_docked_nmr_camera_and_cancels_reference_str
 
     let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(original)));
     assert!(app.inspector_open);
-    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
     assert_eq!(
         (app.tab.camera.center, app.tab.camera.zoom),
         (camera.center, camera.zoom)

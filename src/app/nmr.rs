@@ -354,7 +354,7 @@ impl App {
         self.tab.nmr.dock.restore_dock = self.tab.nmr.open
             && self.tab.nmr.dock.docked
             && self.inspector_open
-            && self.inspector_tab == InspectorTab::Nmr;
+            && self.inspector_tab == InspectorTab::Predict;
         if self.tab.nmr.dock.restore_dock {
             self.place_nmr_inspector(false);
         }
@@ -373,12 +373,12 @@ impl App {
     fn place_nmr_inspector(&mut self, dock: bool) {
         let old_width = self.inspector_width();
         if dock {
-            if self.inspector_tab != InspectorTab::Nmr {
+            if self.inspector_tab != InspectorTab::Predict {
                 self.tab.nmr.dock.dock_return = Some((self.inspector_open, self.inspector_tab));
             }
             self.inspector_open = true;
-            self.inspector_tab = InspectorTab::Nmr;
-        } else if self.inspector_tab == InspectorTab::Nmr {
+            self.inspector_tab = InspectorTab::Predict;
+        } else if self.inspector_tab == InspectorTab::Predict {
             let (open, tab) = self
                 .tab
                 .nmr

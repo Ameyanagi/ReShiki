@@ -1330,7 +1330,7 @@ fn hybrid_docking_preserves_report_and_camera_and_restores_a_hidden_inspector() 
     let _ = app.nmr_action(Action::Move(iced::Point::new(180., 160.)));
     let _ = app.nmr_action(Action::Dock);
     assert!(app.inspector_open);
-    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
     app.set_viewport(Size::new(500., 600.));
     assert_eq!(app.tab.camera.zoom, camera.zoom);
     assert_eq!(app.tab.camera.center, camera.center);
@@ -1519,7 +1519,7 @@ async fn hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edi
             assert_eq!(app.tab.camera.center, camera.center);
             let _ = app.nmr_action(Action::Dock);
             ui.redraw(&mut app);
-            assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+            assert_eq!(app.inspector_tab, InspectorTab::Predict);
             assert_eq!(app.tab.camera.zoom, camera.zoom);
             assert_eq!(app.tab.camera.center, camera.center);
             let dock = ui.snapshot(&app);
@@ -1653,7 +1653,7 @@ async fn tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls() {
     let _ = app.update(Message::Tabs(super::super::tabs::Action::Select(docked_id)));
     ui.redraw(&mut app);
     assert!(app.inspector_open && app.tab.nmr.dock.docked);
-    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
     assert_eq!(app.viewport, dock_viewport);
     assert_eq!(app.tab.camera.zoom, dock_camera.zoom);
     assert_eq!(app.tab.camera.center, dock_camera.center);
@@ -1672,7 +1672,7 @@ async fn tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls() {
     let _ = app.update(Message::Tabs(super::super::tabs::Action::Select(docked_id)));
     ui.redraw(&mut app);
     assert!(app.tab.fit_to_view);
-    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
     assert_eq!(app.viewport, dock_viewport);
     assert_eq!(app.tab.camera.zoom, dock_camera.zoom);
     assert_eq!(app.tab.camera.center, dock_camera.center);
@@ -1686,7 +1686,7 @@ async fn tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls() {
     singleton(&ui.snapshot(&app));
     // Defensive view ownership also covers a stale global inspector choice.
     app.inspector_open = true;
-    app.inspector_tab = InspectorTab::Nmr;
+    app.inspector_tab = InspectorTab::Predict;
     singleton(&ui.snapshot(&app));
 }
 
@@ -3130,7 +3130,7 @@ fn empty_selection_is_a_neutral_empty_state_and_real_failures_stay_red() {
         app.status = STATUS_SENTINEL.into();
         app.error = true;
         app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
-        let _ = app.update(Message::Inspector(InspectorTab::Nmr));
+        let _ = app.update(Message::Inspector(InspectorTab::Predict));
         assert!(app.tab.nmr.open && app.tab.nmr.dock.docked);
         assert_eq!(app.status, EMPTY_STATUS);
         assert!(!app.error);
@@ -3204,7 +3204,7 @@ async fn docked_report_is_always_full_and_undock_restores_the_floating_collapse(
     // Nothing to predict: no Details or provenance, and Copy/Export stay off.
     let (mut empty, _) = App::new();
     ui.redraw(&mut empty);
-    let _ = empty.update(Message::Inspector(InspectorTab::Nmr));
+    let _ = empty.update(Message::Inspector(InspectorTab::Predict));
     ui.redraw(&mut empty);
     let snapshot = ui.snapshot(&empty);
     assert!(!snapshot.nodes.iter().any(|node| node.id == "nmr.method"));

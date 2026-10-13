@@ -124,7 +124,9 @@ pub enum InspectorTab {
     Pages,
     Abbreviations,
     Properties,
-    Nmr,
+    /// Slow, model-based estimates that come with a report; NMR is its one
+    /// section today. Instant calculated values stay in Properties.
+    Predict,
     Labels,
     Templates,
     Import,

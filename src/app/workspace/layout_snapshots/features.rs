@@ -211,7 +211,7 @@ fn nmr_docked(app: &mut App, _: &Driver<'_>) {
 
 /// The NMR inspector tab before any prediction.
 fn nmr_tab(app: &mut App, _: &Driver<'_>) {
-    let _ = app.update(Message::Inspector(InspectorTab::Nmr));
+    let _ = app.update(Message::Inspector(InspectorTab::Predict));
 }
 
 // Chemical names.
