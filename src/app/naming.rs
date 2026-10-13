@@ -1,8 +1,9 @@
 //! Per-document local name parsing, editable previews and rule-based name generation.
+use super::workspace::{accessible_checkbox, accessible_command, command, muted_text, section};
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use crate::canvas::{Camera, Edit, MoleculeCanvas, PreviewStyles, Tool};
-use iced::widget::{column, container, row, text};
+use iced::widget::{Space, column, container, row, scrollable, text};
 mod aliases;
 mod import_dock;
 pub use aliases::{AliasAction, AliasTarget};
@@ -16,6 +17,11 @@ use reshiki::{
     engine::{LocalEngine, Request},
     naming::{self, Record},
 };
+
+const PANEL_INTRO: &str = "Read and generate names on this computer.";
+const NAME_HINT: &str = "Ambiguous names and unsupported stereo are rejected.";
+const PREVIEW_HINT: &str = "Drag atoms to arrange the layout.";
+const STRUCTURE_HINT: &str = "Neutral C, N, O and halogen molecules, up to 64 heavy atoms.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ticket {
@@ -68,6 +74,8 @@ pub enum Action {
     CopyName,
     Caption,
     Alias(AliasAction),
+    /// Selects this molecule and opens the Chemical names inspector.
+    OpenPanel(Vec<u64>),
     Finished(Ticket, Box<Result<Outcome, naming::Error>>),
 }
 
@@ -478,6 +486,12 @@ impl App {
             }
             Action::Caption => self.insert_name_caption(None),
             Action::Alias(action) => return self.naming_alias_action(action),
+            Action::OpenPanel(atoms) => {
+                // Structure → name works on the selection.
+                let select = self.update(Message::Canvas(Edit::Select(atoms)));
+                let open = self.update(Message::Inspector(InspectorTab::Names));
+                return Task::batch([select, open]);
+            }
         }
         Task::none()
     }
@@ -610,131 +624,200 @@ impl App {
         }
     }
 
+    /// The Chemical names inspector, opened from a molecule's right-click
+    /// menu: a fixed header above the scrolling panel.
+    pub(super) fn naming_inspector(&self) -> Element<'_, Message> {
+        let header = column![
+            row![
+                command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
+                Space::new().width(Length::Fill),
+                accessible_command("naming.import", "Open SMILES import", "Import")
+                    .on_press(Message::Inspector(InspectorTab::Import)),
+            ]
+            .align_y(iced::Alignment::Center),
+            text("Chemical names").size(20),
+            text(PANEL_INTRO).size(11).style(muted_text),
+        ]
+        .spacing(8);
+        column![
+            container(header).padding([12, 16]),
+            scrollable(container(self.naming_panel()).padding(iced::Padding {
+                top: 0.,
+                right: 16.,
+                bottom: 16.,
+                left: 16.,
+            }))
+            .id("inspector-content")
+            .height(Length::Fill),
+        ]
+        .into()
+    }
+
+    /// Name → structure, then structure → name for the selection.
     pub(super) fn naming_panel(&self) -> Element<'_, Message> {
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
-        let mut content = column![
-            row![text("Chemical names").size(18), button("naming.import", "Open SMILES import", text("Import")).on_press(Message::Inspector(InspectorTab::Import))].spacing(12),
-            text("Local rule-based chemical naming.").size(12),
-            text("Name → structure").size(15),
-            text("Chemical names are parsed locally by ReShiki's Rust OPSIN backend; this name stays on your computer.").size(12),
-            text_input("naming.name", "Chemical name", "Chemical name, e.g. ethanol", &state.name).on_input(|s| Message::Naming(Action::Name(s))).on_submit(Message::Naming(Action::Resolve)).size(13),
-            text("Supported systematic and retained names produce an editable graph. Ambiguous names and unsupported stereo are rejected.").size(12),
-            button("naming.resolve", "Parse name locally", text("Parse name locally")).on_press_maybe((idle && !state.name.trim().is_empty()).then_some(Message::Naming(Action::Resolve))),
-        ].spacing(10);
+        let mut name = column![
+            section("NAME → STRUCTURE"),
+            text_input(
+                "naming.name",
+                "Chemical name",
+                "Chemical name, e.g. ethanol",
+                &state.name
+            )
+            .on_input(|s| Message::Naming(Action::Name(s)))
+            .on_submit(Message::Naming(Action::Resolve))
+            .size(13)
+            .padding(8),
+            text(NAME_HINT).size(11).style(muted_text),
+            accessible_command("naming.resolve", "Parse name locally", "Parse name")
+                .on_press_maybe(
+                    (idle && !state.name.trim().is_empty())
+                        .then_some(Message::Naming(Action::Resolve))
+                ),
+        ]
+        .spacing(10);
         if let Some(notice) = &state.notice {
-            content = content.push(
+            name = name.push(
                 text(&notice.detail)
                     .size(12)
                     .color(self.theme().palette().danger),
             );
         }
         if !idle {
-            content = content.push(text("Working…").size(12));
+            let mut working = row![text("Working…").size(12)]
+                .spacing(10)
+                .align_y(iced::Alignment::Center);
             if state.local_cancel.is_some() {
-                content = content.push(
-                    button(
-                        "naming.cancel",
-                        "Cancel local naming",
-                        text("Cancel local naming"),
-                    )
-                    .on_press(Message::Naming(Action::Cancel)),
+                working = working.push(
+                    accessible_command("naming.cancel", "Cancel local naming", "Cancel")
+                        .on_press(Message::Naming(Action::Cancel)),
                 );
             }
+            name = name.push(working);
         }
         if let Some(preview) = &state.preview {
-            content = content.push(text(preview.record.provenance.label()).size(12));
-            content = content.push(text(&preview.record.title).size(14));
-            let drawing: Element<'_, Edit> = canvas(preview::Preview(MoleculeCanvas::preview(
-                &preview.document,
-                &preview.selected,
-                preview.camera,
-                self.name_preview_styles(),
-            )))
-            .width(Length::Fill)
-            .height(180)
-            .into();
-            let drawing = drawing.map(|edit| Message::Naming(Action::PreviewEdit(edit)));
-            content = content.push(container(drawing).style(container::bordered_box));
-            content = content.push(text("Editable preview · Drag atoms to adjust layout. Edit SMILES to change chemistry.").size(12));
-            content = content.push(
-                text_input(
-                    "naming.smiles",
-                    "Editable preview SMILES",
-                    "Preview SMILES",
-                    &state.smiles,
-                )
-                .on_input(|s| Message::Naming(Action::Smiles(s)))
-                .size(12),
-            );
-            content = content.push(
-                row![
-                    button(
-                        "naming.update-preview",
-                        "Update preview",
-                        text("Update preview")
-                    )
+            name = name.push(self.naming_preview(preview));
+        }
+        let structure = column![
+            section("STRUCTURE → NAME"),
+            text(STRUCTURE_HINT).size(11).style(muted_text),
+            accessible_command(
+                "naming.generate",
+                "Generate selected structure name locally",
+                "Generate selected name",
+            )
+            .on_press_maybe(idle.then_some(Message::Naming(Action::Generate))),
+            self.generated_name_controls(),
+        ]
+        .spacing(10);
+        column![name, structure].spacing(24).into()
+    }
+
+    /// The parsed name's editable preview, its SMILES and the insertion.
+    fn naming_preview<'a>(&'a self, preview: &'a Preview) -> Element<'a, Message> {
+        let state = &self.tab.naming;
+        let idle = state.pending.is_none();
+        let needs_ack = !preview.record.warnings.is_empty() || !preview.warnings.is_empty();
+        let mut content = column![
+            text(preview.record.provenance.label())
+                .size(11)
+                .style(muted_text),
+            text(&preview.record.title).size(14),
+            self.name_preview_canvas(preview, 180.),
+            text(PREVIEW_HINT).size(11).style(muted_text),
+            text_input(
+                "naming.smiles",
+                "Editable preview SMILES",
+                "Preview SMILES",
+                &state.smiles,
+            )
+            .on_input(|s| Message::Naming(Action::Smiles(s)))
+            .size(12)
+            .padding(7),
+            row![
+                accessible_command("naming.update-preview", "Update preview", "Update")
                     .on_press_maybe(idle.then_some(Message::Naming(Action::UpdatePreview))),
-                    button(
-                        "naming.restore-preview",
-                        "Restore parsed structure",
-                        text("Restore parsed structure")
-                    )
-                    .on_press_maybe(idle.then_some(Message::Naming(Action::RestorePreview))),
-                ]
-                .spacing(6),
-            );
-            if preview.modified {
-                content = content.push(text("Edited chemical identity · The input name may no longer describe this preview.").size(12));
-            }
-            content = content.push(text(format!("{} atoms · {} bonds · Specified stereo is retained; unspecified stereo remains unspecified.", preview.document.atoms.len(), preview.document.bonds.len())).size(12));
-            let warnings = preview.record.warnings.iter().chain(&preview.warnings);
-            for warning in warnings {
-                content = content.push(text(warning).size(12));
-            }
-            let needs_ack = !preview.record.warnings.is_empty() || !preview.warnings.is_empty();
-            if needs_ack {
-                content = content.push(
-                    button(
-                        "naming.acknowledge",
-                        "I reviewed these warnings and the structure",
-                        text("I reviewed these warnings and the structure").size(12),
-                    )
-                    .checked(state.acknowledged)
-                    .style(super::workspace::control(state.acknowledged))
-                    .on_press(Message::Naming(Action::Acknowledge(!state.acknowledged))),
-                );
-            }
+                accessible_command(
+                    "naming.restore-preview",
+                    "Restore parsed structure",
+                    "Restore"
+                )
+                .on_press_maybe(idle.then_some(Message::Naming(Action::RestorePreview))),
+            ]
+            .spacing(4),
+        ]
+        .spacing(8);
+        if preview.modified {
             content = content.push(
+                text("Edited structure: the name may not match.")
+                    .size(11)
+                    .style(muted_text),
+            );
+        }
+        content = content.push(
+            text(format!(
+                "{} atoms · {} bonds",
+                preview.document.atoms.len(),
+                preview.document.bonds.len()
+            ))
+            .size(11)
+            .style(muted_text),
+        );
+        for warning in preview.record.warnings.iter().chain(&preview.warnings) {
+            content = content.push(text(warning).size(11));
+        }
+        if needs_ack {
+            content = content.push(accessible_checkbox(
+                "naming.acknowledge",
+                "I reviewed these warnings and the structure",
+                state.acknowledged,
+                Some(Message::Naming(Action::Acknowledge(!state.acknowledged))),
+            ));
+        }
+        let ready = idle
+            && self.naming_can_edit()
+            && (!needs_ack || state.acknowledged)
+            && state.smiles == preview.identity;
+        content
+            .push(row![
+                Space::new().width(Length::Fill),
+                // Right-aligned, as Insert is in the Import dock.
                 button(
                     "naming.insert",
                     "Insert editable structure",
-                    text("Insert editable structure"),
+                    text("Insert").size(12)
                 )
-                .on_press_maybe(
-                    (idle
-                        && self.naming_can_edit()
-                        && (!needs_ack || state.acknowledged)
-                        && state.smiles == preview.identity)
-                        .then_some(Message::Naming(Action::Insert)),
-                ),
-            );
-        }
-        content = content.push(text("Structure → name").size(15));
-        content = content.push(text("Local organic rules: neutral C/N/O/halogen molecules, up to 64 heavy atoms; supported chains, simple rings and functional groups. Isotopes, charged graphs and unsupported stereo contexts are rejected.").size(12));
-        content = content.push(text("Select a complete connected molecule. The local rule-based generator accepts a name only after local OPSIN reconstructs the exact graph, isotope, charge and specified stereo. Unsupported structures return an explanation.").size(12));
-        content = content.push(
-            button(
-                "naming.generate",
-                "Generate selected structure name locally",
-                text("Generate name locally"),
-            )
-            .on_press_maybe(idle.then_some(Message::Naming(Action::Generate))),
-        );
-        content = content.push(self.generated_name_controls());
-        content.into()
+                .padding([6, 12])
+                .style(crate::appearance::primary)
+                .on_press_maybe(ready.then_some(Message::Naming(Action::Insert))),
+            ])
+            .into()
+    }
+
+    /// The bordered, editable preview canvas shared by this panel and the
+    /// Import dock, which differ only in its height.
+    fn name_preview_canvas<'a>(
+        &'a self,
+        preview: &'a Preview,
+        height: f32,
+    ) -> Element<'a, Message> {
+        let drawing: Element<'a, Edit> = canvas(preview::Preview(MoleculeCanvas::preview(
+            &preview.document,
+            &preview.selected,
+            preview.camera,
+            self.name_preview_styles(),
+        )))
+        .width(Length::Fill)
+        .height(height)
+        .into();
+        container(drawing.map(|edit| Message::Naming(Action::PreviewEdit(edit))))
+            .style(container::bordered_box)
+            .into()
     }
 }
 
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;

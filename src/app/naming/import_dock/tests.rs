@@ -14,11 +14,8 @@ fn record() -> Record {
     Record {
         title: "ethanol".into(),
         systematic_name: None,
-        canonical_smiles: "CCO".into(),
-        smiles: "CCO".into(),
-        synonyms: vec![],
-        warnings: vec![],
         provenance: Provenance::OpsinRust,
+        ..super::super::test_support::record("CCO")
     }
 }
 

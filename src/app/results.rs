@@ -517,7 +517,8 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::DetailsOpen(..)
                 | Action::CopyName
                 | Action::Caption
-                | Action::Alias(..) => None,
+                | Action::Alias(..)
+                | Action::OpenPanel(..) => None,
             }
         }
         Message::ThemeFile(action) => {

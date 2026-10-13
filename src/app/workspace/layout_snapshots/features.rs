@@ -257,26 +257,38 @@ fn name_import_details(app: &mut App, _: &Driver<'_>) {
     settle(app, Message::Naming(naming::Action::Generate));
 }
 
-/// The Names inspector with a parsed name's editable preview.
-fn names_panel(app: &mut App, _: &Driver<'_>) {
-    names(app);
-}
-
-/// The Names inspector scrolled to the generated name of the selection.
-fn names_generated(app: &mut App, d: &Driver<'_>) {
-    names(app);
-    d.scroll_inspector(-30.);
-}
-
-fn names(app: &mut App) {
+/// The entry point of the Chemical names inspector: the right-click menu
+/// on a selected molecule.
+fn names_menu(app: &mut App, _: &Driver<'_>) {
     ethyl_acetate(app);
-    let _ = app.update(Message::Inspector(InspectorTab::Names));
-    let _ = app.update(Message::Naming(naming::Action::Name(
-        "ethyl acetate".into(),
-    )));
+    let atom = app.tab.doc.atoms[2].id;
+    let selected = app.tab.selected.clone();
+    context_menu(app, iced::Point::new(520., 110.), selected, vec![atom]);
+}
+
+/// The Chemical names inspector with a parsed name's editable preview.
+fn names_panel(app: &mut App, d: &Driver<'_>) {
+    names(app, d);
     for action in [naming::Action::Resolve, naming::Action::Generate] {
         settle(app, Message::Naming(action));
     }
+}
+
+/// The Chemical names inspector with the generated name of the selection.
+/// Without a parsed preview it fits unscrolled; a wheel over the preview
+/// would zoom the preview instead of scrolling the panel.
+fn names_generated(app: &mut App, d: &Driver<'_>) {
+    names(app, d);
+    settle(app, Message::Naming(naming::Action::Generate));
+}
+
+/// Opens the inspector from the molecule menu and enters a name.
+fn names(app: &mut App, d: &Driver<'_>) {
+    names_menu(app, d);
+    d.activate(app, "menu-chemical-names");
+    let _ = app.update(Message::Naming(naming::Action::Name(
+        "ethyl acetate".into(),
+    )));
 }
 
 /// The right-click menu on one atom: Show chemical name, atom maps, Join.
@@ -701,7 +713,7 @@ fn assistant_example(app: &mut App, d: &Driver<'_>) {
     let _ = app.update(Message::Assistant(assistant::Action::ImageExample));
 }
 
-pub(in crate::app::workspace) const STATES: [(&str, Scene); 35] = [
+pub(in crate::app::workspace) const STATES: [(&str, Scene); 36] = [
     ("nmr-proton", nmr_proton),
     ("nmr-carbon-labels", nmr_carbon_labels),
     ("nmr-label-menu", nmr_label_menu),
@@ -710,6 +722,7 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 35] = [
     ("name-import-preview", name_import_preview),
     ("name-import-inserted", name_import_inserted),
     ("name-import-details", name_import_details),
+    ("names-menu", names_menu),
     ("names-panel", names_panel),
     ("names-generated", names_generated),
     ("molecule-menu", molecule_menu),

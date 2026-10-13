@@ -40,6 +40,19 @@ const SHORTCUT_GAP: f32 = 12.;
 const SCROLLBAR_WIDTH: f32 = 10.;
 const SCROLLBAR_GAP: f32 = 4.;
 
+/// A menu row's accessibility id: the command's own id where it has one,
+/// otherwise its page and position. Keyboard focus moves by the same id.
+fn item_id(page: Page, index: usize, action: &Action) -> String {
+    let named = match action {
+        Action::Run(message) => match message.as_ref() {
+            Message::Naming(super::naming::Action::OpenPanel(_)) => Some("menu-chemical-names"),
+            message => super::workspace::keyboard_control_id(message),
+        },
+        _ => None,
+    };
+    named.map_or_else(|| format!("menu-{page:?}-{index}"), str::to_owned)
+}
+
 /// The shortcut shown right-aligned beside a command.
 fn shortcut(action: &Action) -> Option<String> {
     match action {
@@ -283,11 +296,16 @@ impl App {
                     "Show chemical name"
                 },
                 Message::Naming(if shown {
-                    super::naming::Action::HideMoleculeName(target)
+                    super::naming::Action::HideMoleculeName(target.clone())
                 } else {
-                    super::naming::Action::ShowMoleculeName(target)
+                    super::naming::Action::ShowMoleculeName(target.clone())
                 }),
                 self.naming_can_show_molecule(),
+            ));
+            entries.push(command(
+                "Chemical names…",
+                Message::Naming(super::naming::Action::OpenPanel(target)),
+                true,
             ));
         }
         entries
@@ -787,9 +805,10 @@ impl App {
             && menu.keyboard
             && let Some((level, index)) = menu.focused
             && let Some(page) = menu.page_at(level)
+            && let Some(Entry::Item { action, .. }) = self.context_entries(page).get(index)
         {
             return iced::advanced::widget::operate(reshiki::accessibility::FocusControl::new(
-                format!("menu-{page:?}-{index}"),
+                item_id(page, index, action),
             ))
             .discard()
             .chain(Task::done(Message::Accessibility(
@@ -891,13 +910,7 @@ impl App {
                                 .children
                                 .get(level)
                                 .is_some_and(|child| child.anchor == index));
-                    let id = match &action {
-                        Action::Run(message) => {
-                            super::workspace::keyboard_control_id(message).map(str::to_owned)
-                        }
-                        _ => None,
-                    }
-                    .unwrap_or_else(|| format!("menu-{page:?}-{index}"));
+                    let id = item_id(page, index, &action);
                     let item = reshiki::accessibility::button(id, accessible_name, content)
                         .padding([6, 10])
                         .width(Length::Fill)

@@ -70,6 +70,71 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
 }
 
 #[test]
+fn chemical_names_entry_selects_the_clicked_molecule_and_opens_its_inspector() -> Result<(), String>
+{
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::document::Document::from_json(include_bytes!(
+        "../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
+    ))?;
+    let mut first: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    let source = app.tab.doc.clone();
+    reshiki::editing::append(&mut app.tab.doc, &source, World::new(250., 0.));
+    let before = app.tab.doc.clone();
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![first[1]],
+        hit: vec![first[1]],
+    });
+    let entries = app.context_entries(Page::Main);
+    let index = entries
+        .iter()
+        .position(|entry| {
+            matches!(
+                entry,
+                Entry::Item {
+                    label: "Chemical names…",
+                    ..
+                }
+            )
+        })
+        .ok_or("Missing Chemical names…")?;
+    let Some(Entry::Item {
+        action, enabled, ..
+    }) = entries.get(index)
+    else {
+        return Err("Chemical names… is not a command".into());
+    };
+    assert!(enabled);
+    assert_eq!(item_id(Page::Main, index, action), "menu-chemical-names");
+    // It follows Show chemical name, which keeps its positional id.
+    let Some(Entry::Item {
+        label: "Show chemical name",
+        action: show,
+        ..
+    }) = entries.get(index - 1)
+    else {
+        return Err("Chemical names… does not follow Show chemical name".into());
+    };
+    assert_eq!(
+        item_id(Page::Main, index - 1, show),
+        format!("menu-Main-{}", index - 1)
+    );
+    run_item(&mut app, Page::Main, "Chemical names…")?;
+    assert!(app.context_menu.is_none());
+    assert_eq!(app.inspector_tab, InspectorTab::Names);
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_width(), 300.);
+    let mut selected = app.tab.selected.clone();
+    selected.sort_unstable();
+    first.sort_unstable();
+    assert_eq!(selected, first);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    Ok(())
+}
+
+#[test]
 fn copy_as_menu_names_scope_and_explains_disabled_reactions() -> Result<(), String> {
     use reshiki::clipboard::CopyFormat;
     let (mut app, _) = App::new();

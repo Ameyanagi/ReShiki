@@ -1559,11 +1559,11 @@ impl App {
         }
         match self.inspector_tab {
             InspectorTab::Assistant => 380.,
-            InspectorTab::Names => 340.,
             InspectorTab::DrawingStyle | InspectorTab::Reactions => 320.,
             InspectorTab::Properties
             | InspectorTab::Predict
             | InspectorTab::Import
+            | InspectorTab::Names
             | InspectorTab::Export => 300.,
             _ => 256.,
         }
@@ -1581,30 +1581,30 @@ impl App {
         }
     }
 
+    /// The inspector's panel at the current tab's width.
+    fn inspector_frame<'a>(
+        &self,
+        content: impl Into<Element<'a, Message>>,
+    ) -> Element<'a, Message> {
+        container(content)
+            .width(self.inspector_width())
+            .height(Length::Fill)
+            .style(panel)
+            .into()
+    }
+
     fn inspector(&self) -> Element<'_, Message> {
         if self.inspector_tab == InspectorTab::Names {
-            return container(scrollable(container(self.naming_panel()).padding([12, 16])))
-                .width(self.inspector_width())
-                .height(Length::Fill)
-                .style(panel)
-                .into();
+            return self.inspector_frame(self.naming_inspector());
         }
         if self.inspector_tab == InspectorTab::Reactions {
             return self.reactions_inspector();
         }
         if self.inspector_tab == InspectorTab::DrawingStyle {
-            return container(self.drawing_style_panel())
-                .width(self.inspector_width())
-                .height(Length::Fill)
-                .style(panel)
-                .into();
+            return self.inspector_frame(self.drawing_style_panel());
         }
         if self.inspector_tab == InspectorTab::Assistant {
-            return container(self.assistant_panel())
-                .width(self.inspector_width())
-                .height(Length::Fill)
-                .style(panel)
-                .into();
+            return self.inspector_frame(self.assistant_panel());
         }
         let mut tabs = row![];
         for (label, tab) in [
@@ -1662,11 +1662,7 @@ impl App {
         if self.inspector_tab == InspectorTab::Properties && self.tab.optimization.is_some() {
             content = content.push(container(self.optimization_footer()).padding([10, 16]));
         }
-        container(content)
-            .width(self.inspector_width())
-            .height(Length::Fill)
-            .style(panel)
-            .into()
+        self.inspector_frame(content)
     }
 
     fn templates_panel(&self) -> Element<'_, Message> {

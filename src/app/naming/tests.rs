@@ -1,17 +1,5 @@
+use super::test_support::record;
 use super::*;
-use reshiki::naming::Provenance;
-
-fn record(smiles: &str) -> Record {
-    Record {
-        title: "ethan-1-ol".into(),
-        systematic_name: Some("ethan-1-ol".into()),
-        canonical_smiles: naming::canonical_smiles(smiles).unwrap(),
-        smiles: smiles.into(),
-        synonyms: vec![],
-        warnings: vec![],
-        provenance: Provenance::LocalRules,
-    }
-}
 
 #[test]
 fn native_open_preserves_pending_naming_in_an_empty_source_tab() {

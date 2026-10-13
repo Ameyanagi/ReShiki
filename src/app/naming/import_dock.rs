@@ -297,20 +297,10 @@ impl App {
     }
 
     fn compact_name_preview<'a>(&'a self, preview: &'a Preview) -> Element<'a, Message> {
-        let drawing: Element<'_, Edit> = canvas(preview::Preview(MoleculeCanvas::preview(
-            &preview.document,
-            &preview.selected,
-            preview.camera,
-            self.name_preview_styles(),
-        )))
-        .width(Length::Fill)
-        .height(160)
-        .into();
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
         let mut content = column![
-            container(drawing.map(|edit| Message::Naming(Action::PreviewEdit(edit))))
-                .style(container::bordered_box),
+            self.name_preview_canvas(preview, 160.),
             text(format!(
                 "{} atoms · {} bonds",
                 preview.document.atoms.len(),

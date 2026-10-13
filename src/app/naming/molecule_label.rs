@@ -1,5 +1,5 @@
 //! Direct molecule-context naming, using the same bounded local worker and
-//! native identity gate as the existing Names inspector.
+//! native identity gate as the Chemical names inspector.
 use super::*;
 
 pub(super) fn target(doc: &Document, hit: &[u64], selected: &[u64]) -> Option<Vec<u64>> {

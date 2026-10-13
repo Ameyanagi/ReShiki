@@ -1,27 +1,8 @@
+use super::super::test_support::{ethanol, record};
 use super::*;
-use reshiki::naming::Provenance;
-
-fn ethanol() -> Document {
-    Document::from_json(include_bytes!(
-        "../../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
-    ))
-    .unwrap()
-}
 
 fn atom_ids(doc: &Document) -> Vec<u64> {
     doc.atoms.iter().map(|atom| atom.id).collect()
-}
-
-fn record() -> Record {
-    Record {
-        title: "ethan-1-ol".into(),
-        systematic_name: Some("ethan-1-ol".into()),
-        canonical_smiles: "CCO".into(),
-        smiles: "CCO".into(),
-        synonyms: vec![],
-        warnings: vec![],
-        provenance: Provenance::LocalRules,
-    }
 }
 
 #[test]
@@ -62,7 +43,7 @@ fn caption_completion_keeps_original_target_when_selection_changes() {
     let ticket = app.tab.naming.pending.unwrap().ticket();
     let _ = app.naming_action(Action::Finished(
         ticket,
-        Box::new(Ok(Outcome::Structure(record()))),
+        Box::new(Ok(Outcome::Structure(record("CCO")))),
     ));
     assert_eq!(app.tab.doc.molecule_names[0].atoms, first);
     assert_eq!(app.tab.doc.annotations.len(), 1);
@@ -85,7 +66,7 @@ fn stale_or_unsupported_completion_changes_no_drawing_or_history() {
         let before = app.tab.doc.clone();
         let result = if stale {
             app.tab.revision += 1;
-            Ok(Outcome::Structure(record()))
+            Ok(Outcome::Structure(record("CCO")))
         } else {
             Err(naming::Error::Rejected(
                 "Unsupported fused-ring parent in local organic rules".into(),
