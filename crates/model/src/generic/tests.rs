@@ -147,6 +147,203 @@ fn pet_tight_bracket_expands_drawings() {
 }
 
 #[test]
+fn pet_ring_bond_selection_requires_whole_molecules() {
+    let source = hetero_repeat(HeteroRepeat::Pet, false);
+    let before = source.clone();
+    let bond = source.bonds.iter().find(|b| b.a == 7 && b.b == 8).unwrap();
+    let result = prepare_expansion_input(&source, &[bond.a, bond.b], Limits::default())
+        .and_then(expand_prepared);
+    assert_eq!(
+        result.unwrap_err(),
+        "Select whole molecules, or clear the selection to expand the whole drawing"
+    );
+    assert_eq!(source, before);
+}
+
+#[test]
+fn pet_whole_molecule_selection_expands_prepared_drawing() {
+    let source = hetero_repeat(HeteroRepeat::Pet, false);
+    let selected = source.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
+    let input = prepare_expansion_input(&source, &selected, Limits::default()).unwrap();
+    let prepared = expand_prepared(input).unwrap();
+    assert_eq!(prepared.count(), 1);
+    assert_hetero_product(&prepared.take().unwrap(), HeteroRepeat::Pet);
+}
+
+#[test]
+fn pet_clicked_component_expands_without_unrelated_molecules() {
+    let mut source = hetero_repeat(HeteroRepeat::Pet, false);
+    let a = source.add_atom("C", Point::new(700., 0.));
+    let b = source.add_atom("O", Point::new(742., 0.));
+    source.add_bond(a, b, 1, "plain");
+    let before = source.clone();
+    let input = prepare_component_expansion_input(&source, &[7, 8], Limits::default()).unwrap();
+    assert_eq!(input.source, hetero_repeat(HeteroRepeat::Pet, false));
+    let prepared = expand_prepared(input).unwrap();
+    assert_eq!(prepared.count(), 1);
+    assert_hetero_product(&prepared.take().unwrap(), HeteroRepeat::Pet);
+    assert_eq!(source, before);
+}
+
+#[test]
+fn carbon_repeat_complete_selection_avoids_redundant_work_reservation() {
+    let mut source = chain(&["C"; 14]);
+    source.generic.repeats.push(unit(
+        (2..14).collect(),
+        Crossing {
+            inside: 2,
+            outside: 1,
+        },
+        Crossing {
+            inside: 13,
+            outside: 14,
+        },
+        3,
+        3,
+    ));
+    let whole = prepare_expansion_input(&source, &source.all_ids(), Limits::default()).unwrap();
+    let clicked = prepare_component_expansion_input(&source, &[2, 3], Limits::default()).unwrap();
+    let drawing = prepare_expansion_input(&source, &[], Limits::default()).unwrap();
+    for input in [whole, clicked, drawing] {
+        let prepared = expand_prepared(input).unwrap();
+        assert_eq!(prepared.count(), 1);
+        assert_eq!(prepared.take().unwrap().atoms.len(), 38);
+    }
+    assert_eq!(
+        prepare_expansion_input(&source, &[2, 3], Limits::default())
+            .err()
+            .unwrap(),
+        "Select whole molecules, or clear the selection to expand the whole drawing"
+    );
+}
+
+#[test]
+fn clicked_repeat_scope_includes_grouped_caption_brackets_and_attachments() {
+    let mut source = hetero_repeat(HeteroRepeat::Pet, false);
+    let bracket = source.generic.repeats[0].bracket.unwrap();
+    let caption = source.next_id();
+    source.annotations.push(crate::document::Annotation {
+        id: caption,
+        position: Point::new(150., 100.),
+        text: "PET".into(),
+        format: Default::default(),
+    });
+    let left = source.add_atom("C", Point::new(700., 0.));
+    let right = source.add_atom("C", Point::new(742., 0.));
+    source.add_bond(left, right, 1, "plain");
+    let attachment = crate::attachments::add(
+        &mut source,
+        &[left, right],
+        crate::attachments::Kind::MultiCenter,
+    )
+    .unwrap();
+    let ligand = source.add_atom("O", Point::new(721., -80.));
+    source.add_bond(attachment, ligand, 1, "plain");
+    source
+        .group_selection(&[7, bracket, caption, attachment])
+        .unwrap();
+    let expected = source.clone();
+    let unrelated = source.add_atom("C", Point::new(1000., 0.));
+    let before = source.clone();
+    let input = prepare_component_expansion_input(&source, &[7, 8], Limits::default()).unwrap();
+    assert_eq!(input.source, expected);
+    assert!(input.source.atom(unrelated).is_none());
+    assert_eq!(source, before);
+}
+
+#[test]
+fn huge_repeat_still_exceeds_shared_work_limit() {
+    let mut source = chain(&["C"; 4]);
+    source.generic.repeats.push(unit(
+        vec![2, 3],
+        Crossing {
+            inside: 2,
+            outside: 1,
+        },
+        Crossing {
+            inside: 3,
+            outside: 4,
+        },
+        1000,
+        1000,
+    ));
+    let before = source.clone();
+    for input in [
+        prepare_expansion_input(&source, &[], Limits::default()),
+        prepare_component_expansion_input(&source, &[2, 3], Limits::default()),
+    ] {
+        assert_eq!(
+            input.and_then(expand_prepared).unwrap_err(),
+            "Generic expansion exceeds the work limit"
+        );
+    }
+    assert_eq!(source, before);
+}
+
+#[test]
+fn generic_native_group_validation_is_prepaid_for_every_expansion_scope() {
+    use super::probe::{self, Stage};
+    use crate::{document::Annotation, grouping::Group};
+
+    let mut source = atom_text::apply(&chain(&["*", "C"]), 1, "[C,N]", Mode::Auto).unwrap();
+    for i in 0..2000_u64 {
+        let first = 3 + i * 3;
+        for id in [first, first + 1] {
+            source.annotations.push(Annotation {
+                id,
+                position: Point::new(0., 100.),
+                text: "a".into(),
+                format: Default::default(),
+            });
+        }
+        source.groups.push(Group {
+            id: first + 2,
+            members: vec![first, first + 1],
+            integral: false,
+        });
+    }
+    // The source is valid, and this probe observes the actual native pair scan.
+    probe::reset();
+    source.validate().unwrap();
+    assert_eq!(probe::count(Stage::GroupPairs), 1);
+    let before = source.clone();
+    let full = source.all_ids();
+    for selected in [&[][..], full.as_slice(), &[1, 2][..]] {
+        probe::reset();
+        let result =
+            prepare_expansion_input(&source, selected, Limits::default()).and_then(expand_prepared);
+        assert_eq!(
+            result.unwrap_err(),
+            "Generic expansion exceeds the work limit"
+        );
+        assert_eq!(probe::count(Stage::Validate), 0, "scope: {selected:?}");
+        assert_eq!(probe::count(Stage::GroupPairs), 0, "scope: {selected:?}");
+    }
+    probe::reset();
+    assert_eq!(
+        prepare_component_expansion_input(&source, &[1], Limits::default())
+            .and_then(expand_prepared)
+            .unwrap_err(),
+        "Generic expansion exceeds the work limit"
+    );
+    assert_eq!(probe::count(Stage::Validate), 0);
+    assert_eq!(probe::count(Stage::GroupPairs), 0);
+    // The direct chemistry and drawing entry points share the same admission.
+    for drawing in [false, true] {
+        probe::reset();
+        let error = if drawing {
+            expand_drawings(&source, Limits::default()).unwrap_err()
+        } else {
+            expand(&source, Limits::default()).unwrap_err()
+        };
+        assert_eq!(error, "Generic expansion exceeds the work limit");
+        assert_eq!(probe::count(Stage::Validate), 0);
+        assert_eq!(probe::count(Stage::GroupPairs), 0);
+    }
+    assert_eq!(source, before);
+}
+
+#[test]
 fn polyether_tight_bracket_expands_chemistry() {
     check_hetero_expansion(HeteroRepeat::Polyether, false, false);
 }

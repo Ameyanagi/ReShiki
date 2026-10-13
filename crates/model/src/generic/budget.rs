@@ -40,6 +40,144 @@ pub(super) fn drawing_size(doc: &Document) -> usize {
         )
 }
 
+/// Shared native-validation admission. Lengths are read without traversing
+/// members, and every counting pass is paid before it starts. Candidate and
+/// accumulated documents use their actual grown metadata, never source counts.
+pub(super) fn charge_validation(doc: &Document, work: &mut Work) -> Result<(), String> {
+    let records = doc
+        .atoms
+        .len()
+        .saturating_add(doc.bonds.len())
+        .saturating_add(doc.annotations.len())
+        .saturating_add(doc.graphics.len())
+        .saturating_add(doc.groups.len())
+        .saturating_add(doc.abbreviations.len())
+        .saturating_add(doc.molecule_names.len())
+        .saturating_add(doc.reactions.len())
+        .saturating_add(doc.arrows.len())
+        .saturating_add(doc.ring_fills.len())
+        .saturating_add(doc.depth_appearance.len())
+        .saturating_add(doc.generic.alternatives.len())
+        .saturating_add(doc.generic.links.len())
+        .saturating_add(doc.generic.repeats.len());
+    work.charge(records)?;
+    let atoms = doc.atoms.len();
+    let bonds = doc.bonds.len();
+    let mut cost = records.saturating_mul(16);
+    let mut group_members = 0usize;
+    for group in &doc.groups {
+        group_members = group_members.saturating_add(group.members.len());
+    }
+    // validate_groups compares every member with the other group's vector.
+    // The total squared safely covers all unordered pairs and empty groups.
+    cost = cost.saturating_add(group_members.saturating_mul(group_members));
+    for atom in &doc.atoms {
+        cost = cost
+            .saturating_add(atom.centroid.len().saturating_mul(atoms.saturating_add(1)))
+            .saturating_add(atom.marks.len())
+            .saturating_add(atom.display.label_scripts.len())
+            .saturating_add(atom.stereo.as_ref().map_or(0, |s| s.neighbors.len()));
+        if atom.display.variable.is_some() {
+            cost = cost.saturating_add(doc.generic.links.len());
+        }
+        if atom.attachment.is_some() {
+            cost = cost.saturating_add(
+                bonds.saturating_mul(atom.centroid.len().saturating_add(atoms).saturating_add(1)),
+            );
+        }
+    }
+    for reaction in &doc.reactions {
+        let participants = reaction
+            .reactants
+            .len()
+            .saturating_add(reaction.products.len())
+            .saturating_add(reaction.agents.len());
+        work.charge(participants)?;
+        cost = cost
+            .saturating_add(doc.arrows.len())
+            .saturating_add(
+                reaction
+                    .annotations
+                    .len()
+                    .saturating_mul(doc.annotations.len().saturating_add(1)),
+            )
+            .saturating_add(participants.saturating_mul(bonds.saturating_add(1)));
+        for participant in reaction
+            .reactants
+            .iter()
+            .chain(&reaction.products)
+            .chain(&reaction.agents)
+        {
+            // doc.atom scans atoms; each bond probes both participant endpoints.
+            cost = cost.saturating_add(
+                participant.atoms.len().saturating_mul(
+                    atoms
+                        .saturating_add(bonds.saturating_mul(2))
+                        .saturating_add(1),
+                ),
+            );
+        }
+    }
+    for name in &doc.molecule_names {
+        cost = cost
+            .saturating_add(doc.annotations.len())
+            .saturating_add(name.atoms.len().saturating_mul(atoms.saturating_add(1)));
+    }
+    for abbreviation in &doc.abbreviations {
+        // Connectivity is indexed once; each abbreviation's boundary check
+        // and reachability can revisit every bond, with hashed member lookups.
+        cost = cost
+            .saturating_add(bonds.saturating_mul(4))
+            .saturating_add(abbreviation.members.len().saturating_mul(4));
+    }
+    for arrow in &doc.arrows {
+        let ends = usize::from(arrow.start_anchor.is_some())
+            .saturating_add(usize::from(arrow.end_anchor.is_some()));
+        cost = cost.saturating_add(
+            ends.saturating_mul(
+                atoms
+                    .saturating_mul(2)
+                    .saturating_add(bonds)
+                    .saturating_add(12),
+            ),
+        );
+    }
+    for repeat in &doc.generic.repeats {
+        cost = cost
+            .saturating_add(bonds)
+            .saturating_add(repeat.members.len().saturating_mul(4))
+            .saturating_add(repeat.bracket_objects.len())
+            .saturating_add(repeat.crossings.len().saturating_mul(4))
+            .saturating_add(
+                repeat
+                    .crossing_brackets
+                    .len()
+                    .saturating_mul(repeat.bracket_objects.len().saturating_add(1)),
+            );
+    }
+    for scope in &doc.depth_appearance {
+        // BTreeMap membership is logarithmic; length squared is a safe bound
+        // for member/key visits, including malformed maps before refusal.
+        let members = scope.atoms.len();
+        cost = cost
+            .saturating_add(members.saturating_mul(members))
+            .saturating_add(scope.weights.len())
+            .saturating_add(scope.overrides.len())
+            .saturating_add(scope.rear_weights.len())
+            .saturating_add(scope.rear_overrides.len());
+    }
+    for fill in &doc.ring_fills {
+        cost = cost.saturating_add(fill.atoms.len().saturating_mul(8));
+    }
+    work.charge(cost)
+}
+
+pub(super) fn validate(doc: &Document, work: &mut Work) -> Result<(), String> {
+    charge_validation(doc, work)?;
+    super::probe::enter(super::probe::Stage::Validate);
+    doc.validate()
+}
+
 /// Owned presentation buffers are copied by every materializer, not merely
 /// measured after enumeration. Inspect lengths without serializing or cloning.
 pub(super) struct Presentation {
@@ -375,6 +513,43 @@ impl Presentation {
         work: &mut Work,
     ) -> Result<(), String> {
         let size = drawing_size(source);
+        let native_refs = source
+            .atoms
+            .iter()
+            .map(|a| a.centroid.len())
+            .chain(source.groups.iter().map(|g| g.members.len()))
+            .chain(source.abbreviations.iter().map(|g| g.members.len()))
+            .chain(source.molecule_names.iter().map(|n| n.atoms.len()))
+            .chain(source.ring_fills.iter().map(|g| g.atoms.len()))
+            .chain(source.depth_appearance.iter().map(|g| g.atoms.len()))
+            .chain(source.reactions.iter().map(|r| {
+                r.annotations.len().saturating_add(1).saturating_add(
+                    r.reactants
+                        .iter()
+                        .chain(&r.products)
+                        .chain(&r.agents)
+                        .map(|p| p.atoms.len().saturating_add(1))
+                        .sum::<usize>(),
+                )
+            }))
+            .fold(0usize, usize::saturating_add);
+        let lookups = native_refs
+            .saturating_add(self.attached_ends.saturating_mul(3))
+            .saturating_add(source.generic.links.len())
+            .saturating_add(source.generic.repeats.len())
+            .saturating_add(
+                source
+                    .generic
+                    .repeats
+                    .iter()
+                    .map(|r| r.bracket_objects.len())
+                    .sum::<usize>(),
+            )
+            .saturating_add(if source.atoms.iter().any(|a| a.attachment.is_some()) {
+                source.bonds.len()
+            } else {
+                0
+            });
         let refs = source
             .generic
             .repeats
@@ -384,25 +559,20 @@ impl Presentation {
                     .len()
                     .saturating_add(r.crossings.len().saturating_mul(2))
                     .saturating_add(r.bracket_objects.len())
+                    .saturating_add(r.crossing_brackets.len())
             })
-            .chain(source.atoms.iter().map(|a| a.centroid.len()))
-            .chain(source.groups.iter().map(|g| g.members.len()))
-            .chain(source.abbreviations.iter().map(|g| g.members.len()))
-            .fold(0usize, usize::saturating_add);
+            .fold(native_refs, usize::saturating_add);
         // Pay owned snapshot buffers before the first clone. Selected inputs
         // additionally pay bounded closure/validation/dependency scans. The
         // strict selection never calls delete, identity, anchor reconciliation
-        // or automatic rear-weight materialization.
+        // or automatic rear-weight materialization. Repeat closure/boundary
+        // scans run per definition, not once per atom, bond or selected ID.
         let selection = if selected.is_empty() {
             0
         } else {
             size.saturating_add(refs)
                 .saturating_add(selected.len())
-                .saturating_mul(
-                    size.saturating_add(refs)
-                        .saturating_add(selected.len())
-                        .saturating_add(32),
-                )
+                .saturating_mul(lookups.saturating_add(32))
                 .saturating_mul(32)
         };
         work.charge(self.copy.saturating_mul(2).saturating_add(selection))

@@ -45,7 +45,7 @@ The unit also takes the side atoms on its backbone, such as the C=O oxygen of a 
 ## Expand
 
 1. Clear the selection to expand the whole drawing. To expand only some molecules, select them completely, with their captions, groups and attachments.
-2. Choose **Expand generic structures** in the **Generic structure** section of **Properties**. When the selection is part of a generic structure, the right-click menu offers the same command.
+2. Choose **Expand generic structures** in the **Generic structure** section of **Properties**. You can also right-click a generic molecule and choose the command to expand that whole molecule, including its brackets, captions, groups and attachments.
 3. All products open together in one new tab, **Generic expansion**. Duplicates are removed.
 
 Undo in the new tab removes all products. The source tab and its Undo history do not change. Save the source and the products as separate `.rsk` files.
@@ -57,6 +57,6 @@ Undo in the new tab removes all products. The source tab and its Undo history do
 
 ## Limits
 
-Expansion stops if it would create more than 500 structures or 100,000 atoms, counted before duplicates are removed, or if it needs too much work. If any product fails, nothing is added. `R` and `X` placeholders, `[NOT …]` lists, `n` counts and the **Head to head** and **Mixed / unknown** patterns are kept but not expanded. Molecular properties, identifiers, NMR prediction and joining wait until you expand; ordinary molecules in the same drawing still work. A crowded or ambiguous placement rejects the whole expansion and keeps the source.
+Expansion stops if it would create more than 500 structures or 100,000 atoms, counted before duplicates are removed, or if it needs too much work. Long repeat units can reach the work limit: PET, for example, expands up to 5 units. If any product fails, nothing is added. `R` and `X` placeholders, `[NOT …]` lists, `n` counts and the **Head to head** and **Mixed / unknown** patterns are kept but not expanded. Molecular properties, identifiers, NMR prediction and joining wait until you expand; ordinary molecules in the same drawing still work. A crowded or ambiguous placement rejects the whole expansion and keeps the source.
 
 [Implementation notes and the full list of limits →](/developer/generic-structures/)

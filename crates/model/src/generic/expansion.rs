@@ -207,15 +207,15 @@ fn admit_structure(
     work: &mut Work,
 ) -> Result<HashSet<u64>, String> {
     total_limit(source, limits)?;
+    budget::validate(source, work)?;
     let source_size = drawing_size(source);
-    // Validation scans repeat boundaries and attachment target lists. Debit a
-    // conservative bound before validation or catalog construction starts.
+    // Native validation has its own shared admission above. Debit remaining
+    // definition/dependency scans before catalog construction starts.
     let definitions = source.generic.alternatives.len()
         + source.generic.links.len()
         + source.generic.repeats.len()
         + source.atoms.iter().map(|a| a.centroid.len()).sum::<usize>();
     work.charge(source_size.saturating_mul(definitions.saturating_add(10)))?;
-    source.validate()?;
     if let Mode::Drawing(_) = mode {
         references::protect_references(source, work)?;
     }
@@ -463,7 +463,7 @@ fn enumerate(
             for i in 0..count {
                 probe::enter(Stage::Materialize);
                 let mut candidate = materialize(&product, &site, i, fragments, mode, work)?;
-                candidate.validate()?;
+                budget::validate(&candidate, work)?;
                 atoms = atoms.saturating_add(candidate.atoms.len());
                 if atoms > limits.max_total_atoms {
                     return Err("Generic expansion exceeds the total atom limit".into());
@@ -493,7 +493,10 @@ fn require_concrete(product: &Document) -> Result<(), String> {
 }
 
 /// Final chemistry preparation shared by both modes; its Molecule is reused.
-fn prepare_product(product: &Document) -> Result<Molecule, String> {
+fn prepare_product(product: &Document, work: &mut Work) -> Result<Molecule, String> {
+    // Chemistry preparation calls Document::validate internally.
+    budget::charge_validation(product, work)?;
+    probe::enter(Stage::Validate);
     probe::enter(Stage::Prepare);
     crate::chemistry::document::prepare(product)
         .map_err(|e| format!("Expanded structure has invalid chemistry: {e}"))
@@ -504,7 +507,7 @@ fn finish_chemistry(products: Vec<Document>, work: &mut Work) -> Result<Vec<Docu
     let mut unique = symmetry::Deduplicator::default();
     for product in products {
         require_concrete(&product)?;
-        let molecule = prepare_product(&product)?;
+        let molecule = prepare_product(&product, work)?;
         if !unique.insert(&molecule, work)? {
             continue;
         }
@@ -527,7 +530,7 @@ fn finish_tiles(
         // Index/copy/ink/clearance work is reserved before the existing final
         // preparation. Its Molecule is reused; no cleanup/identity/rewedge call.
         let plan = depiction::Plan::new(&product, anchors, work)?;
-        let molecule = prepare_product(&product)?;
+        let molecule = prepare_product(&product, work)?;
         if !unique.insert(&molecule, work)? {
             continue;
         }

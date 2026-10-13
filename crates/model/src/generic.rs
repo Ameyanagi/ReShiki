@@ -18,8 +18,9 @@ mod ink;
 pub mod limits;
 mod materialize;
 mod prepared;
-mod probe;
+pub(crate) mod probe;
 mod references;
+mod selection;
 mod symmetry;
 mod variable;
 
@@ -28,7 +29,11 @@ pub use definitions::{prune, selection, validate};
 pub use expansion::{expand, expand_drawings};
 pub use guards::{atom_references, component_intersects, intersects, touches};
 pub use materialize::alternative_fragment;
-pub use prepared::{ExpansionInput, PreparedExpansion, expand_prepared, prepare_expansion_input};
+pub use prepared::{
+    ExpansionInput, PreparedExpansion, expand_prepared, prepare_component_expansion_input,
+    prepare_expansion_input,
+};
+pub use selection::component_scope;
 
 use budget::{Work, drawing_size};
 #[cfg(test)]

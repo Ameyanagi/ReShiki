@@ -24,6 +24,7 @@ const FIELD_WIDTH: f32 = 140.;
 #[derive(Debug, Clone)]
 pub enum Action {
     Expand,
+    ExpandComponent(Vec<u64>),
     Expanded {
         source: TabId,
         epoch: u64,
@@ -115,17 +116,27 @@ impl App {
                 self.status = "Repeating-unit definition cleared".into();
                 self.error = false;
             }
-            Action::Expand => {
+            Action::Expand | Action::ExpandComponent(_) => {
                 if self.generic.pending.is_some() {
                     return Task::none();
                 }
                 // Borrow first: no input payload is copied or scheduled until
                 // its shared presentation/selection allowance has been paid.
-                let input = match reshiki::generic::prepare_expansion_input(
-                    &self.tab.doc,
-                    &self.tab.selected,
-                    Limits::default(),
-                ) {
+                let prepared_input = match action {
+                    Action::ExpandComponent(hit) => {
+                        reshiki::generic::prepare_component_expansion_input(
+                            &self.tab.doc,
+                            &hit,
+                            Limits::default(),
+                        )
+                    }
+                    _ => reshiki::generic::prepare_expansion_input(
+                        &self.tab.doc,
+                        &self.tab.selected,
+                        Limits::default(),
+                    ),
+                };
+                let input = match prepared_input {
                     Ok(input) => input,
                     Err(error) => return self.generic_failed(error),
                 };

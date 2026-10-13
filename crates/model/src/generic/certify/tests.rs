@@ -59,7 +59,7 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
         generic::prepare_expansion_input(&source, &[2], Limits::default())
             .err()
             .unwrap()
-            .contains("complete selected")
+            .contains("Select whole molecules")
     );
     let mut oversized = source.clone();
     oversized.annotations.push(crate::document::Annotation {
@@ -75,7 +75,7 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
             .unwrap()
             .contains("work limit")
     );
-    assert_eq!(probe::counts(), [0; 5]);
+    assert!(probe::counts().iter().take(5).all(|count| *count == 0));
     let replay = prepared.clone();
     let bounds = prepared.bounds();
     assert!(!format!("{prepared:?}").contains("oxidane"));

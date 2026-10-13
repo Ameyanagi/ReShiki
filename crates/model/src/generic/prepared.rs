@@ -71,18 +71,86 @@ pub fn prepare_expansion_input(
     selected: &[u64],
     limits: Limits,
 ) -> Result<ExpansionInput, String> {
+    prepare_input(source, selected, limits, false)
+}
+/// Expand the complete molecular component and native dependencies under a click.
+pub fn prepare_component_expansion_input(
+    source: &Document,
+    hit: &[u64],
+    limits: Limits,
+) -> Result<ExpansionInput, String> {
+    prepare_input(source, hit, limits, true)
+}
+fn prepare_input(
+    source: &Document,
+    selected: &[u64],
+    limits: Limits,
+    connected: bool,
+) -> Result<ExpansionInput, String> {
     limits.check(source, Some(selected))?;
     let mut work = Work::new(limits.max_work);
-    let presentation = budget::Presentation::inspect(source, &mut work)?;
-    presentation.charge_input(source, selected, &mut work)?;
-    let owned = if selected.is_empty() {
+    let scope;
+    let selected = if connected {
+        scope = super::selection::component(source, selected, &mut work)?;
+        &scope
+    } else {
+        if !selected.is_empty() {
+            super::selection::check_molecules(source, selected, &mut work)?;
+        }
+        selected
+    };
+    let chosen = if selected.is_empty() || connected {
+        selected.to_vec()
+    } else {
+        // Refuse the repeat and drawing-size metadata passes from O(1) lengths.
+        work.charge(
+            source
+                .generic
+                .repeats
+                .len()
+                .saturating_add(source.groups.len())
+                .saturating_add(source.abbreviations.len()),
+        )?;
+        probe::enter(Stage::RepeatCount);
+        let refs = source
+            .generic
+            .repeats
+            .iter()
+            .map(|r| {
+                r.members
+                    .len()
+                    .saturating_add(r.crossings.len())
+                    .saturating_add(r.bracket_objects.len())
+                    .saturating_add(1)
+            })
+            .fold(0usize, usize::saturating_add);
+        work.charge(
+            drawing_size(source)
+                .saturating_add(refs)
+                .saturating_add(selected.len())
+                .saturating_mul(source.generic.repeats.len().saturating_add(1))
+                .saturating_mul(32),
+        )?;
+        crate::generic::selection(source, selected)
+    };
+    let ids: std::collections::HashSet<_> = chosen.iter().copied().collect();
+    let whole_drawing = selected.is_empty() || source.object_ids().all(|id| ids.contains(&id));
+    let mut presentation = budget::Presentation::inspect(source, &mut work)?;
+    presentation.charge_input(
+        source,
+        if whole_drawing { &[] } else { selected },
+        &mut work,
+    )?;
+    let owned = if whole_drawing {
         probe::enter(Stage::Snapshot);
         source.clone()
     } else {
-        // Whole source validation is covered by the selected-input reservation.
-        source.validate()?;
+        // Native validation uses the same remaining allowance before extraction.
+        budget::validate(source, &mut work)?;
         probe::enter(Stage::Snapshot);
-        crate::editing::preserved_expansion_selection(source, selected)?
+        let owned = crate::editing::preserved_expansion_selection(source, selected)?;
+        presentation = budget::Presentation::inspect(&owned, &mut work)?;
+        owned
     };
     Ok(ExpansionInput {
         source: owned,
@@ -175,7 +243,7 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
                 &presentation,
                 &mut work,
             )?;
-            part.validate()?;
+            budget::validate(&part, &mut work)?;
             if bounds.0.x >= x && bounds.0.y >= y {
                 accepted = Some((part, bounds));
                 break;
@@ -192,7 +260,7 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
         }
         let (part, (a, b)) = accepted.ok_or("Missing stable measured expansion tile")?;
         crate::editing::extend_append_part(&mut result, part);
-        result.validate()?;
+        budget::validate(&result, &mut work)?;
         grid = Some(grid.map_or((a, b), |(lo, hi)| {
             (
                 Point::new(lo.x.min(a.x), lo.y.min(a.y)),

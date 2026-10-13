@@ -1,25 +1,32 @@
 //! Test-only stage counters; entering a stage is a no-op in production builds.
 
 #[derive(Clone, Copy, Debug)]
-pub(super) enum Stage {
+pub(crate) enum Stage {
     Prepare,
     Solver,
     Measure,
     Materialize,
     Snapshot,
+    ScopeCount,
+    ScopeParticipants,
+    ScopeTraverse,
+    RepeatCount,
+    Validate,
+    #[cfg(test)]
+    GroupPairs,
 }
 
 #[cfg(not(test))]
 #[inline]
-pub(super) fn enter(_stage: Stage) {}
+pub(crate) fn enter(_stage: Stage) {}
 
 #[cfg(test)]
 thread_local! {
-    static STAGES: std::cell::Cell<[usize; 5]> = const { std::cell::Cell::new([0; 5]) };
+    static STAGES: std::cell::Cell<[usize; 11]> = const { std::cell::Cell::new([0; 11]) };
 }
 
 #[cfg(test)]
-pub(super) fn enter(stage: Stage) {
+pub(crate) fn enter(stage: Stage) {
     STAGES.with(|s| {
         let mut counts = s.get();
         counts[stage as usize] += 1;
@@ -29,11 +36,11 @@ pub(super) fn enter(stage: Stage) {
 
 #[cfg(test)]
 pub(super) fn reset() {
-    STAGES.with(|s| s.set([0; 5]));
+    STAGES.with(|s| s.set([0; 11]));
 }
 
 #[cfg(test)]
-pub(super) fn counts() -> [usize; 5] {
+pub(super) fn counts() -> [usize; 11] {
     STAGES.with(std::cell::Cell::get)
 }
 

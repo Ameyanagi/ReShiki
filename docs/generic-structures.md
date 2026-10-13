@@ -156,7 +156,9 @@ caps merely because it might collapse to fewer unique products. Copies,
 chemistry, layout, display measurement and deduplication share the same work
 allowance. Invalid valence or a work-limit error in any combination rejects the
 whole request; no partial output is installed. Reopened files start with fresh
-history.
+history. Drawing layout is the largest cost: a PET unit (14 heavy atoms with
+its C=O groups and ring) expands as a drawing up to n = 5, and a short
+polyester unit up to n = 10, before the work allowance is spent.
 
 Expansion also rejects unresolved nicknames, nested/overlapping or directly
 adjacent units, ambiguous ladder/copolymer connections and specified affected

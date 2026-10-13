@@ -87,7 +87,7 @@ fn generated_union_rejects_changed_component_dependencies_atomically() {
                 .unwrap_err()
                 .contains(expected)
         );
-        assert_eq!(probe::counts(), [0; 5]);
+        assert!(probe::counts().iter().take(5).all(|count| *count == 0));
         assert_eq!(source, before);
     }
 }

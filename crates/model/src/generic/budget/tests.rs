@@ -30,7 +30,7 @@ fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_wo
         .unwrap_err()
         .contains("work limit")
     );
-    assert_eq!(probe::counts(), [0; 5]);
+    assert!(probe::counts().iter().take(5).all(|count| *count == 0));
     let anchors = HashSet::from([2]);
     let candidate = raw(&source, 1);
     let mut probe = Work::new(usize::MAX);
@@ -38,7 +38,7 @@ fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_wo
     let reserved = usize::MAX - probe.remaining;
     let mut short = Work::new(reserved - 1);
     assert!(Plan::new(&candidate, &anchors, &mut short).is_err());
-    assert_eq!(probe::counts(), [0; 5]);
+    assert!(probe::counts().iter().take(5).all(|count| *count == 0));
     // A consumed allowance is not restored for the next product. This budget
     // funds one complete product but cannot even reserve the next product.
     let molecule = crate::chemistry::document::prepare(&candidate).unwrap();
@@ -59,6 +59,7 @@ fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_wo
     // third product's preparation reservation. Earlier completions stay private.
     let mut upfront = Work::new(usize::MAX);
     let presentation = Presentation::inspect(&source, &mut upfront).unwrap();
+    charge_validation(&source, &mut upfront).unwrap();
     protect_references(&source, &mut upfront).unwrap();
     upfront
         .charge(drawing_size(&source) * 11 + 9 * 3 * 20)
@@ -66,10 +67,15 @@ fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_wo
     presentation
         .reserve(&source, 5, 9, 4 * 2 + 3 * 8, &mut upfront)
         .unwrap();
+    // All candidates validate during enumeration, before finishing any tile.
+    for count in 1..=3 {
+        charge_validation(&raw(&source, count), &mut upfront).unwrap();
+    }
     let upfront = usize::MAX - upfront.remaining;
     let mut completed = Work::new(Limits::default().max_work);
     for count in 1..=2 {
         let mut product = raw(&source, count);
+        charge_validation(&product, &mut completed).unwrap();
         let molecule = crate::chemistry::document::prepare(&product).unwrap();
         completed
             .charge(product.atoms.len() * std::mem::size_of::<u32>())
@@ -151,9 +157,8 @@ fn generated_presentation_preflight_rejects_large_cartesian_annotations_before_m
             .unwrap_err()
             .contains("work limit")
     );
-    assert_eq!(
-        probe::counts(),
-        [0; 5],
+    assert!(
+        probe::counts().iter().take(5).all(|count| *count == 0),
         "reject before seed cloning, materialization, preparation, depiction or ink measurement"
     );
     assert_eq!(source, before);
@@ -251,7 +256,7 @@ fn generated_union_picture_preflight_counts_emf_and_shared_png_once() {
         .unwrap_err()
         .contains("work limit")
     );
-    assert_eq!(probe::counts(), [0; 5]);
+    assert!(probe::counts().iter().take(5).all(|count| *count == 0));
     assert!(
         generic::prepare_expansion_input(
             &source,
@@ -265,7 +270,7 @@ fn generated_union_picture_preflight_counts_emf_and_shared_png_once() {
         .unwrap()
         .contains("work limit")
     );
-    assert_eq!(probe::counts(), [0; 5]);
+    assert!(probe::counts().iter().take(5).all(|count| *count == 0));
     assert_eq!(source, before);
     for g in &source.graphics {
         assert_eq!(g.picture.as_ref().unwrap().png(), picture.png());

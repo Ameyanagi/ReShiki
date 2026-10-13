@@ -342,6 +342,7 @@ fn completion(message: &Message) -> Option<Completion> {
             match action {
                 Action::Expanded { .. } => Some(Completion::Generic),
                 Action::Expand
+                | Action::ExpandComponent(..)
                 | Action::RepeatLabel(..)
                 | Action::Pattern(..)
                 | Action::DefineRepeat(..)

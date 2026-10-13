@@ -173,6 +173,20 @@ fn expand_generic_structures_follows_the_target_and_waits_for_a_running_expansio
     );
     app.tab.selected = vec![carbon];
     assert_eq!(enabled(&app, Page::Main, EXPAND), Some(true));
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![carbon],
+        hit: vec![ring_atom],
+    });
+    assert_eq!(enabled(&app, Page::Main, EXPAND), None);
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![ring_atom],
+        hit: vec![carbon],
+    });
+    assert_eq!(enabled(&app, Page::Main, EXPAND), Some(true));
+    app.context_menu = None;
+    app.tab.selected = vec![carbon];
     let outline = outline(&app, Page::Main);
     assert!(
         outline
@@ -193,6 +207,389 @@ fn expand_generic_structures_follows_the_target_and_waits_for_a_running_expansio
     );
     assert!(!app.generic_expand_enabled());
     Ok(())
+}
+
+fn pet_repeat() -> reshiki::document::Document {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind};
+    let mut doc = reshiki::document::Document::default();
+    let chain: Vec<_> = ["C", "O", "C", "C", "O", "C"]
+        .into_iter()
+        .enumerate()
+        .map(|(i, element)| doc.add_atom(element, World::new(i as f32 * 42., 0.)))
+        .collect();
+    for pair in chain.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    let ring: Vec<_> = [
+        (252., 0.),
+        (273., -36.),
+        (315., -36.),
+        (336., 0.),
+        (315., 36.),
+        (273., 36.),
+    ]
+    .into_iter()
+    .map(|(x, y)| doc.add_atom("C", World::new(x, y)))
+    .collect();
+    doc.add_bond(chain[5], ring[0], 1, "plain");
+    for i in 0..6 {
+        doc.add_bond(
+            ring[i],
+            ring[(i + 1) % 6],
+            if i % 2 == 0 { 2 } else { 1 },
+            "plain",
+        );
+    }
+    let carbonyl = doc.add_atom("C", World::new(378., 0.));
+    doc.add_bond(ring[3], carbonyl, 1, "plain");
+    let end = doc.add_atom("C", World::new(420., 0.));
+    doc.add_bond(carbonyl, end, 1, "plain");
+    for (carbon, x) in [(chain[5], 210.), (carbonyl, 378.)] {
+        let oxygen = doc.add_atom("O", World::new(x, -42.));
+        doc.add_bond(carbon, oxygen, 2, "plain");
+    }
+    let bracket = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        bracket,
+        GraphicKind::Brackets,
+        World::new(20., -10.),
+        World::new(398., 10.),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    ));
+    reshiki::generic::define_bracket(
+        &doc,
+        bracket,
+        "3",
+        reshiki::generic::RepeatPattern::HeadToTail,
+    )
+    .unwrap()
+}
+
+fn add_caption(doc: &mut reshiki::document::Document, text: &str) -> u64 {
+    let id = doc.next_id();
+    doc.annotations.push(reshiki::document::Annotation {
+        id,
+        position: World::new(150., 100.),
+        text: text.into(),
+        format: Default::default(),
+    });
+    id
+}
+
+fn expansion_command(app: &App) -> Result<Action, String> {
+    app.context_entries(Page::Main)
+        .into_iter()
+        .find_map(|entry| match entry {
+            Entry::Item {
+                label: "Expand generic structures",
+                action,
+                enabled: true,
+            } => Some(action),
+            _ => None,
+        })
+        .ok_or("Missing caption expansion command".into())
+}
+
+#[test]
+fn expand_context_follows_grouped_graphics_and_generated_name_captions() -> Result<(), String> {
+    use super::super::generic::Action as Generic;
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind};
+    let (mut app, _) = App::new();
+    app.tab.doc = pet_repeat();
+    let first = app.tab.doc.atoms.first().ok_or("PET atom")?.id;
+    let atoms = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    let graphic = app.tab.doc.next_id();
+    app.tab.doc.graphics.push(Graphic::dragged(
+        graphic,
+        GraphicKind::Line,
+        World::new(20., 100.),
+        World::new(100., 100.),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    ));
+    app.tab.doc.group_selection(&[first, graphic])?;
+    let name = add_caption(&mut app.tab.doc, "PET");
+    app.tab
+        .doc
+        .molecule_names
+        .push(reshiki::molecule_names::MoleculeName {
+            annotation: name,
+            atoms,
+            smiles: "OCCOC(=O)c1ccc(C(=O)C)cc1".into(),
+            text: "PET".into(),
+        });
+    let unrelated = app.tab.doc.add_atom("C", World::new(700., 0.));
+    let ordinary = add_caption(&mut app.tab.doc, "Unrelated caption");
+    app.tab.doc.validate()?;
+    let before = app.tab.doc.clone();
+    for hit in [graphic, name] {
+        assert!(!reshiki::generic::touches(&app.tab.doc, &[hit]));
+        app.edit(Edit::ContextMenu {
+            position: Point::new(30., 40.),
+            selected: vec![unrelated],
+            hit: vec![hit],
+        });
+        assert!(app.context_entries(Page::Main).iter().any(|entry| matches!(entry,
+            Entry::Item {
+                label: "Expand generic structures",
+                enabled: true,
+                action: Action::Run(message),
+            } if matches!(message.as_ref(), Message::Generic(Generic::ExpandComponent(ids)) if *ids == [hit])
+        )));
+    }
+    for hit in [unrelated, ordinary] {
+        app.edit(Edit::ContextMenu {
+            position: Point::new(30., 40.),
+            selected: app.tab.doc.all_ids(),
+            hit: vec![hit],
+        });
+        assert_eq!(enabled(&app, Page::Main, "Expand generic structures"), None);
+    }
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    Ok(())
+}
+
+#[test]
+fn expand_context_from_grouped_pet_caption_prepares_its_component() -> Result<(), String> {
+    use super::super::generic::Action as Generic;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = pet_repeat();
+    let caption = add_caption(&mut app.tab.doc, "PET");
+    let grouped: Vec<_> = app
+        .tab
+        .doc
+        .atoms
+        .iter()
+        .map(|atom| atom.id)
+        .chain([caption])
+        .collect();
+    app.tab.doc.group_selection(&grouped)?;
+    let expected = app.tab.doc.all_ids();
+    let unrelated = app.tab.doc.add_atom("C", World::new(700., 0.));
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![unrelated],
+        hit: vec![caption],
+    });
+    let before = app.tab.doc.clone();
+    let source = app.tab.id;
+    assert!(!reshiki::generic::touches(&app.tab.doc, &[caption]));
+    assert_eq!(
+        reshiki::generic::component_scope(&app.tab.doc, &[caption])?,
+        expected
+    );
+    let action = expansion_command(&app)?;
+    assert!(matches!(&action, Action::Run(message)
+        if matches!(message.as_ref(), Message::Generic(Generic::ExpandComponent(ids)) if *ids == [caption])
+    ));
+    let task = app.context_action(action);
+    assert!(app.generic.is_pending(), "{}", app.status);
+    assert!(task.units() > 0);
+    assert_eq!(app.tab.selected, [unrelated]);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.id, source);
+    assert!(!app.tab.history.can_undo());
+    assert!(app.tabs.background.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn expand_context_from_grouped_alternative_caption_opens_concrete_products()
+-> Result<(), String> {
+    use super::super::generic::Action as Generic;
+    use iced::futures::StreamExt;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let carbon = app.tab.doc.add_atom("C", World::default());
+    let halogen = app.tab.doc.add_atom("Cl", World::new(42., 0.));
+    app.tab.doc.add_bond(carbon, halogen, 1, "plain");
+    app.tab.doc = reshiki::atom_text::apply(
+        &app.tab.doc,
+        halogen,
+        "[Cl,Br]",
+        reshiki::atom_text::Mode::Auto,
+    )?;
+    let caption = add_caption(&mut app.tab.doc, "Choices");
+    app.tab.doc.group_selection(&[carbon, halogen, caption])?;
+    let unrelated = app.tab.doc.add_atom("C", World::new(700., 0.));
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![unrelated],
+        hit: vec![caption],
+    });
+    let before = app.tab.doc.clone();
+    let source = app.tab.id;
+    let action = expansion_command(&app)?;
+    assert!(matches!(&action, Action::Run(message)
+        if matches!(message.as_ref(), Message::Generic(Generic::ExpandComponent(ids)) if *ids == [caption])
+    ));
+    let task = app.context_action(action);
+    assert!(app.generic.is_pending(), "{}", app.status);
+    assert_eq!(app.tab.selected, [unrelated]);
+    assert_eq!(app.tab.doc, before);
+    let mut stream = iced_runtime::task::into_stream(task).ok_or("Missing expansion task")?;
+    while let Some(action) = stream.next().await {
+        if let iced_runtime::Action::Output(message) = action {
+            let _ = app.update(message);
+        }
+    }
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(
+        app.status,
+        "Expanded 2 concrete structures in a new drawing"
+    );
+    assert_ne!(app.tab.id, source);
+    assert_eq!(app.tab.doc.atoms.len(), 4);
+    assert_eq!(app.tab.doc.bonds.len(), 2);
+    assert_eq!(app.tab.doc.annotations.len(), 2);
+    assert!(
+        app.tab
+            .doc
+            .annotations
+            .iter()
+            .all(|caption| caption.text == "Choices")
+    );
+    assert_eq!(app.tab.doc.groups.len(), 2);
+    app.tab.doc.validate()?;
+    let background = app.tabs.background.first().ok_or("Expansion source tab")?;
+    assert_eq!(background.doc, before);
+    assert!(!background.history.can_undo());
+    Ok(())
+}
+
+#[tokio::test]
+async fn expand_pet_from_ring_bond_context_opens_complete_product() {
+    use iced::futures::StreamExt;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = pet_repeat();
+    let bond = app.tab.doc.bonds[6].clone();
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![bond.a, bond.b],
+        hit: vec![bond.a, bond.b],
+    });
+    let before = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+    let source = app.tab.id;
+    let action = app
+        .context_entries(Page::Main)
+        .into_iter()
+        .find_map(|entry| match entry {
+            Entry::Item {
+                label: "Expand generic structures",
+                action,
+                enabled: true,
+            } => Some(action),
+            _ => None,
+        })
+        .unwrap();
+    let task = app.context_action(action);
+    assert!(app.generic.is_pending(), "{}", app.status);
+    assert_eq!(app.tab.selected, selected);
+    let mut stream = iced_runtime::task::into_stream(task).unwrap();
+    while let Some(action) = stream.next().await {
+        if let iced_runtime::Action::Output(message) = action {
+            let _ = app.update(message);
+        }
+    }
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(
+        app.status,
+        "Expanded 1 concrete structures in a new drawing"
+    );
+    assert_ne!(app.tab.id, source);
+    assert_eq!(app.tab.doc.atoms.len(), 44);
+    assert_eq!(app.tab.doc.bonds.len(), 46);
+    let molecule = reshiki::chemistry::document::prepare(&app.tab.doc).unwrap();
+    let facts = molecule
+        .state
+        .graph
+        .atoms
+        .iter()
+        .zip(&molecule.state.valences)
+        .map(|(atom, valence)| reshiki::chemistry::AtomFacts {
+            atomic_number: atom.atomic_number,
+            isotope: atom.isotope,
+            charge: atom.charge,
+            hydrogens: (u32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens) as u8,
+            radical_electrons: atom.radical_electrons,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        reshiki::chemistry::properties(&facts).unwrap().formula,
+        "C32H30O12"
+    );
+    assert_eq!(app.tabs.background.first().unwrap().doc, before);
+    assert!(!app.tabs.background.first().unwrap().history.can_undo());
+}
+
+#[tokio::test]
+async fn expand_context_uses_clicked_molecule_when_selection_contains_another_molecule() {
+    use iced::futures::StreamExt;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = pet_repeat();
+    let carbon = app.tab.doc.add_atom("C", World::new(700., 0.));
+    let oxygen = app.tab.doc.add_atom("O", World::new(742., 0.));
+    app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
+    let bond = app.tab.doc.bonds[6].clone();
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: app.tab.doc.all_ids(),
+        hit: vec![bond.a, bond.b],
+    });
+    let before = app.tab.doc.clone();
+    let action = app
+        .context_entries(Page::Main)
+        .into_iter()
+        .find_map(|entry| match entry {
+            Entry::Item {
+                label: "Expand generic structures",
+                action,
+                enabled: true,
+            } => Some(action),
+            _ => None,
+        })
+        .unwrap();
+    let mut stream = iced_runtime::task::into_stream(app.context_action(action)).unwrap();
+    while let Some(action) = stream.next().await {
+        if let iced_runtime::Action::Output(message) = action {
+            let _ = app.update(message);
+        }
+    }
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(
+        app.status,
+        "Expanded 1 concrete structures in a new drawing"
+    );
+    assert_eq!(app.tab.doc.atoms.len(), 44);
+    assert_eq!(app.tab.doc.bonds.len(), 46);
+    assert_eq!(app.tabs.background.first().unwrap().doc, before);
+}
+
+#[test]
+fn properties_expand_pet_ring_bond_selection_explains_whole_molecule_requirement() {
+    let (mut app, _) = App::new();
+    app.tab.doc = pet_repeat();
+    let bond = &app.tab.doc.bonds[6];
+    app.tab.selected = vec![bond.a, bond.b];
+    let before = app.tab.doc.clone();
+    let task = app.generic_action(super::super::generic::Action::Expand);
+    assert_eq!(task.units(), 0);
+    assert!(app.error);
+    assert_eq!(
+        app.status,
+        "Select whole molecules, or clear the selection to expand the whole drawing"
+    );
+    assert!(!app.generic.is_pending());
+    assert_eq!(app.tab.doc, before);
+    assert!(app.tabs.background.is_empty());
 }
 
 #[test]

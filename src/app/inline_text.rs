@@ -786,6 +786,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Abbreviations(_)
             | Message::Generic(
                 super::generic::Action::Expand
+                    | super::generic::Action::ExpandComponent(_)
                     | super::generic::Action::DefineRepeat(_)
                     | super::generic::Action::ClearRepeat(_)
             )

@@ -47,6 +47,35 @@ fn pending_expansion() -> (App, Message) {
     )
 }
 
+#[test]
+fn properties_partial_molecule_selection_explains_how_to_expand() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let carbon = app.tab.doc.add_atom("C", Point::default());
+    let choice = app.tab.doc.add_atom("*", Point::new(42., 0.));
+    app.tab.doc.add_bond(carbon, choice, 1, "plain");
+    app.tab.doc = reshiki::atom_text::apply(
+        &app.tab.doc,
+        choice,
+        "[Cl,Br]",
+        reshiki::atom_text::Mode::Auto,
+    )
+    .unwrap();
+    app.tab.selected = vec![carbon];
+    let before = app.tab.doc.clone();
+    let task = app.update(Message::Generic(Action::Expand));
+    assert_eq!(task.units(), 0);
+    assert!(app.error);
+    assert_eq!(
+        app.status,
+        "Select whole molecules, or clear the selection to expand the whole drawing"
+    );
+    assert!(app.generic.pending.is_none());
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    assert!(app.tabs.background.is_empty());
+}
+
 fn open_optimization_preview(app: &mut App) {
     use crate::app::optimization;
     use reshiki::geometry::{Conformer, ForceField, Optimized, Point3};

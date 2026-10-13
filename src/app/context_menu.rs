@@ -422,14 +422,22 @@ impl App {
         entries
     }
 
-    /// Expansion, only for a selection that belongs to a generic structure.
+    /// Expansion of the clicked component, including its native dependencies.
     fn generic_entries(&self) -> Vec<Entry> {
-        if !reshiki::generic::touches(&self.tab.doc, &self.tab.selected) {
+        let target = self
+            .context_menu
+            .as_ref()
+            .and_then(|menu| menu.hit.as_deref())
+            .unwrap_or(&self.tab.selected);
+        let Ok(scope) = reshiki::generic::component_scope(&self.tab.doc, target) else {
+            return vec![];
+        };
+        if !reshiki::generic::intersects(&self.tab.doc, &scope) {
             return vec![];
         }
         vec![Entry::command(
             super::generic::EXPAND,
-            Message::Generic(super::generic::Action::Expand),
+            Message::Generic(super::generic::Action::ExpandComponent(target.to_vec())),
             self.generic_expand_enabled(),
         )]
     }
