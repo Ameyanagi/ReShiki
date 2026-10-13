@@ -102,7 +102,7 @@ cannot open a drawing saved by a Nightly build and reports the version it needs.
 | 19      | Editable 3D depth appearance and captured projection stereo (#146; 0.11.0).     |
 | 20      | Retained EMF picture sources (#296); cubic arrow controls on a parallel branch. |
 | 21      | Arrow target links and attachment IDs (cubic-arrow branch).                     |
-| 22      | Persisted rear-side opacity (parallel branch).                                  |
+| 22      | Persisted rear opacity (parallel branch).                                       |
 | 23      | Not used.                                                                       |
 | 24      | EMF sources, cubic arrows, target links and rear opacity integrated (#297).     |
 | 25      | Linked molecule-name captions and reaction atom-map labels (#298).              |

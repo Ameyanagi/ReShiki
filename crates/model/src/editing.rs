@@ -111,9 +111,10 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     part
 }
 
-/// Prepaid expansion-only selection. Keep complete native dependencies exactly;
-/// a partial reference/component rejects rather than invoking deletion repair.
-/// The opaque model input caller owns the allowance and source validation.
+/// The part of `doc` that generic expansion copies: the selected components
+/// with every caption, arrow link, group, scope and reaction they reference; a
+/// selection that would cut one of these is an error rather than a repair, and
+/// the caller has already charged the work and validated `doc`.
 pub(crate) fn preserved_expansion_selection(
     doc: &Document,
     selected: &[u64],
@@ -261,8 +262,11 @@ enum AppendMode {
     Ordinary,
     Preserved,
 }
-/// Internal prepared-expansion remap only. No public skip-reconcile switch.
-/// The model caller pays work, validates/proves the detached part and appends it.
+/// Remaps a generic expansion product into `doc`'s IDs, translated by `offset`
+/// and otherwise exactly as stored (no display defaults copied, no arrow
+/// reconciliation), and rejects a product whose label or drawing defaults
+/// differ from `doc`; the caller charges the work and certifies the result
+/// before appending it.
 pub(crate) fn preserved_append_part(
     doc: &Document,
     source: &Document,

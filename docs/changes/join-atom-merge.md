@@ -2,8 +2,9 @@
 
 Cmd/Ctrl+J now merges three or more selected atoms into the first selected atom,
 retaining its ID, element and label color/style. Connected unselected atoms stay
-in place. The merge is one Undo step and also has a **Merge selected atoms**
-command in the shared selection menus.
+in place. The merge is one Undo step. It is also available as **Merge atoms**
+in the context row and **Merge selected atoms** in the right-click menu, next to
+**Join selected atoms or bonds**.
 
 **TODO — Join accuracy:** this is a supported subset. Reference behavior for
 endpoint selection, fragment placement and Co(en)3 coordination still needs

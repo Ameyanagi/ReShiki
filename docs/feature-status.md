@@ -24,7 +24,7 @@ Nightly builds save drawings in a newer format that ReShiki 0.11.0 cannot open; 
 
 `reshiki --mcp` serves an experimental MCP server to AI clients such as Claude Code, Claude Desktop and Codex, and `reshiki --cli` runs the same operations from a terminal. It is in Nightly builds since 2026-10-08, not in ReShiki 0.11.0. Agents can import structure text, open files from granted folders, inspect, analyze, render previews, compose molecules and reaction schemes from SMILES, insert and delete structures with undo and redo, export, and save into granted folders. MCP revisions 2026-07-28, 2025-11-25 and 2025-06-18 are served over stdio only. Limits: edits work at the structure and scheme level (no atom, bond or style operations), chemical names are not resolved, drawings open in the app are not reachable, files are limited to folders granted at startup, and there are no progress notifications or output schemas. Tools, schemas and results may change in any build. See the [agent API reference](agent-api.md), the [setup guide](https://reshiki.com/guide/agents/) and [runtime safety](runtime-safety.md#agent-api-p1-experimental).
 
-## Rear-side opacity — Nightly
+## Rear opacity — Nightly
 
 Available in Nightly builds; not in ReShiki 0.11.0. **Properties → 3D appearance
 → Rear opacity → Apply** sets how opaque rear ink is in projected molecules.

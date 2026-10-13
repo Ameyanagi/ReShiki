@@ -1,4 +1,4 @@
-# Rear-side opacity review
+# Rear opacity review
 
 This is the historical review of the initial midplane implementation. Its
 original captures remain unchanged. The [2026-10-10 visibility correction](changes/rear-visibility-20261010.md)

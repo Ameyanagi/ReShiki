@@ -1,108 +1,164 @@
 # Predicted NMR shifts
 
-Select an atom in one molecule, open **Properties → Predict NMR…**, and choose
-**¹H** or **¹³C**. With no selection, the drawing must contain exactly one
-molecular component. The complete connected graph is used, including atoms
-behind collapsed abbreviations. Click a result row to select its linked drawing
-atom and any explicitly drawn hydrogens. Expand an abbreviation to inspect an
-internal site directly; its original atom ID is retained in the table.
+Available in Nightly builds; not in ReShiki 0.11.0.
 
-Results first open in a compact floating palette at the full window’s right
-edge, including when the inspector is shown. **Reset position** returns it there
-without changing the camera. Drag its title to move it and
-drag the visible bottom-right corner glyph to resize it. Drawing outside the
-palette remains available, and opening or moving it leaves the drawing viewport
-and zoom unchanged. **Dock** moves the same report into the inspector’s **NMR**
-tab; **Undock** returns it to the floating palette. Docking preserves the camera
-and restores the previous inspector state when undocked. Display mode, palette
-position and label format are kept for the document’s current session.
+NMR prediction estimates ¹H and ¹³C chemical shifts for one molecule from
+measured reference data. It runs on your computer, and each value links to its
+atom in the drawing.
 
-The **Predicted shifts** plot places equal-height sticks at the supported shifts
-on a descending ppm axis. Click a stick label or result row to select its linked
-drawing atom. Nearby stick labels can be grouped; repeated clicks cycle their
-atoms while distinct numerical positions remain visible. In **Details…**,
-**Hide plot** makes the palette smaller; **Show plot** restores it. The **− / +**
-size buttons and **Reset position** are also inside Details.
+## Use it
 
-Use the **Show labels** checkbox to add temporary atom numbers to the drawing.
-Its dropdown offers **Atom numbers**, **ppm** or **Both**: labels use bare
-`#ID`, `shift ppm` or `#ID · shift ppm` text. The table and footer identify the
-chosen nucleus and unresolved attached-H groups; labels do not individually
-assign those protons. Labels follow geometry moves, appear only for visible
-owners, and do not change the drawing, Undo history or exported figures. A narrow
-soft-teal halo marks a selected supported NMR owner; its radius is unchanged.
+1. Select an atom of the molecule. If the drawing holds only one molecule, you
+   can leave the selection empty.
+2. Open **Properties → Predict NMR…**. The results open in a floating palette at
+   the right edge of the window.
+3. Choose **¹H** or **¹³C**.
+4. Click a row or a stick label to select its atom in the drawing, together
+   with any hydrogens drawn on it.
+5. Turn on **Show labels** to write the results on the drawing. The menu next
+   to it offers **Atom numbers** (`#3`), **ppm** (`1.280 ppm`) or **Both**
+   (`#3 · 1.280 ppm`).
+6. Choose **Copy** or **Export…** to keep the shifts with the method, data
+   version, conditions, limitations and data credit.
 
-Choose **Details…** to show reference counts, sphere radius, observed dispersion,
-method and conditions. Longer results and details scroll inside the panel. The
-header **−** control collapses the results; **+** expands them again. **×** closes
-the panel and clears drawing labels. Chemical changes invalidate results and
-labels; position/depth moves, drawing styles and abbreviation visibility preserve
-the prediction. Running prediction again clears the previous labels. Changing
-the selected molecule requires running prediction again. Results are per document
-and background results cannot land in another document. See the
-[floating-panel design and native review](changes/nmr-floating-mock-20261010.md).
+### Move or dock the palette
 
-**Copy** and **Export…** include a prediction label, atom IDs, method,
-data version, conditions, limitations and data attribution. Predictions are not
-stored as experimental assignments or full simulated spectra. Plot heights are
-not intensity or integration. No multiplets, integrals, coupling constants,
-second-order simulation or experimental peak assignment are claimed.
+- Drag the title to move the palette. Drag the corner glyph (◢) to resize it.
+- **Dock** moves the report into the inspector, under **Predict → NMR**.
+  **Undock** returns it to the palette. Clicking the **Predict** tab also docks
+  the report.
+- In the floating palette, **−** collapses the results and **+** expands them.
+- **×** closes the report and removes its labels from the drawing.
+- Opening, moving or docking the report never changes the zoom or the view.
+  You can keep drawing while it is open.
+
+### Read the results
+
+- A ¹H row such as `C #3 · 2H` is the group of hydrogens on atom 3. A ¹³C row
+  such as `C #3` is one carbon.
+- The **Predicted shifts** plot marks each predicted shift with a stick on a
+  ppm axis that runs from high to low.
+- **▸ Details** adds a line to each row, for example
+  `Shell 4 · 17 references · SD 0.064 ppm`. **Shell** is how far around the
+  atom the match reaches, **references** is the number of independent
+  reference molecules, and **SD** is the spread of their values. SD is not an
+  error bar.
+- Details also shows the method, data version, conditions, limitations and
+  data credit, and offers **Hide plot** / **Show plot**. In the floating
+  palette it adds **Reset position** and the **−** / **+** size buttons.
+- The footer names the nucleus and the solvent, for example
+  `¹H · grouped per atom · CDCl₃`.
+
+### What the plot and labels show
+
+- The plot marks chemical shifts only. Stick heights do not show intensity or
+  integration.
+- J couplings, multiplets and second-order effects are not predicted.
+- Nearby sticks share one label. Clicking the label again selects its next
+  atom.
+- Labels move with their atoms. An atom inside a collapsed abbreviation is
+  labeled at the abbreviation. Labels never appear in exports or the Undo
+  history.
+- A soft teal halo marks a selected atom that has a prediction.
+
+### When results update
+
+- A chemical change clears the results and labels. Moving atoms, changing
+  depth or drawing styles, and collapsing or expanding abbreviations keep them.
+- To predict another molecule, select it and choose **Predict NMR…** again.
+- Each document keeps its own report, palette position, docking and label
+  format while it is open.
+
+## Limits
+
+- Molecules up to 128 atoms of H, C, N, O, F, P, S, Cl, Br and I. Charged
+  molecules, radicals, metals, multi-center attachments and labels for less
+  common isotopes, such as ²H or ¹³C, are not supported.
+- References are CDCl₃ measurements recorded at 273–323 K. They are pooled
+  without temperature or concentration correction.
+- Only hydrogens on carbon get a value. O–H, N–H and other exchangeable
+  hydrogens do not.
+- Several hydrogens on one atom are one group value, not separate peaks.
+- E/Z, relative configuration and stereoisomers are not distinguished.
+  Diastereotopic hydrogens get the same value.
+- A row with too little reference data stays empty and says why. Even simple
+  molecules can be partly covered: in the ¹H result for ethanol only the CH₃
+  group gets a value.
+- Results are estimates, not assignments or simulated spectra.
+
+## Implementation notes
+
+### Method
 
 The offline method follows the nuclear-rooted spherical matching and
 longest-sphere median fallback described in
 [Ask Ernö (2016)](https://link.springer.com/article/10.1186/s13321-016-0134-6).
-It uses an original, versioned ReShiki encoder, rather than the original
-self-learning assignment loop. No Java, MySQL, network request, API key or
-runtime training is required. Its numbers come from the separately licensed
-[measured nmrshiftdb2 subset](../data/nmr/README.md); the raw unassigned spectra
-from the Ask Ernö paper are not used as assigned reference data.
+It uses an original, versioned ReShiki encoder (`reshiki-hose-v1`), rather than
+the original self-learning assignment loop. No Java, MySQL, network request, API
+key or runtime training is required. Its numbers come from the separately
+licensed [measured nmrshiftdb2 subset](../data/nmr/README.md); the raw
+unassigned spectra from the Ask Ernö paper are not used as assigned reference
+data.
 
-The first version supports neutral closed-shell ordinary-bond organic
-molecules up to 128 atoms containing H, C, N, O, F, P, S, Cl, Br and I. It uses
-recorded CDCl3 measurements at 273–323 K, pooled without temperature or
-concentration correction. Charged structures, radicals, metals, multi-centre
-attachments and non-default isotope labels are unsupported. A row without sufficient
-matching data remains empty and explains why.
+The request uses the complete connected graph of the selected molecule,
+including atoms behind collapsed abbreviations. Expand an abbreviation to see an
+internal site directly; the table keeps its original atom ID. With no
+selection, the drawing must contain exactly one molecular component. The first
+version supports neutral closed-shell ordinary-bond organic molecules.
 
 For **¹H**, one row represents the attached proton group of a parent drawing
 atom. Implicit, explicit attached and explicitly bonded hydrogens are counted
 consistently. Each group is linked to its parent atom and any explicit H atom
 IDs. Carbon-bound proton groups receive a reference-group median when
-supported. Exchangeable O–H/N–H/etc. rows remain without a numerical shift.
-Multiple attached H are an **unresolved group**, not a claim that they form one
-peak. The connectivity-only 2D encoder ignores E/Z and relative configurations; it
-does not distinguish stereoisomers or assign individual
-diastereotopic hydrogen shifts. Equivalent sites have the same environment
-and prediction, but remain separate linked drawing rows.
-
-For **¹³C**, each carbon receives one atom-linked row. The same data, matching
-and limitations workflow applies.
+supported. Exchangeable O–H/N–H rows remain without a numerical shift. Multiple
+attached H are an unresolved group median, not a claim that they form one peak.
+The connectivity-only 2D encoder ignores E/Z and relative configurations; it
+does not distinguish stereoisomers or assign individual diastereotopic hydrogen
+shifts. Equivalent sites have the same environment and prediction, but remain
+separate linked rows. For **¹³C**, each carbon receives one atom-linked row with
+the same matching and limitations.
 
 Matching starts at sphere radius 4 around the nucleus, falling back to radius 3
 then 2. At least two independent molecule/connectivity groups must support an
-entry. **Sphere** reports the radius actually used; **Refs** reports independent
-reference molecule groups. **Obs. SD** is the sample standard deviation of their
-observed environment-group medians. It describes reference dispersion and is
-**not a calibrated error bar or confidence interval**. The export also includes
-the observed minimum/maximum.
+entry. **Shell** reports the radius actually used; **references** counts
+independent reference molecule groups. **SD** is the sample standard deviation
+of their observed environment-group medians. It describes reference dispersion
+and is not a calibrated error bar or confidence interval. The export also
+includes the observed minimum and maximum.
+
+### Coverage and accuracy
 
 Repeated spectra, symmetrical sites and stereoisomer records do not inflate
 support: they contribute one median per molecular connectivity/environment.
-Held-out experimental validation keeps duplicate molecules and stereoisomers
-on the same side of the split. The measured coverage/error and preprocessing
-counts are recorded in [validation.json](../data/nmr/validation.json).
-Coverage is measured among accepted, assigned carbon/H-group targets with
-recorded supported conditions; excluded chemistry and unknown-condition spectra
-are counted separately in the audit. The held-out ¹H group-median MAE is 0.307 ppm at 92.5% coverage; ¹³C MAE is
-2.05 ppm at 60.2% coverage. These are errors among supported accepted targets.
-Those measurements come from the same
-source release, not an independent
-acquisition cohort; the metrics evaluate parent-site group medians. The
-paper's published error is not claimed as ReShiki's accuracy.
+Held-out experimental validation keeps duplicate molecules and stereoisomers on
+the same side of the split. The measured coverage/error and preprocessing
+counts are recorded in [validation.json](../data/nmr/validation.json). Coverage
+is measured among accepted, assigned carbon/H-group targets with recorded
+supported conditions; excluded chemistry and unknown-condition spectra are
+counted separately in the audit. The held-out ¹H group-median MAE is 0.307 ppm
+at 92.5% coverage; ¹³C MAE is 2.05 ppm at 60.2% coverage. These are errors among
+supported accepted targets. Those measurements come from the same source
+release, not an independent acquisition cohort; the metrics evaluate
+parent-site group medians. The paper's published error is not claimed as
+ReShiki's accuracy.
 
-The conditions filter can leave even familiar compounds partly unsupported.
-Ethanol’s bundled result supports its methyl group, while its CH2 group lacks
-sufficient qualified references and its exchangeable OH is unsupported.
-The source ethanol CDCl3 proton spectrum has unreported temperature and was
+The conditions filter can leave familiar compounds partly unsupported.
+Ethanol's bundled result supports its methyl group, while its CH₂ group lacks
+sufficient qualified references and its exchangeable OH is unsupported. The
+source ethanol CDCl₃ proton spectrum has unreported temperature and was
 excluded. Ethyl acetate has three supported non-exchangeable H groups and four
 supported carbon sites in this release.
+
+### Panel and labels
+
+The palette opens at the full window's right edge, also when the inspector is
+shown. **Reset position** returns it there without changing the camera. Docking
+restores the previous inspector tab when undocked. Plot sticks have equal
+height. Labels do not assign individual protons of an unresolved group; the
+table and footer name the nucleus and the group. Running prediction again clears
+the previous labels. Results are per document, and a background result cannot
+land in another document. Copied and exported text includes a prediction label,
+atom IDs, the method, data version, conditions, limitations and attribution.
+Predictions are not stored as experimental assignments or full simulated
+spectra. See the
+[floating-panel design and desktop review](changes/nmr-floating-mock-20261010.md).

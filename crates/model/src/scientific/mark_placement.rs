@@ -20,8 +20,7 @@ pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, 
         .text_style
         .as_ref()
         .map_or(doc.drawing_style.font_size_pt, |style| style.size_pt);
-    // A modest positive gap, scaled with the actual label's font size. This is
-    // a ReShiki default, not a numerical claim about another application's UI.
+    // The pair sits 7% of the label's font size outside its ink.
     let gap = doc.drawing_style.world(font_pt * 0.07);
     let owner_ink = crate::scene::atom_label_ink_boxes(atom, doc);
     // Anchor the pair to the glyph nearest the atom center. Hydrogens and

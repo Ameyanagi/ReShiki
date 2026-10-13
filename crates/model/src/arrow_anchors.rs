@@ -557,10 +557,9 @@ pub fn reconcile(doc: &mut Document) {
         }
     }
 }
-/// Internal prepared-output proof: the stored arrow is an exact fixed point of
-/// native endpoint reconciliation for this displayed label snapshot. Does not
-/// mutate, synthesize IDs, detach links or bypass ordinary reconciliation.
-/// Caller prepays target/ink lookups under its shared allowance.
+/// Checks, without changing `doc`, that every attached arrow already sits
+/// exactly where [`reconcile`] would put it; generic expansion calls this on
+/// its products and charges the target and label-ink lookups to its work budget.
 pub(crate) fn certify_resolved(doc: &Document) -> Result<(), String> {
     for arrow in &doc.arrows {
         if arrow.is_attached()

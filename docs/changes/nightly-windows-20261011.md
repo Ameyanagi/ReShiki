@@ -92,7 +92,7 @@ ethanol spectrum.
 - This desktop review covers 96 DPI / 100% scale only. High and mixed DPI remain pending.
 - Fresh Office/ChemDraw clipboard and Office save-back checks were not repeated; earlier controlled desktop evidence remains historical.
 - The `(+)-lactic acid` GUI case was not repeated in this session; its native CI regressions passed.
-- Cage opacity, attached-arrow transforms, generic expansion and native save/reopen were not repeated in this Windows session.
+- Rear opacity, attached-arrow transforms, generic expansion and native save/reopen were not repeated in this Windows session.
 - Join/Co(en)3 accuracy remains TODO; [issue #246](https://github.com/Ameyanagi/ReShiki/issues/246) stays open.
 
 Reusable caption: **The published Windows Nightly retains arc edits through Undo,

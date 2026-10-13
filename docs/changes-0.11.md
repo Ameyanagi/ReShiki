@@ -319,3 +319,8 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
   publication highlights while retaining the merged application code and
   excluding the ongoing refactoring branches.
   [PR #185](https://github.com/Ameyanagi/ReShiki/pull/185) · @Ameyanagi.
+
+- **0.11.0 release validation:** document the tagged source, six-platform
+  release checks, public-download checksums and macOS signing and native-worker
+  verification. [Validation record](release-0.11.0-validation.md)
+  · [PR #187](https://github.com/Ameyanagi/ReShiki/pull/187) · @Ameyanagi.

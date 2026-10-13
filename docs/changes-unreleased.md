@@ -1,6 +1,10 @@
 # Unreleased changes
 
-See [ReShiki 0.11.0](changes-0.11.md) for the latest release notes.
+Nightly builds add chemical names, NMR prediction, generic structures, atom
+maps, rear opacity, pen paths and arrows that attach to atoms, together with
+Windows and Office improvements and an experimental agent API. None of these
+changes are in ReShiki 0.11.0; see [ReShiki 0.11.0](changes-0.11.md) for the
+latest release notes.
 
 ## File compatibility
 
@@ -8,112 +12,330 @@ Nightly builds save drawings in a newer format. ReShiki 0.11.0 cannot open them
 and asks you to update. If you share files with people on 0.11.0, keep a copy
 saved by 0.11.0.
 
-## Changes
+## Highlights
 
-This page also carries historical evidence into the coordination/Join/generic/Office/Windows composition. The current composed source writes native format 26; its new in-memory documents still default to version 15 before serialization. Drawing and names/maps captures remain records of their identified producers and formats, including 24 and 25. These historical captures do not independently qualify this composition; the [combined review](changes/coordination-join-integration.md) records its actual source and checks. The [published Windows Nightly review](changes/nightly-windows-20261011.md) adds scoped arc, tab, naming and floating NMR checks at 96 DPI / 100% scale; fresh Office and high or mixed DPI acceptance remain pending.
+- Type a chemical name to insert its structure, or label a molecule with its
+  systematic name. Names are converted on your computer.
+- Predict ¹H and ¹³C NMR shifts that link to the atoms of a molecule.
+- Draw element lists, variable positions and repeating units, then expand them
+  into every concrete structure.
+- Map atoms between reactants and products, with **Auto-map** to suggest a
+  mapping.
+- Fade the back of 3D cages with **Rear opacity**, and keep 3D coordinates from
+  MOL files.
+- Draw pen paths, and mechanism arrows that follow the atoms, bonds and lone
+  pairs they point at.
 
-The coordination/Join, generic, adaptive chemistry, Assistant and Windows/Office integration was merged, unreleased, in [Integration PR #300](https://github.com/Ameyanagi/ReShiki/pull/300), including the adaptive/Assistant source from [PR #299](https://github.com/Ameyanagi/ReShiki/pull/299). [PR #301](https://github.com/Ameyanagi/ReShiki/pull/301) adds the source-pinned Windows review-build route; that controller change does not establish native Windows acceptance.
+## Drawing and editing
 
-- **Join accuracy and Co(en)3 — TODO:** the supported Join/coordination subset is merged; selection/placement accuracy and arrowhead/tip appearance remain TODO. [Issue #246](https://github.com/Ameyanagi/ReShiki/issues/246) stays open. The ring-crossing variable-position layout defect was corrected separately in merged [PR #302](https://github.com/Ameyanagi/ReShiki/pull/302), described below. [Actual combined review and retained examples](changes/coordination-join-integration.md) · [Integration PR #300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
+- **Clearer controls for the new features.** The new panels use the same
+  controls as the rest of the inspector, NMR opens under **Predict**, and
+  status messages are shorter. **Chemical names…** in the right-click menu opens
+  the names inspector, and clicking a dative bond again with the **Dative** tool
+  swaps donor and acceptor, like **Reverse bonds**. Background jobs, menus and
+  export notices also behave more reliably.
+  [Writing and terms](writing-style.md) · @Ameyanagi.
 
-- **Adaptive chemistry limits (merged, unreleased):** larger 3D drawings and fused-ring imports use bounded budgets adapted to available machine resources; eligibility remains distinct from completion or convergence. [Desktop examples and native-file checks](adaptive-chemistry-limits-validation.md) · [PR #279](https://github.com/Ameyanagi/ReShiki/pull/279) · [#245](https://github.com/Ameyanagi/ReShiki/issues/245) · [#248](https://github.com/Ameyanagi/ReShiki/issues/248) · @Ameyanagi.
+- **Rear opacity.** Make the bonds behind the front face of a 3D molecule
+  lighter in **Properties → 3D appearance → Rear opacity**, while the visible
+  outline stays solid.
+  [How to use](https://reshiki.com/guide/editing/) ·
+  [Details](rear-opacity.md) ·
+  [Review](changes/rear-visibility-20261010.md) ·
+  [Image](images/rear-visibility-20261010/c60-25-after.jpg) ·
+  [#289](https://github.com/Ameyanagi/ReShiki/pull/289) · @Ameyanagi.
 
-- **SVG pictures for Office (merged, unreleased, [PR #290](https://github.com/Ameyanagi/ReShiki/pull/290)):** export outlined labels for Word and PowerPoint while preserving ordinary editable SVG. Actual Mac Office insertion and save/reopen retain complete chemical labels at the same before/after Office size; controlled Windows Word/PowerPoint insertion, save and same-process document reopen also pass at unchanged picture size. The qualified Windows app is unsigned; rewritten SVGs and stored-size differences are documented in the review. [Review and reusable images](changes/office-svg-placement.md) · @Ameyanagi.
-- **Retained Windows EMF pictures (merged, unreleased):** import spectra at their recorded physical size and retain original vectors with a portable preview. Native Windows import/save/vector export/fresh-process reopen and controlled Word/PowerPoint insert/save/fresh-process reopen checks pass; Mac portable save/resize/reopen checks pass. [Review record and reusable images](changes/emf-picture-import.md) · [PR #285](https://github.com/Ameyanagi/ReShiki/pull/285) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296) · [Issue #64](https://github.com/Ameyanagi/ReShiki/issues/64) · @Ameyanagi.
-- **MOL 3D import (merged, unreleased):** retain source XYZ for rotation and draw removable ordinary hydrogens implicitly while protecting isotopic, charged and other essential H. Native saves retain the conformation; MOL export keeps its existing stereo-safe2D policy. [Review and matched desktop evidence](changes/mol-import-3d-review.md) · [PR #282](https://github.com/Ameyanagi/ReShiki/pull/282) · [Integration PR #296](https://github.com/Ameyanagi/ReShiki/pull/296) · @Ameyanagi.
-- **Numbered ChemDraw silicon groups (merged, unreleased):** read the checked binary attachment property used by ChemDraw 26 while preserving the chemical graph and malformed-data diagnostics. Actual Mac File Open/native save/reopen passes; controlled Windows ChemDraw/PowerPoint copy-paste, Undo/Redo, native save and same-process fresh-tab reopen pass for the single silicon structure. [Review record and reusable images](changes/chemdraw-numbered-paste.md) · [PR #284](https://github.com/Ameyanagi/ReShiki/pull/284) · [Issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) · @Ameyanagi.
-- **Windows clipboard acquisition (merged, unreleased):** retry brief clipboard contention when acquiring embedded drawings from Office, with a bounded attempt count and retained persistent errors. Native Windows checks and [Rust 1.99.0 CI](https://github.com/Ameyanagi/ReShiki/actions/runs/38121740755) pass, including both new contention cases, strict Clippy, 27 active native library tests and 746 application tests. The published Nightly Windows x64 ZIP matches the tested artifact; five native CLI/load commands and four output-format checks passed. [Scoped GUI checks at 100% display scale](changes/nightly-windows-20261011.md) also pass; fresh Office and high or mixed DPI acceptance remain pending. This has no intended visual output change. [Before/after tests, publication and native receipts](changes/windows-ole-clipboard-retry.md) · [PR #305](https://github.com/Ameyanagi/ReShiki/pull/305) · @Ameyanagi.
-- **Windows NMR surface shadows (merged, unreleased):** keep the floating report and assignment-label popup readable after repeated control interactions. Matched native checks pass at 100% display scale; 33 Windows NMR tests include 24 partial-redraw combinations across light/dark themes and 100%, 125% and 200% rendering scales. Native high-DPI acceptance remains pending. [Before/after review and reusable images](changes/windows-nmr-shadows.md) · [PR #310](https://github.com/Ameyanagi/ReShiki/pull/310) · @Ameyanagi.
-- **Exact reference geometry (merged, unreleased):** align a bond or shape edge exactly, rotate copies around a shared center, and stretch a bridge along its original direction while the moving branch stays rigid. Rings cannot use single-edge rigid stretching. [Controls](reference-geometry.md) · [Desktop evidence and reusable images](changes/reference-geometry.md) · [PR #278](https://github.com/Ameyanagi/ReShiki/pull/278) · @Ameyanagi.
+- **Double bonds on tilted cages.** The second stroke of a double bond in a
+  tilted C60 or other cage follows its ring face instead of floating. Molecular
+  coordinates and properties do not change.
+  [Review](projected-double-bonds-review.md) ·
+  [#271](https://github.com/Ameyanagi/ReShiki/pull/271) · @Ameyanagi.
 
-- **Free-base porphine (merged, unreleased):** place a validated 21H,23H core with equal bonds and two inward N–H labels, or construct it from a supplied carbon seed using exact shared-pivot copies. Meso-phenyl bridge stretching keeps both rings rigid. [Guide](porphine-core.md) · [Desktop evidence and reusable images](changes/porphine-core.md) · [PR #287](https://github.com/Ameyanagi/ReShiki/pull/287) · @Ameyanagi.
+- **Reference align/stretch.** Turn a bond or shape edge to an exact angle,
+  rotate copies around a shared center, or stretch one bond while the rest stays
+  rigid, in **Properties → Transform → Reference: align / stretch**.
+  [How to use](https://reshiki.com/guide/editing/) ·
+  [Details](reference-geometry.md) ·
+  [Review](changes/reference-geometry.md) ·
+  [#278](https://github.com/Ameyanagi/ReShiki/pull/278) · @Ameyanagi.
 
-- **Fixed hydrogen-label directions (merged, unreleased):** reflect or rotate selected atoms while keeping fixed hydrogen labels on the corresponding side. Porphine's N–H labels remain inward after a vertical flip, Undo/Redo and reopening the saved drawing; arbitrary rotations select the nearest cardinal side. [Matched native review and chemistry checks](changes/reflected-hydrogen-labels.md) · [PR #308](https://github.com/Ameyanagi/ReShiki/pull/308) · @Ameyanagi. [Issue #88](https://github.com/Ameyanagi/ReShiki/issues/88) remains open for reverse native clipboard exchange.
+- **Porphine template.** Place free-base 21H,23H-porphine from **Templates →
+  Macrocycles**, with equal bonds and both N–H labels inward, or build the
+  scaffold with reference align/stretch.
+  [How to use](https://reshiki.com/guide/templates/) ·
+  [Details](porphine-core.md) · [Review](changes/porphine-core.md) ·
+  [#287](https://github.com/Ameyanagi/ReShiki/pull/287) · @Ameyanagi.
 
-![Reflected porphine retains both inward N–H labels](images/reflected-hydrogen-labels/after.png)
+- **Hydrogen positions follow flips and rotations.** **Flip horizontal**,
+  **Flip vertical** and rotation keep a fixed **Hydrogen position** on the
+  matching side. Other angles take the nearest side, and an exact 45° diagonal
+  picks Left or Right. **Automatic** stays automatic, label text stays upright,
+  and porphine's N–H labels stay inward after a vertical flip.
+  [Review](changes/reflected-hydrogen-labels.md) ·
+  [Image](images/reflected-hydrogen-labels/after.png) ·
+  [#308](https://github.com/Ameyanagi/ReShiki/pull/308) · @Ameyanagi.
 
-Reusable caption: Porphine's two N–H labels remain inward after a vertical flip,
-Undo/Redo and reopening the saved drawing.
+- **Join three or more atoms.** **Join** (Ctrl+J, ⌘J on macOS) merges three or
+  more selected atoms into the first one you selected, and **Merge atoms** also
+  merges four atoms that form two bonds. Surrounding atoms stay in place.
+  [How to use](https://reshiki.com/guide/editing/) ·
+  [Details](fragment-joining.md) · [Review](changes/join-atom-merge.md) ·
+  [#295](https://github.com/Ameyanagi/ReShiki/pull/295),
+  [#300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
 
-- **Local Rust chemical naming (merged, unreleased):** parse supported names into editable structures and generate verified local systematic names from complete molecules. Both directions work without a naming API or Java runtime; reverse naming has a declared organic subset and does not claim every IUPAC or preferred name. [Guide](chemical-naming-rust.md) · [Native review](changes/rust-chemical-naming.md) · [Rust backend PR #291](https://github.com/Ameyanagi/ReShiki/pull/291) · @Ameyanagi.
+- **Coordinate in place.** Connect donor atoms to a metal without moving
+  anything with **Coordinate in place…**, or select a donor and a metal and
+  press Ctrl+J (⌘J on macOS). Close a chelate one donor at a time, and show the
+  contact as a wedge or hash.
+  [How to use](https://reshiki.com/guide/editing/) ·
+  [Details](fragment-joining.md#coordination-contacts-in-place) ·
+  [Review](coordination-desktop-validation.md) ·
+  [Shortcut review](changes/coordination-join-shortcut.md) ·
+  [#283](https://github.com/Ameyanagi/ReShiki/pull/283) · @Ameyanagi.
 
-![Local Rust parsing produces an editable ethanol preview](images/chemical-naming-rust/ethanol-local-parse-preview.jpg)
+- **Generic structures.** Keep element lists, variable attachment positions and
+  repeating units in the drawing, then choose **Expand generic structures** to
+  open every concrete structure in one new tab. Substituents attach outward at
+  the normal bond length, and duplicate products are removed.
+  [How to use](https://reshiki.com/guide/generic-structures/) ·
+  [Details](generic-structures.md) ·
+  [Review](changes/coordination-join-integration.md) ·
+  [Ring placement review](https://github.com/Ameyanagi/ReShiki/blob/1259f4a357558079a2c8556a591d552118864606/docs/changes/generic-ring-expansion.md) ·
+  [#295](https://github.com/Ameyanagi/ReShiki/pull/295),
+  [#302](https://github.com/Ameyanagi/ReShiki/pull/302) · @Ameyanagi.
 
-- **Chemical names in the Import dock and molecule captions (merged, unreleased):** resolve supported names locally and insert the editable molecule with its optional linked caption in one Undo step. Show or hide a verified name for the clicked connected molecule. The upstream-derived OPSIN parser retains its separate MIT license and attribution. [Dock and caption review](changes/molecule-name-label.md) · [Editor backend PR #292](https://github.com/Ameyanagi/ReShiki/pull/292) · [Dock/caption PR #293](https://github.com/Ameyanagi/ReShiki/pull/293) · @Ameyanagi.
+- **Pen paths.** Draw straight and curved segments as one object with **Pen
+  path**, then move nodes and directions with **Edit curve points**.
+  [How to use](https://reshiki.com/guide/figures/) · [Details](graphics.md) ·
+  [Review](changes/tunable-pen-lines.md) ·
+  [Image](images/tunable-pen-lines/pen-final-continued-clean.jpg) ·
+  [#288](https://github.com/Ameyanagi/ReShiki/pull/288) ·
+  [issue #67](https://github.com/Ameyanagi/ReShiki/issues/67) · @Ameyanagi.
 
-- **Reaction atom maps (merged, unreleased):** show imported maps, move map labels independently, review Auto-map before Apply, and align mapped product structures rigidly. [Review and native evidence](reaction-atom-mapping-validation.md) · [PR #294](https://github.com/Ameyanagi/ReShiki/pull/294) · @Ameyanagi.
+- **Curved arrow ends.** Drag the square handles of a curved arrow to change how
+  each end leaves or arrives, without moving the ends.
+  [How to use](https://reshiki.com/guide/reactions/) ·
+  [Details](arrows.md) · [Review](changes/mechanism-curvature.md) ·
+  [Image](images/mechanism-curvature/after-output.jpg) ·
+  [#276](https://github.com/Ameyanagi/ReShiki/pull/276) ·
+  [issue #91](https://github.com/Ameyanagi/ReShiki/issues/91) · @Ameyanagi.
 
-- **Retained (+)-lactic acid (merged, unreleased):** accept this complete retained name as the explicit S structure after local graph/stereo verification, preserve the entered-name caption and retain strict rejection for other unsupported optical qualifiers. [Bounded correction and native evidence](changes/retained-plus-lactic-acid.md) · @Ameyanagi. No general optical-rotation-to-configuration rule is added.
+- **Arrows that attach to atoms.** With **Curved / electron pair** or **Single
+  electron**, click a source atom, bond or lone pair and then a destination; the
+  arrow follows its targets when they move. **Detach start** and **Detach end**
+  release an end.
+  [How to use](https://reshiki.com/guide/reactions/) ·
+  [Details](arrows.md#optional-target-attachments) ·
+  [Review](changes/mechanism-attachments.md) ·
+  [Image](images/mechanism-attachments/mechanism-attachment-crowded-carbonyl-f8-off.jpg) ·
+  [#286](https://github.com/Ameyanagi/ReShiki/pull/286), built on
+  [#276](https://github.com/Ameyanagi/ReShiki/pull/276) and merged through
+  [#297](https://github.com/Ameyanagi/ReShiki/pull/297) ·
+  [issue #92](https://github.com/Ameyanagi/ReShiki/issues/92) · @Ameyanagi.
 
-The local naming, caption and reaction-map contributions above were merged, unreleased, in [Integration PR #298](https://github.com/Ameyanagi/ReShiki/pull/298). Their original review images retain their identified producers.
+- **Drawing-tool defaults.** Chain tools have clearer icons and hints, orbitals
+  have **Snap to atoms** (hold Option/Alt to place freely) and leave a gap
+  around atom labels, and new lone pairs sit closer to their atom. Marks you
+  placed yourself do not move.
+  [Details](scientific-symbols.md) ·
+  [Review](drawing-tool-defaults-review.md) ·
+  [Image](images/drawing-tool-defaults/lone-pair-click-after.jpg) ·
+  [#277](https://github.com/Ameyanagi/ReShiki/pull/277) · issues
+  [#250](https://github.com/Ameyanagi/ReShiki/issues/250),
+  [#90](https://github.com/Ameyanagi/ReShiki/issues/90),
+  [#249](https://github.com/Ameyanagi/ReShiki/issues/249) · @Ameyanagi.
 
-- **Curated offline chemical-name aliases (merged, unreleased):** see 40 provenance-labelled names for 30 exact chemical identities in Import → Name → Details, separate from generated systematic names. Copy an alias or choose it for the molecule's linked caption, then insert directly without Preview. The finite catalog preserves stereo, charge and isotope distinctions and adds no naming API or Java runtime. [Qualified native review and saved-file audits](changes/offline-name-synonyms.md) · [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309) · @Ameyanagi.
+## Reactions
 
-![Direct insertion adds ethanol with the chosen ethyl alcohol linked caption](images/offline-name-synonyms/compact-caption.png)
+- **Atom maps.** Number corresponding atoms in the **Atom maps** section of the
+  reaction inspector, or choose **Auto-map** to get a suggestion that you review
+  before **Apply maps**. **Align mapped structures** lines the products up with
+  the reactants.
+  [How to use](https://reshiki.com/guide/reactions/) ·
+  [Details](reactions.md#atom-mapping-and-label-placement) ·
+  [Review](reaction-atom-mapping-validation.md) ·
+  [#294](https://github.com/Ameyanagi/ReShiki/pull/294) · @Ameyanagi.
 
-Reusable caption: Choose **ethyl alcohol** for ethanol's linked caption and
-insert the editable molecule without Preview. The generated systematic name
-remains separately identified. This image retains its pre-rebase v3 producer
-qualification in the [review](changes/offline-name-synonyms.md).
+## Chemistry tools
 
-- **Multi-atom Join (merged, unreleased):** merge three or more selected atoms into the first selected atom while retaining its ID and label style; surrounding atoms stay fixed. Selection/placement accuracy remains TODO. [Controls and restrictions](fragment-joining.md) · [PR #295](https://github.com/Ameyanagi/ReShiki/pull/295) · [Integration PR #300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
+- **Chemical names.** Type a name in **Import → Name** to insert its structure,
+  or right-click a molecule and choose **Show chemical name**. Names are
+  converted on your computer. **Import → Name → Details** also lists other names
+  from a bundled offline catalog with their source and license: **Copy** copies
+  one, and **Use below** captions the next insertion. **Generate selected name**
+  in the same Details area names the selected molecule, and
+  `(+)-lactic acid` reads as (S)-lactic acid.
+  [How to use](https://reshiki.com/guide/names/) ·
+  [Details](chemical-naming-rust.md) ·
+  [Review](changes/rust-chemical-naming.md) ·
+  [Dock and caption review](changes/molecule-name-label.md) ·
+  [Alias review](changes/offline-name-synonyms.md) ·
+  [(+)-Lactic acid review](changes/retained-plus-lactic-acid.md) ·
+  [Image](images/chemical-naming-rust/ethanol-local-parse-preview.jpg) ·
+  [Caption image](images/offline-name-synonyms/compact-caption.png) ·
+  [#291](https://github.com/Ameyanagi/ReShiki/pull/291),
+  [#292](https://github.com/Ameyanagi/ReShiki/pull/292),
+  [#293](https://github.com/Ameyanagi/ReShiki/pull/293),
+  [#309](https://github.com/Ameyanagi/ReShiki/pull/309) · @Ameyanagi.
 
-- **Generic structures and finite expansion (merged, unreleased):** retain typed choices and repeat definitions, then expand the supported finite subset into explicit products. The variable-position layout defect retained in the original combined review was corrected separately in merged [PR #302](https://github.com/Ameyanagi/ReShiki/pull/302). [Supported scope](generic-structures.md) · [Original combined review and retained defect](changes/coordination-join-integration.md) · [PR #295](https://github.com/Ameyanagi/ReShiki/pull/295) · [Integration PR #300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
+- **NMR prediction.** Choose **Properties → Predict NMR…** to predict ¹H and ¹³C
+  shifts for one molecule. Each value links to its atom, and the report floats
+  beside the drawing or docks under **Predict → NMR**.
+  [How to use](https://reshiki.com/guide/nmr/) ·
+  [Details](nmr-prediction.md) · [Review](nmr-visual-review.md) ·
+  [#272](https://github.com/Ameyanagi/ReShiki/pull/272) · @Ameyanagi.
 
-- **Ring attachment placement and unique expansion products (merged, unreleased):** keep the host fixed, place supported detachable substituents outward at normal connector length, and remove chemically equivalent products. The reviewed examples produce one anisole and three distinct ortho/meta/para methoxytoluenes. The [source-pinned native review](https://github.com/Ameyanagi/ReShiki/blob/1259f4a357558079a2c8556a591d552118864606/docs/changes/generic-ring-expansion.md) records producer `47b14dab`, 351 passing local model tests, actual macOS Undo/Redo/save/fresh-process reopen, and conservative placement and shared-work limits. [PR #302](https://github.com/Ameyanagi/ReShiki/pull/302) is merged and remains unreleased · @Ameyanagi.
+- **Limits that fit your computer.** 3D work on larger drawings and imports of
+  fused rings get calculation limits that scale with the free memory of your
+  computer. A job that starts can still stop at its time limit.
+  [Details](chemistry-resource-policy.md) ·
+  [Review](adaptive-chemistry-limits-validation.md) ·
+  [#279](https://github.com/Ameyanagi/ReShiki/pull/279) · issues
+  [#245](https://github.com/Ameyanagi/ReShiki/issues/245),
+  [#248](https://github.com/Ameyanagi/ReShiki/issues/248) · @Ameyanagi.
 
-- **Coordination attachment (merged, unreleased):** connect donor atoms to metals in place, including a selected donor–metal pair with Ctrl+J (⌘J on macOS), close complete chelates and choose either solid/hashed projection tip while retaining hydrogens, charge and donor→metal direction. [Guide and interchange limits](fragment-joining.md#coordination-contacts-in-place) · [Desktop examples and native-file checks](coordination-desktop-validation.md) · [Selected-pair shortcut evidence](changes/coordination-join-shortcut.md) · [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283) · [#246](https://github.com/Ameyanagi/ReShiki/issues/246) · @Ameyanagi.
-- **0.11.0 release validation:** document the tagged source, six-platform release checks, public-download checksums and macOS signing and native-worker verification. [Validation record](release-0.11.0-validation.md) · [PR #187](https://github.com/Ameyanagi/ReShiki/pull/187) · @Ameyanagi.
-- **Experimental agent API (Nightly builds since 2026-10-08):** `reshiki --mcp` lets Claude Code, Claude Desktop, Codex and other MCP clients import, analyze, render, compose, edit and export drawings, and save them only into folders you grant; `reshiki --cli` converts, renders, composes and analyzes from a terminal. Not in ReShiki 0.11.0; tools and results may change. [Setup guide](https://reshiki.com/guide/agents/) · [Reference](agent-api.md) · [Privacy](privacy-policy.md#optional-agent-api-and-command-line-experimental) · [Acceptance record](agent-api-p1-validation.md) · @Ameyanagi.
-- **Nightly naming checks (merged, unreleased):** application and renderer tests use the naming helper built for each Windows, macOS and Linux release target. Seven local workflow tests pass, including helper-path coverage for all six targets. After the missing-helper failures in [run 38116417137](https://github.com/Ameyanagi/ReShiki/actions/runs/38116417137), [Nightly run 38123945065](https://github.com/Ameyanagi/ReShiki/actions/runs/38123945065) passed all six platform builds and published [0.11.0-nightly.20261011.38123945065.1](https://github.com/Ameyanagi/ReShiki/releases/tag/nightly-0.11.0-nightly.20261011.38123945065.1) from `8e38151190eb2c3814df23a3eb166fb21c972d64`. Public Windows downloads remain unsigned; test-signing artifacts remain internal. This CI configuration change has no visible drawing output. [PR #304](https://github.com/Ameyanagi/ReShiki/pull/304) · @Ameyanagi.
-- **Published Windows Nightly review:** arc editing with Undo/Redo, document-tab activation, direct ethanol insertion with its caption and a floating atom-linked NMR report pass at measured 96 DPI / 100% scale. Ethanol supports one of three proton sites; fresh Office and high or mixed DPI checks remain pending. [Actual captures, repeat steps and receipt](changes/nightly-windows-20261011.md) · [PR #306](https://github.com/Ameyanagi/ReShiki/pull/306) · @Ameyanagi.
-- **Windows signing integration:** verify SignPath-signed x64 and ARM64 applications and installers, and retain internal test-signed nightly artifacts using the existing nightly build. Public Windows downloads remain unsigned while the Foundation release certificate is pending. [Setup guide](signpath-setup.md) · [PR #270](https://github.com/Ameyanagi/ReShiki/pull/270) · @Ameyanagi.
+## Import and export
 
-The drawing and NMR features below, together with exact reference geometry and free-base porphine above, were merged, unreleased, in [Integration PR #297](https://github.com/Ameyanagi/ReShiki/pull/297). Its [combined macOS review](changes/drawing-tools-integration.md) records floating NMR controls, solid cage-rim opacity Undo/Redo, attached cubic-arrow Stretch, native save and fresh-process reopen with retained EMF payloads. Original feature images remain historical comparisons. The [published Windows Nightly review](changes/nightly-windows-20261011.md) passes ethanol floating NMR controls at 100% display scale; the combined cage/attached-arrow/EMF scenario was not repeated on Windows.
+- **3D coordinates from MOL files.** Opening a MOL file with 3D coordinates keeps
+  them, so you can tilt the molecule, and ordinary hydrogens become H counts.
+  Save a `.rsk` file to keep the 3D shape; MOL export still writes a flat
+  drawing.
+  [Details](mol-import-3d.md) · [Review](changes/mol-import-3d-review.md) ·
+  [#282](https://github.com/Ameyanagi/ReShiki/pull/282),
+  [#296](https://github.com/Ameyanagi/ReShiki/pull/296) · @Ameyanagi.
 
-- **Projected fullerene double bonds (merged, unreleased):** automatic secondary strokes follow local retained XYZ ring faces with foreshortened spacing and clean insets. Molecular coordinates and properties are unchanged. [Matched desktop/export evidence](projected-double-bonds-review.md) · [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271) · @Ameyanagi.
+- **ChemDraw numbered attachment points.** ChemDraw 26 files and pastes with
+  numbered attachment points, such as SiMe₃ groups, open as editable structures
+  instead of failing.
+  [Review](changes/chemdraw-numbered-paste.md) ·
+  [#284](https://github.com/Ameyanagi/ReShiki/pull/284) ·
+  [issue #247](https://github.com/Ameyanagi/ReShiki/issues/247) · @Ameyanagi.
 
-- **Rear-side opacity (merged, unreleased):** hide view-occluded cage ink while keeping the exposed outline solid, including after 3D tilt. Molecular data remain unchanged; tilt rotates retained XYZ. Default 100% preserves the opaque drawing; native format 24 introduced the retained setting alongside original EMF picture sources and independently editable cubic arrows. The recorded PR #289 captures use version 22. [How to use it](rear-opacity.md) · [Matched desktop, rotation and persistence evidence](changes/rear-visibility-20261010.md) · [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289) · @Ameyanagi. Reusable image: [C60 with faint rear ink and a solid rim](images/rear-visibility-20261010/c60-25-after.jpg). Visibility budgets are conservative heuristics; Windows print/EMF unit tests passed on the reviewed PR #289 head; [Combined macOS native validation](changes/drawing-tools-integration.md) passes; Windows acceptance for this cage-opacity case remains pending.
+## Windows and Office
 
-- **Independent mechanism-arrow curvature (merged, unreleased):** adjust either end direction independently without moving the arrow endpoints, with one-step Undo and editable cubic save/interchange. [Visual review](changes/mechanism-curvature.md) · [PR #276](https://github.com/Ameyanagi/ReShiki/pull/276) · [Issue #91](https://github.com/Ameyanagi/ReShiki/issues/91) · @Ameyanagi. Connected pen paths and optional target attachments are included in [Integration PR #297](https://github.com/Ameyanagi/ReShiki/pull/297).
+- **SVG for Office.** Export **SVG for Office** for Word and PowerPoint. Text
+  becomes outlines, so labels look the same in Office; ordinary SVG keeps
+  editable text.
+  [How to use](https://reshiki.com/guide/sharing/) ·
+  [Review](changes/office-svg-placement.md) ·
+  [#290](https://github.com/Ameyanagi/ReShiki/pull/290) · @Ameyanagi.
 
-![Finished mechanism arrow after independent departure and arrival edits](images/mechanism-curvature/after-output.jpg)
+- **EMF pictures on Windows.** Insert `.emf` pictures, such as spectra, at their
+  recorded size. `.rsk` files keep the original vectors and a preview that opens
+  on every platform.
+  [How to use](https://reshiki.com/guide/windows/) ·
+  [Details](pictures.md) · [Review](changes/emf-picture-import.md) ·
+  [#285](https://github.com/Ameyanagi/ReShiki/pull/285),
+  [#296](https://github.com/Ameyanagi/ReShiki/pull/296) ·
+  [issue #64](https://github.com/Ameyanagi/ReShiki/issues/64) · @Ameyanagi.
 
-- **Connected pen paths (merged, unreleased):** draw straight and cubic segments in one object, adjust nodes and independent tangents, and continue from Select or Edit Points without accidental changes. [Visual review](changes/tunable-pen-lines.md) · [PR #288](https://github.com/Ameyanagi/ReShiki/pull/288) · [Issue #67](https://github.com/Ameyanagi/ReShiki/issues/67) · @Ameyanagi. Continuous freehand tracing remains unsupported.
+- **More reliable Office paste on Windows.** ReShiki retries when another app
+  briefly holds the clipboard.
+  [Review](changes/windows-ole-clipboard-retry.md) ·
+  [#305](https://github.com/Ameyanagi/ReShiki/pull/305) · @Ameyanagi.
 
-![Finished connected five-node pen path with straight and cubic segments](images/tunable-pen-lines/pen-final-continued-clean.jpg)
+- **Readable panels on Windows.** On Windows, floating panels and menus,
+  including the NMR report and its label menu, draw a border instead of a drop
+  shadow, so they stay readable after repeated redraws.
+  [Review](changes/windows-nmr-shadows.md) ·
+  [#310](https://github.com/Ameyanagi/ReShiki/pull/310) · @Ameyanagi.
 
-- **Optional mechanism-arrow target attachments (merged, unreleased):** click a lone pair, atom or bond and then a destination to create one editable arrow that follows its targets, with one-step Undo, explicit free mode and native persistence. [Problem, solution and actual desktop results](changes/mechanism-attachments.md) · [Issue #92](https://github.com/Ameyanagi/ReShiki/issues/92) · @Ameyanagi. Stacked on [PR #276](https://github.com/Ameyanagi/ReShiki/pull/276); original source/native review is recorded in [PR #286](https://github.com/Ameyanagi/ReShiki/pull/286); [combined macOS native validation](changes/drawing-tools-integration.md) passes, while Windows acceptance for this attached-arrow case remains pending.
+- **The editor window fits the screen on Windows.** It fits inside the screen's
+  work area at startup and when the display scale changes.
+  [Review](changes/windows-window-fit.md) ·
+  [#273](https://github.com/Ameyanagi/ReShiki/pull/273) · @Ameyanagi.
 
-![A lone-pair arrow targets a carbonyl carbon in the additional context while retaining the molecular drawing](images/mechanism-attachments/mechanism-attachment-crowded-carbonyl-f8-off.jpg)
+- **Open files in tabs on Windows and Linux.** Opening a file while ReShiki runs
+  adds a tab to the running window, and a file that is already open switches to
+  its tab. Each Office drawing gets its own tab, so saving updates only that
+  Office document.
+  [How to use](https://reshiki.com/guide/windows/) ·
+  [Review](changes/windows-linux-open-tabs.md) ·
+  [Windows checks](changes/nightly-windows-20261011.md) ·
+  [Linux X11 checks](changes/linux-tab-routing-20261011.md)
+  ([#307](https://github.com/Ameyanagi/ReShiki/pull/307)) ·
+  [#274](https://github.com/Ameyanagi/ReShiki/pull/274), merged through
+  [#300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
 
-- **Drawing-tool defaults (merged, unreleased):** clearer chain icons and steering hints, explicit orbital atom snapping with Option/Alt bypass, transparent atom-label clearance, and closer click-added lone pairs. Existing orbital frames and manual/saved mark offsets stay exact. [Visual review](drawing-tool-defaults-review.md) · [PR #277](https://github.com/Ameyanagi/ReShiki/pull/277) · [#250](https://github.com/Ameyanagi/ReShiki/issues/250) · [#90](https://github.com/Ameyanagi/ReShiki/issues/90) · [#249](https://github.com/Ameyanagi/ReShiki/issues/249) · @Ameyanagi.
+## Assistant
 
-![Click-added methanol lone pair sits closer to O while CH4O and CO properties remain unchanged](images/drawing-tool-defaults/lone-pair-click-after.jpg)
+- **Assistant setup and a first example.** The Assistant panel walks you through
+  installing Codex, signing in and testing the connection, then offers a small
+  ethanol image to try. The draft waits for **Apply**, so you can check it
+  first.
+  [How to use](https://reshiki.com/guide/assistant-setup/) ·
+  [Details](assistant-setup.md) ·
+  [Review](changes/assistant-setup-review-2026-10-09.md) ·
+  [Setup image](images/assistant-setup/assistant-setup-ready.jpg) ·
+  [Example image](images/assistant-setup/assistant-local-example.jpg) ·
+  [#280](https://github.com/Ameyanagi/ReShiki/pull/280) · @Ameyanagi.
 
-Reusable caption: Click-added lone pairs sit closer to visible atom labels and
-avoid nearby chemical ink; manual and previously saved offsets stay exact.
+## Agent API
 
-- **Offline NMR prediction (merged, unreleased):** predict atom-linked ¹H group medians and ¹³C shifts from measured reference environments in a compact palette that preserves drawing space and zoom, with reference details, source conditions, coverage and limitations on demand. [Desktop review](nmr-visual-review.md) · [Method and data](nmr-prediction.md) · [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) · @Ameyanagi.
+- **Experimental agent API (Nightly builds since 2026-10-08):** `reshiki --mcp`
+  lets Claude Code, Claude Desktop, Codex and other MCP clients import, analyze,
+  render, compose, edit and export drawings, and save them only into folders you
+  grant; `reshiki --cli` converts, renders, composes and analyzes from a
+  terminal. Not in ReShiki 0.11.0; tools and results may change.
+  [Setup guide](https://reshiki.com/guide/agents/) ·
+  [Reference](agent-api.md) ·
+  [Privacy](privacy-policy.md#optional-agent-api-and-command-line-experimental) ·
+  [Acceptance record](agent-api-p1-validation.md) · @Ameyanagi.
 
-- **Windows window fitting (merged, unreleased):** fit startup and DPI-changed editor windows inside the monitor work area while preserving the normal UI scale. The [published Nightly window](changes/nightly-windows-20261011.md) fits the measured work area at 96 DPI / 100% scale. High and mixed DPI acceptance remain pending. [Validation note](changes/windows-window-fit.md) · [PR #273](https://github.com/Ameyanagi/ReShiki/pull/273) · @Ameyanagi.
-- **Windows/Linux document tabs (merged, unreleased):** open file launches in the running editor and keep each Office edit session attached to its own document tab. Native Linux IPC tests passed. [Actual Windows executable launches](changes/nightly-windows-20261011.md) open a second file in a new tab, reactivate an existing unsaved tab without duplication, and activate the editor without arguments at 100% display scale. [Published Linux X11 runtime checks](changes/linux-tab-routing-20261011.md) ([PR #307](https://github.com/Ameyanagi/ReShiki/pull/307)) pass file-request admission, window-title routing, cold-launch convergence and bounded fallback. Linux desktop, file-manager association and Office save-back acceptance remain pending. The source from closed [PR #274](https://github.com/Ameyanagi/ReShiki/pull/274) was integrated through [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300). [Validation note](changes/windows-linux-open-tabs.md) · @Ameyanagi.
+## Known limits and pending checks
 
-- **Assistant setup and guided image exercise (merged, unreleased):** explains Codex installation, sign-in, connection recovery and image transfer, then offers a small original ethanol image whose editable draft waits for Apply. [Setup guide](assistant-setup.md) · [Native review and saved-graph proof](changes/assistant-setup-review-2026-10-09.md) · [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280) · @Ameyanagi.
+- **Join:** selection and placement accuracy, the Co(en)₃ example and arrowhead
+  and tip appearance still need work
+  ([issue #246](https://github.com/Ameyanagi/ReShiki/issues/246)).
+- **Office, high-DPI and Linux desktop:** the Windows checks so far ran at 100%
+  display scale. Fresh Office checks, high and mixed display scales on Windows,
+  rear opacity and attached arrows on Windows, and Linux desktop, file-manager
+  and Office save-back checks are still pending.
+- **Copy to ChemDraw:** copying from ReShiki and pasting into a new ChemDraw
+  document gives an empty page
+  ([issue #88](https://github.com/Ameyanagi/ReShiki/issues/88)).
+- **Assistant:** a draft that looks right can still be the wrong molecule. Check
+  it before **Apply**.
+- **Pen paths:** freehand tracing is not supported.
+- **Windows signing:** public Windows downloads are unsigned while the SignPath
+  Foundation release certificate is pending.
 
-![Assistant explains connection readiness and image-transfer guidance before a guided example](images/assistant-setup/assistant-setup-ready.jpg)
+## Build and verification
 
-![The original ethanol image and known reference attach locally before Send](images/assistant-setup/assistant-local-example.jpg)
-
-The known ethanol exercise is a first-use example. Model generation and visual
-review do not establish chemical correctness for other images; inspect the draft
-before Apply. This contribution is merged and remains unreleased.
-
-- **Assistant image benchmark (merged, unreleased):** records independent graph identity, unfinished drafts and failures for eight original synthetic images. Six exact completed graphs out of eleven attempted finite-reference runs remain separate from provisional previews and the known guided exercise. The source from closed [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281) was integrated through [PR #300](https://github.com/Ameyanagi/ReShiki/pull/300). [Method and measured results](assistant-benchmark.md) · @Ameyanagi.
-
-![Provisional macrocycle preview retained after a structured-output failure; excluded from completed successes](assistant-benchmark-results/baseline-20261009/cyclic-gly4/run-2/provisional.png)
-
-The small synthetic cohort does not establish accuracy on real scans or general
-peptide/macrocycle reliability. The retained preview is unfinished even though
-its graph matches the reference. See the report for failures, missing display
-labels, uncertainty and not-run repeats.
+- **Nightly naming checks.** Application and renderer tests use the naming
+  helper built for each Windows, macOS and Linux release target. After the
+  missing-helper failures in
+  [run 38116417137](https://github.com/Ameyanagi/ReShiki/actions/runs/38116417137),
+  [Nightly run 38123945065](https://github.com/Ameyanagi/ReShiki/actions/runs/38123945065)
+  built all six platforms and published
+  [0.11.0-nightly.20261011.38123945065.1](https://github.com/Ameyanagi/ReShiki/releases/tag/nightly-0.11.0-nightly.20261011.38123945065.1)
+  from `8e38151190eb2c3814df23a3eb166fb21c972d64`.
+  [#304](https://github.com/Ameyanagi/ReShiki/pull/304) · @Ameyanagi.
+- **Windows Nightly check.** Arc editing with Undo/Redo, tab activation, ethanol
+  insertion with its caption and a floating NMR report passed on the published
+  Windows Nightly at 100% display scale.
+  [Record](changes/nightly-windows-20261011.md) ·
+  [#306](https://github.com/Ameyanagi/ReShiki/pull/306) · @Ameyanagi.
+- **Windows signing.** SignPath-signed x64 and ARM64 applications and installers
+  are verified, and internal test-signed Nightly artifacts are kept.
+  [Setup guide](signpath-setup.md) ·
+  [#270](https://github.com/Ameyanagi/ReShiki/pull/270) · @Ameyanagi.
+- **Windows review builds.** A source-pinned workflow builds Windows apps for
+  review. [#301](https://github.com/Ameyanagi/ReShiki/pull/301) · @Ameyanagi.
+- **Assistant image benchmark.** A source-tree tool records graph identity,
+  unfinished drafts and failures for eight original synthetic images. The
+  cohort is small and does not measure accuracy on real scans.
+  [Method and results](assistant-benchmark.md) ·
+  [Provisional preview](assistant-benchmark-results/baseline-20261009/cyclic-gly4/run-2/provisional.png) ·
+  [#281](https://github.com/Ameyanagi/ReShiki/pull/281), merged through
+  [#300](https://github.com/Ameyanagi/ReShiki/pull/300) · @Ameyanagi.
+- **Combined reviews.** The features were also checked together:
+  [drawing tools and NMR](changes/drawing-tools-integration.md)
+  ([#297](https://github.com/Ameyanagi/ReShiki/pull/297)); chemical names,
+  captions and atom maps
+  ([#298](https://github.com/Ameyanagi/ReShiki/pull/298)); and coordination,
+  Join, generic structures, Office and Windows
+  ([review](changes/coordination-join-integration.md),
+  [#300](https://github.com/Ameyanagi/ReShiki/pull/300), with the adaptive
+  limits and Assistant source from
+  [#299](https://github.com/Ameyanagi/ReShiki/pull/299)).

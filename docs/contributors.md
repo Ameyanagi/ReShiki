@@ -44,7 +44,7 @@ Merged, unreleased: @Ameyanagi — bounded Windows EMF picture import, retained 
 
 Projected fullerene double-bond rendering and matched desktop/export review (merged, unreleased): @Ameyanagi in [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271).
 
-Rear-side opacity and view-occluded cage visibility with preserved molecular data (merged, unreleased): @Ameyanagi in [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289); [current review](changes/rear-visibility-20261010.md), following [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271).
+Rear opacity for view-occluded cage ink with preserved molecular data (merged, unreleased): @Ameyanagi in [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289); [current review](changes/rear-visibility-20261010.md), following [PR #271](https://github.com/Ameyanagi/ReShiki/pull/271).
 
 Independent mechanism-arrow curvature (merged, unreleased): @Ameyanagi in [PR #276](https://github.com/Ameyanagi/ReShiki/pull/276) for [issue #91](https://github.com/Ameyanagi/ReShiki/issues/91), with [matched desktop evidence](changes/mechanism-curvature.md).
 
