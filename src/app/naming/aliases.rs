@@ -1,4 +1,5 @@
 //! Source-labelled aliases share the Import dock and normal linked captions.
+use super::super::workspace::{accessible_command, control, muted_text, section};
 use super::*;
 use iced::widget::column;
 
@@ -68,28 +69,33 @@ impl App {
             AliasTarget::Import => "import-name",
             AliasTarget::Structure => "naming",
         };
-        let mut content = column![text("Curated aliases · offline").size(12)].spacing(6);
+        let mut content = column![section("CURATED ALIASES · OFFLINE")].spacing(6);
         if record.synonyms.is_empty() {
-            content =
-                content.push(text("No curated aliases available in the bundled catalog.").size(11));
+            content = content.push(
+                text("No curated aliases available in the bundled catalog.")
+                    .size(11)
+                    .style(muted_text),
+            );
         }
         for (index, alias) in record.synonyms.iter().enumerate() {
             let selected =
                 target == AliasTarget::Import && self.tab.naming.import_alias == Some(index);
             content = content.push(
                 column![
-                    text(&alias.name).size(13),
-                    text(alias.source.label()).size(10),
+                    text(&alias.name).size(12),
+                    // The source line carries the attribution the licenses
+                    // require, so it stays under every alias.
+                    text(alias.source.label()).size(11).style(muted_text),
                     row![
-                        button(
+                        accessible_command(
                             format!("{prefix}-alias-copy-{index}"),
                             format!("Copy alias {}", alias.name),
-                            text("Copy").size(11)
+                            "Copy"
                         )
                         .on_press_maybe(available.then_some(
                             Message::Naming(Action::Alias(AliasAction::Copy(target, index)))
                         )),
-                        button(
+                        accessible_command(
                             format!("{prefix}-alias-caption-{index}"),
                             format!(
                                 "{} {}",
@@ -100,16 +106,14 @@ impl App {
                                 },
                                 alias.name
                             ),
-                            text(if selected {
-                                "✓ Use below"
-                            } else if target == AliasTarget::Import {
+                            if target == AliasTarget::Import {
                                 "Use below"
                             } else {
                                 "Insert caption"
-                            })
-                            .size(11)
+                            }
                         )
                         .checked(selected)
+                        .style(control(selected))
                         .on_press_maybe(
                             (available && self.naming_can_edit()).then_some(Message::Naming(
                                 Action::Alias(if target == AliasTarget::Import {
@@ -120,17 +124,17 @@ impl App {
                             ))
                         ),
                     ]
-                    .spacing(6),
+                    .spacing(4),
                 ]
                 .spacing(3),
             );
         }
         if target == AliasTarget::Import && self.tab.naming.import_alias.is_some() {
             content = content.push(
-                button(
+                accessible_command(
                     "import-name-original-caption",
                     "Use original input name below",
-                    text("Use original name below").size(11),
+                    "Use original name below",
                 )
                 .on_press_maybe(
                     available
@@ -145,36 +149,36 @@ impl App {
         let mut content = column![].spacing(8);
         if let Some((ticket, record)) = &self.tab.naming.structure {
             let current = ticket.is_current(self.tab.revision, self.tab.file_epoch);
+            content = content.push(section("GENERATED SYSTEMATIC NAME · LOCAL RULES"));
             if !current {
-                content = content.push(text("Previous name · The drawing changed. Generate the selection name again before using it.").size(12));
+                content = content.push(
+                    text("Drawing changed · Generate the name again")
+                        .size(11)
+                        .style(muted_text),
+                );
             }
-            content = content.push(text(record.provenance.label()).size(11));
-            content = content.push(text("Generated systematic name · local rules").size(12));
             if let Some(name) = &record.systematic_name {
-                content = content.push(text(name).size(15));
+                content = content.push(text(name).size(13));
             }
+            content = content.push(text(record.provenance.label()).size(11).style(muted_text));
             for warning in &record.warnings {
                 content = content.push(text(warning).size(11));
             }
             content = content.push(
                 row![
-                    button(
-                        "naming.copy-name",
-                        "Copy systematic name",
-                        text("Copy name").size(11)
-                    )
-                    .on_press(Message::Naming(Action::CopyName)),
-                    button(
+                    accessible_command("naming.copy-name", "Copy systematic name", "Copy name")
+                        .on_press(Message::Naming(Action::CopyName)),
+                    accessible_command(
                         "naming.caption",
                         "Insert systematic name caption",
-                        text("Insert caption").size(11)
+                        "Insert caption"
                     )
                     .on_press_maybe(
                         (current && self.naming_can_show_molecule())
                             .then_some(Message::Naming(Action::Caption))
                     ),
                 ]
-                .spacing(6),
+                .spacing(4),
             );
             content = content.push(self.alias_controls(AliasTarget::Structure, record));
         }

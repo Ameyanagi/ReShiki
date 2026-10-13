@@ -26,14 +26,19 @@ async fn setup_controls_expose_live_state_and_next_actions() {
         ui.operate(&renderer, &mut operation::black_box(&mut collect));
         let snapshot = collect.snapshot();
         assert!(snapshot.duplicate_ids.is_empty());
-        for id in ["assistant.setup.help", "assistant.setup.drawing"] {
-            assert!(
-                snapshot
-                    .nodes
-                    .iter()
-                    .any(|node| node.id == id && node.enabled)
-            );
-        }
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| node.id == "assistant.setup.help" && node.enabled)
+        );
+        // The header ‹ returns to the inspector; the card has no second way.
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .all(|node| node.id != "assistant.setup.drawing")
+        );
         let next = if state == Connection::Checking {
             "assistant.setup.cancel"
         } else {
@@ -163,5 +168,25 @@ fn setup_help_runs_in_a_task_and_only_failure_changes_status() {
             format!("Could not open the browser. Visit {}", help.url())
         );
         assert!(app.assistant.error);
+    }
+}
+
+#[test]
+fn status_repeats_only_the_failure_the_card_shows() {
+    use codex::ConnectionError::{HandshakeFailed, MissingInstallation};
+    let missing = Connection::Failed(MissingInstallation);
+    assert!(missing.repeats(&MissingInstallation.to_string()));
+    assert!(!missing.repeats(&HandshakeFailed.to_string()));
+    assert!(!missing.repeats("Could not open the browser. Visit https://example.com"));
+    assert!(Connection::SignInRequired.repeats(SIGN_IN_STATUS));
+    assert!(!Connection::SignInRequired.repeats("Connected to Codex"));
+    for state in [
+        Connection::Unchecked,
+        Connection::Checking,
+        Connection::Ready,
+        Connection::Cancelled,
+    ] {
+        assert!(!state.repeats(SIGN_IN_STATUS));
+        assert!(!state.repeats(&MissingInstallation.to_string()));
     }
 }

@@ -4,6 +4,11 @@ use crate::canvas::layered::canvas;
 use reshiki::arrows::{ArrowStyle, Head, HeadShape, NoGo, Preset};
 use reshiki::graphics::LinePattern;
 
+/// The arrow card's one line of gesture help; the full text is in the guide.
+const GESTURE_HINT: &str = "Drag the diamond to bend, the squares to aim each end";
+const ATTACH_HINT: &str =
+    "Click a source, then a destination · Alt-click or turn this off for a free arrow";
+
 #[derive(Debug, Clone, Copy)]
 pub enum Field {
     Line,
@@ -278,8 +283,8 @@ impl App {
                 .into();
     }
     pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
-        use super::workspace::{muted_text, section};
-        use iced::widget::{button, checkbox, column, row, text};
+        use super::workspace::{accessible_command, command, hover_hint, muted_text, section};
+        use iced::widget::{Space, checkbox, column, row, text, tooltip};
         use iced::{Alignment, Length};
         let s = &self.tab.arrows.style;
         let has_selection = self
@@ -319,9 +324,12 @@ impl App {
                     .on_submit(Message::ArrowAction(Action::ApplyNumber(field)))
                     .into()
             };
-            row![text(label).size(11).width(Length::Fill), input,]
-                .spacing(6)
-                .align_y(Alignment::Center)
+            row![
+                text(label).size(11).width(Length::Fill),
+                hover_hint(input, "Enter applies", tooltip::Position::Top),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center)
         };
         let mut panel = column![
             section(if has_selection {
@@ -383,12 +391,16 @@ impl App {
                 )
                 .text_size(12)
                 .padding(5),
-                crate::appearance::text_input("#RRGGBB", &self.tab.arrows.color)
-                    .on_input(|v| Message::ArrowAction(Action::Color(v)))
-                    .on_submit(Message::ArrowAction(Action::ApplyColor))
-                    .size(12)
-                    .padding(5)
-                    .width(Length::Fill)
+                hover_hint(
+                    crate::appearance::text_input("#RRGGBB", &self.tab.arrows.color)
+                        .on_input(|v| Message::ArrowAction(Action::Color(v)))
+                        .on_submit(Message::ArrowAction(Action::ApplyColor))
+                        .size(12)
+                        .padding(5)
+                        .width(Length::Fill),
+                    "Hex color · Enter applies",
+                    tooltip::Position::Top,
+                )
             ]
             .spacing(6),
             number("Line width (pt)", Field::Line),
@@ -434,67 +446,82 @@ impl App {
                     .text_size(12),
             );
         if self.tab.arrow_style.supports_attachments() {
-            panel = panel.push(
+            panel = panel.push(hover_hint(
                 checkbox(self.tab.arrows.attach_targets)
                     .label("Attach targets (two clicks)")
                     .on_toggle(|value| Message::ArrowAction(Action::AttachTargets(value)))
                     .size(14)
                     .text_size(12),
-            );
-            let hint = "Click a source then a destination. Alt-click or turn off Attach targets for free arrows; dragging remains free.";
-            panel = panel.push(text(hint).size(11).style(muted_text));
-        }
-        if has_selection {
-            panel = panel.push(
-                row![
-                    reshiki::accessibility::button(
-                        "arrow.reverse",
-                        "Reverse",
-                        text("Reverse").size(11)
-                    )
-                    .on_press(Message::ArrowAction(Action::Reverse)),
-                    reshiki::accessibility::button(
-                        "arrow.flip-bend",
-                        "Flip bend",
-                        text("Flip bend").size(11)
-                    )
-                    .on_press(Message::ArrowAction(Action::Flip)),
-                    reshiki::accessibility::button(
-                        "arrow.straighten",
-                        "Straighten",
-                        text("Straighten").size(11)
-                    )
-                    .on_press(Message::ArrowAction(Action::Straighten))
-                ]
-                .spacing(4),
-            );
+                ATTACH_HINT,
+                tooltip::Position::Top,
+            ));
         }
         if has_selection {
             let (start, end) = self.selected_arrow_anchors();
+            let action = |id, name, message| {
+                accessible_command(id, name, name)
+                    .width(Length::Fill)
+                    .on_press(Message::ArrowAction(message))
+            };
+            // Unavailable Detach buttons say why on hover.
+            let detach = |id, name, label, message: Option<Action>, why| {
+                let available = message.is_some();
+                let button = accessible_command(id, name, label)
+                    .width(Length::Fill)
+                    .on_press_maybe(message.map(Message::ArrowAction));
+                if available {
+                    Element::from(button)
+                } else {
+                    hover_hint(button, why, tooltip::Position::Top).into()
+                }
+            };
             panel = panel.push(
-                row![
-                    reshiki::accessibility::button(
-                        "arrow.detach-start",
-                        "Detach arrow start",
-                        text("Detach start").size(11)
-                    )
-                    .on_press_maybe(start.then_some(Message::ArrowAction(Action::DetachStart))),
-                    reshiki::accessibility::button(
-                        "arrow.detach-end",
-                        "Detach arrow end",
-                        text("Detach end").size(11)
-                    )
-                    .on_press_maybe(end.then_some(Message::ArrowAction(Action::DetachEnd)))
+                column![
+                    row![
+                        action("arrow.reverse", "Reverse", Action::Reverse),
+                        action("arrow.flip-bend", "Flip bend", Action::Flip),
+                    ]
+                    .spacing(4),
+                    row![
+                        action("arrow.straighten", "Straighten", Action::Straighten),
+                        Space::new().width(Length::Fill),
+                    ]
+                    .spacing(4),
+                    row![
+                        detach(
+                            "arrow.detach-start",
+                            "Detach arrow start",
+                            "Detach start",
+                            start.then_some(Action::DetachStart),
+                            "Start is not attached",
+                        ),
+                        detach(
+                            "arrow.detach-end",
+                            "Detach arrow end",
+                            "Detach end",
+                            end.then_some(Action::DetachEnd),
+                            "End is not attached",
+                        ),
+                    ]
+                    .spacing(4),
                 ]
-                .spacing(4),
+                .spacing(2),
             );
         }
-        geometry = geometry.push(
-            button(text("Reset arrow style").size(11))
-                .on_press(Message::ArrowAction(Action::Reset)),
-        );
-        panel.push(self.inspector_section(super::inspector::Section::ArrowGeometry, "Arrowhead & markers", "", false, geometry))
-            .push(text("Drag circles to move endpoints, the diamond to bend, or squares on direction lines to adjust each end independently. Escape cancels a drag. Return applies fields.").size(11).style(muted_text)).into()
+        geometry = geometry.push(command(
+            "Reset arrow style",
+            Message::ArrowAction(Action::Reset),
+        ));
+        panel
+            .push(self.inspector_section(
+                super::inspector::Section::ArrowGeometry,
+                "Arrowhead & markers",
+                "",
+                false,
+                geometry,
+            ))
+            .push(text(GESTURE_HINT).size(11).style(muted_text))
+            .into()
     }
     pub(super) fn set_arrow_style(&mut self, style: Preset) {
         self.tab.arrows.cancel_source();

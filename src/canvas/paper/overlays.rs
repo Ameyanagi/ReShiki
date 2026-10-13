@@ -1,7 +1,7 @@
 //! Editing aids drawn over the document: handles, notices and badges, gesture outlines and hover, the erase cursor, the selection box and tilt bounds.
 
 use crate::canvas::hit::{bond_target_with, hit_selection_with_orbital};
-use crate::canvas::overlay::{ACCENT, ACCENT_TINT, ARROW_SOURCE};
+use crate::canvas::overlay::{ACCENT, ACCENT_STRONG, ACCENT_TINT};
 use crate::canvas::{
     Gesture, Handle, MoleculeCanvas, SelectionBox, State, Tool, World, layered, markers, pick, rgb,
 };
@@ -96,9 +96,9 @@ impl MoleculeCanvas<'_> {
                 paint,
             )
         });
-        for (target, color, radius) in [
-            (self.arrows.source, ARROW_SOURCE, 10.),
-            (hovered.as_ref(), ACCENT, 8.),
+        for (target, color, radius, width) in [
+            (self.arrows.source, ACCENT_STRONG, 10., 2.),
+            (hovered.as_ref(), ACCENT, 8., 1.5),
         ] {
             if let Some((target, center)) =
                 target.and_then(|t| t.center(self.doc).map(|center| (t, center)))
@@ -135,7 +135,7 @@ impl MoleculeCanvas<'_> {
                 });
                 frame.stroke(
                     &Path::circle(self.camera.screen(center, bounds), radius),
-                    Stroke::default().with_width(1.5).with_color(color),
+                    Stroke::default().with_width(width).with_color(color),
                 );
             }
         }

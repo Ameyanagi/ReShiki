@@ -1,11 +1,13 @@
-use super::{App, Message, inspector::Section, workspace::muted_text};
-use iced::widget::{column, row, text};
+use super::workspace::{accessible_command, accessible_unit_field, hover_hint, muted_text};
+use super::{App, Message, inspector::Section};
+use iced::widget::{column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use std::collections::HashSet;
 
-const REAR_OPACITY_HINT: &str =
-    "100% keeps all ink. 0% hides occluded rear cage ink. Exposed outlines stay solid.";
+const REAR_OPACITY_HINT: &str = "0% hides bonds behind the front face · Outlines stay solid";
+/// Wide enough for "100" and the unit inside the field.
+const REAR_OPACITY_FIELD: f32 = 64.;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -87,37 +89,39 @@ impl App {
                 let revision = self.tab.revision;
                 let file_epoch = self.tab.file_epoch;
                 let apply = Message::DepthAppearance(Action::ApplyRear);
+                let field = reshiki::accessibility::text_input(
+                    "projection-rear-opacity",
+                    "Rear opacity percent",
+                    "Mixed",
+                    &value,
+                )
+                .style(crate::appearance::input_style)
+                .on_input(move |value| {
+                    Message::DepthAppearance(Action::RearInput(Draft {
+                        ids: ids.clone(),
+                        revision,
+                        file_epoch,
+                        value,
+                    }))
+                })
+                .on_submit(apply.clone());
                 column![
-                    text("Rear opacity (%)").size(12),
                     row![
-                        reshiki::accessibility::text_input(
-                            "projection-rear-opacity",
-                            "Rear opacity percent",
-                            "Mixed",
-                            &value
-                        )
-                        .style(crate::appearance::input_style)
-                        .on_input(move |value| {
-                            Message::DepthAppearance(Action::RearInput(Draft {
-                                ids: ids.clone(),
-                                revision,
-                                file_epoch,
-                                value,
-                            }))
-                        })
-                        .on_submit(apply.clone())
-                        .width(Length::Fixed(80.))
-                        .size(12),
-                        reshiki::accessibility::button(
+                        text("Rear opacity").size(12).width(Length::Fill),
+                        container(hover_hint(
+                            accessible_unit_field(field, "%"),
+                            "0–100 · Enter applies",
+                            tooltip::Position::Top,
+                        ))
+                        .width(REAR_OPACITY_FIELD),
+                        accessible_command(
                             "projection-rear-opacity-apply",
                             "Apply rear opacity",
-                            text("Apply").size(12)
+                            "Apply"
                         )
-                        .padding([7, 9])
-                        .style(super::workspace::control(false))
                         .on_press(apply),
                     ]
-                    .spacing(8)
+                    .spacing(6)
                     .align_y(Alignment::Center),
                     text(REAR_OPACITY_HINT).size(11).style(muted_text),
                 ]

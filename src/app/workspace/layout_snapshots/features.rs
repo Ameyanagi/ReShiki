@@ -676,6 +676,18 @@ fn assistant_install(app: &mut App, _: &Driver<'_>) {
     );
 }
 
+/// Codex installed but signed out: the sign-in step, with the commands in
+/// a monospace font.
+fn assistant_sign_in(app: &mut App, _: &Driver<'_>) {
+    assistant_checked(
+        app,
+        Ok(reshiki::assistant::codex::Account {
+            connected: false,
+            models: vec![],
+        }),
+    );
+}
+
 /// Connected: the guided ethanol image exercise attached, before Send.
 fn assistant_example(app: &mut App, d: &Driver<'_>) {
     d.scroll_inspector(-6.);
@@ -689,7 +701,7 @@ fn assistant_example(app: &mut App, d: &Driver<'_>) {
     let _ = app.update(Message::Assistant(assistant::Action::ImageExample));
 }
 
-pub(in crate::app::workspace) const STATES: [(&str, Scene); 34] = [
+pub(in crate::app::workspace) const STATES: [(&str, Scene); 35] = [
     ("nmr-proton", nmr_proton),
     ("nmr-carbon-labels", nmr_carbon_labels),
     ("nmr-label-menu", nmr_label_menu),
@@ -723,6 +735,7 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 34] = [
     ("porphine", porphine),
     ("export-office-svg", export_office_svg),
     ("assistant-install", assistant_install),
+    ("assistant-sign-in", assistant_sign_in),
     ("assistant-example", assistant_example),
 ];
 

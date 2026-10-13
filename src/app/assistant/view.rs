@@ -97,7 +97,7 @@ impl App {
     fn assistant_chat(&self) -> Element<'_, Message> {
         let state = &self.assistant;
         let mut chat = column![].spacing(12).padding([2, 2]).width(Length::Fill);
-        if state.messages.is_empty() || state.connection != super::setup::Connection::Ready {
+        if self.assistant_setup_shown() {
             chat = chat.push(self.assistant_setup_card());
         }
         if state.guided_example {
@@ -144,6 +144,10 @@ impl App {
             ));
         }
         chat.into()
+    }
+    fn assistant_setup_shown(&self) -> bool {
+        let state = &self.assistant;
+        state.messages.is_empty() || state.connection != super::setup::Connection::Ready
     }
     fn assistant_activity_card(&self) -> Element<'_, Message> {
         let state = &self.assistant;
@@ -374,7 +378,9 @@ impl App {
                 .style(super::super::workspace::muted_text),
             );
         }
-        if state.error {
+        // The setup card already explains a failed check.
+        let repeated = self.assistant_setup_shown() && state.connection.repeats(&state.status);
+        if state.error && !repeated {
             activity = activity.push(
                 text(&state.status)
                     .size(11)

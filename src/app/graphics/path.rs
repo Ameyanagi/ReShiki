@@ -1,16 +1,13 @@
 //! Contextual pen authoring and node edits.
+use super::super::workspace::{accessible_command, text_width};
 use super::*;
 use iced::widget::{Column, column, row, text};
 use reshiki::graphics::{Graphic, PathHandle, PathSummary};
 
-const NODE_HINT: &str =
-    "Round nodes carry adjacent controls. Square controls change each tangent independently.";
-const CONTROL_HINT: &str =
-    "A direction control is selected. Drag its square, or choose a node above.";
-const DRAWING_HINT: &str = concat!(
-    "Drag the first segment. Then click for a line or drag a new node for a curve. ",
-    "Click the first node to close. Escape cancels the active gesture."
-);
+/// The block's one line of help; the full gestures are in the guide.
+const DRAWING_HINT: &str = "Click adds a line · Drag adds a curve · Click the first node to close";
+/// Shown instead while a direction control, not a node, is selected.
+const CONTROL_HINT: &str = "Direction control selected · Pick a node above";
 
 #[derive(Debug, Clone, Copy)]
 pub enum Action {
@@ -31,23 +28,26 @@ struct Choice {
     ordinal: usize,
     index: usize,
 }
+/// A pen command, two to a row.
 fn path_button(
     id: &'static str,
     label: &'static str,
 ) -> reshiki::accessibility::Button<'static, Message> {
-    reshiki::accessibility::button(id, label, text(label).size(11))
-        .padding([6, 8])
-        .style(control(false))
+    accessible_command(id, label, label)
 }
-fn path_hint(node: Option<usize>) -> Element<'static, Message> {
-    text(if node.is_some() {
-        NODE_HINT
-    } else {
-        CONTROL_HINT
-    })
-    .size(11)
-    .style(muted_text)
-    .into()
+/// A row label, as wide as the widest one so that the controls line up.
+fn path_label(label: &'static str) -> Element<'static, Message> {
+    let width = [SELECTED_NODE, NEXT_SEGMENT]
+        .map(|label| text_width(label, 11.))
+        .into_iter()
+        .fold(0., f32::max)
+        + 2.;
+    text(label).size(11).width(width).into()
+}
+const SELECTED_NODE: &str = "Selected node";
+const NEXT_SEGMENT: &str = "Next segment";
+fn path_hint(hint: &'static str) -> Element<'static, Message> {
+    text(hint).size(11).style(muted_text).into()
 }
 impl std::fmt::Display for Choice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,21 +71,37 @@ impl App {
     }
     pub(super) fn path_controls(&self) -> Element<'_, Message> {
         let send = |a| Message::Graphics(super::Action::Path(a));
-        let mut panel = column![
-            section("PEN PATH"),
-            row![
-                path_button("pen-new", "New path").on_press(send(Action::New)),
-                path_button("pen-finish", "Finish").on_press(send(Action::Finish))
-            ]
-            .spacing(5)
-        ]
-        .spacing(8);
-        if let Some((graphic, summary)) = self.selected_path() {
-            panel = self.path_node_controls(panel, graphic, &summary);
+        let mut panel = column![section("PEN PATH")].spacing(8);
+        // Outside the Pen path tool, Done in the context row ends editing and
+        // the tool itself starts a new path.
+        let drawing = self.tool == Tool::Graphic(GraphicKind::Path);
+        if drawing {
+            panel = panel.push(
+                row![
+                    path_button("pen-new", "New path").on_press(send(Action::New)),
+                    path_button("pen-finish", "Finish").on_press(send(Action::Finish))
+                ]
+                .spacing(4),
+            );
         }
-        panel
-            .push(text(DRAWING_HINT).size(11).style(muted_text))
-            .into()
+        let mut hint = drawing.then_some(DRAWING_HINT);
+        if let Some((graphic, summary)) = self.selected_path() {
+            let node = self.path_node(graphic, &summary).is_some();
+            panel = self.path_node_controls(panel, graphic, &summary);
+            if !node {
+                hint = Some(CONTROL_HINT);
+            }
+        }
+        match hint {
+            Some(hint) => panel.push(path_hint(hint)).into(),
+            None => panel.into(),
+        }
+    }
+    /// The position of the selected node among the path's nodes, or `None`
+    /// while a direction control is selected.
+    fn path_node(&self, graphic: &Graphic, summary: &PathSummary) -> Option<usize> {
+        let point = self.path_point(graphic, &summary.handles);
+        summary.nodes().position(|h| Some(h.index) == point)
     }
     fn path_node_controls<'a>(
         &'a self,
@@ -102,10 +118,7 @@ impl App {
                 index: h.index,
             })
             .collect();
-        let point = self.path_point(graphic, &summary.handles);
-        let node = choices
-            .iter()
-            .position(|choice| Some(choice.index) == point);
+        let node = self.path_node(graphic, summary);
         let closed = summary.closed;
         let following = node.is_some_and(|i| summary.has_following(i));
         panel
@@ -118,48 +131,56 @@ impl App {
                 .size(12),
             )
             .push(
-                crate::appearance::pick_list(
-                    choices.clone(),
-                    node.and_then(|i| choices.get(i).copied()),
-                    move |choice| send(Action::Node(choice.index)),
-                )
-                .text_size(12)
-                .padding(5)
-                .width(Length::Fill),
-            )
-            .push(
-                row![
-                    path_button("pen-insert", "Insert after")
-                        .on_press_maybe(following.then(|| send(Action::Insert))),
-                    path_button("pen-delete", "Delete node").on_press_maybe(
-                        (node.is_some() && summary.can_delete_node()).then(|| send(Action::Delete))
-                    )
+                column![
+                    row![
+                        path_label(SELECTED_NODE),
+                        crate::appearance::pick_list(
+                            choices.clone(),
+                            node.and_then(|i| choices.get(i).copied()),
+                            move |choice| send(Action::Node(choice.index)),
+                        )
+                        .text_size(12)
+                        .padding(5)
+                        .width(Length::Fill),
+                    ]
+                    .spacing(4)
+                    .align_y(Alignment::Center),
+                    // The segment that follows the selected node.
+                    row![
+                        path_label(NEXT_SEGMENT),
+                        accessible_command("pen-straight", "Straight segment", "Straight")
+                            .on_press_maybe(following.then(|| send(Action::Straight))),
+                        accessible_command("pen-curved", "Curved segment", "Curved")
+                            .on_press_maybe(following.then(|| send(Action::Curved)))
+                    ]
+                    .spacing(4)
+                    .align_y(Alignment::Center),
                 ]
-                .spacing(5),
+                .spacing(4),
             )
             .push(
-                row![
-                    path_button("pen-straight", "Straight segment")
-                        .on_press_maybe(following.then(|| send(Action::Straight))),
-                    path_button("pen-curved", "Curved segment")
-                        .on_press_maybe(following.then(|| send(Action::Curved)))
-                ]
-                .spacing(5),
-            )
-            .push(
-                row![
-                    path_button("pen-close", if closed { "Open path" } else { "Close path" })
-                        .on_press_maybe(
-                            (closed || summary.can_close()).then(|| {
+                column![
+                    row![
+                        path_button("pen-insert", "Insert after")
+                            .on_press_maybe(following.then(|| send(Action::Insert))),
+                        path_button("pen-delete", "Delete node").on_press_maybe(
+                            (node.is_some() && summary.can_delete_node())
+                                .then(|| send(Action::Delete))
+                        )
+                    ]
+                    .spacing(4),
+                    row![
+                        path_button("pen-close", if closed { "Open path" } else { "Close path" })
+                            .on_press_maybe((closed || summary.can_close()).then(|| {
                                 send(if closed { Action::Open } else { Action::Close })
-                            })
-                        ),
-                    path_button("pen-continue", "Continue drawing")
-                        .on_press_maybe((!closed).then(|| send(Action::Continue)))
+                            })),
+                        path_button("pen-continue", "Continue drawing")
+                            .on_press_maybe((!closed).then(|| send(Action::Continue)))
+                    ]
+                    .spacing(4),
                 ]
-                .spacing(5),
+                .spacing(2),
             )
-            .push(path_hint(node))
     }
     pub(super) fn path_action(&mut self, action: Action) {
         match action {

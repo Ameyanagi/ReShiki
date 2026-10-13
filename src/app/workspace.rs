@@ -893,10 +893,24 @@ impl App {
             {
                 let automatic = reshiki::depth_appearance::is_automatic_for(&self.tab.doc, &ids);
                 commands.push(RowCommand {
-                    label: if automatic { "Freeze depth" } else { "Enhance depth" },
-                    menu: if automatic { "Freeze depth appearance" } else { "Enhance depth appearance" },
-                    hint: "Fade hidden rear cage ink while keeping exposed outlines solid; freezing preserves depth colors",
-                    message: Message::DepthAppearance(super::depth_appearance::Action::Enhance(!automatic)),
+                    label: if automatic {
+                        "Freeze depth"
+                    } else {
+                        "Enhance depth"
+                    },
+                    menu: if automatic {
+                        "Freeze depth appearance"
+                    } else {
+                        "Enhance depth appearance"
+                    },
+                    hint: if automatic {
+                        "Keep the current depth colors"
+                    } else {
+                        "Fade bonds behind the front face"
+                    },
+                    message: Message::DepthAppearance(super::depth_appearance::Action::Enhance(
+                        !automatic,
+                    )),
                     enabled: true,
                 });
                 if reshiki::depth_appearance::has(&self.tab.doc, &ids) {
@@ -2767,6 +2781,43 @@ pub(super) fn command(label: &str, message: Message) -> button::Button<'_, Messa
         .padding([7, 9])
         .on_press(message)
         .style(control(false))
+}
+/// A `command` with an accessibility id and name, for controls that
+/// assistive technology and tests activate by id. The caller sets its action.
+pub(super) fn accessible_command<'a>(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    label: impl text::IntoFragment<'a>,
+) -> reshiki::accessibility::Button<'a, Message> {
+    reshiki::accessibility::button(id, name, text(label).size(12))
+        .padding([7, 9])
+        .style(control(false))
+}
+/// A checkbox that publishes its id, name and checked state; `message` is
+/// the toggle, or `None` while it is unavailable.
+pub(super) fn accessible_checkbox<'a>(
+    id: &'static str,
+    label: &'static str,
+    checked: bool,
+    message: Option<Message>,
+) -> reshiki::accessibility::Button<'a, Message> {
+    let toggle = message.clone();
+    reshiki::accessibility::button(
+        id,
+        label,
+        checkbox(checked)
+            .label(label)
+            .on_toggle_maybe(toggle.map(|message| move |_| message.clone()))
+            .size(14)
+            .text_size(12),
+    )
+    .checked(checked)
+    .on_press_maybe(message)
+    .padding(0)
+    .style(|theme: &Theme, _| button::Style {
+        text_color: theme.palette().text,
+        ..Default::default()
+    })
 }
 /// `title · keys` with the shortcut of `message`, for plain-text hints.
 pub(super) fn keyed(title: &str, message: &Message) -> String {

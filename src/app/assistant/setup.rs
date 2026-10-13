@@ -1,7 +1,8 @@
 //! Optional Assistant setup and a local, known-reference image exercise.
 use super::{Action, card};
-use crate::app::{App, InspectorTab, Message};
-use iced::widget::{Column, Row, column, container, row, text};
+use crate::app::workspace::{accessible_command, muted_text};
+use crate::app::{App, Message};
+use iced::widget::{Column, Row, column, container, rich_text, row, span, text};
 use iced::{Element, Length, Task};
 use reshiki::{assistant::codex, document::Document, pictures::Picture};
 
@@ -52,6 +53,15 @@ impl Connection {
         }
     }
 
+    /// Whether `status` only repeats the problem this card already shows.
+    pub(super) fn repeats(self, status: &str) -> bool {
+        match self {
+            Self::SignInRequired => status == SIGN_IN_STATUS,
+            Self::Failed(error) => status == error.to_string(),
+            _ => false,
+        }
+    }
+
     pub(super) fn cancel_check(&mut self) -> bool {
         let checking = *self == Self::Checking;
         if checking {
@@ -94,6 +104,8 @@ const CHECKING_DETAIL: &str = concat!(
     "ReShiki is checking the local Codex executable, saved sign-in and model catalog. You ",
     "can cancel and keep drawing.",
 );
+/// The status after a check that found Codex installed but signed out.
+pub(super) const SIGN_IN_STATUS: &str = "Run `codex login` to sign in, then reconnect.";
 const SIGN_IN_TITLE: &str = "Sign in to Codex";
 const SIGN_IN_DETAIL: &str = concat!(
     "Codex is installed. In a terminal, run `codex login` and complete the browser ",
@@ -148,27 +160,35 @@ const DRAWING_TRANSFER: &str = concat!(
     "shares rendered drafts. Account usage limits apply.",
 );
 
-fn setup_button<'a>(
-    id: &'static str,
-    label: &'static str,
-) -> reshiki::accessibility::Button<'a, Message> {
-    reshiki::accessibility::button(id, label, text(label).size(12))
-        .style(super::super::workspace::control(false))
-}
-
+/// A setup command; `primary` marks the card's next step.
 fn setup_action<'a>(
     id: &'static str,
     label: &'static str,
     value: Action,
+    primary: bool,
 ) -> reshiki::accessibility::Button<'a, Message> {
-    setup_button(id, label)
-        .padding([7, 10])
-        .on_press(Message::Assistant(value))
+    let button = accessible_command(id, label, label).on_press(Message::Assistant(value));
+    if primary {
+        button.style(crate::appearance::primary)
+    } else {
+        button
+    }
 }
 
-fn back_to_drawing<'a>() -> reshiki::accessibility::Button<'a, Message> {
-    setup_button("assistant.setup.drawing", "Back to drawing")
-        .on_press(Message::Inspector(InspectorTab::Properties))
+/// `detail` with each `command` in backticks set in a monospace font.
+fn detail_text(detail: &str) -> Element<'static, Message> {
+    let spans = detail.split('`').enumerate().map(|(index, part)| {
+        let part: iced::widget::text::Span<'static> = span(part.to_owned());
+        if index % 2 == 1 {
+            part.font(iced::Font::MONOSPACE)
+        } else {
+            part
+        }
+    });
+    rich_text(spans.collect::<Vec<_>>())
+        .size(12)
+        .width(Length::Fill)
+        .into()
 }
 
 fn reference() -> Result<Document, String> {
@@ -224,7 +244,7 @@ impl App {
     pub(super) fn assistant_setup_card(&self) -> Element<'_, Message> {
         let copy = self.assistant.connection.copy();
         let actions = self.setup_actions(&copy);
-        let content = column![text(copy.title).size(16), text(copy.detail).size(12)]
+        let content = column![text(copy.title).size(16), detail_text(&copy.detail)]
             .spacing(9)
             .width(Length::Fill)
             .push(actions);
@@ -238,6 +258,9 @@ impl App {
 
     fn setup_actions(&self, copy: &SetupCopy) -> Row<'_, Message> {
         let state = &self.assistant;
+        // Instructions are the next step while Codex is missing or signed
+        // out; otherwise it is the connection test, or the example once ready.
+        let instructions = !matches!(copy.help, Help::Setup);
         let mut actions = row![setup_action(
             "assistant.setup.help",
             match copy.help {
@@ -245,7 +268,8 @@ impl App {
                 Help::SignIn => "Sign-in instructions",
                 Help::Setup => "Setup guide",
             },
-            Action::SetupHelp(copy.help)
+            Action::SetupHelp(copy.help),
+            instructions,
         )]
         .spacing(6);
         if state.connection == Connection::Checking {
@@ -253,33 +277,39 @@ impl App {
                 "assistant.setup.cancel",
                 "Cancel check",
                 Action::Stop,
+                false,
             ));
         } else {
             let title = copy.title;
             let detail = &copy.detail;
             let value = format!("{title}. {detail}. {TRANSFER}");
+            let next = !instructions && state.connection != Connection::Ready;
             actions = actions.push(
-                setup_action("assistant.setup.test", "Test connection", Action::Connect)
-                    .value(value)
-                    .on_press_maybe((!state.busy).then_some(Message::Assistant(Action::Connect))),
+                setup_action(
+                    "assistant.setup.test",
+                    "Test connection",
+                    Action::Connect,
+                    next,
+                )
+                .value(value)
+                .on_press_maybe((!state.busy).then_some(Message::Assistant(Action::Connect))),
             );
         }
         actions
     }
 
+    /// The credential note and, once connected, the example. The composer
+    /// note below the input says what Send shares.
     fn setup_footer<'a>(&self, mut content: Column<'a, Message>) -> Column<'a, Message> {
         let state = &self.assistant;
-        content = content.push(
-            text(CREDENTIALS)
-                .size(11)
-                .style(super::super::workspace::muted_text),
-        );
+        content = content.push(text(CREDENTIALS).size(11).style(muted_text));
         if state.connection == Connection::Ready && !state.guided_example {
             content = content.push(
                 setup_action(
                     "assistant.setup.example",
                     "Try example image · ethanol",
                     Action::ImageExample,
+                    true,
                 )
                 .value(
                     "Attach original ethanol image locally; Send and Apply require your actions.",
@@ -291,12 +321,6 @@ impl App {
             );
         }
         content
-            .push(
-                text(TRANSFER)
-                    .size(11)
-                    .style(super::super::workspace::muted_text),
-            )
-            .push(back_to_drawing())
     }
 
     pub(super) fn assistant_example_card(&self) -> Element<'_, Message> {
@@ -321,11 +345,7 @@ impl App {
                     .height(100),
             );
         }
-        content = content.push(
-            text(EXAMPLE_CAUTION)
-                .size(11)
-                .style(super::super::workspace::muted_text),
-        );
+        content = content.push(text(EXAMPLE_CAUTION).size(11).style(muted_text));
         container(content)
             .padding(12)
             .width(Length::Fill)
@@ -339,10 +359,7 @@ impl App {
         } else {
             DRAWING_TRANSFER
         };
-        text(note)
-            .size(10)
-            .style(super::super::workspace::muted_text)
-            .into()
+        text(note).size(10).style(muted_text).into()
     }
 }
 

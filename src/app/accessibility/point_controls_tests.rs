@@ -388,9 +388,12 @@ async fn pen_node_buttons_publish_actions_and_keyboard_insert_is_one_undo() {
         crate::app::graphics::path::Action::Node(0),
     )));
     let snapshot = ui.snapshot(&app);
+    // New path and Finish belong to the Pen path tool; with the Select
+    // tool, the tool palette starts a path and nothing needs finishing.
+    for id in ["pen-new", "pen-finish"] {
+        assert!(snapshot.nodes.iter().all(|node| node.id != id), "{id}");
+    }
     for id in [
-        "pen-new",
-        "pen-finish",
         "pen-insert",
         "pen-delete",
         "pen-straight",
@@ -444,6 +447,13 @@ async fn pen_node_buttons_publish_actions_and_keyboard_insert_is_one_undo() {
     );
     ui.undo(&mut app);
     assert_eq!(app.tab.doc, before, "one keyboard insert is one Undo");
+    let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Path)));
+    let snapshot = ui.snapshot(&app);
+    for id in ["pen-new", "pen-finish"] {
+        let node = snapshot.nodes.iter().find(|node| node.id == id).expect(id);
+        assert_eq!(node.role, Role::Button);
+        assert!(node.enabled);
+    }
 }
 
 #[tokio::test]

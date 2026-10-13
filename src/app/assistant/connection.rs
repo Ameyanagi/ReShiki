@@ -41,7 +41,7 @@ impl App {
                 self.assistant.status = if account.connected {
                     "Connected to Codex".into()
                 } else {
-                    "Run `codex login` to sign in, then reconnect.".into()
+                    super::setup::SIGN_IN_STATUS.into()
                 };
                 self.assistant.account = Some(account);
             }
