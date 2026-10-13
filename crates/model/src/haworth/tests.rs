@@ -1,5 +1,32 @@
 use super::*;
 
+#[test]
+fn recognized_haworth_atoms_include_ring_and_direct_substituents() -> anyhow::Result<()> {
+    for template in templates().map_err(anyhow::Error::msg)? {
+        let mut doc = template.document;
+        let ring: std::collections::HashSet<_> = doc
+            .bonds
+            .iter()
+            .filter(|bond| bond.projection)
+            .flat_map(|bond| [bond.a, bond.b])
+            .collect();
+        let mut expected = ring.clone();
+        for bond in &doc.bonds {
+            if ring.contains(&bond.a) || ring.contains(&bond.b) {
+                expected.extend([bond.a, bond.b]);
+            }
+        }
+        let outside = doc.add_atom("N", Point::new(300., 0.));
+        let recognized = interchange::recognized_atoms(&doc);
+        assert_eq!(recognized, expected, "{}", template.name);
+        assert!(!recognized.contains(&outside));
+
+        doc.atoms[0].position.x += 20.;
+        assert!(interchange::recognized_atoms(&doc).is_empty());
+    }
+    Ok(())
+}
+
 fn label_ring_intersections(doc: &Document) -> anyhow::Result<Vec<(u64, u64, u64)>> {
     use anyhow::Context;
     let mut intersections = Vec::new();

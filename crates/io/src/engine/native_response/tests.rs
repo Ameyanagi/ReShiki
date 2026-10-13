@@ -114,6 +114,40 @@ async fn projected_engine_analyze_and_exports_preserve_the_drawing() -> anyhow::
                 let output = response
                     .output
                     .ok_or_else(|| anyhow::anyhow!("Missing MOL"))?;
+                if matches!(text, "F/C=C/F" | "F/C=C\\F" | "F[C@](Cl)(Br)I") {
+                    assert_eq!(
+                        output.lines().nth(1),
+                        Some("     RDKit          2D"),
+                        "{text} MOL dimension"
+                    );
+                    assert_eq!(
+                        response
+                            .warnings
+                            .iter()
+                            .filter(|notice| notice.as_str() == LOSS_STEREO_FALLBACK)
+                            .count(),
+                        1,
+                        "{text} MOL fallback notice"
+                    );
+                    assert_eq!(
+                        response.warnings.last().map(String::as_str),
+                        Some(LOSS_STEREO_FALLBACK),
+                        "{text} MOL fallback notice order"
+                    );
+                } else {
+                    assert_eq!(
+                        output.lines().nth(1),
+                        Some("     RDKit          3D"),
+                        "{text} MOL dimension"
+                    );
+                    assert!(
+                        !response
+                            .warnings
+                            .iter()
+                            .any(|notice| notice == LOSS_STEREO_FALLBACK),
+                        "{text} unexpected MOL fallback notice"
+                    );
+                }
                 let imported = molfile::read(&output)?;
                 assert_eq!(
                     smiles::write::write(&imported.molecule.state, Default::default())?.text,
@@ -145,7 +179,110 @@ async fn projected_engine_analyze_and_exports_preserve_the_drawing() -> anyhow::
     Ok(())
 }
 
+#[tokio::test]
+async fn haworth_engine_mol_export_uses_2d_without_a_fallback_notice() -> anyhow::Result<()> {
+    use crate::haworth::{Anomer, Sugar, sugar_document};
+    if !loss_notice_helper_available() {
+        return Ok(());
+    }
+    for (sugar, anomer) in [
+        (Sugar::Glucose, Anomer::Alpha),
+        (Sugar::Galactose, Anomer::Beta),
+    ] {
+        let document = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+        let molecule = molecular::prepare(&document)?;
+        let expected = molfile::write_projected_absolute(&molecule, Default::default())?;
+        let expected_smiles = smiles::write::write(&molecule.state, Default::default())?.text;
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("mol".into());
+        let response = execute(request).await?;
+        assert!(
+            !response
+                .warnings
+                .iter()
+                .any(|notice| notice == LOSS_STEREO_FALLBACK),
+            "{sugar:?}/{anomer:?} unexpected MOL fallback notice"
+        );
+        let output = response
+            .output
+            .ok_or_else(|| anyhow::anyhow!("Missing Haworth MOL export"))?;
+        assert_eq!(output, expected);
+        assert_eq!(output.lines().nth(1), Some("     RDKit          2D"));
+        let exported = molfile::read(&output)?;
+        assert!(exported.molecule.positions.iter().all(|p| p.z == 0.));
+        assert_eq!(
+            smiles::write::write(&exported.molecule.state, Default::default())?.text,
+            expected_smiles
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn imported_3d_engine_mol_export_preserves_xyz_without_a_fallback_notice()
+-> anyhow::Result<()> {
+    if !loss_notice_helper_available() {
+        return Ok(());
+    }
+    for (fixture, expected_smiles) in [
+        (
+            include_str!("../../../../../tests/fixtures/mol-import-3d/chiral-3d-v3000.mol"),
+            "F[C@H](Cl)Br",
+        ),
+        (
+            include_str!("../../../../../tests/fixtures/mol-import-3d/alkene-3d-v3000.mol"),
+            "F/C=C/F",
+        ),
+    ] {
+        let (document, _) = molfile::read(fixture)?.display_document()?;
+        assert!(document.atoms.iter().any(|atom| atom.depth != 0.));
+        let before = serde_json::to_value(&document)?;
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("mol".into());
+        let response = execute(request).await?;
+        assert_eq!(serde_json::to_value(response.document)?, before);
+        assert!(
+            !response
+                .warnings
+                .iter()
+                .any(|notice| notice == LOSS_STEREO_FALLBACK),
+            "{expected_smiles} unexpected MOL fallback notice"
+        );
+        let output = response
+            .output
+            .ok_or_else(|| anyhow::anyhow!("Missing imported 3D MOL export"))?;
+        assert_eq!(
+            output.lines().nth(1),
+            Some("     RDKit          3D"),
+            "{expected_smiles} MOL dimension"
+        );
+        let exported = molfile::read(&output)?;
+        assert_eq!(
+            smiles::write::write(&exported.molecule.state, Default::default())?.text,
+            expected_smiles,
+            "Imported 3D MOL identity"
+        );
+        for (atom, position) in document.atoms.iter().zip(&exported.molecule.positions) {
+            for (actual, expected) in [
+                (position.x, f64::from(atom.position.x) / 28.),
+                (position.y, -f64::from(atom.position.y) / 28.),
+                (position.z, f64::from(atom.depth) / 28.),
+            ] {
+                // The default small-molecule writer uses V2000's four decimals.
+                assert!(
+                    (actual - expected).abs() < 5.1e-5,
+                    "{expected_smiles} MOL coordinate changed: {actual} vs {expected}"
+                );
+            }
+        }
+        assert_eq!(serde_json::to_value(&document)?, before);
+    }
+    Ok(())
+}
+
 // Independent literals pin user-visible text rather than following production constants.
+const LOSS_STEREO_FALLBACK: &str =
+    "Exported as 2D because the 3D coordinates no longer match the drawn stereochemistry";
 const LOSS_ATTACHMENT: &str = "Attachment targets retained. Complex identifiers and coordination-valence analysis are unavailable. Formula, when shown, counts the defined atoms and ligands with charges as entered.";
 const LOSS_REAR: &str = "This chemical format does not retain rear opacity. Chemical structure and XYZ are unchanged; use native ReShiki for editable appearance or SVG/PDF/PNG for the figure.";
 const LOSS_ANCHOR: &str = "Arrow curves are preserved; editing attachment links are omitted from this external format. Chemistry is unchanged. Use a native ReShiki file to retain links.";
@@ -158,6 +295,164 @@ const LOSS_REAR_DRAWING_ERROR: &str = "Invalid editable drawing: CDXML/CDX canno
 const LOSS_ATTACHMENT_IDENTIFIER_ERROR: &str = "Invalid drawing: Multi-center/variable attachment targets require CDXML, CDX, V3000 MOL or native ReShiki export; ordinary molecular identifiers cannot retain them.";
 const LOSS_INVALID_VALENCE_ERROR: &str =
     "Properties: Atom 1: Explicit valence 5 is too large for C";
+
+fn chiral_3d_notice_document() -> anyhow::Result<Document> {
+    Ok(molfile::read(include_str!(
+        "../../../../../tests/fixtures/mol-import-3d/chiral-3d-v3000.mol"
+    ))?
+    .display_document()?
+    .0)
+}
+
+fn flip_notice_document_chirality(document: &mut Document) -> anyhow::Result<()> {
+    let stereo = document
+        .atoms
+        .iter_mut()
+        .find_map(|atom| atom.stereo.as_mut())
+        .ok_or_else(|| anyhow::anyhow!("Missing captured chiral winding"))?;
+    stereo.winding = if stereo.winding == "cw" { "ccw" } else { "cw" }.into();
+    Ok(())
+}
+
+#[tokio::test]
+async fn attachment_early_mol_export_appends_stereo_fallback_notice_once() -> anyhow::Result<()> {
+    use crate::document::Point;
+    let mut document = chiral_3d_notice_document()?;
+    let members = document
+        .atoms
+        .iter()
+        .take(2)
+        .map(|atom| atom.id)
+        .collect::<Vec<_>>();
+    let point = crate::attachments::add(
+        &mut document,
+        &members,
+        crate::attachments::Kind::MultiCenter,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let metal = document.add_atom("Cu", Point::new(140., 56.));
+    let atom = document
+        .atom_mut(metal)
+        .ok_or_else(|| anyhow::anyhow!("Missing copper atom"))?;
+    atom.charge = 2;
+    atom.depth = 21.;
+    document.add_bond(point, metal, 5, "plain");
+    for flipped in [false, true] {
+        if flipped {
+            flip_notice_document_chirality(&mut document)?;
+        }
+        let before = serde_json::to_value(&document)?;
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("mol".into());
+        let response = execute(request).await?;
+        assert!(response.analysis.is_none());
+        assert_eq!(serde_json::to_value(response.document)?, before);
+        let expected_notices = if flipped {
+            vec![LOSS_ATTACHMENT, LOSS_STEREO_FALLBACK]
+        } else {
+            vec![LOSS_ATTACHMENT]
+        };
+        assert_eq!(
+            response
+                .warnings
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            expected_notices
+        );
+        let output = response
+            .output
+            .ok_or_else(|| anyhow::anyhow!("Missing attachment MOL export"))?;
+        assert_eq!(
+            output.lines().nth(1),
+            Some(if flipped {
+                "     RDKit          2D"
+            } else {
+                "     RDKit          3D"
+            })
+        );
+        assert!(output.contains("ATTACH=ALL"));
+        assert_eq!(serde_json::to_value(&document)?, before);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_rxn_export_appends_stereo_fallback_notice_once() -> anyhow::Result<()> {
+    use crate::{
+        chemistry::reaction,
+        document::{Arrow, Point},
+        reactions::{self, Role},
+    };
+    let mut document = chiral_3d_notice_document()?;
+    let reactant_ids = document
+        .atoms
+        .iter()
+        .map(|atom| atom.id)
+        .collect::<Vec<_>>();
+    let product = document.add_atom("C", Point::new(300., 0.));
+    let arrow = document.next_id();
+    document.arrows.push(Arrow::new(
+        arrow,
+        Point::new(100., 0.),
+        Point::new(200., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    reactions::assign(&mut document, arrow, &reactant_ids, Role::Reactant)
+        .map_err(anyhow::Error::msg)?;
+    reactions::assign(&mut document, arrow, &[product], Role::Product)
+        .map_err(anyhow::Error::msg)?;
+    for (flipped, expected_smiles) in [(false, "F[C@H](Cl)Br"), (true, "F[C@@H](Cl)Br")] {
+        if flipped {
+            flip_notice_document_chirality(&mut document)?;
+        }
+        let before = serde_json::to_value(&document)?;
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("rxn".into());
+        let response = crate::engine::LocalEngine::default()
+            .request(request)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let expected_notices = if flipped {
+            vec![LOSS_REACTION_DRAWING, LOSS_STEREO_FALLBACK]
+        } else {
+            vec![LOSS_REACTION_DRAWING]
+        };
+        assert_eq!(
+            response
+                .warnings
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            expected_notices
+        );
+        let output = response
+            .output
+            .ok_or_else(|| anyhow::anyhow!("Missing RXN export"))?;
+        let imported = reaction::read_rxn(&output)?;
+        let reactant = imported
+            .reactants
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("Missing RXN reactant"))?;
+        assert_eq!(
+            smiles::write::write(&reactant.molecule.state, Default::default())?.text,
+            expected_smiles
+        );
+        assert_eq!(reactant.annotations.is_3d, !flipped);
+        if flipped {
+            assert!(
+                reactant
+                    .molecule
+                    .positions
+                    .iter()
+                    .all(|position| position.z == 0.)
+            );
+        }
+        assert_eq!(serde_json::to_value(&document)?, before);
+    }
+    Ok(())
+}
 
 #[derive(Clone, Copy, Debug)]
 enum LossNoticeBase {

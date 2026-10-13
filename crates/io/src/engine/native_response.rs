@@ -149,21 +149,25 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
     {
         return tokio::task::spawn_blocking(move || {
             let document = request.document.as_ref().ok_or(Error::MissingDocument)?;
-            let output = if request.format.as_deref() == Some("mol") {
-                molfile::write_document(document)?
+            let (output, stereo_fallback) = if request.format.as_deref() == Some("mol") {
+                molfile::write_document_with_fallback(document)?
             } else {
-                encode_drawing(document, &request, true)?
+                (encode_drawing(document, &request, true)?, false)
             };
+            let mut warnings = export_notices::notices(
+                document,
+                request.format.as_deref().ok_or(Error::MissingFormat)?,
+                Route::AttachmentEarlyExport,
+            );
+            if stereo_fallback {
+                warnings.push(molfile::STEREO_FALLBACK_NOTICE.into());
+            }
             Ok(Response {
                 document: Some(document.clone()),
                 analysis: None,
                 output: Some(output),
                 engine_version: chemistry::RDKIT_VERSION.into(),
-                warnings: export_notices::notices(
-                    document,
-                    request.format.as_deref().ok_or(Error::MissingFormat)?,
-                    Route::AttachmentEarlyExport,
-                ),
+                warnings,
             })
         })
         .await?;
@@ -445,13 +449,17 @@ fn finish(
                 .clone(),
             "mol" => {
                 let molecule = &prepared.ok_or(Error::MissingPrepared)?.molecule;
-                if molfile::has_projected_coordinates(
+                let (output, stereo_fallback) = molfile::write_drawing_absolute(
+                    molecule,
                     request.document.as_ref().ok_or(Error::MissingDocument)?,
-                ) {
-                    molfile::write_projected_absolute(molecule, Default::default())?
-                } else {
-                    molfile::write_absolute(molecule, Default::default())?
+                    Default::default(),
+                )?;
+                if stereo_fallback {
+                    response
+                        .warnings
+                        .push(molfile::STEREO_FALLBACK_NOTICE.into());
                 }
+                output
             }
             "cdxml" | "cdx" => encode_drawing(document, request, false)?,
             _ => return Err(Error::Export),

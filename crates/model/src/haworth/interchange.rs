@@ -33,6 +33,20 @@ pub(crate) fn recognize(doc: &Document) -> Recognized {
     recognize_with(doc, false)
 }
 
+/// Ring atoms and directly attached substituents recognized by the Haworth
+/// drawing convention. Their depth represents drawing perspective.
+pub fn recognized_atoms(doc: &Document) -> HashSet<u64> {
+    let recognized = recognize(doc);
+    let mut atoms = recognized.atoms;
+    atoms.extend(
+        recognized
+            .stereo
+            .values()
+            .flat_map(|stereo| stereo.neighbors.iter().copied()),
+    );
+    atoms
+}
+
 fn recognize_with(doc: &Document, mol: bool) -> Recognized {
     let positions: HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a)).collect();
     let mut adjacent: HashMap<u64, Vec<(u64, usize)>> = HashMap::new();

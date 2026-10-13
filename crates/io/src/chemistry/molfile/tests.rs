@@ -292,6 +292,7 @@ fn attachment_indices_keep_member_order_and_missing_target_errors() {
             true,
             std::slice::from_ref(&attachment),
             false,
+            false,
         )
         .unwrap();
         assert!(
@@ -308,6 +309,7 @@ fn attachment_indices_keep_member_order_and_missing_target_errors() {
                 Options { force_v3000: true },
                 true,
                 &[missing],
+                false,
                 false
             )
             .unwrap_err()
@@ -402,6 +404,305 @@ fn projected_mol_preserves_explicit_unknown_double_bonds() -> anyhow::Result<()>
         )?)?;
         assert_eq!(imported.molecule.state.metadata.bonds[1].stereo, 1);
     }
+    Ok(())
+}
+
+#[test]
+fn haworth_drawing_export_keeps_existing_2d_bytes_and_stereo() -> anyhow::Result<()> {
+    use crate::haworth::{Anomer, Sugar, sugar_document};
+    for sugar in [
+        Sugar::Glucose,
+        Sugar::Galactose,
+        Sugar::Mannose,
+        Sugar::Ribose,
+        Sugar::Fructose,
+    ] {
+        for anomer in [Anomer::Alpha, Anomer::Beta] {
+            let doc = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+            assert!(doc.atoms.iter().any(|atom| atom.depth.abs() > 0.028));
+            let molecule = document::prepare(&doc)?;
+            let expected_smiles =
+                crate::chemistry::smiles::write::write(&molecule.state, Default::default())?.text;
+            let before = doc.clone();
+            for force_v3000 in [false, true] {
+                let options = Options { force_v3000 };
+                let expected = write_projected_absolute(&molecule, options)?;
+                let (output, fallback) = write_drawing_absolute(&molecule, &doc, options)?;
+                assert_eq!(output, expected, "{sugar:?}/{anomer:?}/{force_v3000}");
+                assert!(!fallback, "Haworth perspective is expected 2D output");
+                assert_eq!(output.lines().nth(1), Some("     RDKit          2D"));
+                if force_v3000 {
+                    for line in output
+                        .lines()
+                        .skip_while(|line| *line != "M  V30 BEGIN ATOM")
+                        .skip(1)
+                        .take(molecule.ids.len())
+                    {
+                        assert_eq!(line.split_whitespace().nth(6), Some("0.000000"));
+                    }
+                } else {
+                    for line in output.lines().skip(4).take(molecule.ids.len()) {
+                        assert_eq!(line.get(20..30), Some("    0.0000"));
+                    }
+                    assert_eq!(output, write_document(&doc)?);
+                }
+                let imported = read(&output)?;
+                assert!(!imported.annotations.is_3d);
+                assert!(imported.molecule.positions.iter().all(|p| p.z == 0.));
+                assert_eq!(
+                    crate::chemistry::smiles::write::write(
+                        &imported.molecule.state,
+                        Default::default()
+                    )?
+                    .text,
+                    expected_smiles,
+                    "{sugar:?}/{anomer:?}/{force_v3000}"
+                );
+                assert_eq!(doc, before);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn haworth_scaffold_export_keeps_existing_2d_bytes() -> anyhow::Result<()> {
+    use crate::haworth::Ring;
+    for ring in [Ring::Five, Ring::Six] {
+        for oxygen in [false, true] {
+            let doc = ring.document(42., oxygen);
+            let molecule = document::prepare(&doc)?;
+            for force_v3000 in [false, true] {
+                let options = Options { force_v3000 };
+                let (output, fallback) = write_drawing_absolute(&molecule, &doc, options)?;
+                assert_eq!(output, write_projected_absolute(&molecule, options)?);
+                assert_eq!(output.lines().nth(1), Some("     RDKit          2D"));
+                assert!(read(&output)?.molecule.positions.iter().all(|p| p.z == 0.));
+                assert!(!fallback);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn haworth_export_only_excludes_drawings_with_recognized_exported_atoms() -> anyhow::Result<()> {
+    use crate::{
+        document::Point,
+        haworth::{Anomer, Sugar, sugar_document},
+    };
+    let mut doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;
+    // Even when only the unrelated component has depth, the exported Haworth
+    // atoms require the same 2D depiction of the whole molecule as before.
+    for atom in &mut doc.atoms {
+        atom.depth = 0.;
+    }
+    let carbon = doc.add_atom("C", Point::new(300., 0.));
+    let oxygen = doc.add_atom("O", Point::new(342., 28.));
+    doc.add_bond(carbon, oxygen, 1, "plain");
+    doc.atom_mut(oxygen).unwrap().depth = 28.;
+    let molecule = document::prepare(&doc)?;
+    for force_v3000 in [false, true] {
+        let options = Options { force_v3000 };
+        let (output, fallback) = write_drawing_absolute(&molecule, &doc, options)?;
+        assert_eq!(output, write_projected_absolute(&molecule, options)?);
+        assert!(!fallback);
+
+        // A separate export that contains no recognized atoms keeps its 3D.
+        let other = document::prepare(&crate::editing::selection(&doc, &[carbon, oxygen]))?;
+        let (output, fallback) = write_drawing_absolute(&other, &doc, options)?;
+        assert_eq!(output.lines().nth(1), Some("     RDKit          3D"));
+        assert!(!fallback);
+        assert_eq!(read(&output)?.molecule.positions[1].z, 1.);
+
+        // Recognition also covers a direct substituent exported on its own.
+        let substituent = doc.atoms[1].stereo.as_ref().unwrap().neighbors[2];
+        doc.atom_mut(substituent).unwrap().depth = 28.;
+        let branch = document::prepare(&crate::editing::selection(&doc, &[substituent]))?;
+        let (output, fallback) = write_drawing_absolute(&branch, &doc, options)?;
+        assert_eq!(output, write_projected_absolute(&branch, options)?);
+        assert_eq!(output.lines().nth(1), Some("     RDKit          2D"));
+        assert!(!fallback);
+        doc.atom_mut(substituent).unwrap().depth = 0.;
+    }
+    Ok(())
+}
+
+#[test]
+fn drawing_export_keeps_existing_2d_bytes_below_the_depth_threshold() -> anyhow::Result<()> {
+    use crate::document::{Document, Point};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("O", Point::new(42., 28.));
+    doc.add_bond(a, b, 1, "plain");
+    for projected in [false, true] {
+        doc.bonds[0].projection = projected;
+        for depth in [0., 0.0279, -0.0279] {
+            doc.atom_mut(a).unwrap().depth = depth;
+            let molecule = document::prepare(&doc)?;
+            for force_v3000 in [false, true] {
+                let options = Options { force_v3000 };
+                let expected = if has_projected_coordinates(&doc) {
+                    write_projected_absolute(&molecule, options)?
+                } else {
+                    write_absolute(&molecule, options)?
+                };
+                let before = doc.clone();
+                let (output, fallback) = write_drawing_absolute(&molecule, &doc, options)?;
+                assert_eq!(output, expected);
+                assert!(!fallback);
+                assert_eq!(output.lines().nth(1), Some("     RDKit          2D"));
+                assert_eq!(doc, before);
+            }
+        }
+    }
+    for depth in [0.0281, -0.0281] {
+        doc.atom_mut(a).unwrap().depth = depth;
+        let molecule = document::prepare(&doc)?;
+        for force_v3000 in [false, true] {
+            let (output, fallback) =
+                write_drawing_absolute(&molecule, &doc, Options { force_v3000 })?;
+            assert!(!fallback);
+            assert_eq!(output.lines().nth(1), Some("     RDKit          3D"));
+        }
+    }
+    doc.atom_mut(a).unwrap().depth = 0.;
+    let molecule = document::prepare(&doc)?;
+    let outside = doc.add_atom("N", Point::new(200., 0.));
+    doc.atom_mut(outside).unwrap().depth = 28.;
+    let (output, fallback) = write_drawing_absolute(&molecule, &doc, Options::default())?;
+    assert_eq!(
+        output,
+        write_projected_absolute(&molecule, Options::default())?
+    );
+    assert!(!fallback, "Only exported atoms qualify for 3D");
+    Ok(())
+}
+
+#[test]
+fn attachment_document_export_keeps_3d_coordinates() -> anyhow::Result<()> {
+    use crate::document::Point;
+    const ALKANE: &str =
+        include_str!("../../../../../tests/fixtures/mol-import-3d/alkane-3d-v3000.mol");
+    let mut doc = read(ALKANE)?.display_document()?.0;
+    let members = doc.atoms.iter().map(|atom| atom.id).collect::<Vec<_>>();
+    let point = crate::attachments::add(&mut doc, &members, Kind::MultiCenter)
+        .map_err(anyhow::Error::msg)?;
+    let metal = doc.add_atom("Cu", Point::new(14., 56.));
+    doc.atom_mut(metal).unwrap().charge = 2;
+    doc.atom_mut(metal).unwrap().depth = 21.;
+    doc.add_bond(point, metal, 5, "plain");
+    let before = doc.clone();
+    let (output, fallback) = write_document_with_fallback(&doc)?;
+    assert!(!fallback);
+    assert_eq!(output, write_document(&doc)?);
+    assert_eq!(output.lines().nth(1), Some("     RDKit          3D"));
+    assert!(output.contains("ATTACH=ALL"));
+    let imported = read(&output)?;
+    let proxy = crate::attachments::interchange_graph(&doc).map_err(anyhow::Error::msg)?;
+    let prepared = document::prepare(&proxy)?;
+    assert_eq!(imported.molecule.positions.len(), prepared.ids.len());
+    for (&id, position) in prepared.ids.iter().zip(&imported.molecule.positions) {
+        let atom = doc.atom(id).unwrap();
+        assert!((position.x - f64::from(atom.position.x) / 28.).abs() < 1e-4);
+        assert!((position.y + f64::from(atom.position.y) / 28.).abs() < 1e-4);
+        assert!((position.z - f64::from(atom.depth) / 28.).abs() < 1e-4);
+    }
+    assert_eq!(doc, before);
+    Ok(())
+}
+
+#[test]
+fn reaction_export_keeps_3d_participant_depth_and_2d_bytes() -> anyhow::Result<()> {
+    use crate::{
+        chemistry::reaction,
+        document::{Arrow, Point},
+        reactions::{self, Role},
+    };
+    const CHIRAL: &str =
+        include_str!("../../../../../tests/fixtures/mol-import-3d/chiral-3d-v3000.mol");
+    let mut doc = read(CHIRAL)?.display_document()?.0;
+    let reactant = document::prepare(&doc)?;
+    let product = doc.add_atom("C", Point::new(300., 0.));
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(100., 0.),
+        Point::new(200., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    reactions::assign(&mut doc, arrow, &reactant.ids, Role::Reactant)
+        .map_err(anyhow::Error::msg)?;
+    reactions::assign(&mut doc, arrow, &[product], Role::Product).map_err(anyhow::Error::msg)?;
+    let (output, fallback) = reaction::write_rxn_with_fallback(&doc, None)?;
+    assert!(!fallback);
+    let imported = reaction::read_rxn(&output)?;
+    for (&id, position) in reactant
+        .ids
+        .iter()
+        .zip(&imported.reactants[0].molecule.positions)
+    {
+        assert!((position.z - f64::from(doc.atom(id).unwrap().depth) / 28.).abs() < 1e-4);
+    }
+    assert_eq!(
+        crate::chemistry::smiles::write::write(
+            &imported.reactants[0].molecule.state,
+            Default::default()
+        )?
+        .text,
+        crate::chemistry::smiles::write::write(&reactant.state, Default::default())?.text
+    );
+    let stereo = doc
+        .atoms
+        .iter_mut()
+        .find_map(|atom| atom.stereo.as_mut())
+        .unwrap();
+    stereo.winding = if stereo.winding == "cw" { "ccw" } else { "cw" }.into();
+    let (_, fallback) = reaction::write_rxn_with_fallback(&doc, None)?;
+    assert!(fallback);
+    for atom in &mut doc.atoms {
+        atom.depth = 0.;
+    }
+    let (output, fallback) = reaction::write_rxn_with_fallback(&doc, None)?;
+    assert!(!fallback);
+    let projected = interchange_depiction(&document::prepare(&crate::editing::selection(
+        &doc,
+        &reactant.ids,
+    ))?)?;
+    let ctab = write_part(
+        &projected,
+        Options { force_v3000: true },
+        true,
+        &[],
+        false,
+        false,
+    )?;
+    let product = interchange_depiction(&document::prepare(&crate::editing::selection(
+        &doc,
+        &[product],
+    ))?)?;
+    let product = write_part(
+        &product,
+        Options { force_v3000: true },
+        true,
+        &[],
+        false,
+        false,
+    )?;
+    let mut expected = String::from(concat!(
+        "$RXN V3000\n\n      RDKit\n\nM  V30 COUNTS 1 1 0\n",
+        "M  V30 BEGIN REACTANT\n",
+    ));
+    expected.push_str(&ctab);
+    expected.push_str("M  V30 END REACTANT\nM  V30 BEGIN PRODUCT\n");
+    expected.push_str(&product);
+    expected.push_str(concat!(
+        "M  V30 END PRODUCT\nM  V30 BEGIN AGENT\n",
+        "M  V30 END AGENT\nM  END\n",
+    ));
+    assert_eq!(output, expected);
+    assert_eq!(output, reaction::write_rxn(&doc, None)?);
     Ok(())
 }
 

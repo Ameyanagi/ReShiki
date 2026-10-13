@@ -38,6 +38,9 @@ pub struct Options {
     pub force_v3000: bool,
 }
 
+pub(crate) const STEREO_FALLBACK_NOTICE: &str =
+    "Exported as 2D because the 3D coordinates no longer match the drawn stereochemistry";
+
 fn invalid(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
 }
@@ -51,14 +54,14 @@ fn at<T>(items: &[T], index: usize) -> Result<&T, Error> {
 /// conventions. V3000 is automatic for dative bonds, large graphs/coordinates.
 /// Queries, enhanced stereo groups and non-tetrahedral tags are not drawing data.
 pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
-    write_part(molecule, options, false, &[], false)
+    write_part(molecule, options, false, &[], false, false)
 }
 
 /// Drawing stereocenters describe a specific configuration. Mark them absolute
 /// so consumers such as ChemDraw do not interpret the file as a racemate.
 /// Keep `write` unchanged for RDKit-compatible reference output.
 pub fn write_absolute(molecule: &Molecule, options: Options) -> Result<String, Error> {
-    write_part(molecule, options, false, &[], true)
+    write_part(molecule, options, false, &[], true, false)
 }
 
 /// Molecular interchange needs a stereochemically valid 2D conformer even when
@@ -66,6 +69,90 @@ pub fn write_absolute(molecule: &Molecule, options: Options) -> Result<String, E
 /// of the coordinates; the drawing and its chemical annotations stay intact.
 pub fn write_projected_absolute(molecule: &Molecule, options: Options) -> Result<String, Error> {
     write_absolute(&interchange_depiction(molecule)?, options)
+}
+
+/// Keep meaningful drawing depth when the exported coordinates describe the
+/// prepared stereochemistry. The flag reports a fallback to the 2D depiction.
+pub(crate) fn write_drawing_absolute(
+    molecule: &Molecule,
+    doc: &crate::document::Document,
+    options: Options,
+) -> Result<(String, bool), Error> {
+    write_drawing_part(molecule, doc, options, false, &[], true)
+}
+
+fn write_drawing_part(
+    molecule: &Molecule,
+    doc: &crate::document::Document,
+    options: Options,
+    reaction: bool,
+    attachments: &[crate::attachments::Attachment],
+    absolute: bool,
+) -> Result<(String, bool), Error> {
+    let depths: HashMap<_, _> = doc.atoms.iter().map(|atom| (atom.id, atom.depth)).collect();
+    let haworth_atoms = crate::haworth::interchange::recognized_atoms(doc);
+    // Haworth depth is drawing perspective. If any exported atom belongs to
+    // that convention, keep the existing 2D depiction without a fallback notice.
+    let meaningful = !molecule.ids.iter().any(|id| haworth_atoms.contains(id))
+        && molecule.ids.iter().any(|id| {
+            depths.get(id).is_some_and(|depth| {
+                f64::from(*depth).abs() / document::WORLD_PER_DEPICT_UNIT > 1e-3
+            })
+        });
+    if meaningful {
+        // Guard the serialized coordinates too: V2000 rounds to four decimal
+        // places, and consumers perceive stereo from that rounded conformer.
+        let attempt = || -> Result<String, Error> {
+            let mut spatial = molecule.clone();
+            for (position, id) in spatial.positions.iter_mut().zip(&spatial.ids) {
+                position.z = f64::from(
+                    *depths
+                        .get(id)
+                        .ok_or_else(|| invalid("Missing MOL drawing atom"))?,
+                ) / document::WORLD_PER_DEPICT_UNIT;
+            }
+            let output = write_part(&spatial, options, reaction, attachments, absolute, true)?;
+            let block = if reaction {
+                // RXN CTABs have no 3D header hint. Let the written Z values
+                // select perception, including rounding at the depth threshold.
+                let mut block = String::from("\n     RDKit          2D\n\n");
+                block.push_str("  0  0  0  0  0  0  0  0  0  0999 V3000\n");
+                block.push_str(&output);
+                block.push_str("M  END\n");
+                block
+            } else {
+                output.clone()
+            };
+            let imported = read(&block).map_err(|error| invalid(error.to_string()))?;
+            let canonical = |molecule: &Molecule| {
+                super::smiles::write::write(&molecule.state, Default::default())
+                    .map(|output| output.text)
+                    .map_err(|error| Error::Stereo(error.to_string()))
+            };
+            // Only stereo perceived from the coordinates proves them. When the
+            // written Z values round into the planar tolerance, the reader
+            // falls back to the wedges, which say nothing about the depth.
+            if !imported.annotations.is_3d || canonical(&imported.molecule)? != canonical(molecule)?
+            {
+                return Err(Error::Stereo(STEREO_FALLBACK_NOTICE.into()));
+            }
+            Ok(output)
+        };
+        if let Ok(output) = attempt() {
+            return Ok((output, false));
+        }
+    }
+    let detached;
+    let molecule = if has_projected_coordinates(doc) {
+        detached = interchange_depiction(molecule)?;
+        &detached
+    } else {
+        molecule
+    };
+    Ok((
+        write_part(molecule, options, reaction, attachments, absolute, false)?,
+        meaningful,
+    ))
 }
 
 pub(crate) fn has_projected_coordinates(doc: &crate::document::Document) -> bool {
@@ -109,6 +196,12 @@ fn interchange_depiction(molecule: &Molecule) -> Result<Molecule, Error> {
 /// Write semantic ALL/ANY endpoints as V3000 properties. Distributed charges
 /// and unbonded attachment points require CDXML/native storage instead.
 pub fn write_document(doc: &crate::document::Document) -> Result<String, Error> {
+    write_document_with_fallback(doc).map(|(output, _)| output)
+}
+
+pub(crate) fn write_document_with_fallback(
+    doc: &crate::document::Document,
+) -> Result<(String, bool), Error> {
     let mut proxy = crate::attachments::interchange_graph(doc).map_err(invalid)?;
     let mut endpoints = Vec::new();
     for a in doc.atoms.iter().filter(|a| a.attachment.is_some()) {
@@ -151,13 +244,9 @@ pub fn write_document(doc: &crate::document::Document) -> Result<String, Error> 
         });
     }
     let molecule = document::prepare(&proxy)?;
-    let molecule = if has_projected_coordinates(doc) {
-        interchange_depiction(&molecule)?
-    } else {
-        molecule
-    };
-    let output = write_part(
+    let (output, fallback) = write_drawing_part(
         &molecule,
+        doc,
         Options {
             force_v3000: !endpoints.is_empty() || !doc.generic.is_empty(),
         },
@@ -165,16 +254,22 @@ pub fn write_document(doc: &crate::document::Document) -> Result<String, Error> 
         &endpoints,
         true,
     )?;
-    generic::restore_output(output, doc)
+    Ok((generic::restore_output(output, doc)?, fallback))
 }
 
 /// Reaction CTABs retain aromatic bond types instead of assigning Kekulé bonds.
-pub(crate) fn reaction_ctab(molecule: &Molecule) -> Result<String, Error> {
-    write_part(molecule, Options { force_v3000: true }, true, &[], false)
-}
-
-pub(crate) fn reaction_ctab_projected(molecule: &Molecule) -> Result<String, Error> {
-    reaction_ctab(&interchange_depiction(molecule)?)
+pub(crate) fn reaction_ctab_drawing(
+    molecule: &Molecule,
+    doc: &crate::document::Document,
+) -> Result<(String, bool), Error> {
+    write_drawing_part(
+        molecule,
+        doc,
+        Options { force_v3000: true },
+        true,
+        &[],
+        false,
+    )
 }
 
 fn write_part(
@@ -183,6 +278,7 @@ fn write_part(
     reaction: bool,
     attachments: &[crate::attachments::Attachment],
     absolute: bool,
+    is_3d: bool,
 ) -> Result<String, Error> {
     let source = &molecule.state;
     source.graph.validate().map_err(invalid)?;
@@ -249,7 +345,7 @@ fn write_part(
         },
         &wedging::Conformer {
             positions: molecule.positions.clone(),
-            is_3d: false,
+            is_3d,
         },
         &source
             .properties
@@ -291,6 +387,8 @@ fn write_part(
     );
     let mut output = if reaction {
         String::new()
+    } else if is_3d {
+        String::from("\n     RDKit          3D\n\n")
     } else {
         String::from("\n     RDKit          2D\n\n")
     };

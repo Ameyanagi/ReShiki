@@ -317,20 +317,24 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             let reaction_smiles = format == "rsmi";
             use crate::chemistry::reaction;
             let document = request.document.take().ok_or("Missing reaction drawing")?;
-            let warnings =
+            let mut warnings =
                 export_notices::notices(&document, format, export_notices::Route::Reaction);
             let selected = request.selected_ids.take();
             let output = tokio::task::spawn_blocking(move || {
                 if reaction_smiles {
                     reaction::write_smiles(&document, selected.as_deref())
+                        .map(|output| (output, false))
                 } else {
-                    reaction::write_rxn(&document, selected.as_deref())
+                    reaction::write_rxn_with_fallback(&document, selected.as_deref())
                 }
             })
             .await
             .map_err(|e| format!("Reaction export failed: {e}"))?;
             match output {
-                Ok(output) => {
+                Ok((output, fallback)) => {
+                    if fallback {
+                        warnings.push(crate::chemistry::molfile::STEREO_FALLBACK_NOTICE.into());
+                    }
                     return Ok(Response {
                         document: None,
                         analysis: None,

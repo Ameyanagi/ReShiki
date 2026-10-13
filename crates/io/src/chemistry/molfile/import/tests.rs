@@ -16,6 +16,8 @@ const ALKENE_V2: &str =
     include_str!("../../../../../../tests/fixtures/mol-import-3d/alkene-3d-v2000.mol");
 const ALKENE_V3: &str =
     include_str!("../../../../../../tests/fixtures/mol-import-3d/alkene-3d-v3000.mol");
+const ALKENE_Z_V3: &str =
+    include_str!("../../../../../../tests/fixtures/mol-import-3d/alkene-z-3d-v3000.mol");
 
 fn smiles(imported: &Imported) -> anyhow::Result<String> {
     Ok(smiles::write::write(&imported.molecule.state, Default::default())?.text)
@@ -71,6 +73,188 @@ fn torsion(points: &[[f64; 3]]) -> f64 {
     let m = cross(b, c);
     let y = dot(cross(n, m), b) / dot(b, b).sqrt();
     y.atan2(dot(n, m))
+}
+
+fn assert_drawing_3d_roundtrip(
+    document: &Document,
+    expected: &str,
+    raw_source: Option<&Imported>,
+) -> anyhow::Result<()> {
+    let prepared = document::prepare(document)?;
+    assert_eq!(
+        smiles::write::write(&prepared.state, Default::default())?.text,
+        expected
+    );
+    assert!(
+        prepared
+            .ids
+            .iter()
+            .any(|&id| { f64::from(document.atom(id).unwrap().depth).abs() / 28. > 1e-3 })
+    );
+    for force_v3000 in [false, true] {
+        let (output, fallback) =
+            molfile::write_drawing_absolute(&prepared, document, molfile::Options { force_v3000 })?;
+        assert!(!fallback, "V3000={force_v3000}");
+        assert_eq!(output.lines().nth(1), Some("     RDKit          3D"));
+        let version = if force_v3000 { "V3000" } else { "V2000" };
+        assert!(output.lines().nth(3).unwrap().ends_with(version));
+        let imported = molfile::read(&output)?;
+        assert!(imported.annotations.is_3d);
+        assert_eq!(imported.molecule.positions.len(), prepared.ids.len());
+        for ((position, atom), &id) in imported
+            .molecule
+            .positions
+            .iter()
+            .zip(&imported.molecule.state.graph.atoms)
+            .zip(&prepared.ids)
+        {
+            assert_ne!(atom.atomic_number, 1);
+            if let Some(raw) = raw_source {
+                let source_index = raw
+                    .molecule
+                    .ids
+                    .iter()
+                    .position(|&source_id| source_id == id)
+                    .unwrap();
+                let source_z = raw.molecule.positions[source_index].z;
+                assert!(
+                    (position.z - source_z).abs() < 1e-4,
+                    "atom={id}, V3000={force_v3000}: exported Z {} != source Z {source_z}",
+                    position.z
+                );
+            }
+            let original = document.atom(id).unwrap();
+            let expected_xyz = [
+                f64::from(original.position.x) / 28.,
+                -f64::from(original.position.y) / 28.,
+                f64::from(original.depth) / 28.,
+            ];
+            for (axis, (actual, expected)) in [position.x, position.y, position.z]
+                .into_iter()
+                .zip(expected_xyz)
+                .enumerate()
+            {
+                assert!(
+                    (actual - expected).abs() < 1e-4,
+                    "atom={id}, axis={axis}, V3000={force_v3000}: {actual} != {expected}"
+                );
+            }
+        }
+        assert_eq!(smiles(&imported.for_display()?)?, expected);
+    }
+    Ok(())
+}
+
+#[test]
+fn drawing_mol_export_preserves_imported_heavy_atom_xyz_and_stereo() -> anyhow::Result<()> {
+    for (text, expected) in [
+        (CHIRAL_V2, "F[C@H](Cl)Br"),
+        (CHIRAL_V3, "F[C@H](Cl)Br"),
+        (ALKENE_V2, "F/C=C/F"),
+        (ALKENE_V3, "F/C=C/F"),
+        (ALKENE_Z_V3, "F/C=C\\F"),
+    ] {
+        let raw = molfile::read(text)?;
+        let document = raw.clone().display_document()?.0;
+        assert_drawing_3d_roundtrip(&document, expected, Some(&raw))?;
+    }
+    Ok(())
+}
+
+#[test]
+fn drawing_mol_export_preserves_tilted_heavy_atom_xyz_and_stereo() -> anyhow::Result<()> {
+    for (text, expected) in [
+        (CHIRAL_V2, "F[C@H](Cl)Br"),
+        (CHIRAL_V3, "F[C@H](Cl)Br"),
+        (ALKENE_V2, "F/C=C/F"),
+        (ALKENE_V3, "F/C=C/F"),
+        (ALKENE_Z_V3, "F/C=C\\F"),
+    ] {
+        let mut document = molfile::read(text)?.display_document()?.0;
+        let ids = document
+            .atoms
+            .iter()
+            .map(|atom| atom.id)
+            .collect::<Vec<_>>();
+        let before = xyz(&document);
+        crate::projection::tilt(&mut document, &ids, 37., true);
+        assert!(
+            before
+                .iter()
+                .zip(xyz(&document))
+                .any(|(a, b)| { (a[2] - b[2]).abs() > 0.01 })
+        );
+        assert_drawing_3d_roundtrip(&document, expected, None)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn drawing_mol_export_falls_back_when_written_depth_reads_as_planar_wedges() -> anyhow::Result<()> {
+    // Every atom at one depth cannot encode the center. V2000 writes
+    // 0.0281 / 28 as 0.0010, which reads as planar, so only the wedges would
+    // still carry the stereo; 0.03 reads as 3D and fails perception.
+    for depth in [0.0281, 0.03] {
+        let mut document = molfile::read(CHIRAL_V2)?.display_document()?.0;
+        for atom in &mut document.atoms {
+            atom.depth = depth;
+        }
+        let prepared = document::prepare(&document)?;
+        let expected = "F[C@H](Cl)Br";
+        assert_eq!(
+            smiles::write::write(&prepared.state, Default::default())?.text,
+            expected
+        );
+        for force_v3000 in [false, true] {
+            let (output, fallback) = molfile::write_drawing_absolute(
+                &prepared,
+                &document,
+                molfile::Options { force_v3000 },
+            )?;
+            assert!(fallback, "depth={depth}, V3000={force_v3000}");
+            assert_eq!(output.lines().nth(1), Some("     RDKit          2D"));
+            assert_eq!(smiles(&molfile::read(&output)?.for_display()?)?, expected);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn drawing_mol_export_falls_back_when_edited_stereo_disagrees_with_xyz() -> anyhow::Result<()> {
+    for text in [CHIRAL_V2, CHIRAL_V3] {
+        let mut document = molfile::read(text)?.display_document()?.0;
+        let stereo = document
+            .atoms
+            .iter_mut()
+            .find_map(|atom| atom.stereo.as_mut())
+            .unwrap();
+        stereo.winding = if stereo.winding == "cw" { "ccw" } else { "cw" }.into();
+        let prepared = document::prepare(&document)?;
+        let expected = "F[C@@H](Cl)Br";
+        assert_eq!(
+            smiles::write::write(&prepared.state, Default::default())?.text,
+            expected
+        );
+        for force_v3000 in [false, true] {
+            let (output, fallback) = molfile::write_drawing_absolute(
+                &prepared,
+                &document,
+                molfile::Options { force_v3000 },
+            )?;
+            assert!(fallback, "V3000={force_v3000}");
+            assert_eq!(output.lines().nth(1), Some("     RDKit          2D"));
+            let imported = molfile::read(&output)?;
+            assert!(
+                imported
+                    .molecule
+                    .positions
+                    .iter()
+                    .all(|position| position.z == 0.)
+            );
+            assert_eq!(smiles(&imported.for_display()?)?, expected);
+        }
+    }
+    Ok(())
 }
 
 #[test]
