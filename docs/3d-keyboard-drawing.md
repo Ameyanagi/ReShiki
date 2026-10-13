@@ -133,8 +133,8 @@ lets selected atoms and their connecting bonds use their base ink within an
 otherwise faded molecule. Native documents retain the editable depth
 appearance; figure and clipboard output use the visible paint.
 
-The unreleased [Rear opacity control](rear-opacity.md), under review as a
-follow-up to PR #271, separately makes rear ink lighter or transparent from
+The [Rear opacity control](rear-opacity.md) (available in Nightly builds; not in
+ReShiki 0.11.0) separately makes rear ink lighter or transparent from
 **Properties → 3D appearance**. Its default 100% preserves opaque paint.
 **Clear depth** also restores rear opacity to 100% while retaining XYZ.
 

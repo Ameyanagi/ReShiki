@@ -1,6 +1,6 @@
 # Ring presets and expanded template catalog
 
-The current library contains 105 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), macrocycles and ligands. The original 81-entry milestone is described below.
+The current library contains 106 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), macrocycles, free-base porphine and ligands. The original 81-entry milestone is described below.
 
 JACS / ACS remains the default. The new chair and cyclopentadiene tools use 14.4 pt edges (42 world units), Arial 10 pt labels and 0.6 pt lines unless the user changes the preferred bond length.
 

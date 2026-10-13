@@ -1,10 +1,9 @@
 # Assistant image-to-structure benchmark
 
-Status: under review in [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281).
+Status: in the source tree on `main`; not in ReShiki 0.11.0. The benchmark is a
+QA tool for developers, not an app feature.
 Author: @Ameyanagi, project creator and maintainer.
-Addresses [issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) and is stacked
-on the guided setup change in [open PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
-The current stack parent is `f71479e69c0a25deae3d9a48cca7b25708f49cb8`.
+Addresses [issue #94](https://github.com/Ameyanagi/ReShiki/issues/94).
 Its [Wayland fixture publication follow-up](changes/wayland-fixture-publication-2026-10-09.md)
 was merged normally, with no changes to the benchmark runner/scorer, dataset,
 recorded results, Rust application source or original image bytes. Fresh live

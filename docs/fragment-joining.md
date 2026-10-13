@@ -63,9 +63,11 @@ and chemistry analysis produced benzofuran (C8H6O).
 
 ## Coordination contacts in place
 
+Available in Nightly builds; not in ReShiki 0.11.0.
+
 The [native desktop validation](coordination-desktop-validation.md) records
 ordinary rejection, in-place contacts, labeled keyboard controls, projection-tip
-reversal and saved-file graph checks. The contribution remains under review.
+reversal and saved-file graph checks.
 
 Select a donor atom or ligand and choose **Coordinate in place…** above the
 canvas or in its context menu. You can also choose **Coordinate in place

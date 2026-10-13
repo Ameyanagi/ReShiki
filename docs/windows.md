@@ -158,8 +158,8 @@ linked into the application. No .NET runtime, C# compiler or extra native helper
 is needed. The editor forbids unsafe Rust; Win32 FFI is isolated in
 `native/windows`, with bounded data and ownership guards.
 
-The experimental `reshiki.exe --cli` commands (Nightly builds only; not in
-ReShiki 0.11.0) follow the same rule as `--graphics-info`: release builds have
+The experimental `reshiki.exe --cli` commands (Nightly builds since 2026-10-08; not
+in ReShiki 0.11.0) follow the same rule as `--graphics-info`: release builds have
 no console, so their output and error messages appear only when piped or
 redirected, for example `.\reshiki.exe --cli info | Write-Output` or
 `.\reshiki.exe --cli convert --smiles CCO -o ethanol.mol 2> errors.txt`. Piping

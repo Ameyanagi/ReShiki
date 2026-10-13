@@ -1,5 +1,5 @@
-//! Experimental operation API (OPERATION_API_VERSION 1); not wired to any
-//! transport in this crate.
+//! Experimental operation API (OPERATION_API_VERSION 1). Its transports live
+//! outside this crate: reshiki-mcp and reshiki::cli.
 //!
 //! # Layering
 //!
@@ -18,6 +18,10 @@
 //!
 //! [`headless::HeadlessHost`] puts the layers together for a process without
 //! the app: the [`catalog`] tools over session documents.
+//!
+//! Progress notifications ([`progress`]) are reserved for a later transport,
+//! such as an in-app host or MCP `progressToken`. The P1 transports pass
+//! `progress: None` in every [`host::Call`].
 //!
 //! # Effect rule
 //!

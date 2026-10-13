@@ -1,6 +1,6 @@
 # Agent API (experimental)
 
-**Experimental. Nightly builds only; not in ReShiki 0.11.0.** Tool names,
+**Experimental. In Nightly builds since 2026-10-08; not in ReShiki 0.11.0.** Tool names,
 schemas, results and the command line may change in any build.
 
 ReShiki's agent API runs ReShiki's import, analysis, rendering, layout and
@@ -272,9 +272,10 @@ changes independently.
 | `app`             | 0.11.0 | The ReShiki build                                                                               |
 | `operation_api`   | 1      | The operation tools and their results (`OPERATION_API_VERSION`, `crates/agent/src/envelope.rs`) |
 | `engine_protocol` | 1      | The internal chemistry engine's request protocol                                                |
-| `document`        | 19     | The native `.rsk` drawing format                                                                |
+| `document`        | 26     | The native `.rsk` drawing format                                                                |
 
-CLI JSON lines carry `api.operation_api` and `api.stability`.
+Run the `info` tool or `reshiki --cli info` for the live values. CLI JSON lines
+carry `api.operation_api` and `api.stability`.
 
 ## Experimental status
 

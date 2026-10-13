@@ -1,5 +1,7 @@
 # Calculation resource policy
 
+Available in Nightly builds; not in ReShiki 0.11.0.
+
 Geometry and aromaticity use the same machine observations and resolve an
 immutable operational budget for each calculation. Processor count does not
 determine the budget. A bounded lookup probe measures effective throughput in
@@ -10,7 +12,7 @@ Memory observations refresh at most once per second.
 The [desktop validation record](adaptive-chemistry-limits-validation.md) includes
 matched former-512-atom rejection/3D-preview captures, the large fused-ring
 import failure/success comparison, original fixtures and independent saved-file
-chemical checks. The candidate remains under review.
+chemical checks.
 
 ## Observations and fallback
 

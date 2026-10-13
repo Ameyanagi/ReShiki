@@ -1,4 +1,7 @@
-//! Reviewed, editable drawing proposals. Model output never mutates the document.
+//! GUI-free agent layer: the assistant's Proposal schema, layout, composition
+//! and review, plus the experimental operation API (`ops`) and folder grants
+//! (`access`) that `reshiki --mcp` and `reshiki --cli` serve. Model output
+//! never mutates a document without review.
 #![forbid(unsafe_code)]
 #![cfg_attr(
     not(test),

@@ -75,9 +75,38 @@ The library is split into workspace crates. Each crate depends only on the crate
 | `crates/model/src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
 | `reference/engine/worker.py`                                | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
 
-Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents are saved as JSON format version 19 and accept versions 1–19 when reading. Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents are saved as JSON format version 26 and accept versions 1–26 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. Molecule preparation compensates for neighbor permutations, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
+
+## Document format versions
+
+`VERSION` in `crates/model/src/document.rs` is the newest format this build
+reads, and every saved file is marked with it. Its doc comment holds the table
+below; update both together. ReShiki 0.11.0 reads versions up to 19, so it
+cannot open a drawing saved by a Nightly build and reports the version it needs.
+
+| Version | Added                                                                           |
+| ------- | ------------------------------------------------------------------------------- |
+| 1       | Original native drawings.                                                       |
+| 2       | Arrow styles.                                                                   |
+| 10      | Collapsed abbreviations.                                                        |
+| 11      | Per-bond crossing depth.                                                        |
+| 12      | Physical publication page layouts.                                              |
+| 13      | Embedded pictures.                                                              |
+| 14      | Document drawing styles.                                                        |
+| 15      | Reaction membership and roles.                                                  |
+| 16      | Embedded custom themes (later also palette hues).                               |
+| 17      | Exact custom colors on either canvas; newer-version probing.                    |
+| 18      | Persistent atom and bond highlights.                                            |
+| 19      | Editable 3D depth appearance and captured projection stereo (#146; 0.11.0).     |
+| 20      | Retained EMF picture sources (#296); cubic arrow controls on a parallel branch. |
+| 21      | Arrow target links and attachment IDs (cubic-arrow branch).                     |
+| 22      | Persisted rear-side opacity (parallel branch).                                  |
+| 23      | Not used.                                                                       |
+| 24      | EMF sources, cubic arrows, target links and rear opacity integrated (#297).     |
+| 25      | Linked molecule-name captions and reaction atom-map labels (#298).              |
+| 26      | Generic structures and coordination joining (#300).                             |
 
 ## Chemistry requests
 
@@ -99,7 +128,7 @@ The file-open panel is intentionally unfiltered, so opening a supported file doe
 
 ## Native chemistry
 
-Application code forbids `unsafe`; required platform calls stay in `native/windows` and `native/macos`, and the bounded worker allocator stays in `crates/process-heap`. Sanitization and ring failures use `thiserror`, preserving the failed stage and underlying ring error. Tests, examples, build scripts and the Windows helper use `anyhow` for propagation and context. Existing string-error APIs are converted explicitly at those boundaries. Prefer iterator transformations when they clarify data flow; use bounded loops for stateful graph traversal.
+Application code forbids `unsafe`. Platform calls stay in `native/windows`, `native/macos` and `native/process` (child-process limits for the naming worker), and the bounded worker allocator stays in `crates/process-heap`. Sanitization and ring failures use `thiserror`, preserving the failed stage and underlying ring error. Tests, examples, build scripts and the Windows helper use `anyhow` for propagation and context. Existing string-error APIs are converted explicitly at those boundaries. Prefer iterator transformations when they clarify data flow; use bounded loops for stateful graph traversal.
 
 The app uses `LocalEngine`, which implements `ChemistryEngine`. Rust handles imports, analysis, cleanup, abbreviations, aromatic display and molecular/drawing exports. It prepares chemistry, computes properties and full CIP labels, lays out molecules and reconstructs drawings; an isolated worker process of the same executable supplies InChI. Blocking tasks keep chemistry off the UI executor. Cached drawing labels never determine chemical identity.
 
@@ -239,7 +268,7 @@ Bond Z order is presentation metadata. A bounded sweep detects unconnected cross
 
 ## Agent API (experimental)
 
-The agent API is in Nightly builds only, not in ReShiki 0.11.0. `reshiki --mcp` serves the [agent API](agent-api.md) to an MCP client over standard input and output, and `reshiki --cli` runs the same operations once from the command line. Both are modes of the single `reshiki` executable, chosen in `src/main.rs` after the worker modes and before Office registration and the GUI. Only a first argument of exactly `--mcp` or `--cli` selects them.
+The agent API is in Nightly builds since 2026-10-08, not in ReShiki 0.11.0. `reshiki --mcp` serves the [agent API](agent-api.md) to an MCP client over standard input and output, and `reshiki --cli` runs the same operations once from the command line. Both are modes of the single `reshiki` executable, chosen in `src/main.rs` after the worker modes and before Office registration and the GUI. Only a first argument of exactly `--mcp` or `--cli` selects them.
 
 ```mermaid
 flowchart LR

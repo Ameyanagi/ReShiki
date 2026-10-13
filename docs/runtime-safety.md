@@ -53,8 +53,8 @@ This update passes **135 Rust tests**, **42 Python tests**, formatting and stric
 ## Agent API (P1, experimental)
 
 The experimental agent API (`reshiki --mcp` and `reshiki --cli`; see the
-[agent API reference](agent-api.md)) is in Nightly builds only, not in ReShiki
-0.11.0. MCP asks servers to validate tool inputs, enforce access controls,
+[agent API reference](agent-api.md)) is in Nightly builds since 2026-10-08, not in
+ReShiki 0.11.0. MCP asks servers to validate tool inputs, enforce access controls,
 rate-limit calls and sanitize outputs
 ([MCP tools, Security Considerations](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)).
 This section records how P1 does each, what remains possible, and the tests

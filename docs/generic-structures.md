@@ -1,6 +1,8 @@
 # Generic structures and finite expansion
 
-This workflow supports a finite subset of generic structures and is unreleased. The [ring expansion review](changes/generic-ring-expansion.md) records native macOS checks and retained limitations.
+Available in Nightly builds; not in ReShiki 0.11.0.
+
+This workflow supports a finite subset of generic structures. The [ring expansion review](changes/generic-ring-expansion.md) records native macOS checks and retained limitations.
 
 ReShiki records choices and repeat definitions in the drawing. **Expand Generic Structures** produces explicit finite combinations in a new tab. An indefinite polymer remains generic until you supply finite counts; it is not treated as an infinite molecule with calculated properties.
 
@@ -74,4 +76,4 @@ Default limits remain 500 raw candidate products, a conservative 100,000-atom ra
 
 Expansion also rejects indefinite counts, unresolved nicknames, exclusion lists, nested/overlapping or directly adjacent units, ambiguous ladder/copolymer connections and specified affected stereochemistry. Mapped repeat atoms and generic structures in explicit reaction membership are restricted. Changed components with generated name captions, attached arrows or rear-opacity scopes require those dependencies to be resolved first; unchanged independent components and captions may be copied. Generic components require expansion before identifiers, properties, derived chemical labels, NMR prediction or joining. Independent ordinary components remain usable.
 
-Native `.rsk` saves retain typed definitions and use document version 26; older readers must be upgraded. Supported CDXML/CDX and V3000 MOL subsets carry represented semantics and refuse unrepresentable data. Fragment alternatives are not ordinary MOL element lists. Full infinite/macromolecular chemistry, ChemDraw generic/polymer parity and a dedicated bulk SDF library workflow remain outside this subset.
+`.rsk` files keep typed definitions; read the [file compatibility](changes-unreleased.md#file-compatibility) note before you share them with ReShiki 0.11.0 users. Supported CDXML/CDX and V3000 MOL subsets carry represented semantics and refuse unrepresentable data. Fragment alternatives are not ordinary MOL element lists. Full infinite/macromolecular chemistry, ChemDraw generic/polymer parity and a dedicated bulk SDF library workflow remain outside this subset.

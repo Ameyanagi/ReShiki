@@ -1,12 +1,14 @@
 # Local chemical naming
 
-The local naming workflow is merged, unreleased, through [PR #298](https://github.com/Ameyanagi/ReShiki/pull/298) and is not included in ReShiki 0.11.0. Its Rust
-backend is introduced separately in [PR #291](https://github.com/Ameyanagi/ReShiki/pull/291). The offline alias follow-up below is merged, unreleased, in [PR #309](https://github.com/Ameyanagi/ReShiki/pull/309).
+Available in Nightly builds; not in ReShiki 0.11.0.
 
 Open **Import → Name** to turn a supported chemical name into an editable
 structure. Right-click a molecule and choose **Show chemical name** to place a
-verified systematic name below it. Both directions use local deterministic Rust rules. Naming requires
-no Java, Python, naming service or network connection.
+verified systematic name below it. Right-click a molecule and choose
+**Chemical names…** to work in both directions in the
+[Chemical names inspector](#chemical-names-inspector). Both directions use local
+deterministic Rust rules. Naming requires no Java, Python, naming service or
+network connection.
 
 ## Parse a chemical name
 
@@ -26,9 +28,8 @@ Changing the preview's chemistry can make the original input name inaccurate.
 ReShiki identifies this change and omits the original name when inserting the
 edited structure. Unapplied SMILES edits cannot be inserted.
 
-The [earlier native review](changes/rust-chemical-naming.md) retains screenshots
-of the previous separate naming panel. Those images do not represent the
-compact Import dock.
+The [earlier desktop review](changes/rust-chemical-naming.md) shows an older
+design of the **Chemical names** inspector, not the Import dock.
 
 The Rust OPSIN port handles supported systematic and retained names, including
 substituted functional groups, bicyclic/spiro systems, heterocycles, supported
@@ -56,6 +57,11 @@ remain evidence of the older build; they do not validate this change.
    result is `ethan-1-ol`, centered below the molecule's visible drawing.
 3. Choose **Hide chemical name** from the same menu to remove it. Show and Hide
    each form one Undo step. Showing an already named molecule reuses its caption.
+
+To see or copy a name without placing it first, select one complete molecule
+and choose **Generate selected name** in **Import → Name → Details** or in the
+[Chemical names inspector](#chemical-names-inspector). Then choose **Copy name**
+or **Insert caption**.
 
 The caption is ordinary editable text with an optional native association to
 its complete molecule. It follows layout changes. A chemical identity change
@@ -94,10 +100,27 @@ tested earlier build, examples, provenance and reproducible checks. The
 [compact dock and molecule-caption follow-up](changes/molecule-name-label.md)
 records the subsequent implementation and its verification status.
 
+## Chemical names inspector
+
+Right-click a molecule and choose **Chemical names…**. ReShiki selects that
+molecule and opens the **Chemical names** inspector. It has two parts:
+
+- **NAME → STRUCTURE**: enter a name and choose **Parse name**. Drag atoms in
+  the preview to arrange the layout, or edit its SMILES and choose **Update**;
+  **Restore** returns to the parsed structure. If the result has warnings,
+  check **I reviewed these warnings and the structure**. Choose **Insert** to
+  add the editable structure. It is inserted without a name caption.
+- **STRUCTURE → NAME**: choose **Generate selected name**, then **Copy name** or
+  **Insert caption**. Curated aliases for the molecule appear below the
+  generated name.
+
+**‹ Properties** returns to the Properties inspector, and **Import** opens the
+Import tab.
+
 ## Curated offline aliases
 
 Open **Import → Name → Details** to resolve the entered name and see its
-**Curated aliases · offline**. Opening Details does not open the optional
+**CURATED ALIASES · OFFLINE**. Opening Details does not open the optional
 preview or insert anything. Choose **Copy** for an alias, or **Use below** to
 use that alias for the next insertion's linked caption. This explicit choice
 leaves the entered name unchanged; **Use original name below** restores the
@@ -108,7 +131,7 @@ parsing and for empty input. Changing preview chemistry prevents using aliases
 from the original graph.
 
 To name a drawing, select one complete molecule and choose **Generate selected
-name** in the same Details area. The **Generated systematic name · local rules**
+name** in the same Details area. The **GENERATED SYSTEMATIC NAME · LOCAL RULES**
 result and its **Copy name** / **Insert caption** actions remain separate from
 the curated aliases and their **Copy** / **Insert caption** actions. Inserting
 an alias reuses the molecule's linked caption instead of making a duplicate.
@@ -126,12 +149,7 @@ map labels do not change chemical identity. An uncatalogued graph explicitly
 shows **No curated aliases available in the bundled catalog.** This means the
 finite catalog has no match, not that the molecule has no other names.
 
-This follow-up has no runtime API, Java, Python or external executable
-dependency. Existing bounded Rust workers and reverse-name coverage are
-unchanged. The merged, unreleased follow-up has 59 distinct passing
-focused tests: 26 library tests on v2 with unchanged v3 library source, plus
-28 app tests and five explicit renderer tests on v3. Qualified macOS native
-checks passed for alias copying, direct captioned insertion without Preview,
-one-step Undo/Redo, fresh-process reopening and final v3 name refresh. The
-[follow-up review](changes/offline-name-synonyms.md) records producer-specific
-screenshots, saved graph/caption audits and the limits of that acceptance.
+The aliases come from a finite catalog bundled with ReShiki. Looking them up
+needs no network connection, Java, Python or other program. The
+[alias review](changes/offline-name-synonyms.md) records screenshots, saved-file
+checks and limits.

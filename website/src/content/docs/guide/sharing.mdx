@@ -10,6 +10,8 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 **Save** writes a `.rsk` file with the complete drawing. If you enter a name without an extension, ReShiki adds `.rsk`, for example `Esterification.rsk`. Use **Save as** for a separate version. Reopen it with **Open**.
 
+Nightly builds save drawings in a newer format. ReShiki 0.11.0 cannot open them and asks you to update. If you share files with people on 0.11.0, keep a copy saved by 0.11.0.
+
 The file contains readable JSON text. Existing `.reshiki` and `.moruno` drawings also open normally; **Save** keeps their current filenames. Use **Save as** to save a copy with the shorter `.rsk` extension.
 
 To add MOL, RXN, CDXML, CDX, SMILES or picture files to the current drawing instead, drop them on the drawing or use **Import → Choose file…**. Dropping a `.rsk` file opens it in a tab.

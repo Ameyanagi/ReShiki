@@ -1,8 +1,9 @@
 # Pure Rust chemical naming: native review
 
-Under review; not included in ReShiki 0.11.0. This editor integration is
-stacked on the separately licensed Rust parser in
-[PR #291](https://github.com/Ameyanagi/ReShiki/pull/291). Both naming directions
+Merged, unreleased; not included in ReShiki 0.11.0. This editor integration
+builds on the separately licensed Rust parser in
+[PR #291](https://github.com/Ameyanagi/ReShiki/pull/291) and was merged through
+[Integration PR #298](https://github.com/Ameyanagi/ReShiki/pull/298). Both naming directions
 run locally in the installed Rust executable, with no Java, JAR, Python parser
 or naming API. The [guide](../chemical-naming-rust.md) states forward and
 reverse coverage; comprehensive IUPAC or preferred-name selection is not
@@ -32,8 +33,11 @@ preserved privately as supplemental and excluded from selected evidence.
 
 ## Actual desktop checks
 
-Root operated the unique signed macOS app through the native UI. Open
-**Import → Chemical names…**, enter `ethanol`, and choose **Parse name locally**.
+Root operated the unique signed macOS app through the native UI. The reviewed
+build opened the Chemical names panel from the Import tab. Current builds open
+it from a molecule's right-click menu with **Chemical names…**, and some labels
+differ; see the [Chemical names inspector](../chemical-naming-rust.md#chemical-names-inspector).
+Open the panel, enter `ethanol`, and choose **Parse name locally**.
 Review the editable CCO preview, scroll beside it, and choose **Insert editable
 structure**. One Undo removes the whole molecule; Redo restores its three
 atoms and two bonds. Select the complete molecule and choose **Generate name
