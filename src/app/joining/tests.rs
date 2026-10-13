@@ -722,11 +722,22 @@ fn repeated_canvas_coordination_reports_duplicate_without_another_history_frame(
     assert_eq!(app.tab.doc, original);
 }
 
-#[tokio::test]
-async fn duplicate_canvas_coordination_after_a_label_refresh_reports_the_installed_copy_as_an_edit()
-{
+async fn label_refresh_completion(app: &mut App) -> Message {
     use iced::futures::StreamExt;
 
+    app.tab.labels_dirty = true;
+    let mut task = iced_runtime::task::into_stream(app.start_label_refresh())
+        .expect("A real label calculation starts");
+    let Some(iced_runtime::Action::Output(labels)) = task.next().await else {
+        panic!("The label task must return its tagged completion");
+    };
+    assert!(matches!(&labels, Message::LabelsReady(_, Ok(_))));
+    labels
+}
+
+#[tokio::test]
+async fn duplicate_canvas_coordination_after_a_label_refresh_keeps_the_refreshed_labels_and_records_nothing()
+ {
     let (mut app, co, donor, _) = coordination();
     let point = app.tab.doc.atom(co).unwrap().position;
     let reshiki::joining::Coordination::Added(contact) =
@@ -735,34 +746,151 @@ async fn duplicate_canvas_coordination_after_a_label_refresh_reports_the_install
         panic!("The first contact is added");
     };
     app.tab.doc = contact;
+    app.tab.doc.atom_mut(donor).unwrap().label_h = 0;
     app.tab.selected = vec![donor];
     let _ = app.update(Message::Join(Action::BeginCoordination));
     let _ = app.update(Message::Join(Action::Anchor(Anchor::Atom(donor))));
     // A label calculation of this revision lands while the preparation is open.
-    app.tab.labels_dirty = true;
-    let mut task = iced_runtime::task::into_stream(app.start_label_refresh())
-        .expect("A real label calculation starts");
-    let Some(iced_runtime::Action::Output(labels)) = task.next().await else {
-        panic!("The label task must return its tagged completion");
-    };
-    assert!(matches!(&labels, Message::LabelsReady(_, Ok(_))));
+    let before_refresh = app.tab.doc.clone();
+    let labels = label_refresh_completion(&mut app).await;
     let revision = app.tab.revision;
     let _ = app.update(labels);
     assert_eq!(app.tab.revision, revision);
-    assert_ne!(
+    let refreshed = app.tab.doc.clone();
+    assert_eq!(refreshed.atom(donor).unwrap().label_h, 2);
+    assert_ne!(refreshed, before_refresh);
+    assert_eq!(
         app.tab.doc,
         app.tab.joining.as_ref().unwrap().prepared.original,
-        "The refresh updates the drawing in place"
+        "The refresh also updates the open preparation"
     );
     let history = app.tab.history.undo_frames().len();
     let _ = app.update(Message::Canvas(Edit::Template(point, None)));
     assert_eq!(
         app.status,
-        "Donor → metal contact added in place · Undo removes it"
+        "This donor is already coordinated to that metal"
     );
     assert!(!app.error);
     assert!(app.tab.joining.is_none());
+    assert_eq!(app.tab.doc, refreshed);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().len(), history);
+}
+
+#[tokio::test]
+async fn move_and_attach_after_a_label_refresh_keeps_the_refreshed_labels_and_records_one_move() {
+    use iced::futures::StreamExt;
+
+    let mut app = ready();
+    let moving_nitrogen = 3;
+    app.tab.doc.atom_mut(moving_nitrogen).unwrap().element = "N".into();
+    let base_oxygen = app.tab.doc.add_atom("O", Point::new(-42., 0.));
+    app.tab.doc.add_bond(1, base_oxygen, 1, "plain");
+    let before_refresh = app.tab.doc.clone();
+    let _ = app.update(Message::Join(Action::Begin));
+    let _ = app.update(Message::Join(Action::Anchor(Anchor::Atom(2))));
+    let labels = label_refresh_completion(&mut app).await;
+    let revision = app.tab.revision;
+    let epoch = app.tab.file_epoch;
+    let history = app.tab.history.undo_frames().len();
+    let _ = app.update(labels);
+    let refreshed = app.tab.doc.clone();
+    assert_eq!(refreshed.atom(moving_nitrogen).unwrap().label_h, 2);
+    assert_eq!(refreshed.atom(base_oxygen).unwrap().label_h, 1);
+    for id in [moving_nitrogen, base_oxygen] {
+        assert_ne!(
+            refreshed.atom(id).unwrap().label_h,
+            before_refresh.atom(id).unwrap().label_h
+        );
+    }
+    let state = app.tab.joining.as_ref().unwrap();
+    assert_eq!(state.prepared.original, refreshed);
+    assert_eq!(
+        state.prepared.fragment.atom(moving_nitrogen),
+        refreshed.atom(moving_nitrogen)
+    );
+    assert_eq!(
+        state.prepared.base.atom(base_oxygen),
+        refreshed.atom(base_oxygen)
+    );
+    assert_eq!((state.revision, state.epoch), (revision, epoch));
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().len(), history);
+
+    let placement = app.update(Message::Canvas(Edit::Template(Point::default(), None)));
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.joining.is_none());
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.tab.revision, revision + 1);
     assert_eq!(app.tab.history.undo_frames().len(), history + 1);
+    // Adding the new bond invalidates chemical labels. Complete the normal
+    // post-placement refresh before checking the remote heteroatom labels.
+    let mut task = iced_runtime::task::into_stream(placement)
+        .expect("The move starts its next label calculation");
+    let Some(iced_runtime::Action::Output(labels)) = task.next().await else {
+        panic!("The move must return its label completion");
+    };
+    assert!(matches!(&labels, Message::Tab(_, message)
+        if matches!(&**message, Message::LabelsReady(_, Ok(_)))));
+    let _ = app.update(labels);
+    for id in [moving_nitrogen, base_oxygen] {
+        assert_eq!(
+            app.tab.doc.atom(id).unwrap().label_h,
+            refreshed.atom(id).unwrap().label_h
+        );
+    }
+    assert_ne!(
+        app.tab.doc.atom(moving_nitrogen).unwrap().position,
+        refreshed.atom(moving_nitrogen).unwrap().position
+    );
+    assert_eq!(app.tab.doc.atom(base_oxygen), refreshed.atom(base_oxygen));
+    assert_eq!(app.tab.doc.bonds.len(), refreshed.bonds.len() + 1);
+    assert_eq!(app.tab.revision, revision + 1);
+    assert_eq!(app.tab.history.undo_frames().len(), history + 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, refreshed);
+    assert_eq!(app.tab.history.undo_frames().len(), history);
+}
+
+#[tokio::test]
+async fn stale_label_refresh_changes_neither_the_drawing_nor_the_open_preparation() {
+    for mode in [Connection::Connect, Connection::Coordinate] {
+        let (mut app, _, donor, _) = coordination();
+        app.tab.doc.atom_mut(donor).unwrap().label_h = 0;
+        let oxygen = app.tab.doc.add_atom("O", Point::new(-42., 0.));
+        let _ = app.update(Message::Join(Action::Begin));
+        let _ = app.update(Message::Join(Action::Mode(mode)));
+        let _ = app.update(Message::Join(Action::Anchor(Anchor::Atom(donor))));
+        let labels = label_refresh_completion(&mut app).await;
+        let Message::LabelsReady(_, Ok(computed)) = &labels else {
+            panic!("The label task must succeed");
+        };
+        let drawing = app.tab.doc.clone();
+        let mut would_refresh = drawing.clone();
+        computed.apply(&mut would_refresh);
+        for id in [donor, oxygen] {
+            assert_eq!(would_refresh.atom(id).unwrap().label_h, 2);
+            assert_ne!(would_refresh.atom(id), drawing.atom(id));
+        }
+        let state = app.tab.joining.as_ref().unwrap();
+        let prepared = state.prepared.clone();
+        let identity = (state.revision, state.epoch);
+        app.tab.revision = app.tab.revision.wrapping_add(1);
+        let history = app.tab.history.undo_frames().len();
+        assert!(!app.tab.labels_dirty);
+        // Deliver through the result handler so the retry flag is visible
+        // before update_front automatically starts the next calculation.
+        let _ = app.update_document_result(labels);
+        assert_eq!(app.tab.doc, drawing);
+        let state = app.tab.joining.as_ref().unwrap();
+        assert_eq!(state.prepared.original, prepared.original);
+        assert_eq!(state.prepared.fragment, prepared.fragment);
+        assert_eq!(state.prepared.base, prepared.base);
+        assert_eq!((state.revision, state.epoch), identity);
+        assert_eq!(app.tab.history.undo_frames().len(), history);
+        assert!(app.tab.label_refresh.pending_key().is_none());
+        assert!(app.tab.labels_dirty);
+    }
 }
 
 #[test]

@@ -81,6 +81,14 @@ impl App {
         match result {
             Ok(computed) => {
                 computed.apply(&mut self.tab.doc);
+                // An open Move & attach or Coordinate preparation builds its
+                // result from these copies. Keep them equal to the drawing, so
+                // placing neither reverts the labels nor adds an Undo step.
+                if let Some(state) = &mut self.tab.joining {
+                    computed.apply(&mut state.prepared.original);
+                    computed.apply(&mut state.prepared.fragment);
+                    computed.apply(&mut state.prepared.base);
+                }
                 self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
                 self.tab.chemistry_notice.clone_from(&computed.notice);
             }

@@ -5,7 +5,7 @@ use crate::canvas::pick::PICK_RADIUS_PX;
 use reshiki::document::{Document, Point};
 use reshiki::editing;
 use reshiki::graphics::Graphic;
-use reshiki::joining::{Coordination, Placed};
+use reshiki::joining::Placed;
 
 impl App {
     pub(super) fn place_chain(
@@ -112,15 +112,6 @@ impl App {
             ) {
                 Ok((outcome, selected)) => {
                     let status = match &outcome {
-                        // A label refresh can update the drawing during the preparation
-                        // without a new revision. Installing the prepared copy of an
-                        // existing contact then still changes the drawing, so it is
-                        // reported as an edit, as the document comparison always did.
-                        Placed::Coordinated(Coordination::AlreadyPresent)
-                            if state.prepared.original != before =>
-                        {
-                            joining::CONTACT_ADDED
-                        }
                         Placed::Coordinated(coordination) => {
                             joining::coordination_status(coordination, false)
                         }
