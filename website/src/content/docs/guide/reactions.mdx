@@ -26,14 +26,26 @@ Click the arrow tool to reuse the current style. Hold it briefly or click its lo
   alt="The arrow palette includes bent, curved, equilibrium, and retrosynthesis arrows."
 />
 
-Select the arrow. Drag its middle handle to set the bend or corner; drag an endpoint to change its length. **Properties** provides **Reverse**, **Flip bend**, **Straighten**, and stroke settings. Expand **Arrowhead & markers** for head geometry, dipole crosses, and no-reaction markers.
+Select the arrow. Drag the diamond to bend it, or to move the corner of a bent arrow. A curved arrow also has a square handle on a line from each end. Drag a square to change how the arrow leaves or arrives; both ends stay where they are. Drag a round end handle to move that end. **Properties** provides **Reverse**, **Flip bend**, **Straighten**, and stroke settings. Expand **Arrowhead & markers** for head geometry, dipole crosses, and no-reaction markers.
 
 With an arrow tool active, click an existing arrow to change its style. Repeated clicks with the same style cycle its variants: reverse the direction, change the side of a half-head, or switch the longer line of an unequal equilibrium arrow.
 
 <Screenshot
   src="/manual/bent-arrow.png"
-  alt="A bent arrow with its editable middle handle and arrow properties."
+  alt="A selected curved arrow from a methoxide oxygen to a carbonyl carbon, with its diamond bend handle, two square direction handles and the arrow properties."
 />
+
+## Point an arrow at atoms
+
+Available in Nightly builds; not in ReShiki 0.11.0.
+
+1. Choose **Curved / electron pair** or **Single electron**. **Attach ends to atoms and bonds** in **Properties** is on by default.
+2. Click where the arrow starts: an atom, a bond or a lone pair. ReShiki highlights it.
+3. Click where the arrow ends. ReShiki adds the arrow in one Undo step.
+
+The arrow follows its targets when they move. To draw a free arrow, Option/Alt-click, drag, or turn off **Attach ends to atoms and bonds**. **Escape** cancels a picked start. To release one end, select the arrow and choose **Detach start** or **Detach end** in **Properties**.
+
+Only `.rsk` files keep the links between an arrow and its targets. Other formats keep the arrow's shape.
 
 ## Make the reaction exportable
 
@@ -51,6 +63,28 @@ The drawing can also carry explicit reactant, product, and reagent roles:
 Use **RXN** or **Reaction SMILES** to export the chemical reaction. Captions and page layout belong in `.rsk`, SVG, PDF, or PNG instead.
 
 Use **Open** for an RXN file. Use **Import** to paste RXN text or reaction SMILES. Reaction roles do not check reaction balance or predict products.
+
+## Map atoms between reactants and products
+
+Available in Nightly builds; not in ReShiki 0.11.0.
+
+Atom maps number the atoms that correspond between reactants and products.
+
+1. Assign reactants and products first. The **Atom maps** section below the roles then shows how many atoms are mapped.
+2. To set one map, select one atom, type a number in **Atom map** and choose **Set**. You can also right-click an atom and choose **Edit atom map…**.
+3. To pair two atoms, select one reactant atom and one product atom, then choose **Pair selected atoms**.
+4. To map the rest, choose **Auto-map**. **Review atom maps** lists each suggested pair; click a row to select that pair in the drawing.
+5. Choose **Apply maps** to keep the suggestion, or **Discard**.
+6. Choose **Align mapped structures** to turn and move each product so that its mapped atoms line up with the reactants.
+
+**Show maps** shows or hides the map numbers. **Move labels** lets you drag the numbers; press **Escape** when you are done. **Reset label positions** returns them to automatic placement. Each edit is one Undo step.
+
+<Screenshot
+  src="/manual/reaction-maps.png"
+  alt="Ethanol oxidized to acetaldehyde with map numbers 1, 2 and 3 on both sides, and the Atom maps section of Reaction roles showing six mapped atoms."
+/>
+
+**Auto-map** compares structures only; it does not predict a reaction mechanism. It keeps the maps you set and does not map reagents. RXN and reaction SMILES keep the map numbers. Save a `.rsk` file to keep custom label positions too.
 
 [Let the assistant draft a scheme →](/guide/assistant/)
 

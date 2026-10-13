@@ -14,26 +14,27 @@ Nightly builds save drawings in a newer format. ReShiki 0.11.0 cannot open them 
 
 The file contains readable JSON text. Existing `.reshiki` and `.moruno` drawings also open normally; **Save** keeps their current filenames. Use **Save as** to save a copy with the shorter `.rsk` extension.
 
-To add MOL, RXN, CDXML, CDX, SMILES or picture files to the current drawing instead, drop them on the drawing or use **Import → Choose file…**. Dropping a `.rsk` file opens it in a tab.
+To add MOL, RXN, CDXML, CDX, SMILES or picture files to the current drawing instead, drop them on the drawing or use **Import → Choose file…**. On Windows you can also insert `.emf` pictures; see [Insert EMF pictures](/guide/windows/#insert-emf-pictures). Dropping a `.rsk` file opens it in a tab.
 
 If ReShiki offers recovery drafts after an interrupted session, choose **Restore** in the status bar to open each one in a tab, then save them to files. Closing a tab or the window with unsaved changes asks whether to save them first; New and Open add a tab instead.
 
 ## Choose an export
 
-Open **Export → Figure**, choose a vector format (SVG or PDF) or PNG, then click **Export**. Expand **Structure & exchange** for molecular formats and CDXML, or **Pages & printing** for page setup and printing. **Editable document** saves the complete `.rsk` original.
+Open **Export → Figure**, choose **SVG**, **SVG for Office**, **PDF** or **PNG** (on Windows also **EMF for Office**), then click its export button, for example **Export SVG…**. **SVG for Office** is available in Nightly builds; not in ReShiki 0.11.0. Expand **Structure & exchange** for molecular formats and CDXML, or **Pages & printing** for page setup and printing. **Editable document** saves the complete `.rsk` original.
 
 PNG uses up to 1200 dpi and automatically lowers resolution for large drawings while preserving physical size. The saved-file status reports the actual pixel dimensions and DPI. If chemistry analysis fails, figure export preserves the visible drawing and shows a review notice instead of blocking Save. [Figure export details and limits](/developer/figure-export/).
 
 File exports use the full drawing. **Copy image** uses the current selection when objects are selected.
 
-| You need                     | Use                                              |
-| ---------------------------- | ------------------------------------------------ |
-| A vector figure              | **SVG** or **PDF**                               |
-| A high-resolution image      | **PNG**                                          |
-| Multiple publication pages   | **PDF · all pages**                              |
-| An editable chemical drawing | **CDXML**                                        |
-| Chemical structure data      | **MOL**, **SMILES**, or **InChI**                |
-| Chemical reaction data       | **RXN** or **Reaction SMILES** in Reaction roles |
+| You need                         | Use                                                                                                   |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| A vector figure                  | **SVG** or **PDF**                                                                                    |
+| A high-resolution image          | **PNG**                                                                                               |
+| A picture for Word or PowerPoint | **EMF for Office** on Windows, or **SVG for Office** in Nightly builds (both turn text into outlines) |
+| Multiple publication pages       | **PDF · all pages**                                                                                   |
+| An editable chemical drawing     | **CDXML**                                                                                             |
+| Chemical structure data          | **MOL**, **SMILES**, or **InChI**                                                                     |
+| Chemical reaction data           | **RXN** or **Reaction SMILES** in Reaction roles                                                      |
 
 Export dialogs also add the selected format’s extension when you omit it.
 
@@ -45,7 +46,7 @@ Anonymous dummy/attachment markers are editor handles and are omitted from figur
 
 <Screenshot
   src="/manual/export.png"
-  alt="The Export panel offers vector drawings, images, chemical data, and print controls."
+  alt="The Export panel with SVG for Office chosen in the Figure format menu, above the Structure & exchange, Pages & printing and Editable document sections."
 />
 
 ## Copy and paste

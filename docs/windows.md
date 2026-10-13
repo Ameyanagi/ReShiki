@@ -15,10 +15,24 @@ Use `.rsk` for an editable original, including pages, pictures and styles.
 SVG/PDF/PNG and EMF export figures; chemical interchange formats retain their supported
 subset. Windows file dialogs support paths containing spaces and Unicode.
 
-**Export → Figure → EMF** saves a vector picture for Microsoft Office with
-outlined text, the canvas background and the drawing's physical dimensions.
-Keep the `.rsk` file to edit the original drawing. See [figure export](figure-export.md)
-for format details and limits.
+**Export → Figure → EMF for Office** saves a vector picture for Microsoft
+Office with outlined text, the canvas background and the drawing's physical
+dimensions. **SVG for Office** (Nightly builds; not in ReShiki 0.11.0) gives
+the same physical size and outlined text as SVG. Keep the `.rsk` file to edit
+the original drawing. See [figure export](figure-export.md) for format details
+and limits.
+
+**Import → Choose file…** also inserts `.emf` pictures, such as spectra, at the
+size recorded in the file. The `.rsk` file keeps the original EMF and a preview;
+other platforms show the preview. See [pictures](pictures.md). Available in
+Nightly builds; not in ReShiki 0.11.0.
+
+When ReShiki is running, opening another file adds it as a tab in the existing
+window, and a file that is already open switches to its tab. Each drawing
+opened from Office gets its own tab, and saving it updates only that Office
+document. Available in Nightly builds; not in ReShiki 0.11.0. See
+[the open-in-tab record](changes/windows-linux-open-tabs.md) for the transport
+and its limits.
 
 ## Clipboard
 

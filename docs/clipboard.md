@@ -60,6 +60,7 @@ Styled metal contacts are also retained when chemical normalization would otherw
 | Hidden ±1 charge on an aromatic carbon without other marks              | Retained as an invisible attached symbol.                                                                 |
 | Other hidden charge labels                                              | Shown in the external copy; charge values are retained.                                                   |
 | R/X and other variable text                                             | Kept as an uninterpreted atom label; variable/query semantics are omitted.                                |
+| ChemDraw 26 groups with numbered attachment points, such as SiMe₃       | Pasted or opened as editable structures; each numbered attachment point becomes an ordinary bond.         |
 | Partial inner-ring curves                                               | Omitted; the underlying bond orders remain.                                                               |
 | Perspective emphasis outside supported aromatic/Haworth cases           | Copied as plain bonds when no assigned stereocenter is affected.                                          |
 | Compact groups with multicenter attachment points                       | May expand into their editable constituent atoms in the receiving editor.                                 |
