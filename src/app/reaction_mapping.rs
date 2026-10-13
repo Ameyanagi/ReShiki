@@ -112,7 +112,9 @@ impl App {
         self.tab.mapping.preview = Some(Preview::new(key, proposal, &self.tab.doc));
     }
 
-    fn mapping_atom(&self) -> Option<u64> {
+    /// The one selected atom that atom-map commands edit. Shared with the
+    /// selection menu.
+    pub(super) fn mapping_atom(&self) -> Option<u64> {
         let ids: Vec<_> = self
             .tab
             .selected

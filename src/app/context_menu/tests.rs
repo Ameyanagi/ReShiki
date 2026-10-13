@@ -29,6 +29,172 @@ fn labels(app: &App, page: Page) -> Vec<&'static str> {
         .collect()
 }
 
+/// Labels and separators ("—") of a menu page, in order.
+fn outline(app: &App, page: Page) -> Vec<&'static str> {
+    app.context_entries(page)
+        .into_iter()
+        .filter_map(|entry| match entry {
+            Entry::Item { label, .. } => Some(label),
+            Entry::Separator => Some("—"),
+            Entry::Hint(_) => None,
+        })
+        .collect()
+}
+
+fn enabled(app: &App, page: Page, label: &str) -> Option<bool> {
+    app.context_entries(page)
+        .into_iter()
+        .find_map(|entry| match entry {
+            Entry::Item {
+                label: name,
+                enabled,
+                ..
+            } if name == label => Some(enabled),
+            _ => None,
+        })
+}
+
+#[test]
+fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    let ring = app.tab.doc.all_ids();
+    let atom = app.tab.doc.atoms.first().ok_or("ring atom")?.id;
+    let before = app.tab.doc.clone();
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![atom],
+        hit: vec![atom],
+    });
+    assert_eq!(
+        outline(&app, Page::Main),
+        [
+            "Edit atom label…",
+            "Edit atom map…",
+            "—",
+            "Show chemical name",
+            "Chemical names…",
+            "Select molecule",
+            "—",
+            "Join selected atoms or bonds",
+            "Merge selected atoms",
+            "Arrange & transform",
+            "—",
+            "Cut",
+            "Copy",
+            "Copy as",
+            "Paste",
+            "Duplicate",
+            "—",
+            "Properties…",
+            "Delete"
+        ]
+    );
+    // Join and Merge both stay, unavailable below their minimum selection.
+    assert_eq!(
+        enabled(&app, Page::Main, "Join selected atoms or bonds"),
+        Some(false)
+    );
+    assert_eq!(
+        enabled(&app, Page::Main, "Merge selected atoms"),
+        Some(false)
+    );
+    // Move & attach and Coordinate in place have one menu home, Arrange &
+    // transform, built from the same commands as the context row.
+    let main = labels(&app, Page::Main);
+    assert!(!main.contains(&"Move & attach…"));
+    assert!(!main.contains(&"Coordinate in place…"));
+    let entries = app.context_entries(Page::Align);
+    let index = entries
+        .iter()
+        .position(|entry| {
+            matches!(
+                entry,
+                Entry::Item {
+                    label: "Coordinate in place…",
+                    ..
+                }
+            )
+        })
+        .ok_or("Missing Coordinate in place…")?;
+    let Some(Entry::Item { action, .. }) = entries.get(index) else {
+        return Err("Coordinate in place… is not a command".into());
+    };
+    assert_eq!(item_id(Page::Align, index, action), "coordination.begin");
+    assert!(matches!(
+        entries.get(index - 1),
+        Some(Entry::Item {
+            label: "Move & attach…",
+            enabled: true,
+            ..
+        })
+    ));
+    // Clear atom map appears once the atom has a map number.
+    app.tab.doc.atom_mut(atom).ok_or("atom")?.map_num = 3;
+    assert_eq!(
+        outline(&app, Page::Main)[..4],
+        ["Edit atom label…", "Edit atom map…", "Clear atom map", "—"]
+    );
+    app.tab.doc.atom_mut(atom).ok_or("atom")?.map_num = 0;
+    assert_eq!(app.tab.doc, before);
+    // Three or more atoms: both Join and Merge run.
+    app.tab.selected = ring.into_iter().take(3).collect();
+    assert_eq!(
+        enabled(&app, Page::Main, "Join selected atoms or bonds"),
+        Some(true)
+    );
+    assert_eq!(
+        enabled(&app, Page::Main, "Merge selected atoms"),
+        Some(true)
+    );
+    assert!(!app.tab.history.can_undo());
+    Ok(())
+}
+
+#[test]
+fn expand_generic_structures_follows_the_target_and_waits_for_a_running_expansion()
+-> Result<(), String> {
+    use super::super::generic::Action as Generic;
+    let (mut app, _) = App::new();
+    let mut doc = reshiki::rings::Preset::Regular.document(42., false);
+    let ring_atom = doc.atoms.first().ok_or("ring atom")?.id;
+    let carbon = doc.add_atom("C", World::new(200., 0.));
+    let halogen = doc.add_atom("Cl", World::new(242., 0.));
+    doc.add_bond(carbon, halogen, 1, "plain");
+    app.tab.doc =
+        reshiki::atom_text::apply(&doc, halogen, "[Cl,Br,I]", reshiki::atom_text::Mode::Auto)?;
+    assert!(reshiki::generic::present(&app.tab.doc));
+    const EXPAND: &str = "Expand Generic Structures";
+    app.tab.selected = vec![ring_atom];
+    assert_eq!(
+        enabled(&app, Page::Main, EXPAND),
+        None,
+        "A target outside every generic structure has no Expand"
+    );
+    app.tab.selected = vec![carbon];
+    assert_eq!(enabled(&app, Page::Main, EXPAND), Some(true));
+    let outline = outline(&app, Page::Main);
+    assert!(
+        outline
+            .windows(4)
+            .any(|group| group == ["—", EXPAND, "—", "Cut"]),
+        "Expand is its own group before the clipboard: {outline:?}"
+    );
+    assert!(app.generic_expand_enabled());
+    app.tab.busy = false;
+    app.tab.selected = app.tab.doc.all_ids();
+    let _ = app.update(Message::Generic(Generic::Expand));
+    assert!(app.generic.is_pending(), "{}", app.status);
+    app.tab.selected = vec![carbon];
+    assert_eq!(
+        enabled(&app, Page::Main, EXPAND),
+        Some(false),
+        "The entry and the button wait for the running expansion"
+    );
+    assert!(!app.generic_expand_enabled());
+    Ok(())
+}
+
 #[test]
 fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide()
 -> Result<(), String> {
@@ -274,14 +440,14 @@ fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), Str
     assert!(run_item(&mut app, Page::Arrange, "Align needs 2 objects").is_err());
     assert_eq!(
         labels(&app, Page::More(2)),
-        ["3D optimize…", "Join selected atoms / bonds"],
+        ["3D optimize…", "Join selected atoms or bonds"],
         "Default keyboard drawing folds the selection commands first"
     );
     assert_eq!(
         labels(&app, Page::More(4)),
         [
             "3D optimize…",
-            "Join selected atoms / bonds",
+            "Join selected atoms or bonds",
             "Merge selected atoms",
             "Move & attach…"
         ],

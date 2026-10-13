@@ -2,7 +2,7 @@ use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use crate::canvas::pick::PICK_RADIUS_PX;
 use crate::canvas::{TemplateAnchorPreview, Tool};
-use iced::widget::{column, container, row, text};
+use iced::widget::{column, row, text};
 use iced::{Element, Length, Task};
 use reshiki::{
     document::{Document, Point},
@@ -39,23 +39,22 @@ const SHARE_ATOM_DETAIL: &str = concat!(
 );
 const FUSE_BOND_DETAIL: &str =
     "Click a matching destination bond to share its two atoms. Drag from it to choose the side.";
-const COORDINATION_DETAIL: &str = concat!(
-    "Click a transition-metal atom to add a directed donor → metal contact. ",
-    "Positions, donor hydrogens and metal charge are retained, ",
-    "including within an existing chelate."
-);
-const COORDINATION_HINT: &str = concat!(
-    "No atoms move. Escape cancels. Each new contact is one Undo step. ",
-    "Wedge/hash styling depicts projection; it does not assign complex stereochemistry."
-);
+const ATTACH_INTRO: &str =
+    "Choose the atom or bond on this fragment to use as its attachment point.";
+const COORDINATION_INTRO: &str =
+    "Pick the donor (N, O, S or P) in the preview, then click a metal on the drawing.";
+/// The full donor, chelate and stereo notes are in docs/fragment-joining.md.
+const COORDINATION_HINT: &str = "Atoms stay in place · Escape cancels · One Undo step per contact";
 const JOIN_HINT: &str =
     "Shift/Ctrl drag snaps the direction. Escape cancels. Joining is one Undo step.";
 
+/// The wording shared by the inspector panel and the canvas bar.
 struct JoinModeTexts {
-    panel_title: &'static str,
-    instruction: &'static str,
+    title: &'static str,
+    intro: &'static str,
+    /// What a click on the drawing does. Coordination says it in the intro.
+    instruction: Option<&'static str>,
     footer: &'static str,
-    bar_title: &'static str,
     bar_subtitle: &'static str,
 }
 
@@ -64,28 +63,35 @@ fn join_mode_texts(mode: Connection) -> JoinModeTexts {
         Connection::Connect | Connection::Auto => CONNECT_DETAIL,
         Connection::ShareAtom => SHARE_ATOM_DETAIL,
         Connection::FuseBond => FUSE_BOND_DETAIL,
-        Connection::Coordinate => COORDINATION_DETAIL,
-    };
-    let coordination = mode == Connection::Coordinate;
-    let title = if coordination {
-        "Coordinate in place"
-    } else {
-        "Move & attach"
+        Connection::Coordinate => {
+            return JoinModeTexts {
+                title: "Coordinate in place",
+                intro: COORDINATION_INTRO,
+                instruction: None,
+                footer: COORDINATION_HINT,
+                bar_subtitle: "Pick a donor, then a metal",
+            };
+        }
     };
     JoinModeTexts {
-        panel_title: title,
-        instruction,
-        footer: if coordination {
-            COORDINATION_HINT
-        } else {
-            JOIN_HINT
-        },
-        bar_title: title,
-        bar_subtitle: if coordination {
-            "Choose a metal · Positions stay fixed"
-        } else {
-            "Choose a destination · Drag to orient"
-        },
+        title: "Move & attach",
+        intro: ATTACH_INTRO,
+        instruction: Some(instruction),
+        footer: JOIN_HINT,
+        bar_subtitle: "Choose a destination · Drag to orient",
+    }
+}
+
+/// The attachment point under the preview; coordination names its donor.
+fn anchor_label(state: &State) -> String {
+    match state.anchor {
+        Anchor::Atom(id) if state.is_coordination() => {
+            state.prepared.fragment.atom(id).map_or_else(
+                || state.anchor.to_string(),
+                |atom| format!("Donor: {} (atom {id})", atom.element),
+            )
+        }
+        anchor => anchor.to_string(),
     }
 }
 
@@ -172,17 +178,44 @@ impl App {
         [
             RowCommand {
                 label: "Join",
-                menu: "Join selected atoms / bonds",
-                hint: "Share two attachment sites or combine three or more selected atoms",
+                menu: "Join selected atoms or bonds",
+                hint: "Join two fragments, merge three or more atoms, or connect a donor to a metal",
                 message: Message::Shortcut(shortcuts::Action::Join),
                 enabled: active && atoms && self.tab.selected.len() >= 2,
             },
             RowCommand {
                 label: "Merge atoms",
                 menu: "Merge selected atoms",
-                hint: "Combine three or more atoms into the first selected atom; surrounding atoms stay in place",
+                hint: "Merge three or more atoms into the first selected atom; surrounding atoms stay in place",
                 message: Message::Shortcut(shortcuts::Action::MergeAtoms),
                 enabled: active && atoms && self.tab.selected.len() >= 3,
+            },
+        ]
+    }
+
+    /// Move & attach and Coordinate in place, shared by the context row, its
+    /// overflow menu and the selection menu.
+    pub(super) fn selected_attach_commands(&self) -> [super::workspace::RowCommand; 2] {
+        use super::workspace::RowCommand;
+        let atoms = self
+            .tab
+            .selected
+            .iter()
+            .any(|id| self.tab.doc.atom(*id).is_some());
+        [
+            RowCommand {
+                label: "Move & attach…",
+                menu: "Move & attach…",
+                hint: "Join the selection to another structure at an atom or bond",
+                message: Message::Join(Action::Begin),
+                enabled: atoms,
+            },
+            RowCommand {
+                label: "Coordinate in place…",
+                menu: "Coordinate in place…",
+                hint: "Pick a donor (N, O, S or P), then a metal; atoms and hydrogens stay in place",
+                message: Message::Join(Action::BeginCoordination),
+                enabled: atoms,
             },
         ]
     }
@@ -352,10 +385,10 @@ impl App {
         Task::none()
     }
     pub(super) fn join_panel(&self) -> Element<'_, Message> {
+        use super::workspace::{accessible_command, muted_text};
         let Some(state) = &self.tab.joining else {
             return text("Select a fragment to attach").into();
         };
-        let coordination = state.is_coordination();
         let texts = join_mode_texts(state.mode);
         let preview: Element<'_, Anchor> = canvas(TemplateAnchorPreview {
             document: &state.prepared.fragment,
@@ -364,11 +397,10 @@ impl App {
         .width(Length::Fill)
         .height(200)
         .into();
-        column![
-            text(texts.panel_title).size(18),
-            text("Choose the atom or bond on this fragment to use as its attachment point.")
-                .size(12)
-                .style(super::workspace::muted_text),
+        // The pick list is the one mode control, Coordinate in place included.
+        let mut panel = column![
+            text(texts.title).size(18),
+            text(texts.intro).size(12).style(muted_text),
             crate::appearance::pick_list(
                 [
                     Connection::Connect,
@@ -381,34 +413,25 @@ impl App {
             )
             .text_size(12)
             .width(Length::Fill),
-            reshiki::accessibility::button(
-                "coordination.mode",
-                "Coordinate in place: donor to metal",
-                text("Coordinate in place").size(12)
-            )
-            .checked(coordination)
-            .style(super::workspace::control(coordination))
-            .on_press(Message::Join(Action::Mode(Connection::Coordinate))),
             preview.map(|anchor| Message::Join(Action::Anchor(anchor))),
-            text(state.anchor.to_string())
-                .size(11)
-                .style(super::workspace::muted_text),
-            text(texts.instruction).size(12),
-            text(texts.footer)
-                .size(11)
-                .style(super::workspace::muted_text),
-            reshiki::accessibility::button(
-                "coordination.cancel",
-                "Cancel attachment",
-                text("Cancel")
-            )
-            .on_press(Message::Join(Action::Cancel))
-            .style(super::workspace::control(false))
+            text(anchor_label(state)).size(11).style(muted_text),
         ]
-        .spacing(12)
-        .into()
+        .spacing(12);
+        if let Some(instruction) = texts.instruction {
+            panel = panel.push(text(instruction).size(12));
+        }
+        panel
+            .push(text(texts.footer).size(11).style(muted_text))
+            .push(
+                accessible_command("coordination.cancel", "Cancel attachment", "Cancel")
+                    .on_press(Message::Join(Action::Cancel)),
+            )
+            .into()
     }
+    /// The canvas bar's content while a preparation is open; the context bar
+    /// draws its frame.
     pub(super) fn join_bar(&self) -> Element<'_, Message> {
+        use super::workspace::{CONTEXT_GAP, accessible_command, muted_text};
         let coordination = self
             .tab
             .joining
@@ -419,27 +442,14 @@ impl App {
         } else {
             Connection::Connect
         });
-        container(
-            row![
-                text(texts.bar_title).size(12),
-                text(texts.bar_subtitle)
-                    .size(11)
-                    .style(super::workspace::muted_text),
-                reshiki::accessibility::button(
-                    "coordination.cancel-bar",
-                    "Cancel attachment",
-                    text("Cancel")
-                )
-                .on_press(Message::Join(Action::Cancel))
-                .style(super::workspace::control(false))
-            ]
-            .spacing(12)
-            .align_y(iced::Alignment::Center),
-        )
-        .height(46)
-        .padding([5, 14])
-        .center_y(46)
-        .style(super::workspace::panel)
+        row![
+            text(texts.title).size(12),
+            text(texts.bar_subtitle).size(11).style(muted_text),
+            accessible_command("coordination.cancel-bar", "Cancel attachment", "Cancel")
+                .on_press(Message::Join(Action::Cancel)),
+        ]
+        .spacing(CONTEXT_GAP)
+        .align_y(iced::Alignment::Center)
         .into()
     }
 }

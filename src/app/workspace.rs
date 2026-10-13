@@ -939,33 +939,14 @@ impl App {
             return commands;
         }
         commands.extend(self.selected_join_commands());
-        commands.extend([
-            RowCommand {
-                label: "Move & attach…",
-                menu: "Move & attach…",
-                hint: "Join the selection to another structure at an atom or bond",
-                message: Message::Join(super::joining::Action::Begin),
-                enabled: self
-                    .tab
-                    .selected
-                    .iter()
-                    .any(|id| self.tab.doc.atom(*id).is_some()),
-            },
-            RowCommand {
-                label: "Coordinate…",
-                menu: "Coordinate in place…",
-                hint: "Choose an existing N/O/S/P donor, then a metal; retain positions and hydrogens",
-                message: Message::Join(super::joining::Action::BeginCoordination),
-                enabled: self.tab.selected.iter().any(|id| self.tab.doc.atom(*id).is_some()),
-            },
-            RowCommand {
-                label: "Group",
-                menu: "Group",
-                hint: "Group",
-                message: Message::Group,
-                enabled: self.can_group(),
-            },
-        ]);
+        commands.extend(self.selected_attach_commands());
+        commands.push(RowCommand {
+            label: "Group",
+            menu: "Group",
+            hint: "Group",
+            message: Message::Group,
+            enabled: self.can_group(),
+        });
         if !self
             .tab
             .doc
@@ -985,7 +966,7 @@ impl App {
 
     pub(super) fn context_bar(&self) -> Element<'_, Message> {
         if self.tab.optimization.is_some() {
-            return container(
+            return context_frame(
                 row![
                     text(tool_name(self.tool).0).size(12),
                     text(if self.tool == Tool::Tilt {
@@ -1011,24 +992,12 @@ impl App {
                 ]
                 .spacing(CONTEXT_GAP)
                 .align_y(Alignment::Center),
-            )
-            .height(46)
-            .padding([5., CONTEXT_PADDING])
-            .center_y(46)
-            .clip(true)
-            .style(panel)
-            .into();
+            );
         }
         if self.tab.joining.is_some() {
-            return self.join_bar();
+            return context_frame(self.join_bar());
         }
-        container(responsive(move |size| self.context_row(size.width)).height(Length::Shrink))
-            .height(46)
-            .padding([5., CONTEXT_PADDING])
-            .center_y(46)
-            .clip(true)
-            .style(panel)
-            .into()
+        context_frame(responsive(move |size| self.context_row(size.width)).height(Length::Shrink))
     }
 
     /// Tool name, options and commands, plus the arrange group for selection
@@ -2502,11 +2471,24 @@ impl App {
 
 const PALETTE_WIDTH: f32 = 104.;
 const CONTEXT_PADDING: f32 = 14.;
-const CONTEXT_GAP: f32 = 10.;
+pub(super) const CONTEXT_GAP: f32 = 10.;
 const DIVIDER: f32 = 11.;
 const MORE_WIDTH: f32 = 30.;
 /// A context row field with its unit inside.
 const UNIT_FIELD: f32 = 54.;
+
+/// The context bar's frame, the full row width, around the tool row or the
+/// bar of a modal state (3D preview, Move & attach, Coordinate in place).
+fn context_frame<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+    container(content)
+        .width(Length::Fill)
+        .height(46)
+        .padding([5., CONTEXT_PADDING])
+        .center_y(46)
+        .clip(true)
+        .style(panel)
+        .into()
+}
 
 /// A context row command that can fold into the ⋯ menu.
 pub(super) struct RowCommand {

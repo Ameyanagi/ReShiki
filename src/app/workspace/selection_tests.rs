@@ -75,7 +75,7 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
             "Join",
             "Merge atoms",
             "Move & attach…",
-            "Coordinate…",
+            "Coordinate in place…",
             "Group"
         ]
     );
@@ -89,7 +89,7 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
             "Join",
             "Merge atoms",
             "Move & attach…",
-            "Coordinate…",
+            "Coordinate in place…",
             "Group",
             "Ungroup"
         ]

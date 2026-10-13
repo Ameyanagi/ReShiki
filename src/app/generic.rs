@@ -200,6 +200,11 @@ impl App {
         self.error = true;
         Task::none()
     }
+    /// The drawing has generic parts and no expansion is running. Shared by
+    /// the button and the right-click menu entry.
+    pub(super) fn generic_expand_enabled(&self) -> bool {
+        self.generic.pending.is_none() && reshiki::generic::present(&self.tab.doc)
+    }
     pub(super) fn generic_expand_button(&self) -> Element<'_, Message> {
         reshiki::accessibility::button(
             "expand-generic-structures",
@@ -207,7 +212,7 @@ impl App {
             text("Expand Generic Structures").size(12),
         )
         .on_press_maybe(
-            (self.generic.pending.is_none() && reshiki::generic::present(&self.tab.doc))
+            self.generic_expand_enabled()
                 .then_some(Message::Generic(Action::Expand)),
         )
         .padding([7, 9])

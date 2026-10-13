@@ -792,3 +792,55 @@ fn coordination_status_pins_added_and_duplicate_with_and_without_a_mark() {
         assert_eq!(coordination_status(&outcome, marked), status);
     }
 }
+
+#[test]
+fn coordination_panel_names_the_donor_and_uses_one_short_hint() {
+    let (mut app, _, n, _) = coordination();
+    let _ = app.update(Message::Join(Action::BeginCoordination));
+    let state = app.tab.joining.as_ref().unwrap();
+    assert_eq!(anchor_label(state), format!("Donor: N (atom {n})"));
+    let texts = join_mode_texts(Connection::Coordinate);
+    assert_eq!(texts.title, "Coordinate in place");
+    assert_eq!(
+        texts.intro,
+        "Pick the donor (N, O, S or P) in the preview, then click a metal on the drawing."
+    );
+    assert_eq!(texts.instruction, None, "The intro says what a click does");
+    assert_eq!(
+        texts.footer,
+        "Atoms stay in place · Escape cancels · One Undo step per contact"
+    );
+    assert_eq!(texts.bar_subtitle, "Pick a donor, then a metal");
+    // The mode pick list switches back to Move & attach and its wording.
+    let _ = app.update(Message::Join(Action::Mode(Connection::Connect)));
+    let state = app.tab.joining.as_ref().unwrap();
+    assert_eq!(anchor_label(state), format!("Atom {n}"));
+    let texts = join_mode_texts(state.mode);
+    assert_eq!(texts.title, "Move & attach");
+    assert_eq!(texts.instruction, Some(CONNECT_DETAIL));
+}
+
+#[test]
+fn row_and_menu_share_the_attach_and_coordinate_commands() {
+    let mut app = ready();
+    let row: Vec<_> = app
+        .selected_attach_commands()
+        .into_iter()
+        .map(|c| (c.label, c.menu, c.enabled))
+        .collect();
+    assert_eq!(
+        row,
+        [
+            ("Move & attach…", "Move & attach…", true),
+            ("Coordinate in place…", "Coordinate in place…", true)
+        ]
+    );
+    let row_labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
+    assert!(row_labels.contains(&"Coordinate in place…"));
+    assert!(
+        row_labels.contains(&"Coordinate }"),
+        "Keyboard drawing keeps its own command"
+    );
+    app.tab.selected.clear();
+    assert!(app.selected_attach_commands().iter().all(|c| !c.enabled));
+}
