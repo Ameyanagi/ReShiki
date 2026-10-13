@@ -1,11 +1,8 @@
 use super::*;
 use crate::{
-    app::{
-        Job, naming,
-        office::{Host, Lease},
-        tabs,
-    },
-    desktop::Reply,
+    app::{Job, naming, tabs},
+    desktop::Admission,
+    session::{Host, Lease},
 };
 use reshiki::document::{Document, Point};
 use std::{
@@ -16,8 +13,8 @@ use std::{
     time::Duration,
 };
 
-fn request(app: &mut App, paths: Vec<std::path::PathBuf>) -> Arc<Reply> {
-    let reply = Reply::new();
+fn request(app: &mut App, paths: Vec<std::path::PathBuf>) -> Arc<Admission> {
+    let reply = Admission::new();
     let _ = app.update(Message::Desktop(Action::Request(Event::Open(
         paths,
         reply.clone(),
@@ -224,7 +221,7 @@ async fn desktop_open_task_emits_untagged_read_and_finished_after_the_front_tab_
     let (mut app, _) = App::new();
     let _ = app.update(Message::Desktop(Action::Ready));
     let original = app.tab.id;
-    let reply = Reply::new();
+    let reply = Admission::new();
     let task = app.update(Message::Desktop(Action::Request(Event::Open(
         vec![path.clone()],
         reply.clone(),
@@ -296,7 +293,7 @@ fn desktop_prepare_rejects_missing_or_invalid_leases_before_not_ready_busy() {
     let (mut app, _) = App::new();
     assert!(!app.desktop.ready);
     let prepare = |app: &mut App, binding: Binding| {
-        let reply = Reply::new();
+        let reply = Admission::new();
         let _ = app.update(Message::Desktop(Action::Request(Event::Prepare(
             binding,
             reply.clone(),

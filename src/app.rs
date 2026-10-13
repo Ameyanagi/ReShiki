@@ -58,7 +58,7 @@ mod naming;
 mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
-pub(crate) mod office;
+mod office;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 #[cfg(test)]
@@ -82,7 +82,7 @@ mod shortcut_examples;
 #[cfg(test)]
 mod shortcut_focus_tests;
 mod shortcuts;
-pub(crate) mod startup;
+mod startup;
 mod tabs;
 mod template_library;
 #[cfg(test)]
@@ -300,7 +300,7 @@ pub enum Message {
     )]
     Opened(Option<(PathBuf, Result<Vec<u8>, String>)>),
     FilePrepared(files::Opened),
-    OfficePrepared(office::Binding, files::Opened),
+    OfficePrepared(crate::session::Binding, files::Opened),
     #[cfg(any(windows, target_os = "linux"))]
     Desktop(desktop::Action),
     #[cfg(target_os = "macos")]
@@ -412,7 +412,12 @@ impl App {
         self.tab.nmr.clear_pending();
     }
 
+    #[cfg(test)]
     pub fn new() -> (Self, Task<Message>) {
+        Self::with_startup(crate::session::Arguments::default())
+    }
+
+    pub fn with_startup(startup: crate::session::Arguments) -> (Self, Task<Message>) {
         let recovery = if cfg!(test) {
             None
         } else {
@@ -476,11 +481,6 @@ impl App {
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
-        };
-        let startup = if cfg!(test) {
-            startup::Arguments::default()
-        } else {
-            startup::parse(std::env::args_os().skip(1))
         };
         let task = app.open_startup(startup);
         #[cfg(any(windows, target_os = "linux"))]

@@ -1,6 +1,6 @@
 //! A bounded typed protocol. Filenames use native bytes/wide units losslessly.
 use super::native;
-use crate::app::office::{Host, Phase};
+use crate::session::{Host, Phase};
 use serde::{Deserialize, Serialize};
 use std::{
     io::{self, Read, Write},

@@ -1,7 +1,8 @@
-use super::{Job, Message, Pending, office::Host};
+use super::{Job, Message, Pending};
+use crate::session::Host;
 use iced::Task;
 use reshiki::engine::Request;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const SAVE: &str = "Save";
 const DONT_SAVE: &str = "Don’t Save";
@@ -27,14 +28,6 @@ pub(super) fn save_backend(host: Option<Host>) -> SaveBackend {
         Some(Host::LibreOffice) => SaveBackend::LibreOfficeRetry,
         None => SaveBackend::Atomic,
     }
-}
-
-/// Two paths name the same file, also through links or different spellings.
-pub(super) fn same_file(a: &Path, b: &Path) -> bool {
-    a == b
-        || std::fs::canonicalize(a)
-            .ok()
-            .is_some_and(|a| std::fs::canonicalize(b).ok() == Some(a))
 }
 
 /// Asks with the system dialog whether to save `name` before continuing a
@@ -250,7 +243,7 @@ impl super::App {
                         .tab
                         .office
                         .as_ref()
-                        .is_some_and(|binding| binding.host == super::office::Host::LibreOffice)
+                        .is_some_and(|binding| binding.host == Host::LibreOffice)
                     {
                         "Drawing saved for LibreOffice. Return to the document to check the update."
                     } else {

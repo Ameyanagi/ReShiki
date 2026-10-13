@@ -2,10 +2,8 @@
 //! Windows MoveFileEx cannot replace that destination until the reader closes.
 //! Only native Microsoft Office sessions use the OLE acknowledgement protocol.
 
-use super::{
-    files::{SaveBackend, save_backend},
-    office::Host,
-};
+use super::files::{SaveBackend, save_backend};
+use crate::session::Host;
 use std::{
     io::{self, Write},
     path::Path,

@@ -1,9 +1,10 @@
 use super::{Modal, Owner, admitted, async_result};
-use crate::app::{Message, accessibility, atom_text, gates, office, tabs, updates};
+use crate::app::{Message, accessibility, atom_text, gates, tabs, updates};
+use crate::session::{Binding, Host};
 
 #[test]
 fn receipts_outside_the_matrix_preserve_predicates_and_wrapper_routing() {
-    let binding = office::Binding::standalone("drawing.rsk".into(), office::Host::Office);
+    let binding = Binding::standalone("drawing.rsk".into(), Host::Office);
     // Historical raw predicate answers, including receipts handled before any modal gate.
     // Columns: atom text, preview, cleanup, optimization, updates background.
     let mut cases = vec![

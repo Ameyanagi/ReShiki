@@ -22,6 +22,7 @@ mod desktop;
 mod launch;
 #[cfg(windows)]
 mod rendering;
+mod session;
 #[cfg(any(windows, test))]
 mod window_fit;
 
@@ -114,11 +115,20 @@ fn main() -> iced::Result {
             }
         }
     }
+    let startup = session::parse(std::env::args_os().skip(1));
     #[cfg(any(windows, target_os = "linux"))]
-    let _desktop = desktop::launch(
-        &std::env::args_os().skip(1).collect::<Vec<_>>(),
-        &app::startup::parse(std::env::args_os().skip(1)),
-    );
+    let _desktop = {
+        let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+        match desktop::launch(&args, &startup) {
+            desktop::LaunchOutcome::Continue(mut host) => {
+                if let Some(events) = host.as_mut().and_then(desktop::GuiHost::take_events) {
+                    app::install_desktop_events(events);
+                }
+                host
+            }
+            desktop::LaunchOutcome::Exit(code) => std::process::exit(code),
+        }
+    };
     #[cfg(windows)]
     reshiki_windows::enable_office_embedding();
     #[cfg(windows)]
@@ -137,7 +147,9 @@ fn main() -> iced::Result {
     // The inline editor can shape a new font before the drawing reaches the
     // canvas. Install variable-weight aliases before either creates text buffers.
     canvas::prepare_fonts();
-    let result = iced::application(app::App::new, app::App::update, app::App::view)
+    // iced boots the app once; the closure hands it the arguments parsed above.
+    let boot = move || app::App::with_startup(startup.clone());
+    let result = iced::application(boot, app::App::update, app::App::view)
         .default_font(iced::Font::with_name(reshiki::style::ui_font_family()))
         .title(app::App::title)
         .theme(app::App::theme)

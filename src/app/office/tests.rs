@@ -1,6 +1,11 @@
 use super::super::{document_tab::DocumentTab, tabs};
 use super::*;
+use crate::session::{Host, Lease};
 use reshiki::document::{Document, Point};
+use std::{
+    path::PathBuf,
+    sync::{Arc, atomic::Ordering},
+};
 
 #[test]
 fn binding_admission_preserves_standalone_and_watched_lease_rules() {

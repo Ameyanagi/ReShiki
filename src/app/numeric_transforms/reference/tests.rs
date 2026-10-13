@@ -343,7 +343,8 @@ fn composed_docked_nmr_tab_switch_restores_camera_and_reset_cancels_stretch() {
 
 #[test]
 fn resetting_an_office_tab_preserves_docked_nmr_camera_and_cancels_reference_stretch() {
-    use crate::app::{InspectorTab, nmr::Action as NmrAction, office};
+    use crate::app::{InspectorTab, nmr::Action as NmrAction};
+    use crate::session::{Binding, Host, Lease, Phase};
     use std::path::PathBuf;
 
     // Extend the optional Windows46 reset regression with a real stretch
@@ -351,11 +352,11 @@ fn resetting_an_office_tab_preserves_docked_nmr_camera_and_cancels_reference_str
     let drawing = fixture().tab.doc.clone();
     let (mut app, _) = App::new();
     let path = PathBuf::from("nmr-reference-office.rsk");
-    let lease = office::Lease::new([7; 16], || true);
+    let lease = Lease::new([7; 16], || true);
     let _ = app.update(Message::OfficePrepared(
-        office::Binding {
+        Binding {
             path: path.clone(),
-            host: office::Host::Office,
+            host: Host::Office,
             lease: Some(lease.clone()),
         },
         Some((
@@ -419,7 +420,7 @@ fn resetting_an_office_tab_preserves_docked_nmr_camera_and_cancels_reference_str
     let (docked, restore_dock, _) = parked.nmr.docking_state_for_test();
     assert!(parked.nmr.open && docked && restore_dock);
     assert_eq!(parked.office.as_ref().unwrap().path, path);
-    assert_eq!(lease.phase(), office::Phase::Open);
+    assert_eq!(lease.phase(), Phase::Open);
 
     let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(original)));
     assert!(app.inspector_open);
@@ -457,7 +458,7 @@ fn resetting_an_office_tab_preserves_docked_nmr_camera_and_cancels_reference_str
             .token,
         lease.token
     );
-    assert_eq!(lease.phase(), office::Phase::Open);
+    assert_eq!(lease.phase(), Phase::Open);
 }
 
 #[tokio::test]

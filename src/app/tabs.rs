@@ -1,9 +1,9 @@
 //! Document tabs: the strip in the header, switching and closing, and the
 //! results of work that a tab started before it left the front.
 use super::document_tab::{DocumentTab, TabId};
-use super::files::same_file;
 use super::workspace::{caret, control, hover_hint, text_width};
 use super::{App, Job, Message, Pending};
+use crate::session::same_file;
 use iced::widget::{Space, button, column, container, hover, row, text, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Task, Theme};
 use std::path::{Path, PathBuf};

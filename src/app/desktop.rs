@@ -1,12 +1,8 @@
 //! UI-side ownership acknowledgement; the transport cannot accept a request
 //! merely because it queued bytes. A committed open is retained until processed.
-use super::{
-    App, Message,
-    document_tab::TabId,
-    event_slot, files,
-    office::{Binding, Phase},
-};
+use super::{App, Message, document_tab::TabId, event_slot, files};
 use crate::desktop::{Event, protocol::Status};
+use crate::session::{Binding, Phase};
 use iced::{Subscription, Task};
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;

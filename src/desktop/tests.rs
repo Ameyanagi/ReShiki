@@ -1,9 +1,26 @@
-use super::*;
-use crate::app::office::Host as OfficeHost;
+use super::{
+    ACCEPT_POLL, Event, HANDOFF,
+    admission::Admission,
+    client::{Client, office_proxy},
+    launch::{forwardable, office_role, private_nonce},
+    native,
+    protocol::{self, Command, NativePath, Process, Request, Response, Status},
+    server::{Core, Fences, Records, serve_once},
+    write_target,
+};
+use crate::session::{Host, Phase, parse};
 use std::{
     io::{Read, Write},
-    sync::mpsc as sync,
+    process::{Command as Child, Stdio},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc as sync,
+    },
+    thread,
+    time::{Duration, Instant},
 };
+use tokio::sync::mpsc;
 
 fn isolated() -> native::Endpoint {
     native::Endpoint::current()
@@ -207,14 +224,14 @@ fn semantic_launch_flags_preserve_workers_and_explicit_gui_actions() {
     for flag in ["--office-edit", "--libreoffice-edit", "--office-addin-edit"] {
         let supported = args(&["--open", "a.rsk", flag]);
         assert!(
-            office_role(&supported, &crate::app::startup::parse(supported.clone()))
+            office_role(&supported, &parse(supported.clone()))
                 .unwrap()
                 .is_some()
         );
         let invalid = args(&["--open", "a.rsk", flag, "--shortcut-examples"]);
-        assert!(office_role(&invalid, &crate::app::startup::parse(invalid.clone())).is_err());
+        assert!(office_role(&invalid, &parse(invalid.clone())).is_err());
         let missing = args(&[flag]);
-        assert!(office_role(&missing, &crate::app::startup::parse(missing.clone())).is_err());
+        assert!(office_role(&missing, &parse(missing.clone())).is_err());
     }
 }
 
@@ -231,7 +248,7 @@ fn abandoned_or_expired_prepare_cannot_be_revived_by_a_late_ui_reply() {
             Command::Prepare {
                 token,
                 path: file("late.rsk"),
-                host: OfficeHost::Office,
+                host: Host::Office,
             },
         );
         let serving = core.clone();
@@ -290,7 +307,7 @@ fn office_busy_during_startup_can_retry_the_same_launch_after_ui_is_ready() {
         Command::Prepare {
             token: [8; 16],
             path: file("starting.rsk"),
-            host: OfficeHost::Office,
+            host: Host::Office,
         },
     );
     assert_eq!(core.dispatch(prepare.clone(), peer.clone()), Status::Busy);
@@ -311,7 +328,7 @@ fn wrong_generation_and_full_ui_queue_never_take_office_ownership() {
         Command::Prepare {
             token: [4; 16],
             path: file("full.rsk"),
-            host: OfficeHost::LibreOffice,
+            host: Host::LibreOffice,
         },
     );
     assert_eq!(
@@ -321,7 +338,7 @@ fn wrong_generation_and_full_ui_queue_never_take_office_ownership() {
     assert!(receiver.try_recv().is_err());
     for _ in 0..16 {
         core.events
-            .try_send(Event::Open(vec![], Reply::new()))
+            .try_send(Event::Open(vec![], Admission::new()))
             .unwrap();
     }
     let mut prepare = prepare;
@@ -370,7 +387,7 @@ fn host_write_fence_excludes_same_listener_successor_until_save_worker_finishes(
             Command::Prepare {
                 token: [token; 16],
                 path: NativePath::encode(&path).unwrap(),
-                host: OfficeHost::Office,
+                host: Host::Office,
             },
         )
     };
@@ -459,7 +476,7 @@ fn stalled_shared_prepare_leaves_private_fallback_unfenced() {
         Command::Prepare {
             token: [15; 16],
             path: file("fallback.rsk"),
-            host: OfficeHost::Office,
+            host: Host::Office,
         },
     );
     assert_eq!(
@@ -515,7 +532,7 @@ fn queue_full_commit_releases_uncommitted_writer_fence_before_retry() {
         Command::Prepare {
             token: [16; 16],
             path: file("queue-full.rsk"),
-            host: OfficeHost::Office,
+            host: Host::Office,
         },
     );
     let mut fences = Fences::default();
@@ -526,7 +543,7 @@ fn queue_full_commit_releases_uncommitted_writer_fence_before_retry() {
     let mut receiver = ui.join().unwrap();
     for _ in 0..16 {
         core.events
-            .try_send(Event::Open(vec![], Reply::new()))
+            .try_send(Event::Open(vec![], Admission::new()))
             .unwrap();
     }
     let commit = Request::new(
@@ -620,7 +637,7 @@ fn office_commit_retries_keep_one_lease_and_completion_survives_until_ack() {
         Command::Prepare {
             token,
             path: file("a.rsk"),
-            host: OfficeHost::Office,
+            host: Host::Office,
         },
     );
     assert_eq!(
@@ -694,8 +711,8 @@ fn native_pipe_or_socket_has_an_elected_authenticated_owner_and_deadlines() {
 fn office_proxy_child() {
     let endpoint = test_endpoint();
     let source = std::env::var_os("RESHIKI_IPC_TEST_FILE").unwrap();
-    let startup = crate::app::startup::parse(["--open".into(), source, "--office-edit".into()]);
-    std::process::exit(office_proxy(endpoint, &startup, OfficeHost::Office));
+    let startup = parse(["--open".into(), source, "--office-edit".into()]);
+    std::process::exit(office_proxy(endpoint, &startup, Host::Office));
 }
 
 #[test]
@@ -723,16 +740,9 @@ fn office_fake_host_child() {
         }
     });
     let mut fences = Fences::default();
+    let stopping = AtomicBool::new(false);
     loop {
-        if let Ok((mut stream, peer)) = listener.accept(ACCEPT_POLL, HANDOFF)
-            && let Ok(request) = protocol::read::<Request>(&mut stream)
-        {
-            let status = fences.dispatch(&endpoint, &core, request, peer);
-            let _ = protocol::write(
-                &mut stream,
-                &Response::new(core.generation, core.process, status),
-            );
-        }
+        serve_once(&mut listener, &mut fences, &endpoint, &core, &stopping);
     }
 }
 
@@ -844,50 +854,43 @@ fn watched_office_proxy_process_stays_alive_until_its_session_closes() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("drawing.rsk");
     std::fs::write(&source, b"fake-host-fixture").unwrap();
-    let mut child = Child::new(std::env::current_exe().unwrap())
-        .args([
-            "--ignored",
-            "--exact",
-            "desktop::tests::office_proxy_child",
-            "--nocapture",
-        ])
-        .env("RESHIKI_IPC_TEST_NONCE", protocol::token_hex(&nonce))
-        .env("RESHIKI_IPC_TEST_FILE", &source)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut child = test_child(
+        "desktop::tests::office_proxy_child",
+        nonce,
+        &source,
+        &directory.path().join("session"),
+    );
     let lease = match lease_rx.recv_timeout(Duration::from_secs(5)) {
         Ok(lease) => lease,
         Err(error) => {
-            let _ = child.kill();
+            let _ = child.0.kill();
             panic!("Proxy did not open its lease: {error}");
         }
     };
     assert!(
-        child.try_wait().unwrap().is_none(),
+        child.0.try_wait().unwrap().is_none(),
         "Office's watched child must still be running after handoff"
     );
     thread::sleep(Duration::from_millis(900));
     assert!(
-        child.try_wait().unwrap().is_none(),
+        child.0.try_wait().unwrap().is_none(),
         "Lost commit ACK/temporary IPC loss is not completion"
     );
     assert_eq!(core.records.lock().unwrap().sessions.len(), 1);
     let client = Client::new(endpoint).unwrap();
     assert!(client.open(vec![], Instant::now() + HANDOFF));
     assert!(
-        child.try_wait().unwrap().is_none(),
+        child.0.try_wait().unwrap().is_none(),
         "Unrelated ordinary activation is not completion"
     );
     lease.transition(Phase::Open, Phase::Closed);
     let deadline = Instant::now() + Duration::from_secs(5);
     let exit = loop {
-        if let Some(exit) = child.try_wait().unwrap() {
+        if let Some(exit) = child.0.try_wait().unwrap() {
             break exit;
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
+            let _ = child.0.kill();
             panic!("Proxy did not exit after its lease completed");
         }
         thread::sleep(Duration::from_millis(25));
