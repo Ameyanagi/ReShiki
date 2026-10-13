@@ -27,29 +27,30 @@ fn two_sites(nucleus: Nucleus) -> Arc<Report> {
 #[test]
 fn row_presentation_preserves_proton_and_carbon_text_bytes() {
     for (nucleus, supported_label, unsupported_label, description, unsupported) in [
+        // Atom #9 is not in the drawing, so its label falls back to "Atom".
         (
             Nucleus::H1,
-            "#9 · 3 H group",
-            "#4 · 1 H",
+            "Atom #9 · 3H",
+            "C #4 · 1H",
             concat!(
-                "Select ¹H NMR site atom #9: 3 attached H in an unresolved group. ",
-                "Predicted 1.250 ppm; sphere 2; 7 independent references; observed SD 0.125 ppm",
+                "Select ¹H NMR row Atom #9 · 3H. ",
+                "Predicted 1.250 ppm; shell 2; 7 references; SD 0.125 ppm",
             ),
-            "Select ¹H NMR site atom #4: 1 attached H. Unsupported: No matching data",
+            "Select ¹H NMR row C #4 · 1H. Not predicted: No matching data",
         ),
         (
             Nucleus::C13,
-            "C #9",
+            "Atom #9",
             "C #4",
             concat!(
-                "Select ¹³C NMR site atom #9: carbon atom. ",
-                "Predicted 1.250 ppm; sphere 2; 7 independent references; observed SD 0.125 ppm",
+                "Select ¹³C NMR row Atom #9. ",
+                "Predicted 1.250 ppm; shell 2; 7 references; SD 0.125 ppm",
             ),
-            "Select ¹³C NMR site atom #4: carbon atom. Unsupported: No matching data",
+            "Select ¹³C NMR row C #4. Not predicted: No matching data",
         ),
     ] {
         let report = two_sites(nucleus);
-        let presentation = Presentation::new(&report);
+        let presentation = Presentation::new(&report, &ethyl_acetate_doc());
         assert_eq!(presentation.rows[0].label, supported_label);
         assert_eq!(presentation.rows[1].label, unsupported_label);
         assert_eq!(presentation.rows[0].description, description);
@@ -58,12 +59,9 @@ fn row_presentation_preserves_proton_and_carbon_text_bytes() {
         assert_eq!(presentation.rows[1].shift, "—");
         assert_eq!(
             presentation.rows[0].details,
-            "Sphere 2 · Refs 7 · Obs. SD 0.125 ppm",
+            "Shell 2 · 7 references · SD 0.125 ppm",
         );
-        assert_eq!(
-            presentation.rows[1].details,
-            "Sphere — · Refs — · Obs. SD — ppm",
-        );
+        assert_eq!(presentation.rows[1].details, "Shell — · no references",);
         assert_eq!(presentation.value, "local-data-v1. CDCl₃; 298 K");
         assert_eq!(presentation.supported_count, 1);
         assert_eq!(presentation.sorted_ids, [9]);
@@ -86,7 +84,7 @@ fn presentation_distinguishes_supported_rows_from_finite_unique_owners() {
     report.rows[1].statistics.as_mut().unwrap().median = f64::NAN;
     report.rows[3].statistics = None;
     let report = Arc::new(report);
-    let presentation = Presentation::new(&report);
+    let presentation = Presentation::new(&report, &ethyl_acetate_doc());
     assert_eq!(presentation.supported_count, 4);
     assert_eq!(presentation.sorted_ids, [30, 50]);
     assert_eq!(presentation.rows[1].shift, "NaN");
@@ -122,7 +120,7 @@ fn direct_result_assignment_uses_fallback_instead_of_another_arcs_cache() {
     app.tab.nmr.job.result = Some(Arc::new(replacement));
     assert!(
         super::super::view::panel_description(&app.tab.nmr)
-            .contains("¹³C prediction: 0 of 4 atom-linked sites supported"),
+            .contains("¹³C NMR · 0 of 4 atoms predicted"),
     );
     assert!(app.nmr_canvas().unwrap().supported.is_none());
 }

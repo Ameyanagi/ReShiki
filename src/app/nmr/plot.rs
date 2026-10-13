@@ -1,6 +1,6 @@
 //! Chemical-shift sticks with atom-linked labels. Heights are deliberately
 //! uniform; the backend supplies shifts, not intensities or a spin simulation.
-use super::presentation::Presentation;
+use super::presentation::{Presentation, row_label};
 use super::view::site_description;
 use super::{Action, Message, Nucleus, Report};
 use crate::canvas::overlay::ACCENT;
@@ -162,7 +162,7 @@ fn marker_name_with_presentation(
             let mut text = presentation
                 .and_then(|presentation| presentation.rows.get(index))
                 .map_or_else(
-                    || site_description(report.nucleus, row),
+                    || site_description(report.nucleus, row, &row_label(report.nucleus, row, None)),
                     |site| site.description.clone(),
                 );
             if text.len() > MAX_SITE_NAME {
@@ -175,7 +175,7 @@ fn marker_name_with_presentation(
         .join("; ");
     if count > 3 {
         description.push_str(&format!(
-            "; {} additional sites. Full predictions are in the atom-linked result rows",
+            "; {} additional sites. Full predictions are in the results table",
             count - 3
         ));
     }
@@ -304,7 +304,7 @@ pub(super) fn view_with_presentation<'a>(
 
 fn marker_style(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
-        let color = crate::appearance::color(crate::appearance::is_dark(theme), ACCENT);
+        let color = crate::appearance::themed(theme, ACCENT);
         button::Style {
             text_color: color,
             background: matches!(status, button::Status::Hovered | button::Status::Pressed)
@@ -472,6 +472,7 @@ impl Widget<Message, Theme, Renderer> for Plot<'_> {
                 },
                 color,
             );
+            let stick = crate::appearance::themed(theme, ACCENT);
             for row in &self.report.rows {
                 let Some(shift) = row.shift() else {
                     continue;
@@ -492,7 +493,7 @@ impl Widget<Message, Theme, Renderer> for Plot<'_> {
                         },
                         ..Default::default()
                     },
-                    crate::appearance::color(crate::appearance::is_dark(theme), ACCENT),
+                    stick,
                 );
             }
             for shift in self.axis.ticks() {

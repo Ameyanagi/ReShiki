@@ -730,21 +730,14 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         let method = find("nmr.method").value.as_deref().unwrap();
         assert!(method.contains(engine::DATA_VERSION));
         assert!(method.contains("HOSE spherical environments"));
-        assert!(method.contains("3 of 3 atom-linked sites supported"));
+        assert!(method.contains("3 of 3 atoms predicted"));
         assert!(method.contains("273–323"));
         assert!(method.contains("Connectivity-only"));
         assert!(method.contains("not a calibrated confidence interval"));
         let site = find("nmr.site.1H.2");
         assert_eq!(site.role, Role::ToggleButton);
         assert_eq!(site.checked, Some(true));
-        for text in [
-            "¹H",
-            "atom #2",
-            "unresolved group",
-            "4.160 ppm",
-            "sphere 3",
-            "17 independent references",
-        ] {
+        for text in ["¹H", "C #2 · 2H", "4.160 ppm", "shell 3", "17 references"] {
             assert!(site.name.contains(text), "{text}: {}", site.name);
         }
         assert!(site.value.as_deref().unwrap().contains("CDCl3"));
@@ -845,7 +838,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
             unsupported_tree
                 .nodes
                 .iter()
-                .any(|n| n.id.starts_with("nmr.site.1H.") && n.name.contains("Unsupported:"))
+                .any(|n| n.id.starts_with("nmr.site.1H.") && n.name.contains("Not predicted:"))
         );
         assert!(
             unsupported_tree
@@ -1440,7 +1433,7 @@ async fn hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edi
                 .iter()
                 .find(|n| n.id == "nmr.marker.13C.4")
                 .unwrap();
-            assert!(marker.name.contains("170.700 ppm") && marker.name.contains("atom #4"));
+            assert!(marker.name.contains("170.700 ppm") && marker.name.contains("C #4."));
             fully_visible(marker);
             let point = marker.bounds.center();
             for event in [
@@ -2876,10 +2869,10 @@ fn description_with_provenance(prefix: &str) -> String {
 
 #[test]
 fn finished_prediction_status_text_pins_both_supported_ethyl_acetate_reports() {
-    const H1_STATUS: &str = "¹H NMR prediction · 3/3 supported atom-linked sites";
-    const C13_STATUS: &str = "¹³C NMR prediction · 4/4 supported atom-linked sites";
-    const H1_DESCRIPTION: &str = "Status: ¹H prediction: 3 of 3 atom-linked sites supported.";
-    const C13_DESCRIPTION: &str = "Status: ¹³C prediction: 4 of 4 atom-linked sites supported.";
+    const H1_STATUS: &str = "¹H NMR · 3 of 3 atoms predicted";
+    const C13_STATUS: &str = "¹³C NMR · 4 of 4 atoms predicted";
+    const H1_DESCRIPTION: &str = "Status: ¹H NMR · 3 of 3 atoms predicted.";
+    const C13_DESCRIPTION: &str = "Status: ¹³C NMR · 4 of 4 atoms predicted.";
 
     for (nucleus, count, status, description) in [
         (Nucleus::H1, 3, H1_STATUS, H1_DESCRIPTION),
@@ -2935,15 +2928,13 @@ fn selected_carbon_status_text_pins_linked_atom() {
     let mut app = ethyl_acetate();
     let report = predicted(&app.tab.doc, Nucleus::C13);
     let atom_id = report.rows[0].atom_id;
+    let shift = report.rows[0].shift().unwrap();
     accept(&mut app, report);
     app.error = true;
     app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
     let _ = app.nmr_action(Action::SelectRow(0));
 
-    assert_eq!(
-        app.status,
-        format!("NMR prediction linked to atom #{atom_id}")
-    );
+    assert_eq!(app.status, format!("Atom #{atom_id} · {shift:.3} ppm"));
     assert!(app.error);
     assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(NOTICE_SENTINEL));
     assert_eq!(app.tab.selected, [atom_id]);
@@ -3030,8 +3021,7 @@ fn nmr_row_and_marker_selection_refresh_caption_and_atom_controls() {
 
 // Current behavior: selecting a result preserves the error flag and notice.
 #[test]
-fn selected_proton_status_text_pins_unresolved_attached_hydrogen_group() {
-    const UNRESOLVED_GROUP: &str = " · unresolved attached-H group";
+fn selected_proton_status_text_pins_atom_hydrogen_count_and_shift() {
     let mut app = ethyl_acetate();
     let report = predicted(&app.tab.doc, Nucleus::H1);
     let index = report
@@ -3039,7 +3029,8 @@ fn selected_proton_status_text_pins_unresolved_attached_hydrogen_group() {
         .iter()
         .position(|row| row.hydrogen_count > 1)
         .unwrap();
-    let atom_id = report.rows[index].atom_id;
+    let row = &report.rows[index];
+    let (atom_id, count, shift) = (row.atom_id, row.hydrogen_count, row.shift().unwrap());
     accept(&mut app, report);
     app.error = true;
     app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
@@ -3047,7 +3038,7 @@ fn selected_proton_status_text_pins_unresolved_attached_hydrogen_group() {
 
     assert_eq!(
         app.status,
-        format!("NMR prediction linked to atom #{atom_id}{UNRESOLVED_GROUP}")
+        format!("Atom #{atom_id} · {count}H · {shift:.3} ppm")
     );
     assert!(app.error);
     assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(NOTICE_SENTINEL));
@@ -3124,4 +3115,143 @@ fn panel_description_pins_no_result_pending_and_notice_text() {
             description_with_provenance(description)
         );
     }
+}
+
+#[test]
+fn empty_selection_is_a_neutral_empty_state_and_real_failures_stay_red() {
+    // An empty drawing, and two molecules with nothing selected: opening the
+    // tab shows the empty state, not an error.
+    let (mut empty, _) = App::new();
+    let mut two = ethyl_acetate();
+    let before = two.tab.doc.clone();
+    two.tab.doc.add_atom("C", Point::new(500., 300.));
+    two.changed(before);
+    for app in [&mut empty, &mut two] {
+        app.status = STATUS_SENTINEL.into();
+        app.error = true;
+        app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
+        let _ = app.update(Message::Inspector(InspectorTab::Nmr));
+        assert!(app.tab.nmr.open && app.tab.nmr.dock.docked);
+        assert_eq!(app.status, EMPTY_STATUS);
+        assert!(!app.error);
+        assert_eq!(app.tab.nmr.notice(), None);
+        assert!(app.tab.nmr.job.result.is_none() && app.tab.nmr.job.pending.is_none());
+    }
+    assert_eq!(
+        reshiki::nmr::prepare(&empty.tab.doc, &[]).unwrap_err(),
+        engine::SELECT_ONE_MOLECULE
+    );
+
+    // Atoms selected in two molecules keep the actionable diagnostic.
+    let first = two.tab.doc.atoms.first().unwrap().id;
+    let last = two.tab.doc.atoms.last().unwrap().id;
+    two.tab.selected = vec![first, last];
+    let _ = two.nmr_action(Action::Predict(Nucleus::H1));
+    assert!(two.error);
+    assert_eq!(two.status, engine::SELECT_ONE_MOLECULE);
+    assert_eq!(two.tab.nmr.notice(), Some(engine::SELECT_ONE_MOLECULE));
+
+    // Unsupported chemistry is a real failure: one atom over the 128 limit.
+    let (mut large, _) = App::new();
+    let mut previous = large.tab.doc.add_atom("C", Point::new(0., 0.));
+    for index in 1..=128_u16 {
+        let atom = large
+            .tab
+            .doc
+            .add_atom("C", Point::new(f32::from(index) * 30., 0.));
+        large.tab.doc.add_bond(previous, atom, 1, "plain");
+        previous = atom;
+    }
+    let _ = large.nmr_action(Action::Open);
+    assert!(large.error);
+    assert_eq!(large.tab.nmr.notice(), Some(large.status.as_str()));
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer docked report and empty state check"]
+async fn docked_report_is_always_full_and_undock_restores_the_floating_collapse() {
+    let ids = |snapshot: &reshiki::accessibility::Snapshot| -> Vec<String> {
+        snapshot.nodes.iter().map(|node| node.id.clone()).collect()
+    };
+    let mut ui = NmrUi::new(Size::new(1280., 820.)).await;
+    let mut app = ethyl_acetate();
+    ui.redraw(&mut app);
+    let _ = app.nmr_action(Action::Open);
+    finish_prediction(&mut app);
+    let _ = app.nmr_action(Action::ToggleCollapsed);
+    let floating = ids(&ui.snapshot(&app));
+    assert!(floating.iter().any(|id| id == "nmr.collapse"));
+    assert!(!floating.iter().any(|id| id.starts_with("nmr.site.")));
+
+    let _ = app.nmr_action(Action::Dock);
+    ui.redraw(&mut app);
+    let docked = ids(&ui.snapshot(&app));
+    assert!(
+        app.tab.nmr.collapsed,
+        "Dock keeps the floating collapse state"
+    );
+    for id in ["nmr.mode", "nmr.close", "nmr.method", "nmr.site.1H.2"] {
+        assert!(docked.iter().any(|node| node == id), "{id}: {docked:?}");
+    }
+    assert!(!docked.iter().any(|id| id == "nmr.collapse"));
+
+    let _ = app.nmr_action(Action::Undock);
+    ui.redraw(&mut app);
+    let restored = ids(&ui.snapshot(&app));
+    assert!(restored.iter().any(|id| id == "nmr.collapse"));
+    assert!(!restored.iter().any(|id| id.starts_with("nmr.site.")));
+
+    // Nothing to predict: no Details or provenance, and Copy/Export stay off.
+    let (mut empty, _) = App::new();
+    ui.redraw(&mut empty);
+    let _ = empty.update(Message::Inspector(InspectorTab::Nmr));
+    ui.redraw(&mut empty);
+    let snapshot = ui.snapshot(&empty);
+    assert!(!snapshot.nodes.iter().any(|node| node.id == "nmr.method"));
+    for id in ["nmr.copy", "nmr.export"] {
+        let node = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
+        assert!(!node.enabled, "{id}");
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer docked report scrolling check"]
+async fn wheel_over_the_docked_report_scrolls_the_inspector() {
+    use iced::{Event, mouse};
+    let mut ui = NmrUi::new(Size::new(940., 620.)).await;
+    let mut app = ethyl_acetate();
+    ui.redraw(&mut app);
+    let _ = app.nmr_action(Action::Open);
+    finish_prediction(&mut app);
+    let _ = app.nmr_action(Action::Dock);
+    ui.redraw(&mut app);
+    // The report overflows the inspector; wheel over one of its rows.
+    let row = ui
+        .snapshot(&app)
+        .nodes
+        .into_iter()
+        .find(|node| node.id == "nmr.site.1H.2")
+        .unwrap();
+    let point = row.visible_bounds.expect("Visible docked row").center();
+    let (_, messages) = ui.events(
+        &app,
+        &[
+            Event::Mouse(mouse::Event::CursorMoved { position: point }),
+            Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Lines { x: 0., y: -2. },
+            }),
+        ],
+        mouse::Cursor::Available(point),
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| matches!(message, Message::InspectorScroll(y) if *y > 0.)),
+        "The inspector scrolls under the docked report: {messages:?}"
+    );
+    assert!(
+        !messages
+            .iter()
+            .any(|message| matches!(message, Message::Canvas(_)))
+    );
 }

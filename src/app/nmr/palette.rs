@@ -28,11 +28,15 @@ pub(in crate::app) const OVERLAY_INSETS: iced::Padding = iced::Padding {
 // independent of the palette's default height or maximum resize height.
 const REACHABLE_HEIGHT: f32 = 360.;
 
+/// Pointer ownership for the docked report, which sits inside the
+/// inspector's scrollable. That scrollable handles wheel and touch scrolling
+/// only after its content, so this guard leaves them uncaptured.
 pub(super) fn guard<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     Element::new(Palette {
         content: content.into(),
         floating: None,
         dismiss: None,
+        nested: true,
     })
 }
 
@@ -41,6 +45,7 @@ pub(super) fn menu<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, 
         content: content.into(),
         floating: None,
         dismiss: Some(Action::LabelMenu(false)),
+        nested: false,
     })
 }
 
@@ -58,6 +63,7 @@ pub(super) fn floating<'a>(
             width,
             resizable,
         }),
+        nested: false,
     })
 }
 
@@ -99,6 +105,8 @@ struct Palette<'a> {
     content: Element<'a, Message>,
     floating: Option<Floating>,
     dismiss: Option<Action>,
+    /// Inside a parent scrollable: leave wheel and touch scrolling to it.
+    nested: bool,
 }
 
 #[derive(Default)]
@@ -364,6 +372,9 @@ impl Widget<Message, Theme, Renderer> for Palette<'_> {
             shell.capture_event();
         }
         let captured = match event {
+            Event::Mouse(mouse::Event::WheelScrolled { .. }) | Event::Touch(_) if self.nested => {
+                false
+            }
             Event::Mouse(mouse::Event::ButtonPressed(button)) if inside => {
                 state.buttons.insert(*button);
                 true

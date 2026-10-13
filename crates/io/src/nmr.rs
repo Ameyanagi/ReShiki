@@ -12,6 +12,19 @@ pub const CONDITIONS: &str =
 pub const ATTRIBUTION: &str = "Contains information from nmrshiftdb2 (https://nmrshiftdb.nmr.uni-koeln.de), available under the nmrshiftdb2 Database License (https://svn.code.sf.net/p/nmrshiftdb2/code/trunk/snapshots/nmrshiftdb2datalicense.txt).";
 pub const DATA_ACCESS: &str = "The derivative index and exact transformation method are available at https://github.com/Ameyanagi/ReShiki/tree/main/data/nmr and https://github.com/Ameyanagi/ReShiki/blob/main/crates/io/src/nmr/dataset.rs.";
 pub const LIMITATIONS: &str = "Connectivity-only 2D environments do not distinguish E/Z or relative configurations, stereoisomers, or resolve diastereotopic H. Multiple attached H are an unresolved group median, not an assigned peak. Exchangeable H, charged/radical structures, metals and non-default isotope labels are unsupported. Reference spread is descriptive and is not a calibrated confidence interval.";
+/// The solvent of the reference data, as shown next to results.
+pub const SOLVENT_LABEL: &str = "CDCl₃";
+/// Short notes on what the shift plot shows, one sentence each.
+pub const PLOT_NOTES: [&str; 4] = [
+    "The plot marks chemical shifts only.",
+    "Stick heights do not show intensity or integration.",
+    "J couplings, multiplets and second-order effects are not predicted.",
+    "Clicking a shared label again selects its next atom.",
+];
+/// Why a site has no prediction when the engine gives no reason.
+pub const NO_REFERENCE_DATA: &str = "No qualified reference data";
+/// The request is not one whole molecule: nothing, part of several, or several.
+pub const SELECT_ONE_MOLECULE: &str = "Select one whole molecule to predict NMR shifts";
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -77,7 +90,7 @@ pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String
     };
     let components = reactions::molecules(document, &selection);
     let [atom_ids] = components.as_slice() else {
-        return Err("Select atoms in one complete molecular structure for NMR prediction".into());
+        return Err(SELECT_ONE_MOLECULE.into());
     };
     if atom_ids.len() > core::MAX_ATOMS {
         return Err("NMR prediction supports at most 128 atoms".into());

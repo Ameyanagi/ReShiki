@@ -1619,15 +1619,6 @@ impl App {
                     .on_press(Message::Inspector(tab)),
             );
         }
-        if self.inspector_tab == InspectorTab::Nmr {
-            return container(
-                column![container(tabs).padding([8, 8]), self.nmr_inspector(),].spacing(4),
-            )
-            .width(self.inspector_width())
-            .height(Length::Fill)
-            .style(panel)
-            .into();
-        }
         let body = match self.inspector_tab {
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),

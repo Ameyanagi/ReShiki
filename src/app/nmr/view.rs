@@ -1,26 +1,26 @@
-//! NMR panel builders, placement wrappers and accessible descriptions.
+//! NMR palette and docked report builders, and accessible descriptions.
 use super::palette::{MAX_SIZE, MIN_SIZE, PANEL_PADDING, RESIZE_STEP};
 use super::panel::site_id_prefix;
 use super::presentation::{self, Presentation};
 use super::style::{outlined, quiet, result_row, rule, segment, surface, table_surface};
 use super::{Action, State, palette, panel, plot};
-use crate::app::{App, Message, workspace::muted_text};
+use crate::app::{
+    App, Message,
+    workspace::{control, muted_text},
+};
 use crate::canvas::nmr::LabelMode;
 use iced::widget::{
-    Column, Container, Row, Space, checkbox, column, container, row, scrollable, sensor, stack,
-    text,
+    Column, Row, Space, checkbox, column, container, row, scrollable, sensor, stack, text,
 };
 use iced::{Alignment, Element, Length, Size};
 use reshiki::document::Document;
 use reshiki::nmr::{self as engine, Nucleus, Report};
 use std::borrow::Cow;
 
-const PLOT_DESCRIPTION: &str = concat!(
-    "The plot marks chemical shifts only. ",
-    "Stick heights do not represent intensity or integration. ",
-    "No J couplings, multiplets or second-order simulation are predicted. ",
-    "Nearby labels cycle their distinct atom-linked sites.",
-);
+const FLOATING_TITLE: &str = "NMR prediction";
+const DOCKED_TITLE: &str = "NMR prediction";
+/// The panel's line while nothing is predicted or calculating.
+const EMPTY_STATE: &str = "Select a molecule, or draw one, to predict its NMR shifts.";
 
 /// Where the panel is shown: the movable palette over the drawing, or docked
 /// in the inspector.
@@ -30,74 +30,34 @@ pub(super) enum Placement {
     Docked,
 }
 
-impl Placement {
-    fn title_glyph(self) -> &'static str {
-        match self {
-            Self::Floating => "⠿",
-            Self::Docked => "",
-        }
-    }
-
-    fn mode_toggle<'a>(self) -> reshiki::accessibility::Button<'a, Message> {
-        let (name, label, action) = match self {
-            Self::Floating => ("Dock NMR in the inspector", "Dock", Action::Dock),
-            Self::Docked => (
-                "Undock NMR into a movable palette",
-                "Undock",
-                Action::Undock,
-            ),
-        };
-        named_command("nmr.mode", name, label, action, true).style(segment(true))
-    }
-
-    fn wrap<'a>(
-        self,
-        surface: Container<'a, Message>,
-        width: f32,
-        collapsed: bool,
-    ) -> Element<'a, Message> {
-        match (self, collapsed) {
-            (Self::Floating, false) => sensor(surface.width(width))
-                .on_show(|size| Message::Nmr(Action::RenderedSize(size)))
-                .on_resize(|size| Message::Nmr(Action::RenderedSize(size)))
-                .into(),
-            (Self::Docked, false) => {
-                palette::guard(surface.width(Length::Fill).height(Length::Fill))
-            }
-            (Self::Floating, true) => surface.width(width).into(),
-            (Self::Docked, true) => palette::guard(surface.width(Length::Fill)),
-        }
-    }
-}
-
 impl App {
+    /// The inspector tab's content, inside the inspector's standard padded
+    /// scrollable like every other tab.
     pub(in crate::app) fn nmr_inspector(&self) -> Element<'_, Message> {
         if self.tab.nmr.open && self.tab.nmr.dock.docked {
             return self.nmr_panel(Placement::Docked);
         }
         // Inspector selection is global; prediction mode/results belong to a
         // document. Never instantiate a second panel for a floating document.
-        container(
-            column![
-                text("NMR prediction").size(14),
-                text(if self.tab.nmr.open {
-                    "Results are in the floating palette."
-                } else {
-                    "Select a molecule to predict its chemical shifts."
-                })
-                .size(12),
-                named_command(
-                    "nmr.inspector.dock",
-                    "Dock NMR prediction in this inspector",
-                    "Dock here",
-                    Action::Dock,
-                    true,
-                ),
-            ]
-            .spacing(10),
-        )
-        .padding(8)
-        .height(Length::Fill)
+        column![
+            text(DOCKED_TITLE).size(14),
+            text(if self.tab.nmr.open {
+                "Results are in the floating palette."
+            } else {
+                EMPTY_STATE
+            })
+            .size(12)
+            .style(muted_text),
+            named_command(
+                "nmr.inspector.dock",
+                "Dock NMR prediction in this inspector",
+                "Dock here",
+                Action::Dock,
+                true,
+            )
+            .style(outlined),
+        ]
+        .spacing(10)
         .into()
     }
 
@@ -120,14 +80,51 @@ impl App {
         layers.into()
     }
 
+    /// The floating palette card, or the docked report as plain inspector
+    /// content: no card, shadow or inner scrollable, and always the full
+    /// report, since docked mode has no collapse control. The floating
+    /// collapse state is kept for Undock.
     pub(super) fn nmr_panel(&self, placement: Placement) -> Element<'_, Message> {
         let state = &self.tab.nmr;
         let title = title_bar(state, placement);
-        if state.collapsed {
-            let title = container(title).padding(PANEL_PADDING).style(surface);
-            return placement.wrap(title, state.palette.width, true);
+        if placement == Placement::Floating && state.collapsed {
+            return container(title)
+                .padding(PANEL_PADDING)
+                .style(surface)
+                .width(state.palette.width)
+                .into();
         }
         let header = column![title, nucleus_switch(state), label_controls(state)].spacing(8);
+        let body = self.nmr_body(placement);
+        let footer = footer(state, placement);
+        if placement == Placement::Docked {
+            return palette::guard(column![header, body, footer].spacing(12));
+        }
+        let content = panel::view(
+            header,
+            scrollable(
+                container(body).padding(iced::Padding::ZERO.bottom(panel::CONTENT_END_INSET)),
+            )
+            .id("nmr-results")
+            .height(Length::Shrink),
+            footer,
+            state
+                .palette
+                .resized
+                .then_some((state.palette.height - 2. * PANEL_PADDING).max(0.)),
+        );
+        let panel = container(content)
+            .padding(PANEL_PADDING)
+            .style(surface)
+            .width(state.palette.width);
+        sensor(panel)
+            .on_show(|size| Message::Nmr(Action::RenderedSize(size)))
+            .on_resize(|size| Message::Nmr(Action::RenderedSize(size)))
+            .into()
+    }
+
+    fn nmr_body(&self, placement: Placement) -> Column<'_, Message> {
+        let state = &self.tab.nmr;
         let mut body = column![].spacing(8);
         if state.job.pending.is_some() {
             body = body.push(text("Calculating from the molecular graph…").size(12));
@@ -149,49 +146,68 @@ impl App {
                 &self.tab.doc,
                 &self.tab.selected,
             ));
+        } else if state.job.pending.is_none() && state.job.notice.is_none() {
+            body = body.push(text(EMPTY_STATE).size(12).style(muted_text));
         }
-        body = details_section(body, state, placement);
-        let content = panel::view(
-            header,
-            scrollable(
-                container(body).padding(iced::Padding::ZERO.bottom(panel::CONTENT_END_INSET)),
-            )
-            .id("nmr-results")
-            .height(Length::Shrink),
-            footer(state, placement),
-            (placement == Placement::Floating && state.palette.resized)
-                .then_some((state.palette.height - 2. * PANEL_PADDING).max(0.)),
-            placement,
-        );
-        let panel = container(content).padding(PANEL_PADDING).style(surface);
-        placement.wrap(panel, state.palette.width, false)
+        if reported(state) {
+            body = details_section(body, state, placement);
+        }
+        body
     }
 }
 
+/// A report exists or is being calculated, so provenance and Details apply.
+fn reported(state: &State) -> bool {
+    state.job.result.is_some() || state.job.pending.is_some()
+}
+
 fn title_bar(state: &State, placement: Placement) -> Row<'_, Message> {
-    row![
-        text(placement.title_glyph()).size(15).style(muted_text),
-        text("NMR prediction").size(14),
-        Space::new().width(Length::Fill),
-        placement.mode_toggle(),
-        named_command(
-            "nmr.collapse",
-            "Show or hide the NMR prediction results",
-            if state.collapsed { "+" } else { "−" },
-            Action::ToggleCollapsed,
-            true,
-        )
-        .expanded(!state.collapsed)
-        .padding([4, 5]),
-        named_command(
-            "nmr.close",
-            "Close NMR prediction",
-            "×",
-            Action::Close,
-            true,
-        )
-        .padding([4, 5]),
-    ]
+    let close = named_command(
+        "nmr.close",
+        "Close NMR prediction",
+        "×",
+        Action::Close,
+        true,
+    )
+    .padding([4, 5]);
+    match placement {
+        Placement::Floating => row![
+            text("⠿").size(15).style(muted_text),
+            text(FLOATING_TITLE).size(14),
+            Space::new().width(Length::Fill),
+            named_command(
+                "nmr.mode",
+                "Dock NMR in the inspector",
+                "Dock",
+                Action::Dock,
+                true,
+            )
+            .style(segment(true)),
+            named_command(
+                "nmr.collapse",
+                "Show or hide the NMR prediction results",
+                if state.collapsed { "+" } else { "−" },
+                Action::ToggleCollapsed,
+                true,
+            )
+            .expanded(!state.collapsed)
+            .padding([4, 5]),
+            close,
+        ],
+        Placement::Docked => row![
+            text(DOCKED_TITLE).size(14),
+            Space::new().width(Length::Fill),
+            named_command(
+                "nmr.mode",
+                "Undock NMR into a movable palette",
+                "Undock",
+                Action::Undock,
+                true,
+            )
+            .style(outlined),
+            close,
+        ],
+    }
     .spacing(4)
     .align_y(Alignment::Center)
 }
@@ -212,18 +228,26 @@ fn nucleus_switch(state: &State) -> Row<'_, Message> {
             Nucleus::C13,
         ),
     ] {
-        nuclei = nuclei.push(
-            named_command(
-                id,
-                name,
-                label,
-                Action::Predict(nucleus),
-                state.job.pending.is_none(),
-            )
-            .checked(state.job.nucleus == nucleus)
+        let label = text(label)
+            .size(12)
             .width(Length::Fill)
-            .height(30)
-            .style(segment(state.job.nucleus == nucleus)),
+            .height(Length::Fill)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center);
+        nuclei = nuclei.push(
+            reshiki::accessibility::button(id, name, label)
+                .padding([5, 7])
+                .on_press_maybe(
+                    state
+                        .job
+                        .pending
+                        .is_none()
+                        .then_some(Message::Nmr(Action::Predict(nucleus))),
+                )
+                .checked(state.job.nucleus == nucleus)
+                .width(Length::Fill)
+                .height(30)
+                .style(segment(state.job.nucleus == nucleus)),
         );
     }
     nuclei
@@ -234,7 +258,7 @@ fn label_controls(state: &State) -> Element<'_, Message> {
     // the application's keyboard/native activation and checked semantics.
     let labels = reshiki::accessibility::button(
         "nmr.labels",
-        "Show atom-linked NMR assignment labels on the drawing",
+        "Show NMR assignment labels on the drawing",
         checkbox(state.labels.visible)
             .label("Show labels")
             .size(15)
@@ -265,45 +289,44 @@ fn label_controls(state: &State) -> Element<'_, Message> {
             .is_some()
             .then_some(Message::Nmr(Action::ToggleLabels)),
     );
-    let mode = row![
-        text(label_mode_name(state.labels.mode)).size(12),
-        Space::new().width(Length::Fill),
-        text("▾").size(10)
-    ];
-    let anchor =
-        reshiki::accessibility::button("nmr.labels.mode", "NMR assignment label format", mode)
-            .expanded(state.labels.menu)
-            .value(label_mode_name(state.labels.mode))
-            .padding([5, 7])
-            .width(132)
-            .style(outlined)
-            .on_press_maybe(
-                state
-                    .labels
-                    .visible
-                    .then_some(Message::Nmr(Action::LabelMenu(!state.labels.menu))),
-            );
+    let toggle_menu = Message::Nmr(Action::LabelMenu(!state.labels.menu));
+    let anchor = crate::app::popover::choice_anchor(
+        "nmr.labels.mode",
+        "NMR assignment label format".into(),
+        label_mode_name(state.labels.mode).into(),
+        12.,
+        [5, 7],
+        state.labels.menu,
+        toggle_menu.clone(),
+    )
+    .value(label_mode_name(state.labels.mode))
+    .width(132)
+    .on_press_maybe(state.labels.visible.then_some(toggle_menu));
     let popup = state.labels.menu.then(|| {
-        let mut choices = column![].spacing(2);
-        for (id, label, mode) in [
+        let choices = [
             ("nmr.labels.atom", "Atom numbers", LabelMode::Atom),
             ("nmr.labels.ppm", "ppm", LabelMode::Shift),
             ("nmr.labels.both", "Both", LabelMode::Both),
-        ] {
-            choices = choices.push(
-                named_command(
-                    id,
-                    "Choose NMR assignment label format",
-                    label,
-                    Action::LabelMode(mode),
-                    true,
-                )
-                .checked(state.labels.mode == mode)
+        ]
+        .map(|(id, label, mode)| {
+            reshiki::accessibility::button(
+                id,
+                "Choose NMR assignment label format",
+                text(label).size(12),
+            )
+            .checked(state.labels.mode == mode)
+            .padding([6, 10])
+            .width(Length::Fill)
+            .style(control(state.labels.mode == mode))
+            .on_press(Message::Nmr(Action::LabelMode(mode)))
+            .into()
+        });
+        palette::menu(
+            container(column(choices))
                 .width(Length::Fill)
-                .style(segment(state.labels.mode == mode)),
-            );
-        }
-        palette::menu(container(choices).padding(4).style(surface))
+                .padding(5)
+                .style(surface),
+        )
     });
     let dropdown = Element::new(
         crate::app::popover::popover(anchor, popup, Message::Nmr(Action::LabelMenu(false)))
@@ -350,13 +373,7 @@ fn results_table<'a>(
     let mut table = column![
         container(
             row![
-                text(if report.nucleus == Nucleus::H1 {
-                    "H site"
-                } else {
-                    "Atom"
-                })
-                .size(12)
-                .width(Length::Fill),
+                text("Atom").size(12).width(Length::Fill),
                 text("δ / ppm").size(12).width(72).align_x(Alignment::End),
             ]
             .spacing(8)
@@ -384,13 +401,31 @@ fn site_row<'a>(
 ) -> reshiki::accessibility::Button<'a, Message> {
     let site = presentation.and_then(|presentation| presentation.rows.get(index));
     let label = site.map_or_else(
-        || Cow::Owned(presentation::row_label(report.nucleus, item)),
+        || {
+            Cow::Owned(presentation::row_label(
+                report.nucleus,
+                item,
+                presentation::element(document, item),
+            ))
+        },
         |site| Cow::Borrowed(site.label.as_str()),
     );
     let shift = site.map_or_else(
         || Cow::Owned(presentation::row_shift(item)),
         |site| Cow::Borrowed(site.shift.as_str()),
     );
+    let mut description = site.map_or_else(
+        || site_description(report.nucleus, item, &label),
+        |site| site.description.clone(),
+    );
+    if !document.atom_visible(item.atom_id)
+        && let Some(group) = document.abbreviation_containing(item.atom_id)
+    {
+        description.push_str(&format!(
+            ". Shown at abbreviation {} anchored on atom #{}",
+            group.label, group.anchor
+        ));
+    }
     let mut values = column![
         row![
             text(label).size(12).width(Length::Fill),
@@ -419,21 +454,7 @@ fn site_row<'a>(
             report.nucleus.code(),
             item.atom_id
         ),
-        {
-            let mut description = site.map_or_else(
-                || site_description(report.nucleus, item),
-                |site| site.description.clone(),
-            );
-            if !document.atom_visible(item.atom_id)
-                && let Some(group) = document.abbreviation_containing(item.atom_id)
-            {
-                description.push_str(&format!(
-                    ". Shown at abbreviation {} anchored on atom #{}",
-                    group.label, group.anchor
-                ));
-            }
-            description
-        },
+        description,
         values,
     )
     .padding([7, 9])
@@ -500,7 +521,7 @@ fn details_section<'a>(
         let source = provenance(state.job.result.as_deref());
         body = body
             .push(options)
-            .push(text(PLOT_DESCRIPTION).size(11))
+            .push(text(engine::PLOT_NOTES.join(" ")).size(11))
             .push(text(source.method).size(11))
             .push(text(source.data_version).size(11))
             .push(text(source.conditions).size(11))
@@ -511,53 +532,61 @@ fn details_section<'a>(
 }
 
 fn footer(state: &State, placement: Placement) -> Column<'_, Message> {
-    let mut commands = row![
-        named_command(
-            "nmr.method",
-            "NMR prediction method, source, conditions and limitations",
-            if state.details {
-                "▾ Details…"
-            } else {
-                "▸ Details…"
-            },
-            Action::ToggleDetails,
-            true,
-        )
-        .expanded(state.details)
-        .value(panel_description(state))
-        .padding([5, 0]),
-        Space::new().width(Length::Fill),
-        named_command(
+    let reported = reported(state);
+    let mut commands = row![].spacing(3).align_y(Alignment::Center);
+    if reported {
+        commands = commands.push(
+            named_command(
+                "nmr.method",
+                "NMR prediction method, source, conditions and limitations",
+                if state.details {
+                    "▾ Details"
+                } else {
+                    "▸ Details"
+                },
+                Action::ToggleDetails,
+                true,
+            )
+            .expanded(state.details)
+            .value(panel_description(state))
+            .padding([5, 0]),
+        );
+    }
+    commands = commands
+        .push(Space::new().width(Length::Fill))
+        .push(named_command(
             "nmr.copy",
             "Copy predicted NMR shifts with attribution",
             "Copy",
             Action::Copy,
             state.job.result.is_some(),
-        ),
-        named_command(
+        ))
+        .push(named_command(
             "nmr.export",
             "Export predicted NMR shifts with attribution as TSV",
             "Export…",
             Action::Export,
             state.job.result.is_some(),
-        ),
-    ]
-    .spacing(3)
-    .align_y(Alignment::Center);
+        ));
     if placement == Placement::Floating {
         commands = commands.push(text("◢").size(12).style(muted_text));
     }
-    column![
-        text(if state.job.nucleus == Nucleus::H1 {
-            "Predicted H groups · unresolved · CDCl₃"
+    let mut footer = column![].spacing(5);
+    if reported {
+        // Proton shifts are medians per parent atom's H group, not averages.
+        let grouping = if state.job.nucleus == Nucleus::H1 {
+            " · grouped per atom"
         } else {
-            "Predicted shifts · CDCl₃"
-        })
-        .size(10)
-        .style(muted_text),
-        commands,
-    ]
-    .spacing(5)
+            ""
+        };
+        let conditions = format!(
+            "{}{grouping} · {}",
+            state.job.nucleus.label(),
+            engine::SOLVENT_LABEL
+        );
+        footer = footer.push(text(conditions).size(10).style(muted_text));
+    }
+    footer.push(commands)
 }
 
 fn named_command<'a>(
@@ -574,45 +603,30 @@ fn named_command<'a>(
         .style(quiet)
 }
 
-pub(super) fn site_description(nucleus: Nucleus, row: &engine::Row) -> String {
-    let site = if nucleus == Nucleus::H1 {
-        format!(
-            "{} attached H{}",
-            row.hydrogen_count,
-            if row.hydrogen_count > 1 {
-                " in an unresolved group"
-            } else {
-                ""
-            }
-        )
-    } else {
-        "carbon atom".into()
-    };
-    let prediction = row
-        .statistics
-        .as_ref()
-        .map(|s| {
+/// The accessible name of a result row or plot marker, built from the same
+/// site label as the table (`C #1 · 3H`).
+pub(super) fn site_description(nucleus: Nucleus, row: &engine::Row, label: &str) -> String {
+    let prediction = row.statistics.as_ref().map_or_else(
+        || {
             format!(
-                "Predicted {:.3} ppm; sphere {}; {} independent references; observed SD {:.3} ppm",
+                "Not predicted: {}",
+                row.limitation
+                    .as_deref()
+                    .unwrap_or(engine::NO_REFERENCE_DATA)
+            )
+        },
+        |s| {
+            format!(
+                "Predicted {:.3} ppm; shell {}; {} references; SD {:.3} ppm",
                 s.median,
-                row.radius.map(|r| r.to_string()).unwrap_or_default(),
+                row.radius
+                    .map_or_else(|| "—".into(), |radius| radius.to_string()),
                 s.support,
                 s.standard_deviation
             )
-        })
-        .unwrap_or_else(|| {
-            format!(
-                "Unsupported: {}",
-                row.limitation
-                    .as_deref()
-                    .unwrap_or("No qualified reference data")
-            )
-        });
-    format!(
-        "Select {} NMR site atom #{}: {site}. {prediction}",
-        nucleus.label(),
-        row.atom_id
-    )
+        },
+    );
+    format!("Select {} NMR row {label}. {prediction}", nucleus.label())
 }
 
 fn label_mode_name(mode: LabelMode) -> &'static str {
@@ -655,9 +669,8 @@ pub(super) fn panel_description(state: &State) -> String {
     } else if let Some(notice) = &state.job.notice {
         notice.clone()
     } else if let Some(report) = &state.job.result {
-        format!(
-            "{} prediction: {} of {} atom-linked sites supported",
-            report.nucleus.label(),
+        super::summary(
+            report.nucleus,
             state
                 .job
                 .presentation
@@ -665,9 +678,9 @@ pub(super) fn panel_description(state: &State) -> String {
                 .filter(|presentation| presentation.matches(report))
                 .map_or_else(
                     || report.supported_count(),
-                    |presentation| presentation.supported_count
+                    |presentation| presentation.supported_count,
                 ),
-            report.rows.len()
+            report.rows.len(),
         )
     } else {
         "No prediction result".into()

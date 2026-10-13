@@ -142,7 +142,7 @@ fn cached_plot_widths_and_names_preserve_every_group() {
     reports.push(extreme);
     for report in reports {
         let report = std::sync::Arc::new(report);
-        let presentation = Presentation::new(&report);
+        let presentation = Presentation::new(&report, &reshiki::document::Document::default());
         for width in [0., 32., 240., 284., 304., 384., 460., 584.] {
             let axis = Axis::new(&report);
             let original = groups(&report, axis, width);
@@ -194,7 +194,7 @@ fn dense_coincident_and_long_id_reports_keep_every_owner_in_cycleable_groups() {
             let description = marker_name(&report, &group.indices);
             assert!(description.len() < 4096);
             assert!(description.contains("additional sites"));
-            assert!(description.contains("atom-linked result rows"));
+            assert!(description.contains("results table"));
         }
     }
     // A succession of nearby shifts across the full plot should not become
@@ -558,7 +558,7 @@ async fn dense_marker_keeps_all_distinct_original_atoms_accessible_and_cycleable
         for &owner in &group.indices {
             assert!(
                 node.name
-                    .contains(&format!("atom #{}", report.rows[owner].atom_id))
+                    .contains(&format!(" #{}.", report.rows[owner].atom_id))
             );
         }
         let message = ui.activate(&mut plot, &id);

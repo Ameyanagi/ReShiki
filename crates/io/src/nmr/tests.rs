@@ -17,8 +17,11 @@ fn complete_component_and_collapsed_groups_retain_drawing_atom_links() {
     assert_eq!(request.atom_ids, ids);
     assert_eq!(request.source.atoms.len(), 3);
     let another = doc.add_atom("C", Point::new(300., 0.));
-    assert!(prepare(&doc, &[]).is_err());
-    assert!(prepare(&doc, &[ids[0], another]).is_err());
+    assert_eq!(prepare(&doc, &[]).unwrap_err(), SELECT_ONE_MOLECULE);
+    assert_eq!(
+        prepare(&doc, &[ids[0], another]).unwrap_err(),
+        SELECT_ONE_MOLECULE
+    );
     assert_eq!(prepare(&doc, &[ids[0]]).unwrap().source.atoms.len(), 3);
 }
 #[test]

@@ -1,49 +1,26 @@
-//! NMR surface and control appearance.
+//! NMR surface and control appearance, built on the shared floating surface.
 use iced::widget::{button, container};
-use iced::{Border, Color, Shadow, Theme, Vector};
+use iced::{Border, Shadow, Theme};
 
-pub(super) fn surface(theme: &Theme) -> container::Style {
-    let dark = crate::appearance::is_dark(theme);
-    container::Style {
-        background: Some(
-            if dark {
-                theme.extended_palette().background.base.color
-            } else {
-                Color::WHITE
-            }
-            .into(),
-        ),
-        text_color: Some(theme.palette().text),
-        border: Border {
-            color: if dark {
-                theme.extended_palette().background.strong.color
-            } else {
-                Color::from_rgb8(215, 223, 229)
-            },
-            width: 1.,
-            radius: 6.into(),
-        },
-        shadow: crate::appearance::surface_shadow(Shadow {
-            color: Color::BLACK.scale_alpha(if dark { 0.2 } else { 0.08 }),
-            offset: Vector::new(0., 3.),
-            blur_radius: 12.,
-        }),
-        ..Default::default()
-    }
-}
+/// The floating palette card and its label menu: the app's shared floating
+/// surface, including its platform shadow policy.
+pub(super) use crate::app::color_popover::surface;
+
+/// The results table: the shared surface's border and fill, without a shadow.
 pub(super) fn table_surface(theme: &Theme) -> container::Style {
+    let surface = surface(theme);
     container::Style {
         shadow: Shadow::default(),
         border: Border {
-            radius: 4.into(),
-            ..surface(theme).border
+            radius: 6.into(),
+            ..surface.border
         },
-        ..surface(theme)
+        ..surface
     }
 }
 pub(super) fn rule(theme: &Theme) -> container::Style {
     container::Style {
-        background: Some(surface(theme).border.color.into()),
+        background: Some(table_surface(theme).border.color.into()),
         ..Default::default()
     }
 }
@@ -52,12 +29,11 @@ pub(super) fn quiet(theme: &Theme, status: button::Status) -> button::Style {
     style.border = Border::default();
     style
 }
+/// A neutral command with the table's outline, such as the docked Undock.
 pub(super) fn outlined(theme: &Theme, status: button::Status) -> button::Style {
-    let mut style = quiet(theme, status);
-    style.border = Border {
-        radius: 4.into(),
-        ..surface(theme).border
-    };
+    let mut style = crate::app::workspace::control(false)(theme, status);
+    style.border.color = table_surface(theme).border.color;
+    style.border.width = 1.;
     style
 }
 pub(super) fn segment(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
@@ -67,7 +43,7 @@ pub(super) fn segment(selected: bool) -> impl Fn(&Theme, button::Status) -> butt
         if !selected {
             style.border = Border {
                 radius: 4.into(),
-                ..surface(theme).border
+                ..table_surface(theme).border
             };
         }
         style

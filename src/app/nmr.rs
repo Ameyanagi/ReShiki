@@ -42,6 +42,16 @@ pub(super) use palette::OVERLAY_INSETS;
 pub(super) use state::State;
 
 const STALE_NOTICE: &str = "Molecular chemistry changed; run prediction again";
+/// The status while nothing predictable is selected: an empty state, not an error.
+const EMPTY_STATUS: &str = "NMR · Select a molecule";
+
+/// The status summary of an accepted report, e.g. `¹H NMR · 3 of 3 atoms predicted`.
+fn summary(nucleus: Nucleus, supported: usize, total: usize) -> String {
+    format!(
+        "{} NMR · {supported} of {total} atoms predicted",
+        nucleus.label()
+    )
+}
 
 fn identity_current(
     document: &Document,
@@ -169,6 +179,21 @@ impl App {
         self.tab.nmr.labels.menu = false;
         let request = match engine::prepare(&self.tab.doc, &self.tab.selected) {
             Ok(r) => r,
+            // No atom is selected: the panel shows its empty state. A selection
+            // across several molecules keeps its diagnostic below.
+            Err(error)
+                if error == engine::SELECT_ONE_MOLECULE
+                    && !self
+                        .tab
+                        .selected
+                        .iter()
+                        .any(|id| self.tab.doc.atom(*id).is_some()) =>
+            {
+                self.tab.nmr.job.notice = None;
+                self.status = EMPTY_STATUS.into();
+                self.error = false;
+                return Task::none();
+            }
             Err(error) => {
                 self.tab.nmr.job.notice = Some(error.clone());
                 self.status = error;
@@ -211,12 +236,11 @@ impl App {
         }
         match result {
             Ok(report) => {
-                let presentation = presentation::Presentation::new(&report);
-                let supported = presentation.supported_count;
-                self.status = format!(
-                    "{} NMR prediction · {supported}/{} supported atom-linked sites",
-                    report.nucleus.label(),
-                    report.rows.len()
+                let presentation = presentation::Presentation::new(&report, &self.tab.doc);
+                self.status = summary(
+                    report.nucleus,
+                    presentation.supported_count,
+                    report.rows.len(),
                 );
                 self.error = false;
                 self.tab.nmr.job.result_epoch = Some(key.epoch);
@@ -250,18 +274,16 @@ impl App {
             {
                 selected.push(group.anchor);
             }
-            let atom_id = row.atom_id;
-            let hydrogen_count = row.hydrogen_count;
+            let mut status = format!("Atom #{}", row.atom_id);
+            if self.tab.nmr.job.nucleus == Nucleus::H1 {
+                status.push_str(&format!(" · {}H", row.hydrogen_count));
+            }
+            match &row.statistics {
+                Some(statistics) => status.push_str(&format!(" · {:.3} ppm", statistics.median)),
+                None => status.push_str(" · not predicted"),
+            }
             self.set_selection(selected);
-            self.status = format!(
-                "NMR prediction linked to atom #{}{}",
-                atom_id,
-                if hydrogen_count > 1 && self.tab.nmr.job.nucleus == Nucleus::H1 {
-                    " · unresolved attached-H group"
-                } else {
-                    ""
-                }
-            );
+            self.status = status;
         }
         Task::none()
     }

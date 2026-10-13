@@ -1,8 +1,8 @@
 //! The floating panel's height follows its rendered rows, including wrapping.
 //! A single body scrolls when the window cannot fit even the first full row.
+//! The docked report is plain inspector content and does not use this panel.
 use super::Message;
 use super::palette::{MAX_SIZE, PANEL_PADDING, PREFERRED_ROWS};
-use super::view::Placement;
 use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
     widget::{Operation, Tree, tree},
@@ -34,19 +34,16 @@ pub(super) fn view<'a>(
     body: impl Into<Element<'a, Message>>,
     footer: impl Into<Element<'a, Message>>,
     requested: Option<f32>,
-    placement: Placement,
 ) -> Element<'a, Message> {
     Element::new(Panel {
         children: vec![header.into(), body.into(), footer.into()],
         requested,
-        placement,
     })
 }
 
 struct Panel<'a> {
     children: Vec<Element<'a, Message>>,
     requested: Option<f32>,
-    placement: Placement,
 }
 
 #[derive(Default)]
@@ -211,14 +208,7 @@ impl Widget<Message, Theme, Renderer> for Panel<'_> {
         tree.diff_children(&self.children);
     }
     fn size(&self) -> Size<Length> {
-        Size::new(
-            Length::Fill,
-            if self.placement == Placement::Floating {
-                Length::Shrink
-            } else {
-                Length::Fill
-            },
-        )
+        Size::new(Length::Fill, Length::Shrink)
     }
     fn layout(
         &mut self,
@@ -247,11 +237,7 @@ impl Widget<Message, Theme, Renderer> for Panel<'_> {
         // detail lines inside them. No character-count estimate controls fit.
         let fixed = header_node.size().height + footer_node.size().height + 2. * GAP;
         let heights = heights(fixed, body_node.size().height, &rows.0);
-        let height = if self.placement == Placement::Floating {
-            floating_height(self.requested, heights, limits.max().height)
-        } else {
-            limits.max().height
-        };
+        let height = floating_height(self.requested, heights, limits.max().height);
         let body_space = (height - fixed).max(0.);
         body_node = body.as_widget_mut().layout(
             body_tree,
