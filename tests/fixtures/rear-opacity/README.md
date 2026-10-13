@@ -22,7 +22,7 @@ conditions and title/tab differences explained in the
 [review](../../../docs/rear-opacity-review.md). Private incidental-UI captures
 are excluded. The [manifest](evidence-manifest.json) pins all public copies.
 
-Run `python3 scripts/verify_rear_opacity_evidence.py` from the repository root
+Run `python3 scripts/evidence/verify_rear_opacity_evidence.py` from the repository root
 to check all eleven complete native documents, their frozen hashes,
 history/persistence byte equality, and the retained f32 depth classification.
 Native replay needs only standard-library Python 3.9+ and requires no Cargo,

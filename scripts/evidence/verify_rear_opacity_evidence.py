@@ -203,7 +203,7 @@ def main():
     parser.add_argument(
         "--native-dir",
         type=Path,
-        default=Path(__file__).resolve().parent.parent / "tests/fixtures/rear-opacity",
+        default=Path(__file__).resolve().parents[2] / "tests/fixtures/rear-opacity",
     )
     parser.add_argument("--typed-before", type=Path)
     parser.add_argument("--export-dir", type=Path)

@@ -169,7 +169,7 @@ before starting the other and use separate clean data directories.
 Run this read-only probe in the same interactive session as the editor:
 
 ```powershell
-powershell -NoProfile -File scripts/probe_windows_window.ps1 -EditorProcessId <PID> -SourceCommit <COMMIT>
+powershell -NoProfile -File scripts/evidence/probe_windows_window.ps1 -EditorProcessId <PID> -SourceCommit <COMMIT>
 ```
 
 Retain its executable hash, DPI, physical outer/client/work bounds and
