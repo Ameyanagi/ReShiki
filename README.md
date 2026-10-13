@@ -79,7 +79,7 @@ and confirm it in your pull request.
 
 Thanks to our [contributors](docs/contributors.md) for their code, testing, and feedback.
 
-ReShiki uses Rust and Iced, with chemistry, clipboard and printing in one application executable per platform. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions.
+ReShiki uses Rust and Iced, with chemistry, clipboard and printing in one application executable per platform. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions. For LLMs and AI agents, the site also publishes [llms.txt](https://reshiki.com/llms.txt) and the [Agent API set](https://reshiki.com/_llms-txt/agent-api.txt).
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 

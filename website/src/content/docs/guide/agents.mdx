@@ -269,6 +269,14 @@ type reshiki-mcp.txt
 
 `echo %ERRORLEVEL%` shows the [exit code](#exit-codes), and `type` shows the server’s messages.
 
+## For AI agents and LLMs
+
+The documentation is also published as plain text for language models:
+
+- [/llms.txt](/llms.txt): an index of the documentation.
+- [/\_llms-txt/agent-api.txt](/_llms-txt/agent-api.txt): the agent pages in one file. It holds this guide, the API overview, the command-line reference, the tool reference, the skill page and runtime safety.
+- [/llms-full.txt](/llms-full.txt): all documentation in one file. [/llms-small.txt](/llms-small.txt) is a shorter version.
+
 ## Privacy
 
 The agent API runs only when you or a client you configured start it. It opens no network connection: no update checks, downloads or telemetry. Your MCP client, and the model service it uses, receive what the tools return, including structures, rendered images and text from the drawings the agent works on, and the client’s own privacy terms apply. ReShiki cannot see drawings open in the app, and files are read and written only in the folders you grant. The command line uses your own permissions. Read the [privacy policy](/developer/privacy-policy/#optional-agent-api-and-command-line-experimental) for details, and [runtime safety](/developer/runtime-safety/#agent-api-p1-experimental) for limits and remaining risks.
