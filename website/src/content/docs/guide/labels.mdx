@@ -104,6 +104,14 @@ To format a whole text label without opening the editor, select its atom and use
 
 The formatting is saved in the .rsk file and copied to ChemDraw files. Formatted text labels in ChemDraw files keep their formatting when you open them.
 
+## Bond to a text label
+
+You can draw a bond from a short caption, such as **Pd²⁺** typed with **Text**, as you would from an atom. Choose **Single bond** or another bond tool and drag from the caption's letters. The caption becomes an atom label and keeps its font, size, and color. **Pd²⁺** becomes a palladium atom with charge +2; other formatted text, such as M²⁺, stays a text label with its formatting.
+
+Click the caption to add a bond in the default direction. A bond can also end on a caption. **Straight chain** and **Snaking chain** can start from a caption too. **Hydrogen bond** does not convert captions.
+
+When you point at a caption with a bond tool, the status bar says whether it can become an atom label. Captions with more than one line or more than 32 characters, molecule names, and reaction conditions stay captions. One **Undo** restores the caption and removes the new bond.
+
 ## Attach to several atoms
 
 Select the target atoms, right-click → **Attachment points…**, and choose **Multi-center attachment** for simultaneous participation, such as η6-arene or η3-allyl. **Variable attachment** represents alternative attachment positions. Draw a bond from the new point to a metal or substituent. These are distinct from a plain dummy atom or drawing centroid.

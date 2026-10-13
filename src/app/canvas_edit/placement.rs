@@ -1,13 +1,101 @@
 //! Drawing gestures that place new structure.
 use crate::app::{App, joining};
-use crate::canvas::Tool;
 use crate::canvas::pick::PICK_RADIUS_PX;
+use crate::canvas::{Edit, Tool};
 use reshiki::document::{Document, Point};
 use reshiki::editing;
 use reshiki::graphics::Graphic;
 use reshiki::joining::Placed;
 
 impl App {
+    pub(super) fn place_text_bond(&mut self, edit: Edit, before: Document) {
+        let Edit::TextBond {
+            source,
+            source_text,
+            start,
+            end,
+            target,
+            target_text,
+        } = edit
+        else {
+            return;
+        };
+        if !self.tool.bonds_from_text() {
+            return;
+        }
+        let conversion =
+            convert_bond_text(&self.tab.doc, (source, source_text), (target, target_text));
+        let (doc, source, target) = match conversion {
+            Ok(converted) => converted,
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+                return;
+            }
+        };
+        let revision = self.tab.revision;
+        // A converted caption never stays in the drawing without its Undo step.
+        let fallback = before.clone();
+        self.tab.doc = doc;
+        if let Some(end) = end {
+            self.place_bond(start, end, source, target, before);
+        } else if let Some(source) = source
+            && self.default_bond_from_atom(source)
+        {
+            self.changed(before);
+        }
+        if self.tab.revision == revision {
+            self.tab.doc = fallback;
+            return;
+        }
+        self.status = "Bond from text".into();
+        self.error = false;
+    }
+
+    pub(super) fn place_chain_from_text(
+        &mut self,
+        points: &[Point],
+        source: Option<u64>,
+        source_text: Option<u64>,
+        target: Option<u64>,
+        before: Document,
+    ) {
+        let Some(text) = source_text else {
+            return self.place_chain(points, source, target, before);
+        };
+        if !self.tool.bonds_from_text() {
+            return;
+        }
+        let result =
+            reshiki::atom_text::text_to_atom(&self.tab.doc, text).and_then(|(doc, source)| {
+                reshiki::chains::place(
+                    &doc,
+                    points,
+                    Some(source),
+                    target,
+                    self.tab.camera.world_len(PICK_RADIUS_PX),
+                )
+            });
+        match result {
+            Ok((doc, ids)) => {
+                self.tab.doc = doc;
+                self.tab.selected = ids;
+            }
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+                return;
+            }
+        }
+        let revision = self.tab.revision;
+        self.changed(before);
+        if self.tab.revision == revision {
+            return;
+        }
+        self.status = "Bond from text".into();
+        self.error = false;
+    }
+
     pub(super) fn place_chain(
         &mut self,
         points: &[Point],
@@ -302,5 +390,25 @@ impl App {
             self.tab.selected = vec![b];
         }
         self.changed(before);
+    }
+}
+
+/// Convert both ends on a candidate so a refusal never installs half an edit.
+fn convert_bond_text(
+    doc: &Document,
+    source: (Option<u64>, Option<u64>),
+    target: (Option<u64>, Option<u64>),
+) -> Result<(Document, Option<u64>, Option<u64>), String> {
+    let (doc, source) = if let Some(text) = source.1 {
+        let (doc, id) = reshiki::atom_text::text_to_atom(doc, text)?;
+        (doc, Some(id))
+    } else {
+        (doc.clone(), source.0)
+    };
+    if let Some(text) = target.1 {
+        let (doc, target) = reshiki::atom_text::text_to_atom(&doc, text)?;
+        Ok((doc, source, Some(target)))
+    } else {
+        Ok((doc, source, target.0))
     }
 }

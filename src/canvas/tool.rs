@@ -42,6 +42,19 @@ impl Tool {
             _ => return None,
         })
     }
+    /// Chemical bond and chain tools may turn a caption into an atom label.
+    pub fn bonds_from_text(self) -> bool {
+        matches!(
+            self,
+            Self::Chain(_)
+                | Self::Bond(_)
+                | Self::StyledBond(_)
+                | Self::Wedge
+                | Self::Hash
+                | Self::Wavy
+        ) && self.bond_preset() != Some(reshiki::bonds::BondPreset::Dotted)
+    }
+
     pub fn selects(self) -> bool {
         matches!(self, Self::Select | Self::Lasso)
     }

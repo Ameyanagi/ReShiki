@@ -381,6 +381,7 @@ pub struct App {
     // The current tab's status; parked with its document when it leaves the front.
     status: String,
     error: bool,
+    bond_text_hint: Option<(String, bool, String)>,
     file_io: files::State,
     office: office::State,
     #[cfg(any(windows, target_os = "linux"))]
@@ -457,6 +458,7 @@ impl App {
             // A recovery offer in the status bar is the launch message.
             status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
+            bond_text_hint: None,
             file_io: files::State::default(),
             office: office::State::default(),
             #[cfg(any(windows, target_os = "linux"))]

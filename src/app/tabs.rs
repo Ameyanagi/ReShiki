@@ -231,6 +231,7 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
+        self.clear_bond_text_hint();
         self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
         self.nmr_leave_tab();

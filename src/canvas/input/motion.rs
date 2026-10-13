@@ -28,6 +28,7 @@ impl MoleculeCanvas<'_> {
         if let Some(Gesture::Chain {
             start,
             source,
+            source_text,
             points,
             snaking,
             pressed,
@@ -42,7 +43,7 @@ impl MoleculeCanvas<'_> {
                 chains::snake(
                     points,
                     p,
-                    source.is_some(),
+                    source.is_some() || source_text.is_some(),
                     bond,
                     self.chain_drawing,
                     state.modifiers.shift(),
@@ -51,7 +52,7 @@ impl MoleculeCanvas<'_> {
                 *points = chains::straight(
                     *start,
                     p,
-                    source.is_some(),
+                    source.is_some() || source_text.is_some(),
                     bond,
                     self.chain_drawing,
                     state.modifiers.shift(),

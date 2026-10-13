@@ -1217,6 +1217,7 @@ fn entire_chain_is_one_history_step_and_draw_settings_do_not_edit_the_document()
     app.edit(Edit::Chain {
         points,
         source: None,
+        source_text: None,
         target: None,
     });
     assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (8, 7));
@@ -1228,6 +1229,7 @@ fn entire_chain_is_one_history_step_and_draw_settings_do_not_edit_the_document()
     app.edit(Edit::Chain {
         points: vec![Point::default(), Point::new(42., 0.)],
         source: None,
+        source_text: None,
         target: None,
     });
     assert!(app.error);

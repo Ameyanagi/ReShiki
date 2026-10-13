@@ -98,6 +98,11 @@ pub struct MoleculeName {
     pub text: String,
 }
 
+/// Whether this annotation is still associated with a molecule name.
+pub fn is_caption(doc: &Document, id: u64) -> bool {
+    doc.molecule_names.iter().any(|name| name.annotation == id)
+}
+
 /// A chemical connected component, independent of drawing groups and captions.
 pub fn component(doc: &Document, seed: u64) -> Vec<u64> {
     if doc.atom(seed).is_none() {

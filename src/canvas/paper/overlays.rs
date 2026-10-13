@@ -1,6 +1,8 @@
 //! Editing aids drawn over the document: handles, notices and badges, gesture outlines and hover, the erase cursor, the selection box and tilt bounds.
 
-use crate::canvas::hit::{bond_target_with, hit_selection_with_orbital};
+use crate::canvas::hit::{
+    bond_target_with, bond_target_with_text, bond_text_at, hit_selection_with_orbital,
+};
 use crate::canvas::overlay::{ACCENT, ACCENT_STRONG, ACCENT_TINT};
 use crate::canvas::{
     Gesture, Handle, MoleculeCanvas, SelectionBox, State, Tool, World, layered, markers, pick, rgb,
@@ -445,8 +447,28 @@ impl MoleculeCanvas<'_> {
     ) -> ControlFlow<()> {
         if let Some(p) = state.cursor {
             let p = Point::new(p.x - bounds.x, p.y - bounds.y);
+            if let Some(Gesture::Draw {
+                start, id, text, ..
+            }) = &state.gesture
+            {
+                let origin = id
+                    .and_then(|id| self.doc.atom(id).map(|a| a.position))
+                    .unwrap_or(*start);
+                let (_, _, target_text) = bond_target_with_text(
+                    self.doc,
+                    origin,
+                    self.camera.world(p, bounds),
+                    (*id, *text),
+                    12. / self.camera.zoom,
+                    self.bond_drawing.unconstrained(state.modifiers.alt()),
+                    self.tool,
+                );
+                if let Some(text) = target_text {
+                    markers::Markers::text_hover(self.doc, text, frame, self.camera, bounds);
+                }
+            }
             match &state.gesture {
-                Some(Gesture::Draw { start, id })
+                Some(Gesture::Draw { start, id, .. })
                     if self.tool.bond_preset().is_none()
                         && self.tool != Tool::Arrow
                         && self.tool != Tool::Atom =>
@@ -506,6 +528,24 @@ impl MoleculeCanvas<'_> {
                 }
                 None if cursor.is_over(bounds) && self.tool != Tool::Erase => {
                     let point = self.camera.world(p, bounds);
+                    if self.tool.bonds_from_text()
+                        && let Some(text) = bond_text_at(
+                            self.doc,
+                            point,
+                            self.camera.world_len(pick::PICK_RADIUS_PX),
+                        )
+                    {
+                        if reshiki::atom_text::text_atom_refusal(self.doc, text).is_none() {
+                            markers::Markers::text_hover(
+                                self.doc,
+                                text,
+                                frame,
+                                self.camera,
+                                bounds,
+                            );
+                        }
+                        return ControlFlow::Continue(());
+                    }
                     let mut hit = hit_selection_with_orbital(
                         self.doc,
                         point,

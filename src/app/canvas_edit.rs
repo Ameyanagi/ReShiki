@@ -6,6 +6,8 @@ use reshiki::editing;
 mod click;
 mod placement;
 
+const BOND_TEXT_HINT: &str = "Drag to bond; this text becomes an atom label";
+
 impl App {
     pub(super) fn edit(&mut self, edit: Edit) {
         match edit {
@@ -66,10 +68,12 @@ impl App {
         if let Edit::Hover(point) = edit {
             self.tab.hover = point.map(|p| (p, self.tab.file_epoch));
             self.keyboard_pointer_hover(point);
+            self.hover_bond_text(point);
             return;
         }
         if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
             self.tab.hover = None;
+            self.hover_bond_text(None);
         }
         if self.tab.cleanup.is_some() {
             match edit {
@@ -90,7 +94,7 @@ impl App {
             return;
         }
         let before = self.tab.doc.clone();
-        if matches!(edit, Edit::Bond(..)) {
+        if matches!(edit, Edit::Bond(..) | Edit::TextBond { .. }) {
             self.tab.arrows.cancel_source();
         }
         match edit {
@@ -111,8 +115,15 @@ impl App {
             Edit::Chain {
                 points,
                 source,
+                source_text,
                 target,
-            } => return self.place_chain(&points, source, target, before),
+            } => return self.place_chain_from_text(&points, source, source_text, target, before),
+            edit @ Edit::TextBond { .. } => return self.place_text_bond(edit, before),
+            Edit::TextBondRefused(error) => {
+                self.status = error;
+                self.error = true;
+                return;
+            }
             Edit::Graphic(start, end, constrain) => {
                 return self.place_graphic(start, end, constrain, self.tab.snap_orbitals, before);
             }
@@ -281,3 +292,60 @@ impl App {
         }
     }
 }
+
+impl App {
+    /// The caption hint belongs to the pointer over this tab with this tool:
+    /// put the status it replaced back before either changes.
+    pub(super) fn clear_bond_text_hint(&mut self) {
+        self.hover_bond_text(None);
+    }
+
+    fn hover_bond_text(&mut self, point: Option<Point>) {
+        let hint = point
+            .filter(|_| self.tool.bonds_from_text())
+            .and_then(|p| {
+                crate::canvas::bond_text_at(
+                    &self.tab.doc,
+                    p,
+                    self.tab
+                        .camera
+                        .world_len(crate::canvas::pick::PICK_RADIUS_PX),
+                )
+            })
+            .map(|id| {
+                reshiki::atom_text::text_atom_refusal(&self.tab.doc, id)
+                    .unwrap_or_else(|| BOND_TEXT_HINT.into())
+            });
+        let previous = self
+            .bond_text_hint
+            .take()
+            .and_then(|(status, error, shown)| {
+                (self.status == shown && !self.error).then_some((status, error))
+            });
+        if let Some(hint) = hint {
+            let (status, error) = previous.unwrap_or_else(|| (self.status.clone(), self.error));
+            self.status = hint.clone();
+            self.error = false;
+            self.bond_text_hint = Some((status, error, hint));
+        } else if let Some((status, error)) = previous {
+            self.status = status;
+            self.error = error;
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn bond_text_evidence_after(
+        doc: reshiki::document::Document,
+        edit: Edit,
+    ) -> reshiki::document::Document {
+        let (mut app, _) = Self::new();
+        app.tab.busy = false;
+        app.tab.doc = doc;
+        app.tool = Tool::Bond(1);
+        let _ = app.update(crate::app::Message::Canvas(edit));
+        app.tab.doc
+    }
+}
+
+#[cfg(test)]
+mod tests;

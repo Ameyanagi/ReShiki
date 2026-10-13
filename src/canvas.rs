@@ -48,6 +48,10 @@ pub(crate) mod tilt;
 mod tool;
 
 #[cfg(test)]
+mod bond_text_render_tests;
+#[cfg(test)]
+mod bond_text_tests;
+#[cfg(test)]
 pub(crate) mod label_click_tests;
 #[cfg(test)]
 mod performance;
@@ -64,7 +68,7 @@ pub(crate) mod pen_tests;
 mod transform_shortcut_tests;
 
 use grid::GridCache;
-pub use hit::{distance_to_segment, hit_object};
+pub use hit::{bond_text_at, distance_to_segment, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 pub use previews::{
@@ -132,6 +136,7 @@ pub enum Edit {
     Chain {
         points: Vec<World>,
         source: Option<u64>,
+        source_text: Option<u64>,
         target: Option<u64>,
     },
     Graphic(World, World, bool),
@@ -198,6 +203,15 @@ pub enum Edit {
         y: f32,
     },
     Bond(World, World, Option<u64>, Option<u64>),
+    TextBond {
+        source: Option<u64>,
+        source_text: Option<u64>,
+        start: World,
+        end: Option<World>,
+        target: Option<u64>,
+        target_text: Option<u64>,
+    },
+    TextBondRefused(String),
     PlaneBond(u64, reshiki::projection::growth::Endpoint),
     Ring(World, Option<World>),
     DelocalizedRing(World, Option<World>, u8),
@@ -274,6 +288,7 @@ enum Gesture {
         start: World,
         pressed: World,
         source: Option<u64>,
+        source_text: Option<u64>,
         points: Vec<World>,
         snaking: bool,
         dragged: bool,
@@ -301,7 +316,9 @@ enum Gesture {
     Tilt(tilt::TiltDrag),
     Draw {
         start: World,
+        pressed: World,
         id: Option<u64>,
+        text: Option<u64>,
     },
     Ring {
         start: World,

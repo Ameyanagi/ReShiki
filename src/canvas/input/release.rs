@@ -1,6 +1,6 @@
 //! Pointer releases: finish the active gesture as one edit.
 
-use crate::canvas::hit::{bond_target_with, hit_object, plane_endpoint, region_selection};
+use crate::canvas::hit::{bond_target_with_text, hit_object, plane_endpoint, region_selection};
 use crate::canvas::pick::{CLICK_SLOP_PX, DRAG_SLOP_PX, HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::snapping::{arrow_endpoint, ring_gesture};
 use crate::canvas::{
@@ -32,6 +32,7 @@ impl MoleculeCanvas<'_> {
                 start,
                 pressed,
                 source,
+                source_text,
                 points,
                 snaking,
                 dragged,
@@ -41,7 +42,7 @@ impl MoleculeCanvas<'_> {
                 }
                 let (points, target) = self.chain_plan(
                     (start, pressed),
-                    source,
+                    (source, source_text),
                     &points,
                     (snaking, dragged),
                     p,
@@ -53,6 +54,7 @@ impl MoleculeCanvas<'_> {
                 Edit::Chain {
                     points,
                     source,
+                    source_text,
                     target,
                 }
             }
@@ -91,7 +93,12 @@ impl MoleculeCanvas<'_> {
                     ControlFlow::Break(action) => return Some(action),
                 }
             }
-            Gesture::Draw { start, id } => match self.release_draw(state, start, id, p, inside) {
+            Gesture::Draw {
+                start,
+                pressed,
+                id,
+                text,
+            } => match self.release_draw(state, (start, pressed), id, text, p, inside) {
                 ControlFlow::Continue(edit) => edit,
                 ControlFlow::Break(action) => return Some(action),
             },
@@ -323,60 +330,84 @@ impl MoleculeCanvas<'_> {
     fn release_draw(
         &self,
         state: &State,
-        start: World,
+        origin: (World, World),
         id: Option<u64>,
+        text: Option<u64>,
         p: World,
         inside: bool,
     ) -> ControlFlow<Action<Edit>, Edit> {
+        let (start, pressed) = origin;
         if !inside {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        ControlFlow::Continue(if start.distance(p) < self.camera.world_len(DRAG_SLOP_PX) {
-            if self.arrow_attach_mode() {
-                Edit::ArrowTarget(p, state.modifiers.alt())
-            } else {
-                Edit::Click(p)
-            }
-        } else {
-            let origin = id
-                .and_then(|id| self.doc.atom(id).map(|a| a.position))
-                .unwrap_or(start);
-            let (end, target) = if self.tool == Tool::Arrow {
-                (
-                    arrow_endpoint(
+        ControlFlow::Continue(
+            if pressed.distance(p) < self.camera.world_len(DRAG_SLOP_PX) {
+                if text.is_some() {
+                    Edit::TextBond {
+                        source: id,
+                        source_text: text,
                         start,
-                        p,
-                        self.bond_drawing.fixed_angles && !state.modifiers.alt(),
-                    ),
-                    None,
-                )
+                        end: None,
+                        target: None,
+                        target_text: None,
+                    }
+                } else if self.arrow_attach_mode() {
+                    Edit::ArrowTarget(p, state.modifiers.alt())
+                } else {
+                    Edit::Click(p)
+                }
             } else {
-                bond_target_with(
-                    self.doc,
-                    origin,
-                    p,
-                    id,
-                    12.0 / self.camera.zoom,
-                    self.bond_drawing.unconstrained(state.modifiers.alt()),
-                )
-            };
-            if self.tool != Tool::Arrow
-                && target.is_none()
-                && let Some((id, endpoint)) = id.and_then(|id| {
-                    plane_endpoint(
-                        self.doc,
-                        id,
-                        p,
-                        self.bond_drawing.unconstrained(state.modifiers.alt()),
+                let origin = id
+                    .and_then(|id| self.doc.atom(id).map(|a| a.position))
+                    .unwrap_or(start);
+                let (end, target, target_text) = if self.tool == Tool::Arrow {
+                    (
+                        arrow_endpoint(
+                            start,
+                            p,
+                            self.bond_drawing.fixed_angles && !state.modifiers.alt(),
+                        ),
+                        None,
+                        None,
                     )
-                    .map(|endpoint| (id, endpoint))
-                })
-            {
-                Edit::PlaneBond(id, endpoint)
-            } else {
-                Edit::Bond(origin, end, id, target)
-            }
-        })
+                } else {
+                    bond_target_with_text(
+                        self.doc,
+                        origin,
+                        p,
+                        (id, text),
+                        12.0 / self.camera.zoom,
+                        self.bond_drawing.unconstrained(state.modifiers.alt()),
+                        self.tool,
+                    )
+                };
+                if text.is_some() || target_text.is_some() {
+                    Edit::TextBond {
+                        source: id,
+                        source_text: text,
+                        start: origin,
+                        end: Some(end),
+                        target,
+                        target_text,
+                    }
+                } else if self.tool != Tool::Arrow
+                    && target.is_none()
+                    && let Some((id, endpoint)) = id.and_then(|id| {
+                        plane_endpoint(
+                            self.doc,
+                            id,
+                            p,
+                            self.bond_drawing.unconstrained(state.modifiers.alt()),
+                        )
+                        .map(|endpoint| (id, endpoint))
+                    })
+                {
+                    Edit::PlaneBond(id, endpoint)
+                } else {
+                    Edit::Bond(origin, end, id, target)
+                }
+            },
+        )
     }
     fn release_move(
         &self,

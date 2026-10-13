@@ -778,7 +778,60 @@ fn atom_label_editor_formatted(app: &mut App, _: &Driver<'_>) {
     );
 }
 
-pub(in crate::app::workspace) const STATES: [(&str, Scene); 38] = [
+/// A free Pd²⁺ caption above benzene, ready to become a connected label.
+fn bond_text_scene(app: &mut App) -> (u64, World, World, u64, World) {
+    use reshiki::{
+        document::Annotation,
+        typography::{Script, StyleChange},
+    };
+    let mut doc = benzene();
+    let top = doc
+        .atoms
+        .iter()
+        .min_by(|a, b| a.position.y.total_cmp(&b.position.y))
+        .unwrap()
+        .clone();
+    let mut caption = Annotation {
+        id: doc.next_id(),
+        position: top.position.offset(-8., -56.),
+        text: "Pd2+".into(),
+        format: Default::default(),
+    };
+    caption.format.apply(
+        &caption.text,
+        Some(2..4),
+        &StyleChange::Script(Script::Superscript),
+    );
+    let text = caption.id;
+    let ink = reshiki::atom_text::text_first_glyph_center(&caption).unwrap();
+    doc.annotations.push(caption);
+    let start = reshiki::atom_text::text_atom_position(&doc, text).unwrap();
+    show(app, doc, 2., 0.);
+    select(app, vec![]);
+    let _ = app.update(Message::Tool(Tool::Bond(1)));
+    (text, ink, start, top.id, top.position)
+}
+
+/// The status hint while the bond tool hovers over eligible caption ink.
+fn bond_from_text_hint(app: &mut App, _: &Driver<'_>) {
+    let (_, ink, _, _, _) = bond_text_scene(app);
+    let _ = app.update(Message::Canvas(Edit::Hover(Some(ink))));
+}
+
+/// The same caption converted and bonded to the ring through the app handler.
+fn bond_from_text(app: &mut App, _: &Driver<'_>) {
+    let (text, _, start, target, end) = bond_text_scene(app);
+    let _ = app.update(Message::Canvas(Edit::TextBond {
+        source: None,
+        source_text: Some(text),
+        start,
+        end: Some(end),
+        target: Some(target),
+        target_text: None,
+    }));
+}
+
+pub(in crate::app::workspace) const STATES: [(&str, Scene); 40] = [
     ("nmr-proton", nmr_proton),
     ("nmr-carbon-labels", nmr_carbon_labels),
     ("nmr-label-menu", nmr_label_menu),
@@ -817,6 +870,8 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 38] = [
     ("assistant-example", assistant_example),
     ("atom-label-editor", atom_label_editor),
     ("atom-label-editor-formatted", atom_label_editor_formatted),
+    ("bond-from-text-hint", bond_from_text_hint),
+    ("bond-from-text", bond_from_text),
 ];
 
 pub(in crate::app::workspace) fn needs_naming(name: &str) -> bool {

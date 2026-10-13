@@ -1146,6 +1146,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
     let Edit::Chain {
         points,
         source: a,
+        source_text: None,
         target: b,
     } = pointer_gesture(&canvas, Point::new(80., 150.), Point::new(320., 150.))
     else {
@@ -1155,7 +1156,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
     assert_eq!(points.len(), 7);
     let (preview, preview_target) = canvas.chain_plan(
         (World::new(-120., 0.), World::new(-120., 0.)),
-        Some(source),
+        (Some(source), None),
         &[World::new(-120., 0.)],
         (false, true),
         World::new(120., 0.),
@@ -1167,6 +1168,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
     let Edit::Chain {
         points,
         source: a,
+        source_text: None,
         target: b,
     } = pointer_gesture(&canvas, Point::new(84., 153.), Point::new(84., 153.))
     else {
@@ -1193,7 +1195,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
     let last = *initial.last().unwrap();
     let (extension, _) = canvas.chain_plan(
         (last, last),
-        ids.last().copied(),
+        (ids.last().copied(), None),
         &[last],
         (false, false),
         last,

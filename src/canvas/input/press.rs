@@ -1,6 +1,6 @@
 //! Mouse presses on the paper: the context menu and the gesture a left press starts.
 
-use crate::canvas::hit::hit_selection;
+use crate::canvas::hit::{bond_text_at, hit_selection};
 use crate::canvas::pick::{HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::{
     Edit, Gesture, HandleClick, MoleculeCanvas, State, Tool, TransformDrag, World, tilt,
@@ -282,16 +282,29 @@ impl MoleculeCanvas<'_> {
                 self.doc.expand_groups(&hit)
             };
         }
+        let text = self
+            .tool
+            .bonds_from_text()
+            .then(|| bond_text_at(self.doc, p, self.camera.world_len(PICK_RADIUS_PX)))
+            .flatten();
+        if let Some(error) = text.and_then(|id| reshiki::atom_text::text_atom_refusal(self.doc, id))
+        {
+            state.gesture = None;
+            return Some(Action::publish(Edit::TextBondRefused(error)).and_capture());
+        }
+        let text_start = text.and_then(|id| reshiki::atom_text::text_atom_position(self.doc, id));
         state.gesture = match self.tool {
             Tool::Chain(mode) => {
                 let source = self.doc.nearest(p, self.camera.world_len(PICK_RADIUS_PX));
                 let start = source
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
+                    .or(text_start)
                     .unwrap_or(p);
                 Some(Gesture::Chain {
                     start,
                     pressed: p,
                     source,
+                    source_text: text,
                     points: vec![start],
                     snaking: mode == ChainMode::Snaking,
                     dragged: false,
@@ -331,7 +344,9 @@ impl MoleculeCanvas<'_> {
             {
                 Some(Gesture::Draw {
                     start: p,
+                    pressed: p,
                     id: self.doc.nearest(p, self.camera.world_len(PICK_RADIUS_PX)),
+                    text: None,
                 })
             }
             Tool::Bond(_)
@@ -340,7 +355,9 @@ impl MoleculeCanvas<'_> {
             | Tool::Hash
             | Tool::Wavy
             | Tool::Arrow => Some(Gesture::Draw {
-                start: p,
+                start: text_start.unwrap_or(p),
+                pressed: p,
+                text,
                 id: if self.tool == Tool::Arrow {
                     None
                 } else {

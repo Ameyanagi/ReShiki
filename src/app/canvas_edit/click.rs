@@ -185,43 +185,48 @@ impl App {
             }
             self.tab.selected = vec![b.a, b.b];
         } else {
-            let (order, display) = self.bond_style();
             let a = atom.unwrap_or_else(|| self.tab.doc.add_atom("C", p));
-            let Some(start) = self.tab.doc.atom(a).map(|a| a.position) else {
-                self.status = "The bond's starting atom is unavailable".into();
-                self.error = true;
+            if !self.default_bond_from_atom(a) {
                 return;
-            };
-            if let Some(endpoint) = reshiki::projection::growth::Plane::at(&self.tab.doc, a)
-                .and_then(|plane| plane.outward(self.tab.bond_drawing.length))
-            {
-                let preset = self
-                    .tool
-                    .bond_preset()
-                    .unwrap_or(reshiki::bonds::BondPreset::Single);
-                match reshiki::projection::growth::place(&self.tab.doc, a, endpoint, "C", preset) {
-                    Ok((doc, id)) => {
-                        self.tab.doc = doc;
-                        self.tab.selected = vec![id];
-                    }
-                    Err(error) => {
-                        self.status = error;
-                        self.error = true;
-                        return;
-                    }
-                }
-            } else {
-                let end = editing::bond_extension(&self.tab.doc, start, Some(a), order);
-                let ratio =
-                    self.tab.bond_drawing.length / reshiki::style::DEFAULT.bond_length_world;
-                let end = start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
-                let b = self.tab.doc.add_atom("C", end);
-                self.tab.doc.add_bond(a, b, order, display);
-                self.apply_current_bond_preset(a, b);
-                self.tab.selected = vec![b];
             }
         }
         self.changed(before);
+    }
+    pub(super) fn default_bond_from_atom(&mut self, a: u64) -> bool {
+        let (order, display) = self.bond_style();
+        let Some(start) = self.tab.doc.atom(a).map(|a| a.position) else {
+            self.status = "The bond's starting atom is unavailable".into();
+            self.error = true;
+            return false;
+        };
+        if let Some(endpoint) = reshiki::projection::growth::Plane::at(&self.tab.doc, a)
+            .and_then(|plane| plane.outward(self.tab.bond_drawing.length))
+        {
+            let preset = self
+                .tool
+                .bond_preset()
+                .unwrap_or(reshiki::bonds::BondPreset::Single);
+            match reshiki::projection::growth::place(&self.tab.doc, a, endpoint, "C", preset) {
+                Ok((doc, id)) => {
+                    self.tab.doc = doc;
+                    self.tab.selected = vec![id];
+                }
+                Err(error) => {
+                    self.status = error;
+                    self.error = true;
+                    return false;
+                }
+            }
+        } else {
+            let end = editing::bond_extension(&self.tab.doc, start, Some(a), order);
+            let ratio = self.tab.bond_drawing.length / reshiki::style::DEFAULT.bond_length_world;
+            let end = start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
+            let b = self.tab.doc.add_atom("C", end);
+            self.tab.doc.add_bond(a, b, order, display);
+            self.apply_current_bond_preset(a, b);
+            self.tab.selected = vec![b];
+        }
+        true
     }
 }
 

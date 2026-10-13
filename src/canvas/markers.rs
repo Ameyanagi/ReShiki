@@ -14,6 +14,34 @@ pub(super) struct Markers {
 }
 
 impl Markers {
+    pub fn text_hover(
+        doc: &Document,
+        id: u64,
+        frame: &mut layered::Frame<'_>,
+        camera: Camera,
+        bounds: Rectangle,
+    ) {
+        let Some((lo, hi)) = doc
+            .annotations
+            .iter()
+            .find(|a| a.id == id)
+            .and_then(reshiki::atom_text::text_ink_bounds)
+        else {
+            return;
+        };
+        let scale = camera.zoom.clamp(0.15, 1.);
+        let lo = camera.screen(lo, bounds) - iced::Vector::new(3. * scale, 3. * scale);
+        let hi = camera.screen(hi, bounds) + iced::Vector::new(3. * scale, 3. * scale);
+        let path = Path::rectangle(lo, Size::new(hi.x - lo.x, hi.y - lo.y));
+        // Match the ordinary atom-hover outline, including its zoom behavior.
+        frame.stroke(
+            &path,
+            Stroke::default()
+                .with_width(1.4 * scale.sqrt())
+                .with_color(ACCENT),
+        );
+    }
+
     pub fn new(doc: &Document, ids: &[u64]) -> Self {
         Self::build(doc, ids, true)
     }

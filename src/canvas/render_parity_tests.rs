@@ -728,6 +728,7 @@ async fn paper_layers_match_captured_baseline() {
         start,
         pressed: start,
         source: None,
+        source_text: None,
         points: vec![start],
         snaking: false,
         dragged: true,
@@ -894,28 +895,42 @@ async fn paper_layers_match_captured_baseline() {
                 canvas.tool = Tool::Bond(1);
                 state.gesture = Some(Gesture::Draw {
                     start: position(o),
+                    pressed: position(o),
                     id: Some(o),
+                    text: None,
                 });
                 Some(offset(position(o), 40., -25.))
             }
             "dotted" => {
                 canvas.tool = Tool::StyledBond(reshiki::bonds::BondPreset::Dotted);
                 let start = World::new(560., 200.);
-                state.gesture = Some(Gesture::Draw { start, id: None });
+                state.gesture = Some(Gesture::Draw {
+                    start,
+                    pressed: start,
+                    id: None,
+                    text: None,
+                });
                 Some(offset(start, 40., 0.))
             }
             "atom" => {
                 canvas.tool = Tool::Atom;
                 state.gesture = Some(Gesture::Draw {
                     start: position(n),
+                    pressed: position(n),
                     id: Some(n),
+                    text: None,
                 });
                 Some(offset(position(n), 0., 45.))
             }
             "arrow_draw" => {
                 canvas.tool = Tool::Arrow;
                 let start = World::new(300., 40.);
-                state.gesture = Some(Gesture::Draw { start, id: None });
+                state.gesture = Some(Gesture::Draw {
+                    start,
+                    pressed: start,
+                    id: None,
+                    text: None,
+                });
                 Some(offset(start, 80., 10.))
             }
             "arrow_selected" => {
@@ -951,7 +966,12 @@ async fn paper_layers_match_captured_baseline() {
             "line_short" | "line_long" => {
                 canvas.selected = &all;
                 let start = World::new(560., 250.);
-                state.gesture = Some(Gesture::Draw { start, id: None });
+                state.gesture = Some(Gesture::Draw {
+                    start,
+                    pressed: start,
+                    id: None,
+                    text: None,
+                });
                 Some(offset(
                     start,
                     if mode == "line_short" { 1. } else { 40. },

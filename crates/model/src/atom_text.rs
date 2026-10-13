@@ -10,6 +10,11 @@ fn known_group(text: &str) -> bool {
 }
 mod hydride;
 pub use hydride::entry;
+mod from_text;
+pub use from_text::{
+    TEXT_TOO_LONG, text_atom_position, text_atom_refusal, text_first_glyph_center, text_ink_bounds,
+    text_to_atom,
+};
 
 /// Unambiguous condensed spellings of existing structural definitions.
 fn formula_group(text: &str) -> Option<(&'static str, &'static str)> {

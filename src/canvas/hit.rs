@@ -1,6 +1,6 @@
 //! Hit testing: which objects a pointer position or region selects, and where a drawn bond attaches.
 
-use super::{Document, World};
+use super::{Document, Tool, World};
 use iced::Vector;
 use reshiki::chains::BondDrawing;
 
@@ -74,8 +74,25 @@ pub(super) fn bond_target_with(
     end: World,
     source: Option<u64>,
     radius: f32,
-    mut drawing: BondDrawing,
+    drawing: BondDrawing,
 ) -> (World, Option<u64>) {
+    let (snapped, pointer, near_snap) = bond_targets(doc, start, end, source, radius, drawing);
+    match pointer.or(near_snap) {
+        Some((position, id)) => (position, Some(id)),
+        None => (snapped, None),
+    }
+}
+/// The free endpoint, the atom under the pointer and the atom at the snapped
+/// endpoint, each as (position, id).
+type BondTargets = (World, Option<(World, u64)>, Option<(World, u64)>);
+fn bond_targets(
+    doc: &Document,
+    start: World,
+    end: World,
+    source: Option<u64>,
+    radius: f32,
+    mut drawing: BondDrawing,
+) -> BondTargets {
     let origin = source.and_then(|id| doc.atom(id));
     if origin.is_some_and(|a| !a.centroid.is_empty()) {
         // A centre-to-metal contact often extends beyond the ring radius.
@@ -102,12 +119,44 @@ pub(super) fn bond_target_with(
         .and_then(|id| plane_endpoint(doc, id, end, drawing))
         .map(|p| p.position)
         .unwrap_or_else(|| drawing.endpoint(start, end));
-    if let Some(atom) = nearest(end).or_else(|| nearest(snapped)) {
-        (atom.position, Some(atom.id))
-    } else {
-        (snapped, None)
+    let target = |p: World| nearest(p).map(|atom| (atom.position, atom.id));
+    (snapped, target(end), target(snapped))
+}
+/// A caption must own the hit and the pointer must be on its ink, without padding.
+pub fn bond_text_at(doc: &Document, p: World, radius: f32) -> Option<u64> {
+    let id = hit_object(doc, p, radius)?;
+    let annotation = doc.annotations.iter().find(|a| a.id == id)?;
+    let (lo, hi) = reshiki::atom_text::text_ink_bounds(annotation)?;
+    (p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y).then_some(id)
+}
+
+/// An atom under the pointer wins, then a caption under the pointer, then an
+/// atom at the snapped endpoint: a fixed length never redirects a drop that
+/// lands on caption ink.
+pub(super) fn bond_target_with_text(
+    doc: &Document,
+    start: World,
+    end: World,
+    source: (Option<u64>, Option<u64>),
+    radius: f32,
+    drawing: BondDrawing,
+    tool: Tool,
+) -> (World, Option<u64>, Option<u64>) {
+    let (snapped, pointer, near_snap) = bond_targets(doc, start, end, source.0, radius, drawing);
+    if pointer.is_none()
+        && tool.bonds_from_text()
+        && let Some(id) = bond_text_at(doc, end, radius).filter(|id| Some(*id) != source.1)
+        && reshiki::atom_text::text_atom_refusal(doc, id).is_none()
+        && let Some(position) = reshiki::atom_text::text_atom_position(doc, id)
+    {
+        return (position, None, Some(id));
+    }
+    match pointer.or(near_snap) {
+        Some((position, id)) => (position, Some(id), None),
+        None => (snapped, None, None),
     }
 }
+
 pub(super) fn plane_endpoint(
     doc: &Document,
     id: u64,
