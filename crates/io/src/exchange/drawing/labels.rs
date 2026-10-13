@@ -210,7 +210,12 @@ impl Writer<'_> {
             if super::ligands::implicit_carbon(a, doc) {
                 self.tree.set(node, "IgnoreWarnings", "yes")?;
             }
-            if a.explicit_h != 0 && !super::ligands::implicit_carbon(a, doc) {
+            // A typed charge or other explicit label without hydrogens (N+,
+            // O-) writes zero, or import would add automatic hydrogens. Plain
+            // carbons keep their skeletal vertex in external readers.
+            let no_hydrogens =
+                a.no_implicit && a.explicit_h == 0 && (a.charge != 0 || a.element != "C");
+            if (a.explicit_h != 0 || no_hydrogens) && !super::ligands::implicit_carbon(a, doc) {
                 self.tree
                     .set(node, "NumHydrogens", a.explicit_h.to_string())?;
             }

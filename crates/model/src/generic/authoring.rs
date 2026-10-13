@@ -110,8 +110,17 @@ pub fn apply_label(doc: &Document, id: u64, text: &str) -> Result<Option<Documen
             break;
         }
     }
+    // A trailing sign is a charge (O2-, SO4 2-), never a range, and so is a
+    // charged hydride (NH4-2, CH2-3). A space before the range separates it
+    // from the label's own digits (CH2 1-3).
     if base.is_none()
-        && let Some(start) = text.find(|c: char| c.is_ascii_digit())
+        && !text.trim_end().ends_with(['+', '-', '−', '⁺', '⁻'])
+        && !crate::atom_text::charged_label(text)
+        && let Some(start) = text
+            .split_once(char::is_whitespace)
+            .filter(|(_, range)| range.trim_start().starts_with(|c: char| c.is_ascii_digit()))
+            .map(|(label, _)| label.len())
+            .or_else(|| text.find(|c: char| c.is_ascii_digit()))
         && text.get(start..).is_some_and(|s| s.contains('-'))
     {
         base = Some((

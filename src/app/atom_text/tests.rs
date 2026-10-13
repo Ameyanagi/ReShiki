@@ -13,9 +13,10 @@ fn accepting_an_unchanged_label_preserves_imported_atom_properties() -> Result<(
         atom.isotope = 2;
         let before = app.tab.doc.clone();
         let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
-        if element == "H" {
-            assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.input, "H");
-        }
+        assert_eq!(
+            app.tab.atom_text.as_ref().ok_or("Draft")?.input,
+            format!("{element}+")
+        );
         let _ = app.update(Message::AtomText(Action::Apply));
         assert_eq!(app.tab.doc, before);
     }
@@ -39,6 +40,36 @@ fn explicit_label_draft_and_history_retain_the_entered_count() -> Result<(), Str
     assert_eq!(app.tab.doc.atom(n).ok_or("N")?.explicit_h, 0);
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc.atom(n).ok_or("N")?.explicit_h, 3);
+    Ok(())
+}
+
+#[test]
+fn charged_atom_label_draft_and_undo_retain_real_atom_properties() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    let metal = app.tab.doc.add_atom("Pt", Point::default());
+    let ligand = app.tab.doc.add_atom("N", Point::new(42., 0.));
+    app.tab.doc.add_bond(ligand, metal, 1, "plain");
+    let original = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(Action::Begin(Some(metal))));
+    let _ = app.update(Message::AtomText(Action::Input("Pd2+".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert!(app.tab.atom_text.is_none());
+    let atom = app.tab.doc.atom(metal).ok_or("Missing palladium")?;
+    assert_eq!(atom.element, "Pd");
+    assert_eq!(atom.charge, 2);
+    assert_eq!(app.tab.doc.bonds, original.bonds);
+    let charged = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(Action::Begin(Some(metal))));
+    assert_eq!(
+        app.tab.atom_text.as_ref().ok_or("Missing draft")?.input,
+        "Pd2+"
+    );
+    let _ = app.update(Message::AtomText(Action::Cancel));
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(app.tab.doc, charged);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atom(metal), original.atom(metal));
+    assert_eq!(app.tab.doc, original);
     Ok(())
 }
 

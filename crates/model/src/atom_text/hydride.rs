@@ -4,22 +4,23 @@ pub(super) struct Hydride {
     pub element: String,
     pub hydrogens: u32,
     pub charge: i32,
+    pub charged_element: bool,
 }
 
 pub(super) fn parse(input: &str) -> Result<Option<Hydride>, String> {
     let normalized: String = input
         .chars()
         .map(|c| match c {
-            '₀' => '0',
-            '₁' => '1',
-            '₂' => '2',
-            '₃' => '3',
-            '₄' => '4',
-            '₅' => '5',
-            '₆' => '6',
-            '₇' => '7',
-            '₈' => '8',
-            '₉' => '9',
+            '₀' | '⁰' => '0',
+            '₁' | '¹' => '1',
+            '₂' | '²' => '2',
+            '₃' | '³' => '3',
+            '₄' | '⁴' => '4',
+            '₅' | '⁵' => '5',
+            '₆' | '⁶' => '6',
+            '₇' | '⁷' => '7',
+            '₈' | '⁸' => '8',
+            '₉' | '⁹' => '9',
             '⁺' => '+',
             '⁻' | '−' => '-',
             other => other,
@@ -51,6 +52,9 @@ pub(super) fn parse(input: &str) -> Result<Option<Hydride>, String> {
         })
         .find(|(_, count)| count.chars().all(|c| c.is_ascii_digit()));
     let parsed = if let Some((element, count)) = forward {
+        if count.len() > 1 && charge_suffix.is_some_and(|(_, suffix)| suffix.is_empty()) {
+            return Err("Write the charge after the sign, for example NH4+2".into());
+        }
         Some((element, count))
     } else if let Some(rest) = body.strip_prefix('H') {
         let split = rest
@@ -63,7 +67,7 @@ pub(super) fn parse(input: &str) -> Result<Option<Hydride>, String> {
         None
     };
     let Some((element, count)) = parsed else {
-        return Ok(None);
+        return charged_element(&normalized);
     };
     if !count.chars().all(|c| c.is_ascii_digit()) {
         return Ok(None);
@@ -97,25 +101,85 @@ pub(super) fn parse(input: &str) -> Result<Option<Hydride>, String> {
         element: element.into(),
         hydrogens,
         charge,
+        charged_element: false,
+    }))
+}
+
+fn charged_element(input: &str) -> Result<Option<Hydride>, String> {
+    let split = input
+        .find(|c: char| !c.is_ascii_alphabetic())
+        .unwrap_or(input.len());
+    let element = input.get(..split).ok_or("Invalid element")?;
+    if !crate::editing::ELEMENTS.contains(&element) {
+        return Ok(None);
+    }
+    let suffix = input.get(split..).ok_or("Invalid charge")?;
+    let (sign, count) = if let Some(count) = suffix.strip_prefix('+') {
+        ('+', count)
+    } else if let Some(count) = suffix.strip_prefix('-') {
+        ('-', count)
+    } else if let Some(count) = suffix.strip_suffix('+') {
+        ('+', count)
+    } else if let Some(count) = suffix.strip_suffix('-') {
+        ('-', count)
+    } else {
+        return Ok(None);
+    };
+    if !count.chars().all(|c| c.is_ascii_digit()) {
+        return Ok(None);
+    }
+    let magnitude = if count.is_empty() {
+        1
+    } else {
+        count
+            .parse::<i32>()
+            .map_err(|_| "Enter a charge from -8 to +8")?
+    };
+    if !(1..=8).contains(&magnitude) {
+        return Err("Enter a charge from -8 to +8".into());
+    }
+    Ok(Some(Hydride {
+        element: element.into(),
+        hydrogens: 0,
+        charge: if sign == '+' { magnitude } else { -magnitude },
+        charged_element: true,
     }))
 }
 
 pub fn entry(atom: &crate::document::Atom) -> String {
-    if atom.explicit_h == 0 && !atom.no_implicit || matches!(atom.element.as_str(), "*" | "H") {
+    // A typed H+ or H- has no hydrogens of its own; other H atoms stay bare.
+    let charged_hydrogen =
+        atom.element == "H" && atom.no_implicit && atom.explicit_h == 0 && atom.charge != 0;
+    if atom.explicit_h == 0 && !atom.no_implicit
+        || atom.element == "*"
+        || atom.element == "H" && !charged_hydrogen
+    {
         return atom
             .display
             .variable
             .clone()
             .unwrap_or_else(|| atom.element.clone());
     }
+    let sign = if atom.charge > 0 { '+' } else { '-' };
+    let magnitude = atom.charge.unsigned_abs();
+    if atom.explicit_h == 0 && atom.charge != 0 {
+        // A charged element without hydrogens: digits, then the sign (Pd2+, Na+).
+        let amount = if magnitude > 1 {
+            magnitude.to_string()
+        } else {
+            String::new()
+        };
+        return format!("{}{amount}{sign}", atom.element);
+    }
     let mut text = format!("{}H{}", atom.element, atom.explicit_h);
     if atom.explicit_h == 1 {
         text.pop();
     }
     if atom.charge != 0 {
-        text.push(if atom.charge > 0 { '+' } else { '-' });
-        if atom.charge.unsigned_abs() > 1 {
-            text.push_str(&atom.charge.unsigned_abs().to_string());
+        text.push(sign);
+        // parse rejects a bare sign after a multi-digit count (NH42+), so write NH12+1.
+        if magnitude > 1 || atom.explicit_h >= 10 {
+            text.push_str(&magnitude.to_string());
         }
     }
     text

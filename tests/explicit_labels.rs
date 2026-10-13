@@ -226,3 +226,85 @@ fn explicit_labels_are_reversible_and_invalid_chemistry_is_still_drawable() -> R
     assert_eq!(source.atom(n).ok_or("Missing N")?.explicit_h, 0);
     Ok(())
 }
+
+#[test]
+fn typed_metal_charge_keeps_bonded_ligands_and_renders_a_formal_charge() -> Result<(), String> {
+    for order in [1, 5] {
+        let mut source = Document::default();
+        let metal = source.add_atom("Pt", Point::default());
+        let ligand = source.add_atom("N", Point::new(84., 0.));
+        source.add_bond(ligand, metal, order, "plain");
+        let doc = atom_text::apply(&source, metal, "Pd2+", Mode::Auto)?;
+        let atom = doc.atom(metal).ok_or("Missing palladium")?;
+        assert_eq!(atom.element, "Pd");
+        assert_eq!(atom.charge, 2);
+        assert!(atom.no_implicit);
+        assert_eq!(atom.explicit_h, 0);
+        assert_eq!(atom.label_h, 0);
+        assert!(atom.display.variable.is_none());
+        assert_eq!(doc.atoms.len(), source.atoms.len());
+        assert_eq!(doc.bonds, source.bonds);
+        assert_eq!(doc.atom(ligand), source.atom(ligand));
+        assert!(
+            scene::primitives(&doc)
+                .iter()
+                .any(|p| matches!(p, Primitive::Text { text, .. } if text == "2+")),
+            "The formal charge must be drawn independently of the element label"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn typed_charges_keep_their_missing_hydrogens_through_chemdraw_files()
+-> Result<(), Box<dyn std::error::Error>> {
+    let engine = LocalEngine::default();
+    // Without NumHydrogens="0" these would come back as NH- and CH+.
+    for (label, element, bonds) in [("N-", "N", 1), ("C+", "C", 2)] {
+        let mut source = Document::default();
+        let id = source.add_atom("O", Point::default());
+        for index in 0..bonds {
+            let neighbor = source.add_atom("C", Point::new(84., 40. * index as f32));
+            source.add_bond(id, neighbor, 1, "plain");
+        }
+        let doc = atom_text::apply(&source, id, label, Mode::Auto)?;
+        for format in ["cdxml", "cdx"] {
+            let mut request = Request::molecule("export", doc.clone());
+            request.format = Some(format.into());
+            let output = engine
+                .request(request)
+                .await?
+                .output
+                .ok_or("Missing export")?;
+            let imported = engine.request(Request::import(format, &output)).await?;
+            let back = imported.document.ok_or("Missing imported drawing")?;
+            let atom = back
+                .atoms
+                .iter()
+                .find(|a| a.element == element && a.charge != 0)
+                .ok_or("Lost the charged atom")?;
+            assert!(atom.no_implicit, "{label} {format}");
+            assert_eq!((atom.explicit_h, atom.label_h), (0, 0), "{label} {format}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn typed_sodium_charge_removes_hydrogens_from_a_bonded_atom() -> Result<(), String> {
+    let mut source = Document::default();
+    let atom_id = source.add_atom("C", Point::default());
+    let neighbor = source.add_atom("O", Point::new(84., 0.));
+    source.add_bond(atom_id, neighbor, 1, "plain");
+    source.atom_mut(atom_id).ok_or("Missing carbon")?.label_h = 3;
+    let doc = atom_text::apply(&source, atom_id, "Na+", Mode::Auto)?;
+    let atom = doc.atom(atom_id).ok_or("Missing sodium")?;
+    assert_eq!(atom.element, "Na");
+    assert_eq!(atom.charge, 1);
+    assert!(atom.no_implicit);
+    assert_eq!(atom.explicit_h, 0);
+    assert_eq!(atom.label_h, 0);
+    assert!(atom.display.variable.is_none());
+    assert_eq!(doc.bonds, source.bonds);
+    Ok(())
+}

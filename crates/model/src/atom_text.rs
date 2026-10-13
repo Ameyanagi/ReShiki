@@ -45,13 +45,23 @@ pub fn description(text: &str, mode: Mode) -> &'static str {
         || known_group(text.trim()) && !ELEMENTS.contains(&text.trim())
     {
         "A real chemical group. Expand it later from Abbreviations. Requires a single-bond endpoint."
-    } else if hydride::parse(text.trim()).is_ok_and(|h| h.is_some()) {
-        "An atom with the entered hydrogen count. Checking chemistry will not rewrite this label. Type the element alone to restore automatic hydrogens."
+    } else if let Ok(Some(explicit)) = hydride::parse(text.trim()) {
+        if explicit.charged_element {
+            "An element with the typed charge. Hydrogens are not added; type the element alone to restore automatic hydrogens."
+        } else {
+            "An atom with the entered hydrogen count. Checking chemistry will not rewrite this label. Type the element alone to restore automatic hydrogens."
+        }
     } else if ELEMENTS.contains(&text.trim()) || text.trim() == "*" {
         "An element symbol (or * for a dummy atom)."
     } else {
         "Text on a dummy atom; existing bonds stay connected."
     }
+}
+
+/// Text in the charged element or hydride grammar (Pd2+, NH4-2) is one
+/// charged atom, so generic labels never read its digits as a link range.
+pub(crate) fn charged_label(text: &str) -> bool {
+    hydride::parse(text.trim()).is_ok_and(|parsed| parsed.is_some_and(|h| h.charge != 0))
 }
 
 /// Returns a complete candidate; failures never partially modify the drawing.

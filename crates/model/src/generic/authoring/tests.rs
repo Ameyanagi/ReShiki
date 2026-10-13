@@ -6,6 +6,29 @@ use crate::generic::{
 use crate::graphics::GraphicKind;
 
 #[test]
+fn trailing_charges_bypass_bare_link_ranges() -> Result<(), String> {
+    let source = chain(&["C", "C", "C"]);
+    for text in ["O2-", "SO4 2-", "NO2-", "Pd2+", "O2−", "O2⁻", "Pd2⁺"] {
+        assert_eq!(super::apply_label(&source, 2, text), Ok(None), "{text}");
+    }
+    // A charged hydride with a sign-first charge is one atom, not a range.
+    for text in ["NH4-2", "CH2-3", "CH21-3", "NH12-1"] {
+        assert_eq!(super::apply_label(&source, 2, text), Ok(None), "{text}");
+    }
+    let result = super::apply_label(&source, 2, "CH2 1-3")?.ok_or("Missing link node")?;
+    assert_eq!(
+        result.generic.links,
+        vec![LinkNode {
+            atom: 2,
+            min: 1,
+            max: 3,
+        }]
+    );
+    assert_eq!(result.atom(2).ok_or("Missing atom")?.explicit_h, 2);
+    Ok(())
+}
+
+#[test]
 fn alternative_lists_keep_prefixes_isotopes_and_choice_kinds() {
     for (text, choices, excluded) in [
         (
@@ -212,12 +235,7 @@ fn link_labels_accept_delimited_hydrides_and_preserve_the_source() {
             Some(text)
         );
     }
-    // Current behavior: CH21-3 is split at the first digit, producing 21-3.
     for (text, message) in [
-        (
-            "CH21-3",
-            "Repeat counts must be an ordered range from 1 to 1000",
-        ),
         (
             "(CH2)0-3",
             "Repeat counts must be an ordered range from 1 to 1000",
