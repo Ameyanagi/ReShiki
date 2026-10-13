@@ -12,6 +12,27 @@ const RETAINED_SUFFIX: &str = retained_text!("");
 
 pub(super) const ID_LIMIT: &str = "Generic object ID limit exceeded";
 
+pub(super) fn text_label(atom: &crate::document::Atom) -> Option<&str> {
+    if atom.element == "*" && atom.attachment.is_none() && atom.centroid.is_empty() {
+        atom.display
+            .variable
+            .as_deref()
+            .filter(|label| !label.is_empty())
+    } else {
+        None
+    }
+}
+
+pub(super) fn repeat_text_label(label: &str) -> String {
+    format!(
+        "{label} is a text label, not atoms. Draw the repeat unit's atoms (for example O, C=O, CH2) to expand it."
+    )
+}
+
+pub(super) fn outside_text_label(label: &str) -> String {
+    format!("{label} is a text label, not atoms. Draw its atoms to expand it.")
+}
+
 /// A refusal that leaves the source drawing unchanged.
 pub(super) fn retained(reason: &str) -> String {
     format!("{reason}{RETAINED_SUFFIX}")

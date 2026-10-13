@@ -195,3 +195,220 @@ fn selected_bond_anchor_seeds_both_endpoints_without_a_target_bond() {
         assert!(!super::component_intersects(&doc, &[id]));
     }
 }
+
+fn flagged_double_bond(doc: &mut Document, kind: &str) {
+    let bond = doc.bonds.first_mut().unwrap();
+    bond.order = 2;
+    match kind {
+        "captured" => bond.stereo = Some("any".into()),
+        "authority" => bond.stereo_authoritative = true,
+        "controls" => bond.stereo_atoms = vec![3, 4],
+        "marker" => bond.display = "wavy".into(),
+        _ => unreachable!(),
+    }
+    assert!(bond.specifies_stereo());
+}
+
+fn cyclic_double_bond(size: usize, kind: &str) -> Document {
+    let mut doc = chain(&vec!["C"; size]);
+    doc.add_bond(size as u64, 1, 1, "plain");
+    flagged_double_bond(&mut doc, kind);
+    doc
+}
+
+fn depiction_accepts(doc: &Document, atom: u64) -> bool {
+    crate::generic::depiction::Plan::new(
+        doc,
+        &std::collections::HashSet::from([atom]),
+        &mut crate::generic::Work::new(usize::MAX),
+    )
+    .is_ok()
+}
+
+#[test]
+fn terminal_double_bond_import_flags_do_not_block_direct_or_neighbor_guards() {
+    for kind in ["captured", "authority", "controls", "marker"] {
+        let mut doc = chain(&["O", "C", "C", "C"]);
+        flagged_double_bond(&mut doc, kind);
+        for affected in [1, 2, 3] {
+            assert!(
+                super::reject_affected_stereo(&doc, &[affected]).is_ok(),
+                "terminal {kind}, affected atom {affected}"
+            );
+            assert!(depiction_accepts(&doc, affected), "terminal {kind}");
+        }
+    }
+}
+
+#[test]
+fn explicit_hydrogen_of_any_isotope_keeps_a_double_bond_end_guarded() {
+    // Only implicit hydrogens leave an end without E/Z. An explicit isotope
+    // label or a lone N-H defines it ([2H]/C=C/C, [H]/N=C/C); an explicit
+    // protium on =CH2 is refused conservatively.
+    for (end, isotope) in [("C", 0), ("C", 1), ("C", 2), ("C", 3), ("C", 99), ("N", 0)] {
+        let mut doc = chain(&[end, "C", "C"]);
+        flagged_double_bond(&mut doc, "authority");
+        assert!(super::reject_affected_stereo(&doc, &[1]).is_ok(), "{end}");
+        assert!(depiction_accepts(&doc, 3), "{end}");
+        let hydrogen = doc.add_atom("H", Point::new(0., 42.));
+        doc.atom_mut(hydrogen).unwrap().isotope = isotope;
+        doc.add_bond(1, hydrogen, 1, "plain");
+        // Adding a bond clears the neighboring stereo flags.
+        flagged_double_bond(&mut doc, "authority");
+        for affected in [1, 2, 3, hydrogen] {
+            assert!(
+                super::reject_affected_stereo(&doc, &[affected]).is_err(),
+                "{end}, isotope {isotope}, affected atom {affected}"
+            );
+        }
+        assert!(!depiction_accepts(&doc, 3), "{end}, isotope {isotope}");
+    }
+}
+
+#[test]
+fn dative_and_hydrogen_bond_cycles_do_not_exempt_double_bond_stereo() {
+    // N1/C=C/N->[Zn]<-1 and an N-H...N hydrogen bond close no ring in
+    // chemistry ring perception, so the C=C keeps its E/Z.
+    use crate::bonds::DATIVE;
+    for (closure, order) in [("Zn", DATIVE), ("H", 0)] {
+        let mut doc = chain(&["N", "C", "C", "N"]);
+        doc.bonds.swap(0, 1);
+        let closing = doc.add_atom(closure, Point::new(63., 42.));
+        if order == DATIVE {
+            doc.add_bond(4, closing, DATIVE, "plain");
+            doc.add_bond(1, closing, DATIVE, "plain");
+        } else {
+            doc.add_bond(4, closing, 1, "plain");
+            doc.add_bond(closing, 1, 0, "plain");
+        }
+        flagged_double_bond(&mut doc, "authority");
+        for affected in [2, 3] {
+            assert!(
+                super::reject_affected_stereo(&doc, &[affected]).is_err(),
+                "{closure}, affected atom {affected}"
+            );
+        }
+        assert!(!depiction_accepts(&doc, 2), "{closure}");
+        // The same cycle through ordinary bonds is a five-member ring.
+        doc.bonds
+            .iter_mut()
+            .filter(|bond| bond.order == order)
+            .for_each(|bond| bond.order = 1);
+        assert!(
+            super::reject_affected_stereo(&doc, &[2]).is_ok(),
+            "{closure}"
+        );
+        assert!(depiction_accepts(&doc, 2), "{closure}");
+    }
+}
+
+#[test]
+fn small_ring_double_bond_import_flags_do_not_block_direct_or_neighbor_guards() {
+    for size in 3..=7 {
+        for kind in ["captured", "authority", "controls", "marker"] {
+            let doc = cyclic_double_bond(size, kind);
+            for affected in [1, 2, 3] {
+                assert!(
+                    super::reject_affected_stereo(&doc, &[affected]).is_ok(),
+                    "ring size {size}, {kind}, affected atom {affected}"
+                );
+                assert!(
+                    depiction_accepts(&doc, affected),
+                    "ring size {size}, {kind}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn double_bond_uses_the_shortest_alternative_ring_path() {
+    let mut doc = cyclic_double_bond(9, "authority");
+    assert!(super::reject_affected_stereo(&doc, &[1]).is_err());
+    doc.add_bond(3, 8, 1, "plain");
+    flagged_double_bond(&mut doc, "authority");
+    assert!(super::reject_affected_stereo(&doc, &[1]).is_ok());
+    assert!(super::reject_affected_stereo(&doc, &[3]).is_ok());
+    assert!(depiction_accepts(&doc, 5));
+}
+
+#[test]
+fn acyclic_and_eight_member_or_larger_double_bond_stereo_remains_guarded() {
+    for kind in ["captured", "authority", "controls", "marker"] {
+        let mut acyclic = chain(&["C", "C", "C", "C"]);
+        acyclic.bonds.swap(0, 1);
+        flagged_double_bond(&mut acyclic, kind);
+        let mut sources = vec![(acyclic, 1)];
+        sources.extend([8, 9].map(|size| (cyclic_double_bond(size, kind), 3)));
+        for (doc, neighbor) in sources {
+            assert!(super::reject_affected_stereo(&doc, &[2]).is_err(), "{kind}");
+            assert!(!depiction_accepts(&doc, 4), "{kind}");
+            if matches!(kind, "authority" | "marker") {
+                assert!(
+                    super::reject_affected_stereo(&doc, &[neighbor]).is_err(),
+                    "{kind}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn small_ring_or_terminal_single_bond_stereo_remains_guarded() {
+    for kind in ["captured", "authority", "controls", "marker"] {
+        for mut doc in [chain(&["C", "C", "C"]), cyclic_double_bond(6, kind)] {
+            flagged_double_bond(&mut doc, kind);
+            doc.bonds.first_mut().unwrap().order = 1;
+            assert!(super::reject_affected_stereo(&doc, &[1]).is_err(), "{kind}");
+            assert!(!depiction_accepts(&doc, 3), "{kind}");
+        }
+    }
+}
+
+#[test]
+fn prepared_terminal_and_small_ring_unknown_stereo_metadata_allows_generated_layout() {
+    for mut doc in [
+        chain(&["O", "C", "C", "C"]),
+        cyclic_double_bond(6, "captured"),
+    ] {
+        flagged_double_bond(&mut doc, "captured");
+        doc.bonds.first_mut().unwrap().stereo_authoritative = true;
+        let before = doc.clone();
+        let molecule = crate::chemistry::document::prepare(&doc).unwrap();
+        let metadata = molecule.state.metadata.bonds.first().unwrap();
+        assert!(metadata.stereo != 0 || metadata.unknown_stereo);
+        let mut work = crate::generic::Work::new(crate::generic::Limits::default().max_work);
+        crate::generic::depiction::Plan::new(
+            &doc,
+            &std::collections::HashSet::from([3]),
+            &mut work,
+        )
+        .unwrap()
+        .finish(&mut doc, &molecule, &mut work)
+        .unwrap();
+        crate::generic::drawing_test_support::same_except_positions(doc, &before);
+    }
+}
+
+#[test]
+fn prepared_real_alkene_stereo_still_rejects_generated_layout_atomically() {
+    let mut doc = chain(&["C", "C", "C", "C"]);
+    doc.bonds.get_mut(1).unwrap().order = 2;
+    doc.atom_mut(1).unwrap().position.y = 42.;
+    doc.atom_mut(4).unwrap().position.y = -42.;
+    assert!(doc.bonds.iter().all(|bond| !bond.specifies_stereo()));
+    let molecule = crate::chemistry::document::prepare(&doc).unwrap();
+    assert!(molecule.state.metadata.bonds.iter().any(|m| m.stereo > 1));
+    let before = doc.clone();
+    let mut work = crate::generic::Work::new(crate::generic::Limits::default().max_work);
+    let error = crate::generic::depiction::Plan::new(
+        &doc,
+        &std::collections::HashSet::from([1]),
+        &mut work,
+    )
+    .unwrap()
+    .finish(&mut doc, &molecule, &mut work)
+    .unwrap_err();
+    assert!(error.contains("component stereochemistry"));
+    assert_eq!(doc, before);
+}

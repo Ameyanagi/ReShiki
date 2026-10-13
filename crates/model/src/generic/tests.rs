@@ -4,6 +4,323 @@ use crate::{
     document::Point,
 };
 
+#[derive(Clone, Copy)]
+enum HeteroRepeat {
+    Polyester,
+    Pet,
+    Polyether,
+}
+
+fn hetero_repeat(kind: HeteroRepeat, imported_3d: bool) -> Document {
+    use crate::graphics::{BracketSides, Graphic, GraphicKind};
+    let mut source = match kind {
+        HeteroRepeat::Polyester => {
+            let mut source = chain(&["C", "O", "C", "C", "C"]);
+            let oxygen = source.add_atom("O", Point::new(84., -42.));
+            source.add_bond(3, oxygen, 2, "plain");
+            source
+        }
+        HeteroRepeat::Polyether => chain(&["C", "O", "C", "C", "C"]),
+        HeteroRepeat::Pet => {
+            let mut source = chain(&["C", "O", "C", "C", "O", "C"]);
+            let ring: Vec<_> = [
+                (252., 0.),
+                (273., -36.),
+                (315., -36.),
+                (336., 0.),
+                (315., 36.),
+                (273., 36.),
+            ]
+            .into_iter()
+            .map(|(x, y)| source.add_atom("C", Point::new(x, y)))
+            .collect();
+            source.add_bond(6, ring[0], 1, "plain");
+            for i in 0..6 {
+                source.add_bond(
+                    ring[i],
+                    ring[(i + 1) % 6],
+                    if i % 2 == 0 { 2 } else { 1 },
+                    "plain",
+                );
+            }
+            let carbonyl = source.add_atom("C", Point::new(378., 0.));
+            source.add_bond(ring[3], carbonyl, 1, "plain");
+            let end = source.add_atom("C", Point::new(420., 0.));
+            source.add_bond(carbonyl, end, 1, "plain");
+            for (carbon, x) in [(6, 210.), (carbonyl, 378.)] {
+                let oxygen = source.add_atom("O", Point::new(x, -42.));
+                source.add_bond(carbon, oxygen, 2, "plain");
+            }
+            source
+        }
+    };
+    if imported_3d {
+        // crates/io/src/chemistry/molfile/import.rs marks every 3D order-2 bond.
+        for bond in source.bonds.iter_mut().filter(|b| b.order == 2) {
+            bond.stereo_authoritative = true;
+            bond.projection = true;
+        }
+    }
+    let bracket = source.next_id();
+    let right = if matches!(kind, HeteroRepeat::Pet) {
+        398.
+    } else {
+        146.
+    };
+    source.graphics.push(Graphic::dragged(
+        bracket,
+        GraphicKind::Brackets,
+        Point::new(20., -10.),
+        Point::new(right, 10.),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    ));
+    define_bracket(&source, bracket, "3", RepeatPattern::HeadToTail).unwrap()
+}
+
+fn canonical_smiles(doc: &Document) -> String {
+    let molecule = crate::chemistry::document::prepare(doc).unwrap();
+    crate::chemistry::smiles::write::write(&molecule.state, Default::default())
+        .unwrap()
+        .text
+}
+
+fn assert_hetero_product(product: &Document, kind: HeteroRepeat) {
+    use super::drawing_test_support::formula;
+    let (expected_formula, atoms, bonds, expected_smiles) = match kind {
+        HeteroRepeat::Polyester => ("C8H12O6", 14, 13, "COC(=O)COC(=O)COC(=O)CC"),
+        HeteroRepeat::Pet => {
+            const PET: &str =
+                "COCCOC(=O)c1ccc(C(=O)OCCOC(=O)c2ccc(C(=O)OCCOC(=O)c3ccc(C(=O)C)cc3)cc2)cc1";
+            ("C32H30O12", 44, 46, PET)
+        }
+        HeteroRepeat::Polyether => ("C8H18O3", 11, 10, "COCCOCCOCCC"),
+    };
+    assert_eq!(formula(product), expected_formula);
+    assert_eq!(product.atoms.len(), atoms);
+    assert_eq!(product.bonds.len(), bonds);
+    let expected = crate::chemistry::smiles::read(expected_smiles).unwrap();
+    let expected =
+        crate::chemistry::smiles::write::write(&expected.prepared.state, Default::default())
+            .unwrap()
+            .text;
+    assert_eq!(canonical_smiles(product), expected);
+    assert!(!present(product));
+}
+
+fn check_hetero_expansion(kind: HeteroRepeat, drawing: bool, imported_3d: bool) {
+    let source = hetero_repeat(kind, imported_3d);
+    let before = source.clone();
+    let products = if drawing {
+        expand_drawings(&source, Limits::default())
+            .unwrap()
+            .into_iter()
+            .map(|p| p.document)
+            .collect::<Vec<_>>()
+    } else {
+        expand(&source, Limits::default()).unwrap()
+    };
+    assert_eq!(source, before);
+    assert_eq!(products.len(), 1);
+    assert_hetero_product(&products[0], kind);
+}
+
+#[test]
+fn polyester_tight_bracket_expands_chemistry() {
+    check_hetero_expansion(HeteroRepeat::Polyester, false, false);
+}
+
+#[test]
+fn polyester_tight_bracket_expands_drawings() {
+    check_hetero_expansion(HeteroRepeat::Polyester, true, false);
+}
+
+#[test]
+fn pet_tight_bracket_expands_chemistry() {
+    check_hetero_expansion(HeteroRepeat::Pet, false, false);
+}
+
+#[test]
+fn pet_tight_bracket_expands_drawings() {
+    check_hetero_expansion(HeteroRepeat::Pet, true, false);
+}
+
+#[test]
+fn polyether_tight_bracket_expands_chemistry() {
+    check_hetero_expansion(HeteroRepeat::Polyether, false, false);
+}
+
+#[test]
+fn polyether_tight_bracket_expands_drawings() {
+    check_hetero_expansion(HeteroRepeat::Polyether, true, false);
+}
+
+#[test]
+fn imported_3d_hetero_units_expand_chemistry() {
+    for kind in [HeteroRepeat::Polyester, HeteroRepeat::Pet] {
+        check_hetero_expansion(kind, false, true);
+    }
+}
+
+#[test]
+fn imported_3d_hetero_units_expand_drawings() {
+    for kind in [HeteroRepeat::Polyester, HeteroRepeat::Pet] {
+        check_hetero_expansion(kind, true, true);
+    }
+}
+
+#[test]
+fn condensed_hetero_repeat_text_labels_explain_how_to_expand() {
+    for label in ["OCH2CH2", "CO2", "COO", "OCO"] {
+        let source = chain(&["C", "*", "C"]);
+        let mut source = atom_text::apply(&source, 2, label, Mode::Auto).unwrap();
+        source.generic.repeats.push(unit(
+            vec![2],
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 2,
+                outside: 3,
+            },
+            3,
+            3,
+        ));
+        let expected = format!(
+            "{label} is a text label, not atoms. Draw the repeat unit's atoms (for example O, C=O, CH2) to expand it."
+        );
+        assert_eq!(expand(&source, Limits::default()).unwrap_err(), expected);
+        assert_eq!(
+            expand_drawings(&source, Limits::default()).unwrap_err(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn condensed_hetero_link_text_label_names_the_base_label() {
+    let source = atom_text::apply(&chain(&["C", "*", "C"]), 2, "(OCH2CH2)2-4", Mode::Auto).unwrap();
+    const LINK: &str = "OCH2CH2 is a text label, not atoms. Draw the repeat unit's atoms (for example O, C=O, CH2) to expand it.";
+    assert_eq!(expand(&source, Limits::default()).unwrap_err(), LINK);
+    assert_eq!(
+        expand_drawings(&source, Limits::default()).unwrap_err(),
+        LINK
+    );
+}
+
+#[test]
+fn condensed_hetero_end_group_text_label_explains_how_to_expand() {
+    let source =
+        atom_text::apply(&chain(&["C", "C", "C", "*"]), 2, "[CH2]2-2", Mode::Auto).unwrap();
+    let source = atom_text::apply(&source, 4, "OCH2CH2", Mode::Auto).unwrap();
+    const END: &str = "OCH2CH2 is a text label, not atoms. Draw its atoms to expand it.";
+    assert_eq!(expand(&source, Limits::default()).unwrap_err(), END);
+    assert_eq!(
+        expand_drawings(&source, Limits::default()).unwrap_err(),
+        END
+    );
+}
+
+#[test]
+fn real_repeat_alkene_stereo_stays_refused_in_both_modes() {
+    for authority_only in [false, true] {
+        let mut source = chain(&["C", "C", "C", "C", "C", "C"]);
+        source.bonds[2].order = 2;
+        if authority_only {
+            source.bonds[2].stereo_authoritative = true;
+        } else {
+            source.bonds[2].stereo = Some("e".into());
+            source.bonds[2].stereo_atoms = vec![2, 5];
+        }
+        source.generic.repeats.push(unit(
+            vec![2, 3, 4, 5],
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 5,
+                outside: 6,
+            },
+            3,
+            3,
+        ));
+        const STEREO: &str = "Generic expansion involving specified atom or bond stereochemistry is unsupported; the source drawing is retained";
+        assert_eq!(expand(&source, Limits::default()).unwrap_err(), STEREO);
+        assert_eq!(
+            expand_drawings(&source, Limits::default()).unwrap_err(),
+            STEREO
+        );
+    }
+}
+
+#[test]
+fn isotope_and_coordination_alkene_stereo_in_a_repeat_unit_stays_refused() {
+    const STEREO: &str = "Generic expansion involving specified atom or bond stereochemistry is unsupported; the source drawing is retained";
+    for authority_only in [false, true] {
+        // A pendant -CH=CHD ([2H]/C=C/C keeps its E/Z) on a C-C unit.
+        let mut pendant = chain(&["C", "C", "C", "C"]);
+        let alkene = pendant.add_atom("C", Point::new(42., 42.));
+        let end = pendant.add_atom("C", Point::new(84., 84.));
+        let deuterium = pendant.add_atom("H", Point::new(126., 84.));
+        pendant.atom_mut(deuterium).unwrap().isotope = 2;
+        pendant.add_bond(2, alkene, 1, "plain");
+        pendant.add_bond(alkene, end, 2, "plain");
+        pendant.add_bond(end, deuterium, 1, "plain");
+        pendant.generic.repeats.push(unit(
+            vec![2, 3, alkene, end, deuterium],
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 3,
+                outside: 4,
+            },
+            3,
+            3,
+        ));
+        // N1/C=C/N->[Zn]<-1 is acyclic for ring perception.
+        let mut chelate = chain(&["C", "N", "C", "C", "N", "C"]);
+        let zinc = chelate.add_atom("Zn", Point::new(126., 42.));
+        chelate.add_bond(2, zinc, crate::bonds::DATIVE, "plain");
+        chelate.add_bond(5, zinc, crate::bonds::DATIVE, "plain");
+        chelate.bonds[2].order = 2;
+        chelate.generic.repeats.push(unit(
+            vec![2, 3, 4, 5, zinc],
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 5,
+                outside: 6,
+            },
+            3,
+            3,
+        ));
+        for (mut source, bond, controls) in
+            [(pendant, 4, vec![2, deuterium]), (chelate, 2, vec![2, 5])]
+        {
+            let bond = &mut source.bonds[bond];
+            assert_eq!(bond.order, 2);
+            if authority_only {
+                bond.stereo_authoritative = true;
+            } else {
+                bond.stereo = Some("e".into());
+                bond.stereo_atoms = controls;
+            }
+            assert_eq!(expand(&source, Limits::default()).unwrap_err(), STEREO);
+            assert_eq!(
+                expand_drawings(&source, Limits::default()).unwrap_err(),
+                STEREO
+            );
+        }
+    }
+}
+
 fn chain(elements: &[&str]) -> Document {
     let mut doc = Document::default();
     let mut last = None;

@@ -123,6 +123,12 @@ connected ordinary fragment, exactly two single crossing bonds and explicit
 head/tail ordering. Terminal groups remain outside the replicated fragment.
 Generated link/repeat components receive a new 2D layout.
 
+When the bracket's two sides cross exactly two bonds, the unit also includes
+the side atoms attached to the enclosed atoms, such as C=O oxygens or ring atoms
+above and below the bracket. Units with heteroatoms, such as polyesters and
+polyethers, expand like carbon chains. A condensed label such as `OCH2CH2` on
+one atom is text, not atoms, and cannot be expanded; draw each atom of the unit.
+
 ### Duplicates
 
 Expansion retains one product per unique normalized chemical graph, keeping the

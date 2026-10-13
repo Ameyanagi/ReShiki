@@ -447,7 +447,10 @@ fn enumerate(
     let mut seed = source.clone();
     seed.generic = Generic::default();
     for link in &source.generic.links {
-        if let Some(atom) = seed.atom_mut(link.atom) {
+        // A `*` link atom keeps its typed text for materialize::link's refusal.
+        if let Some(atom) = seed.atom_mut(link.atom)
+            && atom.element != "*"
+        {
             atom.display.set_variable(None);
         }
     }
@@ -476,11 +479,14 @@ fn enumerate(
 
 /// A finished product has no attachment, wildcard or centroid left.
 fn require_concrete(product: &Document) -> Result<(), String> {
-    if product
+    if let Some(atom) = product
         .atoms
         .iter()
-        .any(|a| a.attachment.is_some() || a.element == "*" || !a.centroid.is_empty())
+        .find(|a| a.attachment.is_some() || a.element == "*" || !a.centroid.is_empty())
     {
+        if let Some(label) = super::errors::text_label(atom) {
+            return Err(super::errors::outside_text_label(label));
+        }
         return Err("Expansion still contains an unresolved attachment or atom".into());
     }
     Ok(())

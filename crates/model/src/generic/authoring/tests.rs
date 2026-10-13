@@ -3,7 +3,7 @@ use crate::generic::test_support::{InvalidCase, bracket, chain, element, link_do
 use crate::generic::{
     Alternative, AlternativeSite, Crossing, LinkNode, RepeatCount, RepeatPattern,
 };
-use crate::graphics::GraphicKind;
+use crate::graphics::{BracketSides, GraphicKind};
 
 #[test]
 fn trailing_charges_bypass_bare_link_ranges() -> Result<(), String> {
@@ -311,6 +311,141 @@ fn alternative_authoring_resets_atom_fields_and_replaces_existing_site() {
         super::apply_label(&source, 2, "[Cl,Br]"),
         Err("Use an ordinary atom for alternatives".into())
     );
+}
+
+#[test]
+fn bracket_membership_includes_pendant_carbonyl_outside_the_frame() {
+    for (axis_x, axis_y) in [
+        (Point::new(84., 0.), Point::new(0., 60.)),
+        (Point::new(0., 84.), Point::new(-60., 0.)),
+        (Point::new(84., 21.), Point::new(30., 60.)),
+    ] {
+        for sides in [BracketSides::Both, BracketSides::Left, BracketSides::Right] {
+            for (left_x, right_x, backbone_y, oxygen_y) in [
+                (0.25, 0.75, 0.5, -0.5),
+                (0.25, 0.75, 0.5, 1.5),
+                (0., 1., 0., -0.5),
+                (0., 1., 1., 1.5),
+            ] {
+                let origin = Point::new(20., -30.);
+                let world = |x: f32, y: f32| {
+                    Point::new(
+                        origin.x + x * axis_x.x + y * axis_y.x,
+                        origin.y + x * axis_x.y + y * axis_y.y,
+                    )
+                };
+                let mut source = Document::default();
+                for x in [-0.25, left_x, right_x, 1.25] {
+                    source.add_atom("C", world(x, backbone_y));
+                }
+                source.add_atom("O", world(right_x, oxygen_y));
+                for (a, b, order) in [(1, 2, 1), (2, 3, 1), (3, 4, 1), (3, 5, 2)] {
+                    source.add_bond(a, b, order, "plain");
+                }
+                let id = bracket(&mut source);
+                let graphic = source.graphics.last_mut().unwrap();
+                graphic.origin = origin;
+                graphic.axis_x = axis_x;
+                graphic.axis_y = axis_y;
+                graphic.sides = sides;
+                let expected_members = if sides == BracketSides::Right {
+                    source.atoms.reverse();
+                    vec![5, 3, 2]
+                } else {
+                    vec![2, 3, 5]
+                };
+                let before = source.clone();
+                let result =
+                    super::define_bracket(&source, id, "n", RepeatPattern::HeadToTail).unwrap();
+                assert_eq!(source, before);
+                let unit = &result.generic.repeats[0];
+                assert_eq!(unit.members, expected_members);
+                assert_eq!(
+                    unit.crossings,
+                    vec![
+                        Crossing {
+                            inside: 2,
+                            outside: 1,
+                        },
+                        Crossing {
+                            inside: 3,
+                            outside: 4,
+                        },
+                    ]
+                );
+                assert_eq!(unit.head_count, Some(1));
+            }
+        }
+    }
+}
+
+#[test]
+fn bracket_membership_falls_back_when_a_path_leaks_around_a_side() {
+    let mut source = chain(&["C", "C", "C", "C"]);
+    source.add_atom("C", Point::new(0., -84.));
+    source.add_bond(2, 5, 1, "plain");
+    source.add_bond(5, 1, 1, "plain");
+    source.add_atom("C", Point::new(0., 14.));
+    source.add_bond(2, 6, 1, "plain");
+    let id = bracket(&mut source);
+    let before = source.clone();
+    let result = super::define_bracket(&source, id, "n", RepeatPattern::HeadToTail).unwrap();
+    assert_eq!(source, before);
+    let unit = &result.generic.repeats[0];
+    assert_eq!(unit.members, vec![2, 3]);
+    assert_eq!(
+        unit.crossings,
+        vec![
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 2,
+                outside: 5,
+            },
+            Crossing {
+                inside: 2,
+                outside: 6,
+            },
+            Crossing {
+                inside: 3,
+                outside: 4,
+            },
+        ]
+    );
+    assert_eq!(unit.head_count, None);
+}
+
+#[test]
+fn bracket_membership_falls_back_for_top_and_bottom_crossings() {
+    let mut source = Document::default();
+    for y in [-84., -14., 14., 84.] {
+        source.add_atom("C", Point::new(42., y));
+    }
+    for (a, b) in [(1, 2), (2, 3), (3, 4)] {
+        source.add_bond(a, b, 1, "plain");
+    }
+    let id = bracket(&mut source);
+    let before = source.clone();
+    let result = super::define_bracket(&source, id, "n", RepeatPattern::HeadToTail).unwrap();
+    assert_eq!(source, before);
+    let unit = &result.generic.repeats[0];
+    assert_eq!(unit.members, vec![2, 3]);
+    assert_eq!(
+        unit.crossings,
+        vec![
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 3,
+                outside: 4,
+            },
+        ]
+    );
+    assert_eq!(unit.head_count, Some(1));
 }
 
 #[test]

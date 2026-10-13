@@ -2,7 +2,7 @@
 use super::{
     Alternative, EXPANDABLE_FLIPS, LinkNode, RepeatPattern, RepeatUnit, Work, bonds_at,
     definitions::pair,
-    errors::ID_LIMIT,
+    errors::{ID_LIMIT, repeat_text_label, text_label},
     expansion::{Mode, Site},
     graph::IndexedGraph,
     guards::reject_affected_stereo,
@@ -274,6 +274,10 @@ fn insert_fragment(doc: &Document, id: u64, fragment: &Document) -> Result<Docum
 pub(super) fn link(doc: &Document, node: &LinkNode, count: u32) -> Result<Document, String> {
     let atom = doc.atom(node.atom).ok_or("Missing link node")?;
     if atom.element == "*" {
+        if let Some(label) = text_label(atom) {
+            let label = super::authoring::split_link_label(label)?.map_or(label, |(base, _)| base);
+            return Err(repeat_text_label(label));
+        }
         return Err("A generic link-node atom needs a concrete element before expansion".into());
     }
     let contacts = bonds_at(doc, node.atom);
@@ -350,6 +354,11 @@ pub(super) fn repeat(doc: &Document, unit: &RepeatUnit, count: u32) -> Result<Do
     }
     let members: HashSet<_> = unit.members.iter().copied().collect();
     let atom_index: HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a)).collect();
+    for id in &unit.members {
+        if let Some(label) = atom_index.get(id).and_then(|a| text_label(a)) {
+            return Err(repeat_text_label(label));
+        }
+    }
     if unit.members.iter().any(|id| {
         atom_index
             .get(id)

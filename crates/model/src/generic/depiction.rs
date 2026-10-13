@@ -6,6 +6,7 @@ use super::{
     errors::retained,
     geometry::{at, at_mut, finite, include},
     graph::IndexedGraph,
+    guards::DoubleBondIndex,
     ink::{measured_bounds, move_box, object_bounds, reach, saved_and_refreshed_boxes},
     probe::{self, Stage},
     references::reject_changed_references,
@@ -28,6 +29,7 @@ fn label_clearance(margin: f32) -> f32 {
 
 pub(super) struct Plan {
     graph: IndexedGraph,
+    double_bonds: DoubleBondIndex,
     components: Vec<Vec<usize>>,
     affected: Vec<bool>,
 }
@@ -45,6 +47,7 @@ impl Plan {
             doc.bonds.iter().map(|bond| (bond.a, bond.b)),
             "Missing generated bond endpoint",
         )?;
+        let double_bonds = DoubleBondIndex::new(doc)?;
         let (_, all_components) = graph.components()?;
         let mut affected = vec![false; n];
         let mut components = Vec::new();
@@ -72,16 +75,21 @@ impl Plan {
             .atoms
             .iter()
             .any(|a| affected_ids.contains(&a.id) && a.stereo.is_some())
-            || doc
-                .bonds
-                .iter()
-                .any(|b| affected_ids.contains(&b.a) && b.specifies_stereo())
         {
             return Err(stereo_error());
+        }
+        for bond in &doc.bonds {
+            if affected_ids.contains(&bond.a)
+                && bond.specifies_stereo()
+                && !double_bonds.stereo_impossible(bond)?
+            {
+                return Err(stereo_error());
+            }
         }
         reject_changed_references(doc, &affected_ids, |_| Ok(()))?;
         Ok(Self {
             graph,
+            double_bonds,
             components,
             affected,
         })
@@ -119,9 +127,16 @@ impl Plan {
         {
             return Err(stereo_error());
         }
-        for (b, m) in state.graph.bonds.iter().zip(&state.metadata.bonds) {
+        for ((b, m), bond) in state
+            .graph
+            .bonds
+            .iter()
+            .zip(&state.metadata.bonds)
+            .zip(&doc.bonds)
+        {
             if *at(&self.affected, b.a)?
                 && (m.stereo != 0 || m.unknown_stereo || !m.stereo_atoms.is_empty())
+                && !self.double_bonds.stereo_impossible(bond)?
             {
                 return Err(stereo_error());
             }
