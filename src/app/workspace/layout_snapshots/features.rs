@@ -358,7 +358,7 @@ fn methoxytoluene(app: &mut App) {
     );
 }
 
-/// A variable attachment site, with Expand in Chemical abbreviations.
+/// A variable attachment site, with the Chemical abbreviations page open.
 fn generic_variable(app: &mut App, _: &Driver<'_>) {
     methoxytoluene(app);
     let _ = app.update(Message::Inspector(InspectorTab::Abbreviations));
@@ -392,7 +392,7 @@ fn generic_choice(app: &mut App, _: &Driver<'_>) {
     );
 }
 
-/// A bracketed repeating unit with its REPEATING UNIT controls.
+/// A bracketed repeating unit with its Repeating unit section.
 fn generic_repeat(app: &mut App, _: &Driver<'_>) {
     let mut doc = Document::default();
     let atoms: Vec<u64> = [(0., 0.), (36.373, -21.), (72.746, 0.), (109.119, -21.)]

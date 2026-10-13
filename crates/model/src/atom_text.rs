@@ -35,7 +35,7 @@ impl std::fmt::Display for Mode {
 }
 pub fn description(text: &str, mode: Mode) -> &'static str {
     if mode != Mode::Text && text.contains(',') {
-        "A finite list of element or chemical group alternatives. Expand Generic Structures generates each combination."
+        "A finite list of element or chemical group alternatives. Expand generic structures generates each combination."
     } else if mode == Mode::Text {
         "Text on a dummy atom; existing bonds stay connected."
     } else if crate::ligands::LABELS.contains(&text.trim()) {

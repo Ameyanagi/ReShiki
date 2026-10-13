@@ -122,7 +122,7 @@ pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String
 pub fn fingerprint(document: &Document, ids: &[u64]) -> Result<String, String> {
     if crate::generic::component_intersects(document, ids) {
         return Err(
-            "Expand Generic Structures before predicting NMR for this molecular component".into(),
+            "Expand generic structures before predicting NMR for this molecular component".into(),
         );
     }
     let wanted: std::collections::BTreeSet<_> = ids.iter().copied().collect();

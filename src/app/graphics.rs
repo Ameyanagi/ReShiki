@@ -313,11 +313,6 @@ impl App {
                 .padding(6),
             );
         }
-        if let [graphic] = selected.as_slice()
-            && graphic.kind.brackets()
-        {
-            panel = panel.push(self.generic_bracket_controls(graphic.id));
-        }
         // Editing points ends with Done in the context row or Escape.
         if self.tool != Tool::EditPoints
             && matches!(selected.as_slice(), [g] if matches!(g.kind, GraphicKind::Curve | GraphicKind::Path | GraphicKind::Arc))

@@ -679,3 +679,50 @@ fn prepared_expansion_errors_keep_original_tab_history_and_status() {
     assert!(!huge_app.tab.history.can_undo());
     assert!(!huge_app.tab.history.can_redo());
 }
+
+#[test]
+fn generic_card_follows_generic_parts_and_repeat_section_one_selected_bracket() {
+    use reshiki::graphics::{Graphic, GraphicKind};
+    let (mut app, _) = App::new();
+    let carbon = app.tab.doc.add_atom("C", Point::default());
+    let mut graphic = |kind| {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
+            id,
+            kind,
+            Point::new(-20., -20.),
+            Point::new(20., 20.),
+            Default::default(),
+            Default::default(),
+            false,
+        ));
+        id
+    };
+    let bracket = graphic(GraphicKind::Brackets);
+    let rectangle = graphic(GraphicKind::Rectangle);
+    assert!(app.generic_structure_section().is_none());
+    for (selected, shown) in [
+        (vec![bracket], true),
+        (vec![rectangle], false),
+        (vec![bracket, rectangle], false),
+        (vec![], false),
+    ] {
+        app.tab.selected = selected;
+        assert_eq!(
+            app.repeating_unit_section().is_some(),
+            shown,
+            "{:?}",
+            app.tab.selected
+        );
+    }
+    let choice = app.tab.doc.add_atom("*", Point::new(42., 0.));
+    app.tab.doc.add_bond(carbon, choice, 1, "plain");
+    app.tab.doc = reshiki::atom_text::apply(
+        &app.tab.doc,
+        choice,
+        "[Cl,Br]",
+        reshiki::atom_text::Mode::Auto,
+    )
+    .unwrap();
+    assert!(app.generic_structure_section().is_some());
+}

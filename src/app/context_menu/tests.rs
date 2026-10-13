@@ -164,7 +164,7 @@ fn expand_generic_structures_follows_the_target_and_waits_for_a_running_expansio
     app.tab.doc =
         reshiki::atom_text::apply(&doc, halogen, "[Cl,Br,I]", reshiki::atom_text::Mode::Auto)?;
     assert!(reshiki::generic::present(&app.tab.doc));
-    const EXPAND: &str = "Expand Generic Structures";
+    const EXPAND: &str = "Expand generic structures";
     app.tab.selected = vec![ring_atom];
     assert_eq!(
         enabled(&app, Page::Main, EXPAND),

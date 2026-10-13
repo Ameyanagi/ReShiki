@@ -9,6 +9,11 @@ const MAX_CACHED_ATOMS: usize = 8192;
 const MAX_CACHED_BONDS: usize = 16384;
 const MAX_CACHED_COMPONENTS: usize = 1024;
 
+/// The notice of a drawing whose generic structures wait for expansion. It is
+/// information, not an error: the app shows it muted.
+pub const GENERIC_NOTICE: &str =
+    "Chemical labels of generic structures are calculated after expansion";
+
 #[derive(Debug, Default)]
 pub struct Refresh {
     cache: HashMap<u64, Arc<Entry>>,
@@ -44,7 +49,7 @@ impl Refresh {
         let mut bonds = 0;
         let (components, unresolved) = components(source);
         if unresolved {
-            refresh.notice = Some("Expand Generic Structures before refreshing chemical labels for this molecular component".into());
+            refresh.notice = Some(GENERIC_NOTICE.into());
         }
         for component in components {
             let Some(first) = component.atoms.first() else {

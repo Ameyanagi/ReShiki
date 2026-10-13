@@ -428,7 +428,7 @@ impl App {
             return vec![];
         }
         vec![Entry::command(
-            "Expand Generic Structures",
+            super::generic::EXPAND,
             Message::Generic(super::generic::Action::Expand),
             self.generic_expand_enabled(),
         )]

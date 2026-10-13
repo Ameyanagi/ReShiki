@@ -1,16 +1,25 @@
 //! Finite expansion creates a new drawing; the source and its history stay intact.
+use super::inspector::Section;
+use super::workspace::{accessible_command, hover_hint, muted_text};
 use super::{App, Message, Tool, document_tab::TabId};
-use iced::widget::{Row, column, row, text};
-use iced::{Element, Task};
+use iced::widget::{Row, column, container, row, text, tooltip};
+use iced::{Alignment, Element, Length, Task};
 use reshiki::generic::{Limits, PreparedExpansion, RepeatPattern};
 
 pub(super) const EXPANSION_DISCARDED: &str =
     "Generic expansion was discarded because another edit was open; expand again";
 
-const REPEAT_HINT: &str = concat!(
-    "The bracket records its enclosed atoms and the existing crossing bonds. ",
-    "Use n for an indefinite polymer."
-);
+pub(super) const EXPAND: &str = "Expand generic structures";
+const EXPAND_HINT: &str = "Opens all concrete structures together in one new tab";
+const NOTHING_TO_EXPAND: &str = "This drawing has no generic definitions";
+const EXPANSION_RUNNING: &str = "An expansion is already running";
+const AFTER_EXPANSION: &str = "Labels and properties are calculated after expansion.";
+const DEFINE_HINT: &str = "Records the enclosed atoms and the existing crossing bonds";
+const CLEAR_HINT: &str = "Removes the definition; the bracket stays";
+const NOTHING_TO_CLEAR: &str = "This bracket has no repeating unit";
+const REPEAT_HINT: &str = "Use n for an indefinite polymer.";
+/// The Repeats field and the Pattern list share one column.
+const FIELD_WIDTH: f32 = 140.;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -205,21 +214,59 @@ impl App {
     pub(super) fn generic_expand_enabled(&self) -> bool {
         self.generic.pending.is_none() && reshiki::generic::present(&self.tab.doc)
     }
-    pub(super) fn generic_expand_button(&self) -> Element<'_, Message> {
-        reshiki::accessibility::button(
-            "expand-generic-structures",
-            "Expand Generic Structures",
-            text("Expand Generic Structures").size(12),
+    fn generic_expand_button(&self) -> Element<'_, Message> {
+        let enabled = self.generic_expand_enabled();
+        let hint = if enabled {
+            EXPAND_HINT
+        } else if self.generic.pending.is_some() {
+            EXPANSION_RUNNING
+        } else {
+            NOTHING_TO_EXPAND
+        };
+        hover_hint(
+            accessible_command("expand-generic-structures", EXPAND, EXPAND)
+                .on_press_maybe(enabled.then_some(Message::Generic(Action::Expand))),
+            hint,
+            tooltip::Position::Top,
         )
-        .on_press_maybe(
-            self.generic_expand_enabled()
-                .then_some(Message::Generic(Action::Expand)),
-        )
-        .padding([7, 9])
-        .style(super::workspace::control(false))
         .into()
     }
-    pub(super) fn generic_bracket_controls(&self, id: u64) -> Element<'_, Message> {
+    /// The Properties card of a drawing with generic parts: its labels and
+    /// properties wait for the expansion, which the card offers.
+    pub(super) fn generic_structure_section(&self) -> Option<Element<'_, Message>> {
+        if !reshiki::generic::present(&self.tab.doc) {
+            return None;
+        }
+        Some(
+            self.inspector_section(
+                Section::GenericStructure,
+                "Generic structure",
+                "",
+                true,
+                column![
+                    self.generic_expand_button(),
+                    text(AFTER_EXPANSION).size(11).style(muted_text),
+                ]
+                .spacing(6),
+            ),
+        )
+    }
+    /// The repeating unit of the one selected bracket, as its own section
+    /// after the Graphic style card.
+    pub(super) fn repeating_unit_section(&self) -> Option<Element<'_, Message>> {
+        let mut selected = self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none());
+        let (Some(bracket), None) = (selected.next(), selected.next()) else {
+            return None;
+        };
+        if !bracket.kind.brackets() {
+            return None;
+        }
+        let id = bracket.id;
         let defined = self
             .tab
             .doc
@@ -227,35 +274,39 @@ impl App {
             .repeats
             .iter()
             .any(|u| u.bracket == Some(id) || u.bracket_objects.contains(&id));
-        column![
-            text("REPEATING UNIT")
-                .size(11)
-                .style(super::workspace::muted_text),
-            self.repeat_count_row(id),
-            self.pattern_picker(),
-        ]
-        .extend(self.bracket_buttons(defined, id))
-        .spacing(8)
-        .into()
+        Some(
+            self.inspector_section(
+                Section::RepeatingUnit,
+                "Repeating unit",
+                "",
+                true,
+                column![
+                    self.repeat_count_row(id),
+                    self.pattern_row(),
+                    self.define_repeat_button(id),
+                    self.clear_repeat_button(defined, id),
+                    text(REPEAT_HINT).size(11).style(muted_text),
+                ]
+                .spacing(6),
+            ),
+        )
     }
     fn repeat_count_row(&self, id: u64) -> Row<'_, Message> {
-        row![
-            text("Repeats").size(12),
-            reshiki::accessibility::text_input(
-                "polymer-repeat-count",
-                "Polymer repeat count or label",
-                "1-3 or n",
-                &self.generic.label,
-            )
-            .on_input(|s| Message::Generic(Action::RepeatLabel(s)))
-            .on_submit(Message::Generic(Action::DefineRepeat(id)))
-            .size(12)
-            .padding(6),
-        ]
-        .spacing(8)
+        let field = reshiki::accessibility::text_input(
+            "polymer-repeat-count",
+            "Polymer repeat count or label",
+            "1-3 or n",
+            &self.generic.label,
+        )
+        .style(crate::appearance::input_style)
+        .on_input(|s| Message::Generic(Action::RepeatLabel(s)))
+        .on_submit(Message::Generic(Action::DefineRepeat(id)))
+        .size(12)
+        .padding(6);
+        labeled("Repeats", field)
     }
-    fn pattern_picker(&self) -> Element<'_, Message> {
-        crate::appearance::pick_list(
+    fn pattern_row(&self) -> Row<'_, Message> {
+        let patterns = crate::appearance::pick_list(
             [
                 PatternChoice(RepeatPattern::HeadToTail),
                 PatternChoice(RepeatPattern::HeadToHead),
@@ -266,35 +317,43 @@ impl App {
         )
         .text_size(12)
         .padding(6)
+        .width(Length::Fill);
+        labeled("Pattern", patterns)
+    }
+    fn define_repeat_button(&self, id: u64) -> Element<'_, Message> {
+        let label = "Define repeating unit";
+        hover_hint(
+            accessible_command("define-polymer-repeat", label, label)
+                .on_press(Message::Generic(Action::DefineRepeat(id))),
+            DEFINE_HINT,
+            tooltip::Position::Top,
+        )
         .into()
     }
-    fn bracket_buttons(&self, defined: bool, id: u64) -> [Element<'_, Message>; 4] {
-        [
-            reshiki::accessibility::button(
-                "define-polymer-repeat",
-                "Use enclosed atoms",
-                text("Use enclosed atoms").size(12),
-            )
-            .on_press(Message::Generic(Action::DefineRepeat(id)))
-            .padding([7, 9])
-            .style(super::workspace::control(false))
-            .into(),
-            text(REPEAT_HINT)
-                .size(11)
-                .style(super::workspace::muted_text)
-                .into(),
-            reshiki::accessibility::button(
-                "clear-polymer-repeat",
-                "Clear repeating unit",
-                text("Clear repeating unit").size(12),
-            )
-            .on_press_maybe(defined.then_some(Message::Generic(Action::ClearRepeat(id))))
-            .padding([7, 9])
-            .style(super::workspace::control(false))
-            .into(),
-            self.generic_expand_button(),
-        ]
+    fn clear_repeat_button(&self, defined: bool, id: u64) -> Element<'_, Message> {
+        let label = "Clear repeating unit";
+        hover_hint(
+            accessible_command("clear-polymer-repeat", label, label)
+                .on_press_maybe(defined.then_some(Message::Generic(Action::ClearRepeat(id)))),
+            if defined {
+                CLEAR_HINT
+            } else {
+                NOTHING_TO_CLEAR
+            },
+            tooltip::Position::Top,
+        )
+        .into()
     }
+}
+
+/// A label and its field on one centered row; fields share one column.
+fn labeled<'a>(label: &'a str, field: impl Into<Element<'a, Message>>) -> Row<'a, Message> {
+    row![
+        text(label).size(12).width(Length::Fill),
+        container(field).width(FIELD_WIDTH),
+    ]
+    .spacing(6)
+    .align_y(Alignment::Center)
 }
 
 #[cfg(test)]

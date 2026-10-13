@@ -27,6 +27,8 @@ pub enum Section {
     ExportChemical,
     ExportPages,
     ExportNative,
+    RepeatingUnit,
+    GenericStructure,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -576,6 +578,9 @@ impl App {
         {
             body = body.push(card(container(self.graphic_panel()).padding(12)));
         }
+        if let Some(section) = self.repeating_unit_section() {
+            body = body.push(section);
+        }
         if self
             .tab
             .doc
@@ -601,7 +606,16 @@ impl App {
         if !self.tab.selected.is_empty() {
             body = body.push(self.selection_panel(&selected));
         }
-        if let Some(error) = &self.tab.chemistry_notice {
+        // The card replaces the informational notice of a generic drawing.
+        if let Some(section) = self.generic_structure_section() {
+            body = body.push(section);
+        }
+        if let Some(error) = self
+            .tab
+            .chemistry_notice
+            .as_deref()
+            .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
+        {
             body = body.push(
                 text(error)
                     .size(12)

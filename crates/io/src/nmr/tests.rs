@@ -237,13 +237,13 @@ fn generic_nmr_gate_covers_connected_dependencies_but_not_independent_components
     assert!(
         fingerprint(&touched, &[1])
             .unwrap_err()
-            .contains("Expand Generic Structures")
+            .contains("Expand generic structures")
     );
     assert!(fingerprint(&touched, &[1, 2, 3]).is_err());
     assert!(
         prepare(&touched, &[1])
             .unwrap_err()
-            .contains("Expand Generic Structures")
+            .contains("Expand generic structures")
     );
     assert_eq!(touched, before);
 

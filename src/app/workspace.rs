@@ -1965,7 +1965,6 @@ impl App {
             command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
             text("Chemical abbreviations").size(18),
             text("Compact labels with the complete molecule inside.").size(12).style(muted_text),
-            self.generic_expand_button(),
             row![
                 item("Expand selected", action(A::Expand), !selected.is_empty(), "Restore the atoms and bonds of the selected abbreviations", "Select an abbreviation first"),
                 item("Expand all", action(A::ExpandAll), !self.tab.doc.abbreviations.is_empty(), "Restore every abbreviation in the drawing", "The drawing has no abbreviations"),
@@ -2167,12 +2166,14 @@ impl App {
                     .size(11)
                     .style(muted_text),
             );
-        if let Some(error) = &self.tab.chemistry_notice {
-            body = body.push(
-                text(error)
-                    .size(11)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
-            );
+        if let Some(notice) = &self.tab.chemistry_notice {
+            let line = text(notice).size(11);
+            // Generic structures wait for expansion: information, not an error.
+            body = body.push(if notice == reshiki::atom_labels::refresh::GENERIC_NOTICE {
+                line.style(muted_text)
+            } else {
+                line.style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
+            });
         }
         body
     }

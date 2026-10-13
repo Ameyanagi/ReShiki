@@ -304,10 +304,10 @@ impl Default for Limits {
         }
     }
 }
-pub const NOTICE: &str = "Generic choices retained. Expand Generic Structures to choose concrete atoms, attachment positions or finite repeats before calculating identifiers or molecular properties.";
+pub const NOTICE: &str = "Generic choices retained. Expand generic structures to choose concrete atoms, attachment positions or finite repeats before calculating identifiers or molecular properties.";
 /// Joining referenced generic structures requires concrete chemical choices first.
 pub const JOIN_NOTICE: &str =
-    "Expand Generic Structures before joining referenced generic atoms or repeating units.";
+    "Expand generic structures before joining referenced generic atoms or repeating units.";
 
 pub fn present(doc: &Document) -> bool {
     !doc.generic.is_empty() || doc.atoms.iter().any(|a| a.is_variable_attachment())

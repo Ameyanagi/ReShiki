@@ -2777,7 +2777,7 @@ fn generic_definition_blocks_pending_and_completed_nmr_and_old_delivery_after_cl
                 .notice
                 .as_deref()
                 .unwrap()
-                .contains("Expand Generic Structures")
+                .contains("Expand generic structures")
         );
         let _ = app.generic_action(crate::app::generic::Action::ClearRepeat(bracket));
         let _ = app.nmr_action(Action::Finished(key, Ok(report)));

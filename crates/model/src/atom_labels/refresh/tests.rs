@@ -87,12 +87,7 @@ fn unsupported_components_keep_labels_without_hiding_invalid_drawings() {
         if kind == Some(crate::attachments::Kind::Variable) {
             // Variable positions are unresolved generic chemistry, unlike a
             // fixed multi-center point or an ordinary drawing centroid.
-            assert!(
-                cached
-                    .notice
-                    .as_deref()
-                    .is_some_and(|notice| notice.contains("Expand Generic Structures"))
-            );
+            assert_eq!(cached.notice.as_deref(), Some(GENERIC_NOTICE));
             assert!(cached.cache.is_empty());
             assert!(cached.atoms.is_empty() && cached.bonds.is_empty());
         } else {
@@ -179,13 +174,7 @@ fn generic_refresh_skips_prior_concrete_cache_and_keeps_independent_labels_usabl
     .unwrap();
     let before = source.clone();
     let blocked = Refresh::calculate(&source, &previous).unwrap();
-    assert!(
-        blocked
-            .notice
-            .as_deref()
-            .unwrap()
-            .contains("Expand Generic Structures")
-    );
+    assert_eq!(blocked.notice.as_deref(), Some(GENERIC_NOTICE));
     assert!(Arc::ptr_eq(&previous.cache[&1], &blocked.cache[&1]));
     assert!(!blocked.cache.contains_key(&ids[0]));
     assert!(ids.iter().all(|id| !blocked.atoms.contains_key(id)));
