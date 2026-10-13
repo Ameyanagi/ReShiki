@@ -1,0 +1,29 @@
+{
+  "observed_utc": "2026-10-09T22:43:57.2559101Z",
+  "baseline": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\base-51fa0991\\reshiki.exe",
+    "bytes": 102718976,
+    "sha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+    "modified_utc": "2026-10-09T06:16:17.7199127Z"
+  },
+  "processes": [],
+  "drives": [
+    {
+      "drive": "C:",
+      "free_bytes": 356663296,
+      "total_bytes": 106273173504
+    },
+    {
+      "drive": "F:",
+      "free_bytes": 244551680,
+      "total_bytes": 107374178304
+    }
+  ],
+  "baseline_directory": [
+    {
+      "Name": "reshiki.exe",
+      "Length": 102718976
+    }
+  ],
+  "receipt_directory_exists": false
+}

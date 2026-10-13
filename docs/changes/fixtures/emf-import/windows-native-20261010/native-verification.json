@@ -1,0 +1,109 @@
+{
+  "status": "PASS: Windows EMF import, original dimensions and vectors, GUI Save/Export, fresh-process native document reopen; baseline rejects same EMF",
+  "observed_at_utc": "2026-10-09T22:46:52.374786+00:00",
+  "operator": "root through Windows App/192.168.1.51 using cua_repl exclusively",
+  "raw_screenshot_size": [
+    2556,
+    1712
+  ],
+  "baseline": {
+    "pid": 13752,
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\base-51fa0991\\reshiki.exe",
+    "sha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+    "historical_source": "51fa0991da2507bb00b27c1b420e807468de6423",
+    "observed_workflow": "Untitled; F8 off; Import \u2192 Choose file; source.emf in exports-v3; maximized to reveal clipped footer; red status Can\u2019t import .emf; canvas remains empty; Undo/Redo disabled",
+    "source_attribution_limit": "Retained historical build ledger, command and successful log; no reconstructed complete original compiler-input manifest"
+  },
+  "candidate": {
+    "first_gui_pid": 5852,
+    "first_pid_exit_confirmed": true,
+    "fresh_gui_pid": 4748,
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-candidate-20261009\\reshiki.exe",
+    "sha256": "124336a60753ad7cd3bba0c9bf4f453298d6fac7d857dbe1562903e2e0fc88b2",
+    "source_attribution": "Retained compiler/default-input receipt;1120 production Rust/Cargo/assets/presets correlate to783be63a; current692d4c53 differs in tests/docs only",
+    "source_commit": "783be63a2752103cd2c436a79e02a03d442e6085",
+    "pr_head_at_gui_review": "692d4c53",
+    "native_saved": "desktop-import-20261010.rsk",
+    "native_saved_sha256": "7a689884c15fb62bacd7b1ad9bac9f602d4651a769657bdc9ac3958ffb30158f",
+    "native_doc": "v20;0 atoms/0 bonds/one EMF picture;100\u00d760mm;4724\u00d72834 preview; exact original12860B EMF retained",
+    "exported": "desktop-vector-reexport-20261010.emf",
+    "exported_sha256": "a1c18d84970b68b064a6e7a8866cfb43e0b0922001e476a4e9f4de004c170c1a",
+    "export_semantics": "14704B/422 records; original23 DrawLines and16 DrawString retained in nested EMF+ content plus classic vector/text fallback;102.82\u00d762.82mm padded full figure",
+    "fresh_process_reopen": "Same actual native save, selected EMF picture shows100\u00d760mm and4724\u00d72834; Undo/Redo disabled"
+  },
+  "same_source": {
+    "guest_path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\source.emf",
+    "bytes": 12860,
+    "sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a"
+  },
+  "independent_read_only_receipts": {
+    "native-fresh-process-reopen-verification.json": "261dd35c7f7c17e294783338224ee235d60437d116c1c2e3f627710c661be2df",
+    "baseline-source-and-space-verification.json": "5c0e47fa8d1d62bbe159f26644541561e7e37ea967104e08a160600d4ad96b58"
+  },
+  "limits": [
+    "The Windows App accessibility tree exposes only the RDP host; guest visual results are raw screenshots.",
+    "Physical high-DPI/mixed-DPI coverage is not established by this100%RDP session.",
+    "Fresh reopen and maximized baseline have different screen framing; original picture dimensions and native bytes establish retained size.",
+    "Stable saved bytes and fresh process reopen do not imply power-loss durability.",
+    "The saved EMF export was structurally verified; this receipt does not claim a new PowerPoint desktop consumer test.",
+    "The initial snap-layout-overlay capture is preserved as supplemental, excluded from the selected unobstructed before image."
+  ],
+  "files": {
+    "desktop-import-20261010.rsk": {
+      "bytes": 492401,
+      "sha256": "7a689884c15fb62bacd7b1ad9bac9f602d4651a769657bdc9ac3958ffb30158f"
+    },
+    "desktop-vector-reexport-20261010.emf": {
+      "bytes": 14704,
+      "sha256": "a1c18d84970b68b064a6e7a8866cfb43e0b0922001e476a4e9f4de004c170c1a"
+    },
+    "emf-import-baseline-unsupported-snap-overlay.jpg": {
+      "bytes": 248536,
+      "sha256": "f95c1cd7d70986f5187115cf15841fc4aeae5975309d3fcb8f201668302ce129"
+    },
+    "emf-import-baseline-unsupported.ax.txt": {
+      "bytes": 346,
+      "sha256": "50dffa363d10fb9fcb16854112b36c47907a5fe792a2bc03b6b190b11d4b67b3"
+    },
+    "emf-import-baseline-unsupported.jpg": {
+      "bytes": 249036,
+      "sha256": "e53c8461fda4b7898bbf97a5dabb16fa729eff4f61b3640321ba50d5f94d520d"
+    },
+    "emf-import-candidate-fresh-process-reopened.ax.txt": {
+      "bytes": 346,
+      "sha256": "50dffa363d10fb9fcb16854112b36c47907a5fe792a2bc03b6b190b11d4b67b3"
+    },
+    "emf-import-candidate-fresh-process-reopened.jpg": {
+      "bytes": 362140,
+      "sha256": "660d7e11454ac22a75241af5b30958becff99e4d68d92ed66d89560a18dbc501"
+    },
+    "emf-import-candidate-native-saved.ax.txt": {
+      "bytes": 346,
+      "sha256": "50dffa363d10fb9fcb16854112b36c47907a5fe792a2bc03b6b190b11d4b67b3"
+    },
+    "emf-import-candidate-native-saved.jpg": {
+      "bytes": 365950,
+      "sha256": "945d36cf20da4bc839811ceadddab50366c02e01307df91847772ca122e3646a"
+    },
+    "emf-import-candidate-original-dimensions.ax.txt": {
+      "bytes": 346,
+      "sha256": "50dffa363d10fb9fcb16854112b36c47907a5fe792a2bc03b6b190b11d4b67b3"
+    },
+    "emf-import-candidate-original-dimensions.jpg": {
+      "bytes": 357704,
+      "sha256": "a757f9ea6f48207979f7c8fdb1fb6c6ded1a9ce968cfbe6d0d3aff1ce5d02814"
+    },
+    "emf-import-candidate-vector-export-completed.ax.txt": {
+      "bytes": 346,
+      "sha256": "50dffa363d10fb9fcb16854112b36c47907a5fe792a2bc03b6b190b11d4b67b3"
+    },
+    "emf-import-candidate-vector-export-completed.jpg": {
+      "bytes": 362643,
+      "sha256": "00000239c51a90dd93a8a6c7cdb308a367ebd78ef80b1b5da97dd3c078fa668b"
+    },
+    "source.emf": {
+      "bytes": 12860,
+      "sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a"
+    }
+  }
+}

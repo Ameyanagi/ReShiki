@@ -1,0 +1,189 @@
+{
+  "rdkit_version": "2026.03.6",
+  "native_binary_sha256": "2bc9889b78d85970c23172b4e85b5ffafae3be969c1bdf53a4880b8925e4976d",
+  "method": "Independent JSON-to-V2000 coordinates and bond orders, RDKit MolFromMolBlock; separate preserved application --cli analyze, no implementation imports",
+  "files": {
+    "porphine-placed-desktop.rsk": {
+      "sha256": "f864ffdc64d6af029b64642f04f4b56bfc7b989aca51634fc4bdc61d539e2268",
+      "independent_rdkit": {
+        "formula": "C20H14N4",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "canonical_smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "donors": 2,
+        "acceptors": 2,
+        "implicit_nh_native_ids": [21, 23]
+      },
+      "native_cli": {
+        "acceptors": 2,
+        "donors": 2,
+        "exact_mass": 310.12184644800004,
+        "formula": "C20H14N4",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "logp": 4.655600000000003,
+        "mass": 310.35999999999996,
+        "rings": 5,
+        "smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "tpsa": 57.36,
+        "unpaired_electrons": 0
+      }
+    },
+    "porphine-manually-constructed-desktop.rsk": {
+      "sha256": "872cb03673d3d25b797d30b17eec0d1923fb60a586d499bcf09dbc3292b4f06c",
+      "independent_rdkit": {
+        "formula": "C20H14N4",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "canonical_smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "donors": 2,
+        "acceptors": 2,
+        "implicit_nh_native_ids": [21, 33]
+      },
+      "native_cli": {
+        "acceptors": 2,
+        "donors": 2,
+        "exact_mass": 310.12184644800004,
+        "formula": "C20H14N4",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "logp": 4.655600000000002,
+        "mass": 310.36,
+        "rings": 5,
+        "smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "tpsa": 57.36,
+        "unpaired_electrons": 0
+      }
+    },
+    "porphine-manually-constructed-inward-labels-desktop.rsk": {
+      "sha256": "49d6928165e9c9ccb021c84ec432ede7b25e871eae986d4bcde903cf2d432c97",
+      "independent_rdkit": {
+        "formula": "C20H14N4",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "canonical_smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "donors": 2,
+        "acceptors": 2,
+        "implicit_nh_native_ids": [21, 33]
+      },
+      "native_cli": {
+        "acceptors": 2,
+        "donors": 2,
+        "exact_mass": 310.12184644800004,
+        "formula": "C20H14N4",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "logp": 4.655600000000002,
+        "mass": 310.36,
+        "rings": 5,
+        "smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "tpsa": 57.36,
+        "unpaired_electrons": 0
+      }
+    },
+    "porphine-phenyl-stretched-desktop.rsk": {
+      "sha256": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c",
+      "independent_rdkit": {
+        "formula": "C26H18N4",
+        "inchikey": "IIKNTCGCRNEFET-LQIRNWTPSA-N",
+        "inchi": "InChI=1S/C26H18N4/c1-2-4-17(5-3-1)26-24-12-10-22(29-24)15-20-8-6-18(27-20)14-19-7-9-21(28-19)16-23-11-13-25(26)30-23/h1-16,27,30H/b18-14-,19-14-,20-15-,21-16-,22-15-,23-16-,26-24-,26-25-",
+        "canonical_smiles": "C1=Cc2cc3ccc([nH]3)c(-c3ccccc3)c3nc(cc4ccc(cc1n2)[nH]4)C=C3",
+        "donors": 2,
+        "acceptors": 2,
+        "implicit_nh_native_ids": [21, 23]
+      },
+      "native_cli": {
+        "acceptors": 2,
+        "donors": 2,
+        "exact_mass": 386.15314657600004,
+        "formula": "C26H18N4",
+        "inchi": "InChI=1S/C26H18N4/c1-2-4-17(5-3-1)26-24-12-10-22(29-24)15-20-8-6-18(27-20)14-19-7-9-21(28-19)16-23-11-13-25(26)30-23/h1-16,27,30H/b18-14-,19-14-,20-15-,21-16-,22-15-,23-16-,26-24-,26-25-",
+        "inchikey": "IIKNTCGCRNEFET-LQIRNWTPSA-N",
+        "logp": 6.322600000000006,
+        "mass": 386.458,
+        "rings": 6,
+        "smiles": "C1=Cc2cc3ccc([nH]3)c(-c3ccccc3)c3nc(cc4ccc(cc1n2)[nH]4)C=C3",
+        "tpsa": 57.36,
+        "unpaired_electrons": 0
+      }
+    },
+    "porphine-placed-fresh-reopened-desktop.rsk": {
+      "sha256": "f864ffdc64d6af029b64642f04f4b56bfc7b989aca51634fc4bdc61d539e2268",
+      "independent_rdkit": {
+        "formula": "C20H14N4",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "canonical_smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "donors": 2,
+        "acceptors": 2,
+        "implicit_nh_native_ids": [21, 23]
+      },
+      "native_cli": {
+        "acceptors": 2,
+        "donors": 2,
+        "exact_mass": 310.12184644800004,
+        "formula": "C20H14N4",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "logp": 4.655600000000003,
+        "mass": 310.35999999999996,
+        "rings": 5,
+        "smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "tpsa": 57.36,
+        "unpaired_electrons": 0
+      }
+    },
+    "porphine-manual-inward-fresh-reopened-desktop.rsk": {
+      "sha256": "49d6928165e9c9ccb021c84ec432ede7b25e871eae986d4bcde903cf2d432c97",
+      "independent_rdkit": {
+        "formula": "C20H14N4",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "canonical_smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "donors": 2,
+        "acceptors": 2,
+        "implicit_nh_native_ids": [21, 33]
+      },
+      "native_cli": {
+        "acceptors": 2,
+        "donors": 2,
+        "exact_mass": 310.12184644800004,
+        "formula": "C20H14N4",
+        "inchi": "InChI=1S/C20H14N4/c1-2-14-10-16-5-6-18(23-16)12-20-8-7-19(24-20)11-17-4-3-15(22-17)9-13(1)21-14/h1-12,21,24H/b13-9-,14-10-,15-9-,16-10-,17-11-,18-12-,19-11-,20-12-",
+        "inchikey": "RKCAIXNGYQCCAL-CEVVSZFKSA-N",
+        "logp": 4.655600000000002,
+        "mass": 310.36,
+        "rings": 5,
+        "smiles": "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+        "tpsa": 57.36,
+        "unpaired_electrons": 0
+      }
+    },
+    "porphine-phenyl-stretch-fresh-reopened-desktop.rsk": {
+      "sha256": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c",
+      "independent_rdkit": {
+        "formula": "C26H18N4",
+        "inchikey": "IIKNTCGCRNEFET-LQIRNWTPSA-N",
+        "inchi": "InChI=1S/C26H18N4/c1-2-4-17(5-3-1)26-24-12-10-22(29-24)15-20-8-6-18(27-20)14-19-7-9-21(28-19)16-23-11-13-25(26)30-23/h1-16,27,30H/b18-14-,19-14-,20-15-,21-16-,22-15-,23-16-,26-24-,26-25-",
+        "canonical_smiles": "C1=Cc2cc3ccc([nH]3)c(-c3ccccc3)c3nc(cc4ccc(cc1n2)[nH]4)C=C3",
+        "donors": 2,
+        "acceptors": 2,
+        "implicit_nh_native_ids": [21, 23]
+      },
+      "native_cli": {
+        "acceptors": 2,
+        "donors": 2,
+        "exact_mass": 386.15314657600004,
+        "formula": "C26H18N4",
+        "inchi": "InChI=1S/C26H18N4/c1-2-4-17(5-3-1)26-24-12-10-22(29-24)15-20-8-6-18(27-20)14-19-7-9-21(28-19)16-23-11-13-25(26)30-23/h1-16,27,30H/b18-14-,19-14-,20-15-,21-16-,22-15-,23-16-,26-24-,26-25-",
+        "inchikey": "IIKNTCGCRNEFET-LQIRNWTPSA-N",
+        "logp": 6.322600000000006,
+        "mass": 386.458,
+        "rings": 6,
+        "smiles": "C1=Cc2cc3ccc([nH]3)c(-c3ccccc3)c3nc(cc4ccc(cc1n2)[nH]4)C=C3",
+        "tpsa": 57.36,
+        "unpaired_electrons": 0
+      }
+    }
+  }
+}

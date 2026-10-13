@@ -1,0 +1,125 @@
+{
+  "head_sha": "127d1a6247d390d33d420f2168f4a657d2659f7b",
+  "git_tree": "fbfecd1bb71fe4515f8bcafc928df403241627f3",
+  "run_id": "38002219982",
+  "attempt": "1",
+  "run_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/38002219982",
+  "repository": "Ameyanagi/ReShiki",
+  "pr": 284,
+  "target": "x86_64-pc-windows-msvc",
+  "profile": "release",
+  "runner": {
+    "ImageOS": "win22",
+    "ImageVersion": "20261004.326.1",
+    "RUNNER_ARCH": "X64"
+  },
+  "exe": {
+    "bytes": 55299584,
+    "sha256": "3e56439b55cd3c7dc047f431bb56f60407d17bc56fae0e1cb76641f1ee2e6fb9"
+  },
+  "signed": false,
+  "qualified": true,
+  "optional_features": [],
+  "source_bytes_unchanged": true,
+  "tracked_source_count": 2581,
+  "source_inventory_sha256": "919fef94e1eb0e988d8a06fd2d2ec63497acc25f29aa7fba872fafeda9c830e0",
+  "cargo_lock_sha256": "ceb8cb65b6d2ca9be22755fdd673558e15e896dd919e4d1170ecf62677054f07",
+  "own_compiler_artifacts": [
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/vendor/zune-jpeg#0.5.15",
+      "target": "zune_jpeg"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/vendor/usvg#0.45.1",
+      "target": "usvg"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/crates/process-heap#reshiki-process-heap@0.1.0",
+      "target": "reshiki_process_heap"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/crates/depict-math#reshiki-depict-math@0.1.0",
+      "target": "reshiki_depict_math"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/crates/chemistry#reshiki-chemistry@0.1.0",
+      "target": "reshiki_chemistry"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/native/geometry#reshiki-geometry@0.1.0",
+      "target": "reshiki_geometry"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/vendor/svg2pdf#0.13.0",
+      "target": "svg2pdf"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/native/windows#reshiki-windows@0.1.0",
+      "target": "reshiki_windows"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/crates/agent#reshiki-agent@0.1.0",
+      "target": "reshiki_agent"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/crates/model#reshiki-model@0.1.0",
+      "target": "reshiki_model"
+    },
+    {
+      "fresh": false,
+      "kind": ["custom-build"],
+      "package_id": "path+file:///<checkout>#reshiki@0.11.0",
+      "target": "build-script-build"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/crates/io#reshiki-io@0.1.0",
+      "target": "reshiki_io"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>/crates/mcp#reshiki-mcp@0.1.0",
+      "target": "reshiki_mcp"
+    },
+    {
+      "fresh": false,
+      "kind": ["lib"],
+      "package_id": "path+file:///<checkout>#reshiki@0.11.0",
+      "target": "reshiki"
+    },
+    {
+      "fresh": false,
+      "kind": ["bin"],
+      "package_id": "path+file:///<checkout>#reshiki@0.11.0",
+      "target": "reshiki"
+    }
+  ],
+  "_provenance": {
+    "original_record": "build-receipt.json",
+    "original_sha256": "3e6bd7733461a43707fea2b165fd63f10efbf3cc3a0ea7c2e8fca8f4ddab7cad",
+    "representation": "Selected build receipt fields; package paths normalized to <checkout>. Full compiler, dependency, source and artifact receipts remain privately preserved.",
+    "exact_source_link": "https://github.com/Ameyanagi/ReShiki/tree/127d1a6247d390d33d420f2168f4a657d2659f7b"
+  }
+}

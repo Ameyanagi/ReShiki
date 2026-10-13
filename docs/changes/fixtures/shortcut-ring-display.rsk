@@ -1,0 +1,455 @@
+{
+  "abbreviations": [],
+  "atom_labels": [],
+  "version": 15,
+  "atoms": [
+    {
+      "id": 537,
+      "element": "C",
+      "position": {
+        "x": -130.00000333333332,
+        "y": -42.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 538,
+      "element": "C",
+      "position": {
+        "x": -93.62693333333328,
+        "y": -21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 539,
+      "element": "C",
+      "position": {
+        "x": -93.62693333333328,
+        "y": 21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 540,
+      "element": "C",
+      "position": {
+        "x": -130.00000333333332,
+        "y": 42.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 541,
+      "element": "C",
+      "position": {
+        "x": -166.3730633333333,
+        "y": 21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 542,
+      "element": "C",
+      "position": {
+        "x": -166.3730633333333,
+        "y": -21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 474,
+      "element": "Ru",
+      "position": {
+        "x": 130.00000000000023,
+        "y": 73.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 475,
+      "element": "*",
+      "position": {
+        "x": 130.00000000000023,
+        "y": -10.5
+      },
+      "centroid": [
+        476,
+        477,
+        478,
+        479,
+        480,
+        481
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 476,
+      "element": "C",
+      "position": {
+        "x": 151.00000000000023,
+        "y": 25.872999999999593
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 477,
+      "element": "C",
+      "position": {
+        "x": 109.00000000000023,
+        "y": 25.872999999999593
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 478,
+      "element": "C",
+      "position": {
+        "x": 88.00000000000023,
+        "y": -10.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 479,
+      "element": "C",
+      "position": {
+        "x": 109.00000000000023,
+        "y": -46.87299999999959
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 480,
+      "element": "C",
+      "position": {
+        "x": 151.00000000000023,
+        "y": -46.87299999999959
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 481,
+      "element": "C",
+      "position": {
+        "x": 172.00000000000023,
+        "y": -10.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 537,
+      "b": 538,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 538,
+      "b": 539,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 539,
+      "b": 540,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 540,
+      "b": 541,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 541,
+      "b": 542,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 542,
+      "b": 537,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 476,
+      "b": 477,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 477,
+      "b": 478,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 478,
+      "b": 479,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 479,
+      "b": 480,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 480,
+      "b": 481,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 481,
+      "b": 476,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 474,
+      "b": 475,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [],
+  "groups": []
+}

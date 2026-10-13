@@ -1,0 +1,30 @@
+{
+  "observed_utc": "2026-10-09T23:09:58.5178369Z",
+  "powerpoint_processes": [
+    {
+      "pid": 13116,
+      "parent_pid": 11304,
+      "session_id": 2,
+      "path": "C:\\Program Files\\Microsoft Office\\Root\\Office16\\POWERPNT.EXE",
+      "created_utc": "2026-10-09T23:05:54.2279620Z",
+      "exe_bytes": 1917184,
+      "exe_sha256": "e58e29a44268bad4562a5c6d335641fb5522522079de71e8d2fbfccf32975ceb",
+      "file_version": "16.0.20527.20032",
+      "product_version": "16.0.20527.20032"
+    }
+  ],
+  "owned_file": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-powerpoint-emf-20261010.pptx",
+    "bytes": 37482,
+    "modified_utc": "2026-10-09T23:04:32.6367443Z",
+    "sha256": "6ccd40accae9fbb41c9e9dac03d4933f2fe82da7f9746dea647931f71ff26563"
+  },
+  "owned_file_unchanged_since_save": true,
+  "root_reopen_screenshot": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/powerpoint-emf-fresh-process-reopened.jpg",
+    "bytes": 309306,
+    "sha256": "5323d39d062b8d2e0a78acc4423c442e6fd90d974f372eba54e284e8b1f84e75"
+  },
+  "correlation_scope": "Live process and unchanged file observed while root reports fresh reopened presentation remains open. The screenshot proves visual reopen; read-only process query does not inspect document state through COM. Prior absent-process observations at23:05:13Z and23:05:45Z are preserved separately.",
+  "no_gui_com_or_guest_writes": true
+}

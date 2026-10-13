@@ -1,0 +1,9 @@
+
+running 4 tests
+test canvas::render_parity_tests::rear_opacity_canvas_matches_reference_alpha_and_keeps_cage_rim_and_marks_clean ... ignored, Actual native renderer alpha pixels; requires a headless renderer
+test app::tests::rear_opacity_draft_apply_is_one_undo_and_rejects_stale_invalid_or_late_input ... ok
+test app::tests::rear_target_selection_includes_quadruple_and_partial_covalent_bonds ... ok
+test app::tests::rgb_first_coordinate_contact_rear_apply_targets_one_molecule_and_retains_history ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 654 filtered out; finished in 6.79s
+

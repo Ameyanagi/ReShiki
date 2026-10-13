@@ -1,0 +1,254 @@
+{
+  "schema": 1,
+  "status": "PASS_INDEPENDENT_NATIVE_HISTORY_AND_SIGNED_CLI_EXPORT_CHECKS",
+  "checked_utc": "2026-10-09T16:11:29.902550+00:00",
+  "production_source_head": "7ec621227bc6fd777d5918efb9b8b6443c207d8e",
+  "signed_executable_sha256": "4d35fe616bc9cb1388e4a6ec45312c65cc21aa6b67e42e17b077dd848fcc4043",
+  "source_inputs_verified_against_git_and_worktree": 1069,
+  "source_aggregate_sha256": "170c9870763cf80d23e0d70eee27f05bf49aa176eba413ca9bfacceda7ceb505",
+  "own_fresh_false_artifacts_verified": 15,
+  "all9_signed_bundle_files_and_codesign_verified": true,
+  "default_features": true,
+  "native_document_version": 22,
+  "typed_before_native_version": 19,
+  "typed_before_native_sha256": "121280660ab89d7a53a7f0a336d5c23edc4c7a46e8dafe143443c9ff884a7d6e",
+  "typed_before_reason": "The parent native19 save already normalizes original fixture XYZ to f32 and supplies typed serializer defaults. This check uses that exact saved native as baseline; no further XYZ/default exception is needed.",
+  "native": {
+    "native_files": 11,
+    "atoms": 60,
+    "bonds": 90,
+    "xyz_values": 180,
+    "all_nonappearance_fields_exact": true,
+    "raw_equality_groups": [
+      [
+        "100",
+        "25-undo"
+      ],
+      [
+        "25",
+        "25-redo",
+        "0-undo",
+        "25-fresh-reopen",
+        "25-noop"
+      ],
+      [
+        "0",
+        "0-redo",
+        "0-fresh-reopen"
+      ]
+    ],
+    "native_sha256": {
+      "before-desktop": "121280660ab89d7a53a7f0a336d5c23edc4c7a46e8dafe143443c9ff884a7d6e",
+      "100": "a2ea34712470ce645f4efa7386089d662001ce2a13ecd07c6d51982ebb5dc2ef",
+      "25-undo": "a2ea34712470ce645f4efa7386089d662001ce2a13ecd07c6d51982ebb5dc2ef",
+      "25": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "25-redo": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "0-undo": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "25-fresh-reopen": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "25-noop": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "0": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "0-redo": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "0-fresh-reopen": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c"
+    },
+    "single_scope_rgb_strength": 0,
+    "rear_weights_float32_exact": true,
+    "front_atoms": 30,
+    "rear_atoms": 30
+  },
+  "exports": {
+    "typed_before_exports_byte_identical100": [
+      "svg",
+      "png",
+      "pdf"
+    ],
+    "analysis": {
+      "acceptors": 0,
+      "donors": 0,
+      "exact_mass": 720.0,
+      "formula": "C60",
+      "inchi": "InChI=1S/C60/c1-2-5-6-3(1)8-12-10-4(1)9-11-7(2)17-21-13(5)23-24-14(6)22-18(8)28-20(12)30-26-16(10)15(9)25-29-19(11)27(17)37-41-31(21)33(23)43-44-34(24)32(22)42-38(28)48-40(30)46-36(26)35(25)45-39(29)47(37)55-49(41)51(43)57-52(44)50(42)56(48)59-54(46)53(45)58(55)60(57)59",
+      "inchikey": "XMWRBQBLMFGWIX-UHFFFAOYSA-N",
+      "logp": 17.73000000000001,
+      "mass": 720.6599999999999,
+      "rings": 32,
+      "smiles": "c12c3c4c5c1c1c6c7c2c2c8c3c3c9c4c4c%10c5c5c1c1c6c6c%11c7c2c2c7c8c3c3c8c9c4c4c9c%10c5c5c1c1c6c6c%11c2c2c7c3c3c8c4c4c9c5c1c1c6c2c3c41",
+      "tpsa": 0.0,
+      "unpaired_electrons": 0
+    },
+    "effective_rear_svg_alpha": 0.25,
+    "alpha_wrappers_per_rear_primitive": 1,
+    "opaque_front_primitives_exact25_to0": 15,
+    "faded_primitives25": 16,
+    "faded_primitives0": 0,
+    "PNG_paper": "opaque white; rear RGB191 at25%, white at0%; front black unchanged",
+    "PNG_bounds": {
+      "100": [
+        1320,
+        1298
+      ],
+      "25": [
+        1320,
+        1298
+      ],
+      "0": [
+        1313,
+        1290
+      ]
+    },
+    "pixel_samples_checked": 4,
+    "PDF_partial_alpha_present": true,
+    "scope": "fresh signed-CLI exports, not desktop-canvas screenshots",
+    "pixel_sample_selection": "Representative solid bond-interior samples classified from endpoint Z, selected after inspecting output; not an exhaustive or preregistered pixel test. SVG alpha and all15 opaque-front primitive comparisons are separate structural checks."
+  },
+  "runtime_commands_passed": 17,
+  "runtime_scope": "codesign verification,CLIinfo,three analyze calls and12SVG/PNG/PDF exports; no GUI or Cargo by independent reviewer",
+  "export_artifact_sha256": {
+    "c60-0.pdf": "5595ff5909f4309454471f710c260f9dfbf8fa9fb9abc203b5e57cb5fda655bb",
+    "c60-0.png": "9fbbaf4497283bea6fb229c7268e4b76ea25f6119c070f5be6d2ad91ebbf1335",
+    "c60-0.svg": "e79362f68e7f9694b623d33c9cb7d1ad1b4950d3040c28ddb1c8939984fe795c",
+    "c60-100.pdf": "1753fb00577565be2e21ff5d91c02cd1a9d24f5072625e83c7a6c048d96a2cc5",
+    "c60-100.png": "30e5b42549f12f5eace5f97e1d723bc0d5c156614c2d4aa91b4a0ea24b82ea6a",
+    "c60-100.svg": "27d9dd673a0d538a0ee5cfbc4afd34eca0bd3ae2c2fc8903657ab7e69c166702",
+    "c60-25.pdf": "601b310b07adb8a158dda500672d133cafb58f2d693ed549af0506905d41dc9f",
+    "c60-25.png": "a0099f77ee18e2bd9af37188e59aee87e8fb57fae88edd60453df3e18ea73b34",
+    "c60-25.svg": "ccbddeb7e7339da278e5218f2629df75b9c74c6770b994ed687cea0085ad3c5f",
+    "c60-typed-before.pdf": "1753fb00577565be2e21ff5d91c02cd1a9d24f5072625e83c7a6c048d96a2cc5",
+    "c60-typed-before.png": "30e5b42549f12f5eace5f97e1d723bc0d5c156614c2d4aa91b4a0ea24b82ea6a",
+    "c60-typed-before.svg": "27d9dd673a0d538a0ee5cfbc4afd34eca0bd3ae2c2fc8903657ab7e69c166702"
+  },
+  "actual_desktop_evidence": {
+    "producer": "ROOT soleGUI",
+    "manual_receipt_sha256": "0441414cf15e5e56d925d6311555dee2aa412933c65166d70fc674be250a6efc",
+    "raw_public_JPEGs": {
+      "c60-rear-opacity-100.jpg": {
+        "sha256": "45a0266aaa73965285b93695e67b63ffc19370f17b822ad51c9897d4b46c3573",
+        "bytes": 489992,
+        "size": [
+          2560,
+          1704
+        ],
+        "source": "root actual native desktop CUA RAWJPEG"
+      },
+      "c60-rear-opacity-25.jpg": {
+        "sha256": "0e9271896b43baed8d2cb737caa8d5b4c79c3df1636685122cdf0e55abcf658c",
+        "bytes": 454357,
+        "size": [
+          2560,
+          1704
+        ],
+        "source": "root actual native desktop CUA RAWJPEG"
+      },
+      "c60-rear-opacity-0.jpg": {
+        "sha256": "5c524d1b49d41b6187408a8f43f5f409605eb23ef06b1f84d905f5a811d2f64b",
+        "bytes": 430942,
+        "size": [
+          2560,
+          1704
+        ],
+        "source": "root actual native desktop CUA RAWJPEG"
+      },
+      "c60-rear-opacity-0-fresh-reopen-clean.jpg": {
+        "sha256": "941fa49ed008de90f4ffa6c33a4e1b49893a260f1f5b53d53909d962b77f3254",
+        "bytes": 425081,
+        "size": [
+          2560,
+          1704
+        ],
+        "source": "root actual native desktop CUA RAWJPEG"
+      },
+      "c60-rear-opacity-25-fresh-reopen-clean.jpg": {
+        "sha256": "a0babb29a1ae5922373ae29ee0c55e8c66e609b1d00ad4a003a57d402d28b0ea",
+        "bytes": 454923,
+        "size": [
+          2560,
+          1704
+        ],
+        "source": "root actual native desktop CUA RAWJPEG"
+      },
+      "c60-rear-opacity-before.jpg": {
+        "sha256": "4d3e9c01437239a1da2a239183a2b9313b7c86500ee3aacc39767b97b47af20e",
+        "bytes": 485244,
+        "size": [
+          2560,
+          1704
+        ],
+        "source": "root actual parent desktop CUA RAWJPEG"
+      }
+    },
+    "fresh_kernel_running_app_receipt_sha256": "c42f44809924f2c2b5b496a9727c8b30c5e52086d0a64417266c09d36cbf8fc4",
+    "fresh_kernel_pid": 46179,
+    "manual_matches_reported_native_identity_checks": true,
+    "root_history_checks": "one25Undo100/Redo25;one0Undo25/Redo0;fresh0and25 bothhistorydisabled;reapply25 no-op remainshistorydisabled",
+    "inspected_directly": [
+      "c60-rear-opacity-100.jpg",
+      "c60-rear-opacity-25.jpg",
+      "c60-rear-opacity-0-fresh-reopen-clean.jpg"
+    ],
+    "review": "Observed foreground remains dark, rear is faint at25 and absent at0. Molecular Properties retainC60/60atoms/90bonds and rear-opacity field reflects setting. No simulated screenshot was produced."
+  },
+  "capture_and_export_differences": [
+    "Initial100/25/0 captures use same209% lightJACSArial10/F8off wholeC60;titles and save/dirty/draft states differ.",
+    "Fresh-reopen captures have different tab counts/chrome;they confirm persistence/history, not a matched screenshot geometry comparison.",
+    "Private initial fresh0 recovery-banner and fresh25 keyboard-on JPEGs remain retained but excluded from public six-JPEG set.",
+    "CLI0% viewBox/PNG intrinsic size shrinks from1320x1298 to1313x1290 because hidden paint no longer contributes bounds. The retained native pose/XYZ is unchanged; desktop zoom stayed209%.",
+    "These CLI PNGs have opaque white paper (all A255), so the measured rear25% signal is RGB191 rather than an exported A64. TransparentPNG is not claimed by this measurement."
+  ],
+  "negative_controls": {
+    "status": "PASS",
+    "controls": [
+      {
+        "case": "changed-XYZ",
+        "rejected": true,
+        "reason": "immutable native SHA changed: 25"
+      },
+      {
+        "case": "wrong-Redo",
+        "rejected": true,
+        "reason": "raw equality: ['25', '25-redo', '0-undo', '25-fresh-reopen', '25-noop']"
+      },
+      {
+        "case": "double-alpha",
+        "rejected": true,
+        "reason": "alpha applied more than once"
+      }
+    ],
+    "modified_original_inputs": false,
+    "all_mutations_in_new_proof_subdirectories": true
+  },
+  "portable_checker": {
+    "filename": "verify_rear_opacity_evidence.py",
+    "sha256": "64819ed9a6cee5e78e8eb494d98b45b758d61f4774bb3758083d3ac191286e01",
+    "native_only_requires": "Python3.9+ standard library;no app launch",
+    "optional_exports_requires": "Pillow and retained signedCLI outputs",
+    "reads_only": true,
+    "format_type_syntax_checks": [
+      {
+        "tool": "ruff",
+        "exit_code": 0
+      },
+      {
+        "tool": "ruff-format",
+        "exit_code": 0
+      },
+      {
+        "tool": "ty",
+        "exit_code": 0
+      }
+    ],
+    "public_integration": "Copy unchanged to scripts/verify_rear_opacity_evidence.py; default inputtests/fixtures/rear-opacity retains all11 original basenames."
+  },
+  "scope_limits": [
+    "Manual desktop verification covers the whole unselected C60 in light theme. Selected components, dark theme and highlights have separate compiled test evidence and are not claimed as manual desktop checks.",
+    "No Windows printing/Office EMF, C70 manual check or new Cargo/native canvas test was run by this independent reviewer.",
+    "SVG/PNG/PDF export pixels are measured fresh signedCLI artifacts;they are not native canvas screenshots.",
+    "Clip/omit/crossing render paint differs with alpha by design;underlying chemical graph,XYZ and bond projection flags remain exact. Opaque front SVG primitives are exact25vs0;this is not an assertion that all scene primitives are identical100vs25."
+  ],
+  "artifact_names": {
+    "measurements": "native-export-audit.json",
+    "pixel_samples": "export-pixel-samples.json",
+    "provenance": "provenance.json",
+    "commands": "commands.json",
+    "checker_controls": "checker-negative-controls.json"
+  },
+  "original_inputs_and_source_modified": false
+}

@@ -1,0 +1,157 @@
+{
+  "schema": 1,
+  "producer_source": "b09bf5ed5d57f298988b7528dd9f776b0169e025",
+  "files": [
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/README.md",
+      "bytes": 4638,
+      "sha256": "d536dd8abf0c6e7040b5e41e6407590bf19364b0878d9e14a1f2b7a65a8167b0",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/README.md",
+      "bytes": 5127,
+      "sha256": "2593586d7a6d5bacc05e47066c33f5c4320b4824ef4324f665d118b25d38ef83",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/candidate-artifact-qualification.json",
+      "bytes": 1775,
+      "sha256": "952280d9cafae3315c09c8b2e8cdf9f7d4f5dcfadfcb9fbdfec340005a0e6bd7",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/candidate-build-summary.json",
+      "bytes": 4790,
+      "sha256": "9b9bcadfc5594310c24323d3b7b825423acd3d030543d82d8b2d14790c96edcc",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/independent-source-qualification.json",
+      "bytes": 5976,
+      "sha256": "2e4dbe77c04e95cd30a91caf2e5acfb1bf9a5f0559a7fbe94435a640c2c46bdf",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/powerpoint-audit.json",
+      "bytes": 4322,
+      "sha256": "79a01c668d50219c5cba68f3e2ee983ce2828b0db9e0e4123f0e182e12a18d61",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/provenance.json",
+      "bytes": 2501,
+      "sha256": "4d5fc2ce55dfff2fa91bb0491bbeeb64cf4ab7e0e4ec41d1db991a76b0695a62",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/verify.py",
+      "bytes": 20045,
+      "sha256": "c36e3f3fedca77c042ee26797075fc63b2f82e4c933b3acabf156f361d5f1452",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/windows-native-input.rsk",
+      "bytes": 9811,
+      "sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/windows-office-svg-comparison-v1.docx",
+      "bytes": 26301,
+      "sha256": "c971f206a4dca4b64a62dcc826112ec0954e4a5e033d51ff457dcbba51d09204",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/windows-office-svg-comparison-v1.pptx",
+      "bytes": 42120,
+      "sha256": "709a60d363f171669a0315ce36668bf1044cc25d6adb386355607cd5bd940d2b",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/windows-single-office-v1.svg",
+      "bytes": 5703,
+      "sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/windows-single-ordinary-v1.svg",
+      "bytes": 1180,
+      "sha256": "2b44ebc443c9430975d4ccb7555aa5841eb8549902e53943d35531bc7035fa01",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/changes/fixtures/office-svg-placement/windows-native-20261010/word-audit.json",
+      "bytes": 5291,
+      "sha256": "1b0a7893a3be77ab324593309900aa6cf80cda4e7a71e5e8a6094d6c07094c7a",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/changes/office-svg-placement.md",
+      "bytes": 13374,
+      "sha256": "2c650d4f87139323cb25129f4a976f3d525b7aa1cf63216be9cf9a58cf7d7b65",
+      "kind": "authored documentation or derived receipt"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-native-figure-menu.jpg",
+      "bytes": 298298,
+      "sha256": "ad6076679684255122afaa87165b824b726de078aff28309611f514da6154b6f",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-native-office-exported.jpg",
+      "bytes": 311486,
+      "sha256": "844d5f5f2a16790e5a4285417c8acb43eb58a90ce44ac697dd1ae121dc9d3f19",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-powerpoint-office-inserted-400.jpg",
+      "bytes": 316725,
+      "sha256": "316d3c196e5d8477dbb508ad6fba75e1887ae1a2981952528c301c021162eb4f",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-powerpoint-office-reopened-400.jpg",
+      "bytes": 304703,
+      "sha256": "2bb8c48c26441d0a4b2eb2ed44287b0a70dc7c6cf1b7d08bcdf11613964cb451",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-powerpoint-ordinary-inserted-400.jpg",
+      "bytes": 294431,
+      "sha256": "e9d1b7f3966288ea8d91b5fb1fc1a94eb06931dea96226d867911be9f1f6f39e",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-powerpoint-ordinary-reopened-400.jpg",
+      "bytes": 302240,
+      "sha256": "ea1187fa5934ef62621c0829a84e49e2cc5660787231362ab512d22519b1b144",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-word-comparison-reopened-200.jpg",
+      "bytes": 303575,
+      "sha256": "a8d06e4db6e1e083e1317d21f295854a42cdde3e10d8bdfa249213146eff1188",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-word-comparison-saved-200.jpg",
+      "bytes": 324241,
+      "sha256": "69230735f4f6517f3a0ebbf3c88b221c8717119a6a0402560619114d11502c01",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-word-office-inserted-200.jpg",
+      "bytes": 320944,
+      "sha256": "ee34233c8922a5ea0738db225ac23b88952c8ab36ac362b31b15ff3e96f9220d",
+      "kind": "byte-original controlled artifact"
+    },
+    {
+      "path": "docs/images/office-svg-placement/windows-word-ordinary-inserted-200.jpg",
+      "bytes": 312241,
+      "sha256": "5535899505ecd95aada5c646c4f680765eaca5f507ac70db825d28396d39eb39",
+      "kind": "byte-original controlled artifact"
+    }
+  ],
+  "scope": "Artifact hashes and semantic checker; not GUI replay or compiler qualification replay. The manifest self-hash is kept in the external review inventory."
+}

@@ -1,0 +1,20 @@
+   Compiling reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/molecule-name-label/crates/model)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.89s
+     Running unittests src/lib.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_model-bb0720808af6882b)
+
+running 12 tests
+test molecule_names::tests::atom_deletion_preserves_caption_edited_in_the_same_transaction ... ok
+test molecule_names::tests::caption_is_centered_below_visual_ink_and_keeps_names_as_plain_text ... ok
+test molecule_names::tests::changes_to_specified_stereo_or_unknown_stereo_remove_the_old_name ... ok
+test molecule_names::tests::chemical_edit_removes_obsolete_caption_atomically_and_undo_restores_it ... ok
+test molecule_names::tests::component_bond_charge_and_unknown_stereo_edits_remove_automatic_names ... ok
+test molecule_names::tests::deleting_atoms_removes_name_but_copying_a_caption_does_not_delete_it ... ok
+test molecule_names::tests::incorrect_verified_identity_cannot_install_a_caption ... ok
+test molecule_names::tests::repeated_show_reuses_one_caption_and_hide_is_one_undo_step ... ok
+test molecule_names::tests::save_reopen_retains_link_and_older_drawings_need_no_metadata ... ok
+test molecule_names::tests::translating_molecule_follows_geometry_and_map_or_display_edits_keep_the_name ... ok
+test molecule_names::tests::user_edited_or_independently_dragged_caption_detaches_and_is_preserved ... ok
+test molecule_names::tests::whole_molecule_copy_remaps_association_and_caption_only_copy_is_plain_text ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 138 filtered out; finished in 0.14s
+

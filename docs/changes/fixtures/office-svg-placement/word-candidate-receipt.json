@@ -1,0 +1,61 @@
+{
+  "status": "PASS",
+  "recorded_utc": "2026-10-09T16:14:04.154516+00:00",
+  "app": "word",
+  "app_version": "16.113.4",
+  "app_build": "16.113.26100421",
+  "candidate_producer_signed_sha256": "a526729562d646abb83038001f9a51041329ebb6ec768e72f634b8e99ec8b5a9",
+  "candidate_svg": {
+    "file": "single-candidate-office.svg",
+    "sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d"
+  },
+  "document": {
+    "file": "word-candidate-office.docx",
+    "bytes": 24234,
+    "sha256": "77ac452871df100126147def13fb880311d4fca5f8ed8e1e216b8ad57f8e306c"
+  },
+  "embedded_svg": {
+    "entry": "word/media/image2.svg",
+    "sha256": "8fd43b86eaa7e03d23e5408efc220a962fd91fc2ad93af0a3ec255e87da2d359",
+    "bytes": 5971,
+    "text_nodes": 0,
+    "root_dimensions": {
+      "width": "116.788",
+      "height": "38.5422",
+      "viewBox": "0 0 116.788 38.5422",
+      "overflow": "hidden"
+    },
+    "path_count": 5
+  },
+  "intrinsic_extent_emu": {
+    "cx": "1104900",
+    "cy": "368300"
+  },
+  "matches_baseline_office_extent": true,
+  "intrinsic_mm": {
+    "width": 30.691666666666666,
+    "height": 10.230555555555556
+  },
+  "native_checks": [
+    "Actual CUA Blank document/presentation, Picture from File",
+    "One picture;no resize/crop/reposition/style;viewonly400%",
+    "Complete O/SiMe3 labels/subscript and appropriate bond endpoints visible on initial and savedfreshreopen",
+    "LocalcontrolledSaveAs,closedowned document, reopenedownedrecent;Undo disabled",
+    "Inline graphic1"
+  ],
+  "raw_evidence": {
+    "word-candidate-inserted-400.jpg": {
+      "sha256": "9b489f93d0305190e4ccb0c39d37d1b63d3a8e01b5bacc11372d14c94104e1b4",
+      "bytes": 196636
+    },
+    "word-candidate-reopened-400.jpg": {
+      "sha256": "f1a4cbc69a2ef701809ec5f6322fb6ba7de2199926f2bf15c01e271db1b9536a",
+      "bytes": 189499
+    },
+    "word-candidate-reopened-ax.txt": {
+      "sha256": "5b621ea981758d32338088d4196cab7c3852a351e5e4dfb875b6568d0ced48eb",
+      "bytes": 4709
+    }
+  },
+  "scope": "macOS MicrosoftOffice actual GUI only;notWindows acceptance. Finalcandidate UIlabel correction under validation; exporter bytes must remain equal for finalsamebehaviorlink. Reopen viewport/selection can differ;no objectreposition."
+}

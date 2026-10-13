@@ -1,0 +1,215 @@
+{
+  "source_checkpoint": "3d58e6cae27be94332c54181c995d75adc02c6b3",
+  "declared_feature_base": "2811703dfe9570fcf99377a3d4132222ab71d25a",
+  "historical_baseline": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "platform": "macOS 26.5.1 arm64",
+  "candidate_build_profile": "debug, default features",
+  "candidate_signed_binary_sha256": "2bc9889b78d85970c23172b4e85b5ffafae3be969c1bdf53a4880b8925e4976d",
+  "candidate_source_mtimes_refreshed_content_unchanged": true,
+  "candidate_depfile_worktree": "geometry",
+  "candidate_own_source_confirmed": true,
+  "images": {
+    "template-search-before.jpg": {
+      "source_name": "baseline/porphine-template-search-before.jpg",
+      "sha256": "a476edd20600f93dedd58e489eed8d53bf6ee88ddbca50c5f00c7ead6f6bebad",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 100,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "template-search-after.jpg": {
+      "source_name": "after/porphine-template-search-after.jpg",
+      "sha256": "fc2cb52e2f8e07b01b6750924b5cbcdf29470d55f97fa01b3d0288dd460a7405",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 100,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "placed-fresh-reopened.jpg": {
+      "source_name": "after/porphine-placed-fresh-reopened-clean.jpg",
+      "sha256": "c095ccdf7dcfac5d6dc3e4dba6176b475c1c8856f1a4637b10d5026253fc6279",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 176,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "four-rotated-seeds.jpg": {
+      "source_name": "after/porphine-four-rotated-seeds.jpg",
+      "sha256": "38939c39585133d65fbfa4f753d921eec26f19d506bade7deb147f824c99f64b",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 176,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "manual-label-before.jpg": {
+      "source_name": "after/porphine-manual-construction-after.jpg",
+      "sha256": "1617ef207db63e8ee1e4d1a87bcd6f87e5bab073c5d76b160ad7b51b79729e85",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 176,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "manual-label-inward-after.jpg": {
+      "source_name": "after/porphine-manual-construction-inward-labels-after.jpg",
+      "sha256": "8eb3c6623aa4de2ac789d128a0f1c1099f33ee31d9f3340bbcba27a806e0efab",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 176,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "manual-fresh-reopened.jpg": {
+      "source_name": "after/porphine-manual-inward-fresh-reopened.jpg",
+      "sha256": "0f9f1bd3c64125a0aa9af42b20175c4adca0f0c85666e7f4375b4e20875d9831",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 176,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "phenyl-before.jpg": {
+      "source_name": "baseline/porphine-phenyl-stretch-before.jpg",
+      "sha256": "558effa1a1bb230204c39041b299513956a7e52d1a0e7d05a324c58552686370",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 152,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "phenyl-stretched-after.jpg": {
+      "source_name": "after/porphine-phenyl-stretched-after.jpg",
+      "sha256": "284fc8780432399d7b517f13cd4f8488038a693d9553b63f636dfbc213cc84a4",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 152,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "phenyl-stretch-controls.jpg": {
+      "source_name": "after/porphine-phenyl-stretch-controls.jpg",
+      "sha256": "61fe1b15f6e39c9e5f8f5137d802c6d1ee6855f602d10e2283066789b06e3818",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 152,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "ring-stretch-refused.jpg": {
+      "source_name": "after/porphine-ring-stretch-refused.jpg",
+      "sha256": "591cc994c02ab479274ce54134e786bcd91d1b5f92c20a94d455304e4b266b04",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 152,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    },
+    "phenyl-fresh-reopened.jpg": {
+      "source_name": "after/porphine-phenyl-stretch-fresh-reopened.jpg",
+      "sha256": "51bde638e246e56c724da6a014c5a6ed00fdc234402ad1493f2f63e2bcff120d",
+      "dimensions": [2560, 1704],
+      "format": "JPEG",
+      "zoom_percent": 146,
+      "f8_presentation": false,
+      "inspection": "original native bytes; inspected for legibility, clipping and unrelated content"
+    }
+  },
+  "native_files": {
+    "porphine-placed-fresh-reopened-desktop.rsk": {
+      "source_name": "porphine-placed-fresh-reopened-desktop.rsk",
+      "sha256": "f864ffdc64d6af029b64642f04f4b56bfc7b989aca51634fc4bdc61d539e2268"
+    },
+    "porphine-placed-redo.rsk": {
+      "source_name": "porphine-placed-redo.rsk",
+      "sha256": "f864ffdc64d6af029b64642f04f4b56bfc7b989aca51634fc4bdc61d539e2268"
+    },
+    "porphine-phenyl-stretch-redo.rsk": {
+      "source_name": "porphine-phenyl-stretch-redo.rsk",
+      "sha256": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c"
+    },
+    "porphine-phenyl-stretch-fresh-reopened-desktop.rsk": {
+      "source_name": "porphine-phenyl-stretch-fresh-reopened-desktop.rsk",
+      "sha256": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c"
+    },
+    "porphine-placed-undo.rsk": {
+      "source_name": "porphine-placed-undo.rsk",
+      "sha256": "aede89f4a68a902161a5dba6eb93e4b3227c727c01997f89164df47a4f5c91a0"
+    },
+    "porphine-phenyl-stretch-undo.rsk": {
+      "source_name": "porphine-phenyl-stretch-undo.rsk",
+      "sha256": "fafc7c6f471fc1adc14f42220379a8a2dcb7a29954c24bc3b24f4cc1577a52ca"
+    },
+    "porphine-seed-aligned-desktop.rsk": {
+      "source_name": "porphine-seed-aligned-desktop.rsk",
+      "sha256": "d3baa923c3704dde01083c7adf01905cfcf2b3e5614fc01be2a5f3c4f4e0318f"
+    },
+    "porphine-phenyl-stretched-desktop.rsk": {
+      "source_name": "porphine-phenyl-stretched-desktop.rsk",
+      "sha256": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c"
+    },
+    "porphine-four-seeds-desktop.rsk": {
+      "source_name": "porphine-four-seeds-desktop.rsk",
+      "sha256": "144adbdb189cab828fe67e7b20c01559b8350417af34c593c019d6f8b5689ece"
+    },
+    "porphine-manually-constructed-desktop.rsk": {
+      "source_name": "porphine-manually-constructed-desktop.rsk",
+      "sha256": "872cb03673d3d25b797d30b17eec0d1923fb60a586d499bcf09dbc3292b4f06c"
+    },
+    "porphine-placed-desktop.rsk": {
+      "source_name": "porphine-placed-desktop.rsk",
+      "sha256": "f864ffdc64d6af029b64642f04f4b56bfc7b989aca51634fc4bdc61d539e2268"
+    },
+    "porphine-seed-copy-90-desktop.rsk": {
+      "source_name": "porphine-seed-copy-90-desktop.rsk",
+      "sha256": "a8ccc3664222bd3645f9e142c254d86cb0c00c7e0bfa6246790d0f23325d37f3"
+    },
+    "porphine-manually-constructed-inward-labels-desktop.rsk": {
+      "source_name": "porphine-manually-constructed-inward-labels-desktop.rsk",
+      "sha256": "49d6928165e9c9ccb021c84ec432ede7b25e871eae986d4bcde903cf2d432c97"
+    },
+    "porphine-closed-carbon-scaffold-desktop.rsk": {
+      "source_name": "porphine-closed-carbon-scaffold-desktop.rsk",
+      "sha256": "62921b4fa6dab62875b70900e2511eacfcfbf03a5b2cdc0714a4b78adf742774"
+    },
+    "porphine-ring-stretch-refused-desktop.rsk": {
+      "source_name": "porphine-ring-stretch-refused-desktop.rsk",
+      "sha256": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c"
+    },
+    "porphine-manual-inward-fresh-reopened-desktop.rsk": {
+      "source_name": "porphine-manual-inward-fresh-reopened-desktop.rsk",
+      "sha256": "49d6928165e9c9ccb021c84ec432ede7b25e871eae986d4bcde903cf2d432c97"
+    },
+    "porphine-seed-arm-length-desktop.rsk": {
+      "source_name": "porphine-seed-arm-length-desktop.rsk",
+      "sha256": "b7c37ff07eae1ca276aae7d48aaa771319ffac7f0eff797f41faf0d71d1d8a5f"
+    },
+    "source-seed.rsk": {
+      "source_name": "porphine-rendered/stage-0.rsk",
+      "sha256": "b23c383d492a44ff8f7239cd056eb05f33bfee07993f4c4d4931ea59c628b9e8"
+    },
+    "source-aligned-seed.rsk": {
+      "source_name": "porphine-rendered/stage-1.rsk",
+      "sha256": "f7d75a5e4754adbe3710c164fdfd5fff9186914f03557bf966d236730a614a3d"
+    },
+    "source-template.rsk": {
+      "source_name": "porphine-rendered/porphine-template.rsk",
+      "sha256": "7ad6ab707a9112193a9245cc01daeb792716be8cb59baeff8f58568f08d43589"
+    },
+    "source-phenyl.rsk": {
+      "source_name": "porphine-rendered/stage-5.rsk",
+      "sha256": "fafc7c6f471fc1adc14f42220379a8a2dcb7a29954c24bc3b24f4cc1577a52ca"
+    }
+  },
+  "vendor_screenshot_or_artwork_bundled": false,
+  "limitations": [
+    "Template-search before capture uses frozen historical51fa; declared281 stack base is separately source-confirmed without porphine",
+    "Phenyl before/after and manual label before/after use the same candidate, not the historical baseline",
+    "Given carbon seed was supplied; no from-blank click count or speed comparison",
+    "Fresh reopen has disabled Undo/Redo, no selection handles; Fit changes camera only",
+    "Original vendor saturated scaffold screenshot/coordinates remain private; reference facts describe different C20H36N4 chemistry"
+  ]
+}

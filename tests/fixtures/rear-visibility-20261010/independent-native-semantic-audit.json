@@ -1,0 +1,216 @@
+{
+  "scope": "Bounded independent read-only JSON/native projection audit; no edits to project files, Cargo/builds, GUI actions, Git/PR operations, or manifests. This private receipt is the sole new file.",
+  "captured_utc": "2026-10-10T00:04:55.722268+00:00",
+  "inputs": [
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/back-opacity/tests/fixtures/rear-opacity/c60-visibility-native-25.rsk",
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/back-opacity/tests/fixtures/rear-opacity/c60-visibility-native-0.rsk",
+      "sha256": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "bytes": 46102
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/back-opacity/tests/fixtures/rear-opacity/c60-visibility-native-0-tilted.rsk",
+      "sha256": "1ca19b3dbdd78bf4b6bdd1d5fd759246d179a2fd058029d0082086bb4e7cf915",
+      "bytes": 46108
+    }
+  ],
+  "opacity_change": [
+    {
+      "path": "/depth_appearance/0/rear_opacity",
+      "before": 0.25,
+      "after": 0.0
+    }
+  ],
+  "tilt_changed_leaf_count": 180,
+  "tilt_changed_leaf_categories": {
+    "atom.position.x": 60,
+    "atom.position.y": 60,
+    "atom.depth": 60
+  },
+  "native_version": 22,
+  "atom_count": 60,
+  "bond_count": 90,
+  "atom_ids": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60
+  ],
+  "retained_exact": {
+    "all_noncoordinate_atom_fields": true,
+    "all_full_bond_objects_including_order_display_color_stereo_z_order": true,
+    "all_nonatom_top_level_fields_including_appearance_scope_and_labels": true
+  },
+  "bond_order_counts": {
+    "1": 60,
+    "2": 30
+  },
+  "bond_display_counts": {
+    "plain": 90
+  },
+  "projection_flags_count": {
+    "False": 90
+  },
+  "atom_chemical_summary": "60 neutral nonisotopic C atoms, radical_electrons=0, explicit_h=0, label_h=0, no_implicit=true; all stereo and other stored atom fields exact. One connected 3-regular graph, bond-order valence4 at all60 atoms.",
+  "rotation": {
+    "xyz_are_changed_not_identical": true,
+    "convention": "Orthographic X/Y position plus depth, rotated around the atom-mean center. X tilt followed by Y tilt. Positive depth faces viewer.",
+    "fitted_matrix": [
+      [
+        0.8191520386978605,
+        -0.20788591032884332,
+        0.5345777426547716
+      ],
+      [
+        -9.864263097320025e-09,
+        0.9320078449061286,
+        0.36243802773530664
+      ],
+      [
+        -0.5735764580382415,
+        -0.29689184915478717,
+        0.7634561587889304
+      ]
+    ],
+    "matrix_determinant": 0.9999999768880995,
+    "fitted_x_degrees": -21.249999942924536,
+    "fitted_y_degrees": 35.00000120161004,
+    "expected_x_degrees": -21.25,
+    "expected_y_degrees": 35.0,
+    "max_expected_xyz_residual_document_units": 1.1327625117019124e-05,
+    "original_center": [
+      4.3333333395641677e-07,
+      -1.9499999552863302e-07,
+      5.833333508083645e-08
+    ],
+    "tilted_center": [
+      2.3866666906495006e-07,
+      -2.3733333591735574e-07,
+      -6.823333375649554e-07
+    ],
+    "max_center_delta_document_units": 7.406666726457919e-07,
+    "max_all1770_pair_distance_delta_document_units": 1.899187961384996e-05,
+    "max90_bond_distance_delta_document_units": 1.0362578422018487e-05,
+    "gesture_comparison": "Given140x85 screenshot-pixel drag, expected angles match the source0.5degree/logical-point rule if capture is2pixels/logical-point. Native fitted angles are proved by saved coordinates;2x capture scaling was not independently measured here."
+  },
+  "render_source_check": "scene::primitives creates rear_opacity::Paint from original currentXYZ before RGB/style materialization. Visibility recomputes from stored position/depth; rear_opacity0 is a per-scope alpha target for view-occluded ink, not a blanket fade of all points beyond a depth midplane. Stored old weights remain exact and do not override current visibility.",
+  "image_observation": "Inspected existing zero-after and tilted-selection-cleared raw screenshots. Both visibly show an unbroken solid outer cage rim; their front-face layouts differ consistently with a tilt. No pixel-exact render reproduction or per-pixel opacity measurement was performed.",
+  "images": [
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-after.jpg",
+      "sha256": "1fe1247ced7a3583b745de098b08ff9ad314a32f84fdf2f9db17d3bc0e785d5b",
+      "visually_inspected_by_this_audit": true
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-one-undo-restores25.jpg",
+      "sha256": "e6434f011ce12975211bc1341a84cca0feb29706ead751031748f5d2b8cb1443",
+      "visually_inspected_by_this_audit": false
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-redo-restores0.jpg",
+      "sha256": "9012d3624d4b2827e1f7595defc2a4b26c0785907c3d60275555822f7d4b5021",
+      "visually_inspected_by_this_audit": false
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-visibility-correction/native-after/c60-zero-tilted-selection-cleared.jpg",
+      "sha256": "f1178535a9c93ebf9fdf44ed801d241041475bca43f47d0844fdecb6669e06da",
+      "visually_inspected_by_this_audit": true
+    }
+  ],
+  "source_receipts": [
+    {
+      "path": "src/canvas/tilt.rs",
+      "sha256": "a0ed3eca222a19e70cfd7380d0f6416885360d4b2576fba2c0eafb0b48c4fa7d"
+    },
+    {
+      "path": "src/canvas/input/release.rs",
+      "sha256": "0d8a2d725a8a47deceb145b1f6c2058c2b8670037e95de80566dfa0860c8587f"
+    },
+    {
+      "path": "crates/model/src/projection.rs",
+      "sha256": "295acc4496a8485cd2ec84944afc52298e3577dd353ac2249204f563b463e13b"
+    },
+    {
+      "path": "crates/model/src/depth_appearance.rs",
+      "sha256": "e8115ff61a77fcd35ae8d97903b07d151be7d6071cb61be9442fa844706f9bcd"
+    },
+    {
+      "path": "crates/model/src/rear_opacity.rs",
+      "sha256": "e93a877502b208898d87b27e4a3f7a3b6e55b290dd9105acaa2ff97331f394c4"
+    },
+    {
+      "path": "crates/model/src/rear_opacity/visibility.rs",
+      "sha256": "969d6e1ee043e3a64a5e11290c100db6934c1edbda08f0d3bea9d35b085b34db"
+    },
+    {
+      "path": "crates/model/src/scene.rs",
+      "sha256": "2df25cd1b68adaabe96aa2c49d8cb9eba3e64d7e382b2be403872af84b595651"
+    }
+  ],
+  "limitations": [
+    "No fresh-process reopen/history verification performed by this audit; root owns those GUI checks.",
+    "No new execution of Rust renderer or resource-policy tests.",
+    "All chemical/style preservation claims are exact against the supplied25/0 originals, not an independent synthesis or IUPAC identity validation.",
+    "The originalXYZ are rotated, not byte-preserved; rigidity and resulting orthographic projection were checked numerically within observedfloat rounding."
+  ]
+}

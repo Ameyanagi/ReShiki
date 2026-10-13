@@ -1,0 +1,28 @@
+{
+  "phase": "app-history-complete-bin",
+  "argv": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "reshiki",
+    "--bin",
+    "reshiki",
+    "rear_"
+  ],
+  "env": {
+    "CARGO_TARGET_DIR": "/Users/ryuichi/dev/ReShiki/target",
+    "CARGO_BUILD_JOBS": "4"
+  },
+  "start": "2026-10-09T22:43:48.746573+00:00",
+  "end": "2026-10-09T22:43:56.385599+00:00",
+  "seconds": 7.638799292,
+  "exit_code": 0,
+  "source_count": 1071,
+  "source_aggregate": "173a0dd53b1af5c66095f774f737cdde36657e865c991a8af5d5ed7a14fbb59e",
+  "protected_count": 164,
+  "pre_hashes_exact": true,
+  "post_hashes_exact": true,
+  "stdout_sha256": "26b8942de103a33b4a868baf176e52fd65247b051455c0337f883de63dd74200",
+  "stderr_sha256": "2427a67420012d394e9eb174729bff3b0cf25c2cd973563a0c8d9fb72404b8fa"
+}

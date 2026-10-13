@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "time_unix": 1791561916.960059,
+  "launch": "CUA exact verified bundle path after confirmedzero ReShiki processes",
+  "observations": [
+    {
+      "pid": 52372,
+      "kernel_executable": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Office SVG Verified.app/Contents/MacOS/reshiki",
+      "sha256": "a526729562d646abb83038001f9a51041329ebb6ec768e72f634b8e99ec8b5a9"
+    }
+  ]
+}

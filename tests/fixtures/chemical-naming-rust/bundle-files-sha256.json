@@ -1,0 +1,11 @@
+{
+  "Contents/Info.plist": "b85452464eb436d7741830bd20671f823f16e3e7e7a3ef36d28eeebe818568f1",
+  "Contents/MacOS/reshiki": "ef5948ea8c060ce2b7f77a927f45c4f28990052e0d33bb8da1feea98f0e8efd4",
+  "Contents/Resources/Licenses/LICENSE": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab",
+  "Contents/Resources/Licenses/LICENSE-APACHE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "Contents/Resources/Licenses/LICENSE-MIT": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891",
+  "Contents/Resources/Licenses/NOTICE": "e733c3541709b28c56e06f0249977f51f2c89ac8d85a39b540f1acd54dcafd87",
+  "Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": "84029e6c2a6bf804a9ba40ce041e0d457f2d06f1b5e8cef7d2ea23e76458e0d2",
+  "Contents/Resources/ReShiki.icns": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766",
+  "Contents/_CodeSignature/CodeResources": "70238dfea7c09eb4034c6d735cce63fa2f4ab2ac0322f5d25c65287fc3028799"
+}

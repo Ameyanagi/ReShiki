@@ -1,0 +1,80 @@
+{
+  "observed_utc": "2026-10-09T22:13:04.6530722Z",
+  "exists": true,
+  "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-import-20261010.rsk",
+  "file_bytes": 492401,
+  "file_sha256": "7a689884c15fb62bacd7b1ad9bac9f602d4651a769657bdc9ac3958ffb30158f",
+  "file_created_utc": "2026-10-09T22:12:01.1862705Z",
+  "file_modified_utc": "2026-10-09T22:12:01.1862705Z",
+  "metadata_stable_across_read": true,
+  "second_read_sha256": "7a689884c15fb62bacd7b1ad9bac9f602d4651a769657bdc9ac3958ffb30158f",
+  "version": 20,
+  "atom_count": 0,
+  "bond_count": 0,
+  "graphic_count": 1,
+  "source_path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\source.emf",
+  "source_sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a",
+  "graphics": [
+    {
+      "metadata": {
+        "id": 1,
+        "kind": "picture",
+        "origin": {
+          "x": -413.38586,
+          "y": -246.56302
+        },
+        "axis_x": {
+          "x": 826.7717,
+          "y": 0.0
+        },
+        "axis_y": {
+          "x": 0.0,
+          "y": 496.06302
+        },
+        "style": {
+          "stroke": [
+            0,
+            0,
+            0
+          ],
+          "fill": null,
+          "width_pt": 0.6,
+          "pattern": "solid"
+        },
+        "sides": "both",
+        "phase": "solid",
+        "phase_flipped": false,
+        "layer": -1
+      },
+      "emf_bytes": 12860,
+      "emf_sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a",
+      "emf_matches_source": true,
+      "emf_frame_0_01mm": [
+        0,
+        0,
+        10000,
+        6000
+      ],
+      "emf_frame_mm": [
+        100,
+        60
+      ],
+      "png_bytes": 355832,
+      "png_sha256": "1dabe5ad6f5806cd121f294a19eaa697dfc9f6957518da19ecbfe858733139ca",
+      "png_dimensions": [
+        4724,
+        2834
+      ]
+    }
+  ],
+  "processes": [
+    {
+      "pid": 5852,
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-candidate-20261009\\reshiki.exe",
+      "sha256": "124336a60753ad7cd3bba0c9bf4f453298d6fac7d857dbe1562903e2e0fc88b2",
+      "command": "\"C:\\Users\\ryuichi\\dev\\reshiki-emf-candidate-20261009\\reshiki.exe\" "
+    }
+  ],
+  "reference_100x60_axes_exact_match": true,
+  "scope": "Read-only file bytes read and hashed twice; durable file presence demonstrated, not fsync or power-loss durability proof. No copy of raw native drawing performed."
+}

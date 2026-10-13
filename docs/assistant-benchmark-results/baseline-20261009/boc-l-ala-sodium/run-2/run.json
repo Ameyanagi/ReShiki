@@ -1,0 +1,24 @@
+{
+  "configuration": {
+    "auto_apply": false,
+    "effort": "xhigh",
+    "generation_started": [
+      {
+        "effort": "xhigh",
+        "elapsed_seconds": 1.6436754169999999,
+        "event": "started",
+        "model_label": "GPT-6.1-Sol"
+      }
+    ],
+    "model": "gpt-6.1-sol",
+    "provider": "Codex app-server",
+    "request_timeout_seconds": 116,
+    "requested_effort": "xhigh",
+    "requested_model": "gpt-6.1-sol",
+    "service_tier": "default"
+  },
+  "elapsed_seconds": 87.737410833,
+  "error": "Codex returned invalid structured output: expected value at line 1 column 1",
+  "review": null,
+  "status": "failed"
+}

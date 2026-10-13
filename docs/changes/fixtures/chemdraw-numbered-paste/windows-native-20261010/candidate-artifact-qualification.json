@@ -1,0 +1,48 @@
+{
+  "all_inventory_bytes_match_exact_git_objects": true,
+  "archive_sha256": "7049fade68352359d06fc7643c836387579e360d7deca4a9f689430cd02419f8",
+  "artifact": {
+    "archive_download_url": "https://api.github.com/repos/Ameyanagi/ReShiki/actions/artifacts/11649199842/zip",
+    "created_at": "2026-10-09T23:17:48Z",
+    "digest": "sha256:7049fade68352359d06fc7643c836387579e360d7deca4a9f689430cd02419f8",
+    "expired": false,
+    "expires_at": "2026-10-23T23:17:44Z",
+    "id": 11649199842,
+    "name": "windows-review-pr284-127d1a6247d390d33d420f2168f4a657d2659f7b-38002219982-1",
+    "node_id": "MDg6QXJ0aWZhY3QxMTY0OTE5OTg0Mg==",
+    "size_in_bytes": 22337477,
+    "updated_at": "2026-10-09T23:17:48Z",
+    "url": "https://api.github.com/repos/Ameyanagi/ReShiki/actions/artifacts/11649199842",
+    "workflow_run": {
+      "head_branch": "fix/chemdraw-binary-paste",
+      "head_repository_id": 1373582807,
+      "head_sha": "127d1a6247d390d33d420f2168f4a657d2659f7b",
+      "id": 38002219982,
+      "repository_id": 1373582807
+    }
+  },
+  "attempt": 1,
+  "build_receipt_sha256": "3e6bd7733461a43707fea2b165fd63f10efbf3cc3a0ea7c2e8fca8f4ddab7cad",
+  "exe_bytes": 55299584,
+  "exe_sha256": "3e56439b55cd3c7dc047f431bb56f60407d17bc56fae0e1cb76641f1ee2e6fb9",
+  "executable_run_on_Mac": false,
+  "guest_operations": false,
+  "guest_transfer_authorized": false,
+  "head": "127d1a6247d390d33d420f2168f4a657d2659f7b",
+  "job": 114062737440,
+  "job_conclusion": "success",
+  "minimum_remaining_guest_bytes": 157286400,
+  "pe_architecture": "x64",
+  "portable_app_bytes": 57899395,
+  "pr": 284,
+  "run": 38002219982,
+  "source_inventory_count": 2581,
+  "subsystem": "Windows GUI",
+  "_provenance": {
+    "original_record": "qualification.json",
+    "original_sha256": "9e23d88f159ce7c2a42089ae0b367eef3d9e22e4edf1f999e4f2d298ac51f11f",
+    "representation": "Derived JSON, not a byte-original receipt. Only path strings were normalized; values and conclusions are retained.",
+    "normalization_mapping": [],
+    "original_storage": "Immutable private acceptance/audit record; full original-to-public mapping is retained for maintainer review."
+  }
+}

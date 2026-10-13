@@ -1,0 +1,54 @@
+{
+  "scoped_mol_tests": {
+    "passed": 21,
+    "ignored_existing_measurement": 1
+  },
+  "raw_parser": {
+    "accepted": 26236,
+    "rejected": 24374,
+    "mismatches": 0
+  },
+  "raw_drawing": {
+    "accepted": 26223,
+    "rejected": 24387,
+    "spatial": 4577,
+    "mismatches": 0
+  },
+  "substance_groups": {
+    "accepted": 11313,
+    "rejected": 20782
+  },
+  "native_complete_responses": {
+    "accepted": 1266,
+    "rejected": 219,
+    "mismatches": 0,
+    "expected_display_delta": "exact source Z and projection/stereo capture only"
+  },
+  "clippy": "cargo clippy --locked -p reshiki-io --lib --tests -- -D warnings",
+  "rustfmt": "passed",
+  "python_compile": "passed",
+  "git_diff_check": "passed",
+  "packaged_candidate": {
+    "cases": 28,
+    "independent_rdkit": "2026.03.6",
+    "identity_regressions": 0
+  },
+  "baseline_28": {
+    "expected_flattened_explicit_h_controls": 28,
+    "recorded_any_to_e_identity_regressions": 2
+  },
+  "fresh_process_reopen": {
+    "source_native": "candidate-alkane-3d-redo.rsk",
+    "clean_title": true,
+    "undo_disabled": true,
+    "redo_disabled": true,
+    "formula": "C6H14",
+    "atoms": 6,
+    "bonds": 5,
+    "canonical_smiles": "CCCCCC",
+    "native_bytes_not_rewritten": true,
+    "reviewer": "@Ameyanagi"
+  },
+  "cargo_lane_released_to": "ROOT",
+  "no_push_or_gui_by_worker": true
+}

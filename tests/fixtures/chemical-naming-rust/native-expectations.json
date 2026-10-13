@@ -1,0 +1,9 @@
+{
+  "families": {
+    "ethanol-rust-native.rsk": "ethanol",
+    "ethanol-rust-caption-native.rsk": "ethanol",
+    "r-lactic-rust-native.rsk": "r-lactic"
+  },
+  "byte_equal_groups": [],
+  "history_scope": "GUI history/reopen checked by root; three saved originals only, no invented pre/post saved copies"
+}

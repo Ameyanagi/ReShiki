@@ -1,0 +1,427 @@
+{
+  "issue": 67,
+  "status": "Open; under review",
+  "pr": "https://github.com/Ameyanagi/ReShiki/pull/288",
+  "declared_base": {
+    "branch": "feat/mechanism-curve-controls",
+    "head": "5e68c9b4811e2039148eafd0eb68f54cf03db19c",
+    "production": "477b97f4da391c628d4e7fe5a7998f5b335b9ff3"
+  },
+  "reviewed_source": "2b3fdb4043fb7f4315f5c116a93194652ca09d17",
+  "source_only_merge": "e10c876faf1c24bc807fbd4caa8d2117286e8ea5",
+  "native_version": 20,
+  "signed_binary_sha256": "b630b1ff119a681d82b35f0a64c20cda92e364d11e70a71f816a8ee9a9e8ed6c",
+  "raw_binary_sha256": "fabda5f1b91ffafcc60ddfc7b2c560e45cc31efc3612c19d9bfbf7bb9b4ee1f0",
+  "source_aggregate_sha256": "ac1539ac33b7ab32cdc3c5b44933dd29118f703b3f9aaeb0b217661c5ff734bb",
+  "own_compiler_artifacts_fresh_false": 15,
+  "current_compiled_inputs": {
+    "immutable_built_inputs": 1072,
+    "unchanged_at_e10c": 1071,
+    "changed_test_only_input": "reference/native_aromatic.rs",
+    "not_relabelled_as_all_current_inputs_equal": true
+  },
+  "independent_audit": {
+    "status": "pass",
+    "assertions_passed": 5094,
+    "input_count": 104,
+    "public_final_native_saves": 17,
+    "public_final_raw_captures": 8,
+    "receipt": "docs/changes/tunable-pen-lines-audit.json",
+    "receipt_sha256": "694e9495bb66e4a11cd26050c295ad878d4e00f982a4bed1bc0341ba55b46fd2",
+    "checker": "docs/changes/tunable-pen-lines-audit.py",
+    "checker_sha256": "e3aaa3673e69af42f2be21d7a66cb3d48ff5b0d9f7d9c99e2e2d4e409ca5f1e0",
+    "archival_exact_original": false,
+    "tool_history_process_actions": "ROOT desktop observations; saved-native equality independently checked",
+    "full_receipt_contains_excluded_trial_metadata_but_trial_files_not_published": true,
+    "original_receipt_sha256": "1d4f4d3a20aceb882bc5fb9369be58419f83abff8b79b525ca6562958b500d1a",
+    "public_receipt_formatting_only": true,
+    "checker_archival_exact_original": true
+  },
+  "validation": {
+    "final_focused_tests": 11,
+    "scoped_check": "PASS",
+    "strict_clippy": "PASS",
+    "fmt_diff": "PASS",
+    "historical_a730_model_canvas_export_and_widget_checks": "PASS; unchanged scope not rerun at final head",
+    "full_CI_and_updated_reference_guard_replay": "pending"
+  },
+  "images": [
+    {
+      "path": "docs/images/tunable-pen-lines/pen-interior-node-controls-left-behind.jpg",
+      "sha256": "974145f3ee95c8db4aff9216732b4953c79b1257e83aa7a16dc64ace7dee9d6b",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-interior-node-controls-follow.jpg",
+      "sha256": "d288ee8672a9bec4bf427af99f3cf17777b9074d6e6215a043f878782de59eca",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-continue-selection-lost-matched-148-before.jpg",
+      "sha256": "1c186526fff2133aa2efda635f04cadc4ce34652b658b27877aff3ba07d3e5af",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-continue-explicit-select-final-retained.jpg",
+      "sha256": "053f1b336ff42621ef6fc9f968fe52bdd2bdab9226d2c4907cf00d5ce96198d4",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-continue-explicit-select-final-appended.jpg",
+      "sha256": "34a33c2174bab84020ab08efad1d3b5fc682a4fd77d2b730a831ca221cc718e6",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-continue-explicit-edit-points-final-retained.jpg",
+      "sha256": "6f8d167c9a4293505d8c8f87de30c048ed9eb08f6f1b64eb7e07ebe5ba7c0160",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-node-click-creates-edit-before-fix.jpg",
+      "sha256": "1053fc8f61e2ed27a21450e5de77f58149483a62535f3d3e8fc4d7f20aadb407",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-node-click-final-no-edit.jpg",
+      "sha256": "713935e506cdfde507825f16e91a1e73756e69ea1b22dec95721f8ca52cc7e57",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-node-offset-drag-final.jpg",
+      "sha256": "8fc2abccdd1dbae91e1160f919ec4c669f88c6aa4866f860fb2377ae93f56c43",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-tangent-offset-drag-final.jpg",
+      "sha256": "79478b0314b0279464644b5c2436a5522baa528a2e4490ac82bbbdada7ca1397",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-final-continued-clean.jpg",
+      "sha256": "2218e66f2efb32e9cb56e1be70dba016dd3ea8c1f362b4612cd11e557d14b1ce",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    },
+    {
+      "path": "docs/images/tunable-pen-lines/pen-final-five-nodes-fresh-reopened-controls.jpg",
+      "sha256": "d474ea1f2a7f476151b4c033052a0331c53678e53c2d6303def1f4d40d9ad7b7",
+      "format": "image/jpeg",
+      "pixel_dimensions": [2560, 1704],
+      "untouched_original": true
+    }
+  ],
+  "native_fixtures": [
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-four-nodes.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-continue-select-before-matched-148.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-node-click-before-fix.rsk",
+      "sha256": "64be52a4960a88778c444a7486f3271fd0a6ba7ee9628ed8432cb2056d9fcbd3",
+      "bytes": 1677,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "01b81dc8"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-baseline-node-desktop.rsk",
+      "sha256": "c79813d01ac1475bd6239faec7d8af11b427e758a8abd5ce1abab9c66dbbbc6b",
+      "bytes": 4991,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "477b97f4"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-candidate-node-desktop.rsk",
+      "sha256": "a598130d035ad3e5871145d1ccb53451bf8c7f6a6c12aaf9af93e392901bfdc1",
+      "bytes": 5013,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-candidate-node-undo.rsk",
+      "sha256": "2d37acf65cd67dd9a047add73c985400b652bcb233c9010a24848bb2d7ea6c57",
+      "bytes": 4980,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-candidate-node-redo.rsk",
+      "sha256": "a598130d035ad3e5871145d1ccb53451bf8c7f6a6c12aaf9af93e392901bfdc1",
+      "bytes": 5013,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-three-nodes.rsk",
+      "sha256": "7229659e758aa7faf14477afd96e08e767c07cfc2eb0bffb1ebb4690e3665db0",
+      "bytes": 1328,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-four-node-undo.rsk",
+      "sha256": "7229659e758aa7faf14477afd96e08e767c07cfc2eb0bffb1ebb4690e3665db0",
+      "bytes": 1328,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-four-node-redo.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-inserted-node.rsk",
+      "sha256": "3c881c3c292bac46f09a6a73b8ad3f4268025d31a9fae93432d603014e774b3c",
+      "bytes": 1789,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-deleted-node.rsk",
+      "sha256": "ab9334cd5df13ff00b332f759d69c470ea47c803aac842bf9c1eab4b7a0eb9fa",
+      "bytes": 1525,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-straight-segment.rsk",
+      "sha256": "c25dacc958aba2edc5a795bf934cd94fc68b381d8e0f419f44b144d0ccb60297",
+      "bytes": 1457,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-curved-segment.rsk",
+      "sha256": "63c3521776c1ce7dc144cafc7bf8df6f306302037dbddad75365fb6e3990ddf5",
+      "bytes": 1666,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-closed.rsk",
+      "sha256": "1f96604c8b917b17ed55a3f8ac74b77e6239d30f1c321701cfd2d143b20d143f",
+      "bytes": 1840,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-authored-reopened-path.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "historical desktop output",
+      "captured_source": "a7301867"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-node-click-final-no-edit.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-tangent-click-final-no-edit.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-select-final-no-edit.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-edit-points-final-no-edit.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-node-offset-drag-final.rsk",
+      "sha256": "f7dd075ac8d3b651609dd46be6f7d5517e9627cf4cb72a57af6dd5bf1e767d34",
+      "bytes": 1678,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-node-offset-drag-final-undo.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-node-offset-drag-final-redo.rsk",
+      "sha256": "f7dd075ac8d3b651609dd46be6f7d5517e9627cf4cb72a57af6dd5bf1e767d34",
+      "bytes": 1678,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-tangent-offset-drag-final.rsk",
+      "sha256": "289302f38af932141712f127676cd365b83c427d9f87ce7a340bae05e515c201",
+      "bytes": 1668,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-tangent-offset-drag-final-undo.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-tangent-offset-drag-final-redo.rsk",
+      "sha256": "289302f38af932141712f127676cd365b83c427d9f87ce7a340bae05e515c201",
+      "bytes": 1668,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-select-final-appended.rsk",
+      "sha256": "c1ba44b9eefb2b4f357982dc0d0cb8cd015b3f4acd0bc45a2625f0e995316803",
+      "bytes": 1797,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-select-final-undo.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-select-final-redo.rsk",
+      "sha256": "c1ba44b9eefb2b4f357982dc0d0cb8cd015b3f4acd0bc45a2625f0e995316803",
+      "bytes": 1797,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-edit-points-final-appended.rsk",
+      "sha256": "f32b1ed0ee928fc1f356aed6f2adb143d213aba6e4b880dfde3f32b1ee027ad2",
+      "bytes": 1797,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-edit-points-final-undo.rsk",
+      "sha256": "bfdeffe7ac7b3d49441abe93309e7f575dba83c6cea8e954e6201f8063b43ba9",
+      "bytes": 1658,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-edit-points-final-redo.rsk",
+      "sha256": "f32b1ed0ee928fc1f356aed6f2adb143d213aba6e4b880dfde3f32b1ee027ad2",
+      "bytes": 1797,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    },
+    {
+      "path": "tests/fixtures/tunable-pen-lines-67/pen-final-five-nodes-fresh-reopened.rsk",
+      "sha256": "f32b1ed0ee928fc1f356aed6f2adb143d213aba6e4b880dfde3f32b1ee027ad2",
+      "bytes": 1797,
+      "version": 20,
+      "role": "final audited b630 desktop output",
+      "captured_source": "2b3fdb40"
+    }
+  ],
+  "public_final_native_paths": [
+    "tests/fixtures/tunable-pen-lines-67/pen-node-click-final-no-edit.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-tangent-click-final-no-edit.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-select-final-no-edit.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-edit-points-final-no-edit.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-node-offset-drag-final.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-node-offset-drag-final-undo.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-node-offset-drag-final-redo.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-tangent-offset-drag-final.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-tangent-offset-drag-final-undo.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-tangent-offset-drag-final-redo.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-select-final-appended.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-select-final-undo.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-select-final-redo.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-edit-points-final-appended.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-edit-points-final-undo.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-continue-explicit-edit-points-final-redo.rsk",
+    "tests/fixtures/tunable-pen-lines-67/pen-final-five-nodes-fresh-reopened.rsk"
+  ],
+  "capture_limits": [
+    "Final matched captures 148% rounded UI; fresh process reopen 136% separate view.",
+    "Historical node transport 127% 477b production versus a730 candidate.",
+    "Earlier Pen Continue and click defects are within-PR implementations, not declared stack base.",
+    "Tab/title/status/default selected-node choice differs as described in visual review.",
+    "No image transformations; vendor artwork not published."
+  ],
+  "license": "MIT OR Apache-2.0"
+}

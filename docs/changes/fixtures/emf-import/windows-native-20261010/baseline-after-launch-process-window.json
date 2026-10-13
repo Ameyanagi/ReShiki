@@ -1,0 +1,35 @@
+{
+  "observed_utc": "2026-10-09T22:45:20.0005552Z",
+  "ssh_session_id": 0,
+  "processes": [
+    {
+      "pid": 13752,
+      "parent_pid": 7520,
+      "session_id": 2,
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\base-51fa0991\\reshiki.exe",
+      "command_line": "\"C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\base-51fa0991\\reshiki.exe\" ",
+      "created_utc": "2026-10-09T22:44:05.8777720Z",
+      "sha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+      "bytes": 102718976,
+      "window": {
+        "handle": 0,
+        "title": "",
+        "dpi": 0,
+        "dpi_awareness": -1,
+        "rect_success": false,
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "baseline_build_log": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\build-base.log",
+    "exists": true,
+    "sha256": "91cd837c9e043a221e26cfd4f7ab4962866d42fad911bec53d5c2580472719f2",
+    "tail": "    Finished `dev` profile [unoptimized] target(s) in 0.71s"
+  }
+}

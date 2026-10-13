@@ -1,0 +1,79 @@
+{
+  "utc": "2026-10-10T09:19:26.3824230Z",
+  "files": [
+    {
+      "path": "windows-si-single-v1.cdx",
+      "bytes": 1767,
+      "sha256": "4daf91a99999dc284083bed64703c8a4bdc253460e0892d99296a5bd24ca4400"
+    },
+    {
+      "path": "windows-si-clipboard-after-v1.rsk",
+      "bytes": 11031,
+      "sha256": "30fd5d77ea94b88ae05ec1a36e6e1b050de7d1f2c75f2b506de2b06ac4bf628d"
+    },
+    {
+      "path": "windows-si-powerpoint-v1.pptx",
+      "bytes": 39277,
+      "sha256": "98c78dfa5a3856052ec6158000c6b32687c6042c435e8be475b93bc4c443433b"
+    },
+    {
+      "path": "windows-si-powerpoint-paste-after-v1.rsk",
+      "bytes": 11031,
+      "sha256": "30fd5d77ea94b88ae05ec1a36e6e1b050de7d1f2c75f2b506de2b06ac4bf628d"
+    }
+  ],
+  "processes": [
+    {
+      "pid": 8980,
+      "session": 2,
+      "creation_utc": "2026-10-09T23:53:02.6776470Z",
+      "path": "owned-runtime/baseline/reshiki.exe",
+      "sha256": "752743a45e6afda49de4661d68bfcf07b7ef736c4aa3a3829d799171dae6a894"
+    },
+    {
+      "pid": 13696,
+      "session": 2,
+      "creation_utc": "2026-10-10T09:03:48.0920060Z",
+      "path": "owned-runtime/candidate/reshiki.exe",
+      "sha256": "3e56439b55cd3c7dc047f431bb56f60407d17bc56fae0e1cb76641f1ee2e6fb9"
+    }
+  ],
+  "_provenance": {
+    "original_record": "fresh-proof-normalized.json",
+    "original_sha256": "ad38476b99096af707b47a1689e59480b353858bc21646343042c1a78eaccbfe",
+    "representation": "Derived JSON, not a byte-original receipt. Only path strings were normalized; values and conclusions are retained.",
+    "normalization_mapping": [
+      {
+        "pointer": "/files/0/path",
+        "original_basename": "windows-si-single-v1.cdx",
+        "public_value": "windows-si-single-v1.cdx"
+      },
+      {
+        "pointer": "/files/1/path",
+        "original_basename": "windows-si-clipboard-after-v1.rsk",
+        "public_value": "windows-si-clipboard-after-v1.rsk"
+      },
+      {
+        "pointer": "/files/2/path",
+        "original_basename": "windows-si-powerpoint-v1.pptx",
+        "public_value": "windows-si-powerpoint-v1.pptx"
+      },
+      {
+        "pointer": "/files/3/path",
+        "original_basename": "windows-si-powerpoint-paste-after-v1.rsk",
+        "public_value": "windows-si-powerpoint-paste-after-v1.rsk"
+      },
+      {
+        "pointer": "/processes/0/path",
+        "original_basename": "reshiki.exe",
+        "public_value": "owned-runtime/baseline/reshiki.exe"
+      },
+      {
+        "pointer": "/processes/1/path",
+        "original_basename": "reshiki.exe",
+        "public_value": "owned-runtime/candidate/reshiki.exe"
+      }
+    ],
+    "original_storage": "Immutable private acceptance/audit record; full original-to-public mapping is retained for maintainer review."
+  }
+}

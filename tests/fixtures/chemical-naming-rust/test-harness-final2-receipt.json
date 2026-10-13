@@ -1,0 +1,13 @@
+{
+  "test_binary": "/tmp/reshiki-opsin-core-target/debug/deps/reshiki-f1afd2d79a2afed2",
+  "test_binary_sha256": "e1471f8069234b76162d9648bc13eebbe38209e850d1c0d368ffd6c13ca72e7b",
+  "source_worktree": "/Users/ryuichi/dev/ReShiki-worktrees/naming-backend",
+  "source_file_sha256": "53cd1a07e17235e0362b3944e6e4d88c6b80ebefadfff6248d4dd1d91ce26684",
+  "compiled_by_command": "cargo test --locked --offline -p reshiki --lib naming::local::tests::cancellation_kills_and_reaps_child_and_removes_private_payload -- --exact --nocapture",
+  "compile_and_focused_log_sha256": "7fdb731201b88efced34022ff04b6460262fa0f8d02ece7b49c8fe96b096e78c",
+  "focused_result": "1 passed,0 failed",
+  "measured_startup_ms": 322.9135,
+  "measured_cancellation_ms": 24.768792,
+  "actual_cancellation_limit_seconds": 3,
+  "prior_failure_phase_cause": "not established"
+}

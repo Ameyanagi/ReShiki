@@ -1,0 +1,118 @@
+{
+  "method": "Independent native JSON arithmetic; no implementation imports",
+  "coordinate_tolerance_world": 3e-5,
+  "exact_restoration": [
+    {
+      "before": "porphine-placed-desktop.rsk",
+      "after": "porphine-placed-redo.rsk",
+      "all_native_fields_exact": true
+    },
+    {
+      "before": "porphine-placed-desktop.rsk",
+      "after": "porphine-placed-fresh-reopened-desktop.rsk",
+      "all_native_fields_exact": true
+    },
+    {
+      "before": "source-phenyl.rsk",
+      "after": "porphine-phenyl-stretch-undo.rsk",
+      "all_native_fields_exact": true
+    },
+    {
+      "before": "porphine-phenyl-stretched-desktop.rsk",
+      "after": "porphine-phenyl-stretch-redo.rsk",
+      "all_native_fields_exact": true
+    },
+    {
+      "before": "porphine-phenyl-stretched-desktop.rsk",
+      "after": "porphine-phenyl-stretch-fresh-reopened-desktop.rsk",
+      "all_native_fields_exact": true
+    },
+    {
+      "before": "porphine-phenyl-stretched-desktop.rsk",
+      "after": "porphine-ring-stretch-refused-desktop.rsk",
+      "all_native_fields_exact": true
+    },
+    {
+      "before": "porphine-manually-constructed-inward-labels-desktop.rsk",
+      "after": "porphine-manual-inward-fresh-reopened-desktop.rsk",
+      "all_native_fields_exact": true
+    }
+  ],
+  "placement_undo_empty": true,
+  "direct_core": {
+    "atoms": 24,
+    "bonds": 28,
+    "double_bonds": 11,
+    "nh_ids": [21, 23],
+    "bond_min_world": 41.99999656893671,
+    "bond_max_world": 42.00000127905946,
+    "nh_midpoint_to_center_world": 9.204467562650259e-7
+  },
+  "manual_core": {
+    "atoms": 24,
+    "bonds": 28,
+    "double_bonds": 11,
+    "nh_ids": [21, 33],
+    "bond_min_world": 41.99999533286878,
+    "bond_max_world": 42.000000165894136,
+    "nh_midpoint_to_center_world": 8.862642079860836e-15
+  },
+  "seed_alignment": {
+    "original_edge_degrees": 17.300000610999376,
+    "arm_before_pt": 21.60000167044892,
+    "arm_after_pt": 14.399999008395232,
+    "arm_only_moved_id": 5,
+    "arm_axis_error_world": 1.5155903568789613e-6,
+    "aligned_coordinates_exactly_match_renderer_fixture": true,
+    "pinned_point_world": [0, 0],
+    "label_caches_hydrated": [2, 2, 2, 1, 3, 2]
+  },
+  "quarter_copies": {
+    "successive_turns_degrees": [90, 90, 90],
+    "shared_pin_world": [0, 0],
+    "maximum_coordinate_residual_world": 0.0
+  },
+  "closing_links": [
+    [5, 22],
+    [26, 28],
+    [32, 34],
+    [38, 1]
+  ],
+  "manual_label_adjustment": {
+    "atom_id": 33,
+    "only_change": "display.hydrogen_position: below → above"
+  },
+  "phenyl_drag": {
+    "fixed_atom_id": 5,
+    "moving_atom_ids": [25, 26, 27, 28, 29, 30],
+    "translation_world": [14.77592399999999, -14.77592399999999],
+    "rigid_residual_world": 7.211102568194133e-6,
+    "axis_error_world": 0.0,
+    "before_pt": 14.40000057707914,
+    "after_pt": 21.564450445899972,
+    "core_atoms_and_all_bonds_exact": true
+  },
+  "file_sha256": {
+    "porphine-closed-carbon-scaffold-desktop.rsk": "62921b4fa6dab62875b70900e2511eacfcfbf03a5b2cdc0714a4b78adf742774",
+    "porphine-four-seeds-desktop.rsk": "144adbdb189cab828fe67e7b20c01559b8350417af34c593c019d6f8b5689ece",
+    "porphine-manual-inward-fresh-reopened-desktop.rsk": "49d6928165e9c9ccb021c84ec432ede7b25e871eae986d4bcde903cf2d432c97",
+    "porphine-manually-constructed-desktop.rsk": "872cb03673d3d25b797d30b17eec0d1923fb60a586d499bcf09dbc3292b4f06c",
+    "porphine-manually-constructed-inward-labels-desktop.rsk": "49d6928165e9c9ccb021c84ec432ede7b25e871eae986d4bcde903cf2d432c97",
+    "porphine-phenyl-stretch-fresh-reopened-desktop.rsk": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c",
+    "porphine-phenyl-stretch-redo.rsk": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c",
+    "porphine-phenyl-stretch-undo.rsk": "fafc7c6f471fc1adc14f42220379a8a2dcb7a29954c24bc3b24f4cc1577a52ca",
+    "porphine-phenyl-stretched-desktop.rsk": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c",
+    "porphine-placed-desktop.rsk": "f864ffdc64d6af029b64642f04f4b56bfc7b989aca51634fc4bdc61d539e2268",
+    "porphine-placed-fresh-reopened-desktop.rsk": "f864ffdc64d6af029b64642f04f4b56bfc7b989aca51634fc4bdc61d539e2268",
+    "porphine-placed-redo.rsk": "f864ffdc64d6af029b64642f04f4b56bfc7b989aca51634fc4bdc61d539e2268",
+    "porphine-placed-undo.rsk": "aede89f4a68a902161a5dba6eb93e4b3227c727c01997f89164df47a4f5c91a0",
+    "porphine-ring-stretch-refused-desktop.rsk": "d8bae906269e1ddf86c75aa91a2cbe348cc5c85fe83b061a5e713482d3d23d6c",
+    "porphine-seed-aligned-desktop.rsk": "d3baa923c3704dde01083c7adf01905cfcf2b3e5614fc01be2a5f3c4f4e0318f",
+    "porphine-seed-arm-length-desktop.rsk": "b7c37ff07eae1ca276aae7d48aaa771319ffac7f0eff797f41faf0d71d1d8a5f",
+    "porphine-seed-copy-90-desktop.rsk": "a8ccc3664222bd3645f9e142c254d86cb0c00c7e0bfa6246790d0f23325d37f3",
+    "source-aligned-seed.rsk": "f7d75a5e4754adbe3710c164fdfd5fff9186914f03557bf966d236730a614a3d",
+    "source-phenyl.rsk": "fafc7c6f471fc1adc14f42220379a8a2dcb7a29954c24bc3b24f4cc1577a52ca",
+    "source-seed.rsk": "b23c383d492a44ff8f7239cd056eb05f33bfee07993f4c4d4931ea59c628b9e8",
+    "source-template.rsk": "7ad6ab707a9112193a9245cc01daeb792716be8cb59baeff8f58568f08d43589"
+  }
+}

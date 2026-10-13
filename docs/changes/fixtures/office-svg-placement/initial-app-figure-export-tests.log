@@ -1,0 +1,20 @@
+   Compiling cosmolkit-core v0.3.0 (https://github.com/Ameyanagi/COSMolKit.git?rev=252a1f3d6480fc4a0abcd51d76707f51f69b4406#252a1f3d)
+   Compiling reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/crates/chemistry)
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement)
+   Compiling reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/crates/model)
+   Compiling reshiki-geometry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/native/geometry)
+   Compiling reshiki-io v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/crates/io)
+   Compiling reshiki-agent v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/crates/agent)
+   Compiling reshiki-mcp v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/crates/mcp)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 34s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-75ff9495b9c4a5ec)
+
+running 3 tests
+test app::figure_export::tests::office_svg_uses_figure_snapshot_without_changing_selection_or_document ... ok
+test app::figure_export::tests::exporting_a_snapshot_blocks_duplicate_exports_and_always_resets ... ok
+test app::figure_export::tests::switched_and_closed_tabs_keep_export_completions_off_the_front_tab ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 652 filtered out; finished in 8.39s
+

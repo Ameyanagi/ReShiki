@@ -1,0 +1,113 @@
+{
+  "written_utc": "2026-10-09T23:15:03.164775+00:00",
+  "status": "PASS: owned saved DOCX embeds exact vector EMF; exact stored picture extent102.83x62.83mm",
+  "scope": "Read-only live process/file queries; authorized scp of only owned DOCX; local ZIP/XML/byte inspection and root raw screenshot review. No GUI/COM/build/guest writes/public packaging changes.",
+  "initial_live_word_binding": {
+    "pid": 5024,
+    "parent_pid": 7520,
+    "session_id": 2,
+    "path": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+    "created_utc": "2026-10-09T23:10:28.1816700Z",
+    "exe_bytes": 1557224,
+    "exe_sha256": "a6a4da14ca3edfa90e475339f649791c5dc2ebd77fb53d556d84880762f69a0b",
+    "file_version": "16.0.20527.20032",
+    "product_version": "16.0.20527.20032"
+  },
+  "process_observed_utc": "2026-10-09T23:14:06.3730996Z",
+  "guest_saved_file": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-word-emf-20261010.docx",
+    "bytes": 17657,
+    "created_utc": "2026-10-09T23:13:24.3424033Z",
+    "modified_utc": "2026-10-09T23:13:24.4248346Z",
+    "sha256": "5fd87ef65c29d3355d2293d95ffebf2e1852fd2e635e5a2b81b432b1f2fc25fc"
+  },
+  "stable_two_reads": true,
+  "copy_matches_guest": true,
+  "sharing_note": "Read-only FileStream with ReadWrite/Delete sharing; default Get-FileHash sharing failed while Word kept the file open",
+  "container": {
+    "zip_integrity": "PASS",
+    "inline_pictures": 1,
+    "media": [
+      "word/media/image1.emf"
+    ],
+    "relationship_id": "rId4",
+    "embedded_emf_bytes": 14704,
+    "embedded_emf_sha256": "a1c18d84970b68b064a6e7a8866cfb43e0b0922001e476a4e9f4de004c170c1a",
+    "embedded_exact_desktop_export": true,
+    "picture_extent_emu": [
+      3701880,
+      2261880
+    ],
+    "inline_extent_emu": [
+      3701880,
+      2261880
+    ],
+    "picture_extent_mm": [
+      102.83,
+      62.83
+    ],
+    "emf_frame_0_01mm": [
+      0,
+      0,
+      10282,
+      6282
+    ],
+    "emf_frame_mm": [
+      102.82,
+      62.82
+    ],
+    "extent_minus_frame_mm": [
+      0.010000000000005116,
+      0.00999999999999801
+    ],
+    "crop": null,
+    "rotation_degrees": 0,
+    "flip_horizontal": false,
+    "flip_vertical": false,
+    "picture_offset_emu": [
+      0,
+      0
+    ],
+    "inline_effect_extent_emu": {
+      "l": 0,
+      "t": 0,
+      "r": 0,
+      "b": 5080
+    },
+    "effect_extent_note": "The bottom5080EMU is a separate inline effect/layout bound (~0.1411mm), not part of picture width/height or a crop."
+  },
+  "same_picture_extent_as_powerpoint": true,
+  "visual_observation": "Both raw screenshots show the complete title, blue peaks, axes and red/green inset at200%document zoom. Saved image shows desktop-word-emf-20261010.docx title and saved status; ribbon displays height62.83mm and width102.82mm. XML stores102.83x62.83mm, so the UI width is not an exact numerical oracle.",
+  "size_interpretation": "Root reports no manual resize. Word and PowerPoint store exactly the same3701880x2261880EMU,0.01mm larger per axis than the embedded EMF frame. The mechanism producing that small difference or the Word UI width display is not established; do not claim exact source-frame equality.",
+  "limits": [
+    "Word fresh-process reopen is pending separately at audit time",
+    "No physical display-DPI claim",
+    "Stable file reads do not establish power-loss durability"
+  ],
+  "files": {
+    "desktop-word-emf-20261010.docx": {
+      "bytes": 17657,
+      "sha256": "5fd87ef65c29d3355d2293d95ffebf2e1852fd2e635e5a2b81b432b1f2fc25fc"
+    },
+    "word-readonly-ssh-save-audit.json": {
+      "bytes": 1374,
+      "sha256": "1fd693872e8d1b8d507592162f5b3020ef52f84a5ab773bbddf579b0de70e70e"
+    },
+    "word-emf-inserted.jpg": {
+      "bytes": 372261,
+      "sha256": "d2e61468ca8203d7b225567a9bc6642b6b86af1ea6e3cf39afc894efaf4fc238",
+      "dimensions": [
+        2556,
+        1712
+      ]
+    },
+    "word-emf-saved-intrinsic-size.jpg": {
+      "bytes": 379140,
+      "sha256": "cea7f727cff3069425f8116845c60fcdad1eca856d3f51d01c8323b15c3939d6",
+      "dimensions": [
+        2556,
+        1712
+      ]
+    }
+  }
+}

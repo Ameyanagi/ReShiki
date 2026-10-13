@@ -1,0 +1,33 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.68s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-031b697453cae98b)
+
+running 24 tests
+test app::naming::import_dock::tests::actual_local_parser_result_inserts_directly_with_verified_source_title ... ok
+test app::naming::import_dock::tests::busy_requests_and_unsupported_names_leave_drawing_and_history_untouched ... ok
+test app::naming::import_dock::tests::cancelled_edited_switched_or_stale_import_completions_never_commit ... ok
+test app::naming::import_dock::tests::completion_routes_only_to_originating_tab ... ok
+test app::naming::import_dock::tests::default_dock_exposes_one_insert_and_collapses_preview_and_details ... ignored, Opt-in actual renderer compact Import dock accessibility and dispatch
+test app::naming::import_dock::tests::edited_preview_never_inserts_original_name_or_unapplied_smiles ... ok
+test app::naming::import_dock::tests::insert_without_caption_and_optional_preview_reuse_need_no_acknowledgement ... ok
+test app::naming::import_dock::tests::linked_name_survives_native_copy_and_ordinary_figure_and_editable_exports ... ok
+test app::naming::import_dock::tests::one_insert_resolves_and_commits_structure_and_verified_caption_together ... ok
+test app::naming::molecule_label::tests::actual_local_worker_name_is_accepted_only_for_the_target_graph ... ok
+test app::naming::molecule_label::tests::caption_completion_keeps_original_target_when_selection_changes ... ok
+test app::naming::molecule_label::tests::clicked_molecule_is_independent_of_multi_selection_and_logical_groups ... ok
+test app::naming::molecule_label::tests::stale_or_unsupported_completion_changes_no_drawing_or_history ... ok
+test app::naming::tests::caption_requires_current_graph_and_is_undoable ... ok
+test app::naming::tests::changed_preview_no_longer_claims_original_chemical_name ... ok
+test app::naming::tests::controls_publish_named_native_actions_and_editable_values ... ignored, Opt-in native renderer accessibility metadata and dispatch
+test app::naming::tests::local_parse_cancels_obsolete_tickets ... ok
+test app::naming::tests::native_preview_and_exchange_retain_specified_and_unspecified_stereo ... ok
+test app::naming::tests::preview_insertion_is_native_editable_and_one_history_step ... ok
+test app::naming::tests::preview_text_edits_do_not_cancel_independent_local_name_generation ... ok
+test app::naming::tests::scrolled_insert_click_reaches_button_instead_of_preview ... ignored, Opt-in real renderer scrolled preview pointer regression
+test app::naming::tests::stale_results_cannot_reach_another_local_document_or_request ... ok
+test app::naming::tests::typing_during_preview_rebuild_retains_new_text_and_rejects_old_completion ... ok
+test app::naming::tests::warnings_and_unapplied_smiles_edits_block_insertion ... ok
+
+test result: ok. 21 passed; 0 failed; 3 ignored; 0 measured; 655 filtered out; finished in 13.64s
+

@@ -1,0 +1,23 @@
+{
+  "observed_utc": "2026-10-09T22:20:12.0623765Z",
+  "old_pid_5852_exists": false,
+  "processes": [
+    {
+      "pid": 4748,
+      "parent_pid": 7520,
+      "created": "2026-10-09T22:16:39.3477620Z",
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-candidate-20261009\\reshiki.exe",
+      "command": "\"C:\\Users\\ryuichi\\dev\\reshiki-emf-candidate-20261009\\reshiki.exe\" ",
+      "sha256": "124336a60753ad7cd3bba0c9bf4f453298d6fac7d857dbe1562903e2e0fc88b2"
+    }
+  ],
+  "native_file": {
+    "modified_utc": "2026-10-09T22:12:01.1862705Z",
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-import-20261010.rsk",
+    "sha256": "7a689884c15fb62bacd7b1ad9bac9f602d4651a769657bdc9ac3958ffb30158f",
+    "bytes": 492401,
+    "matches_previous_save": true
+  },
+  "all_observed_reshiki_match_candidate": true,
+  "scope": "Read-only SSH identity and saved-file hash check. Native reopened appearance is root GUI evidence; this tool did not operate UI."
+}

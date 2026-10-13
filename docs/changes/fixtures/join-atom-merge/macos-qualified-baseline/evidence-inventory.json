@@ -1,0 +1,44 @@
+{
+  "schema": "reshiki.join.qualified-baseline-public-evidence.v1",
+  "scope": "Original three-atom Cmd+J rejection in qualified macOS app containing unrelated Generic work; not clean main.",
+  "original_count": 3,
+  "authored_summary_count": 1,
+  "valid_capture_version": "v3 only",
+  "input": {
+    "path": "tests/fixtures/join-three-atoms-before.rsk",
+    "sha256": "44807c91c4be874d6b8748576b15a988da62da1e1a9512d75c0b0623ced700aa"
+  },
+  "files": [
+    {
+      "path": "docs/images/join-atom-merge/macos-baseline-three-selected-v3.jpg",
+      "kind": "byte-exact v3 native original",
+      "source_basename": "join-baseline-three-selected-v3.jpg",
+      "bytes": 334412,
+      "sha256": "daf02b97ca432274498426dc81b908553d3d99c6e1d6a16f2edb508794bbbe74",
+      "dimensions": [2560, 1704]
+    },
+    {
+      "path": "docs/images/join-atom-merge/macos-baseline-cmd-j-rejected-v3.jpg",
+      "kind": "byte-exact v3 native original",
+      "source_basename": "join-baseline-cmd-j-rejected-v3.jpg",
+      "bytes": 340907,
+      "sha256": "7e179e76c54e6990c21e5155b2e44e82228b92301a7bf28f073e4ddb43f42b99",
+      "dimensions": [2560, 1704]
+    },
+    {
+      "path": "docs/changes/fixtures/join-atom-merge/macos-qualified-baseline/join-baseline-cmd-j-rejected-native-v3.rsk",
+      "kind": "byte-exact v3 native original",
+      "source_basename": "join-baseline-cmd-j-rejected-native-v3.rsk",
+      "bytes": 3164,
+      "sha256": "56a7830d476e34315af70a4c0a2956d00c446092e6bffbfdd03883cc8e6901dd",
+      "rsk_version": 20
+    },
+    {
+      "path": "docs/changes/fixtures/join-atom-merge/macos-qualified-baseline/README.md",
+      "kind": "authored qualified-baseline summary",
+      "bytes": 3864,
+      "sha256": "5f6c9ecc973c3b0e196baaa604e485ff33e9ac444ce58f2617550cb4148a6094"
+    }
+  ],
+  "self_inventory_note": "This inventory does not hash itself; the private addendum-ready receipt pins the complete payload."
+}

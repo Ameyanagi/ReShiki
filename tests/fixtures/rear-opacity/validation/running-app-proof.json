@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "pid": 46179,
+  "kernel_executable": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+  "sha256": "4d35fe616bc9cb1388e4a6ec45312c65cc21aa6b67e42e17b077dd848fcc4043",
+  "time_unix": 1791561248.0633988,
+  "launch": "CUA exact app path after pgrepconfirmedzero",
+  "scope": "fresh process screenshot/native reopen review; first UI launch was exactpath but no perPIDkernelreceipt retained"
+}

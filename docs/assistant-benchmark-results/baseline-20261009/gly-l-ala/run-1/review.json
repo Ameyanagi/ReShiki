@@ -1,0 +1,9 @@
+{
+  "changes": [],
+  "issues": [
+    "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data."
+  ],
+  "passes": 1,
+  "summary": "Matches the source’s atom labels, connectivity, bond orders and solid wedge. Spacing is clear, with no overlaps or clipped labels.",
+  "verified": true
+}

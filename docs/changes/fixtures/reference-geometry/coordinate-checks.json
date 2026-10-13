@@ -1,0 +1,386 @@
+{
+  "method": "Independent Python arithmetic on original fixture/native UI save JSON. No app, model, Cargo, or GUI invocation.",
+  "candidate_commit": "d04fb529de57c5198f4d44973b067d28990a019a",
+  "tolerance_world": 3e-5,
+  "tolerance_degrees": 2e-5,
+  "serialized_json_precision": "f32 positions serialized as shortest decimal; tolerances cover JSON decimal and f32 rounding",
+  "source_hashes": {
+    "angle-23-75-desktop.rsk": "240ca66ea608b86af9714364587245e3ea3551e00681cce0909a8aecf83cdbe1",
+    "case-0.rsk": "e005bede71811f90ba602dd81b8cbf2f71f30b2e50705109d2f5a1eb8dac684c",
+    "case-3.rsk": "33a6e6291985e4d80a1e61ecd891c6fb48529abf4a4cc6abd23348d1c27eaa2c",
+    "case-6.rsk": "5135cf31b2928b75ded05a462fbc2ec7d5dec61fd4920d33e0069967b287b73e",
+    "horizontal-desktop.rsk": "719c3805d52be05caeef5b5bf9b71a70e4ccc2d1bc7a6f334be85afa65f44489",
+    "stretch-21-6-desktop.rsk": "4a0e2832f8595e581fc76c0bf43ea40f3a41c15b210ea58582cd5426aab9b868",
+    "stretch-drag-desktop.rsk": "e21dc808e9c71cc11125494585f2d74d080db986cef0baac3e0e2c22715e3d66",
+    "stretch-end-fixed-desktop.rsk": "fc00689d22dc668049d2fee1d8a8b1a2054a69f5be10fd3490967f1226b949f4",
+    "wedge-horizontal-desktop.rsk": "afde7ba1392bc5bf62b7ae600c85f67e7141bf14f41e67fb485255bab556e842",
+    "wedge-vertical-desktop.rsk": "bf9513e96b06977f1cc807b6a71487ff12eb804d72b6bfce213b738daaea01ab"
+  },
+  "checked": [
+    {
+      "input": "case-0.rsk",
+      "native_save": "horizontal-desktop.rsk",
+      "preceding_save": "case-0.rsk",
+      "reference_edge": [1, 2],
+      "target_degrees": 0,
+      "directed": false,
+      "original_angle_degrees": 17.299999308528783,
+      "actual_angle_degrees": 0.0,
+      "angle_error_degrees": 0.0,
+      "relative_rotation_degrees": -17.299999308528783,
+      "contract_pivot_world": [1.1842379282265398e-15, -1.1666667205645354e-6],
+      "pivot_drift_world": 7.161897706505822e-7,
+      "max_rotation_residual_world": 3.000409225488392e-6,
+      "max_pair_distance_error_world": 3.0747591779345385e-6,
+      "metadata": {
+        "same_atom_id_order": true,
+        "same_bonds_including_endpoint_order_depth_stereo": true,
+        "other_top_level_changes": [],
+        "chemical_atom_changes": [],
+        "computed_cache_changes": [
+          {
+            "id": 1,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 2,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 3,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 4,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 5,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 6,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          }
+        ],
+        "cache_values_match_neutral_valence": true
+      },
+      "passed": true
+    },
+    {
+      "input": "case-0.rsk",
+      "native_save": "angle-23-75-desktop.rsk",
+      "preceding_save": "horizontal-desktop.rsk",
+      "reference_edge": [1, 2],
+      "target_degrees": 23.75,
+      "directed": true,
+      "original_angle_degrees": 17.299999308528783,
+      "actual_angle_degrees": 23.749999220895702,
+      "angle_error_degrees": 7.79104311732226e-7,
+      "relative_rotation_degrees": 23.74999922089569,
+      "contract_pivot_world": [6.666666649834951e-7, -9.049734899235773e-7],
+      "pivot_drift_world": 4.398774341325061e-7,
+      "max_rotation_residual_world": 2.1450627937855892e-6,
+      "max_pair_distance_error_world": 5.930554252131515e-6,
+      "metadata": {
+        "same_atom_id_order": true,
+        "same_bonds_including_endpoint_order_depth_stereo": true,
+        "other_top_level_changes": [],
+        "chemical_atom_changes": [],
+        "computed_cache_changes": [
+          {
+            "id": 1,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 2,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 3,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 4,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 5,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "id": 6,
+            "field": "label_h",
+            "before": 0,
+            "after": 1
+          }
+        ],
+        "cache_values_match_neutral_valence": true
+      },
+      "passed": true
+    },
+    {
+      "input": "case-3.rsk",
+      "native_save": "stretch-drag-desktop.rsk",
+      "fixed_atom": 1,
+      "moving_atom": 2,
+      "moving_branch_ids": [2, 3, 4],
+      "fixed_branch_ids": [1],
+      "original_length_pt": 14.399999635952067,
+      "result_length_pt": 24.478940171176234,
+      "expected_length_pt": null,
+      "original_angle_degrees": 17.299998006058164,
+      "result_angle_degrees": 17.299999349741913,
+      "angle_error_degrees": 1.3436837491553888e-6,
+      "translation_world": [28.067017000000007, 8.741903],
+      "perpendicular_axis_error_world": 1.674379280558469e-6,
+      "exact_fixed_branch": true,
+      "max_rigid_translation_residual_world": 3.041381257762392e-6,
+      "max_moving_branch_pair_distance_error_world": 4.803541521880561e-6,
+      "max_unchanged_bond_length_error_world": 4.803541521880561e-6,
+      "metadata": {
+        "same_atom_id_order": true,
+        "same_bonds_including_endpoint_order_depth_stereo": true,
+        "other_top_level_changes": [],
+        "chemical_atom_changes": [],
+        "computed_cache_changes": [
+          {
+            "id": 1,
+            "field": "label_h",
+            "before": 0,
+            "after": 3
+          },
+          {
+            "id": 2,
+            "field": "label_h",
+            "before": 0,
+            "after": 2
+          },
+          {
+            "id": 3,
+            "field": "label_h",
+            "before": 0,
+            "after": 2
+          }
+        ],
+        "cache_values_match_neutral_valence": true
+      },
+      "passed": true
+    },
+    {
+      "input": "case-3.rsk",
+      "native_save": "stretch-21-6-desktop.rsk",
+      "fixed_atom": 1,
+      "moving_atom": 2,
+      "moving_branch_ids": [2, 3, 4],
+      "fixed_branch_ids": [1],
+      "original_length_pt": 14.399999635952067,
+      "result_length_pt": 21.60000065061962,
+      "expected_length_pt": 21.6,
+      "original_angle_degrees": 17.299998006058164,
+      "result_angle_degrees": 17.29999749364153,
+      "angle_error_degrees": 5.124166477799008e-7,
+      "translation_world": [20.049979999999998, 6.244872000000001],
+      "perpendicular_axis_error_world": 5.634315343172602e-7,
+      "exact_fixed_branch": true,
+      "max_rigid_translation_residual_world": 5.119570288787222e-6,
+      "max_moving_branch_pair_distance_error_world": 4.803541557407698e-6,
+      "max_unchanged_bond_length_error_world": 4.803541557407698e-6,
+      "metadata": {
+        "same_atom_id_order": true,
+        "same_bonds_including_endpoint_order_depth_stereo": true,
+        "other_top_level_changes": [],
+        "chemical_atom_changes": [],
+        "computed_cache_changes": [
+          {
+            "id": 1,
+            "field": "label_h",
+            "before": 0,
+            "after": 3
+          },
+          {
+            "id": 2,
+            "field": "label_h",
+            "before": 0,
+            "after": 2
+          },
+          {
+            "id": 3,
+            "field": "label_h",
+            "before": 0,
+            "after": 2
+          }
+        ],
+        "cache_values_match_neutral_valence": true
+      },
+      "passed": true
+    },
+    {
+      "input": "case-3.rsk",
+      "native_save": "stretch-end-fixed-desktop.rsk",
+      "fixed_atom": 2,
+      "moving_atom": 1,
+      "moving_branch_ids": [1],
+      "fixed_branch_ids": [2, 3, 4],
+      "original_length_pt": 14.399999635952067,
+      "result_length_pt": 21.600000752576708,
+      "expected_length_pt": 21.6,
+      "original_angle_degrees": -162.70000199394184,
+      "result_angle_degrees": -162.70000163804477,
+      "angle_error_degrees": 3.5589707181316044e-7,
+      "translation_world": [-20.04998, -6.244873],
+      "perpendicular_axis_error_world": 3.9132927298624054e-7,
+      "exact_fixed_branch": true,
+      "max_rigid_translation_residual_world": 0.0,
+      "max_moving_branch_pair_distance_error_world": 0,
+      "max_unchanged_bond_length_error_world": 0.0,
+      "metadata": {
+        "same_atom_id_order": true,
+        "same_bonds_including_endpoint_order_depth_stereo": true,
+        "other_top_level_changes": [],
+        "chemical_atom_changes": [],
+        "computed_cache_changes": [
+          {
+            "id": 1,
+            "field": "label_h",
+            "before": 0,
+            "after": 3
+          },
+          {
+            "id": 2,
+            "field": "label_h",
+            "before": 0,
+            "after": 2
+          },
+          {
+            "id": 3,
+            "field": "label_h",
+            "before": 0,
+            "after": 2
+          }
+        ],
+        "cache_values_match_neutral_valence": true
+      },
+      "passed": true
+    },
+    {
+      "input": "case-6.rsk",
+      "native_save": "wedge-horizontal-desktop.rsk",
+      "preceding_save": "case-6.rsk",
+      "reference_edge": [2, 1],
+      "target_degrees": 0,
+      "directed": false,
+      "original_angle_degrees": 17.300001913469956,
+      "actual_angle_degrees": -8.935676930592121e-7,
+      "angle_error_degrees": 8.935676873988996e-7,
+      "relative_rotation_degrees": -17.300002807037657,
+      "contract_pivot_world": [0.0, -8.881784197001252e-16],
+      "pivot_drift_world": 5.261327247041024e-7,
+      "max_rotation_residual_world": 1.0701140816267674e-6,
+      "max_pair_distance_error_world": 8.5551768336245e-7,
+      "metadata": {
+        "same_atom_id_order": true,
+        "same_bonds_including_endpoint_order_depth_stereo": true,
+        "other_top_level_changes": [],
+        "chemical_atom_changes": [],
+        "computed_cache_changes": [],
+        "cache_values_match_neutral_valence": true
+      },
+      "passed": true
+    },
+    {
+      "input": "case-6.rsk",
+      "native_save": "wedge-vertical-desktop.rsk",
+      "preceding_save": "wedge-horizontal-desktop.rsk",
+      "reference_edge": [2, 1],
+      "target_degrees": 90,
+      "directed": false,
+      "original_angle_degrees": 17.300001913469956,
+      "actual_angle_degrees": -90.0000008935677,
+      "angle_error_degrees": 8.935676873988996e-7,
+      "relative_rotation_degrees": -90.00000000000001,
+      "contract_pivot_world": [4.999999987376214e-7, -1.6375483369301946e-7],
+      "pivot_drift_world": 4.2955193163479947e-7,
+      "max_rotation_residual_world": 7.440640384867628e-7,
+      "max_pair_distance_error_world": 1.5668277910663164e-6,
+      "metadata": {
+        "same_atom_id_order": true,
+        "same_bonds_including_endpoint_order_depth_stereo": true,
+        "other_top_level_changes": [],
+        "chemical_atom_changes": [],
+        "computed_cache_changes": [],
+        "cache_values_match_neutral_valence": true
+      },
+      "passed": true
+    }
+  ],
+  "all_passed": true,
+  "cache_evidence": [
+    "src/app/engine_jobs.rs:190 analysis_ready refreshes computed labels only",
+    "crates/model/src/atom_labels.rs:580 refresh_computed copies label_h/CIP caches",
+    "crates/model/src/chemistry/document/output.rs:540 computes implicit plus explicit H cache"
+  ],
+  "limits": [
+    "The native saves corroborate coordinates/metadata, not pointer event counts or Undo history; root separately checked Undo/Redo and repeated-angle no-op.",
+    "Root's vertical benzene intermediate was not saved; only wedge vertical is numerically audited.",
+    "Screenshots remain root-captured native JPEG; no visual file was retouched."
+  ],
+  "baseline_observations": [
+    {
+      "app_source_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+      "input": "case-6.rsk",
+      "native_save": "wedge-manual-rotation-before-desktop.rsk",
+      "native_save_sha256": "53ce782227b10854d21a4af7e643cc2404b802c654633c7c1a769d591a2bcb0d",
+      "actual_angle_degrees": 87.16944874740459,
+      "relative_angle_degrees": 69.86944683393463,
+      "vertical_axis_error_degrees": 2.830551252595413,
+      "distance_to_nearest_15_degree_relative_turn": 5.1305531660653685,
+      "metadata": {
+        "same_atom_id_order": true,
+        "same_bonds_including_endpoint_order_depth_stereo": true,
+        "other_top_level_changes": [],
+        "chemical_atom_changes": [],
+        "computed_cache_changes": [],
+        "cache_values_match_neutral_valence": true
+      },
+      "interpretation": "Saved manual-rotation output is not exactly vertical. Its relative turn is not a 15-degree multiple; do not describe this desktop operation as Shift/grid snapping. Root's initial visual estimate about92.3 degrees is contradicted by this saved JSON and was reported immediately. Original scratch filename wedge-grid-before-desktop.rsk was copied byte-for-byte to this accurate name; its hash is unchanged.",
+      "comparability": "Exact hashed rendered input5135cf31 and baseline53ce7822 retain the same C2 explicit_h1/no_implicit=true/CIP R, ccw neighbors and all bonds. Candidate H/V saves retain those same fields. The preliminary narrative about0/false mixed source/preanalysis state with actual UI input and is corrected; there is no evidence that a validator regenerated case files during this audit.",
+      "chronology": "The baseline app source is51fa0991; candidate source isd04fb529. Root's requested source-before-confirmation geometry regression and baseline control were retained before implementation. Native before/after desktop captures were collected later from their separately frozen apps."
+    }
+  ],
+  "published_names": {
+    "case-0.rsk": "ring-input.rsk",
+    "horizontal-desktop.rsk": "ring-horizontal-desktop.rsk",
+    "angle-23-75-desktop.rsk": "ring-23-75-desktop.rsk",
+    "case-3.rsk": "branch-input.rsk",
+    "stretch-drag-desktop.rsk": "branch-drag-desktop.rsk",
+    "stretch-21-6-desktop.rsk": "branch-21-6-desktop.rsk",
+    "stretch-end-fixed-desktop.rsk": "branch-end-fixed-desktop.rsk",
+    "case-6.rsk": "stereo-input.rsk",
+    "wedge-manual-rotation-before-desktop.rsk": "stereo-manual-rotation-before.rsk",
+    "wedge-horizontal-desktop.rsk": "stereo-horizontal-desktop.rsk",
+    "wedge-vertical-desktop.rsk": "stereo-vertical-desktop.rsk"
+  }
+}

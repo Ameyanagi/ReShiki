@@ -1,0 +1,30 @@
+{
+  "configuration": {
+    "auto_apply": false,
+    "effort": "xhigh",
+    "generation_started": [
+      {
+        "effort": "xhigh",
+        "elapsed_seconds": 2.575418875,
+        "event": "started",
+        "model_label": "GPT-6.1-Sol"
+      }
+    ],
+    "model": "gpt-6.1-sol",
+    "provider": "Codex app-server",
+    "request_timeout_seconds": 300,
+    "requested_effort": "xhigh",
+    "requested_model": "gpt-6.1-sol",
+    "service_tier": "default"
+  },
+  "elapsed_seconds": 46.811744083,
+  "error": null,
+  "review": {
+    "changes": [],
+    "issues": [],
+    "passes": 1,
+    "summary": "The ethanol structure matches the source: two single bonds, the terminal OH label, and the same zigzag orientation. No overlaps or clipping.",
+    "verified": true
+  },
+  "status": "completed"
+}

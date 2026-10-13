@@ -1,0 +1,22 @@
+﻿{
+    "when":  "2026-10-09T10:10:00.3433098Z",
+    "durationSeconds":  0.15494,
+    "exitCode":  1,
+    "stoppedBySpaceGuard":  false,
+    "minimumFreeC":  476565504,
+    "minimumFreeF":  342994944,
+    "finalFree":  [
+                      {
+                          "Name":  "C",
+                          "Free":  476565504
+                      },
+                      {
+                          "Name":  "F",
+                          "Free":  342994944
+                      }
+                  ],
+    "candidate":  null,
+    "objects":  [
+
+                ]
+}

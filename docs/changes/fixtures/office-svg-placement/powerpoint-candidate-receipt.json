@@ -1,0 +1,61 @@
+{
+  "status": "PASS",
+  "recorded_utc": "2026-10-09T16:14:04.158757+00:00",
+  "app": "powerpoint",
+  "app_version": "16.113.4",
+  "app_build": "16.113.26100421",
+  "candidate_producer_signed_sha256": "a526729562d646abb83038001f9a51041329ebb6ec768e72f634b8e99ec8b5a9",
+  "candidate_svg": {
+    "file": "single-candidate-office.svg",
+    "sha256": "082d0559ec7465d85ecbabc61e0f8343735452f32ad85f947e1ec45a57c5ad6d"
+  },
+  "document": {
+    "file": "powerpoint-candidate-office.pptx",
+    "bytes": 38799,
+    "sha256": "bc5443c9f3702d7cc7ca4dc12f4d9e04a8f1721e8f41ee474e4922576e0c76c0"
+  },
+  "embedded_svg": {
+    "entry": "ppt/media/image1.svg",
+    "sha256": "8fd43b86eaa7e03d23e5408efc220a962fd91fc2ad93af0a3ec255e87da2d359",
+    "bytes": 5971,
+    "text_nodes": 0,
+    "root_dimensions": {
+      "width": "116.788",
+      "height": "38.5422",
+      "viewBox": "0 0 116.788 38.5422",
+      "overflow": "hidden"
+    },
+    "path_count": 5
+  },
+  "intrinsic_extent_emu": {
+    "cx": "1104900",
+    "cy": "368300"
+  },
+  "matches_baseline_office_extent": true,
+  "intrinsic_mm": {
+    "width": 30.691666666666666,
+    "height": 10.230555555555556
+  },
+  "native_checks": [
+    "Actual CUA Blank document/presentation, Picture from File",
+    "One picture;no resize/crop/reposition/style;viewonly400%",
+    "Complete O/SiMe3 labels/subscript and appropriate bond endpoints visible on initial and savedfreshreopen",
+    "LocalcontrolledSaveAs,closedowned document, reopenedownedrecent;Undo disabled",
+    "AutoSaveoff;PowerPointDesignSuggestions autodisplayedanddismissed, no suggestionapplied"
+  ],
+  "raw_evidence": {
+    "powerpoint-candidate-inserted-400.jpg": {
+      "sha256": "3916d50d04dfac5208d89bfeb3156b550f254a339db9582634fae70757f94246",
+      "bytes": 289991
+    },
+    "powerpoint-candidate-reopened-400.jpg": {
+      "sha256": "c3d6c5173930db72c9bf6991e97e28c5a1999c633e1492e2f183f41d9b0c1f3b",
+      "bytes": 276758
+    },
+    "powerpoint-candidate-reopened-ax.txt": {
+      "sha256": "b6f2e8af3af7657f8846c356d2b3c906ba87b7337873227f7ea8ae1d61f26026",
+      "bytes": 6768
+    }
+  },
+  "scope": "macOS MicrosoftOffice actual GUI only;notWindows acceptance. Finalcandidate UIlabel correction under validation; exporter bytes must remain equal for finalsamebehaviorlink. Reopen viewport/selection can differ;no objectreposition."
+}

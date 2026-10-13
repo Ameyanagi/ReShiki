@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "description": "Byte-exact selected Windows native acceptance evidence. Original scratch paths are provenance, not required verifier inputs. The snap-overlay screenshot and RDP-host-only AX text stay in scratch.",
+  "files": [
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/source.emf",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/source.emf",
+      "bytes": 12860,
+      "sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a",
+      "role": "root Windows native acceptance"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/desktop-import-20261010.rsk",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/desktop-import-20261010.rsk",
+      "bytes": 492401,
+      "sha256": "7a689884c15fb62bacd7b1ad9bac9f602d4651a769657bdc9ac3958ffb30158f",
+      "role": "root Windows native acceptance"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/desktop-vector-reexport-20261010.emf",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/desktop-vector-reexport-20261010.emf",
+      "bytes": 14704,
+      "sha256": "a1c18d84970b68b064a6e7a8866cfb43e0b0922001e476a4e9f4de004c170c1a",
+      "role": "root Windows native acceptance"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/native-verification.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/native-verification.json",
+      "bytes": 5821,
+      "sha256": "ea20953eaa1edf697a6680d5307859542e8317f43d8a95c9ef8213d8db0318e3",
+      "role": "root Windows native acceptance"
+    },
+    {
+      "path": "docs/images/emf-import/emf-import-baseline-unsupported.jpg",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/emf-import-baseline-unsupported.jpg",
+      "bytes": 249036,
+      "sha256": "e53c8461fda4b7898bbf97a5dabb16fa729eff4f61b3640321ba50d5f94d520d",
+      "role": "raw screenshot; 2556 x 1712; no crop or resize"
+    },
+    {
+      "path": "docs/images/emf-import/emf-import-candidate-original-dimensions.jpg",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/emf-import-candidate-original-dimensions.jpg",
+      "bytes": 357704,
+      "sha256": "a757f9ea6f48207979f7c8fdb1fb6c6ded1a9ce968cfbe6d0d3aff1ce5d02814",
+      "role": "raw screenshot; 2556 x 1712; no crop or resize"
+    },
+    {
+      "path": "docs/images/emf-import/emf-import-candidate-native-saved.jpg",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/emf-import-candidate-native-saved.jpg",
+      "bytes": 365950,
+      "sha256": "945d36cf20da4bc839811ceadddab50366c02e01307df91847772ca122e3646a",
+      "role": "raw screenshot; 2556 x 1712; no crop or resize"
+    },
+    {
+      "path": "docs/images/emf-import/emf-import-candidate-vector-export-completed.jpg",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/emf-import-candidate-vector-export-completed.jpg",
+      "bytes": 362643,
+      "sha256": "00000239c51a90dd93a8a6c7cdb308a367ebd78ef80b1b5da97dd3c078fa668b",
+      "role": "raw screenshot; 2556 x 1712; no crop or resize"
+    },
+    {
+      "path": "docs/images/emf-import/emf-import-candidate-fresh-process-reopened.jpg",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/emf-import-candidate-fresh-process-reopened.jpg",
+      "bytes": 362140,
+      "sha256": "660d7e11454ac22a75241af5b30958becff99e4d68d92ed66d89560a18dbc501",
+      "role": "raw screenshot; 2556 x 1712; no crop or resize"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/native-desktop-import-save-verification.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/native-desktop-import-save-verification.json",
+      "bytes": 2465,
+      "sha256": "6f7a25accd012fea1d40e088135b073bc1e54ebb789eca93ef9192e862b8eca6",
+      "role": "independent bounded read-only verification; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/native-desktop-vector-export-verification.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/native-desktop-vector-export-verification.json",
+      "bytes": 4853,
+      "sha256": "0f135ae4768e4ca64e038f616ef2c53ea417c06a5316cfc39328c20d7c47cb71",
+      "role": "independent bounded read-only verification; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/native-fresh-process-reopen-verification.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/native-fresh-process-reopen-verification.json",
+      "bytes": 1008,
+      "sha256": "261dd35c7f7c17e294783338224ee235d60437d116c1c2e3f627710c661be2df",
+      "role": "independent bounded read-only verification; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/baseline-source-and-space-verification.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/baseline-source-and-space-verification.json",
+      "bytes": 4781,
+      "sha256": "5c0e47fa8d1d62bbe159f26644541561e7e37ea967104e08a160600d4ad96b58",
+      "role": "independent bounded read-only verification; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/baseline-current-observation.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/baseline-current-observation.json",
+      "bytes": 706,
+      "sha256": "a32010de4fe41da9dfed2081247ebba645c56cfdbf759cec75f6b6fa263e016b",
+      "role": "independent bounded read-only verification; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/baseline-after-launch-process-window.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/baseline-after-launch-process-window.json",
+      "bytes": 1094,
+      "sha256": "e007e8728c8d162fc56fab8dfe96c68ccd2677f2251bd91498fa32b8a6eef7d6",
+      "role": "independent bounded read-only verification; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/baseline-retained-build-command.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/baseline-retained-build-command.json",
+      "bytes": 1560,
+      "sha256": "15ccb35545959d094a8080648cffa00a7b4acb0fb05b6c5b290bc189d7bc225e",
+      "role": "independent bounded read-only verification; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/desktop-export-copy-receipt.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/desktop-export-copy-receipt.json",
+      "bytes": 2837,
+      "sha256": "7dead341a263bc165a2a9390e8ab8369b0029d9435a75d7d5d121c7a6080a86b",
+      "role": "independent bounded read-only verification; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/readiness.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/office-handoff-audit/windows-acceptance-20261010/readiness.json",
+      "bytes": 9286,
+      "sha256": "f7b2d7b9bd0f75e78a5f3be6de6c8641feece5072ddbf1830a303dbcb20ba0b2",
+      "role": "independent bounded read-only verification; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/emf-import-source-v3.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/emf-import-source-v3.json",
+      "bytes": 408668,
+      "sha256": "a69a98986c7be5ed5f3bf224d7b74e118722a86067102b0a4a0d6934c2e9f540",
+      "role": "retained pre-desktop build/source/worker history; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/app-link-inputs.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/app-link-inputs.json",
+      "bytes": 133299,
+      "sha256": "e7bc66699f83144402d7f96ca51904afd979bb6c7e293e2769a060e95aa7afff",
+      "role": "retained pre-desktop build/source/worker history; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/actual-app-worker-result.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/actual-app-worker-result.json",
+      "bytes": 1822,
+      "sha256": "105fbc850c402428cabd4c89f44d8669cd2d9161f4c688b692dadf08d3cd39e4",
+      "role": "retained pre-desktop build/source/worker history; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/app-relocated-link-result.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/app-relocated-link-result.json",
+      "bytes": 1021,
+      "sha256": "778785ef5907e1def5dd5783ee76682b4c05c7f64ef20063572b18d8c931ff90",
+      "role": "retained pre-desktop build/source/worker history; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/windows-app-link-launch-failed.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-app-link-launch-failed.json",
+      "bytes": 595,
+      "sha256": "6bff4be0b9328aae2a48fbddd3393f799168aa383bd07bed1324cce58530e50e",
+      "role": "retained pre-desktop build/source/worker history; original bytes"
+    },
+    {
+      "path": "docs/changes/fixtures/emf-import/windows-native-20261010/baseline-source-ledger.json",
+      "original": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/windows-evidence/review-20261010/source-ledger.json",
+      "bytes": 2404,
+      "sha256": "31a9f8a1cdd6d726afb7aaa69200108323f981d7090fa0468f1da091c9ae8efe",
+      "role": "historical baseline attribution; original bytes"
+    }
+  ]
+}

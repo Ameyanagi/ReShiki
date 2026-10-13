@@ -1,0 +1,12 @@
+   Compiling reshiki v0.11.0 (/Users/ryuichi/dev/ReShiki-worktrees/naming-backend)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.16s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (/tmp/reshiki-opsin-core-target/debug/deps/reshiki-f1afd2d79a2afed2)
+
+running 1 test
+escaped-pipe phases: startup=349.899625ms; completion_before_cleanup=1.032069334s; cleanup=2.749083ms
+test naming::local::tests::an_escaped_pipe_holder_cannot_extend_the_completion_deadline ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 147 filtered out; finished in 1.39s
+

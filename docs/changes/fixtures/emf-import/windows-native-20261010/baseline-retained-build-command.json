@@ -1,0 +1,33 @@
+{
+  "path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\build-base.cmd",
+  "sha256": "ee39b6b071dbbd8cb47eb23649a6b8cabc1ecbd22bf951817b0d0e13bcfa332f",
+  "text": {
+    "value": "@echo off\ncall \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\" -arch=amd64 -host_arch=amd64 >nul\nif errorlevel 1 exit /b %errorlevel%\ncd /d C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\base-51fa0991\ncargo +1.99.0 build --locked --bin reshiki > C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\build-base.log 2>&1\nexit /b %errorlevel%",
+    "PSPath": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\build-base.cmd",
+    "PSParentPath": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009",
+    "PSChildName": "build-base.cmd",
+    "PSDrive": {
+      "CurrentLocation": "Users\\ryuichi",
+      "Name": "C",
+      "Provider": "Microsoft.PowerShell.Core\\FileSystem",
+      "Root": "C:\\",
+      "Description": "",
+      "MaximumSize": null,
+      "Credential": "System.Management.Automation.PSCredential",
+      "DisplayRoot": null
+    },
+    "PSProvider": {
+      "ImplementingType": "Microsoft.PowerShell.Commands.FileSystemProvider",
+      "HelpFile": "System.Management.Automation.dll-Help.xml",
+      "Name": "FileSystem",
+      "PSSnapIn": "Microsoft.PowerShell.Core",
+      "ModuleName": "Microsoft.PowerShell.Core",
+      "Module": null,
+      "Description": "",
+      "Capabilities": 52,
+      "Home": "C:\\Users\\ryuichi",
+      "Drives": "C F D E"
+    },
+    "ReadCount": 1
+  }
+}

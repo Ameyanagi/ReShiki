@@ -1,0 +1,142 @@
+{
+  "status": "PASS",
+  "recorded_utc": "2026-10-09T16:02:28.726381+00:00",
+  "source_head": "7ec621227bc6fd777d5918efb9b8b6443c207d8e",
+  "signed_app_sha256": "4d35fe616bc9cb1388e4a6ec45312c65cc21aa6b67e42e17b077dd848fcc4043",
+  "before_signed_app_sha256": "82a0047bd037f77f063233a284f9f7c7de79f36b1c1e98f6eb673ed514d389c0",
+  "manual_conditions": "macOS, actual native CUA;2560x1704 JPEG;Light;Arial10/JACS;209% Fit;Select;unselected entireC60;F8off;Molecule and3Dappearance expanded",
+  "manual_checks": [
+    "PropertiesRearopacity100\u219225\u21920 applied;25rear lighter,0rear hidden,foreground retained",
+    "One Undo25\u2192100 and Redo\u219225;one Undo0\u219225 and Redo\u21920;each saved native",
+    "Quit exact app and confirmed no ReShiki process;freshlaunch exact signed path kernel PID proof recorded",
+    "FreshFileOpen saved0 and25;both Undo and Redo disabled;SaveAs fresh equals original byteforbyte",
+    "Apply25 again while fresh25;Undo and Redo remained disabled;SaveAs noop bytes exact",
+    "FinalAX saved with Rearopacity25 and both history buttons disabled"
+  ],
+  "whole_native_assertions": {
+    "typed_before_to_100_only_change": "version19\u219222",
+    "all10_candidates_graph_xyz_and_every_nonappearance_field_exact": true,
+    "native_counts": {
+      "atoms": 60,
+      "bonds": 90
+    },
+    "appearance_only_25_to_0": "rear_opacity0.25\u21920.0, allotherfields exact",
+    "raw_byte_equality_groups": [
+      [
+        "100",
+        "25-undo"
+      ],
+      [
+        "25",
+        "25-redo",
+        "0-undo",
+        "25-fresh-reopen",
+        "25-noop"
+      ],
+      [
+        "0",
+        "0-redo",
+        "0-fresh-reopen"
+      ]
+    ]
+  },
+  "public_images": [
+    "c60-rear-opacity-100.jpg",
+    "c60-rear-opacity-25.jpg",
+    "c60-rear-opacity-0.jpg",
+    "c60-rear-opacity-0-fresh-reopen-clean.jpg",
+    "c60-rear-opacity-25-fresh-reopen-clean.jpg"
+  ],
+  "before_public_image": {
+    "path": "../evidence/baseline/c60-rear-opacity-before.jpg",
+    "sha256": "4d3e9c01437239a1da2a239183a2b9313b7c86500ee3aacc39767b97b47af20e"
+  },
+  "private_initial_capture_notes": {
+    "c60-rear-opacity-0-fresh-reopen.jpg": "Recovery banner visible; observed native dismiss then clean recapture",
+    "c60-rear-opacity-25-fresh-reopen.jpg": "keyboardmode on; observed exact keyboard-done click off then clean recapture"
+  },
+  "scope_limits": [
+    "Manual whole unselected C60 in light theme only;selected subsets/dark theme exercised by compiled tests, not claimed as desktop checks",
+    "NoWindows printing/Office EMF alpha native runtime verification",
+    "Fresh reopens have different tab counts;do not claim matched screenshot geometry for those",
+    "First exactpath candidate launch has no retained perPID receipt;freshlaunch kernel path and SHA verified"
+  ],
+  "files": {
+    "c60-rear-opacity-0-fresh-reopen-clean.jpg": {
+      "sha256": "941fa49ed008de90f4ffa6c33a4e1b49893a260f1f5b53d53909d962b77f3254",
+      "bytes": 425081
+    },
+    "c60-rear-opacity-0-fresh-reopen.jpg": {
+      "sha256": "0d692bb9dd0ae2d4723f5c234ca088d1d78c60c2f4802d6f91eed30ae8158002",
+      "bytes": 429415
+    },
+    "c60-rear-opacity-0-fresh-reopen.rsk": {
+      "sha256": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "bytes": 46102
+    },
+    "c60-rear-opacity-0-redo.rsk": {
+      "sha256": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "bytes": 46102
+    },
+    "c60-rear-opacity-0-undo.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103
+    },
+    "c60-rear-opacity-0.jpg": {
+      "sha256": "5c524d1b49d41b6187408a8f43f5f409605eb23ef06b1f84d905f5a811d2f64b",
+      "bytes": 430942
+    },
+    "c60-rear-opacity-0.rsk": {
+      "sha256": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "bytes": 46102
+    },
+    "c60-rear-opacity-100.jpg": {
+      "sha256": "45a0266aaa73965285b93695e67b63ffc19370f17b822ad51c9897d4b46c3573",
+      "bytes": 489992
+    },
+    "c60-rear-opacity-100.rsk": {
+      "sha256": "a2ea34712470ce645f4efa7386089d662001ce2a13ecd07c6d51982ebb5dc2ef",
+      "bytes": 43708
+    },
+    "c60-rear-opacity-25-fresh-reopen-clean.jpg": {
+      "sha256": "a0babb29a1ae5922373ae29ee0c55e8c66e609b1d00ad4a003a57d402d28b0ea",
+      "bytes": 454923
+    },
+    "c60-rear-opacity-25-fresh-reopen.jpg": {
+      "sha256": "5ad8d61baabcc33d09219c383c8272bb6376c2c7f51f2cee9c88d043cab732bc",
+      "bytes": 449861
+    },
+    "c60-rear-opacity-25-fresh-reopen.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103
+    },
+    "c60-rear-opacity-25-noop.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103
+    },
+    "c60-rear-opacity-25-redo.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103
+    },
+    "c60-rear-opacity-25-undo.rsk": {
+      "sha256": "a2ea34712470ce645f4efa7386089d662001ce2a13ecd07c6d51982ebb5dc2ef",
+      "bytes": 43708
+    },
+    "c60-rear-opacity-25.jpg": {
+      "sha256": "0e9271896b43baed8d2cb737caa8d5b4c79c3df1636685122cdf0e55abcf658c",
+      "bytes": 454357
+    },
+    "c60-rear-opacity-25.rsk": {
+      "sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "bytes": 46103
+    },
+    "final-native-state-ax.txt": {
+      "sha256": "6419d32eb08736e2775774f84e61d03b63948fba26c7d2fc1b7246a4c6adf19d",
+      "bytes": 4743
+    },
+    "running-app-proof.json": {
+      "sha256": "c42f44809924f2c2b5b496a9727c8b30c5e52086d0a64417266c09d36cbf8fc4",
+      "bytes": 479
+    }
+  }
+}

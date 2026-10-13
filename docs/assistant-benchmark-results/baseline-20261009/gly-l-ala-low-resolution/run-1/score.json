@@ -1,0 +1,30 @@
+{
+  "graph_identity": true,
+  "reference_smiles": "C[C@H](NC(=O)CN)C(=O)O",
+  "observed_smiles": "C[C@H](NC(=O)CN)C(=O)O",
+  "reference_atoms": 10,
+  "observed_atoms": 10,
+  "reference_bonds": 9,
+  "observed_bonds": 9,
+  "atom_errors": [],
+  "hydrogen_errors": [],
+  "missing_atoms": [],
+  "extra_atoms": [],
+  "bond_errors": [],
+  "missing_bonds": [],
+  "extra_bonds": [],
+  "stereochemistry_errors": [],
+  "reference_fragments": 1,
+  "observed_fragments": 1,
+  "missing_fragments": [],
+  "extra_fragments": [],
+  "abbreviations": {
+    "missing_display_labels": {},
+    "extra_display_labels": {},
+    "member_chemistry_errors": [],
+    "policy": "Complete retained graph is scored regardless of collapsed/expanded display. Label changes are separate from chemical identity."
+  },
+  "localization_search_timed_out": false,
+  "localized_metrics_available": true,
+  "reference_checker": "RDKit 2026.03.6"
+}

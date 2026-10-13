@@ -1,0 +1,341 @@
+{
+  "head": "466c7a1a8eb697af2b1b61fcca59668aa653787f",
+  "tree": "461f658162919422b21ce1b146cb14939e3eac8a",
+  "source_sha256": "e73346375c7478d5f4f77473c0b2033506d9167f16799c732240421f9c63b092",
+  "tracked_source_count": 1067,
+  "source_content_unchanged_by_refresh": true,
+  "cargo_lock_sha256": "ceb8cb65b6d2ca9be22755fdd673558e15e896dd919e4d1170ecf62677054f07",
+  "git_status_clean": true,
+  "raw_binary": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki",
+  "raw_binary_sha256": "1b40af4835253a90c56d157b498384edde1ccd1dc053e707e8b5a76c14965275",
+  "signed_app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app",
+  "signed_binary": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Arrow Attachments.app/Contents/MacOS/reshiki",
+  "signed_binary_sha256": "31a3428de420b01655939a646932c437aa24da9a912147733b8ea8076753d352",
+  "codesign_verify": {
+    "returncode": 0,
+    "stderr": ""
+  },
+  "own_workspace_artifacts_all_fresh_false": true,
+  "own_workspace_artifacts": [
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/depict-math#reshiki-depict-math@0.1.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/depict-math/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki_depict_math",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/depict-math/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/process-heap#reshiki-process-heap@0.1.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/process-heap/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki_process_heap",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/process-heap/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/vendor/zune-jpeg#0.5.15",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/vendor/zune-jpeg/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "zune_jpeg",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/vendor/zune-jpeg/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/vendor/usvg#0.45.1",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/vendor/usvg/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "usvg",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/vendor/usvg/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments#reshiki@0.11.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/Cargo.toml",
+      "target": {
+        "kind": [
+          "custom-build"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "build-script-build",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/build.rs",
+        "edition": "2024",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/native/macos#reshiki-macos@0.1.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/native/macos/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki_macos",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/native/macos/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/vendor/svg2pdf#0.13.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/vendor/svg2pdf/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "svg2pdf",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/vendor/svg2pdf/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/chemistry#reshiki-chemistry@0.1.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/chemistry/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki_chemistry",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/chemistry/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/native/geometry#reshiki-geometry@0.1.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/native/geometry/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki_geometry",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/native/geometry/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/model#reshiki-model@0.1.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/model/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki_model",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/model/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/io#reshiki-io@0.1.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/io/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki_io",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/io/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/agent#reshiki-agent@0.1.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/agent/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki_agent",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/agent/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/mcp#reshiki-mcp@0.1.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/mcp/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki_mcp",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/crates/mcp/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments#reshiki@0.11.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "reshiki",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/src/lib.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "fresh": false,
+      "executable": null
+    },
+    {
+      "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments#reshiki@0.11.0",
+      "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/Cargo.toml",
+      "target": {
+        "kind": [
+          "bin"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "reshiki",
+        "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/src/main.rs",
+        "edition": "2024",
+        "doc": true,
+        "doctest": false,
+        "test": true
+      },
+      "fresh": false,
+      "executable": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki"
+    }
+  ],
+  "app_artifact": {
+    "package_id": "path+file:///Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments#reshiki@0.11.0",
+    "manifest_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/Cargo.toml",
+    "target": {
+      "kind": [
+        "bin"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "reshiki",
+      "src_path": "/Users/ryuichi/dev/ReShiki-worktrees/arrow-attachments/src/main.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": false,
+      "test": true
+    },
+    "fresh": false,
+    "executable": "/Users/ryuichi/dev/ReShiki/target/debug/reshiki"
+  }
+}

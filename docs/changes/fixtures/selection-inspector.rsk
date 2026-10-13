@@ -1,0 +1,237 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 15,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": -0.0000018358783,
+        "y": -42.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 2,
+      "element": "C",
+      "position": {
+        "x": 36.373066,
+        "y": -21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 3,
+      "element": "C",
+      "position": {
+        "x": 36.373066,
+        "y": 21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 4,
+      "element": "C",
+      "position": {
+        "x": -0.0000018358783,
+        "y": 42.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": -36.373066,
+        "y": 21.000002
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 6,
+      "element": "C",
+      "position": {
+        "x": -36.373062,
+        "y": -21.000008
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 2,
+      "b": 3,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 3,
+      "b": 4,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 4,
+      "b": 5,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 5,
+      "b": 6,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 6,
+      "b": 1,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [
+    {
+      "id": 7,
+      "position": {
+        "x": -120.0,
+        "y": 100.0
+      },
+      "text": "Reaction conditions",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    }
+  ],
+  "arrows": [],
+  "graphics": [],
+  "groups": []
+}

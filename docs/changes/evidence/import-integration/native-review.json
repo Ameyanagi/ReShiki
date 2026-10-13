@@ -1,0 +1,289 @@
+{
+  "schema": 1,
+  "recorded_utc": "2026-10-10T14:52:14.748949+00:00",
+  "scope": "Controlled macOS native coexistence, molecule rotation and save/reopen; ROOT performed all GUI actions; this audit independently checked retained bytes and images",
+  "sources": {
+    "merge_commit": "fa1fd3e383dca5487347476143e1f70e66b6992b",
+    "merge_parents": [
+      "136e5b67904cf7f8d5c5188f691e066380d534a3",
+      "0b1272869af45d0734731cee17a353ceeff7cd19",
+      "86cb8344bad628034817ea1086122a6c4325d300"
+    ],
+    "tested_index_tree": "2a0939cd858947c1c1769ae3a34fb1789dbc3251",
+    "source_input_dictionary_sha256": "02315cee46cef8424d65c4a3de30177933d9260b8e51f9d5bf586e806f709111",
+    "captured_tracked_files": 2720,
+    "all_captured_files_unchanged_at_independent_audit": true,
+    "added_regression": {
+      "path": "tests/import_batch_native_roundtrip.rs",
+      "sha256": "0d5999a6c06d8c42e6bc6c2e8681516a4d84e5d40502a5ab90ac22d03de828dd"
+    },
+    "originals": [
+      {
+        "path": "docs/changes/evidence/mol-import-3d/candidate-alkane-3d-desktop.rsk",
+        "sha256": "fdef4da9fbe2f76b50e7dba90bf3ad9b12162a788641c4b219013cd3c9da43c3",
+        "bytes": 3677
+      },
+      {
+        "path": "docs/changes/fixtures/emf-import/windows-native-20261010/desktop-import-20261010.rsk",
+        "sha256": "7a689884c15fb62bacd7b1ad9bac9f602d4651a769657bdc9ac3958ffb30158f",
+        "bytes": 492401
+      },
+      {
+        "path": "docs/changes/fixtures/emf-import/windows-native-20261010/source.emf",
+        "sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a",
+        "bytes": 12860
+      }
+    ]
+  },
+  "build": {
+    "compiler": "rustc 1.99.0 b940084d7 (aarch64-apple-darwin)",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--no-default-features",
+      "--test",
+      "import_batch_native_roundtrip",
+      "--message-format=json-render-diagnostics",
+      "--",
+      "--nocapture"
+    ],
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 1,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "root_features": [],
+    "root_defaults": [],
+    "test_dependency_feature_union": "reshiki-process-heap allocation-metrics adds a module; ordinary GUI cfg(not(test)) retains BoundedHeap. No claim of byte/full-graph equivalence to an independently run cargo build.",
+    "own_compiler_artifacts": 18,
+    "all_own_fresh_false": true,
+    "all_own_from_intended_worktree": true,
+    "actual_retained_depfiles": 4,
+    "verified_distinct_tracked_depfile_inputs": 158,
+    "depfile_limit": "Root GUI, root library, helper and regression depfiles; not a complete transitive external/generated input archive.",
+    "raw_gui_sha256": "111fb4a1668eca1a9429e489458d1f293ed2640b20cfd68b23a7084276c9b4f8",
+    "development_helper_sha256": "73e1477d6136bebe103a509974f8c04cb92e9e5c6c69b0044791d2fff2c28c23",
+    "signed_gui_sha256": "5d17c1b39510c0651a7dee02303187795696f98933f8ee669c7d095757e052aa",
+    "bundle_id": "dev.reshiki.combined-imports-20261010-v1",
+    "bundle_files": 9,
+    "bundled_executables": 1,
+    "license_files": 5,
+    "linked_libraries": "macOS system libraries/frameworks only",
+    "signature": "Strict verified ad-hoc development signature; not notarized",
+    "packaging": "Retained binaries/resources only; no additional build. Development helper outside bundle; GUI self-dispatches worker modes.",
+    "signing_commands": [
+      {
+        "command": [
+          "codesign",
+          "--force",
+          "--deep",
+          "--sign",
+          "-",
+          "ReShiki Combined Imports Review.app"
+        ],
+        "exit": 0
+      },
+      {
+        "command": [
+          "codesign",
+          "--verify",
+          "--deep",
+          "--strict",
+          "--verbose=2",
+          "ReShiki Combined Imports Review.app"
+        ],
+        "exit": 0
+      }
+    ],
+    "private_signing_receipt_sha256": "4dd8a17d48fb9c432d428ac009334c8f005e9b2de2fba9a3be4925eac2fe84f9"
+  },
+  "validation": {
+    "source_merge_normal_hooks": {
+      "status": "PASS",
+      "exit": 0,
+      "commands": [
+        "cargo check --all-targets --all-features --locked",
+        "cargo clippy --all-targets --all-features --locked -- -D warnings",
+        "cargo fmt --all --check"
+      ],
+      "other_hooks": ["oxfmt", "oxlint", "ruff", "ruff-format", "ty"],
+      "hooks_log_sha256": "055bfd5d93335974e6517dda5b871010775dbf11ccc0550dae910f1395029c0b"
+    },
+    "focused_regression": {
+      "name": "saved_mol_xyz_and_retained_emf_share_a_native_append_roundtrip",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 7.23,
+      "compiler_build_finished_success": true,
+      "wrapper_exit": 1,
+      "cargo_subprocess_exit_code": null,
+      "explanation": "Post-run wrapper wrongly required the helper to remain unchanged, although this Cargo invocation built it. Original Cargo return code was not persisted; compiler success and full test summary are retained.",
+      "compiler_runtime_log_sha256": "f212aac44fb743906215d5ab0b7f1f55b5d03014be16bb3dbafab5d712c22baf"
+    },
+    "test_followup_normal_hooks": {
+      "status": "PASS",
+      "exit": 0,
+      "commit": "5cca01e923ba3c5e3af1ad4493cd5d4cdc508036",
+      "tree": "2a0939cd858947c1c1769ae3a34fb1789dbc3251",
+      "parent": "fa1fd3e383dca5487347476143e1f70e66b6992b",
+      "normal_hooks": true,
+      "bypass": false,
+      "commands": [
+        "cargo check --all-targets --all-features --locked",
+        "cargo clippy --all-targets --all-features --locked -- -D warnings",
+        "cargo fmt --all --check"
+      ],
+      "naturally_skipped_nonmatching_hooks": ["oxfmt", "oxlint", "ruff", "ruff-format", "ty"],
+      "terminal_receipt_sha256": "d1f1f8eb76649e15ded334e1c5c86a589a0bc5bc2aa64c35b0aa57c9937f4c37",
+      "hooks_log_sha256": "24800f0d5bdb58a01523539297d4495efec5d9e15081e0fbe359e02922caae7f"
+    },
+    "combined_remote_ci": "Not claimed; check the eventual pushed integration head"
+  },
+  "fixture": {
+    "authorship": "Authored combination, not itself a native import capture",
+    "alkane": "Original six carbon atoms/XYZ/H counts and five bonds copied exactly from the prior native save",
+    "picture": "Original complete picture with ID1 changed to7 and origin.y set to120; original x, axes, style, layer, PNG and EMF retained",
+    "version": 20,
+    "formula": "C6H14",
+    "atoms": 6,
+    "bonds": 5,
+    "pictures": 1,
+    "ordinary_h_atom_objects": 0,
+    "folded_h_counts": [3, 2, 2, 2, 2, 3],
+    "original_emf_sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a",
+    "original_emf_bytes": 12860,
+    "preview_png_sha256": "1dabe5ad6f5806cd121f294a19eaa697dfc9f6957518da19ecbfe858733139ca",
+    "preview_dimensions": [4724, 2834]
+  },
+  "native_actions": [
+    "Open authored native file via GUI",
+    "F8 off; whole drawing properties C6H14/six atoms/five bonds",
+    "Save As separate unrotated native file",
+    "Rectangle select exactly six atoms/five bonds, excluding picture",
+    "3D tilt X+15 then Y+15 then Done; clear selection",
+    "Save As rotated result",
+    "Quit owned review app via Cmd+Q",
+    "Relaunch same signed app, open rotated result; disabled Undo/Redo",
+    "F8 off; capture result",
+    "Save As separate reopened native result"
+  ],
+  "readback": {
+    "unrotated_save_whole_document_equals_authored_input": true,
+    "rotated_reopened_save_byte_identical": true,
+    "rotated_reopened_sha256": "5268404becb3b5f4d5d10c74b20e582c6c26a07b5b37eab3ae771d961e0bc09c",
+    "all_picture_fields_and_both_payloads_exact": true,
+    "atom_noncoordinate_fields_exact": true,
+    "bond_undirected_connectivity_order_and_stereo_fields_exact": true,
+    "other_document_fields_exact": true,
+    "rotation": {
+      "model": "Translation to six-atom arithmetic centroid, then Ry(+15 degrees) times Rx(+15 degrees), then translate back",
+      "centroid_before": [-0.04666666666666508, 0.7140000000000001, 4.6746],
+      "proper_rotation_matrix": [
+        [0.9659258262890683, 0.06698729810778066, 0.24999999999999997],
+        [0, 0.9659258262890683, -0.25881904510252074],
+        [-0.25881904510252074, 0.24999999999999997, 0.9330127018922194]
+      ],
+      "analytic_determinant": 1,
+      "maximum_coordinate_residual": 4.160895144877941e-6,
+      "maximum_pairwise_distance_error": 5.98936802020944e-6,
+      "distance_pairs": 15,
+      "signed_six_volume_atom_ids": [2, 3, 4, 5],
+      "signed_six_volume_before": 60472.40334586261,
+      "signed_six_volume_after": 60472.404159908096,
+      "signed_volume_ratio": 1.0000000134614377,
+      "roundoff_scope": "Independent double-precision comparison with saved decimal f32 coordinates; not a new application execution"
+    },
+    "expected_depth_depiction_changes": [
+      "Bond1-2 display plain to bold",
+      "Bond2-3 display plain to wedge; stored endpoint orientation2->3 becomes3->2"
+    ],
+    "normalization_limits": [
+      "Unrotated Save equals parsed whole JSON; byte count differs by final newline only.",
+      "Rotated bond objects are not byte-identical because existing projection depiction updates display/direction.",
+      "Opened and rotated AX captures were tool diffs and are excluded; only complete fresh-process AX is included."
+    ],
+    "fresh_process_evidence": "ROOT reports Cmd+Q and relaunch of the same signed app; full fresh AX has disabled Undo/Redo. No independent historical PID log was retained in this package."
+  },
+  "files": [
+    {
+      "path": "docs/changes/evidence/import-integration/AUTHORED-hexane-3d-retained-emf-v20.rsk",
+      "sha256": "0d517888bdff01822fdc3bcc18519591223d7558f34c3bcf18e09e5082cc7d5d",
+      "bytes": 495860
+    },
+    {
+      "path": "docs/changes/evidence/import-integration/combined-import-native-save.rsk",
+      "sha256": "a130ecaa2270c6296a27221c1c6ed23f562487d1b855382a3c706883c573537a",
+      "bytes": 495859
+    },
+    {
+      "path": "docs/changes/evidence/import-integration/combined-import-native-rotated.rsk",
+      "sha256": "5268404becb3b5f4d5d10c74b20e582c6c26a07b5b37eab3ae771d961e0bc09c",
+      "bytes": 495895
+    },
+    {
+      "path": "docs/changes/evidence/import-integration/combined-import-native-reopened-save.rsk",
+      "sha256": "5268404becb3b5f4d5d10c74b20e582c6c26a07b5b37eab3ae771d961e0bc09c",
+      "bytes": 495895
+    },
+    {
+      "path": "docs/changes/evidence/import-integration/fresh-process-reopened.ax.txt",
+      "sha256": "44eb962e5843c64b1ecd4b37d4a9b816bfa8282fbef089191fe8ef5e0641e7ac",
+      "bytes": 4388
+    },
+    {
+      "path": "docs/images/pr-reviews/import-integration/opened-native.jpg",
+      "sha256": "e1a5853382511d37e05526af98d0b379487feacdb46e58890fbfe69f1af6ab68",
+      "bytes": 370559
+    },
+    {
+      "path": "docs/images/pr-reviews/import-integration/rotated-native.jpg",
+      "sha256": "1c5600d66e01fb22c747cef69847d8dbc1bd961a2e1ca502cce80ca4ad216acb",
+      "bytes": 373150
+    },
+    {
+      "path": "docs/images/pr-reviews/import-integration/fresh-process-reopened.jpg",
+      "sha256": "ea38473e37c1b1670c4320cdeaefb81bbbc0a44c08b35fb46584eb9bc33a718d",
+      "bytes": 368419
+    }
+  ],
+  "images": {
+    "docs/images/pr-reviews/import-integration/opened-native.jpg": {
+      "path": "docs/images/pr-reviews/import-integration/opened-native.jpg",
+      "sha256": "e1a5853382511d37e05526af98d0b379487feacdb46e58890fbfe69f1af6ab68",
+      "bytes": 370559,
+      "dimensions": [2560, 1704],
+      "processing": "Original JPEG bytes; no crop, resize, retouch or re-encoding"
+    },
+    "docs/images/pr-reviews/import-integration/rotated-native.jpg": {
+      "path": "docs/images/pr-reviews/import-integration/rotated-native.jpg",
+      "sha256": "1c5600d66e01fb22c747cef69847d8dbc1bd961a2e1ca502cce80ca4ad216acb",
+      "bytes": 373150,
+      "dimensions": [2560, 1704],
+      "processing": "Original JPEG bytes; no crop, resize, retouch or re-encoding"
+    },
+    "docs/images/pr-reviews/import-integration/fresh-process-reopened.jpg": {
+      "path": "docs/images/pr-reviews/import-integration/fresh-process-reopened.jpg",
+      "sha256": "ea38473e37c1b1670c4320cdeaefb81bbbc0a44c08b35fb46584eb9bc33a718d",
+      "bytes": 368419,
+      "dimensions": [2560, 1704],
+      "processing": "Original JPEG bytes; no crop, resize, retouch or re-encoding"
+    }
+  },
+  "limitations": [
+    "macOS controlled native file coexistence/rotation/persistence only; Windows EMF conversion and Office acceptance retain original qualified PR285 captures.",
+    "GUI is ordinary non-test binary built during Cargo test; root feature set default=[], with allocation-metrics dev feature union qualified separately.",
+    "The imported spectrum is an original controlled EMF picture; no J prediction or new NMR behavior is inferred.",
+    "Recovery draft prompt was left untouched; captures include it.",
+    "Opened/rotated AX text are tool diffs; fresh-process AX is full tree.",
+    "Screenshot camera framing is not an independent physical-size measurement.",
+    "The saved coordinates substantiate a proper rigid rotation; this achiral hexane fixture alone does not prove all stereochemical import cases.",
+    "Existing Recovery draft was not restored or dismissed.",
+    "No new Windows conversion, Office execution, NMR prediction or experimental spectrum is claimed."
+  ],
+  "private_native_acceptance_receipt_sha256": "951625fc380148f48daf1c63301f15ef43cde4aec251e67da0427e78632f2198",
+  "license": "Original controlled fixtures, captures and authored documentation: MIT OR Apache-2.0; existing third-party notices preserved"
+}

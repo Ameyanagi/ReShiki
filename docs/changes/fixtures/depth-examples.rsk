@@ -1,0 +1,5245 @@
+{
+  "abbreviations": [
+    {
+      "label": "CH2OH",
+      "reverse_label": "HOCH2",
+      "anchor": 115,
+      "members": [
+        115,
+        116
+      ]
+    }
+  ],
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 15,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "Ru",
+      "position": {
+        "x": 223.91629,
+        "y": 177.81152
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 2,
+      "element": "*",
+      "position": {
+        "x": 278.4759,
+        "y": 146.31152
+      },
+      "centroid": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 3,
+      "element": "C",
+      "position": {
+        "x": 273.2259,
+        "y": 173.59132
+      },
+      "depth": 31.49999,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 4,
+      "element": "C",
+      "position": {
+        "x": 252.22589,
+        "y": 137.21826
+      },
+      "depth": 31.49999,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": 257.4759,
+        "y": 109.93846
+      },
+      "depth": -0.000009910875,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 6,
+      "element": "C",
+      "position": {
+        "x": 283.7259,
+        "y": 119.03172
+      },
+      "depth": -31.500008,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 7,
+      "element": "C",
+      "position": {
+        "x": 304.7259,
+        "y": 155.4048
+      },
+      "depth": -31.500008,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 8,
+      "element": "C",
+      "position": {
+        "x": 299.4759,
+        "y": 182.6846
+      },
+      "depth": 0.000003303625,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 10,
+      "element": "Ru",
+      "position": {
+        "x": 886.08374,
+        "y": 124.5218
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 11,
+      "element": "*",
+      "position": {
+        "x": 831.5242,
+        "y": 156.02179
+      },
+      "centroid": [
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 12,
+      "element": "C",
+      "position": {
+        "x": 826.2741,
+        "y": 183.3016
+      },
+      "depth": 31.49999,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 13,
+      "element": "C",
+      "position": {
+        "x": 805.2742,
+        "y": 146.92853
+      },
+      "depth": 31.49999,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 14,
+      "element": "C",
+      "position": {
+        "x": 810.5241,
+        "y": 119.648735
+      },
+      "depth": -0.000009910875,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 15,
+      "element": "C",
+      "position": {
+        "x": 836.7741,
+        "y": 128.742
+      },
+      "depth": -31.500008,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 16,
+      "element": "C",
+      "position": {
+        "x": 857.7741,
+        "y": 165.11507
+      },
+      "depth": -31.500008,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 17,
+      "element": "C",
+      "position": {
+        "x": 852.5241,
+        "y": 192.39487
+      },
+      "depth": 0.000003303625,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 19,
+      "element": "Ru",
+      "position": {
+        "x": 285.71704,
+        "y": 504.5218
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 20,
+      "element": "*",
+      "position": {
+        "x": 231.15744,
+        "y": 536.0218
+      },
+      "depth": -0.0000032658588,
+      "centroid": [
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 21,
+      "element": "C",
+      "position": {
+        "x": 256.6741,
+        "y": 563.3016
+      },
+      "depth": 19.201883,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 22,
+      "element": "C",
+      "position": {
+        "x": 246.97739,
+        "y": 526.9285
+      },
+      "depth": 37.82911,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 23,
+      "element": "C",
+      "position": {
+        "x": 221.46071,
+        "y": 499.64874
+      },
+      "depth": 18.627226,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 24,
+      "element": "C",
+      "position": {
+        "x": 205.64078,
+        "y": 508.742
+      },
+      "depth": -19.201885,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 25,
+      "element": "C",
+      "position": {
+        "x": 215.3375,
+        "y": 545.11505
+      },
+      "depth": -37.829117,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 26,
+      "element": "C",
+      "position": {
+        "x": 240.85416,
+        "y": 572.39484
+      },
+      "depth": -18.627222,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 28,
+      "element": "Fe",
+      "position": {
+        "x": 883.6485,
+        "y": 530.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 29,
+      "element": "*",
+      "position": {
+        "x": 823.78485,
+        "y": 530.0
+      },
+      "centroid": [
+        30,
+        31,
+        32,
+        33,
+        34
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 30,
+      "element": "C",
+      "position": {
+        "x": 809.3328,
+        "y": 551.0
+      },
+      "depth": 25.031618,
+      "charge": -1,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 31,
+      "element": "C",
+      "position": {
+        "x": 809.3328,
+        "y": 509.0
+      },
+      "depth": 25.031616,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 32,
+      "element": "C",
+      "position": {
+        "x": 829.305,
+        "y": 496.0213
+      },
+      "depth": -9.561229,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 33,
+      "element": "C",
+      "position": {
+        "x": 841.6485,
+        "y": 530.0
+      },
+      "depth": -30.940777,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 34,
+      "element": "C",
+      "position": {
+        "x": 829.305,
+        "y": 563.9787
+      },
+      "depth": -9.561222,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 36,
+      "element": "Ru",
+      "position": {
+        "x": 286.0837,
+        "y": 884.5218
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 37,
+      "element": "*",
+      "position": {
+        "x": 231.52411,
+        "y": 916.0218
+      },
+      "centroid": [
+        38,
+        39,
+        40,
+        41,
+        42,
+        43
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 38,
+      "element": "C",
+      "position": {
+        "x": 226.27411,
+        "y": 943.3016
+      },
+      "depth": 31.49999,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 39,
+      "element": "C",
+      "position": {
+        "x": 205.27411,
+        "y": 906.9285
+      },
+      "depth": 31.49999,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 40,
+      "element": "C",
+      "position": {
+        "x": 210.52411,
+        "y": 879.64874
+      },
+      "depth": -0.000009910875,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 41,
+      "element": "C",
+      "position": {
+        "x": 236.7741,
+        "y": 888.742
+      },
+      "depth": -31.500008,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 42,
+      "element": "C",
+      "position": {
+        "x": 257.7741,
+        "y": 925.11505
+      },
+      "depth": -31.500008,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 43,
+      "element": "C",
+      "position": {
+        "x": 252.52411,
+        "y": 952.39484
+      },
+      "depth": 0.000003303625,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 45,
+      "element": "Rh",
+      "position": {
+        "x": 788.01013,
+        "y": 912.4429
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 46,
+      "element": "Rh",
+      "position": {
+        "x": 922.41016,
+        "y": 912.4429
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 47,
+      "element": "Cl",
+      "position": {
+        "x": 855.21014,
+        "y": 899.8429
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 48,
+      "element": "Cl",
+      "position": {
+        "x": 855.21014,
+        "y": 932.60284
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 49,
+      "element": "Cl",
+      "position": {
+        "x": 789.27014,
+        "y": 858.68286
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 50,
+      "element": "Cl",
+      "position": {
+        "x": 923.67017,
+        "y": 967.8829
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 51,
+      "element": "*",
+      "position": {
+        "x": 743.91016,
+        "y": 956.54285
+      },
+      "centroid": [
+        52,
+        54,
+        56,
+        58,
+        60
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 52,
+      "element": "C",
+      "position": {
+        "x": 770.4607,
+        "y": 980.4491
+      },
+      "charge": -1,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 53,
+      "element": "C",
+      "position": {
+        "x": 801.6728,
+        "y": 1008.5526
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 54,
+      "element": "C",
+      "position": {
+        "x": 743.5976,
+        "y": 973.3895
+      },
+      "depth": 31.504515,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 55,
+      "element": "C",
+      "position": {
+        "x": 743.23016,
+        "y": 993.194
+      },
+      "depth": 68.54029,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 56,
+      "element": "C",
+      "position": {
+        "x": 717.1664,
+        "y": 943.0484
+      },
+      "depth": 19.470861,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 57,
+      "element": "C",
+      "position": {
+        "x": 685.72723,
+        "y": 927.18475
+      },
+      "depth": 42.360233,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 58,
+      "element": "C",
+      "position": {
+        "x": 727.69415,
+        "y": 931.3562
+      },
+      "depth": -19.470854,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 59,
+      "element": "C",
+      "position": {
+        "x": 708.6311,
+        "y": 901.74744
+      },
+      "depth": -42.360226,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 60,
+      "element": "C",
+      "position": {
+        "x": 760.63184,
+        "y": 954.47107
+      },
+      "depth": -31.504515,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 61,
+      "element": "C",
+      "position": {
+        "x": 780.2894,
+        "y": 952.0355
+      },
+      "depth": -68.54029,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 62,
+      "element": "*",
+      "position": {
+        "x": 966.51013,
+        "y": 866.24286
+      },
+      "centroid": [
+        63,
+        65,
+        67,
+        69,
+        71
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 63,
+      "element": "C",
+      "position": {
+        "x": 993.0607,
+        "y": 890.1491
+      },
+      "charge": -1,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 64,
+      "element": "C",
+      "position": {
+        "x": 1024.2728,
+        "y": 918.2526
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 65,
+      "element": "C",
+      "position": {
+        "x": 966.1976,
+        "y": 883.08954
+      },
+      "depth": 31.504515,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 66,
+      "element": "C",
+      "position": {
+        "x": 965.83014,
+        "y": 902.894
+      },
+      "depth": 68.5403,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 67,
+      "element": "C",
+      "position": {
+        "x": 939.76636,
+        "y": 852.7484
+      },
+      "depth": 19.470861,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 68,
+      "element": "C",
+      "position": {
+        "x": 908.3272,
+        "y": 836.88477
+      },
+      "depth": 42.360233,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 69,
+      "element": "C",
+      "position": {
+        "x": 950.2941,
+        "y": 841.05615
+      },
+      "depth": -19.470861,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 70,
+      "element": "C",
+      "position": {
+        "x": 931.2311,
+        "y": 811.44745
+      },
+      "depth": -42.360233,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 71,
+      "element": "C",
+      "position": {
+        "x": 983.2318,
+        "y": 864.1711
+      },
+      "depth": -31.504515,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 72,
+      "element": "C",
+      "position": {
+        "x": 1002.8894,
+        "y": 861.73553
+      },
+      "depth": -68.54029,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 75,
+      "element": "Rh",
+      "position": {
+        "x": 185.06445,
+        "y": 1288.3962
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 76,
+      "element": "Rh",
+      "position": {
+        "x": 319.46448,
+        "y": 1288.3962
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 77,
+      "element": "Cl",
+      "position": {
+        "x": 252.26447,
+        "y": 1275.7963
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 78,
+      "element": "Cl",
+      "position": {
+        "x": 252.26447,
+        "y": 1308.5563
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 79,
+      "element": "Cl",
+      "position": {
+        "x": 186.32445,
+        "y": 1234.6362
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 80,
+      "element": "Cl",
+      "position": {
+        "x": 320.72446,
+        "y": 1343.8362
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 81,
+      "element": "*",
+      "position": {
+        "x": 140.96445,
+        "y": 1332.4962
+      },
+      "depth": 0.0000027968247,
+      "centroid": [
+        82,
+        84,
+        86,
+        88,
+        90
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 82,
+      "element": "C",
+      "position": {
+        "x": 160.9774,
+        "y": 1360.1226
+      },
+      "depth": 10.616621,
+      "charge": -1,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 83,
+      "element": "C",
+      "position": {
+        "x": 184.50403,
+        "y": 1392.5991
+      },
+      "depth": 23.097202,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 84,
+      "element": "C",
+      "position": {
+        "x": 134.45532,
+        "y": 1338.1664
+      },
+      "depth": 34.668774,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 85,
+      "element": "C",
+      "position": {
+        "x": 126.803406,
+        "y": 1344.8319
+      },
+      "depth": 75.424355,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 86,
+      "element": "C",
+      "position": {
+        "x": 116.92865,
+        "y": 1308.3743
+      },
+      "depth": 10.809862,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 87,
+      "element": "C",
+      "position": {
+        "x": 88.67287,
+        "y": 1280.0172
+      },
+      "depth": 23.517624,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 88,
+      "element": "C",
+      "position": {
+        "x": 132.61864,
+        "y": 1311.918
+      },
+      "depth": -27.987898,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 89,
+      "element": "C",
+      "position": {
+        "x": 122.807526,
+        "y": 1287.7267
+      },
+      "depth": -60.88966,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 90,
+      "element": "C",
+      "position": {
+        "x": 159.84225,
+        "y": 1343.9001
+      },
+      "depth": -28.107336,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 91,
+      "element": "C",
+      "position": {
+        "x": 182.03444,
+        "y": 1357.3062
+      },
+      "depth": -61.14949,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 92,
+      "element": "*",
+      "position": {
+        "x": 363.56445,
+        "y": 1242.1963
+      },
+      "centroid": [
+        93,
+        95,
+        97,
+        99,
+        101
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 93,
+      "element": "C",
+      "position": {
+        "x": 390.11505,
+        "y": 1266.1025
+      },
+      "charge": -1,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 94,
+      "element": "C",
+      "position": {
+        "x": 421.32712,
+        "y": 1294.2059
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 95,
+      "element": "C",
+      "position": {
+        "x": 363.2519,
+        "y": 1259.043
+      },
+      "depth": 31.504515,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 96,
+      "element": "C",
+      "position": {
+        "x": 362.88446,
+        "y": 1278.8474
+      },
+      "depth": 68.5403,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 97,
+      "element": "C",
+      "position": {
+        "x": 336.8207,
+        "y": 1228.7018
+      },
+      "depth": 19.470861,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 98,
+      "element": "C",
+      "position": {
+        "x": 305.38153,
+        "y": 1212.8381
+      },
+      "depth": 42.360233,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 99,
+      "element": "C",
+      "position": {
+        "x": 347.34845,
+        "y": 1217.0095
+      },
+      "depth": -19.470861,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 100,
+      "element": "C",
+      "position": {
+        "x": 328.2854,
+        "y": 1187.4008
+      },
+      "depth": -42.360233,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "hide_charge": true,
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 101,
+      "element": "C",
+      "position": {
+        "x": 380.28616,
+        "y": 1240.1244
+      },
+      "depth": -31.504515,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": true,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 102,
+      "element": "C",
+      "position": {
+        "x": 399.94373,
+        "y": 1237.689
+      },
+      "depth": -68.54029,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 105,
+      "element": "C",
+      "position": {
+        "x": 930.6,
+        "y": 1292.3334
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": {
+        "winding": "cw",
+        "neighbors": [
+          110,
+          106,
+          111
+        ]
+      },
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 106,
+      "element": "C",
+      "position": {
+        "x": 892.8,
+        "y": 1330.1334
+      },
+      "depth": 65.47152,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": {
+        "winding": "cw",
+        "neighbors": [
+          105,
+          107,
+          112
+        ]
+      },
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 107,
+      "element": "C",
+      "position": {
+        "x": 817.2,
+        "y": 1330.1334
+      },
+      "depth": 65.47152,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": {
+        "winding": "ccw",
+        "neighbors": [
+          106,
+          108,
+          113
+        ]
+      },
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 108,
+      "element": "C",
+      "position": {
+        "x": 779.4,
+        "y": 1292.3334
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": {
+        "winding": "cw",
+        "neighbors": [
+          107,
+          109,
+          114
+        ]
+      },
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 109,
+      "element": "C",
+      "position": {
+        "x": 817.2,
+        "y": 1254.5333
+      },
+      "depth": -65.47152,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": {
+        "winding": "ccw",
+        "neighbors": [
+          108,
+          110,
+          115
+        ]
+      },
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 110,
+      "element": "O",
+      "position": {
+        "x": 892.8,
+        "y": 1254.5333
+      },
+      "depth": -65.47152,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 111,
+      "element": "O",
+      "position": {
+        "x": 930.6,
+        "y": 1334.3334
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 112,
+      "element": "O",
+      "position": {
+        "x": 892.8,
+        "y": 1372.1334
+      },
+      "depth": 65.47152,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 113,
+      "element": "O",
+      "position": {
+        "x": 817.2,
+        "y": 1288.1334
+      },
+      "depth": 65.47152,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "display": {
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "left",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 114,
+      "element": "O",
+      "position": {
+        "x": 779.4,
+        "y": 1334.3334
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 115,
+      "element": "C",
+      "position": {
+        "x": 817.2,
+        "y": 1212.5333
+      },
+      "depth": -65.47152,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 116,
+      "element": "O",
+      "position": {
+        "x": 783.6,
+        "y": 1187.3334
+      },
+      "depth": -65.47152,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    }
+  ],
+  "bonds": [
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 3,
+      "b": 4,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 5,
+      "b": 4,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 5,
+      "b": 6,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 6,
+      "b": 7,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 7,
+      "b": 8,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 8,
+      "b": 3,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 12,
+      "b": 13,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 14,
+      "b": 13,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 14,
+      "b": 15,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 15,
+      "b": 16,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 16,
+      "b": 17,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 17,
+      "b": 12,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 10,
+      "b": 11,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 21,
+      "b": 22,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 22,
+      "b": 23,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 24,
+      "b": 23,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 24,
+      "b": 25,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 25,
+      "b": 26,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 26,
+      "b": 21,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 19,
+      "b": 20,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 30,
+      "b": 31,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 32,
+      "b": 31,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 32,
+      "b": 33,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 33,
+      "b": 34,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 34,
+      "b": 30,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 28,
+      "b": 29,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "ring_arc": true,
+      "projection": true,
+      "z_order": 0,
+      "a": 38,
+      "b": 39,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "ring_arc": true,
+      "projection": true,
+      "z_order": 0,
+      "a": 40,
+      "b": 39,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "ring_arc": true,
+      "projection": true,
+      "z_order": 0,
+      "a": 40,
+      "b": 41,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 41,
+      "b": 42,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 42,
+      "b": 43,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 43,
+      "b": 38,
+      "order": 4,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 36,
+      "b": 37,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 45,
+      "b": 47,
+      "order": 1,
+      "display": "hash",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 46,
+      "b": 47,
+      "order": 1,
+      "display": "hash",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 45,
+      "b": 48,
+      "order": 1,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 46,
+      "b": 48,
+      "order": 1,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 45,
+      "b": 49,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 46,
+      "b": 50,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 52,
+      "b": 53,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 54,
+      "b": 55,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 56,
+      "b": 57,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 58,
+      "b": 59,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 60,
+      "b": 61,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 52,
+      "b": 54,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 54,
+      "b": 56,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 56,
+      "b": 58,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 58,
+      "b": 60,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 60,
+      "b": 52,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 51,
+      "b": 45,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 63,
+      "b": 64,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 65,
+      "b": 66,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 67,
+      "b": 68,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 69,
+      "b": 70,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 71,
+      "b": 72,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 63,
+      "b": 65,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 65,
+      "b": 67,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 67,
+      "b": 69,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 69,
+      "b": 71,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 71,
+      "b": 63,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 62,
+      "b": 46,
+      "order": 5,
+      "display": "dashed",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 75,
+      "b": 77,
+      "order": 1,
+      "display": "hash",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 76,
+      "b": 77,
+      "order": 1,
+      "display": "hash",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 75,
+      "b": 78,
+      "order": 1,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 76,
+      "b": 78,
+      "order": 1,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 75,
+      "b": 79,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 76,
+      "b": 80,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 82,
+      "b": 83,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 84,
+      "b": 85,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 86,
+      "b": 87,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 88,
+      "b": 89,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 90,
+      "b": 91,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 82,
+      "b": 84,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 84,
+      "b": 86,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 86,
+      "b": 88,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 88,
+      "b": 90,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 90,
+      "b": 82,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 81,
+      "b": 75,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 93,
+      "b": 94,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 95,
+      "b": 96,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 97,
+      "b": 98,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 99,
+      "b": 100,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 101,
+      "b": 102,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 93,
+      "b": 95,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 95,
+      "b": 97,
+      "order": 4,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 97,
+      "b": 99,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 99,
+      "b": 101,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 101,
+      "b": 93,
+      "order": 4,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 92,
+      "b": 76,
+      "order": 5,
+      "display": "dashed",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 105,
+      "b": 106,
+      "order": 1,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 106,
+      "b": 107,
+      "order": 1,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 108,
+      "b": 107,
+      "order": 1,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 108,
+      "b": 109,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 109,
+      "b": 110,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 110,
+      "b": 105,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 105,
+      "b": 111,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 106,
+      "b": 112,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 107,
+      "b": 113,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 108,
+      "b": 114,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 115,
+      "b": 116,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 109,
+      "b": 115,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [
+    {
+      "id": 9,
+      "position": {
+        "x": 0.0,
+        "y": 330.0
+      },
+      "text": "Arene: contact behind near side",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "color": [
+            41,
+            62,
+            56
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": 190.0
+      }
+    },
+    {
+      "id": 18,
+      "position": {
+        "x": 600.0,
+        "y": 330.0
+      },
+      "text": "Arene: dragged to the far side",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "color": [
+            41,
+            62,
+            56
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": 190.0
+      }
+    },
+    {
+      "id": 27,
+      "position": {
+        "x": 0.0,
+        "y": 710.0
+      },
+      "text": "Arene: tilted again",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "color": [
+            41,
+            62,
+            56
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": 190.0
+      }
+    },
+    {
+      "id": 35,
+      "position": {
+        "x": 600.0,
+        "y": 710.0
+      },
+      "text": "Cp: contact crosses a ring vertex",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "color": [
+            41,
+            62,
+            56
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": 190.0
+      }
+    },
+    {
+      "id": 44,
+      "position": {
+        "x": 0.0,
+        "y": 1090.0
+      },
+      "text": "Partial inner curve",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "color": [
+            41,
+            62,
+            56
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": 190.0
+      }
+    },
+    {
+      "id": 74,
+      "position": {
+        "x": 600.0,
+        "y": 1090.0
+      },
+      "text": "Cp* dimer: automatic contact depth",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "color": [
+            41,
+            62,
+            56
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": 190.0
+      }
+    },
+    {
+      "id": 104,
+      "position": {
+        "x": 0.0,
+        "y": 1470.0
+      },
+      "text": "Cp* dimer: one ligand retilted",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "color": [
+            41,
+            62,
+            56
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": 190.0
+      }
+    },
+    {
+      "id": 117,
+      "position": {
+        "x": 600.0,
+        "y": 1470.0
+      },
+      "text": "Haworth: stereo retained",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "color": [
+            41,
+            62,
+            56
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": 190.0
+      }
+    }
+  ],
+  "arrows": [],
+  "graphics": [],
+  "groups": [
+    {
+      "id": 73,
+      "members": [
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72
+      ],
+      "integral": true
+    },
+    {
+      "id": 103,
+      "members": [
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102
+      ],
+      "integral": true
+    }
+  ]
+}

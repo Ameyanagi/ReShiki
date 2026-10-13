@@ -1,0 +1,132 @@
+{
+  "candidate_source": "127d1a6247d390d33d420f2168f4a657d2659f7b",
+  "representation": "Hashes of all package files except this manifest itself, five original JPEGs and two unchanged Mac references. Original private receipts are separately identified in each derived record.",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 5458,
+      "sha256": "a67b0d97815533fd7ecaac5cdc137acc7478c19947521b758aefc9e495582cea",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "acceptance-receipt.json",
+      "bytes": 7410,
+      "sha256": "ace3fa714136c02bc79444ca2178de60b3c758c333a9ced4bf9163c6195c0cfd",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "baseline-source-parity.json",
+      "bytes": 3262,
+      "sha256": "1ce9f1337b9f0ac13ad947526af4e33255370917d3748fcd823e50a6c006cbc7",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "candidate-artifact-qualification.json",
+      "bytes": 2146,
+      "sha256": "0c0d9cac465319d20f1f5b2b2bd34cf2b8a5a5faae95f67b09ad9ce99fc2733a",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "candidate-build-summary.json",
+      "bytes": 3881,
+      "sha256": "0ecbbea6839c50a5acdf2e175c718d8f9f98e6c205d2e9cffc217f7b8c4aef85",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "independent-direct-audit.json",
+      "bytes": 11515,
+      "sha256": "0ba72e503f044ed0b1ef977e33c11bb1c8bf8e0204cd2f416eded8ab4bf61a9a",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "independent-powerpoint-audit.json",
+      "bytes": 14727,
+      "sha256": "23e415ec4de86382d910ee40e1545accea779812dd766a1b14337b22a85a3e68",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "powerpoint-ole-CONTENTS.cdx",
+      "bytes": 1733,
+      "sha256": "d13b8b1932511d5a98bd507e353be238f18a399c008ab5967953ad99172c2bb8",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "process-file-proof.json",
+      "bytes": 2746,
+      "sha256": "6d08d1e83d54bb9489fc7a8a6eaca78335e717df9e463e63ad47cc2944a0e89d",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "verify.py",
+      "bytes": 8583,
+      "sha256": "0b7df4c4decf4c48aedfff0f8c9a156604cfe26379f4a53c7d11b683e9808aac",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "windows-si-clipboard-after-v1.rsk",
+      "bytes": 11031,
+      "sha256": "30fd5d77ea94b88ae05ec1a36e6e1b050de7d1f2c75f2b506de2b06ac4bf628d",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "windows-si-powerpoint-paste-after-v1.rsk",
+      "bytes": 11031,
+      "sha256": "30fd5d77ea94b88ae05ec1a36e6e1b050de7d1f2c75f2b506de2b06ac4bf628d",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "windows-si-powerpoint-v1.pptx",
+      "bytes": 39277,
+      "sha256": "98c78dfa5a3856052ec6158000c6b32687c6042c435e8be475b93bc4c443433b",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "windows-si-single-v1.cdx",
+      "bytes": 1767,
+      "sha256": "4daf91a99999dc284083bed64703c8a4bdc253460e0892d99296a5bd24ca4400",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-after.jpg",
+      "bytes": 298027,
+      "sha256": "1dbe156af26859fc2abf09ac77941c4372c7b3cedb6c4849e05fe5ed7da0db83",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-before.jpg",
+      "bytes": 257321,
+      "sha256": "3ca8b57dd9790868c097557576737e1b083be95f4f469568eccc7165db1de303",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-after.jpg",
+      "bytes": 296620,
+      "sha256": "ed20b33cc631fbc4c0b97a99430bb71c0149d83dd247997496a39db0beff4ea8",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-before.jpg",
+      "bytes": 255964,
+      "sha256": "dc7b3c783efa19fea0b6ca7d86ebcd5c5f71a002cef0e625dc59cbc878d53424",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-reopened.jpg",
+      "bytes": 299172,
+      "sha256": "ecf6c42a36c601905084b93050ba56bd5f5cb3b357379e22b31d0b4aceb91307",
+      "role": "Windows evidence or authored review tool"
+    },
+    {
+      "path": "../single-desktop.rsk",
+      "bytes": 9811,
+      "sha256": "6055b77a1bf160885f1966c8d29ade79afe34ea87bc6bc8e773892643e24e660",
+      "role": "unchanged Mac reference"
+    },
+    {
+      "path": "../single-analysis.json",
+      "bytes": 312,
+      "sha256": "ceac4aed1c32d29ad44694e6754342726e24fe90e34956159a4ce9e1edb619f5",
+      "role": "unchanged Mac reference"
+    }
+  ]
+}

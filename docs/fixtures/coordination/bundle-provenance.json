@@ -1,0 +1,11 @@
+{
+  "commit": "8fbf166cb9daad908d743cce71e6c6d73a819a47",
+  "worktree": "/Users/ryuichi/dev/ReShiki-worktrees/coordination",
+  "source_entrypoints": 1065,
+  "content_sha256": "e34ea8c03732ca489fb1fd2eaff9966d6e294185e40224563f5e3d1748636425",
+  "raw_executable_sha256": "b41c37bf361c2ad3f3fecd31bf2bb40151828dedcb1882309bcf53ef0c12398e",
+  "signed_executable_sha256": "77654ac99707cf6e1fc46a4ccc1bd3e10db97d802827873864a4a6973c2f2611",
+  "bundle": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Coordination.app",
+  "build_profile": "debug, locked, no-default-features; macOS arm64; ad-hoc signed",
+  "codesign_verified": true
+}

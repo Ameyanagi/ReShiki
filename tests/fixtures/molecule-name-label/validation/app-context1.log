@@ -1,0 +1,29 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki-031b697453cae98b)
+
+running 20 tests
+test app::context_menu::cascade::tests::application_shortcuts_use_the_platform_command_modifier ... ok
+test app::context_menu::cascade::tests::typing_and_unbound_shortcuts_do_not_dispatch_drawing_commands ... ok
+test app::context_menu::cascade_tests::command_shortcuts_close_the_menu_and_dispatch_copy_undo_and_redo_once ... ignored, Opt-in real renderer/menu input regression
+test app::context_menu::cascade_tests::grabbed_scrollbar_keeps_scrolling_outside_panel_and_releases_there ... ignored, Opt-in real renderer/menu input regression
+test app::context_menu::cascade_tests::hover_cascades_keep_parent_and_follow_rows_at_both_window_edges ... ignored, Opt-in real renderer/menu input regression
+test app::context_menu::cascade_tests::keyboard_navigation_reveals_rows_and_escape_closes_the_whole_cascade ... ignored, Opt-in real renderer/menu input regression
+test app::context_menu::cascade_tests::scrollable_bond_menu_reserves_gutter_for_text_and_shortcuts ... ignored, Opt-in real renderer/menu layout regression
+test app::context_menu::cascade_tests::submenu_clicks_recheck_disabled_commands_and_preserve_selection_and_undo ... ignored, Opt-in real renderer/menu input regression
+test app::context_menu::cascade_tests::touch_uses_finger_position_for_submenu_clicks_and_outside_dismissal ... ignored, Opt-in real renderer/menu input regression
+test app::context_menu::cascade_tests::typing_ime_and_unbound_shortcuts_stay_inside_the_menu ... ignored, Opt-in real renderer/menu input regression
+test app::context_menu::tests::chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide ... ok
+test app::context_menu::tests::context_alignment_preserves_molecular_geometry_and_undo_restores_every_group ... ok
+test app::context_menu::tests::context_commands_follow_the_target_without_modifying_the_drawing ... ok
+test app::context_menu::tests::context_tilt_routes_all_axes_and_tool_without_losing_selection ... ok
+test app::context_menu::tests::copy_as_menu_and_command_share_inference_and_explicit_selection_guards ... ok
+test app::context_menu::tests::copy_as_menu_names_scope_and_explains_disabled_reactions ... ok
+test app::context_menu::tests::inserted_examples_keep_existing_objects_and_can_be_removed_in_one_undo ... ok
+test app::context_menu::tests::row_menus_toggle_and_explain_unavailable_arrange_commands ... ok
+test app::context_menu::tests::tilt_drag_is_one_undo_step_and_matches_projection_preview ... ok
+test app::context_menu::view_parity_tests::entries_match_captured_baseline ... ignored, Baseline/candidate context entries; requires RESHIKI_VIEW_PARITY and RESHIKI_DATA_DIR
+
+test result: ok. 11 passed; 0 failed; 9 ignored; 0 measured; 659 filtered out; finished in 8.78s
+

@@ -1,0 +1,89 @@
+{
+  "status": "PASS",
+  "native": {
+    "native_files": 11,
+    "atoms": 60,
+    "bonds": 90,
+    "xyz_values": 180,
+    "all_nonappearance_fields_exact": true,
+    "raw_equality_groups": [
+      [
+        "100",
+        "25-undo"
+      ],
+      [
+        "25",
+        "25-redo",
+        "0-undo",
+        "25-fresh-reopen",
+        "25-noop"
+      ],
+      [
+        "0",
+        "0-redo",
+        "0-fresh-reopen"
+      ]
+    ],
+    "native_sha256": {
+      "before-desktop": "121280660ab89d7a53a7f0a336d5c23edc4c7a46e8dafe143443c9ff884a7d6e",
+      "100": "a2ea34712470ce645f4efa7386089d662001ce2a13ecd07c6d51982ebb5dc2ef",
+      "25-undo": "a2ea34712470ce645f4efa7386089d662001ce2a13ecd07c6d51982ebb5dc2ef",
+      "25": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "25-redo": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "0-undo": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "25-fresh-reopen": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "25-noop": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+      "0": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "0-redo": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c",
+      "0-fresh-reopen": "5ba045fc362dbc16ef3aebd08f5d41b463e64f1a810391c45c16340c5fe4373c"
+    },
+    "single_scope_rgb_strength": 0,
+    "rear_weights_float32_exact": true,
+    "front_atoms": 30,
+    "rear_atoms": 30
+  },
+  "exports": {
+    "typed_before_exports_byte_identical100": [
+      "svg",
+      "png",
+      "pdf"
+    ],
+    "analysis": {
+      "acceptors": 0,
+      "donors": 0,
+      "exact_mass": 720.0,
+      "formula": "C60",
+      "inchi": "InChI=1S/C60/c1-2-5-6-3(1)8-12-10-4(1)9-11-7(2)17-21-13(5)23-24-14(6)22-18(8)28-20(12)30-26-16(10)15(9)25-29-19(11)27(17)37-41-31(21)33(23)43-44-34(24)32(22)42-38(28)48-40(30)46-36(26)35(25)45-39(29)47(37)55-49(41)51(43)57-52(44)50(42)56(48)59-54(46)53(45)58(55)60(57)59",
+      "inchikey": "XMWRBQBLMFGWIX-UHFFFAOYSA-N",
+      "logp": 17.73000000000001,
+      "mass": 720.6599999999999,
+      "rings": 32,
+      "smiles": "c12c3c4c5c1c1c6c7c2c2c8c3c3c9c4c4c%10c5c5c1c1c6c6c%11c7c2c2c7c8c3c3c8c9c4c4c9c%10c5c5c1c1c6c6c%11c2c2c7c3c3c8c4c4c9c5c1c1c6c2c3c41",
+      "tpsa": 0.0,
+      "unpaired_electrons": 0
+    },
+    "effective_rear_svg_alpha": 0.25,
+    "alpha_wrappers_per_rear_primitive": 1,
+    "opaque_front_primitives_exact25_to0": 15,
+    "faded_primitives25": 16,
+    "faded_primitives0": 0,
+    "PNG_paper": "opaque white; rear RGB191 at25%, white at0%; front black unchanged",
+    "PNG_bounds": {
+      "100": [
+        1320,
+        1298
+      ],
+      "25": [
+        1320,
+        1298
+      ],
+      "0": [
+        1313,
+        1290
+      ]
+    },
+    "pixel_samples_checked": 4,
+    "PDF_partial_alpha_present": true,
+    "scope": "fresh signed-CLI exports, not desktop-canvas screenshots"
+  }
+}

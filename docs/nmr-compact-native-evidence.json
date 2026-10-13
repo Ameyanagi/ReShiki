@@ -1,0 +1,178 @@
+{
+  "production_source": "b85119828444eec36189134c93e8d1d4918fe343",
+  "signed_executable_sha256": "9d29f842dfb72748ba931332a7ce37e43183a6155a07b3a260118df9a5c42321",
+  "bundle_manifest_sha256": "9b36e9e863fcb949bbdbc09b52ca6d4692cb1584922ee6d1b1897321e2db5b41",
+  "source_manifest_sha256": "4fdeb8e09524b947e9249e18c6ca6884ab38bddf5333e43b7f7f03c2f01ad8c7",
+  "platform": "macOS arm64; default-feature debug build",
+  "native_review": "Completed through the preserved native app; packaging was performed after the app was quit, without a new build or GUI launch",
+  "capture_policy": "Unmodified original JPEG desktop bytes; no cropping, retouching or re-encoding",
+  "fixture": {
+    "path": "../tests/fixtures/nmr/ethyl-acetate.rsk",
+    "sha256": "7ae28f1b54eedd453f6945589a2157a735cbf542a420ce28c7f09fdba814533b",
+    "formula": "C4H8O2",
+    "atoms": 6,
+    "bonds": 5
+  },
+  "captures": [
+    {
+      "path": "images/nmr/compact/before-proton.jpg",
+      "capture_file": "nmr-full-width-proton-dock.jpg",
+      "sha256": "9c5bb4de8928931b72c247a06356b35f95bb5e8b9ecbc1a70c3484dc80dc1b6e",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2560, 1704],
+      "logical_content_pixels": [1280, 820],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 149,
+      "production_source": "c3d1676c9c5598a6bfb144cc4ff49527f08752ee",
+      "caption": "Historical full-width proton dock",
+      "native_capture_bytes_preserved": true
+    },
+    {
+      "path": "images/nmr/compact/proton.jpg",
+      "capture_file": "nmr-compact-proton-250.jpg",
+      "sha256": "3efcf4cdaa22b5b10f683bf306f70f4a1a306087046928f1781617e8fab2aa7b",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2560, 1704],
+      "logical_content_pixels": [1280, 820],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 250,
+      "production_source": "b85119828444eec36189134c93e8d1d4918fe343",
+      "caption": "Compact proton results",
+      "native_capture_bytes_preserved": true
+    },
+    {
+      "path": "images/nmr/compact/before-carbon.jpg",
+      "capture_file": "nmr-full-width-carbon-dock.jpg",
+      "sha256": "290892680a04f0f748dc9898c8275f7c3b55b1be1293929e5a0d0f600168401e",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2560, 1704],
+      "logical_content_pixels": [1280, 820],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 149,
+      "production_source": "c3d1676c9c5598a6bfb144cc4ff49527f08752ee",
+      "caption": "Historical full-width carbon dock; fourth row below scroll",
+      "native_capture_bytes_preserved": true
+    },
+    {
+      "path": "images/nmr/compact/carbon.jpg",
+      "capture_file": "nmr-compact-carbon-four-rows-250.jpg",
+      "sha256": "eccbee02f2e31dbe5392cb0fb28eeaf3e5b60e40c927c94be7f1a184adeb3d17",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2560, 1704],
+      "logical_content_pixels": [1280, 820],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 250,
+      "production_source": "b85119828444eec36189134c93e8d1d4918fe343",
+      "caption": "All four compact carbon results",
+      "native_capture_bytes_preserved": true
+    },
+    {
+      "path": "images/nmr/compact/carbonyl-selection.jpg",
+      "capture_file": "nmr-compact-carbonyl-selection.jpg",
+      "sha256": "4d34a20d0da511661024c908b0c1ad51abf3e1fb3749d66d3a6914c79786de15",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2560, 1704],
+      "logical_content_pixels": [1280, 820],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 250,
+      "production_source": "b85119828444eec36189134c93e8d1d4918fe343",
+      "caption": "Carbonyl atom #4 selected from its row",
+      "native_capture_bytes_preserved": true
+    },
+    {
+      "path": "images/nmr/compact/details.jpg",
+      "capture_file": "nmr-compact-expanded-details.jpg",
+      "sha256": "c9687c05135bb628dbadb255c98d4816807754e7842c7a1df6318c7483bed0de",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2560, 1704],
+      "logical_content_pixels": [1280, 820],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 250,
+      "production_source": "b85119828444eec36189134c93e8d1d4918fe343",
+      "caption": "Expanded reference columns",
+      "native_capture_bytes_preserved": true
+    },
+    {
+      "path": "images/nmr/compact/method.jpg",
+      "capture_file": "nmr-compact-method-scrolled.jpg",
+      "sha256": "ea94dbfd19f21b246a956ddd79b8ce7c20605c1e1e7f8ae9892491a7928293a2",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2560, 1704],
+      "logical_content_pixels": [1280, 820],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 250,
+      "production_source": "b85119828444eec36189134c93e8d1d4918fe343",
+      "caption": "Scrolled conditions, limitations and attribution",
+      "native_capture_bytes_preserved": true
+    },
+    {
+      "path": "images/nmr/compact/chemical-edit.jpg",
+      "capture_file": "nmr-compact-chemical-edit-clears-results.jpg",
+      "sha256": "c609b6c1d30db3fce902eb6f857f11e985c1cdf27d7e9fd6c794ae6e64f30b49",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2560, 1704],
+      "logical_content_pixels": [1280, 820],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 250,
+      "production_source": "b85119828444eec36189134c93e8d1d4918fe343",
+      "caption": "Chemical edit clears rows and disables Copy/Export",
+      "native_capture_bytes_preserved": true
+    },
+    {
+      "path": "images/nmr/compact/minimum-inspector-shown.jpg",
+      "capture_file": "nmr-compact-native-minimum-inspector-shown.jpg",
+      "sha256": "3b8406d3a5bb7689a16c7867247b85a95803ca6c4b6d4d8a909aa5987e02fa5d",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2080, 1424],
+      "logical_content_pixels": [1040, 680],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 204,
+      "production_source": "b85119828444eec36189134c93e8d1d4918fe343",
+      "caption": "Native minimum window with inspector",
+      "native_capture_bytes_preserved": true
+    },
+    {
+      "path": "images/nmr/compact/minimum-inspector-hidden.jpg",
+      "capture_file": "nmr-compact-native-minimum-inspector-hidden.jpg",
+      "sha256": "15ce3835d1605c0098ae804dd168e762ee3fbd16483ebe44dc7edddd66bacb90",
+      "encoding": "JPEG/JFIF",
+      "physical_window_pixels": [2080, 1424],
+      "logical_content_pixels": [1040, 680],
+      "titlebar_logical_pixels": 32,
+      "displayed_zoom_percent": 204,
+      "production_source": "b85119828444eec36189134c93e8d1d4918fe343",
+      "caption": "Native minimum window without inspector",
+      "native_capture_bytes_preserved": true
+    }
+  ],
+  "native_export": {
+    "matches_existing_fixture_byte_for_byte": true,
+    "path": "../tests/fixtures/nmr/ethyl-acetate-carbon-desktop.tsv",
+    "sha256": "23464aba142911f3fb3c635069f4bc8f2a8c0028934c6925d3065c036058b876",
+    "carbon_rows": 4
+  },
+  "native_final_drawing": {
+    "path": "evidence/nmr/ethyl-acetate-compact-desktop-final.rsk",
+    "sha256": "08978db95416b8f58df2d8b12cbe949328327c8ddc0d0a75c7e32668e0f14cca",
+    "independent_check": "evidence/nmr/compact-desktop-independent-check.json",
+    "independent_check_sha256": "985daf6699f160d7af7747517799f1130aca2cc0fb6def1039353668614f8182",
+    "original_atom_ids_fields_and_positions_preserved": true,
+    "bond_endpoint_order_display_preserved": true,
+    "serialization_note": "Fixture-only bond id keys are not serialized by existing native codec; atom IDs1–6 retained exactly. New optional defaults and empty figure fields serialized.",
+    "nmr_result_persistence_claimed": false,
+    "independent_check_original_bytes": {
+      "url": "https://raw.githubusercontent.com/Ameyanagi/ReShiki/a092df29357b3d649a68c67e0924cb9771dc3d8b/docs/evidence/nmr/compact-desktop-independent-check.json",
+      "sha256": "1cedadcb535b1c0e9696438d2d23b3585cf1b11ab3c2b38d972ed8789f441f32",
+      "source_commit": "a092df29357b3d649a68c67e0924cb9771dc3d8b"
+    },
+    "independent_check_parsed_content_unchanged": true,
+    "independent_check_formatting": "Repository Oxfmt 0.68.0 formatting only; arrays use compact layout; original receipt bytes remain pinned above"
+  },
+  "native_size_limit": {
+    "logical_content_pixels": [1040, 680],
+    "physical_window_pixels": [2080, 1424],
+    "titlebar_logical_pixels": 32,
+    "renderer_only_smaller_size": [940, 620]
+  },
+  "chem_draw_reference": "Installed ChemDraw 26.0.0.6599 Prime lacks ChemNMR; official bundled manual describes a separate prediction window; no live visual match claimed"
+}

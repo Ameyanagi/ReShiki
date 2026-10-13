@@ -1,0 +1,88 @@
+{
+  "capture_date": "2026-10-09",
+  "platform": "macOS26.5.1 arm64",
+  "before_source": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "candidate_source": "d04fb529de57c5198f4d44973b067d28990a019a",
+  "camera": "250%; F8/presentation off; JACS/ACS publication drawing style",
+  "format": "Unmodified native JPEG/JFIF capture bytes, correctly named .jpg; 2560x1704",
+  "candidate_bundle_binary_sha256": "f51610934c15e4d101114b89723dfd580f9e82e5dd977707c86a0c7b46ac905d",
+  "files": {
+    "docs/images/reference-geometry/ring-controls-before.jpg": {
+      "source_capture_name": "baseline/geometry-ring-controls-before.jpg",
+      "sha256": "76a24eb3268332e5ebb459af9624711991b00a52dc136c30d06d2a63fe1f70fd"
+    },
+    "docs/images/reference-geometry/stretch-controls-before.jpg": {
+      "source_capture_name": "baseline/geometry-stretch-controls-before.jpg",
+      "sha256": "c4daf1d27734ebb065dd1a98b49740f01eb5d14aabb8f429f6209a52394c7e0a"
+    },
+    "docs/images/reference-geometry/wedge-manual-rotation-before.jpg": {
+      "source_capture_name": "baseline/geometry-wedge-snapped-before.jpg",
+      "sha256": "a51736c430d2f3a7897875508ae84b473d1850cdabb545c03a3ad1ee7f67ff3c"
+    },
+    "docs/images/reference-geometry/horizontal-controls-after.jpg": {
+      "source_capture_name": "after/geometry-horizontal-controls.jpg",
+      "sha256": "993aaa762134dcb6508d0de827663d19ca47bb56c45b2b1b9e7147128e2dd70f"
+    },
+    "docs/images/reference-geometry/angle-controls-after.jpg": {
+      "source_capture_name": "after/geometry-angle-controls.jpg",
+      "sha256": "0557a312ea47a38179dbadb7409ec68359a4677923c0c4f6930089dcd0bbd5a2"
+    },
+    "docs/images/reference-geometry/stretch-controls-after.jpg": {
+      "source_capture_name": "after/geometry-stretch-numeric.jpg",
+      "sha256": "0bc5b7fdea0c6e7efd26ee068405bf0d783a5a52182b2b27af4ad63d064ab47e"
+    },
+    "docs/images/reference-geometry/wedge-horizontal-after.jpg": {
+      "source_capture_name": "after/geometry-wedge-horizontal.jpg",
+      "sha256": "b1b64e1ba9d4f74b7bb89adec6f49787b6c5958b617f436892d06be08ab5432d"
+    },
+    "docs/images/reference-geometry/wedge-vertical-after.jpg": {
+      "source_capture_name": "after/geometry-wedge-vertical.jpg",
+      "sha256": "7d4d8cf59db40489a04ae5bf2284bad443868f3a3a8e200e82003760c12d67f0"
+    },
+    "docs/changes/fixtures/reference-geometry/ring-input.rsk": {
+      "source_fixture_name": "case-0.rsk",
+      "sha256": "e005bede71811f90ba602dd81b8cbf2f71f30b2e50705109d2f5a1eb8dac684c"
+    },
+    "docs/changes/fixtures/reference-geometry/ring-horizontal-desktop.rsk": {
+      "source_fixture_name": "horizontal-desktop.rsk",
+      "sha256": "719c3805d52be05caeef5b5bf9b71a70e4ccc2d1bc7a6f334be85afa65f44489"
+    },
+    "docs/changes/fixtures/reference-geometry/ring-23-75-desktop.rsk": {
+      "source_fixture_name": "angle-23-75-desktop.rsk",
+      "sha256": "240ca66ea608b86af9714364587245e3ea3551e00681cce0909a8aecf83cdbe1"
+    },
+    "docs/changes/fixtures/reference-geometry/branch-input.rsk": {
+      "source_fixture_name": "case-3.rsk",
+      "sha256": "33a6e6291985e4d80a1e61ecd891c6fb48529abf4a4cc6abd23348d1c27eaa2c"
+    },
+    "docs/changes/fixtures/reference-geometry/branch-drag-desktop.rsk": {
+      "source_fixture_name": "stretch-drag-desktop.rsk",
+      "sha256": "e21dc808e9c71cc11125494585f2d74d080db986cef0baac3e0e2c22715e3d66"
+    },
+    "docs/changes/fixtures/reference-geometry/branch-21-6-desktop.rsk": {
+      "source_fixture_name": "stretch-21-6-desktop.rsk",
+      "sha256": "4a0e2832f8595e581fc76c0bf43ea40f3a41c15b210ea58582cd5426aab9b868"
+    },
+    "docs/changes/fixtures/reference-geometry/branch-end-fixed-desktop.rsk": {
+      "source_fixture_name": "stretch-end-fixed-desktop.rsk",
+      "sha256": "fc00689d22dc668049d2fee1d8a8b1a2054a69f5be10fd3490967f1226b949f4"
+    },
+    "docs/changes/fixtures/reference-geometry/stereo-input.rsk": {
+      "source_fixture_name": "case-6.rsk",
+      "sha256": "5135cf31b2928b75ded05a462fbc2ec7d5dec61fd4920d33e0069967b287b73e"
+    },
+    "docs/changes/fixtures/reference-geometry/stereo-manual-rotation-before.rsk": {
+      "source_fixture_name": "wedge-manual-rotation-before-desktop.rsk",
+      "sha256": "53ce782227b10854d21a4af7e643cc2404b802c654633c7c1a769d591a2bcb0d"
+    },
+    "docs/changes/fixtures/reference-geometry/stereo-horizontal-desktop.rsk": {
+      "source_fixture_name": "wedge-horizontal-desktop.rsk",
+      "sha256": "afde7ba1392bc5bf62b7ae600c85f67e7141bf14f41e67fb485255bab556e842"
+    },
+    "docs/changes/fixtures/reference-geometry/stereo-vertical-desktop.rsk": {
+      "source_fixture_name": "wedge-vertical-desktop.rsk",
+      "sha256": "bf9513e96b06977f1cc807b6a71487ff12eb804d72b6bfce213b738daaea01ab"
+    }
+  },
+  "conditions": "Selected complete fixtures; before and after use the same drawing style/camera, but inspector scroll positions and public fixture tab counts differ. Before uses frozen baseline; captures collected after implementation. Source confirmation and retained regression precede implementation. Manual wedge drag before and exact reference alignment after are different operations. No claim that baseline drag used Shift/grid snapping."
+}

@@ -1,0 +1,29 @@
+{
+  "phase": "required-clippy",
+  "argv": [
+    "cargo",
+    "clippy",
+    "--locked",
+    "--workspace",
+    "--all-targets",
+    "--all-features",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "env": {
+    "CARGO_TARGET_DIR": "/Users/ryuichi/dev/ReShiki/target",
+    "CARGO_BUILD_JOBS": "4"
+  },
+  "start": "2026-10-09T22:52:00.968641+00:00",
+  "end": "2026-10-09T22:57:04.927504+00:00",
+  "seconds": 303.95558954100005,
+  "exit_code": 0,
+  "source_count": 1071,
+  "source_aggregate": "173a0dd53b1af5c66095f774f737cdde36657e865c991a8af5d5ed7a14fbb59e",
+  "protected_count": 164,
+  "pre_hashes_exact": true,
+  "post_hashes_exact": true,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "ed52771196d50e5e14b2f305536dbbc99c0cd617d16529a6a27195b906bf9590"
+}

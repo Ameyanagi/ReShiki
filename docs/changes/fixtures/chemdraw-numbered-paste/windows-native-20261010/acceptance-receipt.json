@@ -1,0 +1,166 @@
+{
+  "captured_at_utc": "2026-10-10T09:19:08.975802+00:00",
+  "operator": "/root through cua_repl native Windows App",
+  "pr": 284,
+  "candidate_head": "127d1a6247d390d33d420f2168f4a657d2659f7b",
+  "candidate_run": 38002219982,
+  "candidate_exe_sha256": "3e56439b55cd3c7dc047f431bb56f60407d17bc56fae0e1cb76641f1ee2e6fb9",
+  "candidate_pid": 13696,
+  "baseline_pid": 8980,
+  "baseline_source_head": "44d198c4e6791a15017af7ac6d356c245b7073ca",
+  "producer": "Installed Windows ChemDraw 26.1 native drawing and PowerPoint CS ChemDraw 64-bit Drawing object",
+  "routes": {
+    "chemdraw": {
+      "baseline": "Native context Paste rejected unsupported binary drawing property 0x044b on blank drawing; Undo disabled",
+      "candidate": "Native context Paste editable 6 atoms/5 bonds, contracted SiMe3, C4H12OSi, CO[Si](C)(C)C; one Undo blank, Redo restores graph, native Save and clean fresh-tab reopen",
+      "paste_zoom_percent": 100,
+      "reopen_zoom_percent": 232,
+      "keyboard_drawing": "ON during original direct route"
+    },
+    "powerpoint": {
+      "baseline": "Native object context Copy then fresh blank ReShiki context Paste rejected unsupported binary drawing property 0x044b; Undo disabled",
+      "candidate": "Same native copied object context Paste editable 6 atoms/5 bonds, contracted SiMe3; one Undo blank, Redo restores graph, native Save and clean fresh-tab reopen; final molecular panel C4H12OSi/CO[Si](C)(C)C",
+      "paste_zoom_percent": 100,
+      "reopen_zoom_percent": 232,
+      "keyboard_drawing": "OFF during before/after paste and final reopened screenshot"
+    }
+  },
+  "guest_owned_outputs": [
+    "windows-si-single-v1.cdx",
+    "windows-si-clipboard-after-v1.rsk",
+    "windows-si-powerpoint-v1.pptx",
+    "windows-si-powerpoint-paste-after-v1.rsk"
+  ],
+  "limitations": [
+    "Native clipboard payload was not intercepted; saved producer/container audit verifies property and graph separately.",
+    "Fresh-tab reopen within same running executable; not a fresh-process test.",
+    "Two-connection/sparse Windows native routes not claimed.",
+    "windows-si-clipboard-before-v1.jpg records an unsuccessful OSK key transport, not the actual parser rejection; actual before-menu capture is the rejection.",
+    "Unsuccessful Japanese IME/select-all filename entry attempts were corrected before saving; final local path verified in native dialog."
+  ],
+  "raw_screenshots": [
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-after.jpg",
+      "sha256": "1dbe156af26859fc2abf09ac77941c4372c7b3cedb6c4849e05fe5ed7da0db83",
+      "bytes": 298027
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-before.jpg",
+      "sha256": "3ca8b57dd9790868c097557576737e1b083be95f4f469568eccc7165db1de303",
+      "bytes": 257321
+    },
+    {
+      "path": "windows-si-clipboard-before-v1.jpg",
+      "sha256": "eb6c789f7cc00cb6f9278f2b0588597c19c0dfe98b1a4caee43f2ac629a2f6c0",
+      "bytes": 247812
+    },
+    {
+      "path": "windows-si-clipboard-reopened-v1.jpg",
+      "sha256": "3a22f99790f0048d2d90c85f2652c99f61b339d4e9c5ddf23926e12b03b2962a",
+      "bytes": 279874
+    },
+    {
+      "path": "windows-si-clipboard-saved-v1.jpg",
+      "sha256": "0e71d454d490586cc7fc20adbea3a44929e2e81cda85e7e2a30dbc08f8491c75",
+      "bytes": 286874
+    },
+    {
+      "path": "windows-si-clipboard-undo-v1.jpg",
+      "sha256": "30692c33ecd80bafea74e81b3a43fa187875f6e40f376ca38742e52d8231dc23",
+      "bytes": 246017
+    },
+    {
+      "path": "windows-si-native-selected-v1.jpg",
+      "sha256": "d22736195586db94c5a214a0cc9fa624cd3bae67d4bb79e0480a1867a8ede18f",
+      "bytes": 237358
+    },
+    {
+      "path": "windows-si-powerpoint-object-v1.jpg",
+      "sha256": "b00c6c7bee42a8050517b86466acc7f8c73759474665ec6083e964d2e3d83786",
+      "bytes": 310265
+    },
+    {
+      "path": "windows-si-powerpoint-ole-menu-v1.jpg",
+      "sha256": "352221a1acb66d4247fcc0cbb327d1e792f21f8c1dd932bfed1b22496b4f9d84",
+      "bytes": 340666
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-after.jpg",
+      "sha256": "ed20b33cc631fbc4c0b97a99430bb71c0149d83dd247997496a39db0beff4ea8",
+      "bytes": 296620
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-before.jpg",
+      "sha256": "dc7b3c783efa19fea0b6ca7d86ebcd5c5f71a002cef0e625dc59cbc878d53424",
+      "bytes": 255964
+    },
+    {
+      "path": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-reopened.jpg",
+      "sha256": "ecf6c42a36c601905084b93050ba56bd5f5cb3b357379e22b31d0b4aceb91307",
+      "bytes": 299172
+    },
+    {
+      "path": "windows-si-powerpoint-paste-saved-v1.jpg",
+      "sha256": "2ddddea868c223d6bf3377324515fa9575c38c9ac5c9cd261bec3ef29237f496",
+      "bytes": 288792
+    },
+    {
+      "path": "windows-si-powerpoint-paste-undo-v1.jpg",
+      "sha256": "bec7aa96e63ad1e2cd30a6b6f96551450694bce6e8396bfde21e123ce1e1b54b",
+      "bytes": 246745
+    }
+  ],
+  "_provenance": {
+    "original_record": "root-native-pr284-acceptance-v1.json",
+    "original_sha256": "8471aea5d8b937d503bfda82d59f198a564ae6c6023c9a6e799c5f6a3f4eaafc",
+    "representation": "Derived JSON, not a byte-original receipt. Only path strings were normalized; values and conclusions are retained.",
+    "normalization_mapping": [
+      {
+        "pointer": "/guest_owned_outputs/0",
+        "original_basename": "windows-si-single-v1.cdx",
+        "public_value": "windows-si-single-v1.cdx"
+      },
+      {
+        "pointer": "/guest_owned_outputs/1",
+        "original_basename": "windows-si-clipboard-after-v1.rsk",
+        "public_value": "windows-si-clipboard-after-v1.rsk"
+      },
+      {
+        "pointer": "/guest_owned_outputs/2",
+        "original_basename": "windows-si-powerpoint-v1.pptx",
+        "public_value": "windows-si-powerpoint-v1.pptx"
+      },
+      {
+        "pointer": "/guest_owned_outputs/3",
+        "original_basename": "windows-si-powerpoint-paste-after-v1.rsk",
+        "public_value": "windows-si-powerpoint-paste-after-v1.rsk"
+      },
+      {
+        "pointer": "/raw_screenshots/0/path",
+        "original_basename": "windows-si-clipboard-after-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-after.jpg"
+      },
+      {
+        "pointer": "/raw_screenshots/1/path",
+        "original_basename": "windows-si-clipboard-before-menu-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-chemdraw-before.jpg"
+      },
+      {
+        "pointer": "/raw_screenshots/9/path",
+        "original_basename": "windows-si-powerpoint-paste-after-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-after.jpg"
+      },
+      {
+        "pointer": "/raw_screenshots/10/path",
+        "original_basename": "windows-si-powerpoint-paste-before-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-before.jpg"
+      },
+      {
+        "pointer": "/raw_screenshots/11/path",
+        "original_basename": "windows-si-powerpoint-paste-reopened-v1.jpg",
+        "public_value": "../../../../images/chemdraw-numbered-paste/windows-powerpoint-reopened.jpg"
+      }
+    ],
+    "original_storage": "Immutable private acceptance/audit record; full original-to-public mapping is retained for maintainer review."
+  }
+}

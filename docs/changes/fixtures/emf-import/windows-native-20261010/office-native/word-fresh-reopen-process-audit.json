@@ -1,0 +1,42 @@
+{
+  "observed_utc": "2026-10-09T23:23:39.0754612Z",
+  "old_pid_5024_exists": false,
+  "word_processes": [
+    {
+      "pid": 11920,
+      "parent_pid": 3584,
+      "session_id": 2,
+      "path": "C:\\Program Files\\Microsoft Office\\Root\\Office16\\WINWORD.EXE",
+      "created_utc": "2026-10-09T23:22:44.2173330Z",
+      "exe_bytes": 1557224,
+      "exe_sha256": "a6a4da14ca3edfa90e475339f649791c5dc2ebd77fb53d556d84880762f69a0b",
+      "file_version": "16.0.20527.20032",
+      "product_version": "16.0.20527.20032"
+    }
+  ],
+  "first_read": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-word-emf-20261010.docx",
+    "bytes": 17657,
+    "modified_utc": "2026-10-09T23:13:24.4248346Z",
+    "sha256": "5fd87ef65c29d3355d2293d95ffebf2e1852fd2e635e5a2b81b432b1f2fc25fc"
+  },
+  "second_read": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-word-emf-20261010.docx",
+    "bytes": 17657,
+    "modified_utc": "2026-10-09T23:13:24.4248346Z",
+    "sha256": "5fd87ef65c29d3355d2293d95ffebf2e1852fd2e635e5a2b81b432b1f2fc25fc"
+  },
+  "read_method": "Read-only FileStream with ReadWrite/Delete sharing",
+  "owned_file_unchanged_since_save": true,
+  "root_reopen_screenshot": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/word-emf-fresh-process-reopened.jpg",
+    "bytes": 352243,
+    "sha256": "9e7ea04c5ddd7fda7ce59820d1af0370541df5d0e4498460c750720141d3024a"
+  },
+  "prior_container_audit": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/word-native-container-audit.json",
+    "sha256": "c68f9221c8302cb7cfe89055feca3001bbe34199af8ef3a1ca680f350150676f"
+  },
+  "correlation_scope": "Live fresh Word process and unchanged owned DOCX observed while root reports reopened document remains open; root raw screenshot is separate visual evidence. No document-state COM inspection or GUI automation.",
+  "no_gui_com_or_guest_writes": true
+}

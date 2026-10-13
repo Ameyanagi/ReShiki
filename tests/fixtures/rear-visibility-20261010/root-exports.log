@@ -1,0 +1,10 @@
+
+running 5 tests
+test native_preserves_opacity_and_external_editable_copy_reports_presentation_loss ... ok
+test flat_retained_rear_setting_keeps_distinct_color_highlight_overlap_and_exact_output ... ok
+test opaque_front_atom_highlight_stays_above_different_color_bond_with_rear_alpha_elsewhere ... ok
+test hidden_cage_ink_disappears_whole_rim_stays_solid_and_100_restores_original_figure ... ok
+test transparent_raster_and_vector_exports_have_real_alpha_and_front_ink_on_each_theme ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.40s
+

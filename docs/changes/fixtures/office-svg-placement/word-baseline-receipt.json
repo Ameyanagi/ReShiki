@@ -1,0 +1,52 @@
+{
+  "status": "BASELINE_BUG_CONFIRMED_ACTUAL_MAC_WORD",
+  "version": "16.113.4",
+  "build": "16.113.26100421",
+  "ui_dimensions_cm": {
+    "width": 3.07,
+    "height": 1.02
+  },
+  "saved_picture_extent_EMU": {
+    "cx": "1104900",
+    "cy": "368300"
+  },
+  "view_zoom": {
+    "initial_insert": 163,
+    "inspect": 400,
+    "reopen": 400
+  },
+  "manual_object_edits": false,
+  "route": "own blank document; Insert Illustrations Pictures Picture from File; ordinary SVG; localSave; close and reopen ownRecent",
+  "actual_observation": "O and SiMe3 tops clipped and horizontal bond below label center, retained afterreopen. No objectresize/crop/style/reposition; view changed163 to400. Reopen changes viewport scroll placement and clears selection.",
+  "office_svg_sha256": "c57ec65d4c2b5cab105d95481ad0f1ed2ed6e89705645b5e45393578fc7edc56",
+  "office_baseline_attributes": 0,
+  "source_baseline_attributes": 3,
+  "files": [
+    {
+      "path": "word-baseline-ordinary.docx",
+      "bytes": 18685,
+      "sha256": "2b62b721214d4aad5d8a614c30e5a9e6eb7979709f61907e7574b2db9ec3d0a3"
+    },
+    {
+      "path": "word-baseline-inserted-163.jpg",
+      "bytes": 186087,
+      "sha256": "5ee42478c9185741a2db070db5b8e88403b3f9c947418125062b4cb16eb8b20d"
+    },
+    {
+      "path": "word-baseline-inserted-400.jpg",
+      "bytes": 188435,
+      "sha256": "1178c84c12509a47851bbb231ae251acae58809f7d2a6747ed95d112e151afce"
+    },
+    {
+      "path": "word-baseline-reopened-400.jpg",
+      "bytes": 187178,
+      "sha256": "2589c3abf6dea282bdd87eed6db044174a8b73df7fcef2f3ad541fb89d02b6d7"
+    },
+    {
+      "path": "word-baseline-reopened-ax.txt",
+      "bytes": 5025,
+      "sha256": "b78b4b8f317e2ff962eb02c1b4ffe275b3df3adf6e5740aec421ad6d89517f18"
+    }
+  ],
+  "scope": "Mac Word only; same historical baseline493/source-mapping limitation as powerpoint-baseline-receipt.json"
+}

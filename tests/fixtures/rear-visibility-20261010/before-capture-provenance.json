@@ -1,0 +1,36 @@
+{
+  "capture": "native app via cua.getAXStateAndScreenshot; raw bytes unchanged",
+  "captured_at_utc": "2026-10-09T20:26:52.851130+00:00",
+  "baseline": true,
+  "implementation": "existing PR renderer using midplane depth fade; new visibility correction not yet built",
+  "compiled_source_head": "7ec621227bc6fd777d5918efb9b8b6443c207d8e",
+  "compiled_source_sha256": "170c9870763cf80d23e0d70eee27f05bf49aa176eba413ca9bfacceda7ceb505",
+  "app": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app",
+  "executable_sha256": "4d35fe616bc9cb1388e4a6ec45312c65cc21aa6b67e42e17b077dd848fcc4043",
+  "processes": [
+    {
+      "pid": 86395,
+      "executable": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki"
+    }
+  ],
+  "fixture": "/Users/ryuichi/dev/ReShiki-worktrees/back-opacity/tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk",
+  "fixture_sha256": "29e4ac58273964ae673267769c56e5f1fe4e036e06a4875ebbbe2ff645ec4ee1",
+  "rear_opacity_percent": 25,
+  "zoom_percent_visible": 209,
+  "image": "c60-25-before.jpg",
+  "image_sha256": "b511eae8cfaffe60761793f847c86ddda9adcf4c44c91628b5c4202779bc37ff",
+  "image_dimensions": [
+    2560,
+    1704
+  ],
+  "ax_sha256": "2dbececd5fc3fce46797dde1468d4477ea231c324d6dc9bef2d83cb670e5f2c1",
+  "capture_notes": [
+    "Keyboard drawing on with cursor at empty position; no molecule edit.",
+    "Existing recovery-draft footer left untouched.",
+    "Inspector scroll and camera state shown in raw image.",
+    "Whole app screenshot; no crop, resize, retouch or annotation."
+  ],
+  "limitations": [
+    "The screenshot demonstrates the reported faded rim in the old implementation; it is not after evidence."
+  ]
+}

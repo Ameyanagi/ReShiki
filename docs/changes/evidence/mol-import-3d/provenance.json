@@ -1,0 +1,136 @@
+{
+  "baseline_commit": "51fa0991da2507bb00b27c1b420e807468de6423",
+  "baseline_executable_sha256": "493a0cb49f79f76ae2ee0716a690c20ce3981f15f701c0a9651552addaa8bf95",
+  "production_commit": "3a6be135bd28b3c844ac9dee9614344fe55b6d35",
+  "reference_harness_commit": "9785f8b636fc09d06e34251affd48c13fbde3e25",
+  "candidate_executable_sha256": "86fd1d62e175267a11ae0e6c211e335ee2af7ad146401fd6e59439ba329e77ec",
+  "strict_deep_ad_hoc_signature_verified": true,
+  "all_workspace_artifacts_own_sources_and_fresh": true,
+  "rust_manifest_contents_unchanged_after_verification_harness_commit": true,
+  "source_aggregate_sha256": "63633633bb1f41a41db13e72b63c496c5895f6e1e5e7ff27c85e9b43298c482c",
+  "cargo_lock_sha256": "ceb8cb65b6d2ca9be22755fdd673558e15e896dd919e4d1170ecf62677054f07",
+  "workspace_artifacts": [
+    {
+      "manifest_path": "crates/depict-math/Cargo.toml",
+      "fresh": false,
+      "target": "reshiki_depict_math",
+      "src_path": "crates/depict-math/src/lib.rs"
+    },
+    {
+      "manifest_path": "crates/process-heap/Cargo.toml",
+      "fresh": false,
+      "target": "reshiki_process_heap",
+      "src_path": "crates/process-heap/src/lib.rs"
+    },
+    {
+      "manifest_path": "vendor/zune-jpeg/Cargo.toml",
+      "fresh": false,
+      "target": "zune_jpeg",
+      "src_path": "vendor/zune-jpeg/src/lib.rs"
+    },
+    {
+      "manifest_path": "vendor/usvg/Cargo.toml",
+      "fresh": false,
+      "target": "usvg",
+      "src_path": "vendor/usvg/src/lib.rs"
+    },
+    {
+      "manifest_path": "Cargo.toml",
+      "fresh": false,
+      "target": "build-script-build",
+      "src_path": "build.rs"
+    },
+    {
+      "manifest_path": "native/macos/Cargo.toml",
+      "fresh": false,
+      "target": "reshiki_macos",
+      "src_path": "native/macos/src/lib.rs"
+    },
+    {
+      "manifest_path": "vendor/svg2pdf/Cargo.toml",
+      "fresh": false,
+      "target": "svg2pdf",
+      "src_path": "vendor/svg2pdf/src/lib.rs"
+    },
+    {
+      "manifest_path": "crates/chemistry/Cargo.toml",
+      "fresh": false,
+      "target": "reshiki_chemistry",
+      "src_path": "crates/chemistry/src/lib.rs"
+    },
+    {
+      "manifest_path": "crates/model/Cargo.toml",
+      "fresh": false,
+      "target": "reshiki_model",
+      "src_path": "crates/model/src/lib.rs"
+    },
+    {
+      "manifest_path": "native/geometry/Cargo.toml",
+      "fresh": false,
+      "target": "reshiki_geometry",
+      "src_path": "native/geometry/src/lib.rs"
+    },
+    {
+      "manifest_path": "crates/io/Cargo.toml",
+      "fresh": false,
+      "target": "reshiki_io",
+      "src_path": "crates/io/src/lib.rs"
+    },
+    {
+      "manifest_path": "crates/agent/Cargo.toml",
+      "fresh": false,
+      "target": "reshiki_agent",
+      "src_path": "crates/agent/src/lib.rs"
+    },
+    {
+      "manifest_path": "crates/mcp/Cargo.toml",
+      "fresh": false,
+      "target": "reshiki_mcp",
+      "src_path": "crates/mcp/src/lib.rs"
+    },
+    {
+      "manifest_path": "Cargo.toml",
+      "fresh": false,
+      "target": "reshiki",
+      "src_path": "src/lib.rs"
+    },
+    {
+      "manifest_path": "Cargo.toml",
+      "fresh": false,
+      "target": "reshiki",
+      "src_path": "src/main.rs"
+    }
+  ],
+  "raw_images": [
+    {
+      "image": "before-250.jpg",
+      "source_capture": "baseline/mol-3d-explicit-h-250.jpg",
+      "sha256": "fd3c5ceef6fc8212c6485ff5826aa3694bdcdfbc5ef70447a4d8ee3fceda5c93",
+      "unmodified_raw_jpeg": true
+    },
+    {
+      "image": "before-properties-240.jpg",
+      "source_capture": "baseline/mol-3d-explicit-h-properties.jpg",
+      "sha256": "2365ffc7abd41eb363826c55d6575da0e2e18c7d929694f34fc34dfd99713b81",
+      "unmodified_raw_jpeg": true
+    },
+    {
+      "image": "after-250.jpg",
+      "source_capture": "after/mol-3d-implicit-h-250.jpg",
+      "sha256": "ad8af13108c0c473587b54929aeb8b3438adda955e2266d679af4f1b06b1c94b",
+      "unmodified_raw_jpeg": true
+    },
+    {
+      "image": "rotated-250.jpg",
+      "source_capture": "after/mol-3d-rotated-both-axes.jpg",
+      "sha256": "012dd6c7a6d713330d99673fa06a14f8bb51bcf2f129ae52bd62d7db63948a3b",
+      "unmodified_raw_jpeg": true
+    },
+    {
+      "image": "reopened-properties-250.jpg",
+      "source_capture": "after/mol-3d-reopened-properties.jpg",
+      "sha256": "3032018c0c7291cef0479a6804c2c852ff90c137ddba45f66d975eafaf67a8c6",
+      "unmodified_raw_jpeg": true
+    }
+  ]
+}

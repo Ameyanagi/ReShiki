@@ -1,0 +1,106 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+     Running unittests src/lib.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_io-33271f2d5c2f4259)
+
+running 100 tests
+test chemistry::cdxml::abbreviations::tests::multiple_attachments_place_by_the_first_reordered_pair ... ok
+test chemistry::cdxml::abbreviations::tests::accepted_single_attachments_are_exact ... ok
+test chemistry::cdxml::abbreviations::tests::multiple_attachment_diagnostics_and_precedence ... ok
+test chemistry::cdxml::abbreviations::tests::single_attachment_diagnostics_and_precedence ... ok
+test chemistry::cdxml::abbreviations::tests::expansion_work_is_pinned ... ok
+test chemistry::cdxml::scene::tests::caption_and_arrow_ids_interleave_in_document_order ... ok
+test chemistry::cdxml::scene::tests::abbreviation_restoration_patches_the_last_duplicate ... ok
+test chemistry::cdxml::coordination_tests::explicit_external_end_projection_retains_donor_metal_direction ... ok
+test chemistry::cdxml::scene::tests::faults_on_an_empty_drawing_precede_the_empty_check ... ok
+test chemistry::cdxml::scene::tests::graphic_and_group_ids_follow_caption_ids ... ok
+test chemistry::cdxml::scene::tests::colored_attached_hydrogen_reaches_the_atom_patch ... ok
+test chemistry::cdxml::scene::tests::objects_after_a_removed_circle_keep_their_source_ordinals ... ok
+test chemistry::cdxml::scene::tests::duplicate_atom_patches_send_updates_to_the_first_and_keep_the_last ... ok
+test chemistry::cdxml::scene::tests::styled_label_diagnostics ... ok
+test chemistry::cleanup::numeric::windows_tests::windows_emulated_cleanup_preserves_the_original_sine_rounding ... ok
+test chemistry::molfile::read::v3000::tests::accepted_ctab_fills_the_raw_parse ... ok
+test chemistry::molfile::read::v3000::tests::atom_block_framing_and_ids ... ok
+test chemistry::cdxml::tests::predicate_defaults_and_preparation_error_precedence_are_preserved ... ok
+test chemistry::cdxml::coordination_tests::actual_chemdraw_roundtrip_retains_complete_complexes_but_omits_projection_paint ... ok
+test chemistry::molfile::read::v3000::tests::bond_attachment_endpoints ... ok
+test chemistry::molfile::read::v3000::tests::bond_block_framing_ids_and_properties ... ok
+test chemistry::molfile::read::v3000::tests::atom_fields_and_properties ... ok
+test chemistry::molfile::read::v3000::tests::bond_cfg_sets_direction_stereo_and_chirality ... ok
+test chemistry::molfile::read::v3000::tests::collection_stereo_groups ... ok
+test chemistry::molfile::read::v3000::tests::ctab_header_and_counts ... ok
+test chemistry::molfile::read::v3000::tests::end_of_ctab_and_whole_file_lines ... ok
+test chemistry::molfile::read::v3000::tests::trailer_blocks_and_final_checks ... ok
+test chemistry::molfile::tests::measure_attachment_index_tradeoff ... ignored, isolated requested-Rust-allocation and lookup timing measurement
+test chemistry::molfile::read::v3000::tests::rxn_participants_stop_at_end_ctab ... ok
+test chemistry::molfile::tests::attachment_indices_keep_member_order_and_missing_target_errors ... ok
+test chemistry::cdxml::scene::tests::atom_patches_and_bond_indicators ... ok
+test chemistry::reaction::layout::tests::supplied_conformers_keep_their_coordinates_and_dimension ... ok
+test compatibility::tests::an_override_wins_and_the_missing_directory_error_is_unchanged ... ok
+test chemistry::molfile::tests::projected_mol_preserves_explicit_unknown_double_bonds ... ok
+test compatibility::tests::every_absolute_home_counts_once_in_order ... ok
+test compatibility::tests::native_extensions_accept_previous_drawings ... ok
+test compatibility::tests::only_the_platform_directory_imports_earlier_data ... ok
+test compatibility::tests::the_environment_home_is_one_of_the_homes ... ok
+test document_styles::tests::exported_percentages_do_not_round_down_in_chemdraw ... ok
+test chemistry::reaction::layout::tests::incomplete_or_invalid_layouts_never_finish_a_reaction ... ok
+test document_styles::tests::journal_presets_use_publisher_settings ... ok
+test document_styles::tests::optional_layout_scaling_is_explicit_and_atomic ... ok
+test document_styles::tests::formatting_roundtrips_presets_boundaries_and_small_margins ... ok
+test chemistry::cdxml::scene::tests::prepared_snapshot_checks_and_precedence ... ok
+test document_styles::tests::reads_legacy_packed_label_style_and_xml_files ... ok
+test document_styles::tests::stationery_requires_explicit_valid_settings ... ok
+test document_styles::tests::reads_current_and_legacy_stationery_without_importing_artwork ... ok
+test document_styles::tests::reusable_style_files_are_validated_and_bounded ... ok
+test compatibility::tests::migration_preserves_originals_and_current_choices_and_does_not_resurrect_drafts ... ok
+test engine::tests::custom_backends_preserve_the_original_request ... ok
+test engine::native_response::tests::projected_inchi_retains_captured_stereo_without_guessing_from_xy ... ok
+test engine::tests::measure_owned_request_transfers ... ignored, isolated requested-Rust-allocation and transfer timing measurement
+test engine::tests::owned_and_shared_native_imports_preserve_snapshots_and_errors ... ok
+test engine::tests::typed_text_formats_follow_cheap_markers ... ok
+test exchange::tests::concurrent_codec_calls_keep_ids_and_counters_independent ... ok
+test exchange::tests::measure_schema_retention ... ignored, isolated requested-Rust-allocation and timing measurement
+test exchange::tests::shared_schema_preserves_last_property_precedence ... ok
+test exchange::values::tests::measure_numeric_append ... ignored, isolated requested-Rust-allocation and timing measurement
+test exchange::values::tests::numeric_append_preserves_bytes_errors_and_rounding ... ok
+test exchange::values::tests::numeric_validation_precedes_output_limit_without_partial_append ... ok
+test chemistry::cdxml::scene::tests::abbreviation_presentations_restore_the_anchor_style ... ok
+test document_styles::tests::style_roundtrip_preserves_coordinates_and_explicit_overrides ... ok
+test export::tests::export_parity_dump ... ignored, prints export fingerprints for a same-machine before/after comparison
+test chemistry::cdxml::scene::tests::fixture_ids_bindings_and_removed_sources ... ok
+test chemistry::molfile::tests::projected_molecular_files_preserve_stereo_when_the_drawing_is_edge_on ... ok
+test export::tests::clipboard_png_keeps_the_fixed_preferred_resolution ... ok
+test export::tests::raster_budget_rejects_invalid_and_extreme_sizes_without_allocating ... ok
+test export::tests::office_clipboard_svg_outlines_text_without_moving_or_resizing_it ... ok
+test export::tests::windows_clipboard_resolution_fits_dib_office_and_native_picture_limits ... ok
+test export::tests::physical_scale_survives_svg_and_png_export ... ok
+test geometry::client::tests::response_limit_rejects_extra_byte_and_accepts_exact_boundary ... ok
+test geometry::tests::ambiguous_disconnected_query_and_coordination_fail_without_mutation ... ok
+test chemistry::cdxml::coordination_tests::coordination_projection_cdxml_and_mol_keep_direction_charge_and_donor_hydrogens ... ok
+test geometry::tests::authoritative_unspecified_bond_rejects_neighbor_direction_leak ... ok
+test geometry::tests::energy_evaluation_applies_pin_coordinates_without_fixed_degrees_of_freedom ... ok
+test geometry::tests::energy_evaluation_still_rejects_invalid_duplicate_and_absent_pins ... ok
+test geometry::tests::generation_offers_retained_depth_in_physical_units_without_mutating_the_source ... ok
+test geometry::tests::physical_scale_tracks_style_and_retained_y_depth ... ok
+test geometry::tests::stable_order_full_component_and_target_only_patch_keep_unrelated_drawing_exact ... ok
+test geometry::tests::defined_unknown_and_unspecified_alkenes_survive_degenerate_projection_and_native_save ... ok
+test geometry::view::tests::mirrored_target_does_not_make_an_improper_rotation ... ok
+test geometry::view::tests::proper_fit_and_inverse_preserve_distance_and_y_convention ... ok
+test geometry::wire::tests::frames_reject_truncation_trailing_bytes_unknown_fields_and_oversize ... ok
+test geometry::tests::wedge_only_tetrahedral_winding_survives_edge_on_and_full_view_rotations ... ok
+test recovery::tests::draft_is_durable_and_corrupt_files_are_ignored ... ok
+test template_library::tests::failed_explicit_release_closes_once_without_a_drop_retry ... ok
+test template_library::tests::guard_releases_lock_even_while_a_duplicate_description_survives ... ok
+test template_library::tests::guard_unwind_releases_a_retained_description_without_masking_the_panic ... ok
+test recovery::tests::old_dark_drafts_convert_their_colors_once ... ok
+test template_library::tests::lock_errors_distinguish_contention_from_io_failures ... ok
+test template_library::tests::normal_finish_distinguishes_committed_warnings_from_operation_failures ... ok
+test template_library::tests::library_operation_holds_lock_through_persist_and_releases_on_write_failure ... ok
+test chemistry::cdxml::scene::tests::each_stage_fault_wins_alone_and_over_every_later_stage ... ok
+test export::tests::clipboard_is_transparent_and_files_keep_canvas_background ... ok
+test export::tests::vector_pdf_and_png_contain_real_drawing_data ... ok
+test export::tests::figure_budgets_step_down_the_resolution_ladder_to_72_dpi ... ok
+test chemistry::cdxml::abbreviations::tests::work_limit_boundary_is_pinned ... ok
+test geometry::client::tests::deadline_and_dropping_future_kill_worker ... ok
+test engine::native_response::tests::projected_engine_analyze_and_exports_preserve_the_drawing ... ok
+test engine::tests::labels_match_full_analysis_for_aromatic_charged_radical_and_stereo_input ... ok
+
+test result: ok. 95 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 4.71s

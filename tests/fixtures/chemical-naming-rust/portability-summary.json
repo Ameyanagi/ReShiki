@@ -1,0 +1,116 @@
+[
+  {
+    "target": "aarch64-apple-darwin",
+    "command": [
+      "cargo",
+      "check",
+      "--locked",
+      "--offline",
+      "-p",
+      "opsin",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "aarch64-apple-darwin"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 8.811009459197521,
+    "log_sha256": "dddaf3701e6c37ed292dd323c22264c33eccf4000c2c934555a2f8e52c34946a"
+  },
+  {
+    "target": "x86_64-apple-darwin",
+    "command": [
+      "cargo",
+      "check",
+      "--locked",
+      "--offline",
+      "-p",
+      "opsin",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "x86_64-apple-darwin"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 8.394645292311907,
+    "log_sha256": "f024a15ce7dafb98226e69b996c6557a799231d1667a46118f2a356e52d8a3b9"
+  },
+  {
+    "target": "aarch64-pc-windows-msvc",
+    "command": [
+      "cargo",
+      "check",
+      "--locked",
+      "--offline",
+      "-p",
+      "opsin",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "aarch64-pc-windows-msvc"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 13.652828290127218,
+    "log_sha256": "36bd25078ebf5b1b2d8a2629cb9e680af369990be9619009f5a88992eb9cbd4c"
+  },
+  {
+    "target": "x86_64-pc-windows-msvc",
+    "command": [
+      "cargo",
+      "check",
+      "--locked",
+      "--offline",
+      "-p",
+      "opsin",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "x86_64-pc-windows-msvc"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 11.582442916929722,
+    "log_sha256": "769d090393434e97b73da02363dafb73aeb7a9437575a9af48d6e165fdaea56f"
+  },
+  {
+    "target": "aarch64-unknown-linux-gnu",
+    "command": [
+      "cargo",
+      "check",
+      "--locked",
+      "--offline",
+      "-p",
+      "opsin",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "aarch64-unknown-linux-gnu"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 9.255245334468782,
+    "log_sha256": "4281b5acaa892d538527800ea1c0250a600e62b571e76d034158db75b0a43687"
+  },
+  {
+    "target": "x86_64-unknown-linux-gnu",
+    "command": [
+      "cargo",
+      "check",
+      "--locked",
+      "--offline",
+      "-p",
+      "opsin",
+      "-p",
+      "reshiki-process",
+      "--all-targets",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 9.613436291925609,
+    "log_sha256": "92fecd4bbbaaa4289527d32bfa34bb17fee9494e95f2cd17670767a7ff161922"
+  }
+]

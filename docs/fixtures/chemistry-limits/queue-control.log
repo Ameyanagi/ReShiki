@@ -1,0 +1,3 @@
+full aggregate reservation: queued request times out without applying geometry
+queued cancellation: reservation restored completely after cancellation/drop
+normal framed worker returns a valid generated conformer after queue recovery: originals=3 coordinates=9

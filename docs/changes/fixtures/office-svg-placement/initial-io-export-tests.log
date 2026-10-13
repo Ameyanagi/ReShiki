@@ -1,0 +1,28 @@
+   Compiling tiff v0.11.3
+   Compiling usvg v0.45.1 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/vendor/usvg)
+   Compiling resvg v0.48.1
+   Compiling reshiki-process-heap v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/crates/process-heap)
+   Compiling reshiki-chemistry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/crates/chemistry)
+   Compiling image v0.25.10
+   Compiling cosmolkit-core v0.3.0 (https://github.com/Ameyanagi/COSMolKit.git?rev=252a1f3d6480fc4a0abcd51d76707f51f69b4406#252a1f3d)
+   Compiling resvg v0.45.1
+   Compiling svg2pdf v0.13.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/vendor/svg2pdf)
+   Compiling reshiki-model v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/crates/model)
+   Compiling reshiki-geometry v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/native/geometry)
+   Compiling reshiki-io v0.1.0 (/Users/ryuichi/dev/ReShiki-worktrees/office-svg-placement/crates/io)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 27s
+     Running unittests src/lib.rs (/Users/ryuichi/dev/ReShiki/target/debug/deps/reshiki_io-33271f2d5c2f4259)
+
+running 9 tests
+test export::tests::export_parity_dump ... ignored, prints export fingerprints for a same-machine before/after comparison
+test export::tests::windows_clipboard_resolution_fits_dib_office_and_native_picture_limits ... ok
+test export::tests::raster_budget_rejects_invalid_and_extreme_sizes_without_allocating ... ok
+test export::tests::physical_scale_survives_svg_and_png_export ... ok
+test export::tests::clipboard_png_keeps_the_fixed_preferred_resolution ... ok
+test export::tests::vector_pdf_and_png_contain_real_drawing_data ... ok
+test export::tests::clipboard_is_transparent_and_files_keep_canvas_background ... ok
+test export::tests::figure_budgets_step_down_the_resolution_ladder_to_72_dpi ... ok
+test export::tests::office_svg_files_and_clipboard_outline_text_without_moving_or_resizing_it ... ok
+
+test result: ok. 8 passed; 0 failed; 1 ignored; 0 measured; 88 filtered out; finished in 0.73s
+

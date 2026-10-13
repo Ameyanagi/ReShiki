@@ -1,0 +1,61 @@
+{
+  "remote_file_observations": [
+    {
+      "name": "desktop-import-20261010.rsk",
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-import-20261010.rsk",
+      "bytes": 492401,
+      "sha256": "7a689884c15fb62bacd7b1ad9bac9f602d4651a769657bdc9ac3958ffb30158f",
+      "created_utc": "2026-10-09T22:12:01.1862705Z",
+      "modified_utc": "2026-10-09T22:12:01.1862705Z",
+      "metadata_stable_across_read": true
+    },
+    {
+      "name": "desktop-vector-reexport-20261010.emf",
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-vector-reexport-20261010.emf",
+      "bytes": 14704,
+      "sha256": "a1c18d84970b68b064a6e7a8866cfb43e0b0922001e476a4e9f4de004c170c1a",
+      "created_utc": "2026-10-09T22:14:40.7545740Z",
+      "modified_utc": "2026-10-09T22:14:40.7545740Z",
+      "metadata_stable_across_read": true
+    },
+    {
+      "name": "source.emf",
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\source.emf",
+      "bytes": 12860,
+      "sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a",
+      "created_utc": "2026-10-09T10:08:07.3773021Z",
+      "modified_utc": "2026-10-09T09:20:26.4045738Z",
+      "metadata_stable_across_read": true
+    },
+    {
+      "name": "vector-reexport.emf",
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\vector-reexport.emf",
+      "bytes": 14704,
+      "sha256": "f8bf4153051ab9fab56b25c4714749a3375129e431151b4c79c6bf2a648ce630",
+      "created_utc": "2026-10-09T10:08:07.3773021Z",
+      "modified_utc": "2026-10-09T09:20:26.4065903Z",
+      "metadata_stable_across_read": true
+    }
+  ],
+  "local_controlled_copies": [
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/desktop-import-20261010.rsk",
+      "status": "copied_controlled_file",
+      "sha256": "7a689884c15fb62bacd7b1ad9bac9f602d4651a769657bdc9ac3958ffb30158f",
+      "bytes": 492401
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/desktop-vector-reexport-20261010.emf",
+      "status": "copied_controlled_file",
+      "sha256": "a1c18d84970b68b064a6e7a8866cfb43e0b0922001e476a4e9f4de004c170c1a",
+      "bytes": 14704
+    },
+    {
+      "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/source.emf",
+      "status": "copied_controlled_file",
+      "sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a",
+      "bytes": 12860
+    }
+  ],
+  "method": "Read-only SSH metadata/SHA followed by scp of only the three explicitly authorized controlled files. No guest write/delete/build/GUI action."
+}

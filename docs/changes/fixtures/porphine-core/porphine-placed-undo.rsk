@@ -1,0 +1,14 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 19,
+  "atoms": [],
+  "bonds": [],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [],
+  "groups": []
+}

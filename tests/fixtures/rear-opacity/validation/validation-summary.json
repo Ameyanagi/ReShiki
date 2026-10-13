@@ -1,0 +1,294 @@
+{
+  "source": "7ec621227bc6fd777d5918efb9b8b6443c207d8e",
+  "passed_commands": [
+    {
+      "name": "model-rear",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "reshiki-model",
+        "rear_opacity"
+      ],
+      "exit_code": 0,
+      "seconds": 61.562,
+      "started_unix": 1791558339.2045782,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-model-rear.log",
+      "stage": "first"
+    },
+    {
+      "name": "projected-bonds",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "reshiki-model",
+        "scene::projected_bonds"
+      ],
+      "exit_code": 0,
+      "seconds": 2.02,
+      "started_unix": 1791558400.768488,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-projected-bonds.log",
+      "stage": "first"
+    },
+    {
+      "name": "export-rear",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--test",
+        "rear_opacity"
+      ],
+      "exit_code": 0,
+      "seconds": 163.784,
+      "started_unix": 1791558402.788706,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-export-rear.log",
+      "stage": "first"
+    },
+    {
+      "name": "rgb-highlights-figures",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--test",
+        "depth_appearance",
+        "--test",
+        "highlights",
+        "--test",
+        "figure_exports"
+      ],
+      "exit_code": 0,
+      "seconds": 101.595,
+      "started_unix": 1791558795.7599502,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-second-rgb-highlights-figures.log",
+      "stage": "second"
+    },
+    {
+      "name": "app-rear",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--bin",
+        "reshiki",
+        "rear_"
+      ],
+      "exit_code": 0,
+      "seconds": 44.838,
+      "started_unix": 1791558897.3561852,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-second-app-rear.log",
+      "stage": "second"
+    },
+    {
+      "name": "actual-canvas-pixels",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--bin",
+        "reshiki",
+        "rear_opacity_canvas_matches_half_ink_and_keeps_front_and_filled_marks_clean",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "seconds": 38.797,
+      "started_unix": 1791559574.0499442,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-fourth-actual-canvas-pixels.log",
+      "stage": "fourth"
+    },
+    {
+      "name": "agent-headless",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "reshiki-agent",
+        "--test",
+        "headless"
+      ],
+      "exit_code": 0,
+      "seconds": 118.167,
+      "started_unix": 1791559612.847337,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-fourth-agent-headless.log",
+      "stage": "fourth"
+    },
+    {
+      "name": "mcp-transcripts",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "reshiki-mcp",
+        "--test",
+        "transcripts"
+      ],
+      "exit_code": 0,
+      "seconds": 134.577,
+      "started_unix": 1791559731.014977,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-fourth-mcp-transcripts.log",
+      "stage": "fourth"
+    },
+    {
+      "name": "mcp-native",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--test",
+        "mcp_stdio",
+        "--test",
+        "mcp_tools"
+      ],
+      "exit_code": 0,
+      "seconds": 55.19,
+      "started_unix": 1791559865.593488,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-fourth-mcp-native.log",
+      "stage": "fourth"
+    },
+    {
+      "name": "workspace-check",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features"
+      ],
+      "exit_code": 0,
+      "seconds": 451.334,
+      "started_unix": 1791559920.784773,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-fourth-workspace-check.log",
+      "stage": "fourth"
+    },
+    {
+      "name": "actual-canvas-pixels",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--bin",
+        "reshiki",
+        "rear_opacity_canvas_matches_half_ink_and_keeps_front_and_filled_marks_clean",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "seconds": 42.713,
+      "started_unix": 1791560478.7800179,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-fifth-actual-canvas-pixels.log",
+      "stage": "fifth"
+    },
+    {
+      "name": "workspace-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 193.02,
+      "started_unix": 1791560521.4940128,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-fifth-workspace-clippy.log",
+      "stage": "fifth"
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 2.595,
+      "started_unix": 1791560714.514279,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-fifth-fmt.log",
+      "stage": "fifth"
+    },
+    {
+      "name": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.018,
+      "started_unix": 1791560717.1099782,
+      "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-fifth-diff.log",
+      "stage": "fifth"
+    }
+  ],
+  "own_source_helper_final_test": {
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--test",
+      "depth_appearance",
+      "paint_preserves_tetrahedral_and_alkene_identity_including_exchange",
+      "--",
+      "--exact"
+    ],
+    "exit_code": 0,
+    "seconds": 110.371,
+    "started_unix": 1791560890.773369,
+    "head": "7ec621227bc6fd777d5918efb9b8b6443c207d8e",
+    "helper": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/apps/ReShiki Rear Opacity Verified.app/Contents/MacOS/reshiki",
+    "helper_signed_sha256": "4d35fe616bc9cb1388e4a6ec45312c65cc21aa6b67e42e17b077dd848fcc4043",
+    "helper_source": "7ec621227bc6fd777d5918efb9b8b6443c207d8e",
+    "helper_source_proven_by": "15 fresh:false own artifacts and Alpha-only main depfile",
+    "helper_contents_unchanged": true,
+    "log": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/rear-opacity-evidence/validation-final-signed-helper-depth.log"
+  },
+  "source_scope": "Production code remains reviewed ec1; e005,5717,7ec are only test helper/oracle/fixture corrections",
+  "full_suite": "No optional full2000-suite replay; focused behavior tests and required workspace checks only",
+  "runtime_scope": "Mac wgpu actual pixels; Windows print/EMF native execution pending",
+  "native_desktop_scope": "ROOT-owned; worker has not launched GUI",
+  "retained_failures": [
+    {
+      "stage": "first",
+      "command": "rgb-highlights-figures",
+      "cause": "Unset explicit InChI helper relaunched test harness, unsupported --inchi-worker"
+    },
+    {
+      "stage": "second",
+      "command": "actual-canvas-pixels",
+      "cause": "tiny-skia backend unavailable on this Mac target"
+    },
+    {
+      "stage": "third",
+      "command": "actual-canvas-pixels",
+      "cause": "First encoded128 oracle differed from native linear-light/sRGB alpha; actual Light50darkness67; production unchanged"
+    },
+    {
+      "stage": "fourth",
+      "command": "workspace-clippy",
+      "cause": "Test fixture field_reassign_with_default; corrected equivalent initializer7ec; strict rerunPASS"
+    },
+    {
+      "stage": "package-first",
+      "command": "package-candidate.py",
+      "cause": "Xcode Python3.9 lacks tomllib; no bundle created; successful rerun installed project-compatiblePython3.13"
+    }
+  ],
+  "helper_provenance_note": "Earlier shared executable helper runs are supplemental and excluded from own-source helper proof; final signed4d35 own fresh15+depfile proof is used for the one stereochemical exchange identity test",
+  "lease": "Explicitly returned ROOT after focused/required checks, exact-source fresh build/sign, final own helper identity PASS and preservation verification; no Cargo/compiler remains."
+}

@@ -1,0 +1,478 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 15,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "O",
+      "position": {
+        "x": 5.6280003,
+        "y": 21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 2,
+      "element": "C",
+      "position": {
+        "x": 42.0,
+        "y": 0.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 3,
+      "element": "O",
+      "position": {
+        "x": 42.0,
+        "y": -42.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 4,
+      "element": "C",
+      "position": {
+        "x": 78.372,
+        "y": 21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": 78.372,
+        "y": 63.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 6,
+      "element": "N",
+      "position": {
+        "x": 114.744,
+        "y": 0.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 7,
+      "element": "C",
+      "position": {
+        "x": 151.116,
+        "y": 21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 8,
+      "element": "O",
+      "position": {
+        "x": 151.116,
+        "y": 63.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 9,
+      "element": "C",
+      "position": {
+        "x": 187.488,
+        "y": 0.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 2,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "id": 10,
+      "element": "N",
+      "position": {
+        "x": 223.86,
+        "y": 21.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 2,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0,
+      "text_style": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 2,
+      "b": 3,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 2,
+      "b": 4,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 4,
+      "b": 5,
+      "order": 1,
+      "display": "wedge",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 4,
+      "b": 6,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 6,
+      "b": 7,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 7,
+      "b": 8,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 7,
+      "b": 9,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 9,
+      "b": 10,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [],
+  "groups": [
+    {
+      "id": 11,
+      "members": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "integral": true
+    }
+  ]
+}

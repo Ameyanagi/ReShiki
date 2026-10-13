@@ -1,0 +1,30 @@
+{
+  "checks": [
+    {
+      "file": "plus-lactic-final.rsk",
+      "sha256": "93de1c1af124f6e2a881b65050e97876beb4bcdfa7bd0cfb666f3ad672013a87",
+      "old_file": "plus-lactic-acid.rsk",
+      "old_sha256": "93de1c1af124f6e2a881b65050e97876beb4bcdfa7bd0cfb666f3ad672013a87",
+      "byte_exact_to_qualified22a": true,
+      "atoms": 6,
+      "bonds": 5,
+      "cip_label": "S",
+      "name": "(+)-lactic acid",
+      "version": 25
+    },
+    {
+      "file": "plus-lactic-generated-final.rsk",
+      "sha256": "9ee17d469528cb8ae238f7243e8ac0c0e34aaa8ec4597854941969585b0a67b1",
+      "old_file": "plus-lactic-generated-name.rsk",
+      "old_sha256": "9ee17d469528cb8ae238f7243e8ac0c0e34aaa8ec4597854941969585b0a67b1",
+      "byte_exact_to_qualified22a": true,
+      "atoms": 6,
+      "bonds": 5,
+      "cip_label": "S",
+      "name": "(2S)-2-hydroxypropanoic acid",
+      "version": 25
+    }
+  ],
+  "pure_rust_name_native_graph": "PASS",
+  "fresh_process_reopen": "pending"
+}

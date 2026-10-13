@@ -1,0 +1,6 @@
+{
+  "status": "not_run",
+  "reason": "Global benchmark budget exhausted",
+  "stage": "budget",
+  "elapsed_seconds": null
+}

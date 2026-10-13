@@ -1,0 +1,105 @@
+{
+  "written_utc": "2026-10-09T23:06:44.740009+00:00",
+  "status": "PASS: saved PPTX retains exact EMF and visible native picture; stored extent is0.01mm larger per axis than EMF frame",
+  "scope": "Read-only SSH process/executable/file queries, authorized scp of only controlled test PPTX, local ZIP/XML/byte inspection and inspection of root raw screenshot. No GUI/COM/build/guest mutation or public packaging changes.",
+  "guest_saved_file": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\desktop-powerpoint-emf-20261010.pptx",
+    "bytes": 37482,
+    "created_utc": "2026-10-09T23:04:32.6133384Z",
+    "modified_utc": "2026-10-09T23:04:32.6367443Z",
+    "sha256": "6ccd40accae9fbb41c9e9dac03d4933f2fe82da7f9746dea647931f71ff26563"
+  },
+  "stable_two_reads": true,
+  "local_copy_matches_guest": true,
+  "powerpoint_executable": {
+    "path": "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE",
+    "bytes": 1917184,
+    "sha256": "e58e29a44268bad4562a5c6d335641fb5522522079de71e8d2fbfccf32975ceb",
+    "file_version": "16.0.20527.20032",
+    "product_version": "16.0.20527.20032"
+  },
+  "process_limit": "No POWERPNT.EXE process existed at23:05:13Z or23:05:45Z; installed executable was independently hashed at its standard Office16 path. This is not yet a contemporaneous live-process binding.",
+  "container": {
+    "zip_integrity": "PASS",
+    "slides": [
+      "ppt/slides/slide1.xml"
+    ],
+    "pictures": 1,
+    "media": [
+      "ppt/media/image1.emf"
+    ],
+    "relationship_id": "rId2",
+    "embedded_emf_bytes": 14704,
+    "embedded_emf_sha256": "a1c18d84970b68b064a6e7a8866cfb43e0b0922001e476a4e9f4de004c170c1a",
+    "embedded_exact_desktop_export": true,
+    "picture_extent_emu": [
+      3701880,
+      2261880
+    ],
+    "picture_extent_mm": [
+      102.83,
+      62.83
+    ],
+    "picture_offset_emu": [
+      4245060,
+      2298060
+    ],
+    "emf_frame_0_01mm": [
+      0,
+      0,
+      10282,
+      6282
+    ],
+    "emf_frame_mm": [
+      102.82,
+      62.82
+    ],
+    "extent_minus_frame_mm": [
+      0.010000000000005116,
+      0.00999999999999801
+    ],
+    "extent_minus_frame_percent": [
+      0.009725734292944092,
+      0.015918497293852293
+    ],
+    "crop": null,
+    "rotation_degrees": 0,
+    "flip_horizontal": false,
+    "flip_vertical": false,
+    "group_transform": null
+  },
+  "size_interpretation": "Root reports no manual resizing on insertion. Stored picture is102.83x62.83mm versus embedded EMF102.82x62.82mm, a0.01mm increase per axis. UI4.05x2.47in is rounded. A small Office import quantization/inclusive-bound effect is a possible explanation, not proven by this audit; do not claim exact intrinsic-size equality.",
+  "raw_screenshot": {
+    "path": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/emf-import-windows-native-20261010/office-native/powerpoint-emf-saved-intrinsic-size.jpg",
+    "dimensions": [
+      2556,
+      1712
+    ],
+    "independent_visual_observation": "Saved presentation title; one selected picture shows title/axis/blue peaks/red-green inset, ribbon height2.47in,width4.05in at68%slide zoom.",
+    "excluded": "powerpoint-emf-inserted-intrinsic-size.jpg actually captured a Save dialog; retain as supplemental scratch, do not use as the acceptance image."
+  },
+  "limits": [
+    "No new physical display-DPI claim",
+    "Saved stable bytes do not establish power-loss durability",
+    "Fresh-process PowerPoint reopen is a separate pending root step at audit time",
+    "No Word acceptance claim"
+  ],
+  "files": {
+    "desktop-powerpoint-emf-20261010.pptx": {
+      "bytes": 37482,
+      "sha256": "6ccd40accae9fbb41c9e9dac03d4933f2fe82da7f9746dea647931f71ff26563"
+    },
+    "powerpoint-readonly-ssh-save-audit.json": {
+      "bytes": 812,
+      "sha256": "f95bbb39cee5de5b6b8b9f3a0b3355cb3f62cf528d4d9feafbcf61e78d7a2f52"
+    },
+    "powerpoint-executable-process-audit.json": {
+      "bytes": 401,
+      "sha256": "21577002090aa7f1cf55eccf7e762642e0a3994c37e73aec999b72b48cecd013"
+    },
+    "powerpoint-emf-saved-intrinsic-size.jpg": {
+      "bytes": 329669,
+      "sha256": "3eab9caa663416bf86beb8d3ba008aba34d81eb5ddcd3f05008869829737b628"
+    }
+  }
+}

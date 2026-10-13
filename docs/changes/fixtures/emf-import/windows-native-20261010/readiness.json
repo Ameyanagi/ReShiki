@@ -1,0 +1,143 @@
+{
+  "written_utc": "2026-10-09T22:09:38.962119+00:00",
+  "scope": "Read-only SSH process/hash/file inventories and local preserved receipts/git-object comparison. No GUI, builds, copies to Windows, cleanup, settings changes or whole-disk scan.",
+  "host": "amearch-win\\ryuichi@192.168.1.51",
+  "running_app_observation": {
+    "utc": "2026-10-09T22:07:46.3642279Z",
+    "pid": 5852,
+    "parent_pid": 7520,
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-candidate-20261009\\reshiki.exe",
+    "sha256": "124336a60753ad7cd3bba0c9bf4f453298d6fac7d857dbe1562903e2e0fc88b2",
+    "bytes": 101817344,
+    "emf_worker_present": false,
+    "application_events": "No reshiki/emf-worker match among at most 40 most recent Application events from preceding 15 minutes; absence does not prove no earlier worker or error.",
+    "gui_acceptance": "Root owns live GUI; this inventory makes no import success or failure claim."
+  },
+  "provenance": {
+    "build_receipt": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/app-link-inputs.json",
+    "windows_build_receipt": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\app-link-inputs.json",
+    "manifest": "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/emf-import-source-v3.json",
+    "manifest_sha256": "a69a98986c7be5ed5f3bf224d7b74e118722a86067102b0a4a0d6934c2e9f540",
+    "archive_sha256": "a1233c836bce6aa8c448d4624c21c86ae12f26cfc83eb026cfb9fc5b379fec7b",
+    "archive_bytes": 171099437,
+    "manifest_files": 2559,
+    "source_version": 3,
+    "build_description": "Exact captured Cargo rustc arguments/libraries/resources/environment replayed with only owned EXE/PDB/output relocation; source was an uncommitted snapshot of feat/emf-import on base51fa0991, not a build invoked from a committed783be checkout.",
+    "corresponding_production_commit": "783be63a2752103cd2c436a79e02a03d442e6085",
+    "independent_manifest_to_commit_check": {
+      "selected_paths": "All .rs, Cargo.toml, Cargo.lock, assets/ and presets/ entries in source-v3 manifest",
+      "count": 1120,
+      "differences": []
+    },
+    "historical_complete_source_verification": "Preserved Windows receipts record all2559 source hashes verified before link/source relocation; this audit did not rehash all guest sources.",
+    "historical_actual_app_worker": "Same exact EXE passed --emf-worker with exit0 in5.5596407s and exact verified PNG1dabe5ad\u2026; this was not GUI acceptance.",
+    "windows_build_receipt_status": "Expected original location from retained source/evidence layout; this exact remote receipt path was not freshly tested. The local absolute build receipt path above was directly read and hashed."
+  },
+  "dll_readiness": {
+    "adjacent_files": [
+      "reshiki.exe",
+      "reshiki.exp",
+      "reshiki.lib"
+    ],
+    "direct_pe_imports": "Independent inspection of preserved matching PE finds Windows system/API-set imports plus VCRUNTIME140.dll; no private chemistry-engine DLL import.",
+    "observed_system_files": {
+      "C:\\Windows\\System32\\vcruntime140.dll": 178848,
+      "C:\\Windows\\System32\\vcruntime140_1.dll": 50256,
+      "C:\\Windows\\System32\\msvcp140.dll": 642720
+    },
+    "limit": "Presence plus historical worker execution supports loader readiness; does not validate every dynamically selected GUI backend."
+  },
+  "fixtures": {
+    "emf": {
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\source.emf",
+      "sha256": "5c59f0c675dfcd40384ed00e7de4b83d075ccd04c7ac11ccaa64df297855be6a",
+      "bytes": 12860,
+      "fresh_remote_hash_verified": true,
+      "frame_mm": [
+        100,
+        60
+      ]
+    },
+    "native_reference": {
+      "path": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\exports-v3\\retained-source.rsk",
+      "sha256": "c329e5d2f28242cbbbf4156f2e533e7497e63391aac4cbdd9046f2ea357e8098",
+      "bytes": 492401,
+      "fresh_remote_hash_verified": true,
+      "version": 20,
+      "picture_mm": [
+        100,
+        60
+      ]
+    },
+    "figure_padding": "The original picture/frame is100\u00d760mm; complete exported figure is102.82\u00d762.82mm because of existing figure padding. These must not be treated as an import scaling mismatch.",
+    "cdx_directory": "C:\\Users\\ryuichi\\dev\\reshiki-emf-import-20261009\\.interop-evidence\\numbered-codec\\fixtures",
+    "cdx_files": {
+      "single.cdx": {
+        "bytes": 1767,
+        "sha256": "95f3b9936c89de6bf09b244d85c92ea5510ca2811cfc08e7b43eaa6415bcc33c"
+      },
+      "two.cdx": {
+        "bytes": 2058,
+        "sha256": "c7184834fc14c742fe294290a63dc6e8c707954c1d608184409ae366e296dafa"
+      },
+      "sparse.cdx": {
+        "bytes": 2061,
+        "sha256": "d04b569a438a448850f9ec37f96f27b78a1b43b18f592160ba9ee6d577323d79"
+      }
+    },
+    "cdx_fresh_remote_hashes_verified": true
+  },
+  "baseline": {
+    "path": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\artifacts\\base-51fa0991\\reshiki.exe",
+    "bytes": 102718976,
+    "sha256": "135779960a15c17bac51e00c614600422531a30b90480d6cb1ba8de5b795e51d",
+    "fresh_remote_hash_verified": true,
+    "root_gui_status": "Root reports normal closure of owned blank baseline PID9464; audit did not operate GUI."
+  },
+  "missing_candidates": {
+    "PR284": "No verified full Windows candidate identified in retained receipts/known artifact paths. numbered-codec baseline.exe/head.exe are detached codec harnesses, not full GUI apps.",
+    "PR290": "No verified full Windows candidate identified in retained receipts/known artifact paths. Preserved final3d343 and initiala526 app/export GUI evidence is macOS.",
+    "known_other_artifact_folders": [
+      "base-51fa0991",
+      "base-profile",
+      "head",
+      "head-profile",
+      "shell-open"
+    ],
+    "limitation": "No whole-disk search and no claim that arbitrary unrecorded binaries are absent. No known receipt ties another retained full EXE to PR284/PR290."
+  },
+  "build_capacity": {
+    "known_shared_target": "C:\\Users\\ryuichi\\dev\\reshiki-issue108-20261009\\target",
+    "known_cargo_cache": "F:\\reshiki-selected-issues-20261002\\.build\\cargo",
+    "cache_proof": "Existing target/cache were used successfully by preserved EMF compiler/dependency receipts. Their presence does not establish a current source-valid CDX/Office build or enough build headroom.",
+    "last_worker_drive_observation_bytes": {
+      "C": 372297728,
+      "F": 245063680
+    },
+    "later_root_gui_observation": "Root reported approximately331MB C/233MB F; no further free-space scan performed.",
+    "prior_relocated_link_initial_bytes": {
+      "C": 476278784,
+      "F": 342986752
+    },
+    "prior_relocated_link_minimum_bytes": {
+      "C": 273358848,
+      "F": 186671104
+    },
+    "observed_prior_link_temporary_decrease_bytes": {
+      "C": 202919936,
+      "F": 156315648
+    },
+    "readiness": "Not cleared to build. Repeating even the prior already-cached link would leave materially less headroom than its prior150MiB guard, especially F; new branch compilation could require more. No precise future build-size guarantee can be made from cache presence. Obtain verified source-matched candidates or a separately authorized build/storage plan first; no cleanup or build attempted."
+  },
+  "retained_receipt_sha256": {
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/emf-import-source-v3.json": "a69a98986c7be5ed5f3bf224d7b74e118722a86067102b0a4a0d6934c2e9f540",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-source-v3-verification.log": "52ea06bcc9f3abe89b17ecec277fcd0f06082db17f1e03243ea5c2f06799fa15",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/app-link-inputs.json": "e7bc66699f83144402d7f96ca51904afd979bb6c7e293e2769a060e95aa7afff",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/compiler-capture-result.json": "322db1f548b198f704b8537e7da2d809a2ff45d9d8ee96e831fa2b84fd33ab43",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/actual-app-worker-result.json": "105fbc850c402428cabd4c89f44d8669cd2d9161f4c688b692dadf08d3cd39e4",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/app-preservation-receipt.json": "1ee3d6adeec644bd0df271acb9576f68f072977227b02c15c6b36ef3ee540e89",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-native-artifacts/app-relocated-link-result.json": "778785ef5907e1def5dd5783ee76682b4c05c7f64ef20063572b18d8c931ff90",
+    "/Users/ryuichi/dev/ReShiki-worktrees/.coordination/interoperability-evidence/windows-app-link-launch-failed.json": "6bff4be0b9328aae2a48fbddd3393f799168aa383bd07bed1324cce58530e50e"
+  },
+  "historical_failure_preserved": "First app-link launch failed exit1 with no candidate; later relocated-link runner recorded null exitCode. Both remain unmodified. Actual-app-worker receipt independently proves successful execution of exact124336 EXE, not a successful original Cargo command or GUI import."
+}

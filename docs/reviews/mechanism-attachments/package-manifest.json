@@ -1,0 +1,324 @@
+{
+  "tested_production_head": "466c7a1a8eb697af2b1b61fcca59668aa653787f",
+  "merged_curves_head": "cd564d1a31ecb52a2ac2b9bd143bcd645422f1d3",
+  "signed_application_sha256": "31a3428de420b01655939a646932c437aa24da9a912147733b8ea8076753d352",
+  "source_sha256": "e73346375c7478d5f4f77473c0b2033506d9167f16799c732240421f9c63b092",
+  "personal_visual_acceptance": "pending",
+  "original_raw_images": [
+    {
+      "original_coordination_path": "evidence/baseline/mechanism-attachment-two-free-arrows-before.png",
+      "archive": "docs/images/mechanism-attachments/mechanism-attachment-two-free-arrows-before.png",
+      "bytes": 325165,
+      "sha256": "4b7c7a593d1e7ee4edf55b0b31dd7b4362677e2db078449c917577eb2f30baef",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "evidence/after/mechanism-attachment-pending-source.jpg",
+      "archive": "docs/images/mechanism-attachments/mechanism-attachment-pending-source.jpg",
+      "bytes": 355608,
+      "sha256": "8c12d2f2072ef49e084ba41dd4a4866491478180be9723862cd357d02ae376c2",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "evidence/after/mechanism-attachment-controls.jpg",
+      "archive": "docs/images/mechanism-attachments/mechanism-attachment-controls.jpg",
+      "bytes": 350845,
+      "sha256": "17881369448f3775f6bd56c1f0dd5f93d0862046547885d830fda7d716be4db9",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "evidence/after/mechanism-attachment-one-arrow-after.jpg",
+      "archive": "docs/images/mechanism-attachments/mechanism-attachment-one-arrow-after.jpg",
+      "bytes": 318114,
+      "sha256": "a9ef2cc95249de3c166c5ef430d34681752c2e6a6b4a9b31fffc738b17b3c8fd",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "evidence/after/mechanism-attachment-crowded-carbonyl-f8-off.jpg",
+      "archive": "docs/images/mechanism-attachments/mechanism-attachment-crowded-carbonyl-f8-off.jpg",
+      "bytes": 323750,
+      "sha256": "885353c03f8ee08557311c9dc3d361b2769fe44a2d06f61fcdfd2b169fa9db7e",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "evidence/after/mechanism-attachment-native-reopened.jpg",
+      "archive": "docs/images/mechanism-attachments/mechanism-attachment-native-reopened.jpg",
+      "bytes": 309955,
+      "sha256": "0b5a79fee0c989f4dd9ffe0484acadae1e293426612216f3b7f5cb4aaaab88aa",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "evidence/after/mechanism-attachment-reopened-attachment-controls-verified.jpg",
+      "archive": "docs/images/mechanism-attachments/mechanism-attachment-reopened-attachment-controls-verified.jpg",
+      "bytes": 355765,
+      "sha256": "24b9e586180e4a3ba186bb879bee1867a50061e8dc99e65136a56824e2fc2c86",
+      "archive_bytes_equal_original": true
+    }
+  ],
+  "original_native_files": [
+    {
+      "original_coordination_path": "arrow-attachment-evidence/crowded-carbonyl-atom-attached-desktop.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/crowded-carbonyl-atom-attached-desktop.rsk",
+      "bytes": 3692,
+      "sha256": "6659d645c6fec8261f03f96ec941cf8cb4f77fe5caef61aea7b4b7a4047e6331",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/crowded-carbonyl-atom-undo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/crowded-carbonyl-atom-undo.rsk",
+      "bytes": 2222,
+      "sha256": "7a282f7a23b88bbc52664dfab904dca6357d5fd021015d2d37f792d432bcd52c",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/crowded-carbonyl-bond-attached-desktop.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/crowded-carbonyl-bond-attached-desktop.rsk",
+      "bytes": 3722,
+      "sha256": "d958382713b37657f2c0215b8ae760ea6c05d93f535cdc897be6667666ab7b2e",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/crowded-methoxide-carbonyl-input.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/crowded-methoxide-carbonyl-input.rsk",
+      "bytes": 2259,
+      "sha256": "060c5ea09c45f0b4b541acfdbc8ae1b6ba9825babb226637d7d69688152e1915",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-arrow-desktop.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-arrow-desktop.rsk",
+      "bytes": 2808,
+      "sha256": "4255e10487b1a0eeed52f08de425207a1dbdaab44ed73c779a4170f133f507f8",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-arrow-redo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-arrow-redo.rsk",
+      "bytes": 2808,
+      "sha256": "4255e10487b1a0eeed52f08de425207a1dbdaab44ed73c779a4170f133f507f8",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-arrow-reopened-desktop.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-arrow-reopened-desktop.rsk",
+      "bytes": 2808,
+      "sha256": "4255e10487b1a0eeed52f08de425207a1dbdaab44ed73c779a4170f133f507f8",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-arrow-undo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-arrow-undo.rsk",
+      "bytes": 1332,
+      "sha256": "1ad1fbaa0ba48b8ad3b57577cb00000613d8a05e008bf4aceace61eac2f687fe",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-end-detach-undo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-end-detach-undo.rsk",
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-end-detached.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-end-detached.rsk",
+      "bytes": 2512,
+      "sha256": "bafb7a0b77dc9276a056533865a1bc1c4c99eed9847586281751a48a9f8f18ed",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-endpoint-drag-undo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-endpoint-drag-undo.rsk",
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-endpoint-dragged.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-endpoint-dragged.rsk",
+      "bytes": 2485,
+      "sha256": "16bd711b039168dd701f30a9fcc0b604a8146d1d10e498d79edca9f937f84c80",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-lone-pair-removal-undo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-lone-pair-removal-undo.rsk",
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-lone-pair-removed.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-lone-pair-removed.rsk",
+      "bytes": 2241,
+      "sha256": "55d7aeed98b919f38e6e060d19822fceff963cedc3bae9c9c60e0164485889b7",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-pending-cancelled.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-pending-cancelled.rsk",
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-source-moved-desktop.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-source-moved-desktop.rsk",
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-tangent-desktop.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-tangent-desktop.rsk",
+      "bytes": 2800,
+      "sha256": "332ccf4d20d0ffc0a8f9e32631740f85d3907b3987dda8612f55f5941d9451e2",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-target-deleted.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-target-deleted.rsk",
+      "bytes": 1926,
+      "sha256": "facf49a841cbb72cb6bf48e072139997df80522d3d335d37d23ad1b260a6cfcc",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-target-deletion-undo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-target-deletion-undo.rsk",
+      "bytes": 2808,
+      "sha256": "d0eea16dc3ac1590b70c14475c9a1a7ce2dd6c7533537bc4a3b5bc43b8b2afa0",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-target-moved-desktop.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-target-moved-desktop.rsk",
+      "bytes": 2808,
+      "sha256": "d0eea16dc3ac1590b70c14475c9a1a7ce2dd6c7533537bc4a3b5bc43b8b2afa0",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-target-redo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-target-redo.rsk",
+      "bytes": 2808,
+      "sha256": "d0eea16dc3ac1590b70c14475c9a1a7ce2dd6c7533537bc4a3b5bc43b8b2afa0",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-attached-target-undo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-attached-target-undo.rsk",
+      "bytes": 2800,
+      "sha256": "332ccf4d20d0ffc0a8f9e32631740f85d3907b3987dda8612f55f5941d9451e2",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-click-input.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-click-input.rsk",
+      "bytes": 1108,
+      "sha256": "9737ebd597fff105a7783d421a2e16a7d214ea13c72e360f04a44b72dc0a06bc",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-explicit-free-arrow-desktop.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-explicit-free-arrow-desktop.rsk",
+      "bytes": 3428,
+      "sha256": "fd8dcd4428eebb25746b83b039731c58552823178c892f60e8c706e5324a52f3",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-explicit-free-arrow-undo.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-explicit-free-arrow-undo.rsk",
+      "bytes": 2815,
+      "sha256": "1e21860642cd60d49df80a27c8fbdd491a2dc98ab7e0dc54324ed32f1ea26876",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-marked-input.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-marked-input.rsk",
+      "bytes": 1332,
+      "sha256": "366b61c7f9b8bcfee1f2d1c3cfd6b22ee397ee5149b295c442d0037086977a61",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/methanol-two-free-arrows-desktop.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/desktop/methanol-two-free-arrows-desktop.rsk",
+      "bytes": 2560,
+      "sha256": "74d552c445b87baf120cfbcbebd4aa1f0735b5da088be8173793fa96c012dc3e",
+      "archive_bytes_equal_original": true
+    }
+  ],
+  "receipts": [
+    {
+      "archive": "docs/reviews/mechanism-attachments/desktop-independent-check.json",
+      "bytes": 8318,
+      "sha256": "5194865069df6720754941a90606d0194120da443cbabd98bb048bb8720474d0",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "archive": "docs/reviews/mechanism-attachments/verify_desktop.py",
+      "bytes": 10472,
+      "sha256": "4812e4e4b697b71d1652e4406d0f7cde6597afe980e273d91326d3850d88c48e",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "archive": "docs/reviews/mechanism-attachments/final-artifact-provenance.json",
+      "bytes": 11215,
+      "sha256": "1acda9a475e31fa8ed0cae370040dc809aad5eccfaee4735a50b4f9254a148ce",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "archive": "docs/reviews/mechanism-attachments/final-own-source-provenance.json",
+      "bytes": 114974,
+      "sha256": "391d18a5e5b28e69f27f538ddcbfb1e7cd528e59e34b487e6969a9e7a878d99e",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "archive": "docs/reviews/mechanism-attachments/matched-export-receipt.json",
+      "bytes": 11634,
+      "sha256": "ffdcb4b066f91223a317e8289ee21fd89de0bc48110c47ff3d3a908b63757d35",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "archive": "docs/reviews/mechanism-attachments/post-merge-source-proof.json",
+      "bytes": 1036,
+      "sha256": "83b5236745605955a047a7f8d51200c13518bcd70e5e6df62e80699f3f3e11ee",
+      "archive_bytes_equal_original": true
+    }
+  ],
+  "additional_test_artifacts": [
+    {
+      "original_coordination_path": "arrow-attachment-evidence/after/app-two-click.rsk",
+      "archive": "tests/fixtures/mechanism-attachments-92/app-two-click-test.rsk",
+      "bytes": 2808,
+      "sha256": "ca6b1971a01f2234dfb6ac429d18b6cfeba56f482323bf5758de18cb23d871b0",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/before/methanol-marked-properties.json",
+      "archive": "docs/reviews/mechanism-attachments/before-analysis.json",
+      "bytes": 486,
+      "sha256": "9b090f2f0e2d11f0b53c36fbb7c3d51607c4676b92f1a00df3d14d61c901706b",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/after/app-two-click-properties.stdout",
+      "archive": "docs/reviews/mechanism-attachments/after-test-analysis.json",
+      "bytes": 486,
+      "sha256": "395cb236ccda0bca6b1710adb089d83d837000e3f2ceef42b71c8508737ece90",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/after/app-two-click.svg",
+      "archive": "docs/reviews/mechanism-attachments/after-test.svg",
+      "bytes": 2036,
+      "sha256": "fdb51ee0078a9c5e9e6eb4f3c337545c9f0902717444581a941d33b232690845",
+      "archive_bytes_equal_original": true
+    },
+    {
+      "original_coordination_path": "arrow-attachment-evidence/after/app-two-click.cdxml",
+      "archive": "docs/reviews/mechanism-attachments/after-test.cdxml",
+      "bytes": 1692,
+      "sha256": "2e83287e90d083dcb36e6b1234c6640a6118609f5b21e3f6ae44c7388489e68f",
+      "archive_bytes_equal_original": true
+    }
+  ]
+}
