@@ -6,8 +6,11 @@ use reshiki::graphics::LinePattern;
 
 /// The arrow card's one line of gesture help; the full text is in the guide.
 const GESTURE_HINT: &str = "Drag the diamond to bend, the squares to aim each end";
-const ATTACH_HINT: &str =
-    "Click a source, then a destination · Alt-click or turn this off for a free arrow";
+const ATTACH_LABEL: &str = "Attach ends to atoms and bonds";
+const ATTACH_HINT: &str = concat!(
+    "Two clicks: a source, then a destination atom, bond or lone pair · ",
+    "Option/Alt-click or turn this off for a free arrow"
+);
 
 #[derive(Debug, Clone, Copy)]
 pub enum Field {
@@ -183,9 +186,9 @@ impl App {
                 self.tab.arrows.cancel_source();
                 self.error = false;
                 self.status = if value {
-                    "Click a source then a destination atom, bond, or lone pair"
+                    "Attached arrows · Click a source, then a destination"
                 } else {
-                    "Free arrow placement · Click or drag on the canvas"
+                    "Free arrows · Click or drag"
                 }
                 .into();
                 return;
@@ -224,7 +227,7 @@ impl App {
                         .get(f as usize)
                         .ok_or("Unknown arrow property")?
                         .parse::<f32>()
-                        .map_err(|_| "Enter a number and press Return")?,
+                        .map_err(|_| "Type a number, then press Enter")?,
                 ),
                 Action::Reset => {
                     *s = ArrowStyle::preset(self.tab.arrow_style);
@@ -278,9 +281,7 @@ impl App {
         self.changed(before);
         self.sync_arrows();
         self.error = false;
-        self.status =
-            "Arrow updated · Drag the diamond to bend or the squares to adjust each end direction"
-                .into();
+        self.status = "Arrow updated · Drag the diamond to bend".into();
     }
     pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
         use super::workspace::{accessible_command, command, hover_hint, muted_text, section};
@@ -448,7 +449,7 @@ impl App {
         if self.tab.arrow_style.supports_attachments() {
             panel = panel.push(hover_hint(
                 checkbox(self.tab.arrows.attach_targets)
-                    .label("Attach targets (two clicks)")
+                    .label(ATTACH_LABEL)
                     .on_toggle(|value| Message::ArrowAction(Action::AttachTargets(value)))
                     .size(14)
                     .text_size(12),

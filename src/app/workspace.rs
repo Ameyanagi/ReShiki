@@ -779,7 +779,9 @@ impl App {
                     .iter()
                     .map(|kind| text_width(&kind.to_string(), 12.))
                     .fold(0., f32::max);
-                lead + chooser + 12. + 15. + CONTEXT_GAP + 22. + text_width("Snap to atoms", 11.)
+                // snap_orbitals_toggle: 14 px box, 8 px gap and its label.
+                let label = text_width(super::graphics::SNAP_ORBITALS_LABEL, 11.);
+                lead + chooser + 12. + 15. + CONTEXT_GAP + 22. + label
             }
             _ if self.moving_bonded_selection() => lead + Self::constraints_width(),
             _ => 0.,
@@ -1158,13 +1160,14 @@ impl App {
     }
 
     /// Options for the current tool, and the usage hint shown on the tool
-    /// name. `summary` shows the selection summary of the selection tools.
+    /// name (`Tool::hint`). `summary` shows the selection summary of the
+    /// selection tools.
     fn tool_options(
         &self,
         summary: bool,
     ) -> (Vec<Element<'_, Message>>, std::borrow::Cow<'static, str>) {
-        let (options, hint): (_, &'static str) = match self.tool {
-            tool if tool.bond_preset().is_some() => (
+        let options = match self.tool {
+            tool if tool.bond_preset().is_some() => {
                 vec![
                     crate::appearance::pick_list(BondPreset::ALL, tool.bond_preset(), |preset| {
                         Message::Tool(match preset {
@@ -1181,12 +1184,11 @@ impl App {
                     .padding(5)
                     .into(),
                     self.bond_constraints(),
-                ],
-                tool.hint(),
-            ),
+                ]
+            }
             // The tool name shows the mode; the palette switches it.
             Tool::Chain(mode) => self.chain_tool_options(mode),
-            Tool::StretchBond { .. } => (
+            Tool::StretchBond { .. } => {
                 vec![
                     reshiki::accessibility::button(
                         "stretch-done",
@@ -1197,11 +1199,10 @@ impl App {
                     .on_press(Message::Tool(Tool::Select))
                     .style(control(false))
                     .into(),
-                ],
-                "Drag the moving end or branch · Original direction stays fixed · Escape cancels",
-            ),
+                ]
+            }
             Tool::Graphic(kind) => self.graphic_tool_options(kind),
-            Tool::EditPoints => (
+            Tool::EditPoints => {
                 vec![
                     hover_hint(
                         reshiki::accessibility::button(
@@ -1216,10 +1217,9 @@ impl App {
                         tooltip::Position::Bottom,
                     )
                     .into(),
-                ],
-                "Drag anchors or control points · Escape finishes",
-            ),
-            Tool::Template => (
+                ]
+            }
+            Tool::Template => {
                 vec![
                     text(
                         self.templates
@@ -1231,11 +1231,10 @@ impl App {
                     .size(12)
                     .into(),
                     done("Cancel"),
-                ],
-                "Click to place / attach · Drag to orient",
-            ),
-            Tool::Ring | Tool::RingPreset(_) => return self.ring_tool_options(),
-            Tool::Arrow => (
+                ]
+            }
+            Tool::Ring | Tool::RingPreset(_) => self.ring_tool_options(),
+            Tool::Arrow => {
                 vec![
                     crate::appearance::pick_list(
                         reshiki::arrows::Preset::ALL,
@@ -1245,10 +1244,9 @@ impl App {
                     .text_size(12)
                     .padding(5)
                     .into(),
-                ],
-                "Click to place / change · Click again to switch · Drag to draw",
-            ),
-            Tool::Atom => (
+                ]
+            }
+            Tool::Atom => {
                 vec![
                     text(format!("Element: {}", self.element)).size(12).into(),
                     crate::appearance::text_input("Symbol: Si, Na, Fe…", &self.custom_element)
@@ -1259,67 +1257,66 @@ impl App {
                         .width(160)
                         .into(),
                     command("Use", Message::ApplyElement).into(),
-                ],
-                "Click to replace · Drag from an atom to add with a bond",
-            ),
-            Tool::Text => (
-                vec![],
-                "Click an atom to name it · Click empty space for a caption · Escape cancels",
-            ),
+                ]
+            }
             Tool::Tilt => self.tilt_tool_options(),
             Tool::Select | Tool::Lasso => self.selection_tool_options(summary),
-            _ => (vec![], self.tool.hint()),
+            _ => vec![],
         };
-        (options, hint.into())
+        // Ring keeps its size shortcut, drawn in the shortcut font.
+        let hint = if matches!(
+            self.tool,
+            Tool::Ring | Tool::RingPreset(reshiki::rings::Preset::Regular)
+        ) {
+            format!(
+                "{} · {} keeps ring size",
+                self.tool.hint(),
+                keys(Modifiers::SHIFT, "R")
+            )
+            .into()
+        } else {
+            self.tool.hint().into()
+        };
+        (options, hint)
     }
 
-    fn chain_tool_options(
-        &self,
-        mode: reshiki::chains::ChainMode,
-    ) -> (Vec<Element<'_, Message>>, &'static str) {
-        (
-            vec![
-                hover_hint(
-                    row![
-                        text(chain_atoms_label(mode)).size(11),
-                        crate::appearance::text_input("Auto", &self.tab.chain_atoms_input)
-                            .on_input(Message::ChainAtoms)
-                            .width(49)
-                            .size(12)
-                            .padding(5),
-                    ]
-                    .spacing(4)
-                    .align_y(Alignment::Center),
-                    "Includes attachment atoms · Auto places 6 atoms per click",
-                    tooltip::Position::Bottom,
-                )
-                .into(),
+    fn chain_tool_options(&self, mode: reshiki::chains::ChainMode) -> Vec<Element<'_, Message>> {
+        vec![
+            hover_hint(
                 row![
-                    text("Angle").size(11),
-                    container(unit_field(
-                        crate::appearance::text_input("120", &self.tab.chain_angle_input)
-                            .on_input(Message::ChainAngle),
-                        "°",
-                    ))
-                    .width(UNIT_FIELD),
+                    text(chain_atoms_label(mode)).size(11),
+                    crate::appearance::text_input("Auto", &self.tab.chain_atoms_input)
+                        .on_input(Message::ChainAtoms)
+                        .width(49)
+                        .size(12)
+                        .padding(5),
                 ]
                 .spacing(4)
-                .align_y(Alignment::Center)
-                .into(),
-                self.bond_constraints(),
-            ],
-            if mode == reshiki::chains::ChainMode::Snaking {
-                "Steer while dragging · Retrace to shorten · Shift flips start · Alt frees"
-            } else {
-                "Drag a regular zigzag · Ctrl bends · Shift flips start · Alt frees"
-            },
-        )
+                .align_y(Alignment::Center),
+                "Includes attachment atoms · Auto places 6 atoms per click",
+                tooltip::Position::Bottom,
+            )
+            .into(),
+            row![
+                text("Angle").size(11),
+                container(unit_field(
+                    crate::appearance::text_input("120", &self.tab.chain_angle_input)
+                        .on_input(Message::ChainAngle),
+                    "°",
+                ))
+                .width(UNIT_FIELD),
+            ]
+            .spacing(4)
+            .align_y(Alignment::Center)
+            .into(),
+            self.bond_constraints(),
+        ]
     }
 
     fn graphic_tool_options(
         &self,
         kind: reshiki::graphics::GraphicKind,
-    ) -> (Vec<Element<'_, Message>>, &'static str) {
+    ) -> Vec<Element<'_, Message>> {
         use reshiki::graphics::GraphicKind as G;
         let chooser: Element<'_, Message> = match kind {
             G::Symbol(k) => {
@@ -1350,36 +1347,12 @@ impl App {
             options.push(self.arc_presets(false));
         }
         if matches!(kind, G::Orbital(_)) {
-            options.push(
-                hover_hint(
-                    checkbox(self.tab.snap_orbitals)
-                        .label("Snap to atoms")
-                        .on_toggle(|snap| Message::Graphics(super::graphics::Action::SnapOrbitals(snap)))
-                        .size(14)
-                        .text_size(11),
-                    "Snap the orbital node to the nearest atom · Hold Option/Alt for free placement",
-                    tooltip::Position::Bottom,
-                )
-                .into(),
-            );
+            options.push(self.snap_orbitals_toggle());
         }
-        (
-            options,
-            match kind {
-                G::Symbol(_) => "Click to place/attach · Drag to position · Escape cancels",
-                G::Orbital(_) => {
-                    "Drag from node · Shift snaps angle · Option/Alt bypasses atom snap"
-                }
-                G::Arc => "Drag an ellipse frame · Shift makes it circular · Escape cancels",
-                G::Path => {
-                    "Drag first segment · Click line / drag curve · Click first node to close"
-                }
-                _ => "Drag to draw · Shift constrains · Escape cancels",
-            },
-        )
+        options
     }
 
-    fn ring_tool_options(&self) -> (Vec<Element<'_, Message>>, std::borrow::Cow<'static, str>) {
+    fn ring_tool_options(&self) -> Vec<Element<'_, Message>> {
         use reshiki::rings::Preset;
         let preset = if let Tool::RingPreset(p) = self.tool {
             p
@@ -1399,12 +1372,7 @@ impl App {
             .into(),
         ];
         if preset != Preset::Regular {
-            let hint = if preset == Preset::Cyclopentadiene {
-                "Click / drag · Alt connects · Shift swaps double bonds"
-            } else {
-                "Click / drag · Alt connects by a bond"
-            };
-            return (options, hint.into());
+            return options;
         }
         options.extend([
             text("Size").size(11).style(muted_text).into(),
@@ -1433,14 +1401,10 @@ impl App {
             .align_y(Alignment::Center)
             .into(),
         ]);
-        let hint = format!(
-            "Click / drag to attach · {} keeps ring size",
-            keys(Modifiers::SHIFT, "R")
-        );
-        (options, hint.into())
+        options
     }
 
-    fn tilt_tool_options(&self) -> (Vec<Element<'_, Message>>, &'static str) {
+    fn tilt_tool_options(&self) -> Vec<Element<'_, Message>> {
         let enabled = crate::canvas::tilt::available(&self.tab.doc, &self.tab.selected);
         let mut tilts = row![].spacing(4);
         for (label, transform) in [
@@ -1455,22 +1419,19 @@ impl App {
             );
         }
         let depth = Message::InspectorAction(super::inspector::Action::DepthBonds);
-        (
-            vec![
-                tilts.into(),
-                hover_hint(
-                    command("Front bonds", depth.clone()).on_press_maybe(enabled.then_some(depth)),
-                    "Emphasize front bonds using the retained projection depth",
-                    tooltip::Position::Bottom,
-                )
-                .into(),
-                done("Done"),
-            ],
-            "Drag to tilt · Shift: 15°",
-        )
+        vec![
+            tilts.into(),
+            hover_hint(
+                command("Front bonds", depth.clone()).on_press_maybe(enabled.then_some(depth)),
+                "Emphasize front bonds using the retained projection depth",
+                tooltip::Position::Bottom,
+            )
+            .into(),
+            done("Done"),
+        ]
     }
 
-    fn selection_tool_options(&self, summary: bool) -> (Vec<Element<'_, Message>>, &'static str) {
+    fn selection_tool_options(&self, summary: bool) -> Vec<Element<'_, Message>> {
         let mut options = Vec::new();
         if summary && self.keyboard_drawing_active() {
             options.push(
@@ -1512,14 +1473,7 @@ impl App {
                 .into(),
             );
         }
-        (
-            options,
-            if self.tool == Tool::Lasso {
-                "Draw around objects · Shift adds · Option drag removes"
-            } else {
-                "Double-click selects molecule · Shift-click adds"
-            },
-        )
+        options
     }
 
     pub(super) fn inspector_width(&self) -> f32 {
@@ -1893,13 +1847,18 @@ impl App {
         let empty = matches.is_empty();
         body = body.push(horizontal_line()).push(
             text(format!(
-                "{} · {} templates",
+                "{} · {} {}",
                 if state.collection == "All collections" {
                     "Results"
                 } else {
                     &state.collection
                 },
-                matches.len()
+                matches.len(),
+                if matches.len() == 1 {
+                    "template"
+                } else {
+                    "templates"
+                }
             ))
             .size(11)
             .style(muted_text),

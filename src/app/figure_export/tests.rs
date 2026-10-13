@@ -33,7 +33,7 @@ fn office_svg_uses_figure_snapshot_without_changing_selection_or_document() {
     let _task = app.update(Message::Export("svg-office"));
     assert!(app.figure_exporting);
     assert!(!app.tab.busy);
-    assert_eq!(app.status, "Preparing SVG · Office picture export…");
+    assert_eq!(app.status, "Preparing SVG for Office export…");
     assert_eq!(app.tab.doc, snapshot);
     assert_eq!(app.tab.selected, vec![a]);
 }

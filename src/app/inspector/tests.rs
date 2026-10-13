@@ -548,10 +548,7 @@ async fn figure_export_buttons_publish_readable_labels() -> Result<(), String> {
     let (mut app, _) = App::new();
     for (format, label) in [
         (FigureFormat::Svg, "Export SVG figure"),
-        (
-            FigureFormat::SvgOffice,
-            "Export SVG · Office picture figure",
-        ),
+        (FigureFormat::SvgOffice, "Export SVG for Office figure"),
     ] {
         let _ = app.update(Message::InspectorAction(Action::Figure(format)));
         let size = iced::Size::new(520., 720.);

@@ -44,6 +44,9 @@ pub(super) use state::State;
 const STALE_NOTICE: &str = "Molecular chemistry changed; run prediction again";
 /// The status while nothing predictable is selected: an empty state, not an error.
 const EMPTY_STATUS: &str = "NMR · Select a molecule";
+/// The status bar shows the first line; its tooltip shows both.
+const COPIED_STATUS: &str =
+    "Copied predicted NMR shifts\nIncludes the method, conditions and data attribution";
 
 /// The status summary of an accepted report, e.g. `¹H NMR · 3 of 3 atoms predicted`.
 fn summary(nucleus: Nucleus, supported: usize, total: usize) -> String {
@@ -290,8 +293,7 @@ impl App {
 
     fn nmr_copy(&mut self) -> Task<Message> {
         if let Some(report) = &self.tab.nmr.job.result {
-            self.status =
-                "Copied predicted NMR shifts with method, conditions and data attribution".into();
+            self.status = COPIED_STATUS.into();
             return iced::clipboard::write(engine::to_tsv(report));
         }
         Task::none()

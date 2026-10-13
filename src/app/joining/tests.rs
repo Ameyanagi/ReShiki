@@ -781,7 +781,7 @@ fn coordination_status_pins_added_and_duplicate_with_and_without_a_mark() {
         (
             Coordination::Added(Document::default()),
             true,
-            "Marked donor → metal contact added in place · Undo removes it",
+            "Marked donor → metal contact added · Undo removes it",
         ),
         (
             Coordination::AlreadyPresent,

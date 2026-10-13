@@ -88,7 +88,7 @@ impl std::fmt::Display for FigureFormat {
         f.write_str(match self {
             Self::Pdf => "PDF",
             Self::Svg => "SVG",
-            Self::SvgOffice => "SVG · Office picture",
+            Self::SvgOffice => "SVG for Office",
             Self::Png => "PNG",
             #[cfg(windows)]
             Self::Emf => "EMF for Office",

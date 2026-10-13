@@ -16,10 +16,10 @@ const ORBITAL_PLACEMENT_HINT: &str = concat!(
     "Shift snaps to 15°. Option/Alt bypasses atom snapping. ",
     "Group with a molecule to move them together."
 );
+pub(super) const SNAP_ORBITALS_LABEL: &str = "Snap to atoms";
 const SNAP_ORBITALS_HINT: &str = concat!(
-    "Snap the orbital node to the nearest atom. ",
-    "Hold Option/Alt for free placement inside the snap radius. ",
-    "This setting applies to new orbitals."
+    "Snap the orbital node to the nearest atom · ",
+    "Hold Option/Alt to place freely · Applies to new orbitals"
 );
 
 #[cfg(test)]
@@ -83,6 +83,20 @@ impl App {
             Action::Sides(sides) => self.set_graphic_sides(sides),
             Action::Path(action) => self.path_action(action),
         }
+    }
+    /// The orbital tool's one Snap to atoms option, in the context row like
+    /// Ring's Aromatic; `options_width` measures its label.
+    pub(super) fn snap_orbitals_toggle(&self) -> Element<'_, Message> {
+        hover_hint(
+            checkbox(self.tab.snap_orbitals)
+                .label(SNAP_ORBITALS_LABEL)
+                .on_toggle(|snap| Message::Graphics(Action::SnapOrbitals(snap)))
+                .size(14)
+                .text_size(11),
+            SNAP_ORBITALS_HINT,
+            tooltip::Position::Bottom,
+        )
+        .into()
     }
     pub(super) fn graphic_panel(&self) -> Element<'_, Message> {
         use reshiki::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};
@@ -227,15 +241,6 @@ impl App {
                         .padding(6)
                         .width(Length::Fill),
                         ORBITAL_PLACEMENT_HINT,
-                        tooltip::Position::Top,
-                    ))
-                    .push(hover_hint(
-                        checkbox(self.tab.snap_orbitals)
-                            .label("Snap to atoms")
-                            .on_toggle(|snap| Message::Graphics(Action::SnapOrbitals(snap)))
-                            .size(14)
-                            .text_size(12),
-                        SNAP_ORBITALS_HINT,
                         tooltip::Position::Top,
                     ))
                     .push(

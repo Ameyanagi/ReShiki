@@ -1161,7 +1161,7 @@ fn repeated_marked_coordination_reports_duplicate_without_another_history_frame(
     let original = app.tab.doc.clone();
     let history = app.tab.history.undo_frames().len();
     for status in [
-        "Marked donor → metal contact added in place · Undo removes it",
+        "Marked donor → metal contact added · Undo removes it",
         "This marked donor is already coordinated to that metal",
     ] {
         let before = app.tab.doc.clone();

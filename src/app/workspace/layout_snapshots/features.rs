@@ -536,7 +536,7 @@ fn upper_pair(app: &mut App) {
     let _ = app.update(Message::ArrowStyle(reshiki::arrows::Preset::Curved));
 }
 
-/// Attach targets: the first click picked the methoxide oxygen.
+/// Attach ends to atoms and bonds: the first click picked the methoxide oxygen.
 fn mechanism_source(app: &mut App, _: &Driver<'_>) {
     upper_pair(app);
     let _ = app.update(Message::Canvas(Edit::ArrowTarget(
@@ -658,7 +658,7 @@ fn porphine(app: &mut App, _: &Driver<'_>) {
     )));
 }
 
-/// The figure format menu with SVG · Office picture chosen.
+/// The figure format menu with SVG for Office chosen.
 fn export_office_svg(app: &mut App, _: &Driver<'_>) {
     ethyl_acetate(app);
     select(app, vec![]);

@@ -51,6 +51,7 @@ After a keyboard step, a stationary pointer does not steal its new target.
 | l                             | Enter Cl at an atom or empty hotspot; place the double line left at a bond   |
 | Enter at an atom              | Edit its label, including after a ring selected several atoms                |
 | [ / ]                         | Mark an atom / connect the active atom to the marked atom with a single bond |
+| }                             | Coordinate the marked donor atom to the active metal (dative bond)           |
 | F8 / Keyboard drawing control | Turn keyboard drawing off for this tab; classic arrow nudging returns        |
 | F8 when off                   | Turn it back on and return to Select                                         |
 | Escape                        | Ordinary cancel/return to Select; preserve this tab's on/off choice          |
@@ -242,7 +243,7 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 | Cmd/Ctrl+Shift+D                           | Start 3D optimization (MMFF94, MMFF94s, or UFF); preview before Apply                     |
 | Cmd/Ctrl+Shift+Right                       | Add a reaction arrow and a copy of the selected molecule to its right                     |
 | Space with Select active                   | Select the whole most recently edited molecule                                            |
-| Cmd/Ctrl+J                                 | Join selected atoms or bonds                                                              |
+| Cmd/Ctrl+J                                 | Join two fragments, merge three or more atoms, or connect a donor to a metal              |
 | Cmd/Ctrl+Shift+K                           | Preview cleanup                                                                           |
 | Cmd/Ctrl+L / E                             | Toggle fixed bond length / fixed angles                                                   |
 | Option/Alt-drag                            | Temporarily draw or move freely, without bond constraints or smart guides                 |

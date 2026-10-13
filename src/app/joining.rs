@@ -31,22 +31,20 @@ impl State {
     }
 }
 
-const CONNECT_DETAIL: &str =
-    "Click a destination atom to add a single bond. Drag from that atom to set the direction.";
-const SHARE_ATOM_DETAIL: &str = concat!(
-    "Click a matching destination atom to merge the two atoms. ",
-    "Drag from it to choose the orientation."
-);
-const FUSE_BOND_DETAIL: &str =
-    "Click a matching destination bond to share its two atoms. Drag from it to choose the side.";
-const ATTACH_INTRO: &str =
-    "Choose the atom or bond on this fragment to use as its attachment point.";
+const CONNECT_DETAIL: &str = "Click a destination atom to add a single bond.";
+const SHARE_ATOM_DETAIL: &str = "Click a matching atom to merge the two atoms.";
+const FUSE_BOND_DETAIL: &str = "Click a matching bond to share its two atoms.";
+const ATTACH_INTRO: &str = "Pick the attachment atom or bond in the preview.";
 const COORDINATION_INTRO: &str =
     "Pick the donor (N, O, S or P) in the preview, then click a metal on the drawing.";
 /// The full donor, chelate and stereo notes are in docs/fragment-joining.md.
 const COORDINATION_HINT: &str = "Atoms stay in place · Escape cancels · One Undo step per contact";
-const JOIN_HINT: &str =
-    "Shift/Ctrl drag snaps the direction. Escape cancels. Joining is one Undo step.";
+/// Dragging from the destination orients the fragment in every join mode.
+const JOIN_HINT: &str = "Drag to orient · Shift/Ctrl snaps · Escape cancels";
+
+/// What Join (⌘J) does, in the row and menu tooltip and in Help.
+pub(super) const JOIN_COMMAND_HINT: &str =
+    "Join two fragments, merge three or more atoms, or connect a donor to a metal";
 
 /// The wording shared by the inspector panel and the canvas bar.
 struct JoinModeTexts {
@@ -179,7 +177,7 @@ impl App {
             RowCommand {
                 label: "Join",
                 menu: "Join selected atoms or bonds",
-                hint: "Join two fragments, merge three or more atoms, or connect a donor to a metal",
+                hint: JOIN_COMMAND_HINT,
                 message: Message::Shortcut(shortcuts::Action::Join),
                 enabled: active && atoms && self.tab.selected.len() >= 2,
             },
@@ -323,9 +321,9 @@ impl App {
                         self.inspector_tab = InspectorTab::Properties;
                         self.tab.fit_to_view = false;
                         let status = if mode == Connection::Coordinate {
-                            "Choose the donor N/O/S/P in the preview, then click the metal. All positions are retained."
+                            "Pick a donor, then click a metal"
                         } else {
-                            "Choose the source atom or bond in the preview, then its destination on the canvas"
+                            "Pick an attachment point, then click a destination"
                         };
                         self.status = status.into();
                         self.error = false;
@@ -461,9 +459,7 @@ pub(super) fn coordination_status(outcome: &Coordination, marked: bool) -> &'sta
     match (outcome, marked) {
         (Coordination::Added(_), false) => CONTACT_ADDED,
         (Coordination::AlreadyPresent, false) => "This donor is already coordinated to that metal",
-        (Coordination::Added(_), true) => {
-            "Marked donor → metal contact added in place · Undo removes it"
-        }
+        (Coordination::Added(_), true) => "Marked donor → metal contact added · Undo removes it",
         (Coordination::AlreadyPresent, true) => {
             "This marked donor is already coordinated to that metal"
         }

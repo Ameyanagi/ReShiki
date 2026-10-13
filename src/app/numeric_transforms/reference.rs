@@ -416,12 +416,13 @@ impl App {
         self.commit_reference(candidate, selected)
     }
     fn start_stretch_drag(&mut self, plan: &Stretch) {
-        self.select_tool(Tool::StretchBond {
+        let tool = Tool::StretchBond {
             fixed: plan.fixed,
             moving: plan.moving,
-        });
+        };
+        self.select_tool(tool);
         self.tab.numeric_transforms.reference.drag_epoch = Some(self.tab.file_epoch);
-        self.status = "Drag the moving end or its branch along the bond · Escape cancels".into();
+        self.status = tool.hint().into();
         self.error = false;
     }
     pub(super) fn reference_transform_panel(&self) -> Element<'_, Message> {
