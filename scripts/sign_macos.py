@@ -7,6 +7,7 @@ import secrets
 import shlex
 import subprocess
 import tempfile
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -30,6 +31,28 @@ def private_run(command):
 
 def run(command):
     return subprocess.run([str(arg) for arg in command], check=True)
+
+
+# Apple accepts notarization, but stapler then needs Apple's ticket service.
+# The hosted Intel runners lose that connection often (stapler exit 68), so
+# repeat the idempotent staple and validate steps before failing the build.
+STAPLER_ATTEMPTS = 4
+STAPLER_DELAY_SECONDS = 20
+
+
+def stapler(action, target, *, sleep=time.sleep):
+    for attempt in range(1, STAPLER_ATTEMPTS + 1):
+        try:
+            return run(["xcrun", "stapler", action, target])
+        except subprocess.CalledProcessError as error:
+            if attempt == STAPLER_ATTEMPTS:
+                raise
+            print(
+                f"stapler {action} failed (exit {error.returncode}); "
+                f"retrying in {STAPLER_DELAY_SECONDS} s",
+                flush=True,
+            )
+            sleep(STAPLER_DELAY_SECONDS)
 
 
 @contextmanager
@@ -135,7 +158,7 @@ def verify_app(app):
         or "Timestamp=" not in details
     ):
         raise ValueError("Missing timestamped Developer ID signature with Hardened Runtime")
-    run(["xcrun", "stapler", "validate", app])
+    stapler("validate", app)
     run(["spctl", "--assess", "--type", "execute", "--verbose=2", app])
 
 
@@ -166,7 +189,7 @@ def sign_and_notarize(app):
             submission = directory / "submission.zip"
             run(["ditto", "-c", "-k", "--keepParent", app, submission])
             notarize(submission, keychain)
-            run(["xcrun", "stapler", "staple", app])
+            stapler("staple", app)
             verify_app(app)
 
 
@@ -215,9 +238,9 @@ def sign_disk_image(image):
                 ]
             )
             notarize(image, keychain)
-            run(["xcrun", "stapler", "staple", image])
+            stapler("staple", image)
             run(["codesign", "--verify", "--strict", image])
-            run(["xcrun", "stapler", "validate", image])
+            stapler("validate", image)
             run(
                 [
                     "spctl",
