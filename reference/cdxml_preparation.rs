@@ -1,3 +1,8 @@
+#[path = "support/reference_dative.rs"]
+mod reference_dative;
+#[path = "support/reference_diagnostics.rs"]
+mod reference_diagnostics;
+
 use anyhow::Context;
 use reshiki::chemistry::cdxml::{self, PreparationStage};
 use serde::Deserialize;
@@ -71,37 +76,6 @@ fn observed(value: &cdxml::PreparedCdxml) -> anyhow::Result<Value> {
     }
     Ok(result)
 }
-fn mismatch(actual: &Value, expected: &Value, path: &str) -> Option<String> {
-    match (actual, expected) {
-        (Value::Object(a), Value::Object(b)) if a.len() == b.len() => {
-            for (k, v) in b {
-                if let Some(x) = a.get(k) {
-                    if let Some(message) = mismatch(x, v, &format!("{path}.{k}")) {
-                        return Some(message);
-                    }
-                } else {
-                    return Some(format!("{path}.{k} missing"));
-                }
-            }
-            return None;
-        }
-        (Value::Array(a), Value::Array(b)) if a.len() == b.len() => {
-            for (i, (x, y)) in a.iter().zip(b).enumerate() {
-                if let Some(message) = mismatch(x, y, &format!("{path}[{i}]")) {
-                    return Some(message);
-                }
-            }
-            return None;
-        }
-        (Value::Number(a), Value::Number(b)) if a.is_f64() || b.is_f64() => {
-            return (a.as_f64().map(f64::to_bits) != b.as_f64().map(f64::to_bits))
-                .then(|| format!("{path}: {actual} != {expected}"));
-        }
-        _ if actual == expected => return None,
-        _ => (),
-    }
-    Some(format!("{path}: {actual} != {expected}"))
-}
 #[test]
 fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -158,7 +132,16 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
         match (actual, case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
-                if let Some(error) = mismatch(&observed(&actual)?, &expected, "") {
+                let expected = reference_dative::preparation(&case.text, expected.clone())
+                    .unwrap_or_else(|error| {
+                        failures.push(format!("{}: dative expectation: {error}", case.name));
+                        expected
+                    });
+                for error in reference_diagnostics::numeric_differences(
+                    &observed(&actual)?,
+                    &expected,
+                    "prepared",
+                ) {
                     failures.push(format!("{}: {error}", case.name));
                 }
             }
@@ -216,16 +199,7 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
     eprintln!(
         "Original complete application: {application_accepted} valid Documents, {application_rejected} rejected imports"
     );
-    anyhow::ensure!(
-        failures.is_empty(),
-        "{}",
-        failures
-            .iter()
-            .take(35)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+    reference_diagnostics::report("CDXML preparation", &failures)?;
     assert!(accepted > 2000 && errors > 160 && restricted == 4 && stages == 6);
     assert_eq!((application_accepted, application_rejected), (6, 5));
     assert_eq!(extensions, 1);

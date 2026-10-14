@@ -3,10 +3,14 @@ use reshiki::chemistry::{RDKIT_VERSION, cdxml};
 use serde::Deserialize;
 use serde_json::Value;
 use std::{
+    collections::BTreeMap,
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
 };
+
+#[path = "support/reference_dative.rs"]
+mod reference_dative;
 
 #[derive(Deserialize)]
 struct Case {
@@ -18,34 +22,65 @@ struct Case {
     restriction: Option<String>,
     application_accepted: Option<bool>,
 }
-fn difference(a: &Value, b: &Value, path: &str) -> Option<String> {
+fn differences(a: &Value, b: &Value, path: &str, output: &mut Vec<(String, String)>) {
     if a == b {
-        return None;
+        return;
     }
     match (a, b) {
-        (Value::Object(a), Value::Object(b)) if a.len() == b.len() => {
+        (Value::Object(a), Value::Object(b)) => {
             for (key, b) in b {
-                if let Some(d) = difference(
-                    a.get(key).unwrap_or(&Value::Null),
-                    b,
-                    &format!("{path}.{key}"),
-                ) {
-                    return Some(d);
+                let field = format!("{path}.{key}");
+                if let Some(a) = a.get(key) {
+                    differences(a, b, &field, output);
+                } else {
+                    output.push((field.clone(), format!("{field}: missing != {b}")));
                 }
             }
-            return None;
+            for (key, a) in a {
+                if !b.contains_key(key) {
+                    let field = format!("{path}.{key}");
+                    output.push((field.clone(), format!("{field}: {a} != missing")));
+                }
+            }
         }
-        (Value::Array(a), Value::Array(b)) if a.len() == b.len() => {
+        (Value::Array(a), Value::Array(b)) => {
+            if a.len() != b.len() {
+                output.push((
+                    format!("{path}.length"),
+                    format!("{path}.length: {} != {}", a.len(), b.len()),
+                ));
+            }
             for (i, (a, b)) in a.iter().zip(b).enumerate() {
-                if let Some(d) = difference(a, b, &format!("{path}[{i}]")) {
-                    return Some(d);
-                }
+                differences(a, b, &format!("{path}[{i}]"), output);
             }
-            return None;
+            for (i, a) in a.iter().enumerate().skip(b.len()) {
+                let field = format!("{path}[{i}]");
+                output.push((field.clone(), format!("{field}: {a} != missing")));
+            }
+            for (i, b) in b.iter().enumerate().skip(a.len()) {
+                let field = format!("{path}[{i}]");
+                output.push((field.clone(), format!("{field}: missing != {b}")));
+            }
         }
-        _ => (),
+        _ => output.push((path.to_owned(), format!("{path}: {a} != {b}"))),
     }
-    Some(format!("{path}: {a} != {b}"))
+}
+
+fn category(path: &str) -> String {
+    let mut inside_index = false;
+    path.chars()
+        .filter(|&c| {
+            if c == '[' {
+                inside_index = true;
+                true
+            } else if c == ']' {
+                inside_index = false;
+                true
+            } else {
+                !inside_index
+            }
+        })
+        .collect()
 }
 
 #[test]
@@ -69,42 +104,90 @@ fn molecular_cdxml_matches_direct_native_reader() -> anyhow::Result<()> {
     assert_eq!(version["chemdraw"], true);
     let (mut accepted, mut rejected, mut restricted_native, mut restricted_invalid) = (0, 0, 0, 0);
     let mut failures = Vec::new();
+    let mut category_counts = BTreeMap::<String, usize>::new();
+    let mut mismatch_cases = Vec::new();
+    let mut intended_changes = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let result = cdxml::read(&case.text);
-        let failure = if let Some(restriction) = &case.restriction {
+        let actual = result.as_ref().ok().map(serde_json::to_value).transpose()?;
+        let mut case_failures = Vec::new();
+        // Retain the unmodified direct-native observation. The shared contract
+        // validates its exact old dative values from source XML before deriving
+        // the documented new values, without consulting the Rust result.
+        let mut intended_expected = case.expected.clone();
+        if let Some(expected) = &case.expected {
+            match reference_dative::normalized_fragments(&case.text, expected.clone()) {
+                Ok(intended) => {
+                    let mut changes = Vec::new();
+                    differences(&intended, expected, "parsed", &mut changes);
+                    if !changes.is_empty() {
+                        intended_changes.push(serde_json::json!({
+                            "name": case.name,
+                            "text": case.text,
+                            "original_expected": expected,
+                            "intended_expected": intended,
+                            "changes": changes,
+                        }));
+                    }
+                    intended_expected = Some(intended);
+                }
+                Err(error) => {
+                    case_failures.push((
+                        "original_dative_contract".to_owned(),
+                        format!("Original dative contract changed: {error:#}"),
+                    ));
+                    intended_expected = None;
+                }
+            }
+        }
+        if let Some(restriction) = &case.restriction {
             // Raw hydrogen order belongs to the pre-normalization stage. Its
             // normalized single-bond case is compared with the native parser.
-            anyhow::ensure!(
-                case.application_accepted == Some(case.name == "restriction/order/hydrogen"),
-                "Application boundary changed for {}: {restriction}",
-                case.name
-            );
+            if case.application_accepted != Some(case.name == "restriction/order/hydrogen") {
+                case_failures.push((
+                    "application_boundary".to_owned(),
+                    format!("Application boundary changed: {restriction}"),
+                ));
+            }
             if case.native_accepted {
                 restricted_native += 1;
             } else {
                 restricted_invalid += 1;
             }
             if result.is_ok() {
-                Some(format!("Accepted intentional restriction: {restriction}"))
-            } else {
-                None
+                case_failures.push((
+                    "accepted_restriction".to_owned(),
+                    format!("Accepted intentional restriction: {restriction}"),
+                ));
             }
         } else {
             match (&result, &case.expected) {
-                (Ok(actual), Some(expected)) => {
+                (Ok(_), Some(_)) => {
                     accepted += 1;
-                    difference(&serde_json::to_value(actual)?, expected, "parsed")
+                    if let Some(expected) = &intended_expected {
+                        differences(
+                            actual.as_ref().unwrap(),
+                            expected,
+                            "parsed",
+                            &mut case_failures,
+                        );
+                    }
                 }
                 (Err(_), None) => {
                     rejected += 1;
-                    None
                 }
-                (Err(error), Some(_)) => Some(format!("Rejected native input: {error}")),
-                (Ok(_), None) => Some(format!("Accepted native failure: {:?}", case.failure)),
+                (Err(error), Some(_)) => case_failures.push((
+                    "rejected_native_input".to_owned(),
+                    format!("Rejected native input: {error}"),
+                )),
+                (Ok(_), None) => case_failures.push((
+                    "accepted_native_failure".to_owned(),
+                    format!("Accepted native failure: {:?}", case.failure),
+                )),
             }
-        };
-        if let Some(failure) = failure {
+        }
+        if !case_failures.is_empty() {
             if failures.is_empty() {
                 std::fs::create_dir_all(root.join("artifacts"))?;
                 std::fs::write(
@@ -115,32 +198,74 @@ fn molecular_cdxml_matches_direct_native_reader() -> anyhow::Result<()> {
                     root.join("artifacts/cdxml-molecular-expected.json"),
                     serde_json::to_vec_pretty(&case.expected)?,
                 )?;
-                if let Ok(actual) = result {
+                std::fs::write(
+                    root.join("artifacts/cdxml-molecular-intended.json"),
+                    serde_json::to_vec_pretty(&intended_expected)?,
+                )?;
+                if let Some(actual) = &actual {
                     std::fs::write(
                         root.join("artifacts/cdxml-molecular-actual.json"),
                         serde_json::to_vec_pretty(&actual)?,
                     )?;
                 }
             }
-            failures.push(format!("{}: {failure}", case.name));
+            for (path, failure) in &case_failures {
+                *category_counts.entry(category(path)).or_default() += 1;
+                failures.push(format!("{}: {failure}", case.name));
+            }
+            mismatch_cases.push(serde_json::json!({
+                "name": case.name,
+                "text": case.text,
+                "expected": case.expected,
+                "intended_expected": intended_expected,
+                "actual": actual,
+                "native_failure": case.failure,
+                "actual_failure": result.as_ref().err().map(ToString::to_string),
+                "restriction": case.restriction,
+                "application_accepted": case.application_accepted,
+                "differences": case_failures,
+            }));
         }
     }
     assert!(child.wait()?.success());
     eprintln!(
         "CDXML: {accepted} native accepted, {rejected} native rejected; {restricted_native} deliberate restrictions of native accepted inputs, {restricted_invalid} restricted native failures"
     );
+    let categories = category_counts
+        .iter()
+        .map(|(name, count)| format!("{name}: {count}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    eprintln!(
+        "{} mismatching cases, {} diagnostics; categories:\n{categories}",
+        mismatch_cases.len(),
+        failures.len()
+    );
+    std::fs::create_dir_all(root.join("artifacts"))?;
+    std::fs::write(
+        root.join("artifacts/cdxml-molecular-failures.txt"),
+        format!("{categories}\n\n{}\n", failures.join("\n")),
+    )?;
+    std::fs::write(
+        root.join("artifacts/cdxml-molecular-mismatches.json"),
+        serde_json::to_vec_pretty(&mismatch_cases)?,
+    )?;
+    std::fs::write(
+        root.join("artifacts/cdxml-molecular-intended-changes.json"),
+        serde_json::to_vec_pretty(&intended_changes)?,
+    )?;
+    eprintln!(
+        "{} independently validated intended dative changes",
+        intended_changes.len()
+    );
     assert!(accepted > 1500);
     assert!(rejected > 0);
     anyhow::ensure!(
         failures.is_empty(),
-        "{} mismatches:\n{}",
+        "{} mismatching cases, {} diagnostics:\n{}",
+        mismatch_cases.len(),
         failures.len(),
-        failures
-            .iter()
-            .take(30)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n")
+        failures.join("\n")
     );
     Ok(())
 }

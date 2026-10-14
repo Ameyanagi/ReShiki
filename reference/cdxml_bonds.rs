@@ -1,5 +1,10 @@
 //! Appearance observations call the original Python helper with independent
 //! native molecules. A second lane supplies the Rust parser's raw fragments.
+#[path = "support/reference_dative.rs"]
+mod reference_dative;
+#[path = "support/reference_diagnostics.rs"]
+mod reference_diagnostics;
+
 use anyhow::Context;
 use reshiki::{
     chemistry::{
@@ -80,7 +85,12 @@ fn matches(
 ) -> anyhow::Result<()> {
     match (actual, expected) {
         (Ok(actual), Some(expected)) => {
-            anyhow::ensure!(actual == expected, "{actual:?} != {expected:?}")
+            let differences = reference_diagnostics::differences(
+                &serde_json::to_value(actual)?,
+                &serde_json::to_value(expected)?,
+                "bonds",
+            );
+            anyhow::ensure!(differences.is_empty(), "{}", differences.join("\n"));
         }
         (Err(actual), None) => {
             anyhow::ensure!(
@@ -148,7 +158,22 @@ fn cdxml_bond_appearance_matches_original_helper() -> anyhow::Result<()> {
             }
             continue;
         }
-        let expected: Option<Vec<Bond>> = case.expected.map(serde_json::from_value).transpose()?;
+        let expected: Option<Vec<Bond>> = case
+            .expected
+            .map(|legacy| {
+                let expected = reference_dative::document_bonds(
+                    &case.text,
+                    legacy.clone(),
+                    &parts,
+                    case.scale,
+                )
+                .unwrap_or_else(|error| {
+                    failures.push(format!("{}: dative expectation: {error}", case.name));
+                    legacy
+                });
+                serde_json::from_value(expected)
+            })
+            .transpose()?;
         if expected.is_some() {
             accepted += 1;
         } else {
@@ -159,8 +184,7 @@ fn cdxml_bond_appearance_matches_original_helper() -> anyhow::Result<()> {
             expected.as_deref(),
             case.error.as_deref(),
             case.error_type.as_deref(),
-        ) && failures.len() < 30
-        {
+        ) {
             failures.push(format!("{}: {error}", case.name));
         }
         if let Some(xml) = &case.parsed_xml {
@@ -172,8 +196,7 @@ fn cdxml_bond_appearance_matches_original_helper() -> anyhow::Result<()> {
                         expected.as_deref(),
                         case.error.as_deref(),
                         case.error_type.as_deref(),
-                    ) && failures.len() < 30
-                    {
+                    ) {
                         failures.push(format!("{} / Rust parser: {error}", case.name));
                     }
                 }
@@ -192,7 +215,7 @@ fn cdxml_bond_appearance_matches_original_helper() -> anyhow::Result<()> {
         "Oracle failed: {}",
         failures.join("\n")
     );
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    reference_diagnostics::report("CDXML bond comparisons", &failures)?;
     assert!(
         accepted > 5000 && rejected > 80 && layer_bounds >= 3 && parsed_cases > 50,
         "Incomplete cases: {accepted}/{rejected}/{layer_bounds}/{parsed_cases}"

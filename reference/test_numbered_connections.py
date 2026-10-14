@@ -36,40 +36,99 @@ class NumberedConnectionTests(unittest.TestCase):
                         "14 15",
                     )
 
+    def test_positive_signed_byte_boundaries_round_trip(self):
+        for number in (1, 12, 127):
+            with self.subTest(number=number):
+                source = (
+                    '<CDXML><n NodeType="ExternalConnectionPoint" '
+                    f'ExternalConnectionNum="{number}"/></CDXML>'
+                )
+                restored = ET.fromstring(from_cdx(to_cdx(source)))
+                node = restored.find("n")
+                self.assertEqual(node.get("NodeType"), "ExternalConnectionPoint")
+                self.assertEqual(node.get("ExternalConnectionNum"), str(number))
+
     def test_malformed_signed_byte_and_wrong_node_are_rejected(self):
         header = to_cdx("<CDXML/>")[:22]
 
-        def frame(number, node_type=12, repeat=False):
+        def frame(number, node_type=12, repeat=False, node_code=0x8004, repeat_type=False):
+            kind = (
+                property_bytes(0x400, struct.pack("<H", node_type))
+                if node_type is not None
+                else b""
+            )
             return (
                 header
-                + struct.pack("<HIHI", 0x8000, 0, 0x8004, 1)
+                + struct.pack("<HIHI", 0x8000, 0, node_code, 1)
                 + property_bytes(0x44B, number)
                 + (property_bytes(0x44B, number) if repeat else b"")
-                + property_bytes(0x400, struct.pack("<H", node_type))
+                + kind
+                + (kind if repeat_type else b"")
                 + b"\0\0" * 3
             )
 
-        self.assertIn('ExternalConnectionNum="1"', from_cdx(frame(b"\1")))
-        for number, kind in [
-            (b"", 12),
-            (b"\1\0", 12),
-            (b"\0", 12),
-            (b"\xff", 12),
-            (b"\x80", 12),
-            (b"\1", 1),
-        ]:
-            with self.subTest(number=number, kind=kind), self.assertRaises(ValueError):
-                from_cdx(frame(number, kind))
+        for number in (1, 12, 127):
+            with self.subTest(binary_number=number):
+                self.assertIn(
+                    f'ExternalConnectionNum="{number}"',
+                    from_cdx(frame(struct.pack("b", number))),
+                )
+        for number in (b"", b"\1\0"):
+            with (
+                self.subTest(number=number),
+                self.assertRaisesRegex(
+                    ValueError, "^Invalid binary number: ExternalConnectionNum$"
+                ),
+            ):
+                from_cdx(frame(number))
+        for number in (b"\0", b"\xff", b"\x80"):
+            with (
+                self.subTest(number=number),
+                self.assertRaisesRegex(
+                    ValueError, "^ExternalConnectionNum must be a positive signed byte$"
+                ),
+            ):
+                from_cdx(frame(number))
+        for node_code, kind in ((0x8004, 1), (0x8001, 12), (0x8005, 12)):
+            with (
+                self.subTest(node_code=node_code, kind=kind),
+                self.assertRaisesRegex(
+                    ValueError, "^ExternalConnectionNum requires an external connection point$"
+                ),
+            ):
+                from_cdx(frame(b"\1", kind, node_code=node_code))
         with self.assertRaisesRegex(ValueError, "unique"):
             from_cdx(frame(b"\1", repeat=True))
-        for kind, number in [
-            ("Element", "1"),
-            ("ExternalConnectionPoint", "0"),
-            ("ExternalConnectionPoint", "128"),
-            ("ExternalConnectionPoint", "1.5"),
-        ]:
-            with self.subTest(kind=kind, number=number), self.assertRaises(ValueError):
-                to_cdx(f'<CDXML><n NodeType="{kind}" ExternalConnectionNum="{number}"/></CDXML>')
+        with self.assertRaisesRegex(ValueError, "unique"):
+            from_cdx(frame(b"\1", repeat_type=True))
+        with self.assertRaisesRegex(ValueError, "unique"):
+            from_cdx(frame(b"\1", node_type=None))
+        for tag, kind in (
+            ("n", None),
+            ("n", "Element"),
+            ("n", "Fragment"),
+            ("page", "ExternalConnectionPoint"),
+            ("b", "ExternalConnectionPoint"),
+        ):
+            with (
+                self.subTest(tag=tag, kind=kind),
+                self.assertRaisesRegex(
+                    ValueError, "^ExternalConnectionNum requires an external connection point$"
+                ),
+            ):
+                owner = f' NodeType="{kind}"' if kind is not None else ""
+                to_cdx(f'<CDXML><{tag}{owner} ExternalConnectionNum="1"/></CDXML>')
+        for number in ("0", "-1", "-128", "128", "255", "1.5", "", "NaN", "inf"):
+            with (
+                self.subTest(number=number),
+                self.assertRaisesRegex(
+                    ValueError, "^ExternalConnectionNum must be a positive signed byte$"
+                ),
+            ):
+                to_cdx(
+                    '<CDXML><n NodeType="ExternalConnectionPoint" '
+                    f'ExternalConnectionNum="{number}"/></CDXML>'
+                )
 
 
 if __name__ == "__main__":

@@ -41,6 +41,10 @@ fn helper(name: &str) -> anyhow::Result<Option<PathBuf>> {
 mod reference_annotations;
 #[path = "support/reference_cdx.rs"]
 mod reference_cdx;
+#[path = "support/reference_dative.rs"]
+mod reference_dative;
+#[path = "support/reference_diagnostics.rs"]
+mod reference_diagnostics;
 
 #[derive(Deserialize)]
 struct Case {
@@ -57,16 +61,15 @@ fn compare(actual: Response, expected: Response) -> anyhow::Result<()> {
     let mut a = serde_json::to_value(actual)?;
     let mut b = serde_json::to_value(expected)?;
     for key in ["mass", "exact_mass", "logp", "tpsa"] {
-        if let (Some(x), Some(y)) = (a["analysis"][key].as_f64(), b["analysis"][key].as_f64()) {
-            anyhow::ensure!(
-                (x - y).abs() <= y.abs().max(1.) * 1e-12,
-                "{key}: {x} != {y}"
-            );
+        if let (Some(x), Some(y)) = (a["analysis"][key].as_f64(), b["analysis"][key].as_f64())
+            && (x - y).abs() <= y.abs().max(1.) * 1e-12
+        {
             a["analysis"][key] = Value::Null;
             b["analysis"][key] = Value::Null;
         }
     }
-    anyhow::ensure!(a == b, "Full response changed:\nactual={a}\nexpected={b}");
+    let differences = reference_diagnostics::differences(&a, &b, "response");
+    anyhow::ensure!(a == b, "{}", differences.join("\n"));
     Ok(())
 }
 
@@ -186,6 +189,7 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
     let lines = BufReader::new(process.stdout.take().context("Missing reference output")?).lines();
     let (mut accepted, mut rejected, mut restricted) = (0, 0, 0);
     let mut failures = Vec::new();
+    let mut dative_extensions = 0;
     for line in lines {
         let record: Value = serde_json::from_str(&line?)?;
         if record.get("name").is_none() {
@@ -232,25 +236,70 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
             restricted += 1;
             continue;
         }
+        let projected = if format == "cdxml" {
+            case.expected.as_ref().and_then(|legacy| {
+                let original = wire_response(legacy.clone());
+                if original.as_ref().err().is_some_and(|error| {
+                    error.to_string() == "Unsupported bond appearance for this order"
+                }) {
+                    match reference_dative::has_projection(&case.text) {
+                        Ok(true) => {
+                            let adapted = reference_dative::response(&case.text, legacy.clone());
+                            if let Err(error) = &adapted {
+                                failures
+                                    .push(format!("{}: dative expectation: {error}", case.name));
+                            }
+                            // A correctly adapted raw response may still fail
+                            // an unrelated original document boundary.
+                            return Some(adapted.and_then(wire_response));
+                        }
+                        Ok(false) => (),
+                        Err(error) => {
+                            failures.push(format!("{}: dative classification: {error}", case.name))
+                        }
+                    }
+                }
+                None
+            })
+        } else {
+            None
+        };
         let expected = case.expected.and_then(|v| wire_response(v).ok());
         let error = match (actual, expected) {
+            (Ok(Outcome::Complete(a)), None) if projected.is_some() => {
+                // The original complete response exists, but its order-5 paint
+                // fails the exact projection validation above. Derive only the
+                // documented dative fields before comparing the whole response.
+                accepted += 1;
+                dative_extensions += 1;
+                projected
+                    .unwrap()
+                    .and_then(|expected| compare(*a, expected))
+                    .err()
+                    .map(|error| error.to_string())
+            }
             (Ok(Outcome::Complete(a)), None) if format == "cdxml" => {
                 // Drawing interchange now retains unresolved chemical input.
                 // Strict molecular preparation must still reject the same
                 // assignment, and no properties may be presented as validated.
-                let strict = reshiki::chemistry::cdxml::prepare_cdxml(&case.text)
-                    .err()
-                    .context("Unexpected relaxation of drawing validation")?;
-                anyhow::ensure!(matches!(
-                    strict.cause,
-                    reshiki::chemistry::cdxml::PreparationCause::Sanitization(_)
-                ));
-                anyhow::ensure!(a.analysis.is_none() && !a.warnings.is_empty());
-                let doc = a.document.context("Missing retained drawing")?;
-                doc.validate().map_err(anyhow::Error::msg)?;
-                anyhow::ensure!(reshiki::chemistry::document::prepare(&doc).is_err());
+                let check = (|| -> anyhow::Result<()> {
+                    let strict = reshiki::chemistry::cdxml::prepare_cdxml(&case.text)
+                        .err()
+                        .context("Unexpected relaxation of drawing validation")?;
+                    anyhow::ensure!(matches!(
+                        strict.cause,
+                        reshiki::chemistry::cdxml::PreparationCause::Sanitization(_)
+                    ));
+                    anyhow::ensure!(a.analysis.is_none() && !a.warnings.is_empty());
+                    let doc = a.document.context("Missing retained drawing")?;
+                    doc.validate().map_err(anyhow::Error::msg)?;
+                    anyhow::ensure!(reshiki::chemistry::document::prepare(&doc).is_err());
+                    Ok(())
+                })();
                 accepted += 1;
-                None
+                check
+                    .err()
+                    .map(|error| format!("document rejected: {error}; Rust accepted"))
             }
             (Ok(Outcome::Complete(a)), Some(b)) => {
                 accepted += 1;
@@ -287,11 +336,13 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
     println!(
         "Native {format} import: {accepted} complete responses, {rejected} matching failures, {restricted} explicit bounds"
     );
-    anyhow::ensure!(
-        failures.is_empty(),
-        "{} response differences; see artifacts/native-import-{format}-failures.log",
-        failures.len()
-    );
+    if format == "cdxml" {
+        println!("Projected-dative response extensions: {dative_extensions}");
+    }
+    reference_diagnostics::report(&format!("Native {format} import"), &failures)?;
+    if format == "cdxml" {
+        assert_eq!(dative_extensions, 9);
+    }
     anyhow::ensure!(
         accepted > 50 && rejected > 0,
         "Insufficient complete-response cases"

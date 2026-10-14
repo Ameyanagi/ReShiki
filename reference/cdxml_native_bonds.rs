@@ -1,3 +1,8 @@
+#[path = "support/reference_dative.rs"]
+mod reference_dative;
+#[path = "support/reference_diagnostics.rs"]
+mod reference_diagnostics;
+
 use anyhow::Context;
 use reshiki::{
     chemistry::{
@@ -80,6 +85,7 @@ fn original_native_bonds_keep_wide_values_until_document_conversion() -> anyhow:
     let header: Value = serde_json::from_str(&lines.next().context("Missing oracle header")??)?;
     assert_eq!(header["rdkit_version"], reshiki::chemistry::RDKIT_VERSION);
     let (mut accepted, mut rejected, mut narrowed, mut boundary) = (0, 0, 0, 0);
+    let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let parts = case
@@ -94,7 +100,23 @@ fn original_native_bonds_keep_wide_values_until_document_conversion() -> anyhow:
         match (actual, case.expected) {
             (Ok(bonds), Some(expected)) => {
                 accepted += 1;
-                assert_eq!(serde_json::to_value(&bonds)?, expected, "{}", case.name);
+                let expected = reference_dative::native_bonds(
+                    &case.text,
+                    expected.clone(),
+                    &parts,
+                    case.scale,
+                )
+                .unwrap_or_else(|error| {
+                    failures.push(format!("{}: dative expectation: {error}", case.name));
+                    expected
+                });
+                for difference in reference_diagnostics::differences(
+                    &serde_json::to_value(&bonds)?,
+                    &expected,
+                    "native",
+                ) {
+                    failures.push(format!("{}: {difference}", case.name));
+                }
                 let converted = bonds
                     .into_iter()
                     .map(cdxml::bonds::NativeBond::into_document)
@@ -102,24 +124,47 @@ fn original_native_bonds_keep_wide_values_until_document_conversion() -> anyhow:
                 match (converted, case.document) {
                     (Ok(bonds), Some(expected)) => {
                         narrowed += 1;
+                        let expected = reference_dative::document_bonds(
+                            &case.text,
+                            expected.clone(),
+                            &parts,
+                            case.scale,
+                        )
+                        .unwrap_or_else(|error| {
+                            failures.push(format!("{}: dative expectation: {error}", case.name));
+                            expected
+                        });
                         let expected: Vec<Bond> = serde_json::from_value(expected)?;
-                        assert_eq!(bonds, expected, "{}", case.name);
+                        for difference in reference_diagnostics::differences(
+                            &serde_json::to_value(&bonds)?,
+                            &serde_json::to_value(&expected)?,
+                            "document.bonds",
+                        ) {
+                            failures.push(format!("{}: {difference}", case.name));
+                        }
                     }
                     (Err(_), None) => boundary += 1,
                     (actual, expected) => {
-                        anyhow::bail!("{}: boundary mismatch {actual:?} / {expected:?}", case.name)
+                        failures.push(format!(
+                            "{}: boundary mismatch {actual:?} / {expected:?}",
+                            case.name
+                        ));
                     }
                 }
             }
             (Err(error), None) => {
                 rejected += 1;
-                assert_eq!(Some(error.to_string()), case.failure, "{}", case.name);
+                if Some(error.to_string()) != case.failure {
+                    failures.push(format!(
+                        "{}: error mismatch {error} / {:?}",
+                        case.name, case.failure
+                    ));
+                }
             }
-            (actual, expected) => anyhow::bail!(
+            (actual, expected) => failures.push(format!(
                 "{}: {actual:?} / {expected:?}; {:?}",
-                case.name,
-                case.failure
-            ),
+                case.name, case.failure
+            )),
         }
     }
     anyhow::ensure!(child.wait()?.success(), "Oracle failed");
@@ -127,5 +172,6 @@ fn original_native_bonds_keep_wide_values_until_document_conversion() -> anyhow:
         "Native bonds: {accepted} exact helpers, {rejected} exact errors; {narrowed} checked bonds, {boundary} final boundary rejections"
     );
     assert!(accepted > 5000 && rejected > 80 && boundary > 40);
+    reference_diagnostics::report("CDXML native bonds", &failures)?;
     Ok(())
 }

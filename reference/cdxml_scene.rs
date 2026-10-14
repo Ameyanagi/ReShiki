@@ -1,3 +1,8 @@
+#[path = "support/reference_dative.rs"]
+mod reference_dative;
+#[path = "support/reference_diagnostics.rs"]
+mod reference_diagnostics;
+
 use anyhow::Context;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reshiki::{
@@ -29,44 +34,6 @@ struct Case {
     document_error: Option<String>,
     restriction: Option<String>,
     molecular_extension: Option<Value>,
-}
-fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
-    match (actual, expected) {
-        (Value::Number(a), Value::Number(b))
-            if a.as_f64().map(f64::to_bits) == b.as_f64().map(f64::to_bits) =>
-        {
-            return None;
-        }
-        (Value::Object(a), Value::Object(b)) if a.len() == b.len() => {
-            for (key, value) in b {
-                if let Some(d) = difference(
-                    a.get(key).unwrap_or(&Value::Null),
-                    value,
-                    &format!("{path}.{key}"),
-                ) {
-                    return Some(d);
-                }
-            }
-            return None;
-        }
-        (Value::Array(a), Value::Array(b)) if a.len() == b.len() => {
-            for (i, (a, b)) in a.iter().zip(b).enumerate() {
-                if let Some(d) = difference(a, b, &format!("{path}[{i}]")) {
-                    return Some(d);
-                }
-            }
-            return None;
-        }
-        _ if !actual.is_number()
-            && !actual.is_array()
-            && !actual.is_object()
-            && actual == expected =>
-        {
-            return None;
-        }
-        _ => (),
-    }
-    Some(format!("{path}: {actual} != {expected}"))
 }
 // Exact production boundary: the response line was parsed into Value first.
 fn wire_document(mut value: Value) -> anyhow::Result<Document> {
@@ -107,6 +74,7 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
     let (mut accepted, mut rejected, mut converted, mut bounds, mut restrictions) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
     let mut extensions = 0;
+    let mut dative_extensions = 0;
     let (mut restricted_native, mut restricted_documents, mut final_only_rejected) = (0, 0, 0);
     for line in lines {
         let value: Value = serde_json::from_str(&line?)?;
@@ -151,7 +119,16 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
         match (&actual, &case.scene) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
-                if let Some(d) = difference(&serde_json::to_value(actual)?, expected, "scene") {
+                let expected = reference_dative::scene(&case.text, expected.clone())
+                    .unwrap_or_else(|error| {
+                        failures.push(format!("{}: dative expectation: {error}", case.name));
+                        expected.clone()
+                    });
+                for d in reference_diagnostics::numeric_differences(
+                    &serde_json::to_value(actual)?,
+                    &expected,
+                    "scene",
+                ) {
                     failures.push(format!("{} {d}", case.name));
                 }
             }
@@ -167,12 +144,35 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
         let actual = actual.and_then(|s| s.into_document());
         let expected = case
             .document
-            .map(wire_document)
+            .map(|legacy| {
+                let original = wire_document(legacy.clone());
+                let adapted = reference_dative::document(&case.text, legacy.clone())
+                    .unwrap_or_else(|error| {
+                        failures.push(format!("{}: dative expectation: {error}", case.name));
+                        legacy
+                    });
+                let intended = wire_document(adapted);
+                if let Err(original_error) = original
+                    && intended.is_ok()
+                {
+                    if !reference_dative::has_projection(&case.text).unwrap_or(false)
+                        || original_error.to_string()
+                            != "Unsupported bond appearance for this order"
+                    {
+                        failures.push(format!(
+                            "{}: unexpected original dative document failure",
+                            case.name
+                        ));
+                    }
+                    dative_extensions += 1;
+                }
+                intended
+            })
             .unwrap_or_else(|| Err(anyhow::anyhow!("{:?}", case.document_error)));
         match (actual, expected) {
             (Ok(actual), Ok(expected)) => {
                 converted += 1;
-                if let Some(d) = difference(
+                for d in reference_diagnostics::numeric_differences(
                     &serde_json::to_value(actual.document)?,
                     &serde_json::to_value(expected)?,
                     "document",
@@ -198,15 +198,18 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
         "scene: {accepted} native accepts, {rejected} native rejects, {converted} document accepts, {bounds} document rejects, {restrictions} explicit restrictions; {} mismatches",
         failures.len()
     );
-    for failure in failures.iter() {
-        eprintln!("{failure}");
-    }
-    assert!(failures.is_empty());
+    eprintln!(
+        "Projected-dative document extensions: {dative_extensions}; final-only rejections: {final_only_rejected}"
+    );
+    reference_diagnostics::report("CDXML scene", &failures)?;
     assert_eq!(
         (accepted, rejected, converted, bounds),
-        (2645, 286, 2344, 587)
+        (2645, 286, 2353, 578)
     );
-    assert_eq!(final_only_rejected, 301);
+    // Nine original raw Documents failed the projection requirement. The
+    // independently adapted paint now passes the same validation boundary.
+    assert_eq!(dative_extensions, 9);
+    assert_eq!(final_only_rejected, 292);
     assert_eq!(extensions, 1);
     assert_eq!(
         (restrictions, restricted_native, restricted_documents),

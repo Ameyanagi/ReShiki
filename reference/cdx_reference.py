@@ -107,7 +107,12 @@ def corpus():
     for code, (name, kind, enum) in PROPERTIES.items():
         if name in ("fonttable", "colortable", "Text", "UTF8Text"):
             continue
-        if enum and kind in INTS:
+        if name == "ExternalConnectionNum":
+            # Native numbered attachment points require this owner and a
+            # positive signed byte. Wrong owners/ranges remain rejection
+            # cases in test_numbered_connections.py, outside this corpus.
+            values = ["1", "12", "127"]
+        elif enum and kind in INTS:
             values = list(enum)
         elif kind in INTS:
             values = ["0", "1", "12"]
@@ -133,6 +138,8 @@ def corpus():
         for value in values:
             root = ET.Element("CDXML")
             node = ET.SubElement(ET.SubElement(root, "page", id="1"), "n", id="2")
+            if name == "ExternalConnectionNum":
+                node.set("NodeType", "ExternalConnectionPoint")
             node.set(name, value)
             xml(f"property {code:x} {value}", ET.tostring(root, encoding="unicode"))
     # Legacy charsets, style boundaries, UTF-8 override, and both header sizes.
