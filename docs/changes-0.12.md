@@ -18,7 +18,7 @@ keep a copy saved by 0.11.0.
 
 **Cmd/Ctrl+C** no longer adds SMILES text. It copies the drawing, so
 PowerPoint, Word and Keynote paste a vector picture and ChemDraw pastes an
-editable structure. To paste a structure into a text field such as
+editable structure (it may first ask whether to keep the copied settings). To paste a structure into a text field such as
 SciFinder's, use **Cmd/Ctrl+Alt+C**.
 
 ## Highlights
@@ -260,7 +260,7 @@ their contributor credits and links to their reviews.
 
 - **Copy drawing or chemical text.** **Cmd/Ctrl+C** copies the drawing, the
   same on every platform: ReShiki and ChemDraw paste it as editable
-  chemistry, Office and Keynote as a vector picture, and browsers and chat
+  chemistry (ChemDraw may first ask whether to keep the copied settings), Office and Keynote as a vector picture, and browsers and chat
   apps as a picture. **Cmd/Ctrl+Alt+C** copies SMILES, or ChemDoodle JSON for
   one clear reaction, for text fields such as SciFinder's.
   [Details](clipboard.md) ·
@@ -359,8 +359,10 @@ their contributor credits and links to their reviews.
   display scale. Fresh Office checks, high and mixed display scales on Windows,
   rear opacity and attached arrows on Windows, and Linux desktop, file-manager
   and Office save-back checks are still pending.
-- **Copy to ChemDraw:** copying from ReShiki and pasting into a new ChemDraw
-  document gives an empty page
+- **Paste into ChemDraw:** when the ReShiki drawing settings differ from the
+  ChemDraw document's, ChemDraw first asks whether to keep the copied settings.
+  Until you choose **As Copied** or **Adopt Current**, the page looks empty and
+  ChemDraw's menus are unavailable; the dialog can open behind other windows.
   ([issue #88](https://github.com/Ameyanagi/ReShiki/issues/88)).
 - **Assistant:** a draft that looks right can still be the wrong molecule. Check
   it before **Apply**.
