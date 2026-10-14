@@ -20,9 +20,9 @@ pre-commit:
     cargo-fmt:
       glob: "*.{rs,toml,lock}"
       run: cargo fmt --all --check
+    # Clippy type-checks libraries and binaries with all features, so a
+    # separate `cargo check` would repeat the build. Tests and examples (about
+    # 100 targets) are linted by CI on every pull request, not on each commit.
     cargo-clippy:
       glob: "*.{rs,toml,lock}"
-      run: cargo clippy --all-targets --all-features --locked -- -D warnings
-    cargo-check:
-      glob: "*.{rs,toml,lock}"
-      run: cargo check --all-targets --all-features --locked
+      run: cargo clippy --workspace --lib --bins --all-features --locked -- -D warnings
