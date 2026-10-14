@@ -11,8 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine.worker import handle
 
 if TYPE_CHECKING or __package__:
+    from .molfile_restrictions_reference import generic_restriction
     from .reaction_drawing_reference import cases
 else:
+    from molfile_restrictions_reference import generic_restriction
     from reaction_drawing_reference import cases
 
 
@@ -22,7 +24,12 @@ def emit(name, text):
         failure = None
     except (ValueError, RuntimeError, KeyError, AttributeError, OverflowError) as error:
         expected, failure = None, str(error)
-    print(json.dumps(dict(name=name, text=text, expected=expected, failure=failure)))
+    restriction = generic_restriction(text, reaction=True) if expected is not None else None
+    print(
+        json.dumps(
+            dict(name=name, text=text, expected=expected, failure=failure, restriction=restriction)
+        )
+    )
 
 
 if __name__ == "__main__":

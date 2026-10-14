@@ -12,12 +12,16 @@ from rdkit.Chem import rdDepictor
 
 if TYPE_CHECKING or __package__:
     from .atropisomer_reference import cases as axial_cases
+    from .molfile_generic_reference import generic_molecule_extension, molecular_snapshot
     from .molfile_groups_reference import cases as group_cases
+    from .molfile_restrictions_reference import generic_restriction
     from .perception_reference import snapshot
     from .valence_reference import ORDERS
 else:
     from atropisomer_reference import cases as axial_cases
+    from molfile_generic_reference import generic_molecule_extension, molecular_snapshot
     from molfile_groups_reference import cases as group_cases
+    from molfile_restrictions_reference import generic_restriction
     from perception_reference import snapshot
     from valence_reference import ORDERS
 
@@ -63,7 +67,26 @@ def emit(name, text):
         failure = None
     except (RuntimeError, ValueError, OverflowError) as error:
         expected, failure = None, str(error)
-    print(json.dumps(dict(name=name, text=text, expected=expected, failure=failure)))
+    # Keep the original result; the restriction is a second, input-derived
+    # contract and must never turn an original rejection into an allowance.
+    restriction = generic_restriction(text) if expected is not None else None
+    extension = None
+    if expected is None and failure == "Outside the existing editable chemistry contract":
+        supported = generic_molecule_extension(text)
+        if supported is not None:
+            extension = dict(failure=failure, expected=molecular_snapshot(supported))
+    print(
+        json.dumps(
+            dict(
+                name=name,
+                text=text,
+                expected=expected,
+                failure=failure,
+                restriction=restriction,
+                extension=extension,
+            )
+        )
+    )
 
 
 def native_molecules():

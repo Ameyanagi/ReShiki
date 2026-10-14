@@ -12,11 +12,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine.worker import handle
 
 if TYPE_CHECKING or __package__:
+    from .molfile_display_reference import display_expectation
+    from .molfile_generic_reference import generic_drawing_addition, generic_engine_extension
     from .molfile_groups_reference import cases as group_cases
     from .molfile_import_reference import annotation_cases, native_molecules, v3_block
+    from .molfile_restrictions_reference import generic_restriction
 else:
+    from molfile_display_reference import display_expectation
+    from molfile_generic_reference import generic_drawing_addition, generic_engine_extension
     from molfile_groups_reference import cases as group_cases
     from molfile_import_reference import annotation_cases, native_molecules, v3_block
+    from molfile_restrictions_reference import generic_restriction
 
 
 def emit(name, text):
@@ -25,7 +31,29 @@ def emit(name, text):
         failure = None
     except (ValueError, RuntimeError, KeyError, OverflowError) as error:
         expected, failure = None, str(error)
-    print(json.dumps(dict(name=name, text=text, expected=expected, failure=failure)))
+    restriction = generic_restriction(text) if expected is not None else None
+    display = generic = extension = None
+    if restriction is None:
+        if expected is not None:
+            display = display_expectation(text, expected)
+            document = display["document"] if display else expected["document"]
+            generic = generic_drawing_addition(text, document)
+        else:
+            extension = generic_engine_extension(text, failure)
+    print(
+        json.dumps(
+            dict(
+                name=name,
+                text=text,
+                expected=expected,
+                failure=failure,
+                restriction=restriction,
+                display=display,
+                generic=generic,
+                generic_extension=extension,
+            )
+        )
+    )
 
 
 if __name__ == "__main__":

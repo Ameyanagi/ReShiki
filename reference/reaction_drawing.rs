@@ -6,10 +6,14 @@ use reshiki::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    collections::{BTreeMap, BTreeSet},
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
 };
+
+#[path = "support/molfile_restrictions.rs"]
+mod restrictions;
 
 #[derive(Deserialize, Serialize)]
 struct Expected {
@@ -23,34 +27,76 @@ struct Case {
     text: String,
     expected: Option<Expected>,
     failure: Option<String>,
+    generic_restriction: Option<restrictions::GenericRestriction>,
 }
 
-fn difference(a: &Value, e: &Value, path: &str) -> Option<String> {
+fn differences(a: &Value, e: &Value, path: &str) -> Vec<String> {
     if a == e {
-        return None;
+        return Vec::new();
     }
+    let mut failures = Vec::new();
     match (a, e) {
-        (Value::Object(a), Value::Object(e)) if a.len() == e.len() => {
-            for (key, value) in e {
-                if let Some(d) = difference(
-                    a.get(key).unwrap_or(&Value::Null),
-                    value,
-                    &format!("{path}.{key}"),
-                ) {
-                    return Some(d);
+        (Value::Object(a), Value::Object(e)) => {
+            for key in a.keys().chain(e.keys()).collect::<BTreeSet<_>>() {
+                let path = format!("{path}.{key}");
+                match (a.get(key), e.get(key)) {
+                    (Some(a), Some(e)) => failures.extend(differences(a, e, &path)),
+                    (Some(a), None) => failures.push(format!("{path}: unexpected field {a}")),
+                    (None, Some(e)) => {
+                        failures.push(format!("{path}: missing field, expected {e}"))
+                    }
+                    (None, None) => unreachable!(),
                 }
             }
         }
-        (Value::Array(a), Value::Array(e)) if a.len() == e.len() => {
-            for (i, (a, e)) in a.iter().zip(e).enumerate() {
-                if let Some(d) = difference(a, e, &format!("{path}[{i}]")) {
-                    return Some(d);
+        (Value::Array(a), Value::Array(e)) => {
+            for i in 0..a.len().max(e.len()) {
+                let path = format!("{path}[{i}]");
+                match (a.get(i), e.get(i)) {
+                    (Some(a), Some(e)) => failures.extend(differences(a, e, &path)),
+                    (Some(a), None) => failures.push(format!("{path}: unexpected entry {a}")),
+                    (None, Some(e)) => {
+                        failures.push(format!("{path}: missing entry, expected {e}"))
+                    }
+                    (None, None) => unreachable!(),
                 }
             }
         }
-        _ => (),
+        _ => failures.push(format!("{path}: {a} != {e}")),
     }
-    Some(format!("{path}: {a} != {e}"))
+    failures
+}
+
+#[test]
+fn drawing_diagnostics_report_every_field_difference() {
+    let actual = serde_json::json!({
+        "a": null,
+        "b": [1, 2, 3],
+        "c": [],
+        "nested": {"one": 1, "two": 2},
+        "unexpected": null,
+    });
+    let expected = serde_json::json!({
+        "b": [4, 5],
+        "c": [null],
+        "missing": null,
+        "nested": {"one": 3, "two": 4},
+    });
+    assert_eq!(
+        differences(&actual, &expected, "drawing"),
+        [
+            "drawing.a: unexpected field null",
+            "drawing.b[0]: 1 != 4",
+            "drawing.b[1]: 2 != 5",
+            "drawing.b[2]: unexpected entry 3",
+            "drawing.c[0]: missing entry, expected null",
+            "drawing.missing: missing field, expected null",
+            "drawing.nested.one: 1 != 3",
+            "drawing.nested.two: 2 != 4",
+            "drawing.unexpected: unexpected field null",
+        ]
+    );
+    assert!(differences(&actual, &actual, "drawing").is_empty());
 }
 
 #[test]
@@ -78,12 +124,51 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut separators, mut agents) = (0, 0, 0, 0);
+    let mut failed_cases = 0;
     let mut failures = Vec::new();
+    let mut categories = BTreeMap::<String, usize>::new();
+    let mut restriction_categories = BTreeMap::<String, usize>::new();
     for line in lines {
         let mut case: Case = serde_json::from_str(&line?)?;
-        let result = reaction::read_rxn(&case.text)
-            .map_err(|e| e.to_string())
-            .and_then(|parsed| {
+        let parsed = reaction::read_rxn(&case.text).map_err(|e| e.to_string());
+        let expected = case.expected.as_mut().and_then(|e| {
+            serde_json::from_value::<Document>(e.document.clone())
+                .ok()
+                .filter(|d| d.validate().is_ok())
+                .map(|doc| (e, doc))
+        });
+        let case_failures = if let Some(restriction) = &case.generic_restriction {
+            // #300 restricts these explicit generic RXN records. Keep the
+            // original drawing capture and require a valid legacy Document
+            // plus the exact independently predicted read-stage rejection.
+            let failure = if matches!(
+                restriction.category.as_str(),
+                "polymer_crossing_membership"
+                    | "empty_polymer_membership"
+                    | "generic_rxn_substance_groups"
+                    | "v2000_link_nodes"
+                    | "polymer_parent_atoms"
+                    | "polymer_crossing_correspondence"
+            ) {
+                restrictions::rejection_difference(
+                    restriction,
+                    expected.is_some() && case.failure.is_none(),
+                    &parsed,
+                )
+            } else {
+                Some(format!(
+                    "Unclassified drawing restriction: {} ({})",
+                    restriction.category, restriction.error
+                ))
+            };
+            if failure.is_none() {
+                *restriction_categories
+                    .entry(restriction.category.clone())
+                    .or_default() += 1;
+            }
+            failure.into_iter().collect::<Vec<_>>()
+        } else {
+            let result = parsed.and_then(|parsed| {
                 let before = serde_json::to_value(&parsed).map_err(|e| e.to_string())?;
                 let result = parsed.drawing().map_err(|e| e.to_string());
                 assert_eq!(
@@ -93,64 +178,72 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                 );
                 result
             });
-        let expected = case.expected.as_mut().and_then(|e| {
-            serde_json::from_value::<Document>(e.document.clone())
-                .ok()
-                .filter(|d| d.validate().is_ok())
-                .map(|doc| (e, doc))
-        });
-        let failure = match (result, expected) {
-            (Ok(draft), Some((expected, document))) => {
-                accepted += 1;
-                let participants: Vec<_> = draft
-                    .participants()
-                    .map(|(molecule, file)| serde_json::json!({"molecule":molecule,"file":file}))
-                    .collect();
-                let state = difference(
-                    &serde_json::to_value(participants)?,
-                    &expected.participants,
-                    "participants",
-                );
-                let labels = draft.labels()?;
-                let labeling = difference(
-                    &serde_json::to_value(&labels)?,
-                    &serde_json::to_value(&expected.labels)?,
-                    "labels",
-                );
-                match draft.finish(labels) {
-                    Ok(doc) => {
-                        separators += doc.annotations.len();
-                        agents += doc.reactions.iter().map(|r| r.agents.len()).sum::<usize>();
-                        state.or(labeling).or(difference(
-                            &serde_json::to_value(doc)?,
-                            &serde_json::to_value(document)?,
-                            "drawing",
-                        ))
-                    }
-                    Err(error) => Some(format!("Could not finish drawing: {error}")),
-                }
-            }
-            (Err(_), None) => {
-                rejected += 1;
-                None
-            }
-            (Err(e), Some(_)) => Some(format!("Rejected supported drawing: {e}")),
-            (Ok(draft), None) => {
-                // Drawing bounds are checked after placement and full CIP labels.
-                if case.expected.is_some() {
-                    match draft.labels().and_then(|labels| draft.finish(labels)) {
-                        Err(_) => {
-                            rejected += 1;
-                            None
+            match (result, expected) {
+                (Ok(draft), Some((expected, document))) => {
+                    accepted += 1;
+                    let participants: Vec<_> = draft
+                        .participants()
+                        .map(
+                            |(molecule, file)| serde_json::json!({"molecule":molecule,"file":file}),
+                        )
+                        .collect();
+                    let mut failures = differences(
+                        &serde_json::to_value(participants)?,
+                        &expected.participants,
+                        "participants",
+                    );
+                    match draft.labels() {
+                        Ok(labels) => {
+                            failures.extend(differences(
+                                &serde_json::to_value(&labels)?,
+                                &serde_json::to_value(&expected.labels)?,
+                                "labels",
+                            ));
+                            match draft.finish(labels) {
+                                Ok(doc) => {
+                                    separators += doc.annotations.len();
+                                    agents +=
+                                        doc.reactions.iter().map(|r| r.agents.len()).sum::<usize>();
+                                    failures.extend(differences(
+                                        &serde_json::to_value(doc)?,
+                                        &serde_json::to_value(document)?,
+                                        "drawing",
+                                    ));
+                                }
+                                Err(error) => {
+                                    failures.push(format!("Could not finish drawing: {error}"));
+                                }
+                            }
                         }
-                        Ok(_) => Some("Accepted invalid drawing".into()),
+                        Err(error) => {
+                            failures.push(format!("Could not label drawing: {error}"));
+                        }
                     }
-                } else {
-                    Some(format!("Accepted rejected drawing: {:?}", case.failure))
+                    failures
+                }
+                (Err(_), None) => {
+                    rejected += 1;
+                    Vec::new()
+                }
+                (Err(e), Some(_)) => vec![format!("Rejected supported drawing: {e}")],
+                (Ok(draft), None) => {
+                    // Drawing bounds are checked after placement and full CIP labels.
+                    if case.expected.is_some() {
+                        match draft.labels().and_then(|labels| draft.finish(labels)) {
+                            Err(_) => {
+                                rejected += 1;
+                                Vec::new()
+                            }
+                            Ok(_) => vec!["Accepted invalid drawing".into()],
+                        }
+                    } else {
+                        vec![format!("Accepted rejected drawing: {:?}", case.failure)]
+                    }
                 }
             }
         };
-        if let Some(error) = failure {
+        if !case_failures.is_empty() {
+            failed_cases += 1;
             if failures.is_empty() {
                 std::fs::create_dir_all(root.join("artifacts"))?;
                 std::fs::write(
@@ -158,30 +251,44 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                     serde_json::to_vec_pretty(&case)?,
                 )?;
             }
-            failures.push(format!("{}: {error}", case.name));
+            for error in case_failures {
+                let category = if error.starts_with("Rejected supported drawing:") {
+                    error.clone()
+                } else if error.starts_with("Accepted rejected drawing:") {
+                    "Accepted rejected drawing".to_owned()
+                } else if error.starts_with("participants") {
+                    "Participant difference".to_owned()
+                } else if error.starts_with("labels") {
+                    "Label difference".to_owned()
+                } else if error.starts_with("drawing") {
+                    "Drawing difference".to_owned()
+                } else {
+                    error.clone()
+                };
+                *categories.entry(category).or_default() += 1;
+                failures.push(format!("{}: {error}", case.name));
+            }
         }
     }
     assert!(child.wait()?.success(), "Reaction drawing reference failed");
     eprintln!(
-        "RXN drawings: {accepted} accepted, {rejected} rejected, {separators} separators, {agents} agents, {} mismatches",
+        "RXN drawings: {accepted} accepted, {rejected} rejected, {} intended restrictions, {separators} separators, {agents} agents, {failed_cases} failed cases, {} mismatches",
+        restriction_categories.values().sum::<usize>(),
         failures.len()
     );
+    for (category, count) in categories {
+        eprintln!("RXN drawing mismatch category: {count} {category}");
+    }
+    for (category, count) in restriction_categories {
+        eprintln!("RXN drawing restriction category: {count} {category}");
+    }
     if !failures.is_empty() {
         std::fs::write(
             root.join("artifacts/reaction-drawing-failures.txt"),
             failures.join("\n"),
         )?;
     }
-    assert!(
-        failures.is_empty(),
-        "{}",
-        failures
-            .iter()
-            .take(24)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(accepted > 1000 && rejected > 100 && separators > 100 && agents > 100);
     Ok(())
 }

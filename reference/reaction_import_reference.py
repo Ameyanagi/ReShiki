@@ -13,12 +13,14 @@ if TYPE_CHECKING or __package__:
     from .molfile_groups_reference import v3 as grouped_molecule
     from .molfile_import_reference import cases as molecular_cases
     from .molfile_import_reference import native_molecules
+    from .molfile_restrictions_reference import generic_restriction
     from .perception_reference import snapshot
     from .valence_reference import ORDERS
 else:
     from molfile_groups_reference import v3 as grouped_molecule
     from molfile_import_reference import cases as molecular_cases
     from molfile_import_reference import native_molecules
+    from molfile_restrictions_reference import generic_restriction
     from perception_reference import snapshot
     from valence_reference import ORDERS
 
@@ -93,7 +95,19 @@ def emit(name, text):
         expected, failure = read(text), None
     except (ValueError, RuntimeError, OverflowError) as error:
         expected, failure = None, str(error)
-    print(json.dumps(dict(name=name, text=text, expected=expected, failure=failure)))
+    print(
+        json.dumps(
+            dict(
+                name=name,
+                text=text,
+                expected=expected,
+                failure=failure,
+                restriction=generic_restriction(text, reaction=True)
+                if expected is not None
+                else None,
+            )
+        )
+    )
 
 
 def v2(parts):
