@@ -1,6 +1,6 @@
 # Command-line reference
 
-**Experimental. In Nightly builds since 2026-10-08; not in ReShiki 0.11.0.** Commands,
+**Experimental. In ReShiki 0.12.0 and later.** Commands,
 options and output may change in any build.
 
 `reshiki --cli` runs one command and exits. It converts, renders, lays out and
@@ -297,7 +297,7 @@ several lines:
     "analyzed_atoms": ["1", "2", "3", "4", "5", "6", "7"]
   },
   "versions": {
-    "app": "0.11.0",
+    "app": "0.12.0",
     "document": 26,
     "engine_protocol": 1,
     "operation_api": 1
@@ -390,7 +390,7 @@ neither.
   "operation_api": 1,
   "stability": "experimental",
   "versions": {
-    "app": "0.11.0",
+    "app": "0.12.0",
     "document": 26,
     "engine_protocol": 1,
     "operation_api": 1

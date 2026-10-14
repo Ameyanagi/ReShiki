@@ -1,7 +1,5 @@
 # Rear opacity
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 Rear opacity makes the bonds behind the front face of a 3D molecule lighter,
 while the outline you can see stays solid. It changes only the drawing's
 appearance, not the molecule.

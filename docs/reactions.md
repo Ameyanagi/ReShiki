@@ -111,8 +111,6 @@ Molecular MOL/SMILES/InChI and current CDXML/CDX drawing exchange do not retain 
 
 ## Atom mapping and label placement
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 Atom maps number the atoms that correspond between reactants and products. You
 can set them by hand, let **Auto-map** suggest them, show them on the drawing
 and align the products to the reactants.

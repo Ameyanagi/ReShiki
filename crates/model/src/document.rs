@@ -217,7 +217,7 @@ pub const REAR_OPACITY: u32 = 22;
 /// | 23 | Not used. |
 /// | 24 | EMF sources, cubic arrows, target links and rear opacity integrated (#297). |
 /// | 25 | Linked molecule-name captions and reaction atom-map labels (#298). |
-/// | 26 | Generic structures and coordination joining (#300). |
+/// | 26 | Generic structures and coordination joining (#300; 0.12.0). |
 pub const VERSION: u32 = 26;
 
 fn newer_version(version: u64) -> String {

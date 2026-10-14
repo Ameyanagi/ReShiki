@@ -1,6 +1,6 @@
 # Agent API overview
 
-**Experimental. In Nightly builds since 2026-10-08; not in ReShiki 0.11.0.** Tool names,
+**Experimental. In ReShiki 0.12.0 and later.** Tool names,
 schemas, results and the command line may change in any build.
 
 ReShiki's agent API runs ReShiki's import, analysis, rendering, layout and
@@ -60,7 +60,7 @@ MCP messages on stdin.
 `agent-access.json`.
 
 Stdout carries MCP messages only. Stderr carries a bounded, content-free log
-in lines such as `reshiki-mcp: info: ReShiki agent API (experimental) 0.11.0;
+in lines such as `reshiki-mcp: info: ReShiki agent API (experimental) 0.12.0;
 granted folders: 0 read, 1 write`. That startup banner is logged at every
 level; only `--log-level debug` lists the granted folders themselves.
 
@@ -164,7 +164,7 @@ The result, with the image data shortened:
     "content": [
       {
         "type": "text",
-        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.11.0\",\"document\":26,\"engine_protocol\":1,\"operation_api\":1},\"warnings\":[]}"
+        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.12.0\",\"document\":26,\"engine_protocol\":1,\"operation_api\":1},\"warnings\":[]}"
       },
       {
         "type": "image",
@@ -182,7 +182,7 @@ The result, with the image data shortened:
         "width": 177
       },
       "versions": {
-        "app": "0.11.0",
+        "app": "0.12.0",
         "document": 26,
         "engine_protocol": 1,
         "operation_api": 1
@@ -220,7 +220,7 @@ declared; files travel inline. Every `structuredContent` carries `versions`
     "document": "doc_750c0a6bb4b449b271ccde44e35088bf",
     "revision": "0",
     "versions": {
-      "app": "0.11.0",
+      "app": "0.12.0",
       "document": 26,
       "engine_protocol": 1,
       "operation_api": 1
@@ -252,7 +252,7 @@ old `base_revision`:
     "message": "base_revision 1 is not the current revision 0; inspect the document and retry with a new idempotency_key"
   },
   "versions": {
-    "app": "0.11.0",
+    "app": "0.12.0",
     "document": 26,
     "engine_protocol": 1,
     "operation_api": 1
@@ -374,7 +374,7 @@ changes independently.
 
 | Field             | Now    | Identifies                                       |
 | ----------------- | ------ | ------------------------------------------------ |
-| `app`             | 0.11.0 | The ReShiki build                                |
+| `app`             | 0.12.0 | The ReShiki build                                |
 | `operation_api`   | 1      | The operation tools and their results            |
 | `engine_protocol` | 1      | The internal chemistry engine's request protocol |
 | `document`        | 26     | The `.rsk` drawing format                        |

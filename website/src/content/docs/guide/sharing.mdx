@@ -10,7 +10,7 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 **Save** writes a `.rsk` file with the complete drawing. If you enter a name without an extension, ReShiki adds `.rsk`, for example `Esterification.rsk`. Use **Save as** for a separate version. Reopen it with **Open**.
 
-Nightly builds save drawings in a newer format. ReShiki 0.11.0 cannot open them and asks you to update. If you share files with people on 0.11.0, keep a copy saved by 0.11.0.
+ReShiki 0.12.0 saves drawings in a newer format, even when they use no new feature. ReShiki 0.11.0 and earlier cannot open them. ReShiki 0.11.0 asks you to update. If you share files with people on 0.11.0, keep a copy saved by 0.11.0.
 
 The file contains readable JSON text. Existing `.reshiki` and `.moruno` drawings also open normally; **Save** keeps their current filenames. Use **Save as** to save a copy with the shorter `.rsk` extension.
 
@@ -20,21 +20,21 @@ If ReShiki offers recovery drafts after an interrupted session, choose **Restore
 
 ## Choose an export
 
-Open **Export → Figure**, choose **SVG**, **SVG for Office**, **PDF** or **PNG** (on Windows also **EMF for Office**), then click its export button, for example **Export SVG…**. **SVG for Office** is available in Nightly builds; not in ReShiki 0.11.0. Expand **Structure & exchange** for molecular formats and CDXML, or **Pages & printing** for page setup and printing. **Editable document** saves the complete `.rsk` original.
+Open **Export → Figure**, choose **SVG**, **SVG for Office**, **PDF** or **PNG** (on Windows also **EMF for Office**), then click its export button, for example **Export SVG…**. Expand **Structure & exchange** for molecular formats and CDXML, or **Pages & printing** for page setup and printing. **Editable document** saves the complete `.rsk` original.
 
 PNG uses up to 1200 dpi and automatically lowers resolution for large drawings while preserving physical size. The saved-file status reports the actual pixel dimensions and DPI. If chemistry analysis fails, figure export preserves the visible drawing and shows a review notice instead of blocking Save. [Figure export details and limits](/developer/figure-export/).
 
 File exports use the full drawing. **Copy image** uses the current selection when objects are selected.
 
-| You need                         | Use                                                                                                   |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| A vector figure                  | **SVG** or **PDF**                                                                                    |
-| A high-resolution image          | **PNG**                                                                                               |
-| A picture for Word or PowerPoint | **EMF for Office** on Windows, or **SVG for Office** in Nightly builds (both turn text into outlines) |
-| Multiple publication pages       | **PDF · all pages**                                                                                   |
-| An editable chemical drawing     | **CDXML**                                                                                             |
-| Chemical structure data          | **MOL**, **SMILES**, or **InChI**                                                                     |
-| Chemical reaction data           | **RXN** or **Reaction SMILES** in Reaction roles                                                      |
+| You need                         | Use                                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| A vector figure                  | **SVG** or **PDF**                                                                  |
+| A high-resolution image          | **PNG**                                                                             |
+| A picture for Word or PowerPoint | **EMF for Office** on Windows, or **SVG for Office** (both turn text into outlines) |
+| Multiple publication pages       | **PDF · all pages**                                                                 |
+| An editable chemical drawing     | **CDXML**                                                                           |
+| Chemical structure data          | **MOL**, **SMILES**, or **InChI**                                                   |
+| Chemical reaction data           | **RXN** or **Reaction SMILES** in Reaction roles                                    |
 
 Export dialogs also add the selected format’s extension when you omit it.
 

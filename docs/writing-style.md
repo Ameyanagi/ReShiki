@@ -41,7 +41,7 @@ update every link in the same commit (`git grep` the anchor).
 - Pages that describe a feature say what it does today. They do not mention
   pull requests, review status, test counts or CI runs.
 - A feature that is only in Nightly builds carries the line "Available in
-  Nightly builds; not in ReShiki 0.11.0."
+  Nightly builds; not in ReShiki 0.12.0."
 - Review evidence, screenshots of review sessions and test results belong in
   the records under `docs/changes/`. Release notes link to them.
 

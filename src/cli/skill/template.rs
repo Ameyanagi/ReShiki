@@ -30,7 +30,7 @@ produce a ReShiki .rsk drawing.";
 
 /// At most 500 characters, so never the executable path.
 const COMPATIBILITY: &str =
-    "Requires a ReShiki build with the experimental agent API (Nightly). Runs offline.";
+    "Requires ReShiki 0.12.0 or later (experimental agent API). Runs offline.";
 
 const LICENSE: &str = env!("CARGO_PKG_LICENSE");
 const GENERATED_BY: &str = "reshiki --cli skill";

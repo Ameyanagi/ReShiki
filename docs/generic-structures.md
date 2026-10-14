@@ -1,7 +1,5 @@
 # Generic structures and finite expansion
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 Generic structures keep element and group lists, variable attachment points
 and repeat counts in the drawing. **Expand generic structures** turns them into
 every concrete structure and opens all of them together in one new tab.
@@ -67,7 +65,7 @@ bracket stays.
    and its Undo history do not change.
 
 Save the source and the products as separate `.rsk` files. Read the
-[file compatibility](changes-unreleased.md#file-compatibility) note before you
+[file compatibility](changes-0.12.md#file-compatibility) note before you
 share them with ReShiki 0.11.0 users.
 
 ## Limits

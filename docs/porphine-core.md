@@ -1,7 +1,5 @@
 # Draw a porphine core
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 The porphine template places a free-base 21H,23H-porphine core with equal bond
 lengths and both N–H labels pointing inward. You can also build the scaffold
 yourself with the reference align/stretch controls.

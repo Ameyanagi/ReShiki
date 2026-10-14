@@ -36,7 +36,7 @@ retain contributor credits and links to their validation evidence.
   not guarantee a global energy minimum; timed-out sampling can fall back to
   one conformer. The documented initial paclitaxel preview is not converged,
   and larger fullerenes such as C70 have not been validated here. This
-  limitation describes 0.11.0. This is fixed in Nightly builds
+  limitation describes 0.11.0. This is fixed in ReShiki 0.12.0
   ([PR #271](https://github.com/Ameyanagi/ReShiki/pull/271)); see the
   [matched evidence](projected-double-bonds-review.md).
 - **Receiving chemical text:** the verified ordinary-Copy reaction route is

@@ -73,7 +73,7 @@ sending a request or image.
 ReShiki has an experimental agent API: `reshiki --mcp`, a Model Context
 Protocol (MCP) server for AI clients such as Claude Code, Claude Desktop and
 Codex, and `reshiki --cli`, a command line for conversions, renders and
-analysis. It is in Nightly builds since 2026-10-08, not in ReShiki 0.11.0. Both modes run
+analysis. It is in ReShiki 0.12.0 and later. Both modes run
 only when you, or an MCP client you configured, start `reshiki --mcp` or
 `reshiki --cli ...`. Neither opens a network listener or makes network
 requests: they make no update checks, downloads or telemetry.

@@ -17,20 +17,18 @@ subset. Windows file dialogs support paths containing spaces and Unicode.
 
 **Export → Figure → EMF for Office** saves a vector picture for Microsoft
 Office with outlined text, the canvas background and the drawing's physical
-dimensions. **SVG for Office** (Nightly builds; not in ReShiki 0.11.0) gives
-the same physical size and outlined text as SVG. Keep the `.rsk` file to edit
-the original drawing. See [figure export](figure-export.md) for format details
-and limits.
+dimensions. **SVG for Office** gives the same physical size and outlined text
+as SVG. Keep the `.rsk` file to edit the original drawing. See
+[figure export](figure-export.md) for format details and limits.
 
 **Import → Choose file…** also inserts `.emf` pictures, such as spectra, at the
 size recorded in the file. The `.rsk` file keeps the original EMF and a preview;
-other platforms show the preview. See [pictures](pictures.md). Available in
-Nightly builds; not in ReShiki 0.11.0.
+other platforms show the preview. See [pictures](pictures.md).
 
 When ReShiki is running, opening another file adds it as a tab in the existing
 window, and a file that is already open switches to its tab. Each drawing
 opened from Office gets its own tab, and saving it updates only that Office
-document. Available in Nightly builds; not in ReShiki 0.11.0. See
+document. See
 [the open-in-tab record](changes/windows-linux-open-tabs.md) for the transport
 and its limits.
 
@@ -172,8 +170,8 @@ linked into the application. No .NET runtime, C# compiler or extra native helper
 is needed. The editor forbids unsafe Rust; Win32 FFI is isolated in
 `native/windows`, with bounded data and ownership guards.
 
-The experimental `reshiki.exe --cli` commands (Nightly builds since 2026-10-08; not
-in ReShiki 0.11.0) follow the same rule as `--graphics-info`: release builds have
+The experimental `reshiki.exe --cli` commands (ReShiki 0.12.0 and later) follow
+the same rule as `--graphics-info`: release builds have
 no console, so their output and error messages appear only when piped or
 redirected, for example `.\reshiki.exe --cli info | Write-Output` or
 `.\reshiki.exe --cli convert --smiles CCO -o ethanol.mol 2> errors.txt`. Piping

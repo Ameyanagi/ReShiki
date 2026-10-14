@@ -1,7 +1,5 @@
 # Chemical names
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 Chemical names turns a name into an editable structure and gives a molecule its
 systematic name. Names are converted on your computer; no internet connection,
 Java or naming service is needed.

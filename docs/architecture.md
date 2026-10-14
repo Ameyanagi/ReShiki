@@ -140,8 +140,9 @@ Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map nu
 
 `VERSION` in `crates/model/src/document.rs` is the newest format this build
 reads, and every saved file is marked with it. Its doc comment holds the table
-below; update both together. ReShiki 0.11.0 reads versions up to 19, so it
-cannot open a drawing saved by a Nightly build and reports the version it needs.
+below; update both together. ReShiki 0.12.0 saves version 26. ReShiki 0.11.0
+reads versions up to 19, so it cannot open a drawing saved by 0.12.0 and reports
+the version it needs.
 
 | Version | Added                                                                           |
 | ------- | ------------------------------------------------------------------------------- |
@@ -163,7 +164,7 @@ cannot open a drawing saved by a Nightly build and reports the version it needs.
 | 23      | Not used.                                                                       |
 | 24      | EMF sources, cubic arrows, target links and rear opacity integrated (#297).     |
 | 25      | Linked molecule-name captions and reaction atom-map labels (#298).              |
-| 26      | Generic structures and coordination joining (#300).                             |
+| 26      | Generic structures and coordination joining (#300; 0.12.0).                     |
 
 ## Chemistry requests
 
@@ -185,7 +186,7 @@ The file-open panel is intentionally unfiltered, so opening a supported file doe
 
 ## Depth appearance and rear opacity
 
-Depth appearance fades atom, bond and fill colors by depth; it is in ReShiki 0.11.0. Rear opacity makes view-occluded ink transparent; it is in Nightly builds, not in ReShiki 0.11.0. Both are stored as `depth_appearance::Scope` entries in `Document::depth_appearance`. Positive Z faces the viewer. See [rear opacity](rear-opacity.md) for what users see.
+Depth appearance fades atom, bond and fill colors by depth; it is in ReShiki 0.11.0 and later. Rear opacity makes view-occluded ink transparent; it is in ReShiki 0.12.0 and later. Both are stored as `depth_appearance::Scope` entries in `Document::depth_appearance`. Positive Z faces the viewer. See [rear opacity](rear-opacity.md) for what users see.
 
 - **Scopes.** A scope's `atoms` are its RGB owner. Owners span connected components, including coordinate contacts, and `strength`, `weights` and `overrides` drive the RGB fade. Rear alpha targets whole covalent molecules instead: `rear_opacity` is the scope's alpha, and `rear_overrides` keeps per-atom alpha inside a wider RGB owner. A scope with strength zero carries alpha only. `rear_weights` is still written for file compatibility; visibility never reads it.
 - **Paint order.** `scene::primitives` builds one `rear_opacity::Paint` from the raw document and its retained XYZ, before any color change. `BondInputs::prepare` (`scene/bond_pass.rs`) then materializes the RGB fade and the canonical canvas colors on a copy, so no stage fades the same paint twice. Ring knockouts build one more `Paint` of that copy, on the first ring stroke. With visibility active, `paint_rear_before_front` moves faded bond ink ahead of opaque bond ink and keeps the order inside each group.
@@ -337,7 +338,7 @@ Bond Z order is presentation metadata. A bounded sweep detects unconnected cross
 
 ## Generic structures
 
-Available in Nightly builds; not in ReShiki 0.11.0. `Document::generic` holds element and group alternatives, link nodes and repeating units; variable attachment points are atom data. They stay drawing data until **Expand generic structures** materializes them, and expansion never changes the source. [Generic structures](generic-structures.md) lists the supported definitions and limits. The module root is `crates/model/src/generic.rs`; its submodules live in `crates/model/src/generic/`.
+`Document::generic` holds element and group alternatives, link nodes and repeating units; variable attachment points are atom data. They stay drawing data until **Expand generic structures** materializes them, and expansion never changes the source. [Generic structures](generic-structures.md) lists the supported definitions and limits. The module root is `crates/model/src/generic.rs`; its submodules live in `crates/model/src/generic/`.
 
 | Module                                              | Job                                                                                               |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -373,7 +374,7 @@ The io boundary:
 
 ## NMR prediction
 
-Available in Nightly builds; not in ReShiki 0.11.0. **Properties → Molecular properties → Predict NMR…**, or **Predict → NMR** in the inspector, predicts ¹H or ¹³C shifts for one molecule from an offline index. [NMR prediction](nmr-prediction.md) describes the method and its limits.
+**Properties → Molecular properties → Predict NMR…**, or **Predict → NMR** in the inspector, predicts ¹H or ¹³C shifts for one molecule from an offline index. [NMR prediction](nmr-prediction.md) describes the method and its limits.
 
 | Layer             | Files                                                             | Job                                                                                                                                             |
 | ----------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -388,7 +389,7 @@ Results are gated by chemical identity. `nmr::fingerprint` hashes the stored che
 
 ## Chemical names
 
-Available in Nightly builds; not in ReShiki 0.11.0. Chemical names turn a name into a structure (**Import → Name**) and a structure into a name (**Show chemical name** and the **Chemical names…** inspector), offline. [Chemical names](chemical-naming-rust.md) describes the behavior and its limits.
+Chemical names turn a name into a structure (**Import → Name**) and a structure into a name (**Show chemical name** and the **Chemical names…** inspector), offline. [Chemical names](chemical-naming-rust.md) describes the behavior and its limits.
 
 - **Rules.** `src/naming/rules.rs` and `src/naming/rules/` hold ReShiki's own nomenclature profile, "ReShiki organic rules 1". The rules work on prepared `reshiki::chemistry` state from reshiki-io and do not use OPSIN. They name molecules of 1–64 heavy atoms within a 200,000-unit work budget.
 - **OPSIN boundary.** Only `src/naming/worker.rs` calls the `opsin` crate: `Parser::parse` with strict options, then semantic CXSMILES. `src/naming/catalog.rs` reads only its upstream version and commit. The worker reports the protocol, port version, upstream commit, resource fingerprint and options with every parse, and the client rejects any mismatch.
@@ -399,7 +400,7 @@ Available in Nightly builds; not in ReShiki 0.11.0. Chemical names turn a name i
 
 ## Agent API (experimental)
 
-The agent API is in Nightly builds since 2026-10-08, not in ReShiki 0.11.0. `reshiki --mcp` serves the [agent API](agent-api.md) to an MCP client over standard input and output, and `reshiki --cli` runs the same operations once from the command line. Both are modes of the single `reshiki` executable, chosen in `src/main.rs` after the worker modes and before Office registration and the GUI. Only a first argument of exactly `--mcp` or `--cli` selects them.
+The agent API is in ReShiki 0.12.0 and later. `reshiki --mcp` serves the [agent API](agent-api.md) to an MCP client over standard input and output, and `reshiki --cli` runs the same operations once from the command line. Both are modes of the single `reshiki` executable, chosen in `src/main.rs` after the worker modes and before Office registration and the GUI. Only a first argument of exactly `--mcp` or `--cli` selects them.
 
 ```mermaid
 flowchart LR

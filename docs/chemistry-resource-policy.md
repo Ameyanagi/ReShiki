@@ -1,7 +1,5 @@
 # Calculation resource policy
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 Geometry and aromaticity use the same machine observations and resolve an
 immutable operational budget for each calculation. Processor count does not
 determine the budget. A bounded lookup probe measures effective throughput in
