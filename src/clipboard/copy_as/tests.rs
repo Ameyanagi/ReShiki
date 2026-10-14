@@ -12,6 +12,217 @@ fn molecule() -> Document {
     doc
 }
 
+fn rings(arrow: bool) -> Document {
+    let mut doc = Document::default();
+    crate::editing::ring(&mut doc, Point::default(), 6, arrow, 36.);
+    crate::editing::ring(&mut doc, Point::new(240., 0.), 6, false, 36.);
+    if arrow {
+        doc.arrows.push(crate::document::Arrow::new(
+            doc.next_id(),
+            Point::new(90., 0.),
+            Point::new(150., 0.),
+            Default::default(),
+            Default::default(),
+        ));
+    }
+    doc
+}
+
+#[tokio::test]
+async fn chemical_text_copies_all_selected_disconnected_molecules_as_smiles() {
+    let mut source = rings(false);
+    let ids = source.all_ids();
+    source.add_atom("N", Point::new(420., 0.));
+    let before = source.clone();
+    let snapshot = selection_or_drawing(&source, &ids);
+    let (format, chemical) = chemical_text_snapshot(&source, &snapshot).unwrap();
+    assert_eq!(format, CopyFormat::Smiles);
+    assert_eq!(chemical, snapshot);
+    let copy = prepare_chemical_text(Default::default(), chemical, format)
+        .await
+        .unwrap();
+    let smiles = copy.text().unwrap();
+    assert_eq!(smiles.split('.').count(), 2);
+    let imported = LocalEngine::default()
+        .request(crate::engine::Request::import_smiles(smiles))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    assert_eq!((imported.atoms.len(), imported.bonds.len()), (12, 12));
+    assert_eq!(source, before);
+    assert_eq!(
+        copy.representations
+            .iter()
+            .map(|r| r.kind.as_str())
+            .collect::<Vec<_>>(),
+        ["org.opensmiles.smiles", TEXT]
+    );
+}
+
+#[tokio::test]
+async fn chemical_text_infers_aromatic_reaction_without_changing_drawing_roles() {
+    let source = rings(true);
+    let before = source.clone();
+    let (format, chemical) = chemical_text_snapshot(&source, &source).unwrap();
+    assert_eq!(format, CopyFormat::ChemDoodleReaction);
+    assert_eq!(chemical.reactions.len(), 1);
+    let copy = prepare_chemical_text(Default::default(), chemical, format)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_str(copy.text().unwrap()).unwrap();
+    assert_eq!(json["m"].as_array().unwrap().len(), 2);
+    assert_eq!(json["m"][0]["a"].as_array().unwrap().len(), 6);
+    assert_eq!(json["m"][1]["a"].as_array().unwrap().len(), 6);
+    assert_eq!(
+        json["m"][0]["b"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|b| b["o"] == 2)
+            .count(),
+        3
+    );
+    assert_eq!(json["s"][0]["rs"].as_array().unwrap().len(), 1);
+    assert_eq!(json["s"][0]["ps"].as_array().unwrap().len(), 1);
+    assert_eq!(source, before);
+    assert_eq!(copy.representations.len(), 1);
+    assert_eq!(copy.representations[0].kind, TEXT);
+}
+
+#[tokio::test]
+async fn chemical_text_matches_former_refresh_first_conversion() {
+    for source in [rings(false), rings(true)] {
+        let engine = LocalEngine::default();
+        let (format, chemical) = chemical_text_snapshot(&source, &source).unwrap();
+        let direct = prepare_chemical_text(engine.clone(), chemical, format)
+            .await
+            .unwrap();
+        let reaction = crate::reactions::copy_reaction(&source, &source).unwrap();
+        let mut refreshed = export::checked_document(&engine, source).await.unwrap();
+        refreshed.reactions = reaction.into_iter().collect();
+        let former = prepare_as(engine, refreshed, format).await.unwrap();
+        assert_eq!(direct.text(), former.text());
+        assert_eq!(direct.notices, former.notices);
+    }
+}
+
+#[tokio::test]
+async fn chemical_text_refreshes_stale_attached_forward_arrow_like_former_copy() {
+    use crate::arrow_anchors::{Anchor, Target};
+    let mut source = rings(true);
+    let target = source.atoms[0].id;
+    source.arrows[0].start_anchor = Some(Anchor {
+        target: Target::Atom { atom: target },
+        offset: Point::new(75., 0.),
+        direction: Point::new(1., 0.),
+        gap: 0.,
+    });
+    let before = source.clone();
+    let engine = LocalEngine::default();
+    let (format, chemical) = chemical_text_snapshot(&source, &source).unwrap();
+    assert_eq!(format, CopyFormat::ChemDoodleReaction);
+    let unrefreshed = prepare_as(engine.clone(), chemical.clone(), format)
+        .await
+        .unwrap();
+    let direct = prepare_chemical_text(engine.clone(), chemical, format)
+        .await
+        .unwrap();
+    let reaction = crate::reactions::copy_reaction(&source, &source).unwrap();
+    let mut refreshed = export::checked_document(&engine, source.clone())
+        .await
+        .unwrap();
+    assert_ne!(refreshed.arrows[0].start, source.arrows[0].start);
+    refreshed.reactions = reaction.into_iter().collect();
+    let former = prepare_as(engine, refreshed, format).await.unwrap();
+    assert_ne!(direct.text(), unrefreshed.text());
+    assert_eq!(direct.text(), former.text());
+    assert_eq!(direct.notices, former.notices);
+    assert_eq!(source, before);
+}
+
+#[tokio::test]
+async fn chemical_text_preserves_explicit_source_roles_and_single_participant_copy() {
+    let mut source = rings(true);
+    let mut reaction = crate::reactions::copy_reaction(&source, &source)
+        .unwrap()
+        .unwrap();
+    std::mem::swap(&mut reaction.reactants, &mut reaction.products);
+    source.reactions = vec![reaction.clone()];
+    let before = source.clone();
+    let snapshot = selection_or_drawing(&source, &reaction.ids());
+    let (format, chemical) = chemical_text_snapshot(&source, &snapshot).unwrap();
+    assert_eq!(format, CopyFormat::ChemDoodleReaction);
+    assert_eq!(chemical.reactions, source.reactions);
+    let copy = prepare_chemical_text(Default::default(), chemical, format)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_str(copy.text().unwrap()).unwrap();
+    assert_eq!(
+        json["s"][0]["rs"],
+        serde_json::json!([format!("a{}", reaction.reactants[0].atoms[0])])
+    );
+    assert_eq!(
+        json["s"][0]["ps"],
+        serde_json::json!([format!("a{}", reaction.products[0].atoms[0])])
+    );
+    let participant = selection_or_drawing(&source, &reaction.reactants[0].atoms);
+    let (format, chemical) = chemical_text_snapshot(&source, &participant).unwrap();
+    assert_eq!(format, CopyFormat::Smiles);
+    assert_eq!(chemical.atoms.len(), 6);
+    assert!(chemical.reactions.is_empty());
+    assert!(
+        prepare_chemical_text(Default::default(), chemical, format)
+            .await
+            .unwrap()
+            .text()
+            .is_some()
+    );
+    assert_eq!(source, before);
+}
+
+#[test]
+fn chemical_text_rejects_ambiguous_reactions_and_pruned_explicit_roles() {
+    let mut ambiguous = rings(true);
+    for atom in &mut ambiguous.atoms[6..] {
+        atom.position.x -= 120.;
+    }
+    assert!(
+        chemical_text_snapshot(&ambiguous, &ambiguous)
+            .unwrap_err()
+            .contains("arrow midpoint")
+    );
+    let mut source = rings(true);
+    let reaction = crate::reactions::copy_reaction(&source, &source)
+        .unwrap()
+        .unwrap();
+    source.reactions = vec![reaction.clone()];
+    let selected: Vec<_> = reaction.reactants[0]
+        .atoms
+        .iter()
+        .copied()
+        .chain([reaction.arrow])
+        .collect();
+    let incomplete = selection_or_drawing(&source, &selected);
+    assert!(incomplete.reactions.is_empty());
+    assert!(chemical_snapshot(&source, &incomplete).is_err());
+    assert!(chemical_text_snapshot(&source, &incomplete).is_err());
+    let without_arrow = selection_or_drawing(
+        &source,
+        &source.atoms.iter().map(|a| a.id).collect::<Vec<_>>(),
+    );
+    assert!(
+        chemical_text_snapshot(&source, &without_arrow)
+            .unwrap_err()
+            .contains("participant")
+    );
+    let participant = selection_or_drawing(&source, &reaction.reactants[0].atoms);
+    assert!(matches!(
+        chemical_snapshot(&source, &participant).unwrap(),
+        Cow::Borrowed(_)
+    ));
+}
+
 #[tokio::test]
 async fn dark_depth_copy_as_cdxml_and_cdx_preserves_exact_source_ink() {
     use crate::{canvas_theme::CanvasTheme, palette::Color};

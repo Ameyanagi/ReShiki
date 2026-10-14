@@ -409,7 +409,7 @@ fn file_shortcuts() -> Element<'static, Message> {
                     keys(command | alt, "C"),
                     keys(command | alt, "O")
                 ),
-                "Copy SMILES / MOL",
+                "Copy chemical text / MOL text",
             ),
             (
                 format!(

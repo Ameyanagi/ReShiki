@@ -28,6 +28,8 @@ saved by 0.11.0.
 
 ## Drawing and editing
 
+- **Copy drawing or chemical text.** Cmd/Ctrl+C copies the drawing. Cmd/Ctrl+Alt+C copies SMILES, or ChemDoodle JSON for one clear reaction, for pasting into text fields such as SciFinder's.
+
 - **Clearer controls for the new features.** The new panels use the same
   controls as the rest of the inspector, NMR opens under **Predict**, and
   status messages are shorter. **Chemical names…** in the right-click menu opens

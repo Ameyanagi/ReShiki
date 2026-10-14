@@ -346,6 +346,9 @@ impl App {
                     self.status = "Select a structure to copy".into();
                     return Task::none();
                 }
+                if format == "smiles" {
+                    return self.copy_chemical_text();
+                }
                 if let Some(format) = reshiki::clipboard::CopyFormat::ALL
                     .into_iter()
                     .find(|candidate| candidate.code() == format)

@@ -118,6 +118,175 @@ fn copy_as_uses_one_snapshot_without_changing_selection_or_undo() {
     assert_eq!(app.copy_as(CopyFormat::Mol).units(), 0);
 }
 
+fn text_shortcut(app: &mut App, character: &str) -> Task<Message> {
+    use crate::app::shortcuts::{Action, key_message};
+    use iced::keyboard::{Key, Modifiers};
+
+    let key = Key::Character(character.into());
+    let message = key_message(&key, &key, Modifiers::COMMAND | Modifiers::ALT).unwrap();
+    let Message::Shortcut(action @ Action::CopyText(_)) = message else {
+        panic!("Expected the chemical text shortcut");
+    };
+    app.shortcut_action(action)
+}
+
+async fn prepared_text(task: Task<Message>) -> (CopyAsKey, PreparedCopy) {
+    use iced::futures::StreamExt;
+
+    let mut stream = iced_runtime::task::into_stream(task).unwrap();
+    let Some(iced_runtime::Action::Output(Message::CopyAsPrepared(key, result))) =
+        stream.next().await
+    else {
+        panic!("Expected the prepared chemical text");
+    };
+    (key, result.unwrap())
+}
+
+#[tokio::test]
+async fn alt_c_shortcut_copies_selected_molecular_smiles_with_existing_statuses() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let carbon = app.tab.doc.add_atom("C", Point::default());
+    let oxygen = app.tab.doc.add_atom("O", Point::new(42., 0.));
+    app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
+    app.tab.doc.add_atom("N", Point::new(240., 0.));
+    app.tab.selected = vec![carbon, oxygen];
+    let before = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+
+    let task = text_shortcut(&mut app, "c");
+    assert_eq!(app.status, "Preparing SMILES for the clipboard…");
+    assert!(app.copy_as_busy && app.tab.clipboard_busy);
+    let (key, copy) = prepared_text(task).await;
+    assert_eq!(key.format, CopyFormat::Smiles);
+    assert_eq!(copy.format, CopyFormat::Smiles);
+    assert_eq!(copy.text(), Some("CO"));
+    app.copy_as_written(key, Ok(copy.notices));
+    assert_eq!(app.status, "Selection copied as SMILES");
+    assert!(!app.copy_as_busy && !app.tab.clipboard_busy && !app.error);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.selected, selected);
+    assert!(!app.tab.history.can_undo());
+}
+
+fn text_reaction() -> Document {
+    use reshiki::document::Arrow;
+
+    let mut doc = Document::default();
+    let carbon = doc.add_atom("C", Point::default());
+    let oxygen = doc.add_atom("O", Point::new(42., 0.));
+    doc.add_bond(carbon, oxygen, 1, "plain");
+    doc.add_atom("O", Point::new(240., 0.));
+    doc.arrows.push(Arrow::new(
+        doc.next_id(),
+        Point::new(90., 0.),
+        Point::new(150., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    doc
+}
+
+#[tokio::test]
+async fn alt_c_shortcut_copies_defined_and_inferred_reactions_as_chemdoodle_json() {
+    for defined in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = text_reaction();
+        if defined {
+            app.tab.doc.reactions = vec![
+                reshiki::reactions::copy_reaction(&app.tab.doc, &app.tab.doc)
+                    .unwrap()
+                    .unwrap(),
+            ];
+        }
+        app.tab.selected = app.tab.doc.all_ids();
+        let before = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+
+        let task = text_shortcut(&mut app, "c");
+        assert_eq!(
+            app.status,
+            "Preparing ChemDoodle JSON · reaction for the clipboard…"
+        );
+        let (key, copy) = prepared_text(task).await;
+        assert_eq!(key.format, CopyFormat::ChemDoodleReaction);
+        assert_eq!(copy.format, CopyFormat::ChemDoodleReaction);
+        let json: serde_json::Value = serde_json::from_str(copy.text().unwrap()).unwrap();
+        assert_eq!(json["m"].as_array().unwrap().len(), 2);
+        assert_eq!(json["m"][0]["a"].as_array().unwrap().len(), 2);
+        assert_eq!(json["m"][1]["a"].as_array().unwrap().len(), 1);
+        assert_eq!(json["s"][0]["rs"], serde_json::json!(["a1"]));
+        assert_eq!(json["s"][0]["ps"], serde_json::json!(["a3"]));
+        app.copy_as_written(key, Ok(copy.notices));
+        assert!(
+            app.status
+                .starts_with("Selection copied as ChemDoodle JSON · reaction · Review details")
+        );
+        assert!(
+            app.status
+                .contains("Captions, drawing styles and other artwork")
+        );
+        assert!(!app.error && !app.copy_as_busy && !app.tab.clipboard_busy);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.selected, selected);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
+fn alt_c_shortcut_keeps_selection_and_busy_refusals_and_rejects_ambiguous_reactions() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    assert_eq!(text_shortcut(&mut app, "c").units(), 0);
+    assert_eq!(app.status, "Select a structure to copy");
+    app.tab.doc = text_reaction();
+    app.tab.selected = app.tab.doc.all_ids();
+    app.native_copy_busy = true;
+    assert_eq!(text_shortcut(&mut app, "c").units(), 0);
+    assert_eq!(app.status, "A clipboard operation is already in progress");
+    app.native_copy_busy = false;
+    app.tab.doc.atoms[2].position.x = 120.;
+    let before = app.tab.doc.clone();
+    assert_eq!(text_shortcut(&mut app, "c").units(), 0);
+    assert!(app.error && app.status.contains("arrow midpoint"));
+    assert!(!app.copy_as_busy && !app.tab.clipboard_busy);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+async fn alt_o_and_copy_as_smiles_keep_their_existing_formats_and_reaction_refusal() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = text_reaction();
+    app.tab.selected = app.tab.doc.all_ids();
+    assert_eq!(app.copy_as(CopyFormat::Smiles).units(), 0);
+    assert_eq!(
+        app.status,
+        "For molecular formats, select a molecule from the reaction."
+    );
+    assert_eq!(text_shortcut(&mut app, "o").units(), 0);
+    assert_eq!(
+        app.status,
+        "For molecular formats, select a molecule from the reaction."
+    );
+    app.tab.selected = app
+        .tab
+        .doc
+        .atoms
+        .iter()
+        .take(2)
+        .map(|atom| atom.id)
+        .collect();
+    let task = text_shortcut(&mut app, "o");
+    assert_eq!(app.status, "Preparing MOL for the clipboard…");
+    let (key, copy) = prepared_text(task).await;
+    assert_eq!(key.format, CopyFormat::Mol);
+    assert_eq!(copy.format, CopyFormat::Mol);
+    assert!(copy.text().unwrap().contains("M  END"));
+}
+
 #[test]
 fn an_ordinary_copy_outliving_its_tab_cannot_overtake_a_new_copy_as() {
     let (mut app, _) = App::new();
@@ -152,7 +321,6 @@ fn success() -> Result<CopyOutcome, String> {
     Ok(CopyOutcome {
         external_editable: true,
         image_only: false,
-        chemical_format: None,
         notices: vec![],
     })
 }
@@ -219,7 +387,6 @@ fn successful_picture_fallback_has_a_concise_status_and_retains_details() {
         Ok(CopyOutcome {
             external_editable: false,
             image_only: false,
-            chemical_format: None,
             notices: vec!["Unsupported projected wedge style".into()],
         }),
     );

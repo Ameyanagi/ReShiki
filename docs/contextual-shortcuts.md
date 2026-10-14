@@ -215,24 +215,29 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 
 ## Files, clipboard and help
 
-| Keys                      | Action                                    |
-| ------------------------- | ----------------------------------------- |
-| F1                        | Help and editable examples                |
-| Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save      |
-| Cmd/Ctrl+Shift+S          | Save as                                   |
-| Cmd/Ctrl+W                | Close tab                                 |
-| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab                       |
-| Cmd/Ctrl+1–8 / 9          | Tab 1–8 / last tab                        |
-| Cmd/Ctrl+P                | Print                                     |
-| Cmd/Ctrl+I                | Import                                    |
-| Cmd/Ctrl+Shift+E          | Open Export                               |
-| Cmd/Ctrl+C / X / V        | Copy / cut / paste editable selection     |
-| Cmd/Ctrl+Shift+C          | Copy as an image                          |
-| Cmd/Ctrl+D                | Copy CDXML text                           |
-| Cmd/Ctrl+Alt+C / O        | Copy SMILES / MOL text                    |
-| Cmd/Ctrl+Alt+P            | Paste                                     |
-| Cmd/Ctrl+Z / Shift+Z      | Undo / redo; Windows also supports Ctrl+Y |
-| Cmd/Ctrl+Enter            | Finish editing a label or caption         |
+| Keys                      | Action                                                                      |
+| ------------------------- | --------------------------------------------------------------------------- |
+| F1                        | Help and editable examples                                                  |
+| Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save                                        |
+| Cmd/Ctrl+Shift+S          | Save as                                                                     |
+| Cmd/Ctrl+W                | Close tab                                                                   |
+| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab                                                         |
+| Cmd/Ctrl+1–8 / 9          | Tab 1–8 / last tab                                                          |
+| Cmd/Ctrl+P                | Print                                                                       |
+| Cmd/Ctrl+I                | Import                                                                      |
+| Cmd/Ctrl+Shift+E          | Open Export                                                                 |
+| Cmd/Ctrl+C / X / V        | Copy / cut / paste editable selection                                       |
+| Cmd/Ctrl+Shift+C          | Copy as an image                                                            |
+| Cmd/Ctrl+D                | Copy CDXML text                                                             |
+| Cmd/Ctrl+Alt+C / O        | Copy chemical text (SMILES, or ChemDoodle JSON for one reaction) / MOL text |
+| Cmd/Ctrl+Alt+P            | Paste                                                                       |
+| Cmd/Ctrl+Z / Shift+Z      | Undo / redo; Windows also supports Ctrl+Y                                   |
+| Cmd/Ctrl+Enter            | Finish editing a label or caption                                           |
+
+**Cmd/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps.
+To paste a structure into a text field such as SciFinder's, select it and use
+**Cmd/Ctrl+Alt+C**. With one clear reaction arrow, that shortcut copies bounded
+ChemDoodle reaction JSON; without an arrow, it copies molecular SMILES.
 
 ## Atom label editor
 

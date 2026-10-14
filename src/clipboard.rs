@@ -26,7 +26,8 @@ const JSON_LIMIT: usize = LIMIT * 2;
 mod browser_tests;
 mod copy_as;
 pub use copy_as::{
-    CopyFormat, PreparedCopy, chemical_snapshot, prepare_as, selection_or_drawing, write_prepared,
+    CopyFormat, PreparedCopy, chemical_snapshot, chemical_text_snapshot, prepare_as,
+    prepare_chemical_text, selection_or_drawing, write_prepared,
 };
 const CDX_TYPES: [&str; 3] = [
     "com.revvity.chemdraw.cdx-clipboard",
@@ -89,7 +90,6 @@ struct Packet {
 pub struct CopyOutcome {
     pub external_editable: bool,
     pub image_only: bool,
-    pub chemical_format: Option<CopyFormat>,
     pub notices: Vec<String>,
 }
 
@@ -263,19 +263,7 @@ pub async fn copy(
     original: Document,
     image_only: bool,
 ) -> Result<CopyOutcome, String> {
-    let reaction = crate::reactions::copy_reaction(&original, &original);
-    copy_with_reaction(engine, original, image_only, reaction).await
-}
-
-/// Carry selection-aware chemical roles separately from the native drawing.
-pub async fn copy_with_reaction(
-    engine: LocalEngine,
-    original: Document,
-    image_only: bool,
-    reaction: Result<Option<crate::reactions::Reaction>, &'static str>,
-) -> Result<CopyOutcome, String> {
-    let (outcome, representations) =
-        prepare_copy_with_reaction(engine, original, image_only, reaction).await?;
+    let (outcome, representations) = prepare_copy(engine, original, image_only).await?;
     let operation = if cfg!(windows) && !image_only {
         "write_embedded"
     } else {
@@ -285,21 +273,10 @@ pub async fn copy_with_reaction(
     Ok(outcome)
 }
 
-#[cfg(test)]
 async fn prepare_copy(
     engine: LocalEngine,
     original: Document,
     image_only: bool,
-) -> Result<(CopyOutcome, Vec<Representation>), String> {
-    let reaction = crate::reactions::copy_reaction(&original, &original);
-    prepare_copy_with_reaction(engine, original, image_only, reaction).await
-}
-
-async fn prepare_copy_with_reaction(
-    engine: LocalEngine,
-    original: Document,
-    image_only: bool,
-    reaction: Result<Option<crate::reactions::Reaction>, &'static str>,
 ) -> Result<(CopyOutcome, Vec<Representation>), String> {
     original.validate()?;
     if original.all_ids().is_empty() {
@@ -308,7 +285,6 @@ async fn prepare_copy_with_reaction(
     let mut outcome = CopyOutcome {
         external_editable: false,
         image_only,
-        chemical_format: None,
         notices: vec![],
     };
     let doc = match export::checked_document(&engine, original.clone()).await {
@@ -326,7 +302,6 @@ async fn prepare_copy_with_reaction(
         ..doc
     };
     let mut representations = Vec::new();
-    let mut chemical_text = None;
     if !image_only {
         representations.push(Representation::new(
             NATIVE,
@@ -378,28 +353,6 @@ async fn prepare_copy_with_reaction(
             Err(error) => outcome
                 .notices
                 .push(format!("Editable exchange unavailable: {error}")),
-        }
-        if !doc.atoms.is_empty() {
-            let chemical = async {
-                let reaction = reaction.map_err(str::to_owned)?;
-                let format = if reaction.is_some() {
-                    CopyFormat::ChemDoodleReaction
-                } else {
-                    CopyFormat::Smiles
-                };
-                let mut snapshot = doc.clone();
-                snapshot.reactions = reaction.into_iter().collect();
-                prepare_as(engine, snapshot, format).await
-            }
-            .await;
-            match chemical {
-                Ok(copy) => {
-                    chemical_text = copy.text.map(|text| (copy.format, text, copy.notices));
-                }
-                Err(error) => outcome
-                    .notices
-                    .push(format!("Chemical text unavailable: {error}")),
-            }
         }
     }
     let images = tokio::task::spawn_blocking(move || copy_images(&doc, image_only))
@@ -462,86 +415,7 @@ async fn prepare_copy_with_reaction(
     if image_count == 0 && image_only {
         return Err(outcome.notices.join(" · "));
     }
-    if let Some((format, text, notices)) = chemical_text {
-        if append_chemical_text(&mut representations, &text, LIMIT) {
-            outcome.chemical_format = Some(format);
-            outcome.notices.extend(
-                notices
-                    .into_iter()
-                    .map(|notice| format!("Chemical text: {notice}")),
-            );
-        } else {
-            outcome.notices.push(
-                "Chemical text omitted to keep the drawing within clipboard size limits; use Copy as for text only.".into(),
-            );
-        }
-    }
     Ok((outcome, representations))
-}
-
-/// Optional text must not make a previously fitting drawing copy fail. Count
-/// aliases separately and include Windows' UTF-16 terminator and wire overhead.
-fn append_chemical_text(
-    representations: &mut Vec<Representation>,
-    text: &str,
-    byte_limit: usize,
-) -> bool {
-    let text_bytes = if cfg!(windows) {
-        text.encode_utf16()
-            .count()
-            .saturating_mul(2)
-            .saturating_add(2)
-    } else {
-        text.len()
-    };
-    let (decoded, wire) = representations
-        .iter()
-        .fold((0usize, 128usize), |(n, w), r| {
-            let padding = usize::from(r.data.ends_with('=')) + usize::from(r.data.ends_with("=="));
-            #[cfg(windows)]
-            let bitmap_bytes = if r.kind == "public.png" {
-                // Non-OLE callers also publish CF_DIB. Reserve its space even
-                // when Office embedding might discard it; no raster decoding.
-                clipboard_dib_size(r).unwrap_or(byte_limit)
-            } else {
-                0
-            };
-            #[cfg(not(windows))]
-            let bitmap_bytes = 0;
-            (
-                n.saturating_add((r.data.len() / 4 * 3).saturating_sub(padding))
-                    .saturating_add(bitmap_bytes),
-                w.saturating_add(r.data.len())
-                    .saturating_add(r.kind.len())
-                    .saturating_add(32),
-            )
-        });
-    if decoded.saturating_add(text_bytes) > byte_limit
-        || wire
-            .saturating_add(text.len().div_ceil(3).saturating_mul(4))
-            .saturating_add(64)
-            > JSON_LIMIT
-    {
-        return false;
-    }
-    representations.push(Representation::new(
-        "public.utf8-plain-text",
-        text.as_bytes(),
-    ));
-    true
-}
-
-#[cfg(any(windows, test))]
-fn clipboard_dib_size(png: &Representation) -> Option<usize> {
-    // The first 24 PNG bytes contain the signature, IHDR tag, width and height.
-    let header = STANDARD.decode(png.data.get(..32)?).ok()?;
-    if header.get(..8)? != b"\x89PNG\r\n\x1a\n" || header.get(12..16)? != b"IHDR" {
-        return None;
-    }
-    let width = u32::from_be_bytes(header.get(16..20)?.try_into().ok()?) as usize;
-    let height = u32::from_be_bytes(header.get(20..24)?.try_into().ok()?) as usize;
-    let stride = width.checked_mul(3)?.checked_add(3)? & !3;
-    stride.checked_mul(height)?.checked_add(40)
 }
 
 fn copy_images(

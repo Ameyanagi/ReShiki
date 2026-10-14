@@ -263,6 +263,10 @@ async fn both_canvas_modes_copy_visible_ink_without_background_objects() {
             .await
             .unwrap();
         assert!(outcome.external_editable, "{:?}", outcome.notices);
+        assert!(representations.iter().all(|item| !matches!(
+            item.kind.as_str(),
+            "public.utf8-plain-text" | "org.opensmiles.smiles"
+        )));
         let native = representations.iter().find(|r| r.kind == NATIVE).unwrap();
         let original: Document = serde_json::from_slice(&native.bytes().unwrap()).unwrap();
         assert_eq!(original.canvas_theme, theme);

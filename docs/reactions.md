@@ -18,9 +18,11 @@ Assistant-generated schemes already contain reactant and product roles, includin
 
 ## Copy a drawn reaction
 
-Ordinary **Cmd/Ctrl+C** retains the selected editable drawing and adds chemical
-text when preparation succeeds. With no selected arrow, it prepares molecular
-SMILES and retains all selected disconnected molecular components. Inspect the
+**Cmd/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps.
+It supplies no chemical plain text. To paste a structure into a text field such
+as SciFinder's, select it and use **Cmd/Ctrl+Alt+C**. With no selected arrow,
+this copies molecular SMILES and retains all selected disconnected molecular
+components. Inspect the
 receiving editor's interpretation of a mixture or salt; copying all components
 does not establish receiver acceptance.
 
@@ -41,14 +43,15 @@ spanning explicit participants are rejected for chemical text even if the
 selection snapshot has pruned their reaction metadata. Unassigned no-arrow
 molecules continue to use the molecular copy path.
 
-The inferred roles exist only in the chemical export snapshot. The native
-clipboard retains its existing selected-drawing metadata. Copy does not move
-atoms, change the source document or create an Undo entry. Ambiguous or invalid
-inference omits optional chemical text and reports the reason while ordinary
-drawing Copy still succeeds. Chemical **Copy as** choices use the same selection
-rules and report an error when the requested conversion cannot be prepared.
+The inferred roles exist only in the chemical copy. The drawing retains its
+existing reaction roles. Copy does not move atoms, change the source document
+or create an Undo entry. Ambiguous or invalid inference leaves the previous
+clipboard intact and reports the reason. Chemical **Copy as** choices use the
+same selection rules and report an error when the requested conversion cannot
+be prepared.
 
-Ordinary reaction Copy uses bounded ChemDoodle JSON. Aromatic molecules use
+**Cmd/Ctrl+Alt+C** for one clear reaction uses bounded ChemDoodle JSON.
+Aromatic molecules use
 validated canonical Kekulé bonds with preserved attached hydrogen counts.
 Agents, non-unit coefficients, atom maps, stereochemistry, radicals, unsupported
 bonds, collapsed abbreviations and disconnected components grouped into one
@@ -68,11 +71,12 @@ with three double bonds and Cyclohexane with six single bonds; the screenshot
 showed `C6H12 (84.16) . C6H6 (78.11)`. MOL was checked only for text-field
 delivery, without Add/conversion. No searches were submitted, and
 vertical/reversed layouts remain covered locally rather than by these live
-checks.
+checks. That build supplied chemical text through ordinary Copy; current builds
+use **Cmd/Ctrl+Alt+C** for that text.
 
-The accepted workflow is ReShiki Cmd+C → Cmd+V into ChemDoodle's Open text
-field → Load. Both complete participants and their reactant/product roles were
-preserved in the tested benzene-to-cyclohexane fixture.
+Use ReShiki **Cmd/Ctrl+Alt+C** → **Cmd/Ctrl+V** into ChemDoodle's **Open** text
+field → **Load**. Both complete participants and their reactant/product roles
+were preserved in the tested benzene-to-cyclohexane fixture.
 [PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) added this
 workflow; direct canvas paste and CAS reaction integration are outside this
 change. The guide records the exact actions, baseline comparison and limits.
