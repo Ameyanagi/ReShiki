@@ -8,7 +8,7 @@
 
 Before the release, a manual [release build](https://github.com/Ameyanagi/ReShiki/actions/runs/38505899071) of the preparation branch passed on all six platforms. It did not publish.
 
-A local optimized macOS ARM64 build was pasted into real applications. PowerPoint, Word and Excel pasted a vector picture. ChemDraw pasted an editable structure after asking whether to keep the copied drawing settings. A Safari image area pasted a picture, and a text area pasted nothing until **Cmd+Alt+C** supplied SMILES. A `CCO` cell copied from Excel pasted into ReShiki as ethanol. Keynote is not installed on the verification host and was not tested, although the release notes name it.
+A local optimized macOS ARM64 build was pasted into real applications. PowerPoint, Word and Excel pasted a vector picture. ChemDraw pasted an editable structure after asking whether to keep the copied drawing settings. A Safari image area pasted a picture, and a text area pasted nothing until **Cmd+Alt+C** supplied SMILES. A `CCO` cell copied from Excel pasted into ReShiki as ethanol. Keynote was not tested, so the release notes name only PowerPoint and Word.
 
 Drawings saved in 0.12.0 use document version 26 and cannot be opened in ReShiki 0.11.0 or earlier. The public applications report document version 26. Older drawings still open in 0.12.0.
 
