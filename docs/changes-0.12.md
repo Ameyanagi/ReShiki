@@ -408,4 +408,5 @@ their contributor credits and links to their reviews.
   limits and Assistant source from
   [#299](https://github.com/Ameyanagi/ReShiki/pull/299)).
 - **Release preparation.** Update the version, the release notes and the
-  documentation for 0.12.0. @Ameyanagi.
+  documentation for 0.12.0.
+  [#320](https://github.com/Ameyanagi/ReShiki/pull/320) · @Ameyanagi.

@@ -150,6 +150,6 @@ Clearer controls and wording for the new features, ChemDraw-like atom labels, th
 agent skill and the MOL and polymer fixes (released in 0.12.0): @Ameyanagi in
 [PR #319](https://github.com/Ameyanagi/ReShiki/pull/319).
 
-Release preparation and documentation for 0.12.0: @Ameyanagi.
+Release preparation and documentation for 0.12.0: @Ameyanagi in [PR #320](https://github.com/Ameyanagi/ReShiki/pull/320).
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.12.md) credit contributors alongside their changes.
