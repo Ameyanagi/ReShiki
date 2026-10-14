@@ -36,8 +36,9 @@ def run(command):
 # Apple accepts notarization, but stapler then needs Apple's ticket service.
 # The hosted Intel runners lose that connection often (stapler exit 68), so
 # repeat the idempotent staple and validate steps before failing the build.
-STAPLER_ATTEMPTS = 4
-STAPLER_DELAY_SECONDS = 20
+# The v0.12.0 Intel disk image stapled only on the fourth of four attempts.
+STAPLER_ATTEMPTS = 8
+STAPLER_DELAY_SECONDS = 30
 
 
 def stapler(action, target, *, sleep=time.sleep):
