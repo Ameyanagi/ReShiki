@@ -1,5 +1,5 @@
 //! Wayland uses the focused GUI owner; X11 retains its persistent worker.
-use super::{JSON_LIMIT, Packet, Representation, encode_request};
+use super::{JSON_LIMIT, Packet};
 use serde::Deserialize;
 use std::{process::Stdio, time::Duration};
 use tokio::{
@@ -26,11 +26,7 @@ enum Response {
     Failure { error: String },
 }
 
-pub(super) async fn invoke(
-    operation: &str,
-    representations: &[Representation],
-) -> Result<Packet, String> {
-    let input = encode_request(operation, representations)?;
+pub(super) async fn invoke_encoded(operation: &str, input: Vec<u8>) -> Result<Packet, String> {
     if let Some(output) = reshiki_linux::gui_clipboard_request(&input).await? {
         let packet = parse_response(&output)?;
         if operation == "write" && !packet.representations.is_empty() {

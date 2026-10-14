@@ -206,6 +206,8 @@ saved by 0.11.0.
 
 ## Import and export
 
+- **Paste keeps editable chemistry first.** Paste tries drawings, chemical formats and structure text before pictures, and tries the next format if one fails. Windows Office drawings are tried first.
+
 - **3D coordinates from MOL files.** Opening a MOL file with 3D coordinates keeps
   them, so you can tilt the molecule, and ordinary hydrogens become H counts.
   Save a `.rsk` file to keep the 3D shape; MOL export still writes a flat

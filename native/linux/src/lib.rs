@@ -69,7 +69,7 @@ fn run() -> Result<(), String> {
         .take(JSON_LIMIT as u64 + 1)
         .read_to_end(&mut input)
         .map_err(|e| e.to_string())?;
-    let request = protocol::parse_request(&input)?;
+    let mut request = protocol::parse_request(&input)?;
     // Decode and validate the complete offer before touching either selection.
     let offer = if request.operation == "write" {
         Some(protocol::prepare_offer(&request.representations)?)
@@ -77,6 +77,9 @@ fn run() -> Result<(), String> {
         None
     };
     let picture_only = request.operation == "read_picture";
+    let requested = std::mem::take(&mut request.formats);
+    let skip_sources = std::mem::take(&mut request.skip_sources);
+    let generation = request.generation.take();
     // A persistent owner needs only decoded shared bytes, not another retained
     // base64 copy of every representation for its entire lifetime.
     drop(request);
@@ -88,8 +91,10 @@ fn run() -> Result<(), String> {
             respond(&protocol::Response::empty())?;
             clipboard.serve()
         } else {
-            let representation = clipboard.read(picture_only)?;
-            respond(&protocol::Response::read(representation))
+            let formats = protocol::read_formats(&requested, picture_only)?;
+            let (representation, generation) =
+                clipboard.read(&formats, &skip_sources, generation.as_deref())?;
+            respond(&protocol::Response::read(representation, generation))
         }
     } else {
         Err("The standalone clipboard worker requires an X11 display. In a Wayland desktop, use Copy or Paste in the focused ReShiki window.".into())

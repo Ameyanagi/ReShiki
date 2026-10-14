@@ -20,6 +20,37 @@ fn error(error: impl std::fmt::Display) -> String {
 // list separately from our own offer/MULTIPLE limit (16 KiB, without interning it).
 const MAX_TARGETS: usize = 4096;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SelectionGeneration {
+    owner: Window,
+    timestamp: Option<Timestamp>,
+}
+
+impl SelectionGeneration {
+    fn check_owner(owner: Window, expected: Option<&str>) -> Result<(), String> {
+        let prefix = format!("x11:{owner:x}:");
+        if expected.is_some_and(|expected| !expected.starts_with(&prefix)) {
+            return Err(protocol::CLIPBOARD_CHANGED.into());
+        }
+        Ok(())
+    }
+
+    fn token(self) -> String {
+        let timestamp = self
+            .timestamp
+            .map_or_else(|| "-".into(), |time| format!("{time:x}"));
+        format!("x11:{:x}:{timestamp}", self.owner)
+    }
+
+    fn check(self, expected: Option<&str>) -> Result<String, String> {
+        let generation = self.token();
+        if expected.is_some_and(|expected| expected != generation) {
+            return Err(protocol::CLIPBOARD_CHANGED.into());
+        }
+        Ok(generation)
+    }
+}
+
 struct TransferTiming {
     idle: Instant,
     total: Instant,
@@ -538,46 +569,136 @@ impl Clipboard {
         Ok(reply)
     }
 
-    pub fn read(&mut self, picture_only: bool) -> Result<Option<Representation>, String> {
+    pub fn read(
+        &mut self,
+        formats: &[&str],
+        skip_sources: &[String],
+        expected: Option<&str>,
+    ) -> Result<(Option<Representation>, String), String> {
         let owner = self.owner()?;
+        // A changed owner outranks even malformed/refused metadata from the
+        // replacement, and can be detected without touching its candidates.
+        SelectionGeneration::check_owner(owner, expected)?;
         if owner == NONE {
-            return Ok(None);
+            let selection = SelectionGeneration {
+                owner,
+                timestamp: None,
+            };
+            let generation = selection.check(expected)?;
+            self.verify_generation(selection, Instant::now() + TRANSFER_TIMEOUT)?;
+            return Ok((None, generation));
         }
         let mut timing = TransferTiming::new(Instant::now());
-        let targets =
-            self.request_property(self.atoms.targets, MAX_TARGETS * 4, timing.deadline())?;
+        let result = self.read_targets(timing.deadline());
+        self.verify_owner(owner)?;
+        let mut targets = result?;
+        let timestamp = if targets.contains(&self.atoms.timestamp) {
+            Some(self.selection_timestamp(owner, timing.deadline())?)
+        } else {
+            // Some owners omit ICCCM TIMESTAMP. Their owner window remains the
+            // available identity; a same-window update cannot be distinguished.
+            None
+        };
+        let selection = SelectionGeneration { owner, timestamp };
+        let generation = selection.check(expected)?;
+        if timestamp.is_some() {
+            // The first TARGETS query discovers timestamp support. Obtain the
+            // candidates again inside that timestamp's checked interval.
+            let result = self.read_targets(timing.deadline());
+            self.verify_generation(selection, timing.deadline())?;
+            targets = result?;
+        }
+        timing.progress(Instant::now())?;
+        let result = self.read_candidates(formats, skip_sources, &targets, timing);
+        // Ownership errors always outrank candidate failures, including a
+        // refused/empty representation and requests with every source skipped.
+        self.verify_generation(selection, Instant::now() + TRANSFER_TIMEOUT)?;
+        Ok((result?, generation))
+    }
+
+    fn read_targets(&self, deadline: Instant) -> Result<Vec<Atom>, String> {
+        let targets = self.request_property(self.atoms.targets, MAX_TARGETS * 4, deadline)?;
         if targets.type_ != u32::from(AtomEnum::ATOM) || targets.format != 32 {
             return Err("Invalid X11 clipboard TARGETS response".into());
         }
-        let targets: Vec<u32> = targets
+        Ok(targets
             .value32()
             .ok_or("Invalid X11 clipboard atom list")?
-            .collect();
-        timing.progress(Instant::now())?;
+            .collect())
+    }
+
+    fn verify_owner(&self, owner: Window) -> Result<(), String> {
+        if self.owner()? != owner {
+            return Err(protocol::CLIPBOARD_CHANGED.into());
+        }
+        Ok(())
+    }
+
+    fn selection_timestamp(&self, owner: Window, deadline: Instant) -> Result<Timestamp, String> {
+        self.verify_owner(owner)?;
+        let result = self.request_property(self.atoms.timestamp, 4, deadline);
+        self.verify_owner(owner)?;
+        let reply = result?;
+        if reply.type_ != u32::from(AtomEnum::INTEGER)
+            || reply.format != 32
+            || reply.value.len() != 4
+        {
+            return Err("Invalid X11 clipboard TIMESTAMP response".into());
+        }
+        reply
+            .value32()
+            .and_then(|mut values| values.next())
+            .ok_or_else(|| "Invalid X11 clipboard TIMESTAMP response".into())
+    }
+
+    fn verify_generation(
+        &self,
+        generation: SelectionGeneration,
+        deadline: Instant,
+    ) -> Result<(), String> {
+        self.verify_owner(generation.owner)?;
+        if let Some(timestamp) = generation.timestamp
+            && self.selection_timestamp(generation.owner, deadline)? != timestamp
+        {
+            return Err(protocol::CLIPBOARD_CHANGED.into());
+        }
+        Ok(())
+    }
+
+    fn read_candidates(
+        &self,
+        formats: &[&str],
+        skip_sources: &[String],
+        targets: &[Atom],
+        timing: TransferTiming,
+    ) -> Result<Option<Representation>, String> {
         let mut known = BTreeMap::new();
-        for (_, types, _) in protocol::READABLE {
-            for mime in *types {
-                let atom = self
-                    .connection
-                    .intern_atom(true, mime.as_bytes())
-                    .map_err(error)?
-                    .reply()
-                    .map_err(error)?
-                    .atom;
-                if atom != NONE && targets.contains(&atom) {
-                    known.insert(*mime, atom);
-                }
+        for mime in protocol::requested_mime_types(formats, skip_sources) {
+            let atom = self
+                .connection
+                .intern_atom(true, mime.as_bytes())
+                .map_err(error)?
+                .reply()
+                .map_err(error)?
+                .atom;
+            if atom != NONE && targets.contains(&atom) {
+                known.insert(mime, atom);
             }
         }
-        let Some((kind, mime)) =
-            protocol::choose_type(|mime| known.contains_key(mime), picture_only)
+        let Some((kind, mime)) = protocol::choose_type(|mime| known.contains_key(mime), formats)
         else {
             return Ok(None);
         };
         let target = *known.get(mime).ok_or("Clipboard target disappeared")?;
-        if self.owner()? != owner {
-            return Err("X11 clipboard changed during the read".into());
-        }
+        let result = self
+            .read_target(target, timing)
+            .map(|bytes| protocol::selected_representation(kind, mime, &bytes));
+        Ok(Some(result.unwrap_or_else(|error| {
+            protocol::read_failure(kind, mime, error)
+        })))
+    }
+
+    fn read_target(&self, target: Atom, mut timing: TransferTiming) -> Result<Vec<u8>, String> {
         let reply = self.request_property(target, LIMIT, timing.deadline())?;
         let bytes = if reply.type_ == self.atoms.incr {
             if reply.format != 32
@@ -636,7 +757,7 @@ impl Clipboard {
         // A one-shot owner may release CLIPBOARD immediately after sending the
         // completed payload. The requested type and transfer bounds above are
         // sufficient; this read never combines data from different owners.
-        protocol::representation(kind, &bytes).map(Some)
+        Ok(bytes)
     }
 }
 

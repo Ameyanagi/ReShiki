@@ -11,22 +11,29 @@ use windows::{
     core::PCWSTR,
 };
 
+#[path = "../../../src/clipboard/priority.rs"]
+mod priority;
+
 const LIMIT: usize = 64 * 1024 * 1024;
 const UNICODE: u32 = 13;
 const DIB: u32 = 8;
 const DIB_V5: u32 = 17;
-const CHEMICAL_FORMATS: &[(&str, &str)] = &[
-    ("dev.reshiki.drawing", "dev.reshiki.drawing"),
-    ("dev.moruno.drawing", "dev.moruno.drawing"),
-    (
-        "ChemDraw Interchange Format",
-        "com.revvity.chemdraw.cdx-clipboard",
-    ),
-    ("ChemDraw XML", "public.cdxml"),
-    ("chemical/x-cdxml", "public.cdxml"),
-    ("MDLCT", "com.mdli.molfile"),
-    ("chemical/x-mdl-molfile", "com.mdli.molfile"),
-    ("SMILES", "org.opensmiles.smiles"),
+const CDX_KINDS: &[&str] = &[
+    "com.revvity.chemdraw.cdx-clipboard",
+    "com.perkinelmer.chemdraw.cdx-clipboard",
+    "com.cambridgesoft.cdx",
+    "com.revvity.cdx",
+    "com.perkinelmer.cdx",
+    "chemical/x-cdx",
+    "application/x-chemdraw",
+];
+const CDXML_KINDS: &[&str] = &[
+    "com.revvity.cdxml",
+    "com.perkinelmer.cdxml",
+    "com.cambridgesoft.cdxml",
+    "com.perkinelmer.chemdraw.cdxml",
+    "chemical/x-cdxml",
+    "public.cdxml",
 ];
 
 #[cfg(test)]
@@ -37,16 +44,32 @@ struct Representation {
     #[serde(rename = "type")]
     kind: String,
     data: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    read_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    embedded: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
 }
 #[derive(Deserialize)]
 struct Request {
     operation: String,
     #[serde(default)]
     representations: Vec<Representation>,
+    #[serde(default)]
+    formats: Vec<String>,
+    #[serde(default)]
+    skip_embedded: bool,
+    #[serde(default)]
+    skip_sources: Vec<String>,
+    #[serde(default)]
+    generation: Option<String>,
 }
 #[derive(Serialize)]
 struct Packet {
     representations: Vec<Representation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    generation: Option<String>,
 }
 
 pub(super) fn format(name: &str) -> Result<u32> {
@@ -59,21 +82,11 @@ pub(super) fn format(name: &str) -> Result<u32> {
         Ok(id)
     }
 }
-pub(super) fn has_chemical_format() -> Result<bool> {
-    for &(name, _) in CHEMICAL_FORMATS {
-        let id = format(name)?;
-        // SAFETY: read-only availability queries do not require OpenClipboard.
-        if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
 fn mapped(kind: &str) -> &str {
+    if CDX_KINDS.contains(&kind) {
+        return "ChemDraw Interchange Format";
+    }
     match kind {
-        "com.revvity.chemdraw.cdx-clipboard"
-        | "com.perkinelmer.chemdraw.cdx-clipboard"
-        | "com.cambridgesoft.cdx" => "ChemDraw Interchange Format",
         "public.png" => "PNG",
         "public.svg-image" => "image/svg+xml",
         "com.adobe.pdf" => "PDF",
@@ -282,6 +295,11 @@ fn prepare_formats(
     }
     let mut formats = BTreeMap::new();
     for rep in representations {
+        if rep.read_error.is_some() || rep.embedded.is_some() || rep.source.is_some() {
+            return Err(anyhow::anyhow!(
+                "Read metadata is not valid for clipboard writes"
+            ));
+        }
         if rep.kind.is_empty() || rep.kind.len() > 128 || rep.kind.contains('\0') {
             return Err(anyhow::anyhow!("Invalid clipboard format"));
         }
@@ -337,74 +355,264 @@ fn write(representations: Vec<Representation>, embedded: bool) -> Result<()> {
     }
     Ok(())
 }
-fn read_packet(picture_only: bool) -> Result<Packet> {
-    let packet = |kind: &str, bytes: Vec<u8>| Packet {
-        representations: vec![Representation {
-            kind: kind.into(),
-            data: STANDARD.encode(bytes),
-        }],
+fn registered_formats(kind: &str) -> Vec<&str> {
+    let aliases: &[&str] = if CDX_KINDS.contains(&kind) {
+        &["ChemDraw Interchange Format"]
+    } else if CDXML_KINDS.contains(&kind) {
+        &["ChemDraw XML", "chemical/x-cdxml"]
+    } else {
+        match kind {
+            "com.mdli.molfile" => &["chemical/x-mdl-molfile", "MDLCT"],
+            "org.opensmiles.smiles" => &["SMILES"],
+            "public.png" => &["PNG", "image/png"],
+            "public.tiff" => &["TIFF", "image/tiff"],
+            "public.jpeg" => &["JFIF", "JPEG", "image/jpeg"],
+            "org.webmproject.webp" | "public.webp" => &["WebP", "image/webp"],
+            "com.adobe.pdf" => &["PDF", "application/pdf"],
+            "public.svg-image" => &["image/svg+xml"],
+            "public.utf8-plain-text" => return vec![],
+            _ => &[],
+        }
     };
-    if let Some(document) = super::ole::read_embedded(picture_only)? {
-        let (kind, bytes) = document.into_parts();
-        return Ok(packet(kind, bytes));
+    aliases
+        .iter()
+        .copied()
+        .chain(std::iter::once(kind))
+        .collect()
+}
+
+fn unicode_text(bytes: &[u8]) -> Result<Vec<u8>> {
+    let (pairs, remainder) = bytes.as_chunks::<2>();
+    if !remainder.is_empty() {
+        return Err(anyhow::anyhow!("Invalid clipboard Unicode text"));
     }
-    let owner = Owner::new()?;
-    let _open = Open::new(owner.0)?;
-    if !picture_only {
-        for &(name, kind) in CHEMICAL_FORMATS {
-            let id = format(name)?;
-            // SAFETY: read-only format query, while holding the clipboard.
-            if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
-                let mut bytes = read(id)?;
+    let utf16: Vec<_> = pairs
+        .iter()
+        .map(|&pair| u16::from_le_bytes(pair))
+        .take_while(|c| *c != 0)
+        .collect();
+    Ok(String::from_utf16(&utf16)?.into_bytes())
+}
+
+fn native_sources(kind: &str) -> Vec<&str> {
+    if kind == "public.utf8-plain-text" {
+        return vec!["CF_UNICODETEXT"];
+    }
+    let mut sources = registered_formats(kind);
+    if kind == "public.png" {
+        sources.extend(["CF_DIBV5", "CF_DIB"]);
+    }
+    sources
+}
+
+fn source_id(source: &str) -> Result<u32> {
+    match source {
+        "CF_UNICODETEXT" => Ok(UNICODE),
+        "CF_DIBV5" => Ok(DIB_V5),
+        "CF_DIB" => Ok(DIB),
+        _ => format(source),
+    }
+}
+
+struct ReadCandidate {
+    source: String,
+    bytes: Result<Vec<u8>>,
+}
+
+fn read_kind_with(
+    kind: &str,
+    skipped: &[String],
+    mut available: impl FnMut(&str) -> Result<bool>,
+    mut acquire: impl FnMut(&str) -> Result<Vec<u8>>,
+) -> Result<Option<ReadCandidate>> {
+    for source in native_sources(kind) {
+        if skipped.iter().any(|skipped| skipped == source) || !available(source)? {
+            continue;
+        }
+        let bytes = acquire(source).and_then(|mut bytes| match source {
+            "CF_UNICODETEXT" => unicode_text(&bytes),
+            "CF_DIBV5" | "CF_DIB" => from_dib(&bytes),
+            _ => {
                 if kind.starts_with("dev.")
-                    || kind == "public.cdxml"
+                    || CDXML_KINDS.contains(&kind)
                     || kind == "org.opensmiles.smiles"
                 {
                     while bytes.last() == Some(&0) {
                         bytes.pop();
                     }
                 }
-                return Ok(packet(kind, bytes));
+                Ok(bytes)
             }
+        });
+        return Ok(Some(ReadCandidate {
+            source: source.into(),
+            bytes,
+        }));
+    }
+    Ok(None)
+}
+
+fn read_kind(kind: &str, skipped: &[String]) -> Result<Option<ReadCandidate>> {
+    read_kind_with(
+        kind,
+        skipped,
+        |source| {
+            let id = source_id(source)?;
+            // SAFETY: read-only format query, while holding the clipboard.
+            Ok(unsafe { IsClipboardFormatAvailable(id) }.is_ok())
+        },
+        |source| read(source_id(source)?),
+    )
+}
+
+fn read_result(
+    kind: &str,
+    result: Result<Vec<u8>>,
+    embedded: Option<bool>,
+    source: Option<String>,
+) -> Packet {
+    let result = result.and_then(|bytes| {
+        if bytes.len() > LIMIT {
+            Err(anyhow::anyhow!("Clipboard data exceeds 64 MB"))
+        } else {
+            Ok(bytes)
+        }
+    });
+    let (data, read_error) = match result {
+        Ok(bytes) => (STANDARD.encode(bytes), None),
+        Err(error) => (
+            String::new(),
+            Some(error.to_string().chars().take(1000).collect()),
+        ),
+    };
+    Packet {
+        representations: vec![Representation {
+            kind: kind.into(),
+            data,
+            read_error,
+            embedded,
+            source,
+        }],
+        generation: None,
+    }
+}
+
+fn read_requested(
+    formats: &[&str],
+    mut acquire: impl FnMut(&str) -> Result<Option<ReadCandidate>>,
+) -> Packet {
+    for &kind in formats {
+        match acquire(kind) {
+            Ok(None) => continue,
+            Ok(Some(candidate)) => {
+                return read_result(kind, candidate.bytes, None, Some(candidate.source));
+            }
+            Err(error) => return read_result(kind, Err(error), None, None),
         }
     }
-    for (name, kind) in [
-        ("PNG", "public.png"),
-        ("image/png", "public.png"),
-        ("JFIF", "public.jpeg"),
-        ("TIFF", "public.tiff"),
-        ("WebP", "org.webmproject.webp"),
-    ] {
-        let id = format(name)?;
-        // SAFETY: read-only format query, while holding the clipboard.
-        if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
-            return Ok(packet(kind, read(id)?));
-        }
-    }
-    for id in [DIB_V5, DIB] {
-        if unsafe { IsClipboardFormatAvailable(id) }.is_ok() {
-            return Ok(packet("public.png", from_dib(&read(id)?)?));
-        }
-    }
-    if !picture_only && unsafe { IsClipboardFormatAvailable(UNICODE) }.is_ok() {
-        let bytes = read(UNICODE)?;
-        if bytes.len() % 2 != 0 {
-            return Err(anyhow::anyhow!("Invalid clipboard Unicode text"));
-        }
-        let utf16: Vec<_> = bytes
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|b| u16::from_le_bytes([b[0], b[1]]))
-            .take_while(|c| *c != 0)
-            .collect();
-        return Ok(packet(
-            "public.utf8-plain-text",
-            String::from_utf16(&utf16)?.into_bytes(),
-        ));
-    }
-    Ok(Packet {
+    Packet {
         representations: vec![],
+        generation: None,
+    }
+}
+
+fn read_packet_with(
+    formats: &[&str],
+    picture_only: bool,
+    skip_embedded: bool,
+    embedded: impl FnOnce(bool) -> Result<Option<super::ole::EmbeddedData>>,
+    ordinary: impl FnOnce(&[&str]) -> Result<Packet>,
+) -> Result<Packet> {
+    let Some(&first) = formats.first() else {
+        return Ok(Packet {
+            representations: vec![],
+            generation: None,
+        });
+    };
+    if !skip_embedded {
+        match embedded(picture_only) {
+            Ok(Some(document)) => {
+                let (kind, bytes) = document.into_parts();
+                if formats.contains(&kind) {
+                    return Ok(read_result(kind, Ok(bytes), Some(true), None));
+                }
+            }
+            Err(error) => return Ok(read_result(first, Err(error), Some(true), None)),
+            Ok(None) => {}
+        }
+    }
+    ordinary(formats)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ClipboardGeneration {
+    owner: usize,
+    formats: i32,
+}
+
+fn clipboard_generation() -> ClipboardGeneration {
+    // SAFETY: read-only metadata queries require no open clipboard or pointers.
+    unsafe {
+        ClipboardGeneration {
+            // A null HWND is a valid ownerless clipboard state. The Windows
+            // binding reports it as Err; keep zero for ownership comparisons.
+            owner: GetClipboardOwner().ok().map_or(0, |owner| owner.0 as usize),
+            formats: CountClipboardFormats(),
+        }
+    }
+}
+
+fn read_generation_with(
+    expected: Option<&str>,
+    mut generation: impl FnMut() -> ClipboardGeneration,
+    acquire: impl FnOnce() -> Result<Packet>,
+) -> Result<Packet> {
+    priority::validate_generation(expected).map_err(anyhow::Error::msg)?;
+    let initial = generation();
+    let token = format!("windows:{}:{}", initial.owner, initial.formats);
+    if expected.is_some_and(|expected| expected != token) {
+        return Err(anyhow::Error::msg(priority::CLIPBOARD_CHANGED));
+    }
+    let result = acquire();
+    // Delayed rendering fills an advertised format without changing its owner
+    // or format count, but can advance GetClipboardSequenceNumber. Never use
+    // that sequence to abort a paste. A same-owner re-copy with the same format
+    // count is indistinguishable (even if the formats differ), as with an X11
+    // owner that lacks TIMESTAMP. OLE can release the clipboard between reads;
+    // an owner/count change must abort rather than fall through with stale
+    // exclusions, including when acquisition failed.
+    if generation() != initial {
+        return Err(anyhow::Error::msg(priority::CLIPBOARD_CHANGED));
+    }
+    let mut packet = result?;
+    packet.generation = Some(token);
+    Ok(packet)
+}
+
+fn read_packet(
+    picture_only: bool,
+    requested: &[String],
+    skip_embedded: bool,
+    skip_sources: &[String],
+    generation: Option<&str>,
+) -> Result<Packet> {
+    read_generation_with(generation, clipboard_generation, || {
+        let formats =
+            priority::read_formats(requested, picture_only).map_err(anyhow::Error::msg)?;
+        priority::validate_skip_sources(skip_sources).map_err(anyhow::Error::msg)?;
+        read_packet_with(
+            &formats,
+            picture_only,
+            skip_embedded,
+            super::ole::read_embedded,
+            |formats| {
+                let owner = Owner::new()?;
+                let _open = Open::new(owner.0)?;
+                Ok(read_requested(formats, |kind| {
+                    read_kind(kind, skip_sources)
+                }))
+            },
+        )
     })
 }
 pub(super) fn invoke(bytes: &[u8]) -> Result<Vec<u8>> {
@@ -414,16 +622,38 @@ pub(super) fn invoke(bytes: &[u8]) -> Result<Vec<u8>> {
     let request: Request = serde_json::from_slice(bytes)?;
     let result = match request.operation.as_str() {
         "write" | "write_embedded" => {
+            if !request.formats.is_empty()
+                || request.skip_embedded
+                || !request.skip_sources.is_empty()
+                || request.generation.is_some()
+            {
+                return Err(anyhow::anyhow!(
+                    "Read options are not valid for clipboard writes"
+                ));
+            }
             write(
                 request.representations,
                 request.operation == "write_embedded",
             )?;
             Packet {
                 representations: vec![],
+                generation: None,
             }
         }
-        "read" => read_packet(false)?,
-        "read_picture" => read_packet(true)?,
+        "read" | "read_picture" => {
+            if !request.representations.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "Read requests cannot contain representations"
+                ));
+            }
+            read_packet(
+                request.operation == "read_picture",
+                &request.formats,
+                request.skip_embedded,
+                &request.skip_sources,
+                request.generation.as_deref(),
+            )?
+        }
         _ => return Err(anyhow::anyhow!("Unknown clipboard operation")),
     };
     Ok(serde_json::to_vec(&result)?)

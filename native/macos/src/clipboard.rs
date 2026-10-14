@@ -7,40 +7,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 pub const LIMIT: usize = 64 * 1024 * 1024;
-const PICTURES: &[&str] = &[
-    "public.png",
-    "public.tiff",
-    "public.jpeg",
-    "org.webmproject.webp",
-    "public.webp",
-];
+#[path = "../../../src/clipboard/priority.rs"]
+mod priority;
+#[cfg(test)]
+use priority::PICTURES;
+use priority::READABLE;
+
 const CDXML_TYPES: &[&str] = &[
     "com.revvity.cdxml",
     "com.perkinelmer.cdxml",
     "com.cambridgesoft.cdxml",
-];
-const READABLE: &[&str] = &[
-    "dev.reshiki.drawing",
-    "dev.moruno.drawing",
-    "com.revvity.chemdraw.cdx-clipboard",
-    "com.perkinelmer.chemdraw.cdx-clipboard",
-    "com.cambridgesoft.cdx",
-    "com.revvity.cdx",
-    "com.perkinelmer.cdx",
-    "com.revvity.cdxml",
-    "com.perkinelmer.cdxml",
-    "com.cambridgesoft.cdxml",
-    "chemical/x-cdxml",
-    "com.mdli.molfile",
-    "org.opensmiles.smiles",
-    "public.png",
-    "public.tiff",
-    "public.jpeg",
-    "org.webmproject.webp",
-    "public.webp",
-    "public.utf8-plain-text",
-    "com.adobe.pdf",
-    "public.svg-image",
 ];
 
 fn pasteboard_types(kind: &str) -> Option<&'static [&'static str]> {
@@ -61,6 +37,10 @@ struct Representation {
     #[serde(rename = "type")]
     kind: String,
     data: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    read_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -69,55 +49,126 @@ struct Request {
     operation: String,
     #[serde(default)]
     representations: Vec<Representation>,
+    #[serde(default)]
+    formats: Vec<String>,
+    #[serde(default)]
+    skip_embedded: bool,
+    #[serde(default)]
+    skip_sources: Vec<String>,
+    #[serde(default)]
+    generation: Option<String>,
 }
 
 #[derive(Serialize)]
 struct Response {
     representations: Vec<Representation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    generation: Option<String>,
 }
 
+#[cfg(test)]
 fn read(board: &NSPasteboard, image_only: bool) -> Result<Vec<Representation>, String> {
+    Ok(read_requested(board, image_only, &[], &[], None)?.representations)
+}
+
+fn read_requested(
+    board: &NSPasteboard,
+    image_only: bool,
+    formats: &[String],
+    skip_sources: &[String],
+    generation: Option<&str>,
+) -> Result<Response, String> {
+    // NSPasteboard.changeCount advances when ownership changes. Supplying
+    // already-promised/lazy data keeps that ownership and does not advance it.
+    read_generation(
+        generation,
+        || board.changeCount().to_string(),
+        || read_item(board, image_only, formats, skip_sources),
+    )
+}
+
+/// Check before applying exclusions and after acquisition, including failures.
+fn read_generation(
+    expected: Option<&str>,
+    mut generation: impl FnMut() -> String,
+    read: impl FnOnce() -> Result<Vec<Representation>, String>,
+) -> Result<Response, String> {
+    priority::validate_generation(expected)?;
+    let initial = generation();
+    if expected.is_some_and(|expected| expected != initial) {
+        return Err(priority::CLIPBOARD_CHANGED.into());
+    }
+    let result = read();
+    if generation() != initial {
+        return Err(priority::CLIPBOARD_CHANGED.into());
+    }
+    Ok(Response {
+        representations: result?,
+        generation: Some(initial),
+    })
+}
+
+fn read_item(
+    board: &NSPasteboard,
+    image_only: bool,
+    formats: &[String],
+    skip_sources: &[String],
+) -> Result<Vec<Representation>, String> {
     let Some(item) = board
         .pasteboardItems()
         .and_then(|items| items.firstObject())
     else {
         return Ok(Vec::new());
     };
-    let mut result = Vec::new();
-    let mut size = 0;
     let available = item.types();
-    for &name in if image_only { PICTURES } else { READABLE } {
-        let kind = NSString::from_str(name);
-        if !available.containsObject(&kind) {
+    read_next(
+        formats,
+        skip_sources,
+        image_only,
+        |name| available.containsObject(&NSString::from_str(name)),
+        |name| {
+            let data = item
+                .dataForType(&NSString::from_str(name))
+                .ok_or("Could not read the selected clipboard representation")?;
+            if data.len() > LIMIT {
+                return Err("Clipboard data exceeds the 64 MB limit".into());
+            }
+            Ok(data.to_vec())
+        },
+    )
+}
+
+fn read_next(
+    formats: &[String],
+    skip_sources: &[String],
+    image_only: bool,
+    available: impl Fn(&str) -> bool,
+    mut fetch: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<Vec<Representation>, String> {
+    priority::validate_skip_sources(skip_sources)?;
+    for name in priority::read_formats(formats, image_only)? {
+        if skip_sources.iter().any(|source| source == name) || !available(name) {
             continue;
         }
-        let Some(data) = item.dataForType(&kind) else {
-            continue;
-        };
-        if data.len() > LIMIT - size {
-            return Err("Clipboard data exceeds the 64 MB limit".into());
-        }
-        size += data.len();
-        result.push(Representation {
-            kind: name.into(),
-            data: STANDARD.encode(data.to_vec()),
+        let bytes = fetch(name).and_then(|bytes| {
+            if bytes.is_empty() || bytes.len() > LIMIT {
+                Err("Invalid or oversized clipboard representation".into())
+            } else {
+                Ok(bytes)
+            }
         });
-        // Fetch only the best editable/image representation. Lazy providers may
-        // have very large alternate representations that we do not need.
-        if matches!(
-            name,
-            "dev.reshiki.drawing"
-                | "dev.moruno.drawing"
-                | "com.mdli.molfile"
-                | "org.opensmiles.smiles"
-                | "public.utf8-plain-text"
-        ) || name.contains("cdx")
-            || PICTURES.contains(&name)
-        {
-            break;
-        }
+        let (data, read_error) = match bytes {
+            Ok(bytes) => (STANDARD.encode(bytes), None),
+            Err(error) => (String::new(), Some(error.chars().take(1000).collect())),
+        };
+        return Ok(vec![Representation {
+            kind: name.into(),
+            data,
+            read_error,
+            source: Some(name.into()),
+        }]);
     }
-    Ok(result)
+    Ok(Vec::new())
 }
 
 fn write(board: &NSPasteboard, representations: &[Representation]) -> Result<(), String> {
@@ -133,7 +184,9 @@ fn write(board: &NSPasteboard, representations: &[Representation]) -> Result<(),
         // Count actual native aliases as well as input representations. An
         // alias collision must not silently overwrite previously prepared data.
         let remaining = (LIMIT - size) / kinds.len();
-        if kinds.iter().any(|&kind| !names.insert(kind))
+        if representation.read_error.is_some()
+            || representation.source.is_some()
+            || kinds.iter().any(|&kind| !names.insert(kind))
             || representation.data.len() > remaining.div_ceil(3) * 4
         {
             return Err("Invalid or oversized clipboard representation".into());
@@ -169,17 +222,43 @@ pub fn execute(input: &[u8]) -> Result<Vec<u8>, String> {
     }
     let request: Request =
         serde_json::from_slice(input).map_err(|_| "Invalid clipboard request or data")?;
+    priority::read_formats(&request.formats, request.operation == "read_picture")?;
+    priority::validate_skip_sources(&request.skip_sources)?;
+    priority::validate_generation(request.generation.as_deref())?;
+    if request.operation == "write"
+        && (!request.formats.is_empty()
+            || request.skip_embedded
+            || !request.skip_sources.is_empty()
+            || request.generation.is_some())
+    {
+        return Err("Clipboard write requests cannot include read options".into());
+    }
+    if request.operation != "write" && !request.representations.is_empty() {
+        return Err("Clipboard read requests cannot include data".into());
+    }
     let board = NSPasteboard::generalPasteboard();
-    let representations = match request.operation.as_str() {
-        "read" => read(&board, false)?,
-        "read_picture" => read(&board, true)?,
+    let response = match request.operation.as_str() {
+        "read" | "read_picture" => read_requested(
+            &board,
+            request.operation == "read_picture",
+            &request.formats,
+            &request.skip_sources,
+            request.generation.as_deref(),
+        )?,
         "write" => {
             write(&board, &request.representations)?;
-            Vec::new()
+            Response {
+                representations: Vec::new(),
+                generation: None,
+            }
         }
         _ => return Err("Unsupported clipboard operation".into()),
     };
-    serde_json::to_vec(&Response { representations }).map_err(|e| e.to_string())
+    let output = serde_json::to_vec(&response).map_err(|e| e.to_string())?;
+    if output.len() > LIMIT * 2 {
+        return Err("Clipboard response is too large".into());
+    }
+    Ok(output)
 }
 
 #[cfg(test)]

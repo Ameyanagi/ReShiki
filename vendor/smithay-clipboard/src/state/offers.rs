@@ -25,17 +25,23 @@ const MAX_MIME_BYTES: usize = 255;
 #[derive(Default)]
 pub(super) struct Offers {
     active: HashMap<ObjectId, Metadata>,
+    next_generation: u64,
 }
 
 struct Metadata {
     offer: WlDataOffer,
     count: usize,
     overflow: bool,
+    generation: u64,
 }
 
 impl Offers {
     pub(super) fn valid(&self, offer: &WlDataOffer) -> bool {
         self.active.get(&offer.id()).is_some_and(|metadata| !metadata.overflow)
+    }
+
+    pub(super) fn generation(&self, offer: &WlDataOffer) -> Option<u64> {
+        self.active.get(&offer.id()).map(|metadata| metadata.generation)
     }
 
     pub(super) fn prune(&mut self) {
@@ -47,8 +53,14 @@ impl Offers {
         if self.active.len() >= MAX_OFFERS {
             return false;
         }
-        self.active
-            .insert(offer.id(), Metadata { offer: offer.clone(), count: 0, overflow: false });
+        let Some(generation) = self.next_generation.checked_add(1) else {
+            return false;
+        };
+        self.next_generation = generation;
+        self.active.insert(
+            offer.id(),
+            Metadata { offer: offer.clone(), count: 0, overflow: false, generation },
+        );
         true
     }
 

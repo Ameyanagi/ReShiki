@@ -59,6 +59,19 @@ To choose a particular format, right-click → **Copy as…**. Choose PNG, SVG, 
 
 **Ctrl+Shift+C** / **Shift+⌘+C** copies an image explicitly; **Import → Paste picture** chooses a picture explicitly. Editable exchange depends on the receiving app and the objects used.
 
+### What Paste uses
+
+**⌘/Ctrl+V** tries the available formats in this order:
+
+1. ReShiki drawing data.
+2. ChemDraw CDX, then CDXML.
+3. MOL, then SMILES offered as chemical formats.
+4. Plain text that imports as chemistry: MOL, SMILES, reaction SMILES, InChI, RXN, CDXML or ReShiki clipboard JSON.
+5. PNG, TIFF, JPEG, then WebP pictures.
+6. Other plain text, PDF or SVG use the usual error messages if nothing can be pasted.
+
+On Windows, drawings embedded in Office objects are tried first. If a format fails, Paste tries the next one. PDF and SVG pictures need conversion to PNG. If every available format fails, Paste explains the problem. For a drawing from a newer version, the message asks you to update ReShiki. **Import → Paste picture** prefers pictures even when editable formats are present.
+
 In Windows desktop Office, normal Copy embeds a ReShiki drawing. Double-click it,
 edit in ReShiki and use **Ctrl+S** to update the open Office document. Then save
 the Office document. **Copy Image** pastes a static figure. See the

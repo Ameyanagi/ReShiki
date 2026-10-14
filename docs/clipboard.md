@@ -4,6 +4,21 @@
 
 Use **Ctrl+Shift+C** / **Cmd+Shift+C**, or **Export → Copy image**, for a picture of the selection. With nothing selected, it copies the whole drawing. This supplies PDF, PNG and SVG; PNG starts at 1200 dpi. On Windows, large raster previews use a lower resolution to fit clipboard and picture limits, with a notice showing the actual DPI. Resolution metadata preserves the physical size; editable drawing data and vector formats keep their precision. A raster-only drawing representation also carries explicit publication-size bounds for compatible drawing applications. A pasted picture does not contain editable atoms or bonds. View aids such as grid, rulers and crosshair are excluded.
 
+Pictures use the canvas colors with a transparent background. Switch the canvas to black for dark slides, and to white for light slides.
+
+## What Paste uses
+
+**Cmd/Ctrl+V** tries the available formats in this order:
+
+1. ReShiki drawing data.
+2. ChemDraw CDX, then CDXML.
+3. MOL, then SMILES offered as chemical formats.
+4. Plain text that imports as chemistry: MOL, SMILES, reaction SMILES, InChI, RXN, CDXML or ReShiki clipboard JSON.
+5. PNG, TIFF, JPEG, then WebP pictures.
+6. Other plain text, PDF or SVG use the usual error messages if nothing can be pasted.
+
+On Windows, drawings embedded in Office objects are tried first. If a format fails, Paste tries the next one. PDF and SVG pictures need conversion to PNG. If every available format fails, Paste explains the problem. For a drawing from a newer version, the message asks you to update ReShiki. **Import → Paste picture** prefers pictures even when editable formats are present.
+
 ## Copy chemical text
 
 To paste a structure into a text field such as SciFinder's, select it and use **Cmd/Ctrl+Alt+C**. With no selected reaction arrow, this copies molecular SMILES. With one clear reaction arrow and complete participants, it copies bounded ChemDoodle reaction JSON. Explicit reaction roles take precedence; an unassigned forward arrow can supply roles from the molecules' positions for this copy only. Ambiguous or unsupported chemistry leaves the previous clipboard intact and reports the reason. See [reaction selection rules](reactions.md#copy-a-drawn-reaction) and the [SciFinder handoff](scifinder-handoff.md).
@@ -32,10 +47,9 @@ Windows desktop Office supports ReShiki OLE objects. Copy the object back into R
 
 Normal Paste also reads supported ChemDraw CDX stored inside a Windows Office
 object. In PowerPoint, select the whole embedded object on the slide, copy it,
-then paste into ReShiki to recover editable atoms and bonds. Explicit standalone
-chemical formats retain priority over this embedded data. Picture-only objects
-and unrecognized embedded content keep their image fallback; recognized corrupt
-or unsupported CDX reports an import error. **Import → Paste picture** always
+then paste into ReShiki to recover editable atoms and bonds. Embedded drawings
+are tried before the other clipboard formats. If embedded data cannot be read,
+Paste tries the remaining formats, including pictures. **Import → Paste picture**
 chooses the preview. [Validation and review checklist](changes/windows-chemdraw-paste-2026-10-05.md).
 
 Clipboard PNG, PDF and SVG figures always have transparent backgrounds. They retain the visible ink: black bonds and labels from a light canvas, white bonds and labels from a dark canvas. The Windows editable object's EMF+ dual preview keeps bonds and outlined text as vectors. Imported pictures retain their own pixels and transparency. Open an older embedded ReShiki object and press Ctrl+S to refresh its preview, then save the Office document.
@@ -46,7 +60,7 @@ macOS retains its existing native drawing/CDX and PDF/PNG/SVG clipboard represen
 
 Editable external exchange uses the supported binary CDX/CDXML subset. It covers tested molecules, formal charges, isotopes, tetrahedral and double-bond stereo, bond/label colors, styled text, supported arrows, graphics, embedded raster pictures and nested groups. Some scientific symbols and orbitals become editable vector paths rather than retaining their original preset type. If the receiving editor asks which document settings to use, preserving the copied settings retains the source appearance.
 
-Paste prefers native drawing data and explicit external chemical formats, then PNG/JPEG/TIFF/WebP pictures, then plain chemical text. MOL text copied from a chat or web page imports even when the copy drops leading spaces from its lines. A structurally valid drawing can be pasted even if chemical validation fails; its atoms, bonds and supplied charges are preserved, with a review notice and no molecular properties. Malformed or unsupported editable content still produces an error rather than silently substituting a picture. **Import → Paste picture** explicitly chooses a raster representation, including when editable formats are also present.
+MOL text copied from a chat or web page imports even when the copy drops leading spaces from its lines. A structurally valid drawing can be pasted even if chemical validation fails; its atoms, bonds and supplied charges are preserved, with a review notice and no molecular properties.
 
 ## Editable ligand copying
 

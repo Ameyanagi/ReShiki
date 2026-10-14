@@ -7,14 +7,18 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
+use sctk::data_device_manager::data_device::DataDeviceData;
 use sctk::data_device_manager::{ReadPipe, WritePipe};
 use sctk::reexports::calloop::{PostAction, RegistrationToken};
+use sctk::reexports::client::Proxy;
+use sctk::reexports::client::protocol::wl_data_device::WlDataDevice;
+use wayland_backend::client::ObjectId;
 
 use super::{State, set_non_blocking};
 use crate::mime::{MimeType, normalize_to_lf};
 use crate::rich::{
-    Completion, Control, Counter, Data, MAX_BYTES, MAX_RETAINED_BYTES, MAX_TRANSFERS, StoredOffer,
-    TIMEOUT, oversized,
+    CLIPBOARD_CHANGED, Completion, Control, Counter, Data, MAX_BYTES, MAX_RETAINED_BYTES,
+    MAX_TRANSFERS, ReadSnapshot, StoredOffer, TIMEOUT, oversized, read_failure,
 };
 
 const DISPATCH_BYTES: usize = 64 * 1024;
@@ -33,16 +37,8 @@ struct Transfer {
 }
 
 enum Body {
-    Read {
-        bytes: Vec<u8>,
-        memory: Counter,
-        reply: ReadReply,
-    },
-    Write {
-        _offer: Arc<StoredOffer>,
-        bytes: Arc<[u8]>,
-        written: usize,
-    },
+    Read { bytes: Vec<u8>, memory: Counter, reply: ReadReply },
+    Write { _offer: Arc<StoredOffer>, bytes: Arc<[u8]>, written: usize },
 }
 
 pub(super) enum ReadReply {
@@ -51,9 +47,36 @@ pub(super) enum ReadReply {
         mime_type: MimeType,
     },
     Binary {
-        completion: Completion<Option<Data>>,
+        completion: Completion<ReadSnapshot>,
         mime_type: String,
+        generation: String,
+        selection: SelectionGuard,
     },
+}
+
+pub(super) enum SelectionGuard {
+    Live {
+        device: WlDataDevice,
+        offer: ObjectId,
+    },
+    #[cfg(test)]
+    Simulated(Arc<std::sync::atomic::AtomicBool>),
+}
+
+impl SelectionGuard {
+    fn is_current(&self) -> bool {
+        match self {
+            Self::Live { device, offer } => {
+                device.is_alive()
+                    && device
+                        .data::<DataDeviceData>()
+                        .and_then(DataDeviceData::selection_offer)
+                        .is_some_and(|selection| selection.inner().id() == *offer)
+            },
+            #[cfg(test)]
+            Self::Simulated(current) => current.load(std::sync::atomic::Ordering::Acquire),
+        }
+    }
 }
 
 impl ReadReply {
@@ -71,13 +94,19 @@ impl ReadReply {
                     }
                 });
                 let _ = sender.send(result);
-            }
-            Self::Binary {
-                completion,
-                mime_type,
-            } => {
-                completion.finish(result.map(|bytes| Some(Data { mime_type, bytes })));
-            }
+            },
+            Self::Binary { completion, mime_type, generation, selection } => {
+                if !selection.is_current() {
+                    completion.finish(Err(io::Error::other(CLIPBOARD_CHANGED)));
+                    return;
+                }
+                completion.finish(match result {
+                    Ok(bytes) => {
+                        Ok(ReadSnapshot { generation, data: Some(Data { mime_type, bytes }) })
+                    },
+                    Err(error) => Err(read_failure(mime_type, generation, error)),
+                });
+            },
         }
     }
 
@@ -87,18 +116,23 @@ impl ReadReply {
             Self::Binary { completion, .. } => Some(completion.control.clone()),
         }
     }
+
+    fn changed(&self) -> bool {
+        matches!(self, Self::Binary { selection, .. } if !selection.is_current())
+    }
 }
 
 impl Transfer {
     fn error(&self, now: Instant) -> Option<io::Error> {
-        self.control
-            .as_ref()
-            .and_then(|control| control.error(now))
-            .or_else(|| {
-                (now >= self.deadline).then(|| {
-                    io::Error::new(io::ErrorKind::TimedOut, "clipboard transfer timed out")
-                })
-            })
+        if let Body::Read { reply, .. } = &self.body
+            && reply.changed()
+        {
+            return Some(io::Error::other(CLIPBOARD_CHANGED));
+        }
+        self.control.as_ref().and_then(|control| control.error(now)).or_else(|| {
+            (now >= self.deadline)
+                .then(|| io::Error::new(io::ErrorKind::TimedOut, "clipboard transfer timed out"))
+        })
     }
 
     fn finish(self, result: io::Result<()>) {
@@ -121,10 +155,7 @@ impl Transfers {
     }
 
     pub(super) fn timeout(&self, now: Instant) -> Option<Duration> {
-        self.active
-            .values()
-            .map(|transfer| transfer.deadline.saturating_duration_since(now))
-            .min()
+        self.active.values().map(|transfer| transfer.deadline.saturating_duration_since(now)).min()
     }
 }
 
@@ -138,45 +169,40 @@ impl State {
             Err(error) => {
                 reply.finish(Err(error));
                 return;
-            }
+            },
         };
         let memory = match Counter::reserve(self.client.memory.clone(), 0, MAX_RETAINED_BYTES) {
             Ok(memory) => memory,
             Err(error) => {
                 reply.finish(Err(error));
                 return;
-            }
+            },
         };
         let control = reply.control();
-        let deadline = control
-            .as_ref()
-            .map_or_else(|| Instant::now() + TIMEOUT, |c| c.deadline);
+        let deadline = control.as_ref().map_or_else(|| Instant::now() + TIMEOUT, |c| c.deadline);
         self.transfers.active.insert(
             id,
             Transfer {
                 token: None,
                 deadline,
                 control,
-                body: Body::Read {
-                    bytes: Vec::new(),
-                    memory,
-                    reply,
-                },
+                body: Body::Read { bytes: Vec::new(), memory, reply },
             },
         );
-        match self.loop_handle.insert_source(pipe, move |_, file, state| {
-            state.read_ready(id, file.as_ref())
-        }) {
+        match self
+            .loop_handle
+            .insert_source(pipe, move |_, file, state| state.read_ready(id, file.as_ref()))
+        {
             Ok(token) => {
                 if let Some(transfer) = self.transfers.active.get_mut(&id) {
                     transfer.token = Some(token);
                 }
-            }
+            },
             Err(error) => {
                 if let Some(transfer) = self.transfers.active.remove(&id) {
                     transfer.finish(Err(io::Error::other(error.to_string())));
                 }
-            }
+            },
         }
     }
 
@@ -197,24 +223,21 @@ impl State {
                 token: None,
                 deadline: Instant::now() + TIMEOUT,
                 control: None,
-                body: Body::Write {
-                    _offer: offer,
-                    bytes,
-                    written: 0,
-                },
+                body: Body::Write { _offer: offer, bytes, written: 0 },
             },
         );
-        match self.loop_handle.insert_source(pipe, move |_, file, state| {
-            state.write_ready(id, file.as_ref())
-        }) {
+        match self
+            .loop_handle
+            .insert_source(pipe, move |_, file, state| state.write_ready(id, file.as_ref()))
+        {
             Ok(token) => {
                 if let Some(transfer) = self.transfers.active.get_mut(&id) {
                     transfer.token = Some(token);
                 }
-            }
+            },
             Err(_) => {
                 self.transfers.active.remove(&id);
-            }
+            },
         }
     }
 
@@ -304,9 +327,9 @@ fn read_available(
                 if progressed >= DISPATCH_BYTES {
                     return None;
                 }
-            }
+            },
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => return None,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {},
             Err(error) => return Some(Err(error)),
         }
     }
@@ -320,16 +343,14 @@ fn write_available(
 ) -> Option<io::Result<()>> {
     let mut progressed = 0;
     for _ in 0..128 {
-        let end = bytes
-            .len()
-            .min(written.saturating_add(DISPATCH_BYTES - progressed));
+        let end = bytes.len().min(written.saturating_add(DISPATCH_BYTES - progressed));
         match writer.write(&bytes[*written..end]) {
             Ok(0) => {
                 return Some(Err(io::Error::new(
                     io::ErrorKind::WriteZero,
                     "clipboard pipe closed",
                 )));
-            }
+            },
             Ok(count) => {
                 *written += count;
                 progressed += count;
@@ -339,9 +360,9 @@ fn write_available(
                 if progressed >= DISPATCH_BYTES {
                     return None;
                 }
-            }
+            },
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => return None,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {},
             Err(error) => return Some(Err(error)),
         }
     }
@@ -407,10 +428,7 @@ mod tests {
     #[test]
     fn short_binary_reads_and_would_block_preserve_every_byte_until_eof() {
         let expected: Vec<_> = (0..70_003).map(|index| (index % 256) as u8).collect();
-        let mut reader = ChunkReader {
-            data: Cursor::new(expected.clone()),
-            calls: 0,
-        };
+        let mut reader = ChunkReader { data: Cursor::new(expected.clone()), calls: 0 };
         let mut received = Vec::new();
         let (used, mut memory) = memory();
         let mut done = false;
@@ -462,9 +480,7 @@ mod tests {
             }
         }
         let mut written = 0;
-        let error = write_available(&mut Closed, b"payload", &mut written)
-            .unwrap()
-            .unwrap_err();
+        let error = write_available(&mut Closed, b"payload", &mut written).unwrap().unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::WriteZero);
         assert_eq!(written, 0);
     }
@@ -504,22 +520,14 @@ mod tests {
         let mut memory = Counter::reserve(used.clone(), 0, MAX_RETAINED_BYTES).unwrap();
         let mut bytes = Vec::new();
         let mut reader = Cursor::new(b"four");
-        assert!(
-            read_available(&mut reader, &mut bytes, &mut memory)
-                .unwrap()
-                .is_err()
-        );
+        assert!(read_available(&mut reader, &mut bytes, &mut memory).unwrap().is_err());
         assert!(bytes.is_empty());
         assert_eq!(used.load(Ordering::Acquire), MAX_RETAINED_BYTES - 3);
         drop(occupied);
 
         let mut full = vec![0; MAX_BYTES];
         let mut one_more = Cursor::new([1]);
-        assert!(
-            read_available(&mut one_more, &mut full, &mut memory)
-                .unwrap()
-                .is_err()
-        );
+        assert!(read_available(&mut one_more, &mut full, &mut memory).unwrap().is_err());
         assert_eq!(full.len(), MAX_BYTES);
     }
 
@@ -534,19 +542,13 @@ mod tests {
             body: Body::Read {
                 bytes: b"partial".to_vec(),
                 memory,
-                reply: ReadReply::Text {
-                    sender,
-                    mime_type: MimeType::TextPlain,
-                },
+                reply: ReadReply::Text { sender, mime_type: MimeType::TextPlain },
             },
         };
         let error = transfer.error(Instant::now()).unwrap();
         assert_eq!(error.kind(), io::ErrorKind::TimedOut);
         transfer.finish(Err(error));
-        assert_eq!(
-            receiver.try_recv().unwrap().unwrap_err().kind(),
-            io::ErrorKind::TimedOut
-        );
+        assert_eq!(receiver.try_recv().unwrap().unwrap_err().kind(), io::ErrorKind::TimedOut);
     }
 
     #[test]
@@ -554,7 +556,7 @@ mod tests {
         let (sender, commands) = channel::channel();
         let client = Client::new(100_000, sender);
         client.inner.ready.store(true, Ordering::Release);
-        let mut request = client.read(vec!["image/png".into()]);
+        let mut request = client.read(vec!["image/png".into()], None);
         let Command::Rich(crate::rich::Operation::Read { completion, .. }) =
             commands.try_recv().unwrap()
         else {
@@ -564,20 +566,88 @@ mod tests {
         ReadReply::Binary {
             completion,
             mime_type: "image/png".into(),
+            generation: "wayland:1:2:3".into(),
+            selection: SelectionGuard::Simulated(Arc::new(std::sync::atomic::AtomicBool::new(
+                true,
+            ))),
         }
         .finish(Ok(bytes.clone()));
         let result = Pin::new(&mut request).poll(&mut Context::from_waker(Waker::noop()));
         assert!(
-            matches!(result, Poll::Ready(Ok(Some(data))) if data.bytes == bytes && data.mime_type == "image/png")
+            matches!(result, Poll::Ready(Ok(ReadSnapshot { data: Some(data), .. })) if data.bytes == bytes && data.mime_type == "image/png")
         );
         client.stop(100_000);
 
         let (sender, receiver) = std::sync::mpsc::channel();
-        ReadReply::Text {
-            sender,
-            mime_type: MimeType::TextPlain,
-        }
-        .finish(Ok(b"a\r\nb\rc".to_vec()));
+        ReadReply::Text { sender, mime_type: MimeType::TextPlain }
+            .finish(Ok(b"a\r\nb\rc".to_vec()));
         assert_eq!(receiver.try_recv().unwrap().unwrap(), "a\nb\nc");
+    }
+
+    #[test]
+    fn failed_binary_transfer_retains_the_selected_mime_and_error() {
+        let (sender, commands) = channel::channel();
+        let client = Client::new(100_001, sender);
+        client.inner.ready.store(true, Ordering::Release);
+        let mut request = client.read(vec!["text/plain".into(), "image/png".into()], None);
+        let Command::Rich(crate::rich::Operation::Read { completion, .. }) =
+            commands.try_recv().unwrap()
+        else {
+            panic!()
+        };
+        ReadReply::Binary {
+            completion,
+            mime_type: "text/plain".into(),
+            generation: "wayland:1:2:3".into(),
+            selection: SelectionGuard::Simulated(Arc::new(std::sync::atomic::AtomicBool::new(
+                true,
+            ))),
+        }
+        .finish(Err(io::Error::new(io::ErrorKind::TimedOut, "read timed out")));
+        let Poll::Ready(Err(error)) =
+            Pin::new(&mut request).poll(&mut Context::from_waker(Waker::noop()))
+        else {
+            panic!("binary transfer did not deliver its error")
+        };
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+        assert_eq!(error.to_string(), "read timed out");
+        let failure = error.get_ref().unwrap().downcast_ref::<crate::rich::ReadFailure>().unwrap();
+        assert_eq!(failure.mime_type, "text/plain");
+        assert_eq!(failure.generation, "wayland:1:2:3");
+        assert_eq!(std::error::Error::source(failure).unwrap().to_string(), "read timed out");
+        client.stop(100_001);
+    }
+
+    #[test]
+    fn changed_selection_during_a_pipe_read_aborts_success_and_failure() {
+        for result in [Ok(b"CCO".to_vec()), Err(io::Error::other("broken pipe"))] {
+            let (sender, commands) = channel::channel();
+            let client = Client::new(100_002, sender);
+            client.inner.ready.store(true, Ordering::Release);
+            let mut request = client.read(vec!["text/plain".into()], None);
+            let Command::Rich(crate::rich::Operation::Read { completion, .. }) =
+                commands.try_recv().unwrap()
+            else {
+                panic!()
+            };
+            let current = Arc::new(std::sync::atomic::AtomicBool::new(true));
+            let reply = ReadReply::Binary {
+                completion,
+                mime_type: "text/plain".into(),
+                generation: "wayland:1:2:3".into(),
+                selection: SelectionGuard::Simulated(current.clone()),
+            };
+            current.store(false, Ordering::Release);
+            assert!(reply.changed());
+            reply.finish(result);
+            let Poll::Ready(Err(error)) =
+                Pin::new(&mut request).poll(&mut Context::from_waker(Waker::noop()))
+            else {
+                panic!()
+            };
+            assert_eq!(error.to_string(), CLIPBOARD_CHANGED);
+            assert!(error.get_ref().unwrap().downcast_ref::<crate::rich::ReadFailure>().is_none());
+            client.stop(100_002);
+        }
     }
 }
