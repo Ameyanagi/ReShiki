@@ -37,9 +37,6 @@ freely. An orbital stays a drawing object; group it with the molecule when they
 should move together. Orbitals leave a small gap around atom labels so the
 labels stay readable.
 
-**Snap to atoms**, the gap around labels and the closer placement of new lone
-pairs are available in Nightly builds; not in ReShiki 0.11.0.
-
 ## Limits
 
 - Lone pairs do not change valence, electron counts or orbital occupancy.

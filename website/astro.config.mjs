@@ -89,7 +89,7 @@ export default defineConfig({
           description:
             "Free chemical drawing app (Rust) for molecules, reaction schemes and publication figures.",
           details:
-            "AI agents can drive ReShiki through an experimental MCP server (`reshiki --mcp`) or command line (`reshiki --cli`), available in Nightly builds. Start with the [Agent API set](https://reshiki.com/_llms-txt/agent-api.txt); its tool reference is generated from the code.",
+            "AI agents can drive ReShiki through an experimental MCP server (`reshiki --mcp`) or command line (`reshiki --cli`), available since ReShiki 0.12.0. Start with the [Agent API set](https://reshiki.com/_llms-txt/agent-api.txt); its tool reference is generated from the code.",
           customSets: [
             {
               label: "Agent API",
@@ -163,6 +163,7 @@ export default defineConfig({
           label: "Developer",
           collapsed: true,
           items: [
+            { label: "ReShiki 0.12.0", slug: "developer/changes-0.12" },
             { label: "ReShiki 0.11.0", slug: "developer/changes-0.11" },
             { label: "ReShiki 0.10.0", slug: "developer/changes-0.10" },
             { label: "ReShiki 0.9.1", slug: "developer/changes-0.9.1" },

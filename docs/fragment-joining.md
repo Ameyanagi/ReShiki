@@ -24,8 +24,7 @@ moving anything.
 Join merges three or more atoms into the first atom you selected. The merged
 atom sits at the center of the selected atom labels and keeps the first atom's
 ID, element, label color and style. Surrounding atoms and captions stay in
-place. Merging three or more atoms is available in Nightly builds; not in
-ReShiki 0.11.0.
+place.
 
 Four atoms that form two bonds fuse the bonds. To merge all four atoms into one
 instead, choose **Merge atoms** in the context row, or **Merge selected atoms**
@@ -50,8 +49,6 @@ Escape, **Cancel** or switching tools leaves the drawing unchanged. Each join is
 one Undo step.
 
 ### Coordination contacts in place
-
-Available in Nightly builds; not in ReShiki 0.11.0.
 
 1. Select a donor atom or ligand and choose **Coordinate in place…** above the
    canvas or in the right-click menu. **Coordinate in place (donor → metal)** in

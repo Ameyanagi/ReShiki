@@ -1,6 +1,6 @@
 # Assistant image-to-structure benchmark
 
-Status: in the source tree on `main`; not in ReShiki 0.11.0. The benchmark is a
+Status: in the source tree since ReShiki 0.12.0. The benchmark is a
 QA tool for developers, not an app feature.
 Author: @Ameyanagi, project creator and maintainer.
 Addresses [issue #94](https://github.com/Ameyanagi/ReShiki/issues/94).

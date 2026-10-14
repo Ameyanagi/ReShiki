@@ -22,8 +22,6 @@ Select a graphic to move, copy, duplicate, rotate, reflect or resize it.
 
 ### Draw a pen path
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 1. Choose **Pen path** and drag the first segment.
 2. Click to add a straight segment, or drag to add a curved one. The drag sets
    the new node's direction.

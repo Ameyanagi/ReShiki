@@ -22,7 +22,7 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
-Version 0.11 adds interactive Rust 3D optimization, mouse and keyboard drawing by default, persistent structure highlights, and editable embedded ChemDraw paste from Windows Office. Older drawings open normally; drawings saved in 0.11 use document version 19 and cannot be opened in 0.10.0 or earlier. Keep a separate copy before saving if you need an earlier release. [Release notes](docs/changes-0.11.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
+Version 0.12 adds chemical names, NMR prediction, generic structures, atom maps, rear opacity, pen paths, attached mechanism arrows, ChemDraw-like atom labels and an experimental agent API. Older drawings open normally; drawings saved in 0.12 use document version 26 and cannot be opened in 0.11.0 or earlier. Keep a separate copy before saving if you need an earlier release. [Release notes](docs/changes-0.12.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
 
 [Explore the color palettes](https://reshiki.com/guide/color-palettes/): each theme's Strong and Tint rows and every Presentation, Pastel and Jmol element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
 
@@ -30,7 +30,7 @@ New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain suppo
 
 ## Install
 
-Download ReShiki for Apple Silicon or Intel macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). ReShiki includes the drawing and chemistry tools: no Python, RDKit, or uv installation is needed. Drawing, imports, cleanup, and molecular properties work offline from the first launch. In Nightly builds, chemical names and NMR prediction work offline too.
+Download ReShiki for Apple Silicon or Intel macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). ReShiki includes the drawing and chemistry tools: no Python, RDKit, or uv installation is needed. Drawing, imports, cleanup, and molecular properties work offline from the first launch. Chemical names and NMR prediction work offline too.
 
 On Mac, open the disk image and drag ReShiki to Applications. On Windows, run setup. Click **ReShiki** in the app to check for updates.
 
@@ -46,7 +46,7 @@ Open **Help → Open shortcut examples** for a single editable reference file. D
 
 The AI assistant is optional and uses your local Codex sign-in. [Install Codex and connect the assistant](docs/assistant-setup.md) for text and image requests; ordinary drawing and chemistry work offline without it.
 
-Experimental (Nightly): AI agents such as Claude Code and Codex can drive ReShiki through its MCP server or command line. [Connect AI agents](https://reshiki.com/guide/agents/)
+Experimental: AI agents such as Claude Code and Codex can drive ReShiki through its MCP server or command line. [Connect AI agents](https://reshiki.com/guide/agents/)
 
 ## Acknowledging ReShiki
 
@@ -85,4 +85,4 @@ See the [documentation and evidence policy](docs/README.md) when adding guides, 
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 
-See the [latest release notes](docs/changes-0.11.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
+See the [latest release notes](docs/changes-0.12.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.

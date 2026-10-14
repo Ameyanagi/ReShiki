@@ -1,7 +1,5 @@
 # MOL import coordinates and hydrogen presentation
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 When you open a MOL file with 3D coordinates, ReShiki keeps them, so you can
 tilt the molecule. Ordinary hydrogens become H counts; hydrogens with an
 isotope, charge, map number or stereo stay as atoms. Save as a `.rsk` file to

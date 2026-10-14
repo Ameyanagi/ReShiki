@@ -1,6 +1,6 @@
 # Agent skill
 
-**Experimental. In Nightly builds since 2026-10-08; not in ReShiki 0.11.0.** The skill's
+**Experimental. In ReShiki 0.12.0 and later.** The skill's
 contents may change in any build.
 
 `reshiki --cli skill` writes an Agent Skill that teaches AI agents such as

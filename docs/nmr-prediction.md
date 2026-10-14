@@ -1,7 +1,5 @@
 # Predicted NMR shifts
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 NMR prediction estimates ¹H and ¹³C chemical shifts for one molecule from
 measured reference data. It runs on your computer, and each value links to its
 atom in the drawing.

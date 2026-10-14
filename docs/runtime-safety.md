@@ -52,7 +52,7 @@ This update passes **135 Rust tests**, **42 Python tests**, formatting and stric
 
 ## Naming worker
 
-Available in Nightly builds; not in ReShiki 0.11.0. Every name parse and every name generation starts a fresh child of the same executable in `--naming-worker` mode. `src/naming/client.rs` supervises it with `WORKER_LIMITS`, and `reshiki-process` (`native/process/`) applies those limits before the worker runs. That crate holds all of the platform FFI.
+Every name parse and every name generation starts a fresh child of the same executable in `--naming-worker` mode. `src/naming/client.rs` supervises it with `WORKER_LIMITS`, and `reshiki-process` (`native/process/`) applies those limits before the worker runs. That crate holds all of the platform FFI.
 
 | Limit           | Value                                                                                                                | Enforced by                                                              |
 | --------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -83,7 +83,7 @@ An invalid catalog makes `aliases_for_smiles` fail. `src/naming/local.rs` and `r
 
 ## EMF worker
 
-Available in Nightly builds; not in ReShiki 0.11.0. Windows only. EMF playback runs Windows GDI+ on picture data from files, so it never runs in the editor or its Office server. The app relaunches itself in one of three modes from `native/windows/src/metafile_worker.rs`:
+Windows only. EMF playback runs Windows GDI+ on picture data from files, so it never runs in the editor or its Office server. The app relaunches itself in one of three modes from `native/windows/src/metafile_worker.rs`:
 
 - `--emf-worker` plays an imported EMF file into its PNG preview. `src/metafile.rs` starts it.
 - `--emf-file-worker` and `--emf-office-worker` record an EMF figure file or Office object for a drawing that contains a retained EMF picture. `crates/io/src/native_windows.rs` starts them through `reshiki_windows::isolated_metafile`; drawings without such a picture record in process.
@@ -100,7 +100,7 @@ The worker reads only stdin and writes only stdout. Its stderr is discarded, and
 
 ## Bounded editor jobs
 
-These jobs run off the UI thread. NMR prediction, generic expansion and Auto-map run on blocking tasks inside the app process; 3D geometry runs in its worker process. Each job has its own bounds, and a job that fails or runs out of budget leaves the drawing unchanged. These bounds are in Nightly builds; not in ReShiki 0.11.0.
+These jobs run off the UI thread. NMR prediction, generic expansion and Auto-map run on blocking tasks inside the app process; 3D geometry runs in its worker process. Each job has its own bounds, and a job that fails or runs out of budget leaves the drawing unchanged.
 
 ### NMR prediction
 
@@ -136,9 +136,9 @@ Enforced in `crates/process-heap/src/policy.rs` and `crates/io/src/geometry/clie
 ## Agent API (P1, experimental)
 
 The experimental agent API (`reshiki --mcp` and `reshiki --cli`; see the
-[agent API reference](agent-api.md)) is in Nightly builds since 2026-10-08, not in
-ReShiki 0.11.0. MCP asks servers to validate tool inputs, enforce access controls,
-rate-limit calls and sanitize outputs
+[agent API reference](agent-api.md)) is in ReShiki 0.12.0 and later. MCP asks
+servers to validate tool inputs, enforce access controls, rate-limit calls and
+sanitize outputs
 ([MCP tools, Security Considerations](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)).
 This section records how P1 does each, what remains possible, and the tests
 that pin it. Gate numbers refer to the P1 acceptance gates.

@@ -1,7 +1,5 @@
 # Align and stretch a reference bond or edge
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 Reference align/stretch turns a drawing so that one bond or shape edge points
 exactly where you want, rotates copies around a shared center, and changes one
 bond's length while the rest of the molecule stays rigid.

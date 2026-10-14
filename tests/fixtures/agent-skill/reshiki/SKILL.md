@@ -2,7 +2,7 @@
 name: "reshiki"
 description: "Draws, converts, renders and analyzes chemical structures and reaction schemes with the local ReShiki app (experimental agent API). Use when asked to lay out molecules or reactions from SMILES, convert MOL, RXN, CDXML, CDX, SMILES, InChI or ReShiki .rsk files to MOL, CDXML, SMILES, InChI, SVG, PDF or PNG, compute formula, mass, logP or InChIKey, or produce a ReShiki .rsk drawing."
 license: "MIT OR Apache-2.0"
-compatibility: "Requires a ReShiki build with the experimental agent API (Nightly). Runs offline."
+compatibility: "Requires ReShiki 0.12.0 or later (experimental agent API). Runs offline."
 metadata:
   reshiki-version: "<app>"
   reshiki-operation-api: "1"

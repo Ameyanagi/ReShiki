@@ -1,12 +1,12 @@
 # Exporting figures
 
-Open **Export → Figure**, choose a format from the menu (**Vector**: **SVG**, **SVG for Office**, **PDF** and, on Windows, **EMF for Office**; **Raster**: **PNG**), then click the export button (for example **Export SVG…**) and choose a destination. **SVG for Office** is available in Nightly builds; not in ReShiki 0.11.0. File export includes the whole drawing. **Copy image** uses the selected objects, or the whole drawing when nothing is selected.
+Open **Export → Figure**, choose a format from the menu (**Vector**: **SVG**, **SVG for Office**, **PDF** and, on Windows, **EMF for Office**; **Raster**: **PNG**), then click the export button (for example **Export SVG…**) and choose a destination. File export includes the whole drawing. **Copy image** uses the selected objects, or the whole drawing when nothing is selected.
 
 | Format                   | Output                                                                                            |
 | ------------------------ | ------------------------------------------------------------------------------------------------- |
 | PDF                      | Vector artwork at the drawing's physical publication size.                                        |
 | SVG                      | Vector artwork for illustration and layout applications. Text remains text.                       |
-| SVG for Office (Nightly) | Physical-size SVG for Word and PowerPoint. Text becomes outlines, so labels stay in place.        |
+| SVG for Office           | Physical-size SVG for Word and PowerPoint. Text becomes outlines, so labels stay in place.        |
 | PNG                      | An opaque image, normally at 1200 dpi, with physical resolution metadata.                         |
 | EMF for Office (Windows) | Vector picture for Microsoft Office at the drawing's physical size. Text becomes vector outlines. |
 

@@ -32,8 +32,6 @@ removes the bend. **Reset arrow style** restores the preset's look.
 
 ### Optional target attachments
 
-Available in Nightly builds; not in ReShiki 0.11.0.
-
 1. Choose **Curved / electron pair** or **Single electron**. **Attach ends to
    atoms and bonds** in **Properties** is on by default.
 2. Click the source: an atom, a bond or a lone pair. It is highlighted, and the
