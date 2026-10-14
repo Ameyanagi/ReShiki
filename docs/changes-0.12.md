@@ -17,7 +17,7 @@ keep a copy saved by 0.11.0.
 ## Copy and paste changed
 
 **Cmd/Ctrl+C** no longer adds SMILES text. It copies the drawing, so
-PowerPoint, Word and Keynote paste a vector picture and ChemDraw pastes an
+PowerPoint and Word paste a vector picture and ChemDraw pastes an
 editable structure (it may first ask whether to keep the copied settings). To paste a structure into a text field such as
 SciFinder's, use **Cmd/Ctrl+Alt+C**.
 
@@ -260,7 +260,7 @@ their contributor credits and links to their reviews.
 
 - **Copy drawing or chemical text.** **Cmd/Ctrl+C** copies the drawing, the
   same on every platform: ReShiki and ChemDraw paste it as editable
-  chemistry (ChemDraw may first ask whether to keep the copied settings), Office and Keynote as a vector picture, and browsers and chat
+  chemistry (ChemDraw may first ask whether to keep the copied settings), Office as a vector picture, and browsers and chat
   apps as a picture. **Cmd/Ctrl+Alt+C** copies SMILES, or ChemDoodle JSON for
   one clear reaction, for text fields such as SciFinder's.
   [Details](clipboard.md) ·
