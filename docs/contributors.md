@@ -152,4 +152,6 @@ agent skill and the MOL and polymer fixes (released in 0.12.0): @Ameyanagi in
 
 Release preparation and documentation for 0.12.0: @Ameyanagi in [PR #320](https://github.com/Ameyanagi/ReShiki/pull/320).
 
+Public-download validation for 0.12.0: @Ameyanagi in [PR #324](https://github.com/Ameyanagi/ReShiki/pull/324) (under review).
+
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.12.md) credit contributors alongside their changes.
