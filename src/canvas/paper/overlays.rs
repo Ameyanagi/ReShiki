@@ -454,7 +454,7 @@ impl MoleculeCanvas<'_> {
                 let origin = id
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
                     .unwrap_or(*start);
-                let (_, _, target_text) = bond_target_with_text(
+                let target = bond_target_with_text(
                     self.doc,
                     origin,
                     self.camera.world(p, bounds),
@@ -463,6 +463,11 @@ impl MoleculeCanvas<'_> {
                     self.bond_drawing.unconstrained(state.modifiers.alt()),
                     self.tool,
                 );
+                let Ok((_, _, target_text)) = target else {
+                    // A refused caption owns the drop: do not draw a fallback
+                    // snapped bond through it or toward a different atom.
+                    return ControlFlow::Break(());
+                };
                 if let Some(text) = target_text {
                     markers::Markers::text_hover(self.doc, text, frame, self.camera, bounds);
                 }

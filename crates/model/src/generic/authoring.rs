@@ -126,7 +126,7 @@ pub fn apply_label(doc: &Document, id: u64, text: &str) -> Result<Option<Documen
 }
 
 /// Keep link authoring and text-label diagnostics on the same label/range split.
-pub(super) fn split_link_label(text: &str) -> Result<Option<(&str, &str)>, String> {
+pub(crate) fn split_link_label(text: &str) -> Result<Option<(&str, &str)>, String> {
     for (open, close) in [('[', ']'), ('(', ')'), ('{', '}')] {
         if let Some(after) = text.strip_prefix(open)
             && let Some((label, range)) = after.split_once(close)

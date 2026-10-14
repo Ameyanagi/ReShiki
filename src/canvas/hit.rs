@@ -141,20 +141,23 @@ pub(super) fn bond_target_with_text(
     radius: f32,
     drawing: BondDrawing,
     tool: Tool,
-) -> (World, Option<u64>, Option<u64>) {
+) -> Result<(World, Option<u64>, Option<u64>), String> {
     let (snapped, pointer, near_snap) = bond_targets(doc, start, end, source.0, radius, drawing);
     if pointer.is_none()
         && tool.bonds_from_text()
         && let Some(id) = bond_text_at(doc, end, radius).filter(|id| Some(*id) != source.1)
-        && reshiki::atom_text::text_atom_refusal(doc, id).is_none()
-        && let Some(position) = reshiki::atom_text::text_atom_position(doc, id)
     {
-        return (position, None, Some(id));
+        if let Some(reason) = reshiki::atom_text::text_atom_refusal(doc, id) {
+            return Err(reason);
+        }
+        if let Some(position) = reshiki::atom_text::text_atom_position(doc, id) {
+            return Ok((position, None, Some(id)));
+        }
     }
-    match pointer.or(near_snap) {
+    Ok(match pointer.or(near_snap) {
         Some((position, id)) => (position, Some(id), None),
         None => (snapped, None, None),
-    }
+    })
 }
 
 pub(super) fn plane_endpoint(

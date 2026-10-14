@@ -360,8 +360,8 @@ impl MoleculeCanvas<'_> {
                 let origin = id
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
                     .unwrap_or(start);
-                let (end, target, target_text) = if self.tool == Tool::Arrow {
-                    (
+                let target = if self.tool == Tool::Arrow {
+                    Ok((
                         arrow_endpoint(
                             start,
                             p,
@@ -369,7 +369,7 @@ impl MoleculeCanvas<'_> {
                         ),
                         None,
                         None,
-                    )
+                    ))
                 } else {
                     bond_target_with_text(
                         self.doc,
@@ -380,6 +380,10 @@ impl MoleculeCanvas<'_> {
                         self.bond_drawing.unconstrained(state.modifiers.alt()),
                         self.tool,
                     )
+                };
+                let (end, target, target_text) = match target {
+                    Ok(target) => target,
+                    Err(reason) => return ControlFlow::Continue(Edit::TextBondRefused(reason)),
                 };
                 if text.is_some() || target_text.is_some() {
                     Edit::TextBond {

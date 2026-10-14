@@ -463,6 +463,7 @@ impl MoleculeCanvas<'_> {
     ) {
         let Draft {
             preview,
+            bond_preview,
             ring_selection,
             ..
         } = draft;
@@ -484,7 +485,7 @@ impl MoleculeCanvas<'_> {
                 let origin = id
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
                     .unwrap_or(*start);
-                let (end, target, target_text) = bond_target_with_text(
+                let Ok((end, target, target_text)) = bond_target_with_text(
                     self.doc,
                     origin,
                     end,
@@ -492,7 +493,19 @@ impl MoleculeCanvas<'_> {
                     12.0 / self.camera.zoom,
                     self.bond_drawing.unconstrained(state.modifiers.alt()),
                     self.tool,
-                );
+                ) else {
+                    return;
+                };
+                if text.is_some() || target_text.is_some() {
+                    // Keep the original captions visible and the source scene
+                    // cached; draw the transient bond above its underlays.
+                    *bond_preview = self.text_bond_preview(
+                        (origin, *id, *text),
+                        (end, target, target_text),
+                        preset,
+                    );
+                    return;
+                }
                 if preset != reshiki::bonds::BondPreset::Dotted
                     || id
                         .zip(target)
@@ -520,21 +533,8 @@ impl MoleculeCanvas<'_> {
                             *ring_selection = Some(vec![id, added]);
                         }
                     } else {
-                        let mut a = *id;
-                        let mut z = target;
-                        for (caption, atom) in [(*text, &mut a), (target_text, &mut z)] {
-                            if let Some(caption) = caption {
-                                let Ok((doc, id)) =
-                                    reshiki::atom_text::text_to_atom(preview, caption)
-                                else {
-                                    return;
-                                };
-                                *preview = Cow::Owned(doc);
-                                *atom = Some(id);
-                            }
-                        }
-                        let a = a.unwrap_or_else(|| preview.to_mut().add_atom("C", origin));
-                        let z = z.unwrap_or_else(|| preview.to_mut().add_atom("C", end));
+                        let a = id.unwrap_or_else(|| preview.to_mut().add_atom("C", origin));
+                        let z = target.unwrap_or_else(|| preview.to_mut().add_atom("C", end));
                         preset.place(preview.to_mut(), a, z);
                         *ring_selection = Some(vec![a, z]);
                     }

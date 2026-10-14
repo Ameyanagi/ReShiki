@@ -303,6 +303,53 @@ fn refusal_edit_sets_error_status_without_document_or_history_changes() {
 }
 
 #[test]
+fn refused_canvas_drop_keeps_document_and_history_and_shows_one_refusal() {
+    for named in [false, true] {
+        let mut app = app();
+        let source = app.tab.doc.add_atom("C", Point::new(-180., -70.));
+        let start = app.tab.doc.atom(source).unwrap().position;
+        let label = if named {
+            "methane".into()
+        } else {
+            "x".repeat(40)
+        };
+        let text = caption(&mut app.tab.doc, &label, Point::new(80., 10.));
+        if named {
+            app.tab
+                .doc
+                .molecule_names
+                .push(reshiki::molecule_names::MoleculeName {
+                    annotation: text,
+                    atoms: vec![source],
+                    smiles: "C".into(),
+                    text: "methane".into(),
+                });
+        }
+        let cursor = ink(&app.tab.doc, text);
+        app.tab.selected = vec![source];
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let reason = reshiki::atom_text::text_atom_refusal(&before, text).unwrap();
+        let edits = crate::canvas::bond_text_drag_edits(&before, app.tool, start, cursor);
+        let mut refusals = 0;
+        for edit in edits {
+            refusals += usize::from(matches!(edit, Edit::TextBondRefused(_)));
+            let hover = matches!(edit, Edit::Hover(Some(p)) if p.distance(cursor) < 0.001);
+            app.edit(edit);
+            if hover {
+                assert_eq!(app.status, reason);
+                assert!(!app.error, "Hover is a hint before release");
+            }
+        }
+        assert_eq!(refusals, 1);
+        assert_unchanged_failure(&app, &before, revision, &[source]);
+        assert_eq!(app.status, reason);
+        assert_eq!(app.tab.history.undo_frames().len(), 0);
+        assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (1, 0));
+    }
+}
+
+#[test]
 fn bond_caption_hover_restores_the_previous_status_and_error_on_leave() {
     for leave in [None, Some(Point::new(350., 220.))] {
         let mut app = app();

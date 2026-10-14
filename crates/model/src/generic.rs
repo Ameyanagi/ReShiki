@@ -24,6 +24,7 @@ mod selection;
 mod symmetry;
 mod variable;
 
+pub(crate) use authoring::split_link_label;
 pub use authoring::{alternative, apply_label, define_bracket, set_repeat_unit};
 pub use definitions::{prune, selection, validate};
 pub use expansion::{expand, expand_drawings};

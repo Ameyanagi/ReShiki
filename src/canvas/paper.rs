@@ -1,5 +1,6 @@
 //! The drawing paper, layer by layer: background, the document as the active gesture would leave it, the document, then editing overlays.
 
+mod bond_text;
 mod draft;
 #[cfg(test)]
 mod orbital_tests;
@@ -16,6 +17,7 @@ use std::borrow::Cow;
 /// The document as the in-progress gesture would leave it, plus its transient decorations.
 struct Draft<'d> {
     preview: Cow<'d, Document>,
+    bond_preview: Option<Document>,
     ring_selection: Option<Vec<u64>>,
     chain_badge: Option<(World, String, bool)>,
     template_notice: Option<(String, bool)>,
@@ -28,6 +30,7 @@ impl<'d> Draft<'d> {
     fn new(base: &'d Document) -> Self {
         Self {
             preview: Cow::Borrowed(base),
+            bond_preview: None,
             ring_selection: None,
             chain_badge: None,
             template_notice: None,
@@ -74,6 +77,7 @@ impl MoleculeCanvas<'_> {
         }
         let Draft {
             mut preview,
+            bond_preview,
             ring_selection,
             chain_badge,
             template_notice,
@@ -111,6 +115,9 @@ impl MoleculeCanvas<'_> {
                 &nmr_ids,
             );
             draw_document(frame, &preview, self.camera, bounds);
+        }
+        if let Some(drawing) = bond_preview {
+            draw_document(frame, &drawing, self.camera, bounds);
         }
         let nmr_cache = (cached_camera.is_some() && translation.is_none()).then_some(&state.scene);
         self.draw_nmr_assignments(frame, &preview, selected, bounds, nmr_cache);

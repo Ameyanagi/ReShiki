@@ -76,6 +76,138 @@ fn release(canvas: &MoleculeCanvas<'_>, state: &mut State, p: World) -> Option<E
     )
 }
 
+/// Exercise the native canvas path; app tests replay these published edits.
+pub(crate) fn bond_text_drag_edits(
+    doc: &Document,
+    tool: Tool,
+    start: World,
+    end: World,
+) -> Vec<Edit> {
+    let mut canvas = tests::chain_canvas(doc, ChainMode::Straight);
+    canvas.tool = tool;
+    let mut state = State::default();
+    let mut edits = Vec::new();
+    for event in [
+        mouse::Event::CursorMoved {
+            position: screen(&canvas, start),
+        },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::CursorMoved {
+            position: screen(&canvas, end),
+        },
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        edits.extend(send(&canvas, &mut state, event));
+    }
+    assert!(state.gesture.is_none());
+    edits
+}
+
+#[test]
+fn refused_caption_drop_publishes_one_refusal_instead_of_a_bond() {
+    for (label, named, reaction) in [
+        ("x".repeat(40), false, false),
+        ("two\nlines".into(), false, false),
+        ("methane".into(), true, false),
+        ("Pd2+".into(), false, true),
+    ] {
+        let mut doc = Document::default();
+        let source = doc.add_atom("C", World::new(-180., -70.));
+        let start = doc.atom(source).unwrap().position;
+        let text = caption(&mut doc, &label, World::new(80., 10.));
+        if named {
+            doc.molecule_names
+                .push(reshiki::molecule_names::MoleculeName {
+                    annotation: text,
+                    atoms: vec![source],
+                    smiles: "C".into(),
+                    text: "methane".into(),
+                });
+        }
+        if reaction {
+            let arrow = doc.next_id();
+            doc.arrows.push(reshiki::document::Arrow::new(
+                arrow,
+                World::new(20., 80.),
+                World::new(120., 80.),
+                Default::default(),
+                Default::default(),
+            ));
+            let mut membership = reshiki::reactions::Reaction::new(arrow);
+            membership.annotations.push(text);
+            doc.reactions.push(membership);
+        }
+        let cursor = ink(&doc, text);
+        // A refused caption must also beat a nearby snapped atom.
+        let snapped = BondDrawing::default().endpoint(start, cursor);
+        doc.add_atom("O", snapped);
+        let before = doc.clone();
+        let reason = reshiki::atom_text::text_atom_refusal(&doc, text).unwrap();
+        assert_eq!(
+            hit::bond_target_with_text(
+                &doc,
+                start,
+                cursor,
+                (Some(source), None),
+                12.,
+                BondDrawing::default(),
+                Tool::Bond(1)
+            ),
+            Err(reason.clone())
+        );
+        let edits = bond_text_drag_edits(&doc, Tool::Bond(1), start, cursor);
+        assert_eq!(
+            edits
+                .iter()
+                .filter(|edit| matches!(edit, Edit::TextBondRefused(_)))
+                .count(),
+            1
+        );
+        assert!(matches!(edits.last(), Some(Edit::TextBondRefused(error)) if error == &reason));
+        assert!(!edits.iter().any(|edit| matches!(
+            edit,
+            Edit::Bond(..) | Edit::TextBond { .. } | Edit::PlaneBond(..)
+        )));
+        assert_eq!(doc, before);
+    }
+}
+
+#[test]
+fn caption_drag_hover_publishes_hints_only_on_caption_transitions() {
+    let mut doc = Document::default();
+    let source = doc.add_atom("C", World::new(-180., -70.));
+    let start = doc.atom(source).unwrap().position;
+    let text = caption(&mut doc, &"x".repeat(40), World::new(80., 10.));
+    let point = ink(&doc, text);
+    let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Bond(1);
+    let mut state = State::default();
+    press(&canvas, &mut state, start);
+    assert!(
+        matches!(send(&canvas, &mut state, mouse::Event::CursorMoved { position: screen(&canvas, point) }), Some(Edit::Hover(Some(p))) if p.distance(point) < 0.001)
+    );
+    assert!(
+        send(
+            &canvas,
+            &mut state,
+            mouse::Event::CursorMoved {
+                position: screen(&canvas, point.offset(0.1, 0.))
+            }
+        )
+        .is_none()
+    );
+    assert!(matches!(
+        send(
+            &canvas,
+            &mut state,
+            mouse::Event::CursorMoved {
+                position: screen(&canvas, point.offset(0., 60.))
+            }
+        ),
+        Some(Edit::Hover(None))
+    ));
+}
+
 #[test]
 fn caption_ink_press_starts_text_draw_at_the_converted_atom() {
     let mut doc = Document::default();
@@ -349,7 +481,8 @@ fn snapped_endpoint_over_caption_does_not_target_text_away_from_the_cursor() {
         12.,
         drawing,
         Tool::Bond(1),
-    );
+    )
+    .unwrap();
     assert_eq!((end, target, target_text), (snapped, None, None));
 }
 
@@ -372,7 +505,8 @@ fn caption_under_the_cursor_beats_an_atom_at_the_snapped_endpoint() {
         12.,
         drawing,
         Tool::Bond(1),
-    );
+    )
+    .unwrap();
     assert_eq!(result, (cursor, None, Some(text)));
     // Away from caption ink the snapped atom still takes the bond.
     let open = cursor.offset(0., 60.);
@@ -388,7 +522,8 @@ fn caption_under_the_cursor_beats_an_atom_at_the_snapped_endpoint() {
             12.,
             drawing,
             Tool::Bond(1),
-        ),
+        )
+        .unwrap(),
         (snapped, Some(near), None)
     );
 }
@@ -412,7 +547,8 @@ fn text_target_helper_returns_the_converted_atom_position() {
         12.,
         BondDrawing::default(),
         Tool::Bond(1),
-    );
+    )
+    .unwrap();
     assert_eq!((end, target, target_text), (point, None, Some(text)));
     assert_eq!(doc, before);
 }
@@ -432,7 +568,8 @@ fn text_target_helper_preserves_existing_atom_attachment_positions() {
         12.,
         BondDrawing::default(),
         Tool::Bond(1),
-    );
+    )
+    .unwrap();
     assert_eq!(result, (point, Some(target), None));
     assert_eq!(
         bond_target_with(
@@ -463,7 +600,8 @@ fn text_target_helper_excludes_its_own_source_caption() {
         12.,
         drawing,
         Tool::Bond(1),
-    );
+    )
+    .unwrap();
     assert_eq!(result, (drawing.endpoint(start, cursor), None, None));
 }
 
@@ -489,7 +627,8 @@ fn ineligible_tools_never_resolve_a_caption_as_a_bond_target() {
                 12.,
                 drawing,
                 tool,
-            ),
+            )
+            .unwrap(),
             (drawing.endpoint(World::default(), cursor), None, None),
             "{tool:?}"
         );

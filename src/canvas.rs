@@ -52,6 +52,8 @@ mod bond_text_render_tests;
 #[cfg(test)]
 mod bond_text_tests;
 #[cfg(test)]
+pub(crate) use bond_text_tests::bond_text_drag_edits;
+#[cfg(test)]
 pub(crate) mod label_click_tests;
 #[cfg(test)]
 mod performance;
@@ -261,6 +263,8 @@ pub struct State {
     gesture: Option<Gesture>,
     relaxation: Option<optimization::Drag>,
     cursor: Option<Point>,
+    /// Only caption transitions during a bond drag need an application hint.
+    bond_text_hover: Option<u64>,
     last_click: Option<(std::time::Instant, u64)>,
     last_transform_click: Option<HandleClick>,
     modifiers: iced::keyboard::Modifiers,
@@ -276,6 +280,7 @@ impl State {
     /// Every drag ends here, so a Ctrl/Cmd drag copy never outlives its drag.
     fn end_gesture(&mut self) -> Option<Gesture> {
         self.scene.get_mut().release_copy();
+        self.bond_text_hover = None;
         self.gesture.take()
     }
 }

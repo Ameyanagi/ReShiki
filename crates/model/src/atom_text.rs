@@ -276,8 +276,24 @@ pub fn apply_with_scripts(
         return apply(doc, id, text, mode);
     }
     if mode == Mode::Auto
-        && let Some(chemical) = manual_chemical_text(text, &runs)
+        && let Some(chemical) = manual_chemical_entry(text, &runs)?
     {
+        return apply_entry(doc, id, &chemical, Mode::Auto, false);
+    }
+    let mut result = apply(doc, id, text, Mode::Text)?;
+    let atom = result
+        .atom_mut(id)
+        .ok_or("The atom is no longer available")?;
+    atom.display.set_variable(Some(text.to_owned()));
+    atom.display.label_scripts = runs;
+    result.validate()?;
+    Ok(result)
+}
+
+/// The chemical spelling of manually scripted input, when atom entry accepts it.
+/// Caption previews use this same classification without applying an edit.
+fn manual_chemical_entry(text: &str, runs: &[ScriptRun]) -> Result<Option<String>, String> {
+    if let Some(chemical) = manual_chemical_text(text, runs) {
         let element = ELEMENTS.contains(&chemical.as_str()) || chemical == "*";
         // A manually lowered digit is a count, never an element charge.
         let lowered_count = runs.iter().any(|run| {
@@ -304,17 +320,10 @@ pub fn apply_with_scripts(
             hydride::parse(&chemical)?
         };
         if element || explicit.is_some() {
-            return apply_entry(doc, id, &chemical, Mode::Auto, false);
+            return Ok(Some(chemical));
         }
     }
-    let mut result = apply(doc, id, text, Mode::Text)?;
-    let atom = result
-        .atom_mut(id)
-        .ok_or("The atom is no longer available")?;
-    atom.display.set_variable(Some(text.to_owned()));
-    atom.display.label_scripts = runs;
-    result.validate()?;
-    Ok(result)
+    Ok(None)
 }
 
 /// A trailing manual superscript distinguishes a charge from an H count:
