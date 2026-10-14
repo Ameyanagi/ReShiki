@@ -6,6 +6,10 @@ use reshiki::engine::{ChemistryEngine, LocalEngine, PythonEngine, Request, Respo
 
 type TestResult = anyhow::Result<()>;
 
+#[path = "support/molfile_restrictions.rs"]
+mod molfile_restrictions;
+#[path = "support/reference_mol.rs"]
+mod reference_mol;
 #[path = "support/reference_presentation.rs"]
 mod reference_presentation;
 
@@ -178,6 +182,10 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
         text: String,
         expected: Option<serde_json::Value>,
         failure: Option<String>,
+        restriction: Option<molfile_restrictions::GenericRestriction>,
+        display: Option<serde_json::Value>,
+        generic: Option<serde_json::Value>,
+        generic_extension: Option<serde_json::Value>,
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
@@ -199,19 +207,117 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
     let local = LocalEngine::default();
     let (mut accepted, mut rejected) = (0, 0);
     let mut failures = Vec::new();
+    let mut categories = std::collections::BTreeMap::<String, usize>::new();
+    let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
+    let (mut xyz, mut folded, mut generic, mut extensions) = (0, 0, 0, 0);
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
-        let expected = case
-            .expected
+        let actual = local.execute(Request::import(format, &case.text)).await;
+        if let Some(restriction) = &case.restriction {
+            if let Some(error) = molfile_restrictions::rejection_difference(
+                restriction,
+                case.expected.is_some() && case.failure.is_none(),
+                &actual,
+            ) {
+                *categories.entry("Restriction contract".into()).or_default() += 1;
+                failures.push(format!("{}: {error}; input {:?}", case.name, case.text));
+            } else {
+                *restrictions
+                    .entry(restriction.category.clone())
+                    .or_default() += 1;
+            }
+            continue;
+        }
+        if let Some(extension) = &case.generic_extension {
+            let result = (|| -> TestResult {
+                anyhow::ensure!(
+                    format == "mol" && case.expected.is_none(),
+                    "Generic extension lacks legacy rejection"
+                );
+                anyhow::ensure!(
+                    case.failure.as_deref() == extension["failure"].as_str(),
+                    "Generic extension legacy reason changed"
+                );
+                let expected: Response = serde_json::from_value(extension["expected"].clone())?;
+                assert_response_matches(actual.map_err(anyhow::Error::msg)?, expected)
+            })();
+            if let Err(error) = result {
+                *categories
+                    .entry("Generic acceptance extension".into())
+                    .or_default() += 1;
+                failures.push(format!("{}: {error:#}; input {:?}", case.name, case.text));
+            } else {
+                extensions += 1;
+            }
+            continue;
+        }
+        let expected = if format == "mol" {
+            case.expected
+                .map(|value| {
+                    reference_mol::adapt_response(
+                        value,
+                        case.display.as_ref(),
+                        case.generic.as_ref(),
+                    )
+                })
+                .transpose()
+        } else {
+            Ok(case.expected)
+        };
+        let expected = match expected {
+            Ok(expected) => expected,
+            Err(error) => {
+                *categories
+                    .entry("MOL expectation contract".into())
+                    .or_default() += 1;
+                failures.push(format!("{}: {error:#}; input {:?}", case.name, case.text));
+                continue;
+            }
+        };
+        if (case.display.is_some() || case.generic.is_some()) && format == "mol" {
+            let result = (|| -> TestResult {
+                let response: Response = serde_json::from_value(
+                    expected.clone().context("Missing adapted MOL response")?,
+                )?;
+                response
+                    .document
+                    .context("Missing adapted MOL document")?
+                    .validate()
+                    .map_err(anyhow::Error::msg)
+            })();
+            if let Err(error) = result {
+                *categories
+                    .entry("MOL expectation contract".into())
+                    .or_default() += 1;
+                failures.push(format!(
+                    "{}: Invalid independently adapted response: {error:#}",
+                    case.name
+                ));
+                continue;
+            }
+        }
+        let expected = expected
             // The original Rust bridge also rejects native values outside the
             // editable document's types, such as negative atom-map numbers.
             .and_then(|value| serde_json::from_value::<Response>(value).ok())
             .filter(|r| r.document.as_ref().is_none_or(|d| d.validate().is_ok()));
-        let actual = local.execute(Request::import(format, &case.text)).await;
         let failure = match (actual, expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
-                assert_response_matches(actual, expected)
+                let expected = if format == "mol" {
+                    let before = serde_json::to_value(&expected)?;
+                    reference_mol::mol_source_xyz(expected, &case.text).inspect(|response| {
+                        if serde_json::to_value(response).ok().as_ref() != Some(&before) {
+                            xyz += 1;
+                        }
+                    })
+                } else {
+                    Ok(expected)
+                };
+                folded += usize::from(case.display.is_some());
+                generic += usize::from(case.generic.is_some());
+                expected
+                    .and_then(|expected| assert_response_matches(actual, expected))
                     .err()
                     .map(|e| e.to_string())
             }
@@ -223,6 +329,15 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
             (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
         };
         if let Some(error) = failure {
+            *categories
+                .entry(
+                    error
+                        .lines()
+                        .next()
+                        .unwrap_or("Unknown mismatch")
+                        .to_owned(),
+                )
+                .or_default() += 1;
             failures.push(format!("{}: {error}; input {:?}", case.name, case.text));
         }
     }
@@ -238,16 +353,11 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
             failures.join("\n"),
         )?;
     }
-    assert!(
-        failures.is_empty(),
-        "{}",
-        failures
-            .iter()
-            .take(24)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n")
+    eprintln!("{format} engine mismatch categories: {categories:?}");
+    eprintln!(
+        "{format} engine restrictions: {restrictions:?}; source XYZ {xyz}, H folding {folded}, generic drawings {generic}, acceptance extensions {extensions}"
     );
+    reference_presentation::report_mismatches(&format!("{format}-engine"), &failures)?;
     assert!(
         accepted > 500 && rejected > 20,
         "Insufficient import response coverage"
@@ -256,9 +366,23 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
 }
 
 fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
+    assert_response_matches_with_source(actual, expected, None)
+}
+
+fn assert_response_matches_with_source(
+    actual: Response,
+    expected: Response,
+    source: Option<&reshiki::document::Document>,
+) -> TestResult {
+    let source = source.map(serde_json::to_value).transpose()?;
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
-    reference_presentation::compare_export(&actual, &mut expected)?;
+    let mut failures = Vec::new();
+    if let Err(error) =
+        reference_presentation::compare_export_with_source(&actual, &mut expected, source.as_ref())
+    {
+        failures.push(format!("[presentation] {error:#}"));
+    }
     if let (Some(a), Some(e)) = (
         actual["analysis"].as_object_mut(),
         expected["analysis"].as_object_mut(),
@@ -273,13 +397,15 @@ fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
                 .and_then(|v| v.as_f64())
                 .context("Missing reference mass")?;
             // RDKit wheels may fuse floating-point operations on some targets.
-            anyhow::ensure!(
-                (av - ev).abs() <= ev.abs().max(1.) * 1e-12,
-                "{field}: {av} != {ev}"
-            );
+            if (av - ev).abs() > ev.abs().max(1.) * 1e-12 {
+                failures.push(format!("[analysis] {field}: {av} != {ev}"));
+            }
         }
     }
-    if actual != expected {
+    failures.extend(reference_presentation::response_differences(
+        &actual, &expected,
+    ));
+    if !failures.is_empty() {
         std::fs::create_dir_all("artifacts")?;
         let name = std::thread::current().name().unwrap_or("engine").to_owned();
         std::fs::write(
@@ -290,7 +416,10 @@ fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
             format!("artifacts/{name}-expected.json"),
             serde_json::to_vec_pretty(&expected)?,
         )?;
-        anyhow::bail!("Engine response mismatch; see artifacts/{name}-{{actual,expected}}.json");
+        anyhow::bail!(
+            "Engine response mismatch\n{}; see artifacts/{name}-{{actual,expected}}.json",
+            failures.join("\n")
+        );
     }
     Ok(())
 }
@@ -859,6 +988,7 @@ async fn native_drawings_match_the_original_python_importer() -> TestResult {
 async fn exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata() -> TestResult {
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
+    let mut failures = Vec::new();
     for smiles in [
         "CCO",
         "N[C@@H](C)C(=O)O",
@@ -886,8 +1016,13 @@ async fn exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata() 
             .execute(request.clone())
             .await
             .map_err(anyhow::Error::msg)?;
+        let source = request.document.clone();
         let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
-        assert_response_matches(actual.clone(), expected)?;
+        if let Err(error) =
+            assert_response_matches_with_source(actual.clone(), expected, source.as_ref())
+        {
+            failures.push(format!("{smiles}/export/cdx: {error:#}"));
+        }
         let data = actual.output.context("Missing binary export")?;
         let request = Request::import("cdx", &data);
         let back = local
@@ -898,13 +1033,23 @@ async fn exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata() 
             .execute(request)
             .await
             .map_err(anyhow::Error::msg)?;
-        assert_response_matches(back.clone(), oracle)?;
+        if let Err(error) = assert_response_matches(back.clone(), oracle) {
+            failures.push(format!("{smiles}/reimport/cdx: {error:#}"));
+        }
         let identity = back.analysis.context("Missing round-trip analysis")?;
         assert_eq!(analysis.smiles, identity.smiles, "{smiles}");
         assert_eq!(analysis.inchikey, identity.inchikey, "{smiles}");
         assert_eq!(analysis.formula, identity.formula, "{smiles}");
         assert_eq!(analysis.exact_mass, identity.exact_mass, "{smiles}");
     }
+    eprintln!(
+        "exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata: {} export/response mismatches",
+        failures.len()
+    );
+    reference_presentation::report_mismatches(
+        "exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata",
+        &failures,
+    )?;
     Ok(())
 }
 
@@ -912,6 +1057,7 @@ async fn exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata() 
 async fn supported_figure_exports_are_byte_identical_to_python() -> TestResult {
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
+    let mut failures = Vec::new();
     for name in [
         "bond-styles-chemdraw",
         "formatted-label-chemdraw",
@@ -953,9 +1099,20 @@ async fn supported_figure_exports_are_byte_identical_to_python() -> TestResult {
             .execute(request.clone())
             .await
             .map_err(anyhow::Error::msg)?;
+        let source = request.document.clone();
         let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
-        assert_response_matches(actual, expected)?;
+        if let Err(error) = assert_response_matches_with_source(actual, expected, source.as_ref()) {
+            failures.push(format!("{name}/export/cdx: {error:#}"));
+        }
     }
+    eprintln!(
+        "supported_figure_exports_are_byte_identical_to_python: {} export/response mismatches",
+        failures.len()
+    );
+    reference_presentation::report_mismatches(
+        "supported_figure_exports_are_byte_identical_to_python",
+        &failures,
+    )?;
     Ok(())
 }
 

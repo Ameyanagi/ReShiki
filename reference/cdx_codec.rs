@@ -15,9 +15,55 @@ struct Case {
     decoded: String,
 }
 
-fn same_xml(left: &str, right: &str, name: &str) -> TestResult {
-    fn compare(a: roxmltree::Node<'_, '_>, b: roxmltree::Node<'_, '_>, name: &str) {
-        assert_eq!(a.tag_name().name(), b.tag_name().name(), "{name}");
+fn binary_differences(actual: &[u8], expected: &[u8]) -> Vec<(&'static str, String)> {
+    let mut differences = Vec::new();
+    if actual.len() != expected.len() {
+        differences.push((
+            "binary length",
+            format!(
+                "encoded binary lengths {} != {}",
+                actual.len(),
+                expected.len()
+            ),
+        ));
+    }
+    for offset in 0..actual.len().max(expected.len()) {
+        if actual.get(offset) != expected.get(offset) {
+            let byte = |value: Option<&u8>| {
+                value
+                    .map(|value| format!("0x{value:02x}"))
+                    .unwrap_or_else(|| "<missing>".into())
+            };
+            differences.push((
+                "binary byte",
+                format!(
+                    "encoded binary byte {offset}: actual {}, expected {}",
+                    byte(actual.get(offset)),
+                    byte(expected.get(offset))
+                ),
+            ));
+        }
+    }
+    differences
+}
+
+fn xml_differences(left: &str, right: &str) -> anyhow::Result<Vec<(&'static str, String)>> {
+    fn compare(
+        a: roxmltree::Node<'_, '_>,
+        b: roxmltree::Node<'_, '_>,
+        path: &str,
+        differences: &mut Vec<(&'static str, String)>,
+    ) {
+        if a.tag_name().name() != b.tag_name().name() {
+            differences.push((
+                "XML tag",
+                format!(
+                    "{path}: tag {} != {}",
+                    a.tag_name().name(),
+                    b.tag_name().name()
+                ),
+            ));
+        }
         let attrs = |n: roxmltree::Node<'_, '_>| {
             n.attributes()
                 .map(|a| (a.name().to_owned(), a.value().to_owned()))
@@ -25,39 +71,94 @@ fn same_xml(left: &str, right: &str, name: &str) -> TestResult {
         };
         let a_attrs = attrs(a);
         let b_attrs = attrs(b);
-        assert_eq!(
-            a_attrs.keys().collect::<Vec<_>>(),
-            b_attrs.keys().collect::<Vec<_>>(),
-            "{name}"
-        );
-        for (key, av) in a_attrs {
-            let bv = &b_attrs[&key];
+        for (key, av) in &a_attrs {
+            let Some(bv) = b_attrs.get(key) else {
+                differences.push((
+                    "XML unexpected attribute",
+                    format!("{path}/@{key}: unexpected={av:?}"),
+                ));
+                continue;
+            };
             // Font sizes and table colors may have equivalent decimal spelling.
-            if let (Ok(x), Ok(y)) = (av.parse::<f64>(), bv.parse::<f64>()) {
-                assert!(
-                    (x - y).abs() <= 1e-12 * x.abs().max(1.),
-                    "{name}: {key}: {av} != {bv}"
-                );
+            let equal = if let (Ok(x), Ok(y)) = (av.parse::<f64>(), bv.parse::<f64>()) {
+                (x - y).abs() <= 1e-12 * x.abs().max(1.)
             } else {
-                assert_eq!(&av, bv, "{name}: {key}");
+                av == bv
+            };
+            if !equal {
+                differences.push((
+                    "XML attribute value",
+                    format!("{path}/@{key}: {av:?} != {bv:?}"),
+                ));
             }
         }
-        if a.tag_name().name() == "s" {
-            assert_eq!(a.text().unwrap_or(""), b.text().unwrap_or(""), "{name}");
+        for (key, bv) in &b_attrs {
+            if !a_attrs.contains_key(key) {
+                differences.push((
+                    "XML missing attribute",
+                    format!("{path}/@{key}: missing, expected={bv:?}"),
+                ));
+            }
+        }
+        if (a.tag_name().name() == "s" || b.tag_name().name() == "s")
+            && a.text().unwrap_or("") != b.text().unwrap_or("")
+        {
+            differences.push((
+                "XML text",
+                format!(
+                    "{path}: text {:?} != {:?}",
+                    a.text().unwrap_or(""),
+                    b.text().unwrap_or("")
+                ),
+            ));
         }
         let ac = a.children().filter(|n| n.is_element()).collect::<Vec<_>>();
         let bc = b.children().filter(|n| n.is_element()).collect::<Vec<_>>();
-        assert_eq!(ac.len(), bc.len(), "{name}");
-        for (a, b) in ac.into_iter().zip(bc) {
-            compare(a, b, name);
+        if ac.len() != bc.len() {
+            differences.push((
+                "XML child count",
+                format!("{path}: child counts {} != {}", ac.len(), bc.len()),
+            ));
+        }
+        for (index, (a, b)) in ac.iter().zip(&bc).enumerate() {
+            compare(
+                *a,
+                *b,
+                &format!("{path}/{}[{index}]", a.tag_name().name()),
+                differences,
+            );
+        }
+        for (index, a) in ac.iter().enumerate().skip(bc.len()) {
+            differences.push((
+                "XML unexpected child",
+                format!(
+                    "{path}/{}[{index}]: unexpected={:?}",
+                    a.tag_name().name(),
+                    &a.document().input_text()[a.range()]
+                ),
+            ));
+        }
+        for (index, b) in bc.iter().enumerate().skip(ac.len()) {
+            differences.push((
+                "XML missing child",
+                format!(
+                    "{path}/{}[{index}]: missing, expected={:?}",
+                    b.tag_name().name(),
+                    &b.document().input_text()[b.range()]
+                ),
+            ));
         }
     }
+    let actual = roxmltree::Document::parse(left).context("Invalid actual decoded XML")?;
+    let expected = roxmltree::Document::parse(right).context("Invalid expected decoded XML")?;
+    let mut differences = Vec::new();
     compare(
-        roxmltree::Document::parse(left)?.root_element(),
-        roxmltree::Document::parse(right)?.root_element(),
-        name,
+        actual.root_element(),
+        expected.root_element(),
+        "/CDXML",
+        &mut differences,
     );
-    Ok(())
+    Ok(differences)
 }
 
 #[test]
@@ -79,21 +180,70 @@ fn matches_python_reference_for_native_files_all_properties_and_charsets() -> Te
     );
     let cases: Vec<Case> = serde_json::from_slice(&output.stdout)?;
     assert!(cases.len() > 400);
+    let mut failures = Vec::new();
+    let mut categories = BTreeMap::<&str, usize>::new();
+    let (mut encoder_checks, mut failing_cases) = (0, 0);
+    let decoder_checks = cases.len();
     for case in cases {
+        let failures_before = failures.len();
         let bytes = STANDARD.decode(&case.binary)?;
         if let Some(xml) = case.xml {
-            assert_eq!(
-                to_cdx(&xml).map_err(anyhow::Error::msg)?,
-                bytes,
-                "{}",
-                case.name
-            );
+            encoder_checks += 1;
+            match to_cdx(&xml) {
+                Ok(actual) if actual == bytes => {}
+                Ok(actual) => {
+                    for (category, difference) in binary_differences(&actual, &bytes) {
+                        *categories.entry(category).or_default() += 1;
+                        failures.push(format!("{}: {difference}", case.name));
+                    }
+                }
+                Err(error) => {
+                    *categories.entry("encode rejection").or_default() += 1;
+                    failures.push(format!("{}: encode rejected: {error}", case.name));
+                }
+            }
         }
-        let decoded = from_cdx(&bytes)
-            .map_err(anyhow::Error::msg)
-            .with_context(|| case.name.clone())?;
-        same_xml(&decoded, &case.decoded, &case.name)?;
+        match from_cdx(&bytes) {
+            Ok(decoded) => match xml_differences(&decoded, &case.decoded) {
+                Ok(differences) => {
+                    for (category, difference) in differences {
+                        *categories.entry(category).or_default() += 1;
+                        failures.push(format!("{}: decoded {difference}", case.name));
+                    }
+                }
+                Err(error) => {
+                    *categories.entry("XML parse rejection").or_default() += 1;
+                    failures.push(format!("{}: decoded XML: {error:#}", case.name));
+                }
+            },
+            Err(error) => {
+                *categories.entry("decode rejection").or_default() += 1;
+                failures.push(format!("{}: decode rejected: {error}", case.name));
+            }
+        }
+        failing_cases += usize::from(failures.len() != failures_before);
     }
+    eprintln!(
+        "CDX codec: {encoder_checks} encoder comparisons, {decoder_checks} decoder comparisons; {failing_cases} failing cases, {} mismatches; categories {categories:?}",
+        failures.len()
+    );
+    if !failures.is_empty() {
+        std::fs::create_dir_all(root.join("artifacts"))?;
+        std::fs::write(
+            root.join("artifacts/cdx-codec-failures.txt"),
+            format!(
+                "{failing_cases} failing cases, {} mismatches; categories {categories:?}\n\n{}\n",
+                failures.len(),
+                failures.join("\n")
+            ),
+        )?;
+    }
+    anyhow::ensure!(
+        failures.is_empty(),
+        "{} mismatches across {failing_cases} cases:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
     Ok(())
 }
 

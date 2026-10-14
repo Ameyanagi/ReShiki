@@ -325,6 +325,9 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.platform.python }}
       RESHIKI_REQUIRE_INCHI_HELPER: "1"
+      # Shard 0 runs the workspace library and app tests, whose local naming
+      # worker tests need this exact source's built executable.
+      RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.platform.target, '-pc-windows-msvc') && '.exe' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux libraries
@@ -367,6 +370,9 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.platform.msvc_arch }}
+      - name: Build the exact application for local naming worker tests
+        if: matrix.shard == 0
+        run: cargo build --locked --features rdkit-reference --bin reshiki
       - name: Run every assigned reference target
         run: uv run --locked python scripts/run_reference_shard.py --index ${{ matrix.shard }} --count 4
       - name: Preserve shard results and failed comparisons

@@ -12,10 +12,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine.worker import to_document  # Retained original drawing converter.
 
 if TYPE_CHECKING or __package__:
+    from .molfile_generic_reference import (
+        drawing_snapshot,
+        generic_drawing_addition,
+        generic_molecule_extension,
+    )
     from .molfile_import_reference import cases, read
+    from .molfile_restrictions_reference import generic_restriction
     from .perception_reference import snapshot
 else:
+    from molfile_generic_reference import (
+        drawing_snapshot,
+        generic_drawing_addition,
+        generic_molecule_extension,
+    )
     from molfile_import_reference import cases, read
+    from molfile_restrictions_reference import generic_restriction
     from perception_reference import snapshot
 
 
@@ -48,6 +60,18 @@ def emit(name, text):
         document = to_document(original)
     except (ValueError, RuntimeError, KeyError, OverflowError) as error:
         expected, failure = None, str(error)
+    restriction = generic_restriction(text) if expected is not None else None
+    extension = None
+    if expected is None and failure == "Outside the existing editable chemistry contract":
+        supported = generic_molecule_extension(text)
+        if supported is not None:
+            extension = dict(failure=failure, **drawing_snapshot(supported))
+    original_drawing = extension["document"] if extension else document
+    generic = (
+        generic_drawing_addition(text, original_drawing)
+        if restriction is None and original_drawing is not None
+        else None
+    )
     print(
         json.dumps(
             dict(
@@ -57,6 +81,9 @@ def emit(name, text):
                 labels=labels,
                 document=document,
                 failure=failure,
+                restriction=restriction,
+                extension=extension,
+                generic=generic,
             )
         )
     )

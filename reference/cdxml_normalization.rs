@@ -1,3 +1,8 @@
+#[path = "support/reference_dative.rs"]
+mod reference_dative;
+#[path = "support/reference_diagnostics.rs"]
+mod reference_diagnostics;
+
 use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, cdxml};
 use serde::Deserialize;
@@ -82,14 +87,32 @@ fn normalization_matches_original_worker_and_direct_native_parser() -> anyhow::R
                     let tree = roxmltree::Document::parse(xml)?;
                     let actual = canonical(tree.root_element());
                     if actual != *expected {
-                        Some(format!("Tree mismatch: {actual} != {expected}"))
+                        Some(
+                            reference_diagnostics::differences(
+                                &actual,
+                                expected,
+                                "normalized tree",
+                            )
+                            .join("\n"),
+                        )
                     } else if case.native {
                         native += 1;
                         match (cdxml::read(xml), &case.native_expected) {
                             (Ok(parsed), Some(expected)) => {
+                                let expected =
+                                    reference_dative::normalized_fragments(xml, expected.clone())
+                                        .unwrap_or_else(|error| {
+                                            failures.push(format!(
+                                                "{}: dative expectation: {error}",
+                                                case.name
+                                            ));
+                                            expected.clone()
+                                        });
                                 let actual = serde_json::to_value(parsed)?;
-                                (actual != *expected)
-                                    .then(|| format!("Native mismatch: {actual} != {expected}"))
+                                (actual != expected).then(|| {
+                                    reference_diagnostics::differences(&actual, &expected, "native")
+                                        .join("\n")
+                                })
                             }
                             (Err(_), None) => None,
                             (Err(error), Some(_)) => {
@@ -147,17 +170,7 @@ fn normalization_matches_original_worker_and_direct_native_parser() -> anyhow::R
     eprintln!(
         "CDXML normalization: {accepted} original successes, {rejected} original failures, {restricted} separate XML restrictions; {native} direct-native pairs, {application} application hydrogen cases"
     );
-    anyhow::ensure!(
-        failures.is_empty(),
-        "{} mismatches:\n{}",
-        failures.len(),
-        failures
-            .iter()
-            .take(12)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+    reference_diagnostics::report("CDXML normalization", &failures)?;
     assert!(accepted > 1000 && rejected > 2000 && native > 500);
     assert_eq!(application, 2);
     Ok(())

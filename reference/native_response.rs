@@ -51,26 +51,38 @@ async fn prepare(request: Arc<Request>) -> anyhow::Result<Option<Arc<Prepared>>>
 }
 
 fn equal(actual: Response, expected: Response) -> anyhow::Result<()> {
+    equal_with_source(actual, expected, None)
+}
+
+fn equal_with_source(
+    actual: Response,
+    expected: Response,
+    source_document: Option<&serde_json::Value>,
+) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
-    reference_presentation::compare_export(&actual, &mut expected)?;
+    let mut failures = Vec::new();
+    if let Err(error) =
+        reference_presentation::compare_export_with_source(&actual, &mut expected, source_document)
+    {
+        failures.push(format!("[presentation] {error:#}"));
+    }
     for field in ["mass", "exact_mass", "logp", "tpsa"] {
         if let (Some(a), Some(e)) = (
             actual["analysis"][field].as_f64(),
             expected["analysis"][field].as_f64(),
         ) {
-            anyhow::ensure!(
-                (a - e).abs() <= e.abs().max(1.) * 1e-12,
-                "{field}: {a} != {e}"
-            );
+            if (a - e).abs() > e.abs().max(1.) * 1e-12 {
+                failures.push(format!("[analysis] {field}: {a} != {e}"));
+            }
             actual["analysis"][field] = serde_json::Value::Null;
             expected["analysis"][field] = serde_json::Value::Null;
         }
     }
-    anyhow::ensure!(
-        actual == expected,
-        "Response mismatch:\nactual={actual}\nexpected={expected}"
-    );
+    failures.extend(reference_presentation::response_differences(
+        &actual, &expected,
+    ));
+    anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
     Ok(())
 }
 
@@ -91,7 +103,7 @@ async fn compare(
         native_response::build(Arc::clone(&request), prepared.clone(), config.clone()).await;
     anyhow::ensure!(
         serde_json::to_value(&*request)? == original,
-        "Request changed"
+        "[request] Request changed"
     );
     anyhow::ensure!(
         prepared
@@ -99,18 +111,18 @@ async fn compare(
             .map(|p| serde_json::to_value(&p.molecule))
             .transpose()?
             == before,
-        "Prepared chemistry changed"
+        "[prepared] Prepared chemistry changed"
     );
     match (actual, expected) {
         (Ok(a), Ok(e)) => {
-            equal(a, e)?;
+            equal_with_source(a, e, original.get("document"))?;
             Ok(true)
         }
         (Err(a), Err(e)) => {
-            anyhow::ensure!(a.to_string() == e, "Error changed: {a} != {e}");
+            anyhow::ensure!(a.to_string() == e, "[error] Error changed: {a} != {e}");
             Ok(false)
         }
-        (a, e) => anyhow::bail!("Outcome changed: {a:?} != {e:?}"),
+        (a, e) => anyhow::bail!("[outcome] Outcome changed: {a:?} != {e:?}"),
     }
 }
 
@@ -123,13 +135,14 @@ async fn imported(reference: &PythonEngine, text: &str) -> anyhow::Result<Docume
         .context("Missing imported drawing")
 }
 
-async fn all_operations(
+async fn operation_comparisons(
     reference: &PythonEngine,
     config: &Config,
     document: &Document,
     name: &str,
-) -> anyhow::Result<usize> {
+) -> (usize, Vec<String>) {
     let mut count = 0;
+    let mut failures = Vec::new();
     for (operation, format) in [
         ("analyze", None),
         ("finish_abbreviation", None),
@@ -141,11 +154,22 @@ async fn all_operations(
     ] {
         let mut request = Request::molecule(operation, document.clone());
         request.format = format.map(str::to_owned);
-        compare(reference, config, request)
-            .await
-            .with_context(|| format!("{name}: {operation}/{format:?}"))?;
+        if let Err(error) = compare(reference, config, request).await {
+            failures.push(format!("{name}: {operation}/{format:?}: {error:#}"));
+        }
         count += 1;
     }
+    (count, failures)
+}
+
+async fn all_operations(
+    reference: &PythonEngine,
+    config: &Config,
+    document: &Document,
+    name: &str,
+) -> anyhow::Result<usize> {
+    let (count, failures) = operation_comparisons(reference, config, document, name).await;
+    anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
     Ok(count)
 }
 
@@ -198,6 +222,7 @@ async fn complete_responses_match_original_worker_for_molecules_and_exports() ->
     texts.sort();
     texts.dedup();
     let mut count = 0;
+    let mut failures = Vec::new();
     for text in texts {
         let mut document = imported(&reference, &text)
             .await
@@ -209,10 +234,13 @@ async fn complete_responses_match_original_worker_for_molecules_and_exports() ->
             atom.label_h = 99;
             atom.cip_label = Some("R".into());
         }
-        count += all_operations(&reference, &config, &document, &text).await?;
+        let (compared, mismatches) =
+            operation_comparisons(&reference, &config, &document, &text).await;
+        count += compared;
+        failures.extend(mismatches);
     }
     eprintln!("Compared {count} complete molecular responses with the original worker");
-    Ok(())
+    reference_presentation::report_mismatches("native-response-molecular", &failures)
 }
 
 #[tokio::test]
@@ -727,7 +755,7 @@ async fn picture_drawings_preserve_the_complete_document_and_exports() -> anyhow
                 actual.output = actual.output.as_deref().map(normalize).transpose()?;
                 expected.output = expected.output.as_deref().map(normalize).transpose()?;
             }
-            equal(actual, expected)
+            equal_with_source(actual, expected, Some(&serde_json::to_value(&document)?))
                 .with_context(|| format!("picture/reflected={reflected}/{operation}/{format:?}"))?;
         }
     }

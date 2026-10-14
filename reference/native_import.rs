@@ -37,10 +37,18 @@ fn helper(name: &str) -> anyhow::Result<Option<PathBuf>> {
     Ok(None)
 }
 
+#[path = "support/molfile_restrictions.rs"]
+mod molfile_restrictions;
 #[path = "support/reference_annotations.rs"]
 mod reference_annotations;
 #[path = "support/reference_cdx.rs"]
 mod reference_cdx;
+#[path = "support/reference_dative.rs"]
+mod reference_dative;
+#[path = "support/reference_diagnostics.rs"]
+mod reference_diagnostics;
+#[path = "support/reference_mol.rs"]
+mod reference_mol;
 
 #[derive(Deserialize)]
 struct Case {
@@ -49,87 +57,41 @@ struct Case {
     format: Option<String>,
     expected: Option<Value>,
     failure: Option<String>,
-    restriction: Option<String>,
+    restriction: Option<Value>,
     molecular_extension: Option<Value>,
+    display: Option<Value>,
+    generic: Option<Value>,
+    generic_extension: Option<Value>,
 }
 
 fn compare(actual: Response, expected: Response) -> anyhow::Result<()> {
     let mut a = serde_json::to_value(actual)?;
     let mut b = serde_json::to_value(expected)?;
     for key in ["mass", "exact_mass", "logp", "tpsa"] {
-        if let (Some(x), Some(y)) = (a["analysis"][key].as_f64(), b["analysis"][key].as_f64()) {
-            anyhow::ensure!(
-                (x - y).abs() <= y.abs().max(1.) * 1e-12,
-                "{key}: {x} != {y}"
-            );
+        if let (Some(x), Some(y)) = (a["analysis"][key].as_f64(), b["analysis"][key].as_f64())
+            && (x - y).abs() <= y.abs().max(1.) * 1e-12
+        {
             a["analysis"][key] = Value::Null;
             b["analysis"][key] = Value::Null;
         }
     }
-    anyhow::ensure!(a == b, "Full response changed:\nactual={a}\nexpected={b}");
+    let differences = reference_diagnostics::differences(&a, &b, "response");
+    let mut categories = std::collections::BTreeMap::<&str, usize>::new();
+    for difference in &differences {
+        let category = if difference.starts_with("response.analysis.") {
+            "analysis"
+        } else if difference.contains(".length:") {
+            "response-length"
+        } else {
+            "response-field"
+        };
+        *categories.entry(category).or_default() += 1;
+    }
+    if !differences.is_empty() {
+        eprintln!("Full response changed: categories={categories:?}");
+    }
+    anyhow::ensure!(differences.is_empty(), "{}", differences.join("\n"));
     Ok(())
-}
-
-// The unchanged worker flattens Z. Adapt exactly that deliberate display
-// delta, retaining full equality for chemistry, source IDs, all other drawing
-// fields and every unaffected 2D response. Explicit-H folding has separate
-// independent actual-executable graph/stereo/XYZ controls.
-fn mol_source_xyz(mut expected: Response, text: &str) -> anyhow::Result<Response> {
-    let imported = reshiki::chemistry::molfile::read(text)?;
-    if !imported.annotations.is_3d
-        && !imported
-            .molecule
-            .positions
-            .iter()
-            .any(|position| position.z != 0.)
-    {
-        return Ok(expected);
-    }
-    let doc = expected
-        .document
-        .as_mut()
-        .context("Missing source MOL drawing")?;
-    let points: std::collections::HashMap<_, _> = imported
-        .molecule
-        .ids
-        .iter()
-        .copied()
-        .zip(&imported.molecule.positions)
-        .collect();
-    for atom in &mut doc.atoms {
-        atom.depth = (points
-            .get(&atom.id)
-            .context("Missing original source atom")?
-            .z
-            * 28.) as f32;
-    }
-    let mut any = std::collections::HashSet::new();
-    for (bond, metadata) in imported
-        .molecule
-        .state
-        .graph
-        .bonds
-        .iter()
-        .zip(&imported.molecule.state.metadata.bonds)
-    {
-        if bond.order == 2 && metadata.stereo == 1 {
-            let a = imported.molecule.ids[bond.a];
-            let b = imported.molecule.ids[bond.b];
-            any.insert((a.min(b), a.max(b)));
-        }
-    }
-    for bond in &mut doc.bonds {
-        if bond.order == 2 {
-            bond.stereo_authoritative = true;
-            if any.contains(&(bond.a.min(bond.b), bond.a.max(bond.b))) {
-                bond.stereo = Some("any".into());
-            }
-        }
-        if matches!(bond.order, 1 | 2 | 4) && !(bond.order == 1 && bond.display == "wavy") {
-            bond.projection = true;
-        }
-    }
-    Ok(expected)
 }
 
 // Match the real bridge's deferred-image and Value -> Response boundary.
@@ -186,6 +148,10 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
     let lines = BufReader::new(process.stdout.take().context("Missing reference output")?).lines();
     let (mut accepted, mut rejected, mut restricted) = (0, 0, 0);
     let mut failures = Vec::new();
+    let mut dative_extensions = 0;
+    let mut categories = std::collections::BTreeMap::<String, usize>::new();
+    let mut restrictions = std::collections::BTreeMap::<String, usize>::new();
+    let (mut folded, mut generic, mut extensions) = (0, 0, 0);
     for line in lines {
         let record: Value = serde_json::from_str(&line?)?;
         if record.get("name").is_none() {
@@ -223,6 +189,24 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
             accepted += 1;
             continue;
         }
+        if let Some(restriction) = &case.restriction
+            && matches!(format, "mol" | "rxn")
+        {
+            let restriction: molfile_restrictions::GenericRestriction =
+                serde_json::from_value(restriction.clone())?;
+            if let Some(error) = molfile_restrictions::rejection_difference(
+                &restriction,
+                case.expected.is_some() && case.failure.is_none(),
+                &actual,
+            ) {
+                *categories.entry("Restriction contract".into()).or_default() += 1;
+                failures.push(format!("{}: {error}", case.name));
+            } else {
+                *restrictions.entry(restriction.category).or_default() += 1;
+                restricted += 1;
+            }
+            continue;
+        }
         if case.restriction.is_some() {
             anyhow::ensure!(
                 actual.is_err(),
@@ -232,30 +216,144 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
             restricted += 1;
             continue;
         }
-        let expected = case.expected.and_then(|v| wire_response(v).ok());
+        let projected = if format == "cdxml" {
+            case.expected.as_ref().and_then(|legacy| {
+                let original = wire_response(legacy.clone());
+                if original.as_ref().err().is_some_and(|error| {
+                    error.to_string() == "Unsupported bond appearance for this order"
+                }) {
+                    match reference_dative::has_projection(&case.text) {
+                        Ok(true) => {
+                            let adapted = reference_dative::response(&case.text, legacy.clone());
+                            if let Err(error) = &adapted {
+                                failures
+                                    .push(format!("{}: dative expectation: {error}", case.name));
+                            }
+                            // A correctly adapted raw response may still fail
+                            // an unrelated original document boundary.
+                            return Some(adapted.and_then(wire_response));
+                        }
+                        Ok(false) => (),
+                        Err(error) => {
+                            failures.push(format!("{}: dative classification: {error}", case.name))
+                        }
+                    }
+                }
+                None
+            })
+        } else {
+            None
+        };
+        if let Some(extension) = &case.generic_extension {
+            let result = (|| -> anyhow::Result<()> {
+                anyhow::ensure!(
+                    format == "mol" && case.expected.is_none(),
+                    "Generic extension lacks legacy rejection"
+                );
+                anyhow::ensure!(
+                    case.failure.as_deref() == extension["failure"].as_str(),
+                    "Generic extension legacy reason changed"
+                );
+                let Outcome::Complete(response) = actual? else {
+                    anyhow::bail!("Generic extension did not return a complete drawing");
+                };
+                compare(*response, wire_response(extension["expected"].clone())?)
+            })();
+            if let Err(error) = result {
+                *categories
+                    .entry("Generic acceptance extension".into())
+                    .or_default() += 1;
+                failures.push(format!("{}: {error:#}", case.name));
+            } else {
+                extensions += 1;
+            }
+            continue;
+        }
+        let expected = if format == "mol" {
+            case.expected
+                .map(|value| {
+                    reference_mol::adapt_response(
+                        value,
+                        case.display.as_ref(),
+                        case.generic.as_ref(),
+                    )
+                })
+                .transpose()
+        } else {
+            Ok(case.expected)
+        };
+        let expected = match expected {
+            Ok(expected)
+                if format == "mol" && (case.display.is_some() || case.generic.is_some()) =>
+            {
+                match expected
+                    .context("Missing adapted MOL response")
+                    .and_then(wire_response)
+                {
+                    Ok(response) => Some(response),
+                    Err(error) => {
+                        *categories
+                            .entry("MOL expectation contract".into())
+                            .or_default() += 1;
+                        failures.push(format!(
+                            "{}: Invalid independently adapted response: {error:#}",
+                            case.name
+                        ));
+                        continue;
+                    }
+                }
+            }
+            Ok(expected) => expected.and_then(|value| wire_response(value).ok()),
+            Err(error) => {
+                *categories
+                    .entry("MOL expectation contract".into())
+                    .or_default() += 1;
+                failures.push(format!("{}: {error:#}", case.name));
+                continue;
+            }
+        };
         let error = match (actual, expected) {
+            (Ok(Outcome::Complete(a)), None) if projected.is_some() => {
+                // The original complete response exists, but its order-5 paint
+                // fails the exact projection validation above. Derive only the
+                // documented dative fields before comparing the whole response.
+                accepted += 1;
+                dative_extensions += 1;
+                projected
+                    .unwrap()
+                    .and_then(|expected| compare(*a, expected))
+                    .err()
+                    .map(|error| error.to_string())
+            }
             (Ok(Outcome::Complete(a)), None) if format == "cdxml" => {
                 // Drawing interchange now retains unresolved chemical input.
                 // Strict molecular preparation must still reject the same
                 // assignment, and no properties may be presented as validated.
-                let strict = reshiki::chemistry::cdxml::prepare_cdxml(&case.text)
-                    .err()
-                    .context("Unexpected relaxation of drawing validation")?;
-                anyhow::ensure!(matches!(
-                    strict.cause,
-                    reshiki::chemistry::cdxml::PreparationCause::Sanitization(_)
-                ));
-                anyhow::ensure!(a.analysis.is_none() && !a.warnings.is_empty());
-                let doc = a.document.context("Missing retained drawing")?;
-                doc.validate().map_err(anyhow::Error::msg)?;
-                anyhow::ensure!(reshiki::chemistry::document::prepare(&doc).is_err());
+                let check = (|| -> anyhow::Result<()> {
+                    let strict = reshiki::chemistry::cdxml::prepare_cdxml(&case.text)
+                        .err()
+                        .context("Unexpected relaxation of drawing validation")?;
+                    anyhow::ensure!(matches!(
+                        strict.cause,
+                        reshiki::chemistry::cdxml::PreparationCause::Sanitization(_)
+                    ));
+                    anyhow::ensure!(a.analysis.is_none() && !a.warnings.is_empty());
+                    let doc = a.document.context("Missing retained drawing")?;
+                    doc.validate().map_err(anyhow::Error::msg)?;
+                    anyhow::ensure!(reshiki::chemistry::document::prepare(&doc).is_err());
+                    Ok(())
+                })();
                 accepted += 1;
-                None
+                check
+                    .err()
+                    .map(|error| format!("document rejected: {error}; Rust accepted"))
             }
             (Ok(Outcome::Complete(a)), Some(b)) => {
                 accepted += 1;
+                folded += usize::from(case.display.is_some());
+                generic += usize::from(case.generic.is_some());
                 let expected = if format == "mol" {
-                    mol_source_xyz(b, &case.text)
+                    reference_mol::mol_source_xyz(b, &case.text)
                 } else {
                     Ok(b)
                 };
@@ -268,12 +366,26 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 rejected += 1;
                 None
             }
+            (Err(error), Some(_)) if matches!(format, "mol" | "rxn") => {
+                Some(format!("Unexpected rejection: {error}"))
+            }
             (a, b) => Some(format!(
                 "Outcome changed: {a:?} != {b:?}; native error {:?}",
                 case.failure
             )),
         };
         if let Some(error) = error {
+            if matches!(format, "mol" | "rxn") {
+                *categories
+                    .entry(
+                        error
+                            .lines()
+                            .next()
+                            .unwrap_or("Unknown mismatch")
+                            .to_owned(),
+                    )
+                    .or_default() += 1;
+            }
             failures.push(format!("{}: {error}", case.name));
         }
     }
@@ -287,11 +399,19 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
     println!(
         "Native {format} import: {accepted} complete responses, {rejected} matching failures, {restricted} explicit bounds"
     );
-    anyhow::ensure!(
-        failures.is_empty(),
-        "{} response differences; see artifacts/native-import-{format}-failures.log",
-        failures.len()
-    );
+    if format == "cdxml" {
+        println!("Projected-dative response extensions: {dative_extensions}");
+    }
+    if matches!(format, "mol" | "rxn") {
+        eprintln!("Native {format} mismatch categories: {categories:?}");
+        eprintln!(
+            "Native {format} restrictions: {restrictions:?}; H folding {folded}, generic drawings {generic}, acceptance extensions {extensions}"
+        );
+    }
+    reference_diagnostics::report(&format!("Native {format} import"), &failures)?;
+    if format == "cdxml" {
+        assert_eq!(dative_extensions, 9);
+    }
     anyhow::ensure!(
         accepted > 50 && rejected > 0,
         "Insufficient complete-response cases"

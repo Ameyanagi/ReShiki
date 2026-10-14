@@ -21,6 +21,8 @@ mod reference_presentation;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Case {
+    #[serde(default)]
+    name: String,
     operation: String,
     format: Option<String>,
     document: Document,
@@ -77,6 +79,7 @@ async fn case(
     document: Document,
 ) -> Case {
     let mut result = Case {
+        name: format!("document/{} atoms", document.atoms.len()),
         operation: operation.into(),
         format: format.map(str::to_owned),
         document,
@@ -89,6 +92,7 @@ async fn case(
 }
 async fn import_case(reference: &PythonEngine, format: &str, text: &str) -> Case {
     let mut result = Case {
+        name: format!("import/{format}/{text}"),
         operation: "import".into(),
         format: Some(format.into()),
         document: Document::default(),
@@ -176,7 +180,7 @@ async fn import_cases() -> anyhow::Result<Vec<Case>> {
 }
 async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
     let reference = PythonEngine::default();
-    let mut documents = vec![Document::default()];
+    let mut documents = vec![("empty".to_owned(), Document::default())];
     let mut figure = Document::default();
     figure.annotations.push(Annotation {
         id: 1,
@@ -184,7 +188,7 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
         text: "試料 α".into(),
         format: Default::default(),
     });
-    documents.push(figure);
+    documents.push(("figure only".into(), figure));
     for (order, element, other, display) in [
         (0, "H", "O", "dotted"),
         (5, "N", "Cu", "plain"),
@@ -199,7 +203,7 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
             let n = doc.add_atom("N", Point::new(-84., 0.));
             doc.add_bond(n, a, 1, "plain");
         }
-        documents.push(doc);
+        documents.push((format!("order={order}/{element}/{other}/{display}"), doc));
     }
     if !lazy {
         for text in [
@@ -222,7 +226,7 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
             for bond in &mut doc.bonds {
                 bond.color = reshiki::palette::Color::Custom([17, 126, 108]);
             }
-            documents.push(doc);
+            documents.push((text.into(), doc));
         }
         let mut reaction = reference
             .execute(Request::import("rsmi", "CCO.O>O>CC=O.O"))
@@ -240,10 +244,10 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
                 ..ArrowStyle::default()
             });
         }
-        documents.push(reaction);
+        documents.push(("CCO.O>O>CC=O.O".into(), reaction));
     }
     let mut result = Vec::new();
-    for document in documents {
+    for (name, document) in documents {
         for (operation, format) in [
             ("analyze", None),
             ("finish_abbreviation", None),
@@ -256,7 +260,9 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
             if lazy && document.atoms.is_empty() && operation == "finish_abbreviation" {
                 continue;
             }
-            result.push(case(&reference, operation, format, document.clone()).await);
+            let mut entry = case(&reference, operation, format, document.clone()).await;
+            entry.name = name.clone();
+            result.push(entry);
         }
     }
     let mut native_empty = Document::default();
@@ -265,7 +271,9 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
         let neighbor = native_empty.add_atom("F", Point::new(index as f32 * 28., 42.));
         native_empty.add_bond(center, neighbor, 1, "plain");
     }
-    result.push(case(&reference, "analyze", None, native_empty).await);
+    let mut entry = case(&reference, "analyze", None, native_empty).await;
+    entry.name = "wildcard with 21 fluorines".into();
+    result.push(entry);
     if !lazy {
         let doc = import(&reference, "COCC").await?;
         for replace in [false, true] {
@@ -280,6 +288,7 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
                 entry.text = Some("OMe".into());
                 entry.selected = Some(vec![doc.atoms.first().context("Missing selected atom")?.id]);
             }
+            entry.name = "COCC".into();
             entry.expected = reference.execute(entry.request()).await;
             result.push(entry);
         }
@@ -305,6 +314,7 @@ async fn aromatic_cases(reference: &PythonEngine, lazy: bool) -> anyhow::Result<
             ]),
         ] {
             let mut entry = case(reference, "aromatic", None, document.clone()).await;
+            entry.name = text.into();
             entry.selected = selected;
             entry.expected = reference.execute(entry.request()).await;
             anyhow::ensure!(entry.expected.is_err());
@@ -312,6 +322,7 @@ async fn aromatic_cases(reference: &PythonEngine, lazy: bool) -> anyhow::Result<
         }
         if !lazy {
             let mut entry = case(reference, "aromatic", None, document).await;
+            entry.name = text.into();
             entry.selected = Some(entry.document.all_ids());
             for _ in 0..2 {
                 entry.expected = reference.execute(entry.request()).await;
@@ -329,40 +340,49 @@ async fn aromatic_cases(reference: &PythonEngine, lazy: bool) -> anyhow::Result<
     }
     Ok(result)
 }
-fn equal(actual: Response, expected: Response) -> anyhow::Result<()> {
+fn equal(
+    actual: Response,
+    expected: Response,
+    source_document: Option<&serde_json::Value>,
+) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
-    reference_presentation::compare_export(&actual, &mut expected)?;
+    let mut failures = Vec::new();
+    if let Err(error) =
+        reference_presentation::compare_export_with_source(&actual, &mut expected, source_document)
+    {
+        failures.push(format!("[presentation] {error:#}"));
+    }
     for field in ["mass", "exact_mass", "logp", "tpsa"] {
         if let (Some(a), Some(e)) = (
             actual["analysis"][field].as_f64(),
             expected["analysis"][field].as_f64(),
         ) {
-            anyhow::ensure!(
-                (a - e).abs() <= e.abs().max(1.) * 1e-12,
-                "{field}: {a} != {e}"
-            );
+            if (a - e).abs() > e.abs().max(1.) * 1e-12 {
+                failures.push(format!("[analysis] {field}: {a} != {e}"));
+            }
             actual["analysis"][field] = serde_json::Value::Null;
             expected["analysis"][field] = serde_json::Value::Null;
         }
     }
-    anyhow::ensure!(
-        actual == expected,
-        "Response changed: {actual}\nExpected: {expected}"
-    );
+    failures.extend(reference_presentation::response_differences(
+        &actual, &expected,
+    ));
+    anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
     Ok(())
 }
 fn outcome(
     actual: Result<Response, String>,
     expected: Result<Response, String>,
+    source_document: Option<&serde_json::Value>,
 ) -> anyhow::Result<()> {
     match (actual, expected) {
-        (Ok(a), Ok(e)) => equal(a, e),
+        (Ok(a), Ok(e)) => equal(a, e, source_document),
         (Err(a), Err(e)) => {
-            anyhow::ensure!(a == e, "Error changed: {a} != {e}");
+            anyhow::ensure!(a == e, "[error] Error changed: {a} != {e}");
             Ok(())
         }
-        (a, e) => anyhow::bail!("Outcome changed: {a:?} != {e:?}"),
+        (a, e) => anyhow::bail!("[outcome] Outcome changed: {a:?} != {e:?}"),
     }
 }
 fn concurrent_indices(cases: &[Case]) -> Vec<usize> {
@@ -436,11 +456,18 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
             actual_indices == expected_indices,
             "Missing routing responses"
         );
+        let mut failures = Vec::new();
         for (index, response) in actual {
             let case = cases.get(index).context("Invalid routing response index")?;
-            outcome(response, case.expected.clone())
-                .with_context(|| format!("{mode}/{}/{:?}", case.operation, case.format))?;
+            let source = serde_json::to_value(&case.document)?;
+            if let Err(error) = outcome(response, case.expected.clone(), Some(&source)) {
+                failures.push(format!(
+                    "{mode}/{}/{}/{:?}: {error:#}",
+                    case.name, case.operation, case.format
+                ));
+            }
         }
+        reference_presentation::report_mismatches(&format!("native-routing-{mode}"), &failures)?;
     }
     Ok(())
 }

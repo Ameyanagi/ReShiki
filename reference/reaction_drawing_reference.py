@@ -15,10 +15,12 @@ from engine import reactions
 from engine.worker import check_supported, to_document
 
 if TYPE_CHECKING or __package__:
+    from .molfile_restrictions_reference import generic_restriction
     from .perception_reference import snapshot
     from .reaction_import_reference import cases as parser_cases
     from .reaction_import_reference import query_cases
 else:
+    from molfile_restrictions_reference import generic_restriction
     from perception_reference import snapshot
     from reaction_import_reference import cases as parser_cases
     from reaction_import_reference import query_cases
@@ -89,7 +91,19 @@ def emit(name, text):
         result, failure = expected(text), None
     except (ValueError, RuntimeError, KeyError, AttributeError, OverflowError) as error:
         result, failure = None, str(error)
-    print(json.dumps(dict(name=name, text=text, expected=result, failure=failure)))
+    print(
+        json.dumps(
+            dict(
+                name=name,
+                text=text,
+                expected=result,
+                failure=failure,
+                generic_restriction=(
+                    generic_restriction(text, reaction=True) if result is not None else None
+                ),
+            )
+        )
+    )
 
 
 def cases(emit):
