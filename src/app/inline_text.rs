@@ -5,7 +5,7 @@ use iced::widget::{Space, column, container, mouse_area, opaque, row, stack, tex
 use iced::{Alignment, Border, Color, Element, Length, Task};
 use reshiki::{
     document::{Annotation, Document, Point},
-    typography::{StyleChange, TextAlign, TextFormat, TextStyle},
+    typography::{Script, StyleChange, TextAlign, TextFormat, TextStyle},
 };
 
 #[derive(Debug, Clone)]
@@ -376,6 +376,10 @@ impl App {
                     Key::Named(Named::Enter) if key.modifiers.command() => {
                         Some(Message::InlineText(Action::Finish(true)))
                     }
+                    _ if script_key(&key.key, key.modifiers).is_some() => {
+                        script_key(&key.key, key.modifiers)
+                            .map(|script| Message::TextStyle(StyleChange::Script(script)))
+                    }
                     Key::Character(c) if key.modifiers.command() => {
                         match c.to_ascii_lowercase().as_str() {
                             "l" if key.modifiers.shift() => {
@@ -392,12 +396,6 @@ impl App {
                             )),
                             "f" => Some(Message::TextStyle(StyleChange::Formula(
                                 !self.current_text_style().formula,
-                            ))),
-                            "-" => Some(Message::TextStyle(StyleChange::Script(
-                                reshiki::typography::Script::Subscript,
-                            ))),
-                            "+" | "=" => Some(Message::TextStyle(StyleChange::Script(
-                                reshiki::typography::Script::Superscript,
                             ))),
                             "z" => Some(Message::InlineText(Action::Undo(key.modifiers.shift()))),
                             "b" => Some(Message::TextStyle(StyleChange::Bold(
@@ -533,9 +531,91 @@ impl App {
     }
 }
 
-struct CaptionHighlighter {
+pub(super) struct CaptionHighlighter {
     settings: (String, TextFormat),
     line: usize,
+}
+
+/// Script shortcuts shared by the caption and atom-label editors. The original
+/// key covers both the shifted plus and unshifted equals forms.
+pub(super) fn script_key(
+    key: &iced::keyboard::Key,
+    modifiers: iced::keyboard::Modifiers,
+) -> Option<Script> {
+    if !modifiers.command() {
+        return None;
+    }
+    match key.as_ref() {
+        iced::keyboard::Key::Character("-") => Some(Script::Subscript),
+        iced::keyboard::Key::Character("+" | "=") => Some(Script::Superscript),
+        _ => None,
+    }
+}
+
+fn editor_offset(text: &str, position: text_editor::Position) -> usize {
+    (text
+        .split_inclusive('\n')
+        .take(position.line)
+        .map(str::len)
+        .sum::<usize>()
+        + position.column)
+        .min(text.len())
+}
+
+/// Resolve source-byte ranges, including word/line selections whose cursor
+/// reports an anchor rather than the normalized start of the selection.
+pub(super) fn editor_range(
+    editor: &text_editor::Content,
+    text: &str,
+) -> Option<std::ops::Range<usize>> {
+    let cursor = editor.cursor();
+    let a = editor_offset(text, cursor.position);
+    let b = editor_offset(text, cursor.selection?);
+    let selected = editor.selection()?;
+    if selected.is_empty() {
+        return None;
+    }
+    let start = a.min(b);
+    if text.get(start..start + selected.len()) == Some(selected.as_str()) {
+        return Some(start..start + selected.len());
+    }
+    text.match_indices(&selected)
+        .min_by_key(|(index, _)| index.abs_diff(start))
+        .map(|(index, selected)| index..index + selected.len())
+}
+
+/// Perform one editor action and retain the exact replaced range. This avoids
+/// assigning the wrong style when an edit deletes one of several equal glyphs.
+pub(super) fn perform_editor_action(
+    editor: &mut text_editor::Content,
+    text: &str,
+    action: text_editor::Action,
+) -> Option<(String, std::ops::Range<usize>)> {
+    let changed = action.is_edit();
+    let selection = editor_range(editor, text);
+    let deletion = matches!(
+        action,
+        text_editor::Action::Edit(text_editor::Edit::Backspace | text_editor::Edit::Delete)
+    );
+    let hint = selection
+        .as_ref()
+        .map(|range| range.start)
+        .unwrap_or_else(|| editor_offset(text, editor.cursor().position));
+    editor.perform(action);
+    if !changed {
+        return None;
+    }
+    let updated = editor.text();
+    let replaced = selection.unwrap_or_else(|| {
+        if deletion && updated.len() < text.len() {
+            let after = editor_offset(&updated, editor.cursor().position);
+            let start = after.min(hint);
+            start..start + text.len() - updated.len()
+        } else {
+            hint..hint
+        }
+    });
+    Some((updated, replaced))
 }
 impl iced::advanced::text::Highlighter for CaptionHighlighter {
     type Settings = (String, TextFormat);
@@ -706,6 +786,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Abbreviations(_)
             | Message::Generic(
                 super::generic::Action::Expand
+                    | super::generic::Action::ExpandComponent(_)
                     | super::generic::Action::DefineRepeat(_)
                     | super::generic::Action::ClearRepeat(_)
             )

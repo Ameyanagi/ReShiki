@@ -4,7 +4,7 @@ use crate::{
     bonds::BondPreset,
     document::{Document, Point},
     exchange::drawing,
-    templates,
+    joining,
 };
 
 fn chelate() -> (Document, u64, Vec<u64>) {
@@ -27,7 +27,9 @@ fn chelate() -> (Document, u64, Vec<u64>) {
         donors.extend([n, n2]);
     }
     for donor in &donors {
-        doc = templates::coordinate_atoms(&doc, *donor, co).unwrap();
+        doc = joining::coordinate_atoms(&doc, *donor, co)
+            .unwrap()
+            .into_document(&doc);
     }
     (doc, co, donors)
 }

@@ -1,5 +1,10 @@
 # Set up Codex for the assistant
 
+> **Which one do I need?**
+>
+> - [Draw with the assistant](assistant.md): ReShiki asks Codex for drawings inside the app.
+> - [Connect AI agents](https://reshiki.com/guide/agents/): an agent you already use (Claude Code, Claude Desktop, Codex) drives ReShiki without opening it.
+
 **Codex is optional.** Drawing, chemistry checks, imports, and exports work without it. Install Codex only if you want ReShiki's assistant to turn instructions or reference images into editable drawings, or help improve a layout.
 
 ## Why ReShiki uses Codex
@@ -117,13 +122,13 @@ On macOS, the app executable is normally `/Applications/ReShiki.app/Contents/Mac
 ## Guided first-use image exercise
 
 The Assistant panel identifies **Install Codex**, **Sign in to Codex**,
-**Connection needs attention**, **Checking Codex**, and **Ready to try an image**.
+**Connection needs attention**, **Checking Codex…**, and **Ready to try an image**.
 The check starts the local app server and reads its saved sign-in and model
 catalog; it does not send an inference request. A listed model is not proof of
-account entitlement: access is checked when you send the request. A failed
-refresh clears the previous connected state. **Test connection** retries, and
-**Cancel check** stops the check while ordinary drawing remains available.
-Provider error payloads and account details are not displayed in setup messages.
+account entitlement: access is checked when you send the request. If a check
+fails, the panel stops showing Codex as connected. **Test connection** retries,
+and **Cancel check** stops the check while ordinary drawing remains available.
+Setup messages never show your account details or the provider's raw error text.
 
 When ready, choose **Try example image · ethanol**. The original bundled image
 and known reference graph are [documented with their license](../assets/assistant/README.md).
@@ -133,14 +138,15 @@ anything. Choose **Send**, compare the editable draft against the reference
 and inspect or edit it before **Apply**. The guided exercise waits for Apply
 even when ordinary requests use Auto apply. Apply uses the existing document
 validation and Undo workflow. An ambiguous or incorrect draft remains a draft
-for your decision; generation and visual review alone do not establish identity.
+for your decision. Check the draft yourself: a draft that looks right can still
+be the wrong molecule.
 
 The composer describes external transfer before Send: the request, recent
 conversation and relevant drawing data travel through Codex, together with any
 attached image. The review also receives the source image and rendered drafts.
 Existing account access/usage limits apply; an API-key sign-in uses separate API
 billing. Codex owns credentials. ReShiki does not collect passwords or keys in
-this panel. **Back to drawing** returns to the ordinary inspector.
+this panel. **‹** in the panel header returns to the inspector.
 
 Official installation and account guidance was checked against installed
 `codex-cli 0.161.0` and the [CLI guide](https://learn.chatgpt.com/docs/cli),

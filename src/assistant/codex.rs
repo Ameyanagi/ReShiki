@@ -204,6 +204,14 @@ impl Timeout {
     }
 }
 impl Server {
+    fn failure(&self, fallback: ConnectionError) -> ConnectionError {
+        if self.cancel.stopped() {
+            ConnectionError::Cancelled
+        } else {
+            fallback
+        }
+    }
+
     async fn start_connection(cancel: Cancel) -> Result<Self, ConnectionError> {
         if cancel.stopped() {
             return Err(ConnectionError::Cancelled);
@@ -218,7 +226,7 @@ impl Server {
             .map_err(|_| ConnectionError::StartFailed)?;
         let mut command = Command::new(executable);
         #[cfg(windows)]
-        command.creation_flags(0x08000000);
+        command.creation_flags(crate::workers::CREATE_NO_WINDOW);
         command.env(
             "PATH",
             std::env::join_paths(search_directories()).map_err(|_| ConnectionError::StartFailed)?,
@@ -263,7 +271,18 @@ impl Server {
                 Duration::from_secs(60),
             ),
         };
-        server.request("initialize", json!({"clientInfo":{"name":"reshiki","title":"ReShiki","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":true}})).await.map_err(|_| if server.cancel.stopped() { ConnectionError::Cancelled } else { ConnectionError::HandshakeFailed })?;
+        let initialize = json!({
+            "clientInfo": {
+                "name": "reshiki",
+                "title": "ReShiki",
+                "version": env!("CARGO_PKG_VERSION"),
+            },
+            "capabilities": {"experimentalApi": true},
+        });
+        server
+            .request("initialize", initialize)
+            .await
+            .map_err(|_| server.failure(ConnectionError::HandshakeFailed))?;
         server
             .send(json!({"method":"initialized","params":{}}))
             .await
@@ -389,13 +408,7 @@ async fn read_connection(server: &mut Server) -> Result<Account, ConnectionError
     let account = server
         .request("account/read", json!({"refreshToken":false}))
         .await
-        .map_err(|_| {
-            if server.cancel.stopped() {
-                ConnectionError::Cancelled
-            } else {
-                ConnectionError::AccountFailed
-            }
-        })?;
+        .map_err(|_| server.failure(ConnectionError::AccountFailed))?;
     // A missing field is a protocol failure; an explicit null is a signed-out account.
     let account = account
         .get("account")
@@ -413,13 +426,10 @@ async fn read_connection(server: &mut Server) -> Result<Account, ConnectionError
     {
         return Err(ConnectionError::AccountFailed);
     }
-    let models = server.models().await.map_err(|_| {
-        if server.cancel.stopped() {
-            ConnectionError::Cancelled
-        } else {
-            ConnectionError::ModelsFailed
-        }
-    })?;
+    let models = server
+        .models()
+        .await
+        .map_err(|_| server.failure(ConnectionError::ModelsFailed))?;
     if models.is_empty() {
         return Err(ConnectionError::NoModels);
     }

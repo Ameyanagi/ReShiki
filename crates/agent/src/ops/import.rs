@@ -8,13 +8,13 @@ use super::{
     exec::Context,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, Principal, Revision, envelope_json},
+    wire::{AnalysisJson, DocHandle, Principal, Revision, warnings},
 };
 use crate::{
     atom_labels,
     document::{Document, History},
     engine::{Analysis, LocalEngine, Request, Response, text_format},
-    envelope::{Envelope, ValidationStatus, Versions, Warning},
+    envelope::Versions,
     tool_spec::{Hints, ToolSpec},
     transaction::{self, Rejection},
 };
@@ -110,56 +110,6 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Import, OpError> 
     Ok(import)
 }
 
-/// Engine [`Analysis`] on the wire.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct AnalysisJson {
-    pub smiles: String,
-    pub formula: String,
-    pub mass: f64,
-    pub exact_mass: f64,
-    pub logp: f64,
-    pub tpsa: f64,
-    pub donors: u32,
-    pub acceptors: u32,
-    pub rings: u32,
-    pub unpaired_electrons: u32,
-    pub inchi: String,
-    pub inchikey: String,
-}
-
-impl From<Analysis> for AnalysisJson {
-    fn from(analysis: Analysis) -> Self {
-        let Analysis {
-            smiles,
-            formula,
-            mass,
-            exact_mass,
-            logp,
-            tpsa,
-            donors,
-            acceptors,
-            rings,
-            unpaired_electrons,
-            inchi,
-            inchikey,
-        } = analysis;
-        Self {
-            smiles,
-            formula,
-            mass,
-            exact_mass,
-            logp,
-            tpsa,
-            donors,
-            acceptors,
-            rings,
-            unpaired_electrons,
-            inchi,
-            inchikey,
-        }
-    }
-}
-
 /// Objects in an imported drawing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 struct Counts {
@@ -218,10 +168,6 @@ pub fn finalize(response: &Document) -> Result<Document, Rejection> {
     Ok(doc)
 }
 
-fn failed(message: impl AsRef<str>) -> OpError {
-    OpError::new(ErrorKind::Failed, message)
-}
-
 /// The drawing to store, or the rejection of an engine drawing.
 struct Read {
     doc: Result<Document, Rejection>,
@@ -237,7 +183,7 @@ async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Rea
         let doc = ctx
             .blocking(move || {
                 Document::from_native_file(text.as_bytes())
-                    .map_err(|error| failed(format!("Could not open document: {error}")))
+                    .map_err(|error| OpError::failed(format!("Could not open document: {error}")))
             })
             .await?;
         return Ok(Read {
@@ -253,7 +199,7 @@ async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Rea
     let mut request = Request::import(name, "");
     request.text = Some(text);
     ctx.checkpoint()?;
-    let response = engine.request(request).await.map_err(failed);
+    let response = engine.request(request).await.map_err(OpError::failed);
     ctx.checkpoint()?;
     let Response {
         document,
@@ -261,7 +207,7 @@ async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Rea
         warnings,
         ..
     } = response?;
-    let document = document.ok_or_else(|| failed("Import returned no drawing"))?;
+    let document = document.ok_or_else(|| OpError::failed("Import returned no drawing"))?;
     let doc = ctx.blocking(move || Ok(finalize(&document))).await?;
     Ok(Read {
         doc,
@@ -270,46 +216,9 @@ async fn read(ctx: &Context, engine: &LocalEngine, import: Import) -> Result<Rea
     })
 }
 
-/// Each message as an envelope [`Warning`], in order.
-pub(crate) fn warnings(messages: Vec<String>) -> Vec<Warning> {
-    messages
-        .into_iter()
-        .map(|message| Warning { message })
-        .collect()
-}
-
-/// An `is_error` result for a drawing that reconciliation rejected: the
-/// envelope with validation `rejected` and a `null` value, plus the
-/// `{error: {code, message}}` of every tool execution error.
-pub(crate) fn rejected(
-    rejection: Rejection,
-    messages: Vec<String>,
-    versions: &Versions,
-) -> ToolResult {
-    let error = OpError::from(rejection.clone());
-    let mut value = envelope_json(&Envelope {
-        value: Value::Null,
-        warnings: warnings(messages),
-        validation: ValidationStatus::Rejected(rejection),
-        versions: versions.clone(),
-    });
-    value.insert(
-        "error".to_owned(),
-        json!({"code": error.kind.code(), "message": error.message}),
-    );
-    ToolResult {
-        value,
-        images: Vec::new(),
-        files: Vec::new(),
-        is_error: true,
-    }
-}
-
 /// Imports into a new session document, through [`import_document`].
 ///
-/// `{value: {document, revision, counts: {atoms, bonds, arrows, annotations,
-/// graphics}, analysis}, warnings, validation, versions}`; `analysis` is
-/// `null` when the engine returned none.
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn import(
     ctx: Context,
     store: Arc<dyn Documents>,
@@ -344,28 +253,21 @@ pub(crate) async fn import_document(
     } = read(&ctx, &engine, import).await?;
     let doc = match doc {
         Ok(doc) => doc,
-        Err(rejection) => return Ok(rejected(rejection, messages, &versions)),
+        Err(rejection) => return Ok(ToolResult::rejected(rejection, messages, &versions)),
     };
     let counts = Counts::of(&doc);
     let created = ctx.effect(move || store.create(&who, doc)).await?;
-    let value = envelope_json(&Envelope {
-        value: Imported {
+    Ok(ToolResult::valid(
+        Imported {
             document: created.handle,
             revision: created.revision,
             counts,
             analysis: analysis.map(AnalysisJson::from),
             source,
         },
-        warnings: warnings(messages),
-        validation: ValidationStatus::Valid,
+        warnings(messages),
         versions,
-    });
-    Ok(ToolResult {
-        value,
-        images: Vec::new(),
-        files: Vec::new(),
-        is_error: false,
-    })
+    ))
 }
 
 #[cfg(test)]

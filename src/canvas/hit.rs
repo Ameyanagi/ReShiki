@@ -1,6 +1,6 @@
 //! Hit testing: which objects a pointer position or region selects, and where a drawn bond attaches.
 
-use super::{Document, World};
+use super::{Document, Tool, World};
 use iced::Vector;
 use reshiki::chains::BondDrawing;
 
@@ -16,6 +16,26 @@ pub(super) fn region_selection(
 
 /// Bonds are manipulated through their two endpoint atoms; they have no separate ID.
 pub(super) fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
+    hit_selection_with_object(doc, p, r, || hit_object(doc, p, r))
+}
+
+pub(super) fn hit_selection_with_orbital(
+    doc: &Document,
+    p: World,
+    r: f32,
+    foreground_orbital: bool,
+) -> Vec<u64> {
+    hit_selection_with_object(doc, p, r, || {
+        hit_object_with_orbital(doc, p, r, foreground_orbital)
+    })
+}
+
+fn hit_selection_with_object(
+    doc: &Document,
+    p: World,
+    r: f32,
+    object: impl FnOnce() -> Option<u64>,
+) -> Vec<u64> {
     if let Some(i) = reshiki::atom_labels::indicators(doc).into_iter().find(|i| {
         (p.x - i.center.x).abs() < i.width / 2. + r && (p.y - i.center.y).abs() < i.height / 2. + r
     }) {
@@ -28,7 +48,7 @@ pub(super) fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
             reshiki::atom_labels::Owner::BondStereo(a, b) => vec![a, b],
         };
     }
-    if let Some(id) = hit_object(doc, p, r) {
+    if let Some(id) = object() {
         return vec![id];
     }
     reshiki::editing::nearest_bond(doc, p, r * 0.7)
@@ -54,8 +74,25 @@ pub(super) fn bond_target_with(
     end: World,
     source: Option<u64>,
     radius: f32,
-    mut drawing: BondDrawing,
+    drawing: BondDrawing,
 ) -> (World, Option<u64>) {
+    let (snapped, pointer, near_snap) = bond_targets(doc, start, end, source, radius, drawing);
+    match pointer.or(near_snap) {
+        Some((position, id)) => (position, Some(id)),
+        None => (snapped, None),
+    }
+}
+/// The free endpoint, the atom under the pointer and the atom at the snapped
+/// endpoint, each as (position, id).
+type BondTargets = (World, Option<(World, u64)>, Option<(World, u64)>);
+fn bond_targets(
+    doc: &Document,
+    start: World,
+    end: World,
+    source: Option<u64>,
+    radius: f32,
+    mut drawing: BondDrawing,
+) -> BondTargets {
     let origin = source.and_then(|id| doc.atom(id));
     if origin.is_some_and(|a| !a.centroid.is_empty()) {
         // A centre-to-metal contact often extends beyond the ring radius.
@@ -82,12 +119,47 @@ pub(super) fn bond_target_with(
         .and_then(|id| plane_endpoint(doc, id, end, drawing))
         .map(|p| p.position)
         .unwrap_or_else(|| drawing.endpoint(start, end));
-    if let Some(atom) = nearest(end).or_else(|| nearest(snapped)) {
-        (atom.position, Some(atom.id))
-    } else {
-        (snapped, None)
-    }
+    let target = |p: World| nearest(p).map(|atom| (atom.position, atom.id));
+    (snapped, target(end), target(snapped))
 }
+/// A caption must own the hit and the pointer must be on its ink, without padding.
+pub fn bond_text_at(doc: &Document, p: World, radius: f32) -> Option<u64> {
+    let id = hit_object(doc, p, radius)?;
+    let annotation = doc.annotations.iter().find(|a| a.id == id)?;
+    let (lo, hi) = reshiki::atom_text::text_ink_bounds(annotation)?;
+    (p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y).then_some(id)
+}
+
+/// An atom under the pointer wins, then a caption under the pointer, then an
+/// atom at the snapped endpoint: a fixed length never redirects a drop that
+/// lands on caption ink.
+pub(super) fn bond_target_with_text(
+    doc: &Document,
+    start: World,
+    end: World,
+    source: (Option<u64>, Option<u64>),
+    radius: f32,
+    drawing: BondDrawing,
+    tool: Tool,
+) -> Result<(World, Option<u64>, Option<u64>), String> {
+    let (snapped, pointer, near_snap) = bond_targets(doc, start, end, source.0, radius, drawing);
+    if pointer.is_none()
+        && tool.bonds_from_text()
+        && let Some(id) = bond_text_at(doc, end, radius).filter(|id| Some(*id) != source.1)
+    {
+        if let Some(reason) = reshiki::atom_text::text_atom_refusal(doc, id) {
+            return Err(reason);
+        }
+        if let Some(position) = reshiki::atom_text::text_atom_position(doc, id) {
+            return Ok((position, None, Some(id)));
+        }
+    }
+    Ok(match pointer.or(near_snap) {
+        Some((position, id)) => (position, Some(id), None),
+        None => (snapped, None, None),
+    })
+}
+
 pub(super) fn plane_endpoint(
     doc: &Document,
     id: u64,
@@ -97,13 +169,24 @@ pub(super) fn plane_endpoint(
     reshiki::projection::growth::Plane::at(doc, id)?.endpoint(cursor, drawing)
 }
 pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
-    // Only precompute label ownership when a foreground orbital may need to
-    // pass through it. Ordinary foreground graphics retain their fast path.
-    let orbital_label = doc
-        .graphics
+    hit_object_with_orbital(doc, p, r, foreground_orbital(doc))
+}
+
+pub(super) fn foreground_orbital(doc: &Document) -> bool {
+    doc.graphics
         .iter()
         .any(|g| g.layer >= 0 && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
-        .then(|| reshiki::scene::atom_label_hit(doc, p, 0.));
+}
+
+fn hit_object_with_orbital(
+    doc: &Document,
+    p: World,
+    r: f32,
+    foreground_orbital: bool,
+) -> Option<u64> {
+    // Only precompute label ownership when a foreground orbital may need to
+    // pass through it. Ordinary foreground graphics retain their fast path.
+    let orbital_label = foreground_orbital.then(|| reshiki::scene::atom_label_hit(doc, p, 0.));
     let graphic = |front| {
         doc.graphics
             .iter()

@@ -38,7 +38,6 @@ use super::{
 use crate::{
     atom_labels::{self, refresh::Refresh},
     document::{Document, History},
-    transaction,
 };
 use std::{
     collections::{HashMap, VecDeque},
@@ -326,14 +325,9 @@ impl SessionStore {
 /// built while nothing has changed yet.
 fn prospect(entry: &Entry, edit: &Edit, labels: Option<&Result<Refresh, String>>) -> Applied {
     let (recorded, chemistry_changed) = match edit {
-        // As `Reconciled::commit`: history records unless the document equals
-        // the snapshot once computed labels are cleared after a chemistry
-        // change. `chemistry_changed` ignores those labels, so a document
-        // whose chemistry changed always differs.
         Edit::Replace { doc, reconciled } => {
-            let before = reconciled.before();
-            let chemistry_changed = transaction::chemistry_changed(before, doc);
-            (chemistry_changed || before != doc, chemistry_changed)
+            let outcome = reconciled.outcome(doc);
+            (outcome.recorded, outcome.chemistry_changed)
         }
         // As `History::undo` and `History::redo`.
         Edit::Step {

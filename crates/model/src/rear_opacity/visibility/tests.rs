@@ -1,0 +1,1271 @@
+use super::*;
+use super::{budget::curve_queries, cage::improper_intersection, vector::cross2};
+use crate::rear_opacity::{
+    Paint,
+    clip::{flatten, mask_clip},
+};
+use crate::scene::depth_field::DepthField;
+use crate::{depth_appearance as depth, projection, scene};
+
+#[test]
+fn opaque_ring_query_estimate_includes_managed_foreground_without_backbone_crossing() {
+    let mut doc = Document::default();
+    crate::editing::ring(&mut doc, Point::default(), 6, true, 0.);
+    let circle = crate::aromatic::circles(&doc).remove(0);
+    let foreground: Vec<_> = [-1.1, 1.1]
+        .into_iter()
+        .map(|x| {
+            let id = doc.add_atom("C", circle.center.offset(circle.radius * x, 0.));
+            doc.atom_mut(id).unwrap().depth = 100.;
+            id
+        })
+        .collect();
+    doc.add_bond(foreground[0], foreground[1], 1, "plain");
+    crate::depth_appearance::set_rear_opacity(&mut doc, &foreground, 0.25).unwrap();
+    let rear = rear_ids(&doc);
+    assert!(
+        circle.atoms.iter().all(|id| !rear.contains(id)),
+        "The ring is fully opaque"
+    );
+    assert_eq!(
+        crossing_queries(&doc, &rear),
+        0,
+        "Short foreground does not cross any graph backbone"
+    );
+    let source = circle.graphic().parts().remove(0);
+    let original = Primitive::Path {
+        commands: source.commands,
+        style: source.style,
+        filled: source.filled,
+    };
+    let (paint, _) = crate::crossings::ring_stroke(
+        &doc,
+        &circle,
+        original.clone(),
+        &crate::rear_opacity::Paint::new(&doc),
+    );
+    let (
+        Primitive::Path {
+            commands: painted, ..
+        },
+        Primitive::Path {
+            commands: source, ..
+        },
+    ) = (paint, original)
+    else {
+        panic!("Expected an actual cubic circle stroke");
+    };
+    assert_ne!(
+        painted, source,
+        "The foreground must actually cross the aromatic circle"
+    );
+    let estimate = estimated_queries(&doc, &rear);
+    assert!(
+        estimate > foreground.len() + 4,
+        "Managed foreground ring queries were ignored"
+    );
+}
+#[test]
+fn query_estimate_retains_pre_knockout_owned_arc_geometry() {
+    let mut doc = Document::default();
+    let ids = crate::editing::ring(&mut doc, Point::default(), 6, false, 0.);
+    crate::ring_arcs::toggle(&mut doc, &ids[..3]).unwrap();
+    crate::depth_appearance::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    let original = crate::ring_arcs::render(&doc);
+    let raw_cost = original.primitives.iter().map(curve_queries).sum::<usize>();
+    assert!(raw_cost > 20, "The fixture must exercise a real curved arc");
+    doc.drawing_style.bold_width_pt = 100.;
+    let a = doc.add_atom("C", Point::new(0., -200.));
+    let b = doc.add_atom("C", Point::new(0., 200.));
+    for id in [a, b] {
+        doc.atom_mut(id).unwrap().depth = 100.;
+    }
+    doc.add_bond(a, b, 1, "bold");
+    doc.bonds.last_mut().unwrap().z_order = 1;
+    let mut opaque = doc.clone();
+    opaque.depth_appearance.clear();
+    assert_eq!(
+        crate::ring_arcs::render(&opaque)
+            .primitives
+            .iter()
+            .map(curve_queries)
+            .sum::<usize>(),
+        0,
+        "The opaque knockout must remove the original arc"
+    );
+    let estimate = estimated_queries(&doc, &rear_ids(&doc));
+    assert!(
+        estimate >= raw_cost * 2,
+        "Owned curve quota was inferred from already-knocked-out paint: pre-knockout curved segments={raw_cost}, retained query estimate={estimate}"
+    );
+}
+#[test]
+fn exact_triangle_intervals_find_hidden_middle_and_keep_depth_ties_visible() {
+    let triangle = Triangle {
+        vertices: [[0., -1., 2.], [1., 1., 2.], [-1., 1., 2.]],
+        face: vec![],
+        shell: 0,
+        layer: 0,
+    };
+    let range = triangle
+        .hidden(Point::new(-2., 0.), Point::new(2., 0.), 0., 0., 0.001)
+        .unwrap();
+    assert_eq!(range, (0.375, 0.625));
+    assert!(
+        triangle
+            .hidden(Point::new(-2., 0.), Point::new(2., 0.), 2., 2., 0.001)
+            .is_none()
+    );
+    assert!(
+        triangle
+            .hidden(Point::new(-2., 0.), Point::new(2., 0.), 3., 3., 0.001)
+            .is_none()
+    );
+}
+#[test]
+fn triangle_validation_rejects_crossings_and_overlap_but_allows_shared_edges() {
+    let a = [[0., 0., 0.], [2., 0., 0.], [0., 2., 0.]];
+    assert!(improper_intersection(
+        a,
+        [[0.5, 0.5, -1.], [0.5, 0.5, 1.], [1.5, 0.5, 0.]],
+        1e-6
+    ));
+    assert!(improper_intersection(
+        a,
+        [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]],
+        1e-6
+    ));
+    assert!(!improper_intersection(
+        a,
+        [[2., 0., 0.], [0., 0., 0.], [1., -1., 0.]],
+        1e-6
+    ));
+    assert!(!improper_intersection(
+        a,
+        [[0., 0., 0.], [-1., 0., 1.], [0., -1., 1.]],
+        1e-6
+    ));
+}
+fn rectangle(x: f32, y: f32, w: f32, h: f32) -> Vec<Point> {
+    vec![
+        Point::new(x, y),
+        Point::new(x + w, y),
+        Point::new(x + w, y + h),
+        Point::new(x, y + h),
+    ]
+}
+#[test]
+fn ink_sweep_preserves_holes_tangencies_vertex_crossings_and_many_disjoint_contours() {
+    let outer = rectangle(0., 0., 10., 10.);
+    let mut hole = rectangle(3., 3., 4., 4.);
+    hole.reverse();
+    let ink = Ink {
+        owners: vec![],
+        layer: 0,
+        contours: vec![outer, hole],
+        field: DepthField::Constant(10.),
+    };
+    assert_eq!(
+        ink.intervals(Point::new(-5., 5.), Point::new(15., 5.), 0., 0., 0, 0.001),
+        vec![(0.25, 0.4), (0.6, 0.75)]
+    );
+    assert_eq!(
+        ink.intervals(Point::new(5., 5.), Point::new(15., 5.), 0., 0., 0, 0.001),
+        vec![(0.2, 0.5)]
+    );
+    assert_eq!(
+        ink.intervals(Point::new(1., 1.), Point::new(2., 2.), 0., 0., 0, 0.001),
+        vec![(0., 1.)]
+    );
+    assert!(
+        ink.intervals(Point::new(-1., 1.), Point::new(1., -1.), 0., 0., 0, 0.001)
+            .is_empty()
+    );
+    assert_eq!(
+        ink.intervals(Point::new(-1., -1.), Point::new(11., 11.), 0., 0., 0, 0.001),
+        vec![(1. / 12., 1. / 3.), (2. / 3., 11. / 12.)]
+    );
+    assert_eq!(
+        ink.intervals(Point::new(1., 1.), Point::new(1., 1.), 0., 0., 0, 0.001),
+        vec![(0., 1.)]
+    );
+    let many = Ink {
+        owners: vec![],
+        layer: 0,
+        contours: (0..1000)
+            .map(|i| rectangle(i as f32 * 2., -1., 1., 2.))
+            .collect(),
+        field: DepthField::Constant(10.),
+    };
+    let intervals = many.intervals(Point::new(-1., 0.), Point::new(2000., 0.), 0., 0., 0, 0.001);
+    assert_eq!(intervals.len(), 1000);
+    assert_eq!(intervals[0], (1. / 2001., 2. / 2001.));
+    assert_eq!(intervals[999], (1999. / 2001., 2000. / 2001.));
+}
+
+fn cage(source: &str) -> Document {
+    let mut doc = Document::from_json(source.as_bytes()).unwrap();
+    let ids = doc.all_ids();
+    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    doc
+}
+fn rim(doc: &Document) -> Vec<u64> {
+    let mut points: Vec<_> = doc.atoms.iter().map(|a| (a.position, a.id)).collect();
+    super::rims::convex_hull(&mut points)
+        .into_iter()
+        .map(|(_, id)| id)
+        .collect()
+}
+fn sources() -> [&'static str; 2] {
+    [
+        include_str!("../../../../../tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk"),
+        include_str!("../../../../../tests/fixtures/projected-double-bonds/c70.rsk"),
+    ]
+}
+fn rotate(doc: &mut Document, degrees: f64) {
+    let n = doc.atoms.len() as f64;
+    let center = doc.atoms.iter().fold([0_f64; 3], |mut c, a| {
+        c[0] += f64::from(a.position.x) / n;
+        c[1] += f64::from(a.position.y) / n;
+        c[2] += f64::from(a.depth) / n;
+        c
+    });
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    for a in &mut doc.atoms {
+        let y = f64::from(a.position.y) - center[1];
+        let z = f64::from(a.depth) - center[2];
+        a.position.y = (center[1] + y * cos - z * sin) as f32;
+        a.depth = (center[2] + y * sin + z * cos) as f32;
+    }
+}
+#[test]
+fn view_visibility_cages_keep_entire_rim_and_fade_hidden_interior() {
+    for source in sources() {
+        let mut doc = cage(source);
+        let original = doc.clone();
+        let hull = rim(&doc);
+        assert_eq!(hull.len(), 20);
+        for alpha in [0., 0.25] {
+            let ids = doc.all_ids();
+            depth::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
+            let paint = Paint::new(&doc);
+            for id in &hull {
+                assert_eq!(paint.atom(*id), 1., "Exposed rim atom {id} faded");
+            }
+            let mut tested_edges = 0;
+            for (&a, &b) in hull
+                .iter()
+                .zip(hull.iter().cycle().skip(1))
+                .take(hull.len())
+            {
+                let bond = doc
+                    .bonds
+                    .iter()
+                    .find(|bond| [bond.a, bond.b].contains(&a) && [bond.a, bond.b].contains(&b));
+                let Some(bond) = bond else {
+                    continue;
+                };
+                tested_edges += 1;
+                for t in [0., 0.1, 0.25, 0.5, 0.75, 0.9, 1.] {
+                    assert_eq!(paint.bond(bond, t), 1., "Rim bond {a}-{b} faded at {t}");
+                }
+                let x = doc.atom(a).unwrap().position;
+                let y = doc.atom(b).unwrap().position;
+                let width = doc.drawing_style.line_width() * 3.;
+                let parts = paint.bond_parts(&doc, bond, vec![Primitive::Line(x, y, width)]);
+                assert!(
+                    matches!(parts.as_slice(),[Primitive::Line(first,last,w)] if *first==x&&*last==y&&*w==width),
+                    "Complete rim stroke changed"
+                );
+            }
+            assert!(
+                tested_edges >= 10,
+                "No meaningful exposed graph edges tested"
+            );
+            if doc.atoms.len() == 60 {
+                assert_eq!(tested_edges, 20);
+            }
+            assert!(
+                doc.atoms.iter().any(|a| paint.atom(a.id) == alpha),
+                "Hidden cage atoms stayed solid"
+            );
+            assert!(
+                doc.bonds.iter().any(|b| paint.bond(b, 0.5) == alpha),
+                "Hidden cage bonds stayed solid"
+            );
+        }
+        assert_eq!(doc.atoms, original.atoms);
+        assert_eq!(doc.bonds, original.bonds);
+        assert!(!crate::transaction::chemistry_changed(&original, &doc));
+    }
+}
+#[test]
+fn view_visibility_17_degree_rotation_keeps_atom_41_on_rim() {
+    let mut doc = cage(include_str!(
+        "../../../../../tests/fixtures/projected-double-bonds/c60.rsk"
+    ));
+    rotate(&mut doc, 17.);
+    let atom = doc.atom(41).unwrap();
+    let visibility = Visibility::new(&doc);
+    let (triangles, ink) = visibility.raw_atom_hits(atom.position, atom.depth, &[41]);
+    assert!(
+        triangles.is_empty(),
+        "Raw 17-degree atom41: triangle faces={triangles:?}"
+    );
+    assert!(
+        ink.iter().any(|owners| owners.as_slice() == [17, 27]),
+        "Raw 17-degree atom41: ink owners={ink:?}"
+    );
+    assert!(
+        rim(&doc).contains(&41),
+        "Raw 17-degree atom41: rim={}",
+        rim(&doc).contains(&41)
+    );
+    assert_eq!(
+        Paint::new(&doc).atom(41),
+        1.,
+        "Raw 17-degree atom41: finalalpha={}",
+        Paint::new(&doc).atom(41)
+    );
+}
+#[test]
+fn view_visibility_rotations_are_live_and_opaque_output_is_exact() {
+    for source in sources() {
+        let original = cage(source);
+        let ids = original.all_ids();
+        for angle in [0., 17., 89.999, 90., 90.001, 127., 180., 270.] {
+            let mut doc = original.clone();
+            rotate(&mut doc, angle);
+            assert_eq!(
+                Visibility::new(&doc).face_count(),
+                if doc.atoms.len() == 60 { 32 } else { 37 },
+                "Rotated cage was rejected at {angle}"
+            );
+            let hull = rim(&doc);
+            for alpha in [0., 0.25] {
+                depth::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
+                let paint = Paint::new(&doc);
+                for id in &hull {
+                    assert_eq!(paint.atom(*id), 1., "Rotated rim atom {id}/{angle}/{alpha}");
+                }
+                let mut exposed_edges = 0;
+                for b in &doc.bonds {
+                    let a = doc.atom(b.a).unwrap().position;
+                    let z = doc.atom(b.b).unwrap().position;
+                    let on = |p: Point, x: Point, y: Point| {
+                        cross2(x, y, p).abs() <= 1e-4 * f64::from(x.distance(y))
+                            && p.x >= x.x.min(y.x) - 1e-4
+                            && p.x <= x.x.max(y.x) + 1e-4
+                            && p.y >= x.y.min(y.y) - 1e-4
+                            && p.y <= x.y.max(y.y) + 1e-4
+                    };
+                    if hull
+                        .iter()
+                        .zip(hull.iter().cycle().skip(1))
+                        .take(hull.len())
+                        .any(|(x, y)| {
+                            let x = doc.atom(*x).unwrap().position;
+                            let y = doc.atom(*y).unwrap().position;
+                            on(a, x, y) && on(z, x, y)
+                        })
+                    {
+                        exposed_edges += 1;
+                        for t in [0., 0.1, 0.25, 0.5, 0.75, 0.9, 1.] {
+                            assert_eq!(
+                                paint.bond(b, t),
+                                1.,
+                                "Rotated rim bond {}-{} at {angle}/{alpha}/{t}",
+                                b.a,
+                                b.b
+                            );
+                        }
+                        let width = doc.drawing_style.line_width() * 3.;
+                        let parts = paint.bond_parts(&doc, b, vec![Primitive::Line(a, z, width)]);
+                        assert!(
+                            matches!(parts.as_slice(),[Primitive::Line(first,last,w)] if *first==a&&*last==z&&*w==width),
+                            "Rotated full stroke at {angle}/{alpha}"
+                        );
+                    }
+                    for t in [0., 0.5, 1.] {
+                        assert!(paint.bond(b, t).is_finite());
+                    }
+                }
+                assert!(
+                    exposed_edges > 0,
+                    "No real exposed graph edge checked at {angle}"
+                );
+                assert!(
+                    doc.atoms.iter().any(|a| paint.atom(a.id) == alpha),
+                    "No rear cage ink changed at {angle}/{alpha}"
+                );
+            }
+            let geometry = doc.clone();
+            let mut clear = doc.clone();
+            clear.depth_appearance.clear();
+            let svg = scene::svg(&clear);
+            depth::set_rear_opacity(&mut doc, &ids, 1.).unwrap();
+            assert_eq!(scene::svg(&doc), svg);
+            assert_eq!(doc.atoms, geometry.atoms);
+            assert_eq!(doc.bonds, geometry.bonds);
+        }
+        let before = Paint::new(&original);
+        let mut turned = original.clone();
+        rotate(&mut turned, 180.);
+        let after = Paint::new(&turned);
+        assert!(
+            ids.iter().any(|id| before.atom(*id) != after.atom(*id)),
+            "Rotation did not recompute front/rear visibility"
+        );
+    }
+}
+#[test]
+fn view_visibility_open_chains_and_single_tilted_rings_do_not_invent_surfaces() {
+    let mut chain = Document::default();
+    let ids: Vec<_> = [-30., -10., 10., 30.]
+        .into_iter()
+        .enumerate()
+        .map(|(i, z)| {
+            let id = chain.add_atom("C", Point::new(i as f32 * 42., 0.));
+            chain.atom_mut(id).unwrap().depth = z;
+            id
+        })
+        .collect();
+    for pair in ids.windows(2) {
+        chain.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    let plain = scene::svg(&chain);
+    depth::set_rear_opacity(&mut chain, &ids, 0.).unwrap();
+    assert_eq!(scene::svg(&chain), plain);
+    let mut ring = Document::default();
+    let ids = crate::editing::ring(&mut ring, Point::default(), 6, false, 0.);
+    projection::tilt(&mut ring, &ids, 50., true);
+    let svg = scene::svg(&ring);
+    depth::set_rear_opacity(&mut ring, &ids, 0.).unwrap();
+    assert_eq!(scene::svg(&ring), svg);
+}
+#[test]
+fn view_visibility_hidden_middle_is_split_without_fading_exposed_endpoints() {
+    let mut doc = Document::default();
+    let ids: Vec<_> = [
+        (-80., 0., -20.),
+        (80., 0., -20.),
+        (0., -50., 20.),
+        (0., 50., 20.),
+    ]
+    .into_iter()
+    .map(|(x, y, z)| {
+        let id = doc.add_atom("C", Point::new(x, y));
+        doc.atom_mut(id).unwrap().depth = z;
+        id
+    })
+    .collect();
+    doc.add_bond(ids[0], ids[1], 1, "plain");
+    doc.add_bond(ids[2], ids[3], 1, "plain");
+    doc.add_bond(ids[0], ids[2], 1, "plain");
+    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    let paint = Paint::new(&doc);
+    let bond = &doc.bonds[0];
+    assert_eq!(paint.bond(bond, 0.), 1.);
+    assert_eq!(paint.bond(bond, 1.), 1.);
+    assert_eq!(paint.bond(bond, 0.5), 0.25);
+    let parts = paint.bond_parts(
+        &doc,
+        bond,
+        vec![Primitive::Line(
+            doc.atom(bond.a).unwrap().position,
+            doc.atom(bond.b).unwrap().position,
+            2.,
+        )],
+    );
+    assert!(
+        parts
+            .iter()
+            .any(|p| matches!(p,Primitive::Opacity{alpha,..} if *alpha==0.25))
+    );
+    assert!(
+        parts
+            .iter()
+            .filter(|p| !matches!(p, Primitive::Opacity { .. }))
+            .count()
+            >= 2
+    );
+    assert!(
+        crate::crossings::gaps(&doc)[0].is_empty(),
+        "Conventional knockout erased managed faint ink"
+    );
+}
+#[test]
+fn view_visibility_freezing_rgb_keeps_settings_but_visibility_tracks_rotation() {
+    let mut doc = cage(sources()[0]);
+    let ids = doc.all_ids();
+    depth::enable(&mut doc, &ids, 0.6).unwrap();
+    depth::freeze(&mut doc, &ids);
+    let settings = doc.depth_appearance.clone();
+    let before = Paint::new(&doc);
+    rotate(&mut doc, 180.);
+    assert_eq!(doc.depth_appearance, settings);
+    let after = Paint::new(&doc);
+    assert!(ids.iter().any(|id| before.atom(*id) != after.atom(*id)));
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.version, crate::document::VERSION);
+    assert_eq!(reopened, doc.current());
+}
+
+#[test]
+fn view_visibility_validates_complete_mesh_and_rejects_partial_folded_or_duplicate_cages() {
+    for source in sources() {
+        let original = cage(source);
+        assert_eq!(
+            Visibility::new(&original).face_count(),
+            if original.atoms.len() == 60 { 32 } else { 37 }
+        );
+        for fault in 0..4 {
+            let mut doc = original.clone();
+            match fault {
+                0 => {
+                    doc.bonds.pop();
+                }
+                1 => {
+                    let position = doc.atoms[1].position;
+                    let depth = doc.atoms[1].depth;
+                    doc.atoms[0].position = position;
+                    doc.atoms[0].depth = depth;
+                }
+                2 => {
+                    doc.atoms[0].position = Point::default();
+                    doc.atoms[0].depth = 0.;
+                }
+                _ => doc.bonds.push(doc.bonds[0].clone()),
+            }
+            assert_eq!(
+                Visibility::new(&doc).face_count(),
+                0,
+                "Fault {fault} inferred a surface"
+            );
+        }
+        let mut reordered = original.clone();
+        reordered.atoms.reverse();
+        reordered.bonds.reverse();
+        for b in &mut reordered.bonds {
+            std::mem::swap(&mut b.a, &mut b.b);
+        }
+        assert_eq!(
+            Visibility::new(&reordered).face_count(),
+            Visibility::new(&original).face_count()
+        );
+        let a = Paint::new(&original);
+        let b = Paint::new(&reordered);
+        for atom in &original.atoms {
+            assert_eq!(a.atom(atom.id), b.atom(atom.id));
+        }
+        for bond in &original.bonds {
+            let reverse = reordered
+                .bonds
+                .iter()
+                .find(|b| b.a == bond.b && b.b == bond.a)
+                .unwrap();
+            for t in [0., 0.25, 0.5, 0.75, 1.] {
+                assert_eq!(a.bond(bond, t), b.bond(reverse, 1. - t));
+            }
+        }
+    }
+}
+#[test]
+fn view_visibility_query_budget_tracks_nonopaque_owners_and_independent_cages() {
+    let mut doc = cage(sources()[0]);
+    doc.depth_appearance.clear();
+    let first = doc.all_ids();
+    let mut other = doc.clone();
+    for atom in &mut other.atoms {
+        atom.depth += 130.;
+    }
+    let second = crate::editing::append(&mut doc, &other, Point::new(400., 0.));
+    doc.add_bond(first[0], second[0], 5, "plain");
+    let all = doc.all_ids();
+    depth::enable(&mut doc, &all, 0.6).unwrap();
+    assert_eq!(doc.depth_appearance.len(), 1, "legacy coordinate RGB owner");
+    let original = doc.clone();
+    let original_svg = scene::svg(&doc);
+    let rgb = depth::Paint::new(&doc);
+    depth::set_rear_opacity(&mut doc, &[first[0]], 0.25).unwrap();
+    let first_edit = doc.clone();
+    let paint = Paint::new(&doc);
+    assert!(
+        paint.has_visibility(),
+        "An opaque neighbor disabled cage fading"
+    );
+    assert!(first.iter().any(|id| paint.atom(*id) == 0.25));
+    assert!(
+        doc.bonds
+            .iter()
+            .filter(|b| first.contains(&b.a) && first.contains(&b.b))
+            .any(|b| paint.bond(b, 0.5) == 0.25)
+    );
+    assert!(second.iter().all(|id| paint.atom(*id) == 1.));
+    assert!(
+        doc.bonds
+            .iter()
+            .filter(|b| second.contains(&b.a) && second.contains(&b.b))
+            .all(|b| paint.bond(b, 0.5) == 1.)
+    );
+    assert_eq!(depth::rear_opacity(&doc, &second), Some(1.));
+    let mut history = crate::document::History::default();
+    assert!(history.commit(original.clone(), &doc));
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc, original);
+    assert!(history.redo(&mut doc));
+    assert_eq!(doc, first_edit);
+    depth::set_rear_opacity(&mut doc, &[second[0]], 0.5).unwrap();
+    let paint = Paint::new(&doc);
+    assert!(
+        paint.has_visibility(),
+        "Two ordinary cages exceeded the query estimate"
+    );
+    assert!(first.iter().any(|id| paint.atom(*id) == 0.25));
+    assert!(second.iter().any(|id| paint.atom(*id) == 0.5));
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.version, crate::document::VERSION);
+    assert_eq!(reopened, doc.current());
+    for id in &all {
+        assert_eq!(depth::Paint::new(&doc).amount(*id), rgb.amount(*id));
+    }
+    assert_eq!(
+        doc.depth_appearance[0].atoms,
+        original.depth_appearance[0].atoms
+    );
+    assert_eq!(
+        doc.depth_appearance[0].weights,
+        original.depth_appearance[0].weights
+    );
+    let mut nonpaint = doc.clone();
+    nonpaint.version = original.version;
+    nonpaint.depth_appearance = original.depth_appearance.clone();
+    assert_eq!(nonpaint, original, "All native graph, XYZ and other fields");
+    assert!(!crate::transaction::chemistry_changed(&original, &doc));
+    depth::set_rear_opacity(&mut doc, &all, 1.).unwrap();
+    assert_eq!(scene::svg(&doc), original_svg, "Opaque RGB output changed");
+}
+
+#[test]
+fn view_visibility_budget_fallback_is_wholly_opaque_and_order_independent() {
+    let source = cage(sources()[0]);
+    let mut doc = source.clone();
+    let source_ids = source.all_ids();
+    for i in 1..5 {
+        crate::editing::append(
+            &mut doc,
+            &crate::editing::selection(&source, &source_ids),
+            Point::new(i as f32 * 1000., 0.),
+        );
+    }
+    let paint = Paint::new(&doc);
+    assert!(!paint.has_visibility());
+    assert!(doc.atoms.iter().all(|a| paint.atom(a.id) == 1.));
+    assert!(doc.bonds.iter().all(|b| paint.bond(b, 0.5) == 1.));
+    doc.atoms.reverse();
+    doc.bonds.reverse();
+    assert!(!Paint::new(&doc).has_visibility());
+}
+#[test]
+fn view_visibility_rim_backbone_and_inward_rail_have_independent_depth() {
+    for source in sources() {
+        let doc = cage(source);
+        let paint = Paint::new(&doc);
+        let hull = rim(&doc);
+        let mut rim_hidden_rails = 0;
+        let mut visible_rails = 0;
+        let mut avoided_self_shadow = 0;
+        let visibility = Visibility::new(&doc);
+        for original in &doc.bonds {
+            let mut b = original.clone();
+            b.order = 2;
+            b.double_position = crate::bonds::DoublePosition::Auto;
+            let Some(support) = scene::projected_bonds::face_atoms(&doc, &b) else {
+                continue;
+            };
+            let a = doc.atom(b.a).unwrap().position;
+            let z = doc.atom(b.b).unwrap().position;
+            let center =
+                support
+                    .iter()
+                    .filter_map(|id| doc.atom(*id))
+                    .fold(Point::default(), |p, a| {
+                        p.offset(
+                            a.position.x / support.len() as f32,
+                            a.position.y / support.len() as f32,
+                        )
+                    });
+            let side = if cross2(a, z, center) < 0. { -1. } else { 1. };
+            let spacing =
+                doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+            let Some(Some(rail)) = scene::projected_bonds::rail_depth(
+                &doc,
+                &b,
+                a,
+                z,
+                spacing * side,
+                spacing * 0.75,
+                doc.drawing_style.line_width() / 2.,
+            ) else {
+                continue;
+            };
+            let (first, last) = rail.points;
+            let parts = paint.rail_parts(
+                &doc,
+                &b,
+                &rail,
+                vec![Primitive::Line(first, last, doc.drawing_style.line_width())],
+            );
+            if parts
+                .iter()
+                .any(|p| matches!(p,Primitive::Opacity{alpha,..} if *alpha==0.25))
+            {
+                if hull.contains(&b.a) && hull.contains(&b.b) && paint.bond(&b, 0.5) == 1. {
+                    rim_hidden_rails += 1;
+                    assert_eq!(paint.bond(&b, 0.), 1.);
+                    assert_eq!(paint.bond(&b, 1.), 1.);
+                }
+            } else {
+                visible_rails += 1;
+                if !visibility
+                    .support_ranges(first, last, rail.field, &rail.support)
+                    .is_empty()
+                {
+                    avoided_self_shadow += 1;
+                }
+            }
+        }
+        assert!(
+            rim_hidden_rails > 0,
+            "Rear support exclusion accidentally exempted adjacent front faces: C{}: {rim_hidden_rails} exposed backbones with hidden inward rails; {visible_rails} visible inward rails",
+            doc.atoms.len()
+        );
+        assert!(
+            visible_rails > 0,
+            "All face annotations self-shadowed: C{}: {rim_hidden_rails} exposed backbones with hidden inward rails; {visible_rails} visible inward rails",
+            doc.atoms.len()
+        );
+        if doc.atoms.len() == 70 {
+            assert!(
+                avoided_self_shadow > 0,
+                "No actual C70 support-face warp case checked: C{}: {avoided_self_shadow} exposed rails protected from their mildly warped support face",
+                doc.atoms.len()
+            );
+        }
+    }
+}
+
+#[test]
+fn view_visibility_shell_respects_external_and_own_explicit_bond_layers() {
+    let mut doc = cage(sources()[0]);
+    let a = doc.add_atom("C", Point::new(-1., 0.));
+    let b = doc.add_atom("C", Point::new(1., 0.));
+    for id in [a, b] {
+        doc.atom_mut(id).unwrap().depth = -200.;
+    }
+    doc.add_bond(a, b, 1, "plain");
+    depth::set_rear_opacity(&mut doc, &[a, b], 0.25).unwrap();
+    let index = doc.bonds.len() - 1;
+    assert_eq!(Paint::new(&doc).bond(&doc.bonds[index], 0.5), 0.25);
+    doc.bonds[index].z_order = 1;
+    assert_eq!(Paint::new(&doc).bond(&doc.bonds[index], 0.5), 1.);
+    doc.bonds[index].z_order = -1;
+    for bond in &mut doc.bonds[..index] {
+        bond.z_order = -2;
+    }
+    doc.bonds[0].z_order = -3;
+    assert_eq!(
+        Paint::new(&doc).bond(&doc.bonds[index], 0.5),
+        1.,
+        "Mixed negative cage layers acquired neutral priority"
+    );
+    for id in [a, b] {
+        doc.atom_mut(id).unwrap().depth = 1000.;
+    }
+    doc.bonds[index].z_order = -4;
+    assert_eq!(
+        Paint::new(&doc).bond(&doc.bonds[index], 0.5),
+        0.25,
+        "Higher explicit layer lost precedence"
+    );
+    let mut own = cage(sources()[0]);
+    let hidden = own
+        .bonds
+        .iter()
+        .position(|b| Paint::new(&own).bond(b, 0.5) == 0.25)
+        .unwrap();
+    own.bonds[hidden].z_order = 1;
+    assert_eq!(
+        Paint::new(&own).bond(&own.bonds[hidden], 0.5),
+        1.,
+        "Bring forward on a rear cage bond remained behind its shell"
+    );
+}
+#[test]
+fn view_visibility_external_foreground_clips_cap_without_hitting_rim_anchor() {
+    let mut doc = Document::default();
+    let length = 100.;
+    let ids: Vec<_> = [
+        (0., 0., 0.),
+        (length, length, 0.),
+        (length, -length, 0.),
+        (length / 2., 0., -length),
+    ]
+    .into_iter()
+    .map(|(x, y, z)| {
+        let id = doc.add_atom("C", Point::new(x, y));
+        doc.atom_mut(id).unwrap().depth = z;
+        id
+    })
+    .collect();
+    for (a, b) in [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)] {
+        doc.add_bond(ids[a], ids[b], 1, "plain");
+    }
+    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    assert_eq!(Visibility::new(&doc).face_count(), 4);
+    let width = doc.drawing_style.line_width();
+    let foreground: Vec<_> = [-2., 2.]
+        .into_iter()
+        .map(|y| {
+            let id = doc.add_atom("C", Point::new(width * 0.75, width * y));
+            doc.atom_mut(id).unwrap().depth = length;
+            id
+        })
+        .collect();
+    doc.add_bond(foreground[0], foreground[1], 1, "plain");
+    let original = doc.clone();
+    // Rasterize the actual opacity-split inward bond alone. The independent
+    // foreground stroke is an occluder, not part of this underlying-ink image.
+    fn raster(parts: &[Primitive], width: f32) -> resvg::tiny_skia::Pixmap {
+        fn xml(p: &Primitive, alpha: f32) -> String {
+            match p {
+                Primitive::Opacity {
+                    alpha: a,
+                    primitive,
+                } => xml(primitive, alpha * a),
+                Primitive::Polygon(points) => format!(
+                    "<polygon fill='black' fill-opacity='{alpha}' points='{}'/>",
+                    points
+                        .iter()
+                        .map(|p| format!("{},{}", p.x, p.y))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+                _ => panic!("Unexpected underlying joined bond primitive"),
+            }
+        }
+        let svg = format!(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='1024' viewBox='{} {} {} {}'>{}</svg>",
+            -width,
+            -2. * width,
+            5. * width,
+            4. * width,
+            parts.iter().map(|p| xml(p, 1.)).collect::<String>()
+        );
+        let tree = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default()).unwrap();
+        let mut image = resvg::tiny_skia::Pixmap::new(1280, 1024).unwrap();
+        resvg::render(
+            &tree,
+            resvg::tiny_skia::Transform::identity(),
+            &mut image.as_mut(),
+        );
+        image
+    }
+    for layer in [-1, 0, 1] {
+        doc.bonds.last_mut().unwrap().z_order = layer;
+        for alpha in [0., 0.25] {
+            depth::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
+            let paint = Paint::new(&doc);
+            assert_eq!(paint.atom(ids[0]), 1., "Foreground misses the hull anchor");
+            let bond = &doc.bonds[2];
+            let hidden = paint.bond(bond, width * 0.75 / (length / 2.));
+            assert_eq!(hidden, alpha, "Underlying cap centerline is hidden");
+            let joins = crate::bond_joins::Joins::new(&doc);
+            let outline = joins.polygon(
+                bond,
+                doc.atom(bond.a).unwrap().position,
+                doc.atom(bond.b).unwrap().position,
+            );
+            let image = raster(
+                &paint.bond_parts(&doc, bond, vec![Primitive::Polygon(outline)]),
+                width,
+            );
+            let actual = image.pixel(448, 512).unwrap().alpha();
+            let expected = if layer < 0 {
+                255
+            } else {
+                (alpha * 255.).round() as u8
+            };
+            assert!(
+                i16::from(actual).abs_diff(i16::from(expected)) <= 1,
+                "Opaque cap restoration overrode external foreground: layer{layer}/alpha{alpha}: restored underlying alpha={actual}, expected={expected}"
+            );
+            assert_eq!(
+                image.pixel(282, 512).unwrap().alpha(),
+                255,
+                "Unoccluded anchor-owned cap sector faded"
+            );
+        }
+    }
+    assert_eq!(doc.atoms, original.atoms);
+    assert!(!crate::transaction::chemistry_changed(&original, &doc));
+}
+
+#[test]
+fn view_visibility_rim_exemption_does_not_leak_to_unrelated_foreground_ink() {
+    let mut doc = cage(sources()[0]);
+    let p = doc.atom(14).unwrap().position;
+    assert_eq!(Paint::new(&doc).atom(14), 1.);
+    let a = doc.add_atom("C", p.offset(-8., 0.));
+    let b = doc.add_atom("C", p.offset(8., 0.));
+    for id in [a, b] {
+        doc.atom_mut(id).unwrap().depth = 500.;
+    }
+    doc.add_bond(a, b, 1, "plain");
+    assert_eq!(
+        Paint::new(&doc).atom(14),
+        0.25,
+        "Genuine external occluder was exempted with the rim's own cage"
+    );
+}
+#[test]
+fn view_visibility_centered_double_rails_do_not_erase_managed_rear_ink() {
+    let mut doc = Document::default();
+    let ids: Vec<_> = [
+        (-50., 0., -10.),
+        (50., 0., -10.),
+        (0., -50., 10.),
+        (0., 50., 10.),
+    ]
+    .into_iter()
+    .map(|(x, y, z)| {
+        let id = doc.add_atom("C", Point::new(x, y));
+        doc.atom_mut(id).unwrap().depth = z;
+        id
+    })
+    .collect();
+    doc.add_bond(ids[0], ids[1], 1, "plain");
+    doc.add_bond(ids[2], ids[3], 2, "plain");
+    doc.bonds[1].double_position = crate::bonds::DoublePosition::Center;
+    depth::set_rear_opacity(&mut doc, &ids[..2], 0.25).unwrap();
+    let paint = Paint::new(&doc);
+    assert_eq!(
+        paint.bond(&doc.bonds[0], 0.5),
+        1.,
+        "The center lies between two real foreground rails"
+    );
+    let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+    for x in [-spacing / 2., spacing / 2.] {
+        assert_eq!(paint.bond(&doc.bonds[0], (x + 50.) / 100.), 0.25);
+    }
+    assert!(
+        crate::crossings::gaps(&doc)[0].is_empty(),
+        "Backbone-only knockout erased the exposed middle and faint rail intervals"
+    );
+    let parts = paint.bond_parts(
+        &doc,
+        &doc.bonds[0],
+        vec![Primitive::Line(
+            Point::new(-50., 0.),
+            Point::new(50., 0.),
+            1.,
+        )],
+    );
+    assert!(
+        parts
+            .iter()
+            .any(|p| matches!(p,Primitive::Opacity{alpha,..} if *alpha==0.25))
+    );
+    assert!(
+        parts
+            .iter()
+            .filter(|p| !matches!(p, Primitive::Opacity { .. }))
+            .count()
+            >= 3
+    );
+}
+
+#[test]
+fn view_visibility_svg_raster_keeps_full_rim_stroke_and_real_hidden_alpha_on_both_themes() {
+    use crate::canvas_theme::CanvasTheme;
+    let scale = 8.;
+    for theme in CanvasTheme::ALL {
+        for alpha in [0., 0.25, 0.5, 1.] {
+            let mut doc = cage(sources()[0]);
+            doc.canvas_theme = theme;
+            let ids = doc.all_ids();
+            depth::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
+            let render = |doc: &Document| {
+                let svg = scene::svg(doc);
+                let tree =
+                    resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default()).unwrap();
+                let size = tree.size();
+                let mut image = resvg::tiny_skia::Pixmap::new(
+                    (size.width() * scale).ceil() as u32,
+                    (size.height() * scale).ceil() as u32,
+                )
+                .unwrap();
+                resvg::render(
+                    &tree,
+                    resvg::tiny_skia::Transform::from_scale(scale, scale),
+                    &mut image.as_mut(),
+                );
+                let (lo, hi) = scene::bounds(&scene::primitives(doc));
+                (image, lo, hi, size)
+            };
+            let (image, lo, hi, size) = render(&doc);
+            let mut opaque = doc.clone();
+            depth::set_rear_opacity(&mut opaque, &ids, 1.).unwrap();
+            let (reference, ref_lo, ref_hi, ref_size) = render(&opaque);
+            let pixel = |image: &resvg::tiny_skia::Pixmap,
+                         p: Point,
+                         lo: Point,
+                         hi: Point,
+                         size: resvg::usvg::Size| {
+                let x = ((p.x - lo.x) / (hi.x - lo.x) * size.width() * scale).floor() as u32;
+                let y = ((p.y - lo.y) / (hi.y - lo.y) * size.height() * scale).floor() as u32;
+                image.pixel(x, y).unwrap().alpha()
+            };
+            let sample = |p| pixel(&image, p, lo, hi, size);
+            let rear = Point::new(-8.102754, -18.966398);
+            let actual = sample(rear);
+            let expected = (alpha * 255.).round() as i16;
+            assert!(
+                (i16::from(actual) - expected).abs() <= 1,
+                "Actual SVG hidden ink alpha {actual}/{alpha}/{theme:?}"
+            );
+            let hull = rim(&doc);
+            let mut tested = 0;
+            for (&first, &last) in hull
+                .iter()
+                .zip(hull.iter().cycle().skip(1))
+                .take(hull.len())
+            {
+                assert!(
+                    doc.bonds
+                        .iter()
+                        .any(|b| [b.a, b.b].contains(&first) && [b.a, b.b].contains(&last))
+                );
+                tested += 1;
+                let a = doc.atom(first).unwrap().position;
+                let b = doc.atom(last).unwrap().position;
+                let length = a.distance(b);
+                let normal = Point::new(-(b.y - a.y) / length, (b.x - a.x) / length);
+                let width = doc.drawing_style.line_width();
+                for t in [0., 0.1, 0.25, 0.5, 0.75, 0.9, 1.] {
+                    for side in [-0.2, 0., 0.2] {
+                        let p = a
+                            .lerp(b, t)
+                            .offset(normal.x * width * side, normal.y * width * side);
+                        let original = pixel(&reference, p, ref_lo, ref_hi, ref_size);
+                        let actual = sample(p);
+                        assert!(
+                            i16::from(actual) >= i16::from(original) - 1,
+                            "Rendered rim inner/outer/cap ink faded at {first}-{last}/{t}/{side}/{alpha}/{theme:?}: original {original}, actual {actual}, targetbounds={lo:?}/{hi:?}, originalbounds={ref_lo:?}/{ref_hi:?}"
+                        );
+                        if t > 0. && t < 1. {
+                            assert!(
+                                original >= 250,
+                                "Rim body probe was not inside the original opaque stroke"
+                            );
+                        }
+                    }
+                }
+            }
+            assert_eq!(tested, 20);
+            if let Ok(directory) = std::env::var("RESHIKI_VISIBILITY_TEST_OUTPUT") {
+                let path =
+                    std::path::Path::new(&directory).join(format!("c60-{theme:?}-{alpha}.png"));
+                image.save_png(path).unwrap();
+                let svg = scene::svg_with_background(&doc);
+                let tree =
+                    resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default()).unwrap();
+                let mut paper =
+                    resvg::tiny_skia::Pixmap::new(image.width(), image.height()).unwrap();
+                resvg::render(
+                    &tree,
+                    resvg::tiny_skia::Transform::from_scale(scale, scale),
+                    &mut paper.as_mut(),
+                );
+                paper
+                    .save_png(
+                        std::path::Path::new(&directory)
+                            .join(format!("c60-{theme:?}-{alpha}-paper.png")),
+                    )
+                    .unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn view_visibility_exposed_miter_sectors_retain_opaque_compound_ink() {
+    let mut doc = cage(sources()[0]);
+    let ids = doc.all_ids();
+    depth::set_rear_opacity(&mut doc, &ids, 0.).unwrap();
+    let a = doc.atom(13).unwrap().position;
+    let b = doc.atom(5).unwrap().position;
+    let length = a.distance(b);
+    let p = a.lerp(b, 0.1).offset(
+        -(b.y - a.y) / length * doc.drawing_style.line_width() * 0.2,
+        (b.x - a.x) / length * doc.drawing_style.line_width() * 0.2,
+    );
+    for alpha in [0., 1.] {
+        depth::set_rear_opacity(&mut doc, &ids, alpha).unwrap();
+        let mut summaries = vec![];
+        for primitive in scene::primitives(&doc) {
+            if let Primitive::Path {
+                commands,
+                filled: true,
+                ..
+            } = primitive
+            {
+                let contours = flatten(&commands);
+                let mut positive = 0;
+                let mut negative = 0;
+                let mut winding = 0;
+                for contour in contours {
+                    let area = contour
+                        .iter()
+                        .zip(contour.iter().cycle().skip(1))
+                        .take(contour.len())
+                        .map(|(a, b)| {
+                            f64::from(a.x) * f64::from(b.y) - f64::from(a.y) * f64::from(b.x)
+                        })
+                        .sum::<f64>();
+                    if area > 0. {
+                        positive += 1;
+                    } else if area < 0. {
+                        negative += 1;
+                    }
+                    for (a, b) in contour
+                        .iter()
+                        .zip(contour.iter().cycle().skip(1))
+                        .take(contour.len())
+                    {
+                        if a.y <= p.y && b.y > p.y && cross2(*a, *b, p) > 0. {
+                            winding += 1;
+                        }
+                        if a.y > p.y && b.y <= p.y && cross2(*a, *b, p) < 0. {
+                            winding -= 1;
+                        }
+                    }
+                }
+                summaries.push((positive, negative, winding));
+            }
+        }
+        assert!(
+            summaries.iter().any(|(_, _, winding)| *winding != 0),
+            "Shared exposed miter sector disappeared: compound ink alpha{alpha}, rim13-5 body probe{p:?}: (positive contours,negative contours,winding)={summaries:?}"
+        );
+    }
+}
+
+#[test]
+fn view_visibility_degenerate_cap_masks_never_restore_an_entire_hidden_bond() {
+    let polygon = vec![
+        Point::new(-5., -1.),
+        Point::new(5., -1.),
+        Point::new(5., 1.),
+        Point::new(-5., 1.),
+    ];
+    let line = vec![Point::new(-1., 0.), Point::default(), Point::new(1., 0.)];
+    assert!(mask_clip(&polygon, &line, false).is_empty());
+    assert_eq!(mask_clip(&polygon, &line, true), vec![polygon.clone()]);
+    assert!(mask_clip(&polygon, &line[..2], false).is_empty());
+}
+
+#[test]
+fn view_visibility_scene_construction_count_characterizes_c60_rear_opacity() {
+    let doc = Document::from_json(
+        include_str!("../../../../../tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk")
+            .as_bytes(),
+    )
+    .unwrap();
+    let before = construction_count();
+    assert!(!scene::primitives(&doc).is_empty());
+    let constructions = construction_count() - before;
+    // One scene Paint per primitives() call; this fixture has no aromatic
+    // circles or ring arcs, so no ring-knockout Paint is built.
+    assert_eq!(constructions, 1);
+}
+
+#[test]
+fn view_visibility_negative_cage_layers_characterize_masks_and_hidden_ranges() {
+    let mut doc = cage(sources()[0]);
+    let a = doc.add_atom("C", Point::new(-1., 0.));
+    let b = doc.add_atom("C", Point::new(1., 0.));
+    for id in [a, b] {
+        doc.atom_mut(id).unwrap().depth = -200.;
+    }
+    doc.add_bond(a, b, 1, "plain");
+    depth::set_rear_opacity(&mut doc, &[a, b], 0.25).unwrap();
+    let external = doc.bonds.len() - 1;
+    doc.bonds[external].z_order = -4;
+    let first = doc.atom(a).unwrap().position;
+    let last = doc.atom(b).unwrap().position;
+    // Current behavior: negative shell faces mask only owners entirely inside
+    // the shell, while hidden ranges still cover external/mixed owners at an
+    // equal or lower explicit layer. Neutral faces mask all three owner groups.
+    for (shell_layer, mask_counts) in [(-2, [180, 0, 0]), (0, [180, 180, 180])] {
+        for bond in &mut doc.bonds[..external] {
+            bond.z_order = shell_layer;
+        }
+        doc.bonds[0].z_order = shell_layer - 1;
+        let view = Visibility::new(&doc);
+        assert_eq!(view.face_count(), 32);
+        for ((name, owners, front_ranges), mask_count) in [
+            ("inside", [1, 2], [vec![], vec![], vec![]]),
+            ("outside", [a, b], [vec![(0., 1.)], vec![], vec![]]),
+            ("mixed", [1, a], [vec![(0., 1.)], vec![], vec![]]),
+        ]
+        .into_iter()
+        .zip(mask_counts)
+        {
+            for (z, expected_count, expected_ranges) in [
+                (-200., mask_count, [vec![(0., 1.)], vec![(0., 1.)], vec![]]),
+                (1000., 0, front_ranges),
+            ] {
+                let field = DepthField::Constant(z);
+                let masks = view.masks(field, &owners);
+                assert_eq!(
+                    masks.len(),
+                    expected_count,
+                    "Mask count at shell layer {shell_layer}, owners {name}, depth {z}"
+                );
+                assert!(masks.iter().all(|triangle| triangle.len() == 3));
+                for (layer, expected) in [shell_layer - 1, shell_layer, shell_layer + 1]
+                    .into_iter()
+                    .zip(expected_ranges)
+                {
+                    assert_eq!(
+                        view.hidden(first, last, field, &owners, layer),
+                        expected,
+                        "Hidden ranges at shell layer {shell_layer}, query layer {layer}, owners {name}, depth {z}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn view_visibility_scene_construction_count_characterizes_tilted_aromatic_ring() {
+    let mut doc = Document::default();
+    let ids = crate::editing::ring(&mut doc, Point::default(), 6, true, 0.);
+    projection::tilt(&mut doc, &ids, 65., true);
+    projection::tilt(&mut doc, &ids, 20., false);
+    depth::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
+    let mut counts = vec![];
+    for ring_arc in [false, true] {
+        for bond in &mut doc.bonds {
+            bond.ring_arc = ring_arc;
+        }
+        let before = construction_count();
+        assert!(!scene::primitives(&doc).is_empty());
+        counts.push(construction_count() - before);
+    }
+    // q-25 builds the scene Paint once and the canonical-document Paint for
+    // ring knockouts once, instead of once per circle part or arc piece.
+    assert_eq!(counts, vec![2, 2]);
+}

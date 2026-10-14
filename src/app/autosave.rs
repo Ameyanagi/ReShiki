@@ -245,9 +245,7 @@ impl App {
     /// Removes a closed tab's draft; a write still running for it finishes
     /// first, and its result, which finds no tab, starts the removal.
     pub(super) fn retire(&mut self, mut tab: DocumentTab) -> Task<Message> {
-        if let Some(binding) = tab.office.take() {
-            binding.finish();
-        }
+        tab.detach_office();
         self.retire_assistant(tab.id);
         let Some(recovery) = tab.recovery else {
             return Task::none();
@@ -432,14 +430,16 @@ impl App {
         self.target_tab();
         let before = self.tab.doc.clone();
         self.tab.doc = candidate.snapshot.document;
-        self.tab.doc.version = self.tab.doc.version.max(15);
+        self.tab
+            .doc
+            .require_version(reshiki::document::EDITOR_BASELINE);
         self.sync_drawing_defaults();
         self.tab.styles.editor = None;
         self.theme_library.editor = None;
         self.tab.path = None;
         self.tab.untitled_name = None;
         self.tab.saved = Document::default();
-        self.tab.file_epoch = self.next_epoch();
+        self.begin_file_epoch();
         self.changed(before);
         self.tab.revision = self.tab.revision.wrapping_add(1);
         self.fit();

@@ -1,4 +1,4 @@
-# Rear opacity keeps exposed cage outlines solid (under review)
+# Rear opacity keeps exposed cage outlines solid
 
 The earlier rear-opacity implementation faded everything beyond a depth
 midplane. On a projected C60 cage, that also faded parts of the visible outer
@@ -10,7 +10,7 @@ projected ink, keeping exposed outlines solid as the molecule turns.
 | ![C60 at 25% rear opacity with incorrectly faded portions of its outer rim](../images/rear-visibility-20261010/c60-25-before.jpg) | ![The same C60 and scale with a solid outer rim and faint occluded rear ink](../images/rear-visibility-20261010/c60-25-after.jpg) |
 
 These are untouched 2560 × 1704 native JPEGs of the same
-[25% drawing](../../tests/fixtures/rear-visibility-20261010/c60-visibility-native-25.rsk)
+[25% drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-visibility-20261010/c60-visibility-native-25.rsk)
 at 209% on macOS arm64, with a light canvas, JACS/ACS, Arial 10 pt and keyboard
 drawing on. The molecule has no selection handles. Inspector scroll, keyboard
 cursor, title, focus and footer state differ; the recovery banner was left
@@ -22,9 +22,9 @@ It is not the PR's declared base. The corrected app was built from the frozen
 its signed executable is
 `bc9b3d61b3acb8c65e0b2ff1b6be2e0c3835ef9ebd097c1785f8210b28fb31f7`.
 Original source, compiler, package and desktop receipts are retained in the
-[evidence package](../../tests/fixtures/rear-visibility-20261010/README.md).
+[evidence package](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-visibility-20261010/README.md).
 
-Use **Properties → 3D appearance → Rear opacity (%) → Apply**. At 25%,
+Use **Properties → 3D appearance → Rear opacity → Apply**. At 25%,
 occluded rear ink is faint; at 0%, it disappears while the exposed rim stays
 solid. At 100%, the existing opaque rendering is preserved. Rotate with
 **3D tilt** to recompute visibility from current retained XYZ, then clear the
@@ -35,8 +35,8 @@ selection to remove the temporary editing overlay.
 | ![C60 at 0% with hidden rear ink and a continuous solid rim](../images/rear-visibility-20261010/c60-zero-after.jpg) | ![Rotated C60 at 0%, with selection cleared and the exposed rim still solid](../images/rear-visibility-20261010/c60-zero-tilted-selection-cleared.jpg) |
 
 ROOT checked 25% → 0%, one Undo to 25%, and one Redo to 0%, then saved separate
-[0%](../../tests/fixtures/rear-visibility-20261010/c60-visibility-native-0.rsk)
-and [tilted 0%](../../tests/fixtures/rear-visibility-20261010/c60-visibility-native-0-tilted.rsk)
+[0%](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-visibility-20261010/c60-visibility-native-0.rsk)
+and [tilted 0%](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-visibility-20261010/c60-visibility-native-0-tilted.rsk)
 native files. Changing opacity changes exactly one field; every atom, bond,
 coordinate and chemical style remains identical. Tilt changes 180 coordinate
 values—X, Y and depth for all 60 atoms—in a rigid −21.25° X then +35° Y rotation.
@@ -83,6 +83,14 @@ source/compiler/native receipts and every captured Mac shipping dependency.
 It checks bytes and these three native graphs; it does not rerender screenshots
 or prove pixel visibility.
 
-Under review in [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289),
+Merged, unreleased, in [PR #289](https://github.com/Ameyanagi/ReShiki/pull/289) through [PR #297](https://github.com/Ameyanagi/ReShiki/pull/297),
 contributed by @Ameyanagi. Reusable caption: **Rear opacity hides occluded cage
 ink while keeping the exposed outline solid, including after 3D tilt.**
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [tests/fixtures/rear-visibility-20261010](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/tests/fixtures/rear-visibility-20261010) on the evidence archive branch.
+
+| Archived files                                                                                                                                               | What they record                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| [tests/fixtures/rear-visibility-20261010](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/tests/fixtures/rear-visibility-20261010) | C60 opacity/tilt native saves and original source, compiler, package and desktop receipts. |

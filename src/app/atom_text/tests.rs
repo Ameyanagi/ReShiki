@@ -1,6 +1,479 @@
 use super::*;
 use crate::canvas::{Edit, Tool};
+use iced::keyboard::{
+    Key, Modifiers,
+    key::{Named, Physical},
+};
+use iced::widget::text_editor::{Action as Input, Edit as TextEdit, Motion};
 use reshiki::document::Point;
+
+fn rich_label(text: &str) -> (App, u64) {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let id = app.tab.doc.add_atom("*", Point::default());
+    app.tab.doc.atom_mut(id).unwrap().display.variable = Some(text.into());
+    let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+    (app, id)
+}
+
+fn editor_action(app: &mut App, action: Input) {
+    let _ = app.update(Message::AtomText(Action::Editor(action)));
+}
+
+fn key_press(key: Key, modifiers: Modifiers) -> text_editor::KeyPress {
+    text_editor::KeyPress {
+        modified_key: key.clone(),
+        key,
+        physical_key: Physical::Unidentified(iced::keyboard::key::NativeCode::Unidentified),
+        modifiers,
+        text: None,
+        status: text_editor::Status::Focused { is_hovered: false },
+    }
+}
+
+#[test]
+fn label_keys_share_caption_script_aliases_and_keep_plain_local() {
+    for (key, script) in [
+        ("-", Script::Subscript),
+        ("+", Script::Superscript),
+        ("=", Script::Superscript),
+        ("t", Script::Normal),
+        ("T", Script::Normal),
+    ] {
+        let key = Key::Character(key.into());
+        for modifiers in [Modifiers::COMMAND, Modifiers::COMMAND | Modifiers::SHIFT] {
+            assert!(matches!(
+                key_binding(key_press(key.clone(), modifiers)),
+                Some(text_editor::Binding::Custom(Message::AtomText(Action::Script(value)))) if value == script
+            ));
+            if script != Script::Normal {
+                assert_eq!(script_key(&key, modifiers), Some(script));
+            } else {
+                assert_eq!(script_key(&key, modifiers), None);
+            }
+        }
+        assert!(!matches!(
+            key_binding(key_press(key, Modifiers::empty())),
+            Some(text_editor::Binding::Custom(_))
+        ));
+    }
+    for modifiers in [Modifiers::empty(), Modifiers::COMMAND, Modifiers::SHIFT] {
+        assert!(matches!(
+            key_binding(key_press(Key::Named(Named::Enter), modifiers)),
+            Some(text_editor::Binding::Custom(Message::AtomText(
+                Action::Apply
+            )))
+        ));
+    }
+    assert!(matches!(
+        key_binding(key_press(Key::Named(Named::Escape), Modifiers::empty())),
+        Some(text_editor::Binding::Custom(Message::AtomText(
+            Action::Cancel
+        )))
+    ));
+    let mut unfocused = key_press(Key::Character("t".into()), Modifiers::COMMAND);
+    unfocused.status = text_editor::Status::Active;
+    assert!(key_binding(unfocused).is_none());
+}
+
+#[test]
+fn selection_script_buttons_toggle_only_the_selected_utf8_range() {
+    let (mut app, _) = rich_label("触媒aa");
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert_eq!(state.editor.selection().as_deref(), Some("触媒aa"));
+    editor_action(&mut app, Input::Move(Motion::DocumentEnd));
+    editor_action(&mut app, Input::Select(Motion::Left));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Subscript)));
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert!(!state.label_edited);
+    assert!(state.scripts_edited);
+    assert_eq!(
+        state.scripts(),
+        vec![ScriptRun {
+            start: "触媒a".len(),
+            end: "触媒aa".len(),
+            script: Script::Subscript
+        }]
+    );
+    let _ = app.update(Message::AtomText(Action::Script(Script::Subscript)));
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert_eq!(
+        state.scripts(),
+        vec![ScriptRun {
+            start: 0,
+            end: "触媒aa".len(),
+            script: Script::Normal
+        }]
+    );
+    let _ = app.update(Message::AtomText(Action::Script(Script::Superscript)));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Normal)));
+    assert!(
+        app.tab
+            .atom_text
+            .as_ref()
+            .unwrap()
+            .selected_script(Script::Normal)
+    );
+}
+
+#[test]
+fn caret_only_script_control_formats_the_entire_label_and_empty_is_safe() {
+    let (mut app, _) = rich_label("R1");
+    editor_action(&mut app, Input::Move(Motion::DocumentEnd));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Superscript)));
+    assert_eq!(
+        app.tab.atom_text.as_ref().unwrap().scripts(),
+        vec![ScriptRun {
+            start: 0,
+            end: 2,
+            script: Script::Superscript
+        }]
+    );
+    let _ = app.update(Message::AtomText(Action::Script(Script::Superscript)));
+    assert_eq!(
+        app.tab.atom_text.as_ref().unwrap().scripts(),
+        vec![ScriptRun {
+            start: 0,
+            end: 2,
+            script: Script::Normal
+        }]
+    );
+    let _ = app.update(Message::AtomText(Action::Input(String::new())));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Subscript)));
+    assert!(app.tab.atom_text.as_ref().unwrap().scripts().is_empty());
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert!(app.tab.atom_text.as_ref().unwrap().error.is_some());
+}
+
+#[test]
+fn manual_script_only_apply_reopens_and_text_edits_preserve_runs() {
+    let (mut app, id) = rich_label("Rab");
+    let original = app.tab.doc.clone();
+    editor_action(&mut app, Input::Move(Motion::DocumentEnd));
+    editor_action(&mut app, Input::Select(Motion::Left));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Superscript)));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(
+        app.tab.doc.atom(id).unwrap().display.label_scripts,
+        vec![ScriptRun {
+            start: 2,
+            end: 3,
+            script: Script::Superscript
+        }]
+    );
+    let formatted = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert!(state.manual_scripts);
+    assert!(!state.scripts_edited);
+    assert_eq!(
+        state.scripts(),
+        formatted.atom(id).unwrap().display.label_scripts
+    );
+    editor_action(&mut app, Input::Move(Motion::DocumentEnd));
+    editor_action(
+        &mut app,
+        Input::Edit(TextEdit::Paste("c".to_owned().into())),
+    );
+    let _ = app.update(Message::AtomText(Action::Apply));
+    let display = &app.tab.doc.atom(id).unwrap().display;
+    assert_eq!(display.variable.as_deref(), Some("Rabc"));
+    assert_eq!(
+        display.label_scripts,
+        vec![ScriptRun {
+            start: 2,
+            end: 4,
+            script: Script::Superscript
+        }]
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, formatted);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+}
+
+#[test]
+fn first_script_key_sets_an_automatic_script_and_the_second_toggles_it_off() {
+    let (mut app, _) = rich_label("R1");
+    editor_action(&mut app, Input::Move(Motion::DocumentEnd));
+    editor_action(&mut app, Input::Select(Motion::Left));
+    assert!(
+        app.tab
+            .atom_text
+            .as_ref()
+            .unwrap()
+            .selected_script(Script::Subscript)
+    );
+    let _ = app.update(Message::AtomText(Action::Script(Script::Subscript)));
+    let one = ScriptRun {
+        start: 1,
+        end: 2,
+        script: Script::Subscript,
+    };
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert!(state.scripts().contains(&one));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Subscript)));
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert!(!state.scripts().contains(&one));
+    assert!(state.selected_script(Script::Normal));
+}
+
+#[test]
+fn automatic_runs_remain_automatic_until_plain_is_chosen() {
+    let (mut app, id) = rich_label("R1");
+    let original = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert_eq!(app.tab.doc, original);
+    let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+    let _ = app.update(Message::AtomText(Action::Input("R2".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert!(
+        app.tab
+            .doc
+            .atom(id)
+            .unwrap()
+            .display
+            .label_scripts
+            .is_empty()
+    );
+    let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Normal)));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert_eq!(
+        app.tab.doc.atom(id).unwrap().display.label_scripts,
+        vec![ScriptRun {
+            start: 0,
+            end: 2,
+            script: Script::Normal
+        }]
+    );
+    let plain = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert_eq!(app.tab.doc, plain);
+}
+
+#[test]
+fn full_value_updates_preserve_reopened_manual_formatting() {
+    let (mut app, id) = rich_label("Rab");
+    editor_action(&mut app, Input::Move(Motion::DocumentEnd));
+    editor_action(&mut app, Input::Select(Motion::Left));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Superscript)));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+    let _ = app.update(Message::AtomText(Action::Input("Rabc".into())));
+    assert_eq!(
+        app.tab.atom_text.as_ref().unwrap().scripts(),
+        vec![ScriptRun {
+            start: 2,
+            end: 4,
+            script: Script::Superscript
+        }]
+    );
+    let _ = app.update(Message::AtomText(Action::Input("酸Rabc".into())));
+    assert_eq!(
+        app.tab.atom_text.as_ref().unwrap().scripts(),
+        vec![ScriptRun {
+            start: "酸Ra".len(),
+            end: "酸Rabc".len(),
+            script: Script::Superscript
+        }]
+    );
+    let _ = app.update(Message::AtomText(Action::Apply));
+    let display = &app.tab.doc.atom(id).unwrap().display;
+    assert_eq!(display.variable.as_deref(), Some("酸Rabc"));
+    assert_eq!(
+        display.label_scripts,
+        vec![ScriptRun {
+            start: "酸Ra".len(),
+            end: "酸Rabc".len(),
+            script: Script::Superscript
+        }]
+    );
+}
+
+#[test]
+fn label_paste_strips_newlines_and_preserves_manual_script_offsets() {
+    let (mut app, _) = rich_label("触媒a");
+    let _ = app.update(Message::AtomText(Action::Script(Script::Superscript)));
+    editor_action(&mut app, Input::Move(Motion::DocumentEnd));
+    editor_action(
+        &mut app,
+        Input::Edit(TextEdit::Paste("\r\nb\nc\rd".to_owned().into())),
+    );
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert_eq!(state.input, "触媒abcd");
+    assert_eq!(state.editor.text(), state.input);
+    assert_eq!(
+        state.scripts(),
+        vec![ScriptRun {
+            start: 0,
+            end: state.input.len(),
+            script: Script::Superscript
+        }]
+    );
+    editor_action(&mut app, Input::Edit(TextEdit::Enter));
+    assert_eq!(app.tab.atom_text.as_ref().unwrap().input, "触媒abcd");
+    let _ = app.update(Message::AtomText(Action::Input("M\r\n2\n+".into())));
+    assert_eq!(app.tab.atom_text.as_ref().unwrap().input, "M2+");
+    assert_eq!(app.tab.atom_text.as_ref().unwrap().editor.text(), "M2+");
+}
+
+#[test]
+fn group_drafts_ignore_scripts_without_changing_selection_or_format() {
+    let (mut app, _) = rich_label("Rab");
+    let _ = app.update(Message::AtomText(Action::Mode(Mode::Group)));
+    let state = app.tab.atom_text.as_ref().unwrap();
+    let cursor = state.editor.cursor();
+    let format = state.format.clone();
+    for script in [Script::Subscript, Script::Superscript, Script::Normal] {
+        let _ = app.update(Message::AtomText(Action::Script(script)));
+    }
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert_eq!(state.editor.cursor(), cursor);
+    assert_eq!(state.format, format);
+    assert!(!state.scripts_edited);
+    assert!(state.scripts().is_empty());
+    let _ = app.update(Message::AtomText(Action::Cancel));
+    let a = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    let b = app.tab.doc.add_atom("O", Point::new(84., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.selected = vec![a, b];
+    let _ = app.update(Message::AtomText(Action::ContractSelection));
+    let _ = app.update(Message::AtomText(Action::Input("Group".into())));
+    let _ = app.update(Message::AtomText(Action::Script(Script::Subscript)));
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert!(state.members.is_some());
+    assert!(!state.scripts_enabled());
+    assert!(!state.scripts_edited);
+}
+
+#[test]
+fn label_modal_blocks_global_typography_and_tool_shortcuts() {
+    let (mut app, _) = rich_label("R1");
+    let document = app.tab.doc.clone();
+    let format = app.tab.caption_format.clone();
+    let tool = app.tool;
+    for message in [
+        Message::ContextKey("T".into()),
+        Message::TextStyle(StyleChange::Script(Script::Superscript)),
+    ] {
+        assert!(!background(&message));
+        let _ = app.update(message);
+    }
+    assert_eq!(app.tab.doc, document);
+    assert_eq!(app.tab.caption_format, format);
+    assert_eq!(app.tool, tool);
+    assert!(!app.tab.atom_text.as_ref().unwrap().scripts_edited);
+    let (mut empty, _) = App::new();
+    empty.tab.busy = false;
+    let _ = empty.update(Message::AtomText(Action::Begin(None)));
+    assert!(empty.tab.atom_text.is_none());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer check for label editor semantics and control actions"]
+async fn rich_label_editor_and_script_controls_expose_accessible_actions() {
+    use iced::advanced::{mouse, renderer::Headless, widget::operation};
+    use iced_runtime::{UserInterface, user_interface::Cache};
+    use reshiki::canvas_theme::CanvasTheme;
+    let mut renderer =
+        <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
+            .await
+            .unwrap();
+    let (mut app, _) = rich_label("Rab");
+    let _ = app.update(Message::AtomText(Action::Script(Script::Superscript)));
+    assert!(app.tab.atom_text.as_ref().unwrap().manual_scripts);
+    let size = iced::Size::new(1040., 680.);
+    app.viewport = size;
+    app.appearance.mode = crate::appearance::Mode::MatchCanvas;
+    for theme in [CanvasTheme::Light, CanvasTheme::Dark] {
+        app.tab.doc.canvas_theme = theme;
+        for mode in [Mode::Text, Mode::Group] {
+            let _ = app.update(Message::AtomText(Action::Mode(mode)));
+            let mut ui = UserInterface::build(
+                app.with_atom_text(Space::new().width(Length::Fill).height(Length::Fill).into()),
+                size,
+                Cache::new(),
+                &mut renderer,
+            );
+            // Draw as well as lay out, so the manual Appearance preview and
+            // themed editor/control styles take their real renderer path.
+            ui.draw(
+                &mut renderer,
+                &app.theme(),
+                &iced::advanced::renderer::Style::default(),
+                mouse::Cursor::Unavailable,
+            );
+            let mut collect =
+                reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+            ui.operate(&renderer, &mut operation::black_box(&mut collect));
+            let snapshot = collect.snapshot();
+            assert!(snapshot.duplicate_ids.is_empty());
+            let editor = snapshot
+                .nodes
+                .iter()
+                .find(|node| node.id == "atom-text")
+                .unwrap();
+            assert_eq!(editor.role, reshiki::accessibility::Role::TextArea);
+            assert_eq!(editor.name, "Atom or group label");
+            assert_eq!(editor.value.as_deref(), Some("Rab"));
+            for id in [
+                "atom-text",
+                "atom-text-subscript",
+                "atom-text-superscript",
+                "atom-text-plain",
+                "atom-text-apply",
+                "atom-text-cancel",
+            ] {
+                let node = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
+                let bounds = node.bounds;
+                assert!(
+                    bounds.x >= 0.
+                        && bounds.y >= 0.
+                        && bounds.width > 0.
+                        && bounds.height > 0.
+                        && bounds.x + bounds.width <= size.width
+                        && bounds.y + bounds.height <= size.height,
+                    "{theme:?} {mode:?} {id}: {bounds:?} must fit inside {size:?}"
+                );
+                let visible = node.visible_bounds.unwrap_or_else(|| {
+                    panic!(
+                        "{theme:?} {mode:?} {id}: {bounds:?} has no visible bounds inside {size:?}"
+                    )
+                });
+                assert!(
+                    (visible.width - bounds.width).abs() < 0.01
+                        && (visible.height - bounds.height).abs() < 0.01,
+                    "{id} must remain fully visible"
+                );
+            }
+            for (id, name, script) in [
+                ("atom-text-subscript", "Subscript", Script::Subscript),
+                ("atom-text-superscript", "Superscript", Script::Superscript),
+                ("atom-text-plain", "Plain text", Script::Normal),
+            ] {
+                let button = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
+                assert_eq!(button.name, name);
+                assert_eq!(button.enabled, mode != Mode::Group);
+                assert_eq!(
+                    button.checked,
+                    Some(mode != Mode::Group && script == Script::Superscript)
+                );
+                let mut activate = reshiki::accessibility::Activate::<Message>::new(id);
+                ui.operate(&renderer, &mut operation::black_box(&mut activate));
+                if mode == Mode::Group {
+                    assert!(activate.message().is_none());
+                } else {
+                    assert!(
+                        matches!(activate.message(), Some(Message::AtomText(Action::Script(value))) if *value == script)
+                    );
+                }
+            }
+        }
+    }
+}
 
 #[test]
 fn accepting_an_unchanged_label_preserves_imported_atom_properties() -> Result<(), String> {
@@ -13,9 +486,10 @@ fn accepting_an_unchanged_label_preserves_imported_atom_properties() -> Result<(
         atom.isotope = 2;
         let before = app.tab.doc.clone();
         let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
-        if element == "H" {
-            assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.input, "H");
-        }
+        assert_eq!(
+            app.tab.atom_text.as_ref().ok_or("Draft")?.input,
+            format!("{element}+")
+        );
         let _ = app.update(Message::AtomText(Action::Apply));
         assert_eq!(app.tab.doc, before);
     }
@@ -39,6 +513,36 @@ fn explicit_label_draft_and_history_retain_the_entered_count() -> Result<(), Str
     assert_eq!(app.tab.doc.atom(n).ok_or("N")?.explicit_h, 0);
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc.atom(n).ok_or("N")?.explicit_h, 3);
+    Ok(())
+}
+
+#[test]
+fn charged_atom_label_draft_and_undo_retain_real_atom_properties() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    let metal = app.tab.doc.add_atom("Pt", Point::default());
+    let ligand = app.tab.doc.add_atom("N", Point::new(42., 0.));
+    app.tab.doc.add_bond(ligand, metal, 1, "plain");
+    let original = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(Action::Begin(Some(metal))));
+    let _ = app.update(Message::AtomText(Action::Input("Pd2+".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert!(app.tab.atom_text.is_none());
+    let atom = app.tab.doc.atom(metal).ok_or("Missing palladium")?;
+    assert_eq!(atom.element, "Pd");
+    assert_eq!(atom.charge, 2);
+    assert_eq!(app.tab.doc.bonds, original.bonds);
+    let charged = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(Action::Begin(Some(metal))));
+    assert_eq!(
+        app.tab.atom_text.as_ref().ok_or("Missing draft")?.input,
+        "Pd2+"
+    );
+    let _ = app.update(Message::AtomText(Action::Cancel));
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(app.tab.doc, charged);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atom(metal), original.atom(metal));
+    assert_eq!(app.tab.doc, original);
     Ok(())
 }
 

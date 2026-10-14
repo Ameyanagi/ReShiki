@@ -1,7 +1,7 @@
 //! Previews that place new structure onto the draft, stroking the conflict when a placement fails.
 
 use super::Draft;
-use crate::canvas::hit::{bond_target_with, plane_endpoint};
+use crate::canvas::hit::{bond_target_with, bond_target_with_text, plane_endpoint};
 use crate::canvas::snapping::ring_gesture;
 use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, delocalized_ring_size, layered, rgb};
 use iced::widget::canvas::{Path, Stroke};
@@ -28,6 +28,7 @@ impl MoleculeCanvas<'_> {
                 start,
                 pressed,
                 source,
+                source_text,
                 points,
                 snaking,
                 dragged,
@@ -40,7 +41,7 @@ impl MoleculeCanvas<'_> {
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
             let (points, target) = self.chain_plan(
                 (*start, *pressed),
-                *source,
+                (*source, *source_text),
                 points,
                 (*snaking, *dragged),
                 cursor,
@@ -52,13 +53,21 @@ impl MoleculeCanvas<'_> {
                 .unwrap_or(*start);
             let added = points
                 .len()
-                .saturating_sub(usize::from(source.is_some()))
+                .saturating_sub(usize::from(source.is_some() || source_text.is_some()))
                 .saturating_sub(usize::from(target.is_some() && points.len() > 1));
             let cancelled = *dragged && points.len() < 2;
             let placement = if cancelled {
                 Ok((self.doc.clone(), vec![]))
             } else {
-                chains::place(self.doc, &points, *source, target, 10.0 / self.camera.zoom)
+                let converted = if let Some(text) = source_text {
+                    reshiki::atom_text::text_to_atom(self.doc, *text)
+                        .map(|(doc, id)| (Cow::Owned(doc), Some(id)))
+                } else {
+                    Ok((Cow::Borrowed(self.doc), *source))
+                };
+                converted.and_then(|(doc, source)| {
+                    chains::place(&doc, &points, source, target, 10.0 / self.camera.zoom)
+                })
             };
             match placement {
                 Ok((doc, ids)) => {
@@ -390,6 +399,7 @@ impl MoleculeCanvas<'_> {
             Some(Gesture::Draw {
                 start,
                 id: Some(id),
+                ..
             }),
             Some(cursor),
             Tool::Atom,
@@ -453,44 +463,68 @@ impl MoleculeCanvas<'_> {
     ) {
         let Draft {
             preview,
+            bond_preview,
             ring_selection,
             ..
         } = draft;
-        if let (Some(Gesture::Draw { start, id }), Some(cursor), Some(preset)) =
-            (&state.gesture, state.cursor, self.tool.bond_preset())
+        if let (
+            Some(Gesture::Draw {
+                start,
+                pressed,
+                id,
+                text,
+            }),
+            Some(cursor),
+            Some(preset),
+        ) = (&state.gesture, state.cursor, self.tool.bond_preset())
         {
             let end = self
                 .camera
                 .world(Point::new(cursor.x - bounds.x, cursor.y - bounds.y), bounds);
-            if start.distance(end) >= 3.0 / self.camera.zoom {
+            if pressed.distance(end) >= 3.0 / self.camera.zoom {
                 let origin = id
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
                     .unwrap_or(*start);
-                let (end, target) = bond_target_with(
+                let Ok((end, target, target_text)) = bond_target_with_text(
                     self.doc,
                     origin,
                     end,
-                    *id,
+                    (*id, *text),
                     12.0 / self.camera.zoom,
                     self.bond_drawing.unconstrained(state.modifiers.alt()),
-                );
+                    self.tool,
+                ) else {
+                    return;
+                };
+                if text.is_some() || target_text.is_some() {
+                    // Keep the original captions visible and the source scene
+                    // cached; draw the transient bond above its underlays.
+                    *bond_preview = self.text_bond_preview(
+                        (origin, *id, *text),
+                        (end, target, target_text),
+                        preset,
+                    );
+                    return;
+                }
                 if preset != reshiki::bonds::BondPreset::Dotted
                     || id
                         .zip(target)
                         .is_some_and(|(a, b)| reshiki::bonds::hydrogen_endpoints(self.doc, a, b))
                 {
-                    let plane = id.filter(|_| target.is_none()).and_then(|id| {
-                        plane_endpoint(
-                            self.doc,
-                            id,
-                            self.camera.world(
-                                Point::new(cursor.x - bounds.x, cursor.y - bounds.y),
-                                bounds,
-                            ),
-                            self.bond_drawing.unconstrained(state.modifiers.alt()),
-                        )
-                        .map(|endpoint| (id, endpoint))
-                    });
+                    let plane = id
+                        .filter(|_| target.is_none() && target_text.is_none())
+                        .and_then(|id| {
+                            plane_endpoint(
+                                self.doc,
+                                id,
+                                self.camera.world(
+                                    Point::new(cursor.x - bounds.x, cursor.y - bounds.y),
+                                    bounds,
+                                ),
+                                self.bond_drawing.unconstrained(state.modifiers.alt()),
+                            )
+                            .map(|endpoint| (id, endpoint))
+                        });
                     if let Some((id, endpoint)) = plane {
                         if let Ok((drawing, added)) =
                             reshiki::projection::growth::place(self.doc, id, endpoint, "C", preset)

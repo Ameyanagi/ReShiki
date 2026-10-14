@@ -202,7 +202,9 @@ fn native_peer_credentials_identify_exact_child_and_detect_process_death() {
             .spawn()
             .unwrap(),
     );
-    let (mut stream, peer) = listener.accept(Duration::from_secs(3)).unwrap();
+    let (mut stream, peer) = listener
+        .accept(Duration::from_secs(3), Duration::from_secs(2))
+        .unwrap();
     assert_eq!(peer.pid, child.0.id());
     assert!(peer.is_alive());
     let mut bytes = [0; 4];
@@ -221,7 +223,9 @@ fn silent_peer_is_bounded_and_does_not_prevent_the_next_connection() {
     let mut listener = fixture.endpoint.listen(&election).unwrap();
     let client = fixture.endpoint.clone();
     let silent = thread::spawn(move || client.connect(Duration::from_secs(2)).unwrap());
-    let (mut stream, _) = listener.accept(Duration::from_secs(2)).unwrap();
+    let (mut stream, _) = listener
+        .accept(Duration::from_secs(2), Duration::from_secs(2))
+        .unwrap();
     let (_silent, _peer) = silent.join().unwrap();
     let before = Instant::now();
     assert!(stream.read_exact(&mut [0; 1]).is_err());
@@ -230,6 +234,10 @@ fn silent_peer_is_bounded_and_does_not_prevent_the_next_connection() {
     drop(_silent);
     let client = fixture.endpoint.clone();
     let next = thread::spawn(move || client.connect(Duration::from_secs(2)).unwrap());
-    assert!(listener.accept(Duration::from_secs(2)).is_ok());
+    assert!(
+        listener
+            .accept(Duration::from_secs(2), Duration::from_secs(2))
+            .is_ok()
+    );
     assert!(next.join().is_ok());
 }

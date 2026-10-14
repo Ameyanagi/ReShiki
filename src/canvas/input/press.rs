@@ -1,6 +1,7 @@
 //! Mouse presses on the paper: the context menu and the gesture a left press starts.
 
-use crate::canvas::hit::hit_selection;
+use crate::canvas::hit::{bond_text_at, hit_selection};
+use crate::canvas::pick::{HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::{
     Edit, Gesture, HandleClick, MoleculeCanvas, State, Tool, TransformDrag, World, tilt,
 };
@@ -17,7 +18,7 @@ impl MoleculeCanvas<'_> {
         canvas_bounds: Rectangle,
     ) -> Option<Action<Edit>> {
         let p = self.camera.world(point?, bounds);
-        let mut hit = hit_selection(self.doc, p, 10. / self.camera.zoom);
+        let mut hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
         if hit.is_empty() {
             hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
         }
@@ -65,14 +66,7 @@ impl MoleculeCanvas<'_> {
             return self.press_tilt(state, p, point);
         }
         if let Tool::StretchBond { fixed, moving } = self.tool {
-            if let Ok(plan) = reshiki::editing::reference::Stretch::new(self.doc, fixed, moving) {
-                let hit = hit_selection(self.doc, p, 10. / self.camera.zoom);
-                if hit.iter().any(|id| plan.ids.contains(id)) {
-                    state.gesture = Some(Gesture::StretchBond { start: p, plan });
-                    return Some(Action::publish(Edit::Hover(None)).and_capture());
-                }
-            }
-            return Some(Action::request_redraw().and_capture());
+            return self.press_stretch(state, p, fixed, moving);
         }
         if let Some(action) = self.press_arrow_handle(state, p) {
             return Some(action);
@@ -89,7 +83,7 @@ impl MoleculeCanvas<'_> {
     }
 
     fn press_tilt(&self, state: &mut State, p: World, point: Point) -> Option<Action<Edit>> {
-        let mut hit = hit_selection(self.doc, p, 10. / self.camera.zoom);
+        let mut hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
         if hit.is_empty() {
             hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
         }
@@ -123,6 +117,26 @@ impl MoleculeCanvas<'_> {
         Some(Action::publish(Edit::Hover(None)).and_capture())
     }
 
+    fn press_stretch(
+        &self,
+        state: &mut State,
+        p: World,
+        fixed: u64,
+        moving: u64,
+    ) -> Option<Action<Edit>> {
+        if let Some(plan) = state.scene.get_mut().stretch(self.doc, fixed, moving) {
+            let hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
+            if hit.iter().any(|id| plan.ids.contains(id)) {
+                state.gesture = Some(Gesture::StretchBond {
+                    start: p,
+                    plan: (*plan).clone(),
+                });
+                return Some(Action::publish(Edit::Hover(None)).and_capture());
+            }
+        }
+        Some(Action::request_redraw().and_capture())
+    }
+
     fn press_arrow_handle(&self, state: &mut State, p: World) -> Option<Action<Edit>> {
         if (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
             && self.selected.len() == 1
@@ -133,7 +147,7 @@ impl MoleculeCanvas<'_> {
                 .iter()
                 .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
             {
-                if let Some(index) = a.handle_at(p, 8.0 / self.camera.zoom) {
+                if let Some(index) = a.handle_at(p, self.camera.world_len(HANDLE_PICK_PX)) {
                     state.gesture = Some(Gesture::ArrowHandle { id: a.id, index });
                     return Some(Action::request_redraw().and_capture());
                 }
@@ -164,7 +178,8 @@ impl MoleculeCanvas<'_> {
                 .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
             {
                 if let Some(index) = a.marks.iter().position(|m| {
-                    a.position.offset(m.offset.x, m.offset.y).distance(p) < 8. / self.camera.zoom
+                    a.position.offset(m.offset.x, m.offset.y).distance(p)
+                        < self.camera.world_len(HANDLE_PICK_PX)
                 }) {
                     state.gesture = Some(Gesture::AtomMark { id: a.id, index });
                     return Some(Action::request_redraw().and_capture());
@@ -172,10 +187,14 @@ impl MoleculeCanvas<'_> {
             }
         }
         if self.tool == Tool::EditPoints {
-            if let Some(id) = self.doc.nearest(p, 10. / self.camera.zoom).filter(|id| {
-                self.doc.atom(*id).is_some_and(|a| a.attachment.is_some())
-                    && self.doc.abbreviation(*id).is_none()
-            }) {
+            if let Some(id) = self
+                .doc
+                .nearest(p, self.camera.world_len(PICK_RADIUS_PX))
+                .filter(|id| {
+                    self.doc.atom(*id).is_some_and(|a| a.attachment.is_some())
+                        && self.doc.abbreviation(*id).is_none()
+                })
+            {
                 state.gesture = Some(Gesture::Move {
                     start: p,
                     ids: vec![id],
@@ -192,7 +211,7 @@ impl MoleculeCanvas<'_> {
                 if let Some(handles) = g.path_handles() {
                     if let Some(handle) = handles
                         .into_iter()
-                        .filter(|h| h.point.distance(p) < 8. / self.camera.zoom)
+                        .filter(|h| h.point.distance(p) < self.camera.world_len(HANDLE_PICK_PX))
                         .min_by(|a, b| a.point.distance(p).total_cmp(&b.point.distance(p)))
                     {
                         state.gesture = Some(Gesture::PathPoint(crate::canvas::pen::PointDrag {
@@ -206,7 +225,7 @@ impl MoleculeCanvas<'_> {
                     continue;
                 }
                 let points = g.edit_points();
-                let hit = |q: &World| q.distance(p) < 8.0 / self.camera.zoom;
+                let hit = |q: &World| q.distance(p) < self.camera.world_len(HANDLE_PICK_PX);
                 let index = if g.kind == GraphicKind::Arc {
                     // Coincident full-circle endpoints must expose the end.
                     points.iter().rposition(hit)
@@ -252,7 +271,7 @@ impl MoleculeCanvas<'_> {
     }
 
     fn start_gesture(&self, state: &mut State, p: World) -> Option<Action<Edit>> {
-        let mut hit = hit_selection(self.doc, p, 10.0 / self.camera.zoom);
+        let mut hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
         if self.tool.selects() && hit.is_empty() {
             hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
         }
@@ -263,16 +282,29 @@ impl MoleculeCanvas<'_> {
                 self.doc.expand_groups(&hit)
             };
         }
+        let text = self
+            .tool
+            .bonds_from_text()
+            .then(|| bond_text_at(self.doc, p, self.camera.world_len(PICK_RADIUS_PX)))
+            .flatten();
+        if let Some(error) = text.and_then(|id| reshiki::atom_text::text_atom_refusal(self.doc, id))
+        {
+            state.gesture = None;
+            return Some(Action::publish(Edit::TextBondRefused(error)).and_capture());
+        }
+        let text_start = text.and_then(|id| reshiki::atom_text::text_atom_position(self.doc, id));
         state.gesture = match self.tool {
             Tool::Chain(mode) => {
-                let source = self.doc.nearest(p, 10.0 / self.camera.zoom);
+                let source = self.doc.nearest(p, self.camera.world_len(PICK_RADIUS_PX));
                 let start = source
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
+                    .or(text_start)
                     .unwrap_or(p);
                 Some(Gesture::Chain {
                     start,
                     pressed: p,
                     source,
+                    source_text: text,
                     points: vec![start],
                     snaking: mode == ChainMode::Snaking,
                     dragged: false,
@@ -304,10 +336,17 @@ impl MoleculeCanvas<'_> {
             } else {
                 Gesture::Select { start: p }
             }),
-            Tool::Atom if self.doc.nearest(p, 10.0 / self.camera.zoom).is_some() => {
+            Tool::Atom
+                if self
+                    .doc
+                    .nearest(p, self.camera.world_len(PICK_RADIUS_PX))
+                    .is_some() =>
+            {
                 Some(Gesture::Draw {
                     start: p,
-                    id: self.doc.nearest(p, 10.0 / self.camera.zoom),
+                    pressed: p,
+                    id: self.doc.nearest(p, self.camera.world_len(PICK_RADIUS_PX)),
+                    text: None,
                 })
             }
             Tool::Bond(_)
@@ -316,18 +355,27 @@ impl MoleculeCanvas<'_> {
             | Tool::Hash
             | Tool::Wavy
             | Tool::Arrow => Some(Gesture::Draw {
-                start: p,
+                start: text_start.unwrap_or(p),
+                pressed: p,
+                text,
                 id: if self.tool == Tool::Arrow {
                     None
                 } else {
-                    self.doc.nearest(p, 10.0 / self.camera.zoom)
+                    self.doc.nearest(p, self.camera.world_len(PICK_RADIUS_PX))
                 },
             }),
             Tool::Ring | Tool::RingPreset(_) | Tool::Template => Some(Gesture::Ring {
                 start: p,
-                attached: self.doc.nearest(p, 10.0 / self.camera.zoom).is_some()
-                    || reshiki::editing::nearest_bond(self.doc, p, 10.0 / self.camera.zoom)
-                        .is_some(),
+                attached: self
+                    .doc
+                    .nearest(p, self.camera.world_len(PICK_RADIUS_PX))
+                    .is_some()
+                    || reshiki::editing::nearest_bond(
+                        self.doc,
+                        p,
+                        self.camera.world_len(PICK_RADIUS_PX),
+                    )
+                    .is_some(),
             }),
             _ => return Some(Action::publish(Edit::Click(p)).and_capture()),
         };

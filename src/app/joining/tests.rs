@@ -203,7 +203,9 @@ fn first_and_second_chelate_contacts_are_in_place_cancellable_and_one_undo_each(
 #[test]
 fn coordination_projection_flip_changes_tip_and_never_chemical_direction() {
     let (mut app, co, n, _) = coordination();
-    app.tab.doc = reshiki::templates::coordinate_atoms(&app.tab.doc, n, co).unwrap();
+    app.tab.doc = reshiki::joining::coordinate_atoms(&app.tab.doc, n, co)
+        .unwrap()
+        .into_document(&app.tab.doc);
     app.tab.selected = vec![n, co];
     let before = app.tab.doc.clone();
     let _ = app.update(Message::ApplyBondPreset(reshiki::bonds::BondPreset::Wedge));
@@ -234,7 +236,8 @@ fn coordination_projection_flip_changes_tip_and_never_chemical_direction() {
 #[tokio::test]
 async fn coordination_export_reports_the_measured_drawing_limits() -> Result<(), String> {
     let (app, co, n, _) = coordination();
-    let mut doc = reshiki::templates::coordinate_atoms(&app.tab.doc, n, co)?;
+    let mut doc =
+        reshiki::joining::coordinate_atoms(&app.tab.doc, n, co)?.into_document(&app.tab.doc);
     let bond = doc.bonds.iter_mut().find(|b| b.order == 5).unwrap();
     reshiki::bonds::BondPreset::Wedge.apply(bond);
     assert!(bond.reverse_projection());
@@ -465,4 +468,507 @@ fn native_fixture_visual_center_uses_recomputed_labels() {
             "expected_bond_count": 3,
         })
     );
+}
+
+#[test]
+fn join_routes_statuses_and_generic_admission_match_the_baseline_table() {
+    use super::super::shortcuts;
+    use reshiki::atom_text::{self, Mode};
+
+    struct Case {
+        name: &'static str,
+        elements: &'static [&'static str],
+        bonds: &'static [(u64, u64)],
+        selected: &'static [u64],
+        route: JoinPlan,
+        merge: bool,
+        generic_sites: &'static [u64],
+    }
+    let cases = [
+        Case {
+            name: "share atom",
+            elements: &["C", "C"],
+            bonds: &[],
+            selected: &[1, 2],
+            route: JoinPlan::ShareAtom {
+                source: 1,
+                target: 2,
+            },
+            merge: false,
+            generic_sites: &[1, 2],
+        },
+        Case {
+            name: "coordinate donor first",
+            elements: &["N", "Co"],
+            bonds: &[],
+            selected: &[1, 2],
+            route: JoinPlan::Coordinate { donor: 1, metal: 2 },
+            merge: false,
+            generic_sites: &[1],
+        },
+        Case {
+            name: "coordinate metal first",
+            elements: &["N", "Co"],
+            bonds: &[],
+            selected: &[2, 1],
+            route: JoinPlan::Coordinate { donor: 1, metal: 2 },
+            merge: false,
+            generic_sites: &[1],
+        },
+        Case {
+            name: "fuse bonds in document order",
+            elements: &["C", "C", "C", "C"],
+            bonds: &[(3, 4), (1, 2)],
+            selected: &[4, 2, 3, 1],
+            route: JoinPlan::FuseBond {
+                source: (3, 4),
+                target: (1, 2),
+            },
+            merge: false,
+            generic_sites: &[3, 1],
+        },
+        Case {
+            name: "merge four atoms with shared bond endpoint",
+            elements: &["C", "C", "C", "C"],
+            bonds: &[(1, 2), (2, 3)],
+            selected: &[1, 2, 3, 4],
+            route: JoinPlan::Merge,
+            merge: false,
+            generic_sites: &[2],
+        },
+        Case {
+            name: "merge four atoms with three bonds",
+            elements: &["C", "C", "C", "C"],
+            bonds: &[(1, 2), (2, 3), (3, 4)],
+            selected: &[1, 2, 3, 4],
+            route: JoinPlan::Merge,
+            merge: false,
+            generic_sites: &[3],
+        },
+        Case {
+            name: "merge three atoms through Join",
+            elements: &["C", "C", "C"],
+            bonds: &[],
+            selected: &[3, 1, 2],
+            route: JoinPlan::Merge,
+            merge: false,
+            generic_sites: &[1],
+        },
+        Case {
+            name: "merge three atoms explicitly",
+            elements: &["C", "C", "C"],
+            bonds: &[],
+            selected: &[3, 1, 2],
+            route: JoinPlan::Merge,
+            merge: true,
+            generic_sites: &[1],
+        },
+    ];
+    for case in cases {
+        for generic_site in
+            std::iter::once(None).chain(case.generic_sites.iter().copied().map(Some))
+        {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            app.tab.doc = Document::default();
+            for (element, x) in case.elements.iter().zip([0., 42., 180., 222.]) {
+                app.tab.doc.add_atom(element, Point::new(x, 0.));
+            }
+            for &(a, b) in case.bonds {
+                app.tab.doc.add_bond(a, b, 1, "plain");
+            }
+            if let Some(id) = generic_site {
+                app.tab.doc = atom_text::apply(&app.tab.doc, id, "[C,N]", Mode::Auto).unwrap();
+            }
+            app.tab.selected = case.selected.to_vec();
+            let message = Message::Shortcut(if case.merge {
+                shortcuts::Action::MergeAtoms
+            } else {
+                shortcuts::Action::Join
+            });
+            let blocked = generic_site.is_some();
+            assert_eq!(
+                app.generic_join_rejection(&message),
+                blocked,
+                "{} {generic_site:?}",
+                case.name
+            );
+            let plan = if case.merge {
+                Some(JoinPlan::Merge)
+            } else {
+                reshiki::joining::join_plan(&app.tab.doc, &app.tab.selected)
+            };
+            assert_eq!(plan, Some(case.route), "{} {generic_site:?}", case.name);
+            assert_eq!(
+                case.route.generic_blocked(&app.tab.doc, &app.tab.selected),
+                blocked,
+                "{} {generic_site:?}",
+                case.name
+            );
+            let before = app.tab.doc.clone();
+            let expected = if blocked {
+                (before.clone(), app.tab.selected.clone())
+            } else {
+                match case.route {
+                    JoinPlan::Coordinate { donor, metal } => (
+                        reshiki::joining::coordinate_atoms(&before, donor, metal)
+                            .unwrap()
+                            .into_document(&before),
+                        vec![donor, metal],
+                    ),
+                    JoinPlan::ShareAtom { source, target } => Prepared::new(&before, &[source])
+                        .unwrap()
+                        .place(
+                            before.atom(target).unwrap().position,
+                            None,
+                            1.,
+                            Anchor::Atom(source),
+                            Connection::ShareAtom,
+                        )
+                        .unwrap(),
+                    JoinPlan::FuseBond { source, target } => {
+                        let a = before.atom(target.0).unwrap().position;
+                        let b = before.atom(target.1).unwrap().position;
+                        Prepared::new(&before, &[source.0, source.1])
+                            .unwrap()
+                            .place(
+                                Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.),
+                                None,
+                                1.,
+                                Anchor::Bond(source.0, source.1),
+                                Connection::FuseBond,
+                            )
+                            .unwrap()
+                    }
+                    JoinPlan::Merge => app.merge_selected_atoms().unwrap(),
+                }
+            };
+            let history = app.tab.history.undo_frames().len();
+            let revision = app.tab.revision;
+            let _ = app.update(message);
+            assert_eq!(
+                app.error, blocked,
+                "{} {generic_site:?}: {}",
+                case.name, app.status
+            );
+            assert_eq!(
+                app.status,
+                if blocked {
+                    reshiki::generic::JOIN_NOTICE
+                } else if case.merge {
+                    "Merged selected atoms"
+                } else {
+                    "Joined selected atoms or bonds"
+                },
+                "{} {generic_site:?}",
+                case.name
+            );
+            assert_eq!(app.tab.doc, expected.0, "{} {generic_site:?}", case.name);
+            assert_eq!(
+                app.tab.selected, expected.1,
+                "{} {generic_site:?}",
+                case.name
+            );
+            assert_eq!(
+                app.tab.doc != before,
+                !blocked,
+                "{} {generic_site:?}",
+                case.name
+            );
+            assert_eq!(
+                app.tab.history.undo_frames().len(),
+                history + usize::from(!blocked),
+                "{} {generic_site:?}",
+                case.name
+            );
+            assert_eq!(
+                app.tab.revision,
+                revision + u64::from(!blocked),
+                "{} {generic_site:?}",
+                case.name
+            );
+            assert!(!app.tab.history.can_redo());
+        }
+    }
+}
+
+#[test]
+fn repeated_canvas_coordination_reports_duplicate_without_another_history_frame() {
+    let (mut app, co, donor, _) = coordination();
+    let original = app.tab.doc.clone();
+    let point = app.tab.doc.atom(co).unwrap().position;
+    let history = app.tab.history.undo_frames().len();
+    for (status, growth) in [
+        ("Donor → metal contact added in place · Undo removes it", 1),
+        ("This donor is already coordinated to that metal", 1),
+    ] {
+        let before = app.tab.doc.clone();
+        app.tab.selected = vec![donor];
+        let _ = app.update(Message::Join(Action::BeginCoordination));
+        let _ = app.update(Message::Join(Action::Anchor(Anchor::Atom(donor))));
+        let _ = app.update(Message::Canvas(Edit::Template(point, None)));
+        assert_eq!(app.status, status);
+        assert!(!app.error);
+        assert!(app.tab.joining.is_none());
+        assert_eq!(app.tool, Tool::Select);
+        assert_eq!(app.tab.doc.atoms, original.atoms);
+        assert_eq!(app.tab.doc.bonds.len(), original.bonds.len() + 1);
+        assert_eq!(app.tab.history.undo_frames().len(), history + growth);
+        if before != original {
+            assert_eq!(app.tab.doc, before);
+        }
+    }
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+}
+
+async fn label_refresh_completion(app: &mut App) -> Message {
+    use iced::futures::StreamExt;
+
+    app.tab.labels_dirty = true;
+    let mut task = iced_runtime::task::into_stream(app.start_label_refresh())
+        .expect("A real label calculation starts");
+    let Some(iced_runtime::Action::Output(labels)) = task.next().await else {
+        panic!("The label task must return its tagged completion");
+    };
+    assert!(matches!(&labels, Message::LabelsReady(_, Ok(_))));
+    labels
+}
+
+#[tokio::test]
+async fn duplicate_canvas_coordination_after_a_label_refresh_keeps_the_refreshed_labels_and_records_nothing()
+ {
+    let (mut app, co, donor, _) = coordination();
+    let point = app.tab.doc.atom(co).unwrap().position;
+    let reshiki::joining::Coordination::Added(contact) =
+        reshiki::joining::coordinate_atoms(&app.tab.doc, donor, co).unwrap()
+    else {
+        panic!("The first contact is added");
+    };
+    app.tab.doc = contact;
+    app.tab.doc.atom_mut(donor).unwrap().label_h = 0;
+    app.tab.selected = vec![donor];
+    let _ = app.update(Message::Join(Action::BeginCoordination));
+    let _ = app.update(Message::Join(Action::Anchor(Anchor::Atom(donor))));
+    // A label calculation of this revision lands while the preparation is open.
+    let before_refresh = app.tab.doc.clone();
+    let labels = label_refresh_completion(&mut app).await;
+    let revision = app.tab.revision;
+    let _ = app.update(labels);
+    assert_eq!(app.tab.revision, revision);
+    let refreshed = app.tab.doc.clone();
+    assert_eq!(refreshed.atom(donor).unwrap().label_h, 2);
+    assert_ne!(refreshed, before_refresh);
+    assert_eq!(
+        app.tab.doc,
+        app.tab.joining.as_ref().unwrap().prepared.original,
+        "The refresh also updates the open preparation"
+    );
+    let history = app.tab.history.undo_frames().len();
+    let _ = app.update(Message::Canvas(Edit::Template(point, None)));
+    assert_eq!(
+        app.status,
+        "This donor is already coordinated to that metal"
+    );
+    assert!(!app.error);
+    assert!(app.tab.joining.is_none());
+    assert_eq!(app.tab.doc, refreshed);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().len(), history);
+}
+
+#[tokio::test]
+async fn move_and_attach_after_a_label_refresh_keeps_the_refreshed_labels_and_records_one_move() {
+    use iced::futures::StreamExt;
+
+    let mut app = ready();
+    let moving_nitrogen = 3;
+    app.tab.doc.atom_mut(moving_nitrogen).unwrap().element = "N".into();
+    let base_oxygen = app.tab.doc.add_atom("O", Point::new(-42., 0.));
+    app.tab.doc.add_bond(1, base_oxygen, 1, "plain");
+    let before_refresh = app.tab.doc.clone();
+    let _ = app.update(Message::Join(Action::Begin));
+    let _ = app.update(Message::Join(Action::Anchor(Anchor::Atom(2))));
+    let labels = label_refresh_completion(&mut app).await;
+    let revision = app.tab.revision;
+    let epoch = app.tab.file_epoch;
+    let history = app.tab.history.undo_frames().len();
+    let _ = app.update(labels);
+    let refreshed = app.tab.doc.clone();
+    assert_eq!(refreshed.atom(moving_nitrogen).unwrap().label_h, 2);
+    assert_eq!(refreshed.atom(base_oxygen).unwrap().label_h, 1);
+    for id in [moving_nitrogen, base_oxygen] {
+        assert_ne!(
+            refreshed.atom(id).unwrap().label_h,
+            before_refresh.atom(id).unwrap().label_h
+        );
+    }
+    let state = app.tab.joining.as_ref().unwrap();
+    assert_eq!(state.prepared.original, refreshed);
+    assert_eq!(
+        state.prepared.fragment.atom(moving_nitrogen),
+        refreshed.atom(moving_nitrogen)
+    );
+    assert_eq!(
+        state.prepared.base.atom(base_oxygen),
+        refreshed.atom(base_oxygen)
+    );
+    assert_eq!((state.revision, state.epoch), (revision, epoch));
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().len(), history);
+
+    let placement = app.update(Message::Canvas(Edit::Template(Point::default(), None)));
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.joining.is_none());
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.tab.revision, revision + 1);
+    assert_eq!(app.tab.history.undo_frames().len(), history + 1);
+    // Adding the new bond invalidates chemical labels. Complete the normal
+    // post-placement refresh before checking the remote heteroatom labels.
+    let mut task = iced_runtime::task::into_stream(placement)
+        .expect("The move starts its next label calculation");
+    let Some(iced_runtime::Action::Output(labels)) = task.next().await else {
+        panic!("The move must return its label completion");
+    };
+    assert!(matches!(&labels, Message::Tab(_, message)
+        if matches!(&**message, Message::LabelsReady(_, Ok(_)))));
+    let _ = app.update(labels);
+    for id in [moving_nitrogen, base_oxygen] {
+        assert_eq!(
+            app.tab.doc.atom(id).unwrap().label_h,
+            refreshed.atom(id).unwrap().label_h
+        );
+    }
+    assert_ne!(
+        app.tab.doc.atom(moving_nitrogen).unwrap().position,
+        refreshed.atom(moving_nitrogen).unwrap().position
+    );
+    assert_eq!(app.tab.doc.atom(base_oxygen), refreshed.atom(base_oxygen));
+    assert_eq!(app.tab.doc.bonds.len(), refreshed.bonds.len() + 1);
+    assert_eq!(app.tab.revision, revision + 1);
+    assert_eq!(app.tab.history.undo_frames().len(), history + 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, refreshed);
+    assert_eq!(app.tab.history.undo_frames().len(), history);
+}
+
+#[tokio::test]
+async fn stale_label_refresh_changes_neither_the_drawing_nor_the_open_preparation() {
+    for mode in [Connection::Connect, Connection::Coordinate] {
+        let (mut app, _, donor, _) = coordination();
+        app.tab.doc.atom_mut(donor).unwrap().label_h = 0;
+        let oxygen = app.tab.doc.add_atom("O", Point::new(-42., 0.));
+        let _ = app.update(Message::Join(Action::Begin));
+        let _ = app.update(Message::Join(Action::Mode(mode)));
+        let _ = app.update(Message::Join(Action::Anchor(Anchor::Atom(donor))));
+        let labels = label_refresh_completion(&mut app).await;
+        let Message::LabelsReady(_, Ok(computed)) = &labels else {
+            panic!("The label task must succeed");
+        };
+        let drawing = app.tab.doc.clone();
+        let mut would_refresh = drawing.clone();
+        computed.apply(&mut would_refresh);
+        for id in [donor, oxygen] {
+            assert_eq!(would_refresh.atom(id).unwrap().label_h, 2);
+            assert_ne!(would_refresh.atom(id), drawing.atom(id));
+        }
+        let state = app.tab.joining.as_ref().unwrap();
+        let prepared = state.prepared.clone();
+        let identity = (state.revision, state.epoch);
+        app.tab.revision = app.tab.revision.wrapping_add(1);
+        let history = app.tab.history.undo_frames().len();
+        assert!(!app.tab.labels_dirty);
+        // Deliver through the result handler so the retry flag is visible
+        // before update_front automatically starts the next calculation.
+        let _ = app.update_document_result(labels);
+        assert_eq!(app.tab.doc, drawing);
+        let state = app.tab.joining.as_ref().unwrap();
+        assert_eq!(state.prepared.original, prepared.original);
+        assert_eq!(state.prepared.fragment, prepared.fragment);
+        assert_eq!(state.prepared.base, prepared.base);
+        assert_eq!((state.revision, state.epoch), identity);
+        assert_eq!(app.tab.history.undo_frames().len(), history);
+        assert!(app.tab.label_refresh.pending_key().is_none());
+        assert!(app.tab.labels_dirty);
+    }
+}
+
+#[test]
+fn coordination_status_pins_added_and_duplicate_with_and_without_a_mark() {
+    for (outcome, marked, status) in [
+        (
+            Coordination::Added(Document::default()),
+            false,
+            "Donor → metal contact added in place · Undo removes it",
+        ),
+        (
+            Coordination::AlreadyPresent,
+            false,
+            "This donor is already coordinated to that metal",
+        ),
+        (
+            Coordination::Added(Document::default()),
+            true,
+            "Marked donor → metal contact added · Undo removes it",
+        ),
+        (
+            Coordination::AlreadyPresent,
+            true,
+            "This marked donor is already coordinated to that metal",
+        ),
+    ] {
+        assert_eq!(coordination_status(&outcome, marked), status);
+    }
+}
+
+#[test]
+fn coordination_panel_names_the_donor_and_uses_one_short_hint() {
+    let (mut app, _, n, _) = coordination();
+    let _ = app.update(Message::Join(Action::BeginCoordination));
+    let state = app.tab.joining.as_ref().unwrap();
+    assert_eq!(anchor_label(state), format!("Donor: N (atom {n})"));
+    let texts = join_mode_texts(Connection::Coordinate);
+    assert_eq!(texts.title, "Coordinate in place");
+    assert_eq!(
+        texts.intro,
+        "Pick the donor (N, O, S or P) in the preview, then click a metal on the drawing."
+    );
+    assert_eq!(texts.instruction, None, "The intro says what a click does");
+    assert_eq!(
+        texts.footer,
+        "Atoms stay in place · Escape cancels · One Undo step per contact"
+    );
+    assert_eq!(texts.bar_subtitle, "Pick a donor, then a metal");
+    // The mode pick list switches back to Move & attach and its wording.
+    let _ = app.update(Message::Join(Action::Mode(Connection::Connect)));
+    let state = app.tab.joining.as_ref().unwrap();
+    assert_eq!(anchor_label(state), format!("Atom {n}"));
+    let texts = join_mode_texts(state.mode);
+    assert_eq!(texts.title, "Move & attach");
+    assert_eq!(texts.instruction, Some(CONNECT_DETAIL));
+}
+
+#[test]
+fn row_and_menu_share_the_attach_and_coordinate_commands() {
+    let mut app = ready();
+    let row: Vec<_> = app
+        .selected_attach_commands()
+        .into_iter()
+        .map(|c| (c.label, c.menu, c.enabled))
+        .collect();
+    assert_eq!(
+        row,
+        [
+            ("Move & attach…", "Move & attach…", true),
+            ("Coordinate in place…", "Coordinate in place…", true)
+        ]
+    );
+    let row_labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
+    assert!(row_labels.contains(&"Coordinate in place…"));
+    assert!(
+        row_labels.contains(&"Coordinate }"),
+        "Keyboard drawing keeps its own command"
+    );
+    app.tab.selected.clear();
+    assert!(app.selected_attach_commands().iter().all(|c| !c.enabled));
 }

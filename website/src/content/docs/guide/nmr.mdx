@@ -1,0 +1,55 @@
+---
+title: Predict NMR shifts
+description: Estimate ¹H and ¹³C chemical shifts for one molecule, with each value linked to its atom.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+Available in Nightly builds; not in ReShiki 0.11.0.
+
+NMR prediction estimates ¹H and ¹³C chemical shifts for one molecule from measured reference data. It runs on your computer.
+
+## Predict the shifts
+
+1. Select an atom of the molecule. If the drawing holds only one molecule, you can leave the selection empty.
+2. Open **Properties → Molecular properties → Predict NMR…**. The results open in the **NMR prediction** palette at the right edge of the window.
+3. Choose **¹H** or **¹³C**.
+4. Click a row in the table, or a label above the plot, to select its atom in the drawing. Hydrogens drawn on that atom are selected too.
+
+<Screenshot
+  src="/manual/nmr-prediction.png"
+  alt="The NMR prediction palette for ethyl acetate with ¹H chosen: a stick plot and three rows, with the C #2 · 2H row at 4.160 ppm selected together with its atom in the drawing."
+/>
+
+## Move or dock the palette
+
+- Drag the title to move the palette. Drag the corner glyph (◢) to resize it.
+- Choose **Dock** to put the report in the inspector, under **Predict → NMR**. **Undock** returns it to the palette. Clicking the **Predict** tab also docks the report.
+- **−** collapses the floating palette, and **+** expands it again. **×** closes the report.
+- You can keep drawing while the report is open. Opening, moving or docking it never changes the zoom or the view.
+
+## Show the results on the drawing
+
+Turn on **Show labels** to write the results next to their atoms. The menu beside it offers **Atom numbers** (`#3`), **ppm** (`1.280 ppm`) or **Both** (`#3 · 1.280 ppm`). The labels move with their atoms. They never appear in exports or the Undo history.
+
+## Check and keep the results
+
+**▸ Details** adds a line under each row, for example `Shell 4 · 17 references · SD 0.064 ppm`. It also shows the method, data version, conditions, limitations and data credit, and offers **Hide plot** / **Show plot**. In the floating palette it adds **Reset position** and the **−** / **+** size buttons.
+
+**Copy** copies the shifts as tab-separated text. **Export…** saves the same text as a `.tsv` file. Both include the method, data version, conditions, limitations and data credit.
+
+A chemical change clears the results and labels. Moving atoms or changing the drawing style keeps them. To predict another molecule, select it and choose **Predict NMR…** again.
+
+## What the numbers mean
+
+- Each value is the median of measured CDCl₃ shifts for atoms in similar environments.
+- **Shell** is how far around the atom the match reaches. The number of **references** counts the reference molecules behind the value.
+- **SD** is the spread of those reference values. It is not an error bar.
+- A ¹H row such as `C #3 · 2H` is one value for all hydrogens on atom 3, not separate peaks.
+- Stick heights in the plot do not show intensity or integration. Couplings and multiplets are not predicted.
+- Only hydrogens on carbon get a value. O–H, N–H and other exchangeable hydrogens do not.
+- Some atoms show no value when there is too little reference data, and the row says why. In ethanol's ¹H result, only the CH₃ group gets a value.
+- E/Z isomers, relative configurations and stereoisomers get the same values.
+- Molecules of up to 128 atoms of H, C, N, O, F, P, S, Cl, Br and I are supported. Charged molecules, radicals, metals and labels for less common isotopes, such as ²H or ¹³C, are not.
+
+[Method, data source and validation →](/developer/nmr-prediction/)

@@ -18,6 +18,7 @@ use std::{collections::HashMap, sync::LazyLock};
 pub const LIMIT: usize = 16 * 1024 * 1024;
 const MAX_OBJECTS: usize = 100_000;
 const MAX_PROPERTIES: usize = 1_000_000;
+const MAX_ATOMIC_NUMBER: u16 = 118;
 const HEADER: &[u8] = b"VjCD0100\x04\x03\x02\x01\0\0\0\0\0\0\0\0\0\0";
 type Result<T> = std::result::Result<T, String>;
 
@@ -128,14 +129,20 @@ fn integer<T: std::str::FromStr>(text: &str) -> Result<T> {
         .parse()
         .map_err(|_| "Drawing integer exceeds the binary format range".into())
 }
-fn external_connection_number(name: &str, node_type: Option<&str>, number: &str) -> Result<()> {
+pub(crate) fn external_connection_number(
+    name: &str,
+    node_type: Option<&str>,
+    number: &str,
+) -> Result<i8> {
     if name != "n" || node_type != Some("ExternalConnectionPoint") {
         return Err("ExternalConnectionNum requires an external connection point".into());
     }
-    if !number.trim().parse::<i8>().is_ok_and(|number| number > 0) {
-        return Err("ExternalConnectionNum must be a positive signed byte".into());
-    }
-    Ok(())
+    number
+        .trim()
+        .parse::<i8>()
+        .ok()
+        .filter(|number| *number > 0)
+        .ok_or_else(|| "ExternalConnectionNum must be a positive signed byte".into())
 }
 fn finite(text: &str) -> Result<f64> {
     let n: f64 = text.trim().parse().map_err(|_| "Invalid drawing number")?;

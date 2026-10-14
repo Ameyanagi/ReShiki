@@ -81,7 +81,7 @@ The frozen source manifest verified all 2,831 recorded files unchanged after
 validation. The successful JSON build reported all 17 owned compiler artifacts
 as `fresh:false`; the executable depfile identified 631 owned inputs. The
 immutable raw executable and signed native bundle match the
-[original provenance receipt](../../tests/fixtures/molecule-name-label/validation/bundle-provenance.json.raw).
+[original provenance receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label/validation/bundle-provenance.json.raw).
 The bundle contains one native executable and no Java payload.
 
 | Check                                        | Result                                                   |
@@ -114,3 +114,11 @@ reproduction commands and raw compiler/test output. Failed attempts remain
 preserved: an ambiguous macro import, an inherited nonexistent stereo-test
 field, packaging under Python without `tomllib`, and a missing InChI test-helper
 override. Their fixes and successful reruns are recorded separately.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [tests/fixtures/molecule-name-label](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label) on the evidence archive branch.
+
+| Archived files                                                                                                                                     | What they record                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [tests/fixtures/molecule-name-label](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/tests/fixtures/molecule-name-label) | Original exact-source build and signed-bundle provenance for the compact Import Name review. |

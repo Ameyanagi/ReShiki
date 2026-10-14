@@ -350,6 +350,7 @@ impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
 
 /// A focusable selector with the same field chrome as the existing pick lists.
 /// Its app-owned popup choices share real mouse, keyboard and native actions.
+/// A caller that disables it (`on_press_maybe(None)`) gets muted text.
 pub(super) fn choice_anchor(
     id: &'static str,
     name: String,
@@ -392,7 +393,11 @@ pub(super) fn choice_anchor(
         );
         iced::widget::button::Style {
             background: Some(field.background),
-            text_color: field.text_color,
+            text_color: if status == iced::widget::button::Status::Disabled {
+                field.text_color.scale_alpha(0.4)
+            } else {
+                field.text_color
+            },
             border: field.border,
             ..Default::default()
         }

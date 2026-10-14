@@ -14,16 +14,14 @@ static ALLOCATOR: reshiki_process_heap::BoundedHeap = reshiki_process_heap::Boun
 fn main() -> anyhow::Result<()> {
     // Chemical helpers relaunch current_exe. Dispatch before creating Tokio,
     // just like the application, so the frozen benchmark runner is sufficient.
-    match std::env::args_os().nth(1).as_deref() {
-        Some(flag) if flag == std::ffi::OsStr::new("--geometry-worker") => {
-            reshiki::geometry::worker::run();
-            return Ok(());
-        }
-        Some(flag) if flag == std::ffi::OsStr::new("--inchi-worker") => {
-            reshiki::chemistry::inchi::worker::run();
-            return Ok(());
-        }
-        _ => {}
+    match std::env::args_os()
+        .nth(1)
+        .as_deref()
+        .and_then(reshiki::workers::run)
+    {
+        Some(0) => return Ok(()),
+        Some(code) => std::process::exit(code),
+        None => {}
     }
     tokio::runtime::Runtime::new()?.block_on(benchmark())
 }

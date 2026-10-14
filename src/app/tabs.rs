@@ -3,6 +3,7 @@
 use super::document_tab::{DocumentTab, TabId};
 use super::workspace::{caret, control, hover_hint, text_width};
 use super::{App, Job, Message, Pending};
+use crate::session::same_file;
 use iced::widget::{Space, button, column, container, hover, row, text, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Task, Theme};
 use std::path::{Path, PathBuf};
@@ -58,14 +59,6 @@ const DOT: f32 = 7.;
 const SPACING: f32 = 6.;
 /// The width of the + and ▾ buttons, which share a place.
 const BUTTON: f32 = 24.;
-
-/// Two paths name the same file, also through links or different spellings.
-fn same_file(a: &Path, b: &Path) -> bool {
-    a == b
-        || std::fs::canonicalize(a)
-            .ok()
-            .is_some_and(|a| std::fs::canonicalize(b).ok() == Some(a))
-}
 
 /// Which tabs show when the strip is `room` wide, and the width limit for
 /// tabs of natural widths `widths`. Wide tabs shrink first. Below the minimum
@@ -231,7 +224,8 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
-        self.tab.arrow_source = None;
+        self.clear_bond_text_hint();
+        self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
         self.pause_optimization();
@@ -678,33 +672,9 @@ impl App {
     }
 }
 
-/// Engine and clipboard results that change a drawing, dropped for a closed tab.
+/// Results owned by a drawing (see `results`): delivered to their tab, dropped for a closed tab.
 pub(super) fn document_result(message: &Message) -> bool {
-    use super::{assistant, document_styles, import, pictures, printing};
-    matches!(
-        message,
-        Message::EngineDone { .. }
-            | Message::Optimization(super::optimization::Action::WorkerDone(..))
-            | Message::Nmr(super::nmr::Action::Finished(..) | super::nmr::Action::Exported(..))
-            | Message::Exported(_)
-            | Message::FigureExported(_)
-            | Message::Printing(printing::Action::Prepared(..) | printing::Action::Finished(..))
-            | Message::DrawingStyle(
-                document_styles::Action::Loaded(..) | document_styles::Action::Saved(..)
-            )
-            | Message::Assistant(assistant::Action::Poll | assistant::Action::Done { .. })
-            | Message::LabelsReady(..)
-            | Message::Mapping(super::reaction_mapping::Action::Ready(..))
-            | Message::InspectorAction(super::inspector::Action::PropertiesCalculated(..))
-            | Message::Imports(import::Action::Loaded(..))
-            | Message::Naming(super::naming::Action::Finished(..))
-            | Message::ClipboardWritten { .. }
-            | Message::CopyAsPrepared(..)
-            | Message::CopyAsWritten(..)
-            | Message::ClipboardRead { .. }
-            | Message::Pasted(_)
-            | Message::Pictures(pictures::Action::Loaded(..))
-    )
+    super::results::async_result(message) == Some(super::results::Owner::Document)
 }
 
 /// An exported structure file is written even after its tab left the front.

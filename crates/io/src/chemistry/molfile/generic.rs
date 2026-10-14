@@ -2,7 +2,7 @@
 use super::{Error, invalid};
 use crate::{
     document::Document,
-    generic::{Alternative, RepeatCount, RepeatPattern},
+    generic::{Alternative, EXPANDABLE_FLIPS, RepeatCount},
 };
 use std::collections::HashMap;
 pub(super) fn restore_output(mut mol: String, doc: &Document) -> Result<String, Error> {
@@ -51,16 +51,12 @@ pub(super) fn restore_output(mut mol: String, doc: &Document) -> Result<String, 
             for choice in &site.choices {
                 match choice {
                     Alternative::Element { symbol, isotope } => {
-                        symbols.push(match (symbol.as_str(), *isotope) {
-                            ("H", 2) => "D",
-                            ("H", 3) => "T",
-                            (_, 0) => symbol.as_str(),
-                            _ => {
-                                return Err(invalid(
-                                    "MOL element-list isotope requires CDXML or native ReShiki",
-                                ));
-                            }
-                        })
+                        if *isotope != 0 && !(symbol == "H" && matches!(*isotope, 2 | 3)) {
+                            return Err(invalid(
+                                "MOL element-list isotope requires CDXML or native ReShiki",
+                            ));
+                        }
+                        symbols.push(choice.display_symbol());
                     }
                     _ => {
                         return Err(invalid(
@@ -125,7 +121,7 @@ pub(super) fn restore_output(mut mol: String, doc: &Document) -> Result<String, 
                     "Crossing-bond bracket associations require CDXML, CDX or native ReShiki",
                 ));
             }
-            if !matches!(unit.flip.as_str(), "" | "Unspecified" | "NoFlip") {
+            if !EXPANDABLE_FLIPS.contains(&unit.flip.as_str()) {
                 return Err(invalid(
                     "Polymer flip semantics require CDXML or native ReShiki",
                 ));
@@ -159,12 +155,7 @@ pub(super) fn restore_output(mut mol: String, doc: &Document) -> Result<String, 
             let mut bonds = Vec::new();
             for c in &unit.crossings {
                 let n = doc
-                    .bonds
-                    .iter()
-                    .position(|b| {
-                        (b.a == c.inside && b.b == c.outside)
-                            || (b.b == c.inside && b.a == c.outside)
-                    })
+                    .bond_position(c.inside, c.outside)
                     .ok_or_else(|| invalid("Missing polymer crossing bond"))?;
                 bonds.push((n + 1).to_string());
             }
@@ -186,11 +177,7 @@ pub(super) fn restore_output(mut mol: String, doc: &Document) -> Result<String, 
                 }
                 None
             };
-            let connect = match unit.pattern {
-                RepeatPattern::HeadToTail => "HT",
-                RepeatPattern::HeadToHead => "HH",
-                RepeatPattern::EitherUnknown => "EU",
-            };
+            let connect = unit.pattern.molfile_connect();
             let mut record = format!(
                 "M  V30 {} {kind} 0 ATOMS=({} {}) XBONDS=({} {}) CONNECT={connect} LABEL=\"{label}\"",
                 i + 1,

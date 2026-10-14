@@ -1,8 +1,9 @@
 # Pure Rust chemical naming: native review
 
-Under review; not included in ReShiki 0.11.0. This editor integration is
-stacked on the separately licensed Rust parser in
-[PR #291](https://github.com/Ameyanagi/ReShiki/pull/291). Both naming directions
+Merged, unreleased; not included in ReShiki 0.11.0. This editor integration
+builds on the separately licensed Rust parser in
+[PR #291](https://github.com/Ameyanagi/ReShiki/pull/291) and was merged through
+[Integration PR #298](https://github.com/Ameyanagi/ReShiki/pull/298). Both naming directions
 run locally in the installed Rust executable, with no Java, JAR, Python parser
 or naming API. The [guide](../chemical-naming-rust.md) states forward and
 reverse coverage; comprehensive IUPAC or preferred-name selection is not
@@ -32,8 +33,11 @@ preserved privately as supplemental and excluded from selected evidence.
 
 ## Actual desktop checks
 
-Root operated the unique signed macOS app through the native UI. Open
-**Import → Chemical names…**, enter `ethanol`, and choose **Parse name locally**.
+Root operated the unique signed macOS app through the native UI. The reviewed
+build opened the Chemical names panel from the Import tab. Current builds open
+it from a molecule's right-click menu with **Chemical names…**, and some labels
+differ; see the [Chemical names inspector](../chemical-naming-rust.md#chemical-names-inspector).
+Open the panel, enter `ethanol`, and choose **Parse name locally**.
 Review the editable CCO preview, scroll beside it, and choose **Insert editable
 structure**. One Undo removes the whole molecule; Redo restores its three
 atoms and two bonds. Select the complete molecule and choose **Generate name
@@ -56,9 +60,10 @@ pre/post JSON byte comparison is not claimed for that action.
 Save the ethanol caption and R-lactic documents, quit the application, and
 reopen them in a fresh process. The saved graph, caption and wedge remain;
 Undo/Redo are disabled. Generating the R-lactic name again leaves document
-history clean. The three actual native saves and accessibility snapshots are
-in the [fixture package](../../tests/fixtures/chemical-naming-rust/README.md).
-Its standard-library checker verifies topology, formula, explicit stereo and
+history clean. The original caption save and accessibility snapshots are
+in the [archived fixture package](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/tests/fixtures/chemical-naming-rust).
+Two original graph inputs remain in the [regression fixture guide](../../tests/fixtures/chemical-naming-rust/README.md).
+The archived standard-library checker verifies topology, formula, explicit stereo and
 the exact caption-only delta. A separate independent RDKit reconstruction
 checks winding and wedge/coordinates without using cached CIP/H labels.
 
@@ -130,3 +135,12 @@ Reuse `docs/images/chemical-naming-rust/ethanol-local-parse-preview.jpg`.
 Credit: @Ameyanagi; project creator and maintainer. Original app code and
 documentation use MIT OR Apache-2.0; the upstream-derived parser retains
 its separate MIT license and attribution in PR #291.
+
+## Archived evidence
+
+The original caption save, checkers and receipts are preserved in the [naming fixture archive](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/tests/fixtures/chemical-naming-rust), with supplementary native workflow captures in the [image archive](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/chemical-naming-rust).
+
+| Archived files                                                                                                                                | What they record                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [Naming fixtures and receipts](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/tests/fixtures/chemical-naming-rust) | Original caption save, accessibility snapshots, finite checkers and source/compiler/package/desktop receipts. |
+| [Supplementary naming captures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/chemical-naming-rust)   | Native insertion, caption/history, optical-name rejection and R-lactic workflow captures.                     |

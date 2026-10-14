@@ -1,4 +1,5 @@
 use super::*;
+use crate::engine::Analysis;
 use crate::ops::{
     exec::Hooks,
     headless::HeadlessHost,
@@ -340,7 +341,7 @@ fn a_rejected_drawing_is_an_error_envelope() {
     let mut response = Document::default();
     response.add_atom("C", crate::document::Point::new(f32::NAN, 0.));
     let rejection = finalize(&response).unwrap_err();
-    let result = rejected(
+    let result = ToolResult::rejected(
         rejection.clone(),
         vec!["engine note".into()],
         &Versions::current("9.8.7"),

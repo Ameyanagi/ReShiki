@@ -10,28 +10,31 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 **Save** writes a `.rsk` file with the complete drawing. If you enter a name without an extension, ReShiki adds `.rsk`, for example `Esterification.rsk`. Use **Save as** for a separate version. Reopen it with **Open**.
 
+Nightly builds save drawings in a newer format. ReShiki 0.11.0 cannot open them and asks you to update. If you share files with people on 0.11.0, keep a copy saved by 0.11.0.
+
 The file contains readable JSON text. Existing `.reshiki` and `.moruno` drawings also open normally; **Save** keeps their current filenames. Use **Save as** to save a copy with the shorter `.rsk` extension.
 
-To add MOL, RXN, CDXML, CDX, SMILES or picture files to the current drawing instead, drop them on the drawing or use **Import → Choose file…**. Dropping a `.rsk` file opens it in a tab.
+To add MOL, RXN, CDXML, CDX, SMILES or picture files to the current drawing instead, drop them on the drawing or use **Import → Choose file…**. On Windows you can also insert `.emf` pictures; see [Insert EMF pictures](/guide/windows/#insert-emf-pictures). Dropping a `.rsk` file opens it in a tab.
 
 If ReShiki offers recovery drafts after an interrupted session, choose **Restore** in the status bar to open each one in a tab, then save them to files. Closing a tab or the window with unsaved changes asks whether to save them first; New and Open add a tab instead.
 
 ## Choose an export
 
-Open **Export → Figure**, choose a vector format (SVG or PDF) or PNG, then click **Export**. Expand **Structure & exchange** for molecular formats and CDXML, or **Pages & printing** for page setup and printing. **Editable document** saves the complete `.rsk` original.
+Open **Export → Figure**, choose **SVG**, **SVG for Office**, **PDF** or **PNG** (on Windows also **EMF for Office**), then click its export button, for example **Export SVG…**. **SVG for Office** is available in Nightly builds; not in ReShiki 0.11.0. Expand **Structure & exchange** for molecular formats and CDXML, or **Pages & printing** for page setup and printing. **Editable document** saves the complete `.rsk` original.
 
 PNG uses up to 1200 dpi and automatically lowers resolution for large drawings while preserving physical size. The saved-file status reports the actual pixel dimensions and DPI. If chemistry analysis fails, figure export preserves the visible drawing and shows a review notice instead of blocking Save. [Figure export details and limits](/developer/figure-export/).
 
 File exports use the full drawing. **Copy image** uses the current selection when objects are selected.
 
-| You need                     | Use                                              |
-| ---------------------------- | ------------------------------------------------ |
-| A vector figure              | **SVG** or **PDF**                               |
-| A high-resolution image      | **PNG**                                          |
-| Multiple publication pages   | **PDF · all pages**                              |
-| An editable chemical drawing | **CDXML**                                        |
-| Chemical structure data      | **MOL**, **SMILES**, or **InChI**                |
-| Chemical reaction data       | **RXN** or **Reaction SMILES** in Reaction roles |
+| You need                         | Use                                                                                                   |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| A vector figure                  | **SVG** or **PDF**                                                                                    |
+| A high-resolution image          | **PNG**                                                                                               |
+| A picture for Word or PowerPoint | **EMF for Office** on Windows, or **SVG for Office** in Nightly builds (both turn text into outlines) |
+| Multiple publication pages       | **PDF · all pages**                                                                                   |
+| An editable chemical drawing     | **CDXML**                                                                                             |
+| Chemical structure data          | **MOL**, **SMILES**, or **InChI**                                                                     |
+| Chemical reaction data           | **RXN** or **Reaction SMILES** in Reaction roles                                                      |
 
 Export dialogs also add the selected format’s extension when you omit it.
 
@@ -43,16 +46,31 @@ Anonymous dummy/attachment markers are editor handles and are omitted from figur
 
 <Screenshot
   src="/manual/export.png"
-  alt="The Export panel offers vector drawings, images, chemical data, and print controls."
+  alt="The Export panel with SVG for Office chosen in the Figure format menu, above the Structure & exchange, Pages & printing and Editable document sections."
 />
 
 ## Copy and paste
 
-Select the objects, then **⌘/Ctrl+C** and **⌘/Ctrl+V**. **Cut** and **Duplicate** are also available above the canvas.
+Select the objects, then **⌘/Ctrl+C** and **⌘/Ctrl+V**. **⌘/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps. It offers editable drawing data and image alternatives, with no chemical plain text, on every platform. **Cut** and **Duplicate** are also available above the canvas.
+
+To paste a structure into a text field such as SciFinder's, select it and use **⌘/Ctrl+Alt+C**. This copies molecular SMILES without a reaction arrow, or bounded ChemDoodle JSON for one clear reaction. Explicit reaction roles take precedence; a clear unassigned forward arrow can supply roles for this copy only. Review any warning or error before pasting. **⌘/Ctrl+Alt+O** copies MOL text. [SciFinder handoff and selection limits](/developer/scifinder-handoff/).
 
 To choose a particular format, right-click → **Copy as…**. Choose PNG, SVG, PDF, MOL, SMILES, InChI, CDXML, CDX, RXN or reaction SMILES. The submenu states whether it copies selected objects or the whole drawing. Select a complete molecule when you need its full chemical structure. Reaction formats require one complete defined reaction; the menu explains unavailable choices. Review any conversion warnings in the copy receipt. [Format and platform details](/developer/clipboard/#copy-as).
 
-On Windows and macOS, Copy offers supported editable drawing data and an image to the receiving app. **Ctrl+Shift+C** / **Shift+⌘+C** copies an image explicitly; **Import → Paste picture** chooses a picture explicitly. Editable exchange depends on the receiving app and the objects used.
+**Ctrl+Shift+C** / **Shift+⌘+C** copies an image explicitly; **Import → Paste picture** chooses a picture explicitly. Editable exchange depends on the receiving app and the objects used.
+
+### What Paste uses
+
+**⌘/Ctrl+V** tries the available formats in this order:
+
+1. ReShiki drawing data.
+2. ChemDraw CDX, then CDXML.
+3. MOL, then SMILES offered as chemical formats.
+4. Plain text that imports as chemistry: MOL, SMILES, reaction SMILES, InChI, RXN, CDXML or ReShiki clipboard JSON.
+5. PNG, TIFF, JPEG, then WebP pictures.
+6. Other plain text, PDF or SVG use the usual error messages if nothing can be pasted.
+
+On Windows, drawings embedded in Office objects are tried first. If a format fails, Paste tries the next one. PDF and SVG pictures need conversion to PNG. If every available format fails, Paste explains the problem. For a drawing from a newer version, the message asks you to update ReShiki. **Import → Paste picture** prefers pictures even when editable formats are present.
 
 In Windows desktop Office, normal Copy embeds a ReShiki drawing. Double-click it,
 edit in ReShiki and use **Ctrl+S** to update the open Office document. Then save

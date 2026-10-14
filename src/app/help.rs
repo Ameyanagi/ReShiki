@@ -206,8 +206,12 @@ fn drawing_shortcuts() -> Element<'static, Message> {
                 "Mark an atom / connect the active atom to the marked atom",
             ),
             (
+                "} in keyboard drawing".into(),
+                "Coordinate the marked donor to the active metal",
+            ),
+            (
                 format!("{} drag", keys(alt, "")),
-                "Draw or move freely, without bond constraints or smart guides",
+                "Draw or move freely, without bond constraints, smart guides or orbital snapping",
             ),
             (
                 format!("{}-click with a ring tool", keys(command, "")),
@@ -357,7 +361,7 @@ fn file_shortcuts() -> Element<'static, Message> {
         format!("{} scroll", keys(command, ""))
     };
     group(
-        "Files",
+        "Files and commands",
         &[
             (
                 format!("{} / {}", keys(command, "N"), keys(command, "O")),
@@ -387,7 +391,7 @@ fn file_shortcuts() -> Element<'static, Message> {
                 "Import / Export",
             ),
             (keys(command, "P"), "Print"),
-            (keys(command, "J"), "Join sites / merge three or more atoms"),
+            (keys(command, "J"), super::joining::JOIN_COMMAND_HINT),
             (keys(command | shift, "K"), "Clean up"),
             (
                 shortcut_label(Message::Optimization(super::optimization::Action::Begin)),
@@ -405,7 +409,7 @@ fn file_shortcuts() -> Element<'static, Message> {
                     keys(command | alt, "C"),
                     keys(command | alt, "O")
                 ),
-                "Copy SMILES / MOL",
+                "Copy chemical text / MOL text",
             ),
             (
                 format!(

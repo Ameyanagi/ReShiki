@@ -169,6 +169,42 @@ pub fn chemical_snapshot<'a>(
     Ok(Cow::Owned(chemical))
 }
 
+/// Choose the explicit chemical-text payload without changing source roles or
+/// expanding the copied selection. Ambiguous or incomplete reactions fail.
+pub fn chemical_text_snapshot(
+    source: &Document,
+    snapshot: &Document,
+) -> Result<(CopyFormat, Document), &'static str> {
+    let chemical = chemical_snapshot(source, snapshot)?;
+    let format = if chemical.reactions.is_empty() {
+        CopyFormat::Smiles
+    } else {
+        CopyFormat::ChemDoodleReaction
+    };
+    Ok((format, chemical.into_owned()))
+}
+
+/// Preserve the refresh and fallback used by the former ordinary Copy text.
+/// This also resolves attached arrow geometry included in reaction JSON.
+pub async fn prepare_chemical_text(
+    engine: LocalEngine,
+    snapshot: Document,
+    format: CopyFormat,
+) -> Result<PreparedCopy, String> {
+    let (snapshot, notice) = match export::checked_document(&engine, snapshot.clone()).await {
+        Ok(checked) => (checked, None),
+        Err(error) => (
+            snapshot,
+            Some(format!("Chemistry could not be refreshed: {error}")),
+        ),
+    };
+    let mut copy = prepare_as(engine, snapshot, format).await?;
+    if let Some(notice) = notice {
+        copy.notices.insert(0, notice);
+    }
+    Ok(copy)
+}
+
 #[derive(Debug, Clone)]
 pub struct PreparedCopy {
     pub format: CopyFormat,

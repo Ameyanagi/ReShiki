@@ -114,6 +114,40 @@ async fn projected_engine_analyze_and_exports_preserve_the_drawing() -> anyhow::
                 let output = response
                     .output
                     .ok_or_else(|| anyhow::anyhow!("Missing MOL"))?;
+                if matches!(text, "F/C=C/F" | "F/C=C\\F" | "F[C@](Cl)(Br)I") {
+                    assert_eq!(
+                        output.lines().nth(1),
+                        Some("     RDKit          2D"),
+                        "{text} MOL dimension"
+                    );
+                    assert_eq!(
+                        response
+                            .warnings
+                            .iter()
+                            .filter(|notice| notice.as_str() == LOSS_STEREO_FALLBACK)
+                            .count(),
+                        1,
+                        "{text} MOL fallback notice"
+                    );
+                    assert_eq!(
+                        response.warnings.last().map(String::as_str),
+                        Some(LOSS_STEREO_FALLBACK),
+                        "{text} MOL fallback notice order"
+                    );
+                } else {
+                    assert_eq!(
+                        output.lines().nth(1),
+                        Some("     RDKit          3D"),
+                        "{text} MOL dimension"
+                    );
+                    assert!(
+                        !response
+                            .warnings
+                            .iter()
+                            .any(|notice| notice == LOSS_STEREO_FALLBACK),
+                        "{text} unexpected MOL fallback notice"
+                    );
+                }
                 let imported = molfile::read(&output)?;
                 assert_eq!(
                     smiles::write::write(&imported.molecule.state, Default::default())?.text,
@@ -140,6 +174,856 @@ async fn projected_engine_analyze_and_exports_preserve_the_drawing() -> anyhow::
                 .expect_err("CDXML accepted projected chemical wedge paint");
             assert!(error.to_string().contains("projected wedge styles"));
             assert_eq!(serde_json::to_value(&unsupported)?, unsupported_before);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn haworth_engine_mol_export_uses_2d_without_a_fallback_notice() -> anyhow::Result<()> {
+    use crate::haworth::{Anomer, Sugar, sugar_document};
+    if !loss_notice_helper_available() {
+        return Ok(());
+    }
+    for (sugar, anomer) in [
+        (Sugar::Glucose, Anomer::Alpha),
+        (Sugar::Galactose, Anomer::Beta),
+    ] {
+        let document = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+        let molecule = molecular::prepare(&document)?;
+        let expected = molfile::write_projected_absolute(&molecule, Default::default())?;
+        let expected_smiles = smiles::write::write(&molecule.state, Default::default())?.text;
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("mol".into());
+        let response = execute(request).await?;
+        assert!(
+            !response
+                .warnings
+                .iter()
+                .any(|notice| notice == LOSS_STEREO_FALLBACK),
+            "{sugar:?}/{anomer:?} unexpected MOL fallback notice"
+        );
+        let output = response
+            .output
+            .ok_or_else(|| anyhow::anyhow!("Missing Haworth MOL export"))?;
+        assert_eq!(output, expected);
+        assert_eq!(output.lines().nth(1), Some("     RDKit          2D"));
+        let exported = molfile::read(&output)?;
+        assert!(exported.molecule.positions.iter().all(|p| p.z == 0.));
+        assert_eq!(
+            smiles::write::write(&exported.molecule.state, Default::default())?.text,
+            expected_smiles
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn imported_3d_engine_mol_export_preserves_xyz_without_a_fallback_notice()
+-> anyhow::Result<()> {
+    if !loss_notice_helper_available() {
+        return Ok(());
+    }
+    for (fixture, expected_smiles) in [
+        (
+            include_str!("../../../../../tests/fixtures/mol-import-3d/chiral-3d-v3000.mol"),
+            "F[C@H](Cl)Br",
+        ),
+        (
+            include_str!("../../../../../tests/fixtures/mol-import-3d/alkene-3d-v3000.mol"),
+            "F/C=C/F",
+        ),
+    ] {
+        let (document, _) = molfile::read(fixture)?.display_document()?;
+        assert!(document.atoms.iter().any(|atom| atom.depth != 0.));
+        let before = serde_json::to_value(&document)?;
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("mol".into());
+        let response = execute(request).await?;
+        assert_eq!(serde_json::to_value(response.document)?, before);
+        assert!(
+            !response
+                .warnings
+                .iter()
+                .any(|notice| notice == LOSS_STEREO_FALLBACK),
+            "{expected_smiles} unexpected MOL fallback notice"
+        );
+        let output = response
+            .output
+            .ok_or_else(|| anyhow::anyhow!("Missing imported 3D MOL export"))?;
+        assert_eq!(
+            output.lines().nth(1),
+            Some("     RDKit          3D"),
+            "{expected_smiles} MOL dimension"
+        );
+        let exported = molfile::read(&output)?;
+        assert_eq!(
+            smiles::write::write(&exported.molecule.state, Default::default())?.text,
+            expected_smiles,
+            "Imported 3D MOL identity"
+        );
+        for (atom, position) in document.atoms.iter().zip(&exported.molecule.positions) {
+            for (actual, expected) in [
+                (position.x, f64::from(atom.position.x) / 28.),
+                (position.y, -f64::from(atom.position.y) / 28.),
+                (position.z, f64::from(atom.depth) / 28.),
+            ] {
+                // The default small-molecule writer uses V2000's four decimals.
+                assert!(
+                    (actual - expected).abs() < 5.1e-5,
+                    "{expected_smiles} MOL coordinate changed: {actual} vs {expected}"
+                );
+            }
+        }
+        assert_eq!(serde_json::to_value(&document)?, before);
+    }
+    Ok(())
+}
+
+// Independent literals pin user-visible text rather than following production constants.
+const LOSS_STEREO_FALLBACK: &str =
+    "Exported as 2D because the 3D coordinates no longer match the drawn stereochemistry";
+const LOSS_ATTACHMENT: &str = "Attachment targets retained. Complex identifiers and coordination-valence analysis are unavailable. Formula, when shown, counts the defined atoms and ligands with charges as entered.";
+const LOSS_REAR: &str = "This chemical format does not retain rear opacity. Chemical structure and XYZ are unchanged; use native ReShiki for editable appearance or SVG/PDF/PNG for the figure.";
+const LOSS_ANCHOR: &str = "Arrow curves are preserved; editing attachment links are omitted from this external format. Chemistry is unchanged. Use a native ReShiki file to retain links.";
+const LOSS_DATIVE_MOL: &str = "MOL retains directed dative chemistry and metal charge, but omits solid/hashed coordination projection appearance. Use native ReShiki or figure export to retain that drawing.";
+const LOSS_DATIVE_DRAWING: &str = "CDXML/CDX retains directed coordination chemistry and ReShiki projection attributes. ChemDraw 26 displays dative arrows and removes wedge/hash paint on save. Use native ReShiki or figure export for faithful projection appearance.";
+const LOSS_REACTION_ROLES: &str = "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme.";
+const LOSS_UNVALIDATED: &str = "Drawing exported; chemical assignments remain unvalidated.";
+const LOSS_REACTION_DRAWING: &str = "Reaction files preserve participants, atom maps and stereo. Save .reshiki to retain captions, arrow appearance and drawing layout.";
+const LOSS_REAR_DRAWING_ERROR: &str = "Invalid editable drawing: CDXML/CDX cannot preserve rear opacity. Use native ReShiki for editable appearance or SVG, PDF or PNG for the figure. Set rear opacity to 100% for editable CDXML/CDX.";
+const LOSS_ATTACHMENT_IDENTIFIER_ERROR: &str = "Invalid drawing: Multi-center/variable attachment targets require CDXML, CDX, V3000 MOL or native ReShiki export; ordinary molecular identifiers cannot retain them.";
+const LOSS_INVALID_VALENCE_ERROR: &str =
+    "Properties: Atom 1: Explicit valence 5 is too large for C";
+
+fn chiral_3d_notice_document() -> anyhow::Result<Document> {
+    Ok(molfile::read(include_str!(
+        "../../../../../tests/fixtures/mol-import-3d/chiral-3d-v3000.mol"
+    ))?
+    .display_document()?
+    .0)
+}
+
+fn flip_notice_document_chirality(document: &mut Document) -> anyhow::Result<()> {
+    let stereo = document
+        .atoms
+        .iter_mut()
+        .find_map(|atom| atom.stereo.as_mut())
+        .ok_or_else(|| anyhow::anyhow!("Missing captured chiral winding"))?;
+    stereo.winding = if stereo.winding == "cw" { "ccw" } else { "cw" }.into();
+    Ok(())
+}
+
+#[tokio::test]
+async fn attachment_early_mol_export_appends_stereo_fallback_notice_once() -> anyhow::Result<()> {
+    use crate::document::Point;
+    let mut document = chiral_3d_notice_document()?;
+    let members = document
+        .atoms
+        .iter()
+        .take(2)
+        .map(|atom| atom.id)
+        .collect::<Vec<_>>();
+    let point = crate::attachments::add(
+        &mut document,
+        &members,
+        crate::attachments::Kind::MultiCenter,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let metal = document.add_atom("Cu", Point::new(140., 56.));
+    let atom = document
+        .atom_mut(metal)
+        .ok_or_else(|| anyhow::anyhow!("Missing copper atom"))?;
+    atom.charge = 2;
+    atom.depth = 21.;
+    document.add_bond(point, metal, 5, "plain");
+    for flipped in [false, true] {
+        if flipped {
+            flip_notice_document_chirality(&mut document)?;
+        }
+        let before = serde_json::to_value(&document)?;
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("mol".into());
+        let response = execute(request).await?;
+        assert!(response.analysis.is_none());
+        assert_eq!(serde_json::to_value(response.document)?, before);
+        let expected_notices = if flipped {
+            vec![LOSS_ATTACHMENT, LOSS_STEREO_FALLBACK]
+        } else {
+            vec![LOSS_ATTACHMENT]
+        };
+        assert_eq!(
+            response
+                .warnings
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            expected_notices
+        );
+        let output = response
+            .output
+            .ok_or_else(|| anyhow::anyhow!("Missing attachment MOL export"))?;
+        assert_eq!(
+            output.lines().nth(1),
+            Some(if flipped {
+                "     RDKit          2D"
+            } else {
+                "     RDKit          3D"
+            })
+        );
+        assert!(output.contains("ATTACH=ALL"));
+        assert_eq!(serde_json::to_value(&document)?, before);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_rxn_export_appends_stereo_fallback_notice_once() -> anyhow::Result<()> {
+    use crate::{
+        chemistry::reaction,
+        document::{Arrow, Point},
+        reactions::{self, Role},
+    };
+    let mut document = chiral_3d_notice_document()?;
+    let reactant_ids = document
+        .atoms
+        .iter()
+        .map(|atom| atom.id)
+        .collect::<Vec<_>>();
+    let product = document.add_atom("C", Point::new(300., 0.));
+    let arrow = document.next_id();
+    document.arrows.push(Arrow::new(
+        arrow,
+        Point::new(100., 0.),
+        Point::new(200., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    reactions::assign(&mut document, arrow, &reactant_ids, Role::Reactant)
+        .map_err(anyhow::Error::msg)?;
+    reactions::assign(&mut document, arrow, &[product], Role::Product)
+        .map_err(anyhow::Error::msg)?;
+    for (flipped, expected_smiles) in [(false, "F[C@H](Cl)Br"), (true, "F[C@@H](Cl)Br")] {
+        if flipped {
+            flip_notice_document_chirality(&mut document)?;
+        }
+        let before = serde_json::to_value(&document)?;
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some("rxn".into());
+        let response = crate::engine::LocalEngine::default()
+            .request(request)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let expected_notices = if flipped {
+            vec![LOSS_REACTION_DRAWING, LOSS_STEREO_FALLBACK]
+        } else {
+            vec![LOSS_REACTION_DRAWING]
+        };
+        assert_eq!(
+            response
+                .warnings
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            expected_notices
+        );
+        let output = response
+            .output
+            .ok_or_else(|| anyhow::anyhow!("Missing RXN export"))?;
+        let imported = reaction::read_rxn(&output)?;
+        let reactant = imported
+            .reactants
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("Missing RXN reactant"))?;
+        assert_eq!(
+            smiles::write::write(&reactant.molecule.state, Default::default())?.text,
+            expected_smiles
+        );
+        assert_eq!(reactant.annotations.is_3d, !flipped);
+        if flipped {
+            assert!(
+                reactant
+                    .molecule
+                    .positions
+                    .iter()
+                    .all(|position| position.z == 0.)
+            );
+        }
+        assert_eq!(serde_json::to_value(&document)?, before);
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug)]
+enum LossNoticeBase {
+    Prepared,
+    Attachment,
+    Unvalidated,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum LossNoticeDecoration {
+    Plain,
+    Rear,
+    Anchor,
+    Dative,
+    Reaction,
+    ReactionRear,
+    ReactionAnchor,
+    ReactionAnchorDative,
+    ReactionRearDative,
+}
+
+impl LossNoticeDecoration {
+    fn rear(self) -> bool {
+        matches!(
+            self,
+            Self::Rear | Self::ReactionRear | Self::ReactionRearDative
+        )
+    }
+
+    fn anchor(self) -> bool {
+        matches!(
+            self,
+            Self::Anchor | Self::ReactionAnchor | Self::ReactionAnchorDative
+        )
+    }
+
+    fn dative(self) -> bool {
+        matches!(
+            self,
+            Self::Dative | Self::ReactionAnchorDative | Self::ReactionRearDative
+        )
+    }
+
+    fn reaction(self) -> bool {
+        matches!(
+            self,
+            Self::Reaction
+                | Self::ReactionRear
+                | Self::ReactionAnchor
+                | Self::ReactionAnchorDative
+                | Self::ReactionRearDative
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum LossNoticeExpected {
+    Analyzed(&'static [&'static str]),
+    Unanalyzed(&'static [&'static str]),
+    Error(&'static str),
+}
+
+fn loss_notice_helper_available() -> bool {
+    if std::env::var_os("RESHIKI_INCHI_HELPER").is_some() {
+        return true;
+    }
+    assert!(
+        std::env::var_os("RESHIKI_REQUIRE_INCHI_HELPER").is_none(),
+        "RESHIKI_REQUIRE_INCHI_HELPER requires RESHIKI_INCHI_HELPER for export notice coverage"
+    );
+    eprintln!("Set RESHIKI_INCHI_HELPER to run prepared real-engine export notice coverage");
+    false
+}
+
+fn loss_notice_document(
+    base: LossNoticeBase,
+    decoration: LossNoticeDecoration,
+) -> anyhow::Result<Document> {
+    use crate::{
+        arrow_anchors::{self, Pick},
+        arrows::{ArrowStyle, Preset},
+        document::{Arrow, Point},
+        reactions::{Participant, Reaction},
+    };
+
+    let mut document = Document::default();
+    let carbon = document.add_atom("C", Point::default());
+    if matches!(base, LossNoticeBase::Unvalidated) {
+        // One neutral carbon carrying five explicit H is drawing-valid but
+        // fails chemical sanitization at Properties (carbon's maximum valence is four).
+        document.atom_mut(carbon).unwrap().explicit_h = 5;
+    } else {
+        let second = document.add_atom("C", Point::new(28., 0.));
+        document.add_bond(carbon, second, 1, "plain");
+        if matches!(base, LossNoticeBase::Attachment) {
+            let attachment = crate::attachments::add(
+                &mut document,
+                &[carbon, second],
+                crate::attachments::Kind::MultiCenter,
+            )
+            .map_err(anyhow::Error::msg)?;
+            let metal = document.add_atom("Cu", Point::new(14., 56.));
+            document.atom_mut(metal).unwrap().charge = 2;
+            // V3000 can retain ALL targets only with one supported contact.
+            document.add_bond(attachment, metal, 5, "plain");
+        }
+    }
+    if decoration.dative() {
+        let donor = document.add_atom("N", Point::new(112., 0.));
+        let metal = document.add_atom("Cu", Point::new(140., 28.));
+        document.atom_mut(metal).unwrap().charge = 2;
+        document.add_bond(donor, metal, 5, "wedge");
+        document.bonds.last_mut().unwrap().projection = true;
+    }
+    if decoration.anchor() {
+        let destination = document
+            .atoms
+            .get(1)
+            .map(|atom| atom.id)
+            .unwrap_or_else(|| document.add_atom("O", Point::new(56., 0.)));
+        arrow_anchors::create(
+            &mut document,
+            &Pick::Atom(carbon),
+            &Pick::Atom(destination),
+            Preset::Curved,
+            ArrowStyle::preset(Preset::Curved),
+        )
+        .map_err(anyhow::Error::msg)?;
+    }
+    if decoration.reaction() {
+        let reactants = document.atoms.iter().map(|atom| atom.id).collect();
+        let product = document.add_atom("O", Point::new(252., 0.));
+        let arrow = document.next_id();
+        document.arrows.push(Arrow::new(
+            arrow,
+            Point::new(196., 0.),
+            Point::new(224., 0.),
+            Preset::Forward,
+            ArrowStyle::preset(Preset::Forward),
+        ));
+        document.reactions.push(Reaction {
+            arrow,
+            reactants: vec![Participant {
+                atoms: reactants,
+                coefficient: 1,
+            }],
+            products: vec![Participant {
+                atoms: vec![product],
+                coefficient: 1,
+            }],
+            agents: vec![],
+            annotations: vec![],
+        });
+    }
+    if decoration.rear() {
+        let ids = document
+            .atoms
+            .iter()
+            .map(|atom| atom.id)
+            .collect::<Vec<_>>();
+        crate::depth_appearance::set_rear_opacity(&mut document, &ids, 0.5)
+            .map_err(anyhow::Error::msg)?;
+    }
+    Ok(document)
+}
+
+fn loss_notice_validate_document(
+    document: &Document,
+    base: LossNoticeBase,
+    decoration: LossNoticeDecoration,
+    name: &str,
+    format: &str,
+) {
+    document
+        .validate()
+        .unwrap_or_else(|error| panic!("{name}/{format}: invalid drawing: {error}"));
+    assert_eq!(
+        crate::attachments::present(document),
+        matches!(base, LossNoticeBase::Attachment),
+        "{name}/{format}: attachment predicate"
+    );
+    assert_eq!(
+        crate::rear_opacity::present(document),
+        decoration.rear(),
+        "{name}/{format}: rear opacity predicate"
+    );
+    assert_eq!(
+        crate::arrow_anchors::export_notice(document).is_some(),
+        decoration.anchor(),
+        "{name}/{format}: arrow-link export predicate"
+    );
+    assert_eq!(
+        document.arrows.iter().any(|arrow| {
+            arrow.kind == "curved" && arrow.start_anchor.is_some() && arrow.end_anchor.is_some()
+        }),
+        decoration.anchor(),
+        "{name}/{format}: anchored mechanism arrow predicate"
+    );
+    assert_eq!(
+        document
+            .bonds
+            .iter()
+            .any(|bond| bond.order == 5 && bond.projection),
+        decoration.dative(),
+        "{name}/{format}: projected dative predicate"
+    );
+    assert_eq!(
+        !document.reactions.is_empty(),
+        decoration.reaction(),
+        "{name}/{format}: reaction export predicate"
+    );
+    assert_eq!(
+        document.reactions.iter().any(|reaction| reaction.ready()),
+        decoration.reaction(),
+        "{name}/{format}: reaction role predicate"
+    );
+    if matches!(base, LossNoticeBase::Unvalidated) {
+        assert!(
+            matches!(
+                molecular::prepare(document),
+                Err(molecular::Error::Sanitization(_))
+            ),
+            "{name}/{format}: fallback fixture must fail sanitization"
+        );
+    } else if matches!(base, LossNoticeBase::Prepared) {
+        molecular::prepare(document)
+            .unwrap_or_else(|error| panic!("{name}/{format}: prepared fixture failed: {error}"));
+    }
+}
+
+fn loss_notice_assert_response<E: std::fmt::Debug + std::fmt::Display>(
+    result: Result<Response, E>,
+    expected: LossNoticeExpected,
+    document: &str,
+    format: &str,
+) {
+    match expected {
+        LossNoticeExpected::Error(expected) => {
+            let error = match result {
+                Err(error) => error,
+                Ok(response) => panic!("{document}/{format}: export succeeded: {response:?}"),
+            };
+            assert_eq!(error.to_string(), expected, "{document}/{format}");
+        }
+        LossNoticeExpected::Analyzed(warnings) | LossNoticeExpected::Unanalyzed(warnings) => {
+            let response = result
+                .unwrap_or_else(|error| panic!("{document}/{format}: export failed: {error}"));
+            assert_eq!(
+                response
+                    .warnings
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>(),
+                warnings,
+                "{document}/{format}: ordered warnings"
+            );
+            assert_eq!(
+                response.analysis.is_some(),
+                matches!(expected, LossNoticeExpected::Analyzed(_)),
+                "{document}/{format}: analysis presence"
+            );
+            assert!(
+                response.output.is_some_and(|output| !output.is_empty()),
+                "{document}/{format}: missing export"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn prepared_export_loss_notices_are_ordered_by_document_and_format() -> anyhow::Result<()> {
+    use LossNoticeDecoration::*;
+    use LossNoticeExpected::{Analyzed, Error};
+
+    if !loss_notice_helper_available() {
+        return Ok(());
+    }
+    let formats = ["mol", "cdxml", "cdx", "smiles"];
+    let cases = [
+        (
+            "prepared baseline",
+            Plain,
+            [Analyzed(&[]), Analyzed(&[]), Analyzed(&[]), Analyzed(&[])],
+        ),
+        // Current behavior: CDXML/CDX rejects rear opacity instead of returning a loss notice.
+        (
+            "prepared rear opacity",
+            Rear,
+            [
+                Analyzed(&[LOSS_REAR]),
+                Error(LOSS_REAR_DRAWING_ERROR),
+                Error(LOSS_REAR_DRAWING_ERROR),
+                Analyzed(&[LOSS_REAR]),
+            ],
+        ),
+        // Current behavior: MOL/SMILES omit the mechanism-arrow editing-link notice.
+        (
+            "prepared anchored mechanism arrow",
+            Anchor,
+            [
+                Analyzed(&[]),
+                Analyzed(&[LOSS_ANCHOR]),
+                Analyzed(&[LOSS_ANCHOR]),
+                Analyzed(&[]),
+            ],
+        ),
+        // Current behavior: SMILES emits no projected dative appearance notice.
+        (
+            "prepared projected dative",
+            Dative,
+            [
+                Analyzed(&[LOSS_DATIVE_MOL]),
+                Analyzed(&[LOSS_DATIVE_DRAWING]),
+                Analyzed(&[LOSS_DATIVE_DRAWING]),
+                Analyzed(&[]),
+            ],
+        ),
+        (
+            "prepared reaction roles",
+            Reaction,
+            [
+                Analyzed(&[LOSS_REACTION_ROLES]),
+                Analyzed(&[LOSS_REACTION_ROLES]),
+                Analyzed(&[LOSS_REACTION_ROLES]),
+                Analyzed(&[LOSS_REACTION_ROLES]),
+            ],
+        ),
+        // Current behavior: finish orders reaction roles, arrow links, then dative paint;
+        // MOL/SMILES still omit the arrow-link notice and SMILES omits dative paint.
+        (
+            "prepared reaction with anchored arrow and projected dative",
+            ReactionAnchorDative,
+            [
+                Analyzed(&[LOSS_REACTION_ROLES, LOSS_DATIVE_MOL]),
+                Analyzed(&[LOSS_REACTION_ROLES, LOSS_ANCHOR, LOSS_DATIVE_DRAWING]),
+                Analyzed(&[LOSS_REACTION_ROLES, LOSS_ANCHOR, LOSS_DATIVE_DRAWING]),
+                Analyzed(&[LOSS_REACTION_ROLES]),
+            ],
+        ),
+        // Current behavior: MOL orders reaction roles, rear opacity, then dative paint.
+        // CDXML/CDX still rejects the combined drawing and SMILES omits dative paint.
+        (
+            "prepared reaction with rear opacity and projected dative",
+            ReactionRearDative,
+            [
+                Analyzed(&[LOSS_REACTION_ROLES, LOSS_REAR, LOSS_DATIVE_MOL]),
+                Error(LOSS_REAR_DRAWING_ERROR),
+                Error(LOSS_REAR_DRAWING_ERROR),
+                Analyzed(&[LOSS_REACTION_ROLES, LOSS_REAR]),
+            ],
+        ),
+    ];
+    for (name, decoration, expected) in cases {
+        let document = loss_notice_document(LossNoticeBase::Prepared, decoration)?;
+        for (format, expected) in formats.into_iter().zip(expected) {
+            loss_notice_validate_document(
+                &document,
+                LossNoticeBase::Prepared,
+                decoration,
+                name,
+                format,
+            );
+            let mut request = Request::molecule("export", document.clone());
+            request.format = Some(format.into());
+            loss_notice_assert_response(execute(request).await, expected, name, format);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn attachment_early_export_loss_notices_are_pinned() -> anyhow::Result<()> {
+    use LossNoticeDecoration::*;
+    use LossNoticeExpected::{Error, Unanalyzed};
+
+    let formats = ["mol", "cdxml", "cdx"];
+    let cases = [
+        (
+            "attachment targets alone",
+            Plain,
+            [Unanalyzed(&[LOSS_ATTACHMENT]); 3],
+        ),
+        // Current behavior: MOL adds rear opacity after the attachment notice;
+        // CDXML/CDX rejects rear opacity before returning any notice.
+        (
+            "attachment targets with rear opacity",
+            Rear,
+            [
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_REAR]),
+                Error(LOSS_REAR_DRAWING_ERROR),
+                Error(LOSS_REAR_DRAWING_ERROR),
+            ],
+        ),
+        // CDXML/CDX adds the arrow-link notice after the attachment notice;
+        // MOL omits the arrow entirely, so the arrow-link notice does not apply.
+        (
+            "attachment targets with anchored mechanism arrow",
+            Anchor,
+            [
+                Unanalyzed(&[LOSS_ATTACHMENT]),
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_ANCHOR]),
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_ANCHOR]),
+            ],
+        ),
+        // All attachment exports add the format's dative paint notice.
+        (
+            "attachment targets with projected dative",
+            Dative,
+            [
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_DATIVE_MOL]),
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_DATIVE_DRAWING]),
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_DATIVE_DRAWING]),
+            ],
+        ),
+        // All attachment exports add the reaction-role notice.
+        (
+            "attachment targets with reaction roles",
+            Reaction,
+            [Unanalyzed(&[LOSS_ATTACHMENT, LOSS_REACTION_ROLES]); 3],
+        ),
+    ];
+    for (name, decoration, expected) in cases {
+        let document = loss_notice_document(LossNoticeBase::Attachment, decoration)?;
+        for (format, expected) in formats.into_iter().zip(expected) {
+            loss_notice_validate_document(
+                &document,
+                LossNoticeBase::Attachment,
+                decoration,
+                name,
+                format,
+            );
+            let mut request = Request::molecule("export", document.clone());
+            request.format = Some(format.into());
+            loss_notice_assert_response(execute(request).await, expected, name, format);
+        }
+    }
+    // Current behavior: SMILES bypasses early attachment export and fails preparation.
+    let document = loss_notice_document(LossNoticeBase::Attachment, Plain)?;
+    loss_notice_validate_document(
+        &document,
+        LossNoticeBase::Attachment,
+        Plain,
+        "attachment targets alone",
+        "smiles",
+    );
+    let mut request = Request::molecule("export", document);
+    request.format = Some("smiles".into());
+    loss_notice_assert_response(
+        execute(request).await,
+        Error(LOSS_ATTACHMENT_IDENTIFIER_ERROR),
+        "attachment targets alone",
+        "smiles",
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn unprepared_drawing_export_loss_notices_are_pinned() -> anyhow::Result<()> {
+    use LossNoticeDecoration::*;
+    use LossNoticeExpected::{Error, Unanalyzed};
+
+    let formats = ["cdxml", "cdx"];
+    let cases = [
+        (
+            "unsanitizable carbon alone",
+            Plain,
+            [Unanalyzed(&[LOSS_UNVALIDATED]); 2],
+        ),
+        // The writer rejects rear opacity before any notice, kept as an error by design.
+        (
+            "unsanitizable carbon with rear opacity",
+            Rear,
+            [Error(LOSS_REAR_DRAWING_ERROR); 2],
+        ),
+        (
+            "unsanitizable carbon with anchored mechanism arrow",
+            Anchor,
+            [Unanalyzed(&[LOSS_UNVALIDATED, LOSS_ANCHOR]); 2],
+        ),
+        // The unprepared fallback adds the dative paint notice after the unvalidated notice.
+        (
+            "unsanitizable carbon with projected dative",
+            Dative,
+            [Unanalyzed(&[LOSS_UNVALIDATED, LOSS_DATIVE_DRAWING]); 2],
+        ),
+        // The unprepared fallback adds the reaction-role notice after the unvalidated notice.
+        (
+            "unsanitizable carbon with reaction roles",
+            Reaction,
+            [Unanalyzed(&[LOSS_UNVALIDATED, LOSS_REACTION_ROLES]); 2],
+        ),
+    ];
+    for (name, decoration, expected) in cases {
+        let document = loss_notice_document(LossNoticeBase::Unvalidated, decoration)?;
+        for (format, expected) in formats.into_iter().zip(expected) {
+            loss_notice_validate_document(
+                &document,
+                LossNoticeBase::Unvalidated,
+                decoration,
+                name,
+                format,
+            );
+            let mut request = Request::molecule("export", document.clone());
+            request.format = Some(format.into());
+            loss_notice_assert_response(execute(request).await, expected, name, format);
+        }
+    }
+    // Current behavior: MOL/SMILES have no drawing-preserving sanitization fallback.
+    let document = loss_notice_document(LossNoticeBase::Unvalidated, Plain)?;
+    for format in ["mol", "smiles"] {
+        loss_notice_validate_document(
+            &document,
+            LossNoticeBase::Unvalidated,
+            Plain,
+            "unsanitizable carbon alone",
+            format,
+        );
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some(format.into());
+        loss_notice_assert_response(
+            execute(request).await,
+            Error(LOSS_INVALID_VALENCE_ERROR),
+            "unsanitizable carbon alone",
+            format,
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn reaction_export_loss_notices_are_ordered() -> anyhow::Result<()> {
+    use LossNoticeDecoration::*;
+    use LossNoticeExpected::Unanalyzed;
+
+    let cases = [
+        (
+            "reaction roles alone",
+            Reaction,
+            Unanalyzed(&[LOSS_REACTION_DRAWING]),
+        ),
+        (
+            "reaction roles with rear opacity",
+            ReactionRear,
+            Unanalyzed(&[LOSS_REACTION_DRAWING, LOSS_REAR]),
+        ),
+        // Current behavior: RXN/reaction SMILES emits only its generic drawing
+        // warning for an anchored mechanism arrow, omitting the arrow-link notice.
+        (
+            "reaction roles with anchored mechanism arrow",
+            ReactionAnchor,
+            Unanalyzed(&[LOSS_REACTION_DRAWING]),
+        ),
+    ];
+    for (name, decoration, expected) in cases {
+        let document = loss_notice_document(LossNoticeBase::Prepared, decoration)?;
+        for format in ["rxn", "rsmi"] {
+            loss_notice_validate_document(
+                &document,
+                LossNoticeBase::Prepared,
+                decoration,
+                name,
+                format,
+            );
+            let mut request = Request::molecule("export", document.clone());
+            request.format = Some(format.into());
+            loss_notice_assert_response(
+                crate::engine::LocalEngine::default().request(request).await,
+                expected,
+                name,
+                format,
+            );
         }
     }
     Ok(())

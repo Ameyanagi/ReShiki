@@ -95,7 +95,7 @@ fn explicit_hydrogen_count_is_stacked_without_losing_subscript_charge_or_isotope
 #[tokio::test]
 async fn paracetamol_formula_and_editable_round_trip_are_unchanged() {
     let doc: Document = serde_json::from_str(include_str!(
-        "../docs/changes/fixtures/automatic-hydrogen.rsk"
+        "fixtures/hydrogen-placement/automatic-hydrogen.rsk"
     ))
     .unwrap();
     let engine = LocalEngine::default();
@@ -204,14 +204,42 @@ fn free_names_remain_unsplit_and_horizontal_bonds_leave_the_core_centered() {
         "Cp*",
         "custom ligand",
         "Name",
-        "R1",
         "MyGroup",
-        "C2H5",
         "C(OH",
         "CCl2 word",
     ] {
         let doc = atom_text::apply(&source, source.atoms[0].id, label, Mode::Text).unwrap();
         position(&doc, label);
+    }
+    for (label, expected_core, expected_counts) in [("R1", "R", "1"), ("C2H5", "CH", "25")] {
+        let doc = atom_text::apply(&source, source.atoms[0].id, label, Mode::Text).unwrap();
+        let parts: Vec<_> = scene::primitives(&doc)
+            .into_iter()
+            .filter_map(|primitive| match primitive {
+                Primitive::Text {
+                    text,
+                    size,
+                    position,
+                    ..
+                } => Some((text, size, position)),
+                _ => None,
+            })
+            .collect();
+        let (_, core_size, core_pos) = parts.first().unwrap();
+        let mut core = String::new();
+        let mut counts = String::new();
+        for (text, size, position) in &parts {
+            if size == core_size {
+                core.push_str(text);
+                assert_eq!(position.y, core_pos.y, "{label}");
+            } else {
+                counts.push_str(text);
+                assert!(size < core_size && position.y > core_pos.y, "{label}");
+            }
+        }
+        assert_eq!(core, expected_core, "{label}");
+        assert_eq!(counts, expected_counts, "{label}");
+        assert!(doc.abbreviations.is_empty());
     }
     for label in ["CH2", "CCl2", "NMe"] {
         let mut doc = atom_text::apply(&source, source.atoms[0].id, label, Mode::Auto).unwrap();

@@ -2,14 +2,14 @@
 #[cfg(test)]
 mod point_controls_tests;
 
-use super::{App, Message};
-use iced::{Subscription, Task, futures::SinkExt, window};
+use super::{App, Message, event_slot};
+use iced::{Subscription, Task, window};
 use reshiki::accessibility::{
     Activate, Collect, FocusControl, SetValue, Snapshot,
     tree::{NativeTree, Request},
 };
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicU64, Ordering},
 };
 use tokio::sync::mpsc;
@@ -26,7 +26,8 @@ mod native {
 
 pub(crate) const SUPPORTED: bool = cfg!(any(target_os = "macos", windows));
 static NEXT: AtomicU64 = AtomicU64::new(1);
-static EVENTS: Mutex<Option<mpsc::Receiver<Action>>> = Mutex::new(None);
+static EVENTS: event_slot::Slot<mpsc::Receiver<Action>> = event_slot::Slot::new();
+const EVENT_CAPACITY: usize = 64;
 
 fn window_geometry(id: window::Id) -> Task<Message> {
     window::size(id).then(move |size| {
@@ -100,12 +101,9 @@ pub(super) struct State {
 }
 impl Default for State {
     fn default() -> Self {
-        let (sender, receiver) = mpsc::channel(64);
-        if SUPPORTED
-            && !cfg!(test)
-            && let Ok(mut slot) = EVENTS.lock()
-        {
-            *slot = Some(receiver);
+        let (sender, receiver) = mpsc::channel(EVENT_CAPACITY);
+        if SUPPORTED && !cfg!(test) {
+            EVENTS.install(receiver);
         }
         Self {
             generation: NEXT.fetch_add(1, Ordering::Relaxed),
@@ -154,18 +152,7 @@ pub(super) fn subscription() -> Subscription<Message> {
         return Subscription::none();
     }
     Subscription::batch([
-        Subscription::run(|| {
-            iced::stream::channel(64, async |mut output| {
-                let receiver = EVENTS.lock().ok().and_then(|mut slot| slot.take());
-                if let Some(mut receiver) = receiver {
-                    while let Some(action) = receiver.recv().await {
-                        if output.send(Message::Accessibility(action)).await.is_err() {
-                            break;
-                        }
-                    }
-                }
-            })
-        }),
+        event_slot::subscription(&EVENTS, EVENT_CAPACITY, Message::Accessibility),
         iced::event::listen_with(|event, _, id| {
             let action = match event {
                 iced::Event::Window(event)

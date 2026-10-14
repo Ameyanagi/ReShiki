@@ -182,11 +182,10 @@ fn write_impl(
     };
     if document.bonds.iter().any(|b| b.ring_arc)
         || (!variable_labels
-            && document.atoms.iter().any(|a| {
-                a.display.variable.is_some()
-                    && !document.generic.alternatives.iter().any(|s| s.atom == a.id)
-                    && !document.generic.links.iter().any(|s| s.atom == a.id)
-            }))
+            && document
+                .atoms
+                .iter()
+                .any(|a| a.display.variable.is_some() && !document.generic.owns_label(a.id)))
     {
         return Err(invalid(
             "CDXML cannot yet preserve inner ring curves or variable atom labels. Save as ReShiki (.rsk) or export SVG/PDF to keep this appearance.",

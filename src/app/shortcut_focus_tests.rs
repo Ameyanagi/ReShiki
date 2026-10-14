@@ -276,17 +276,12 @@ async fn tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner() 
                 )),
                 cursor,
             );
-            // The first real redraw also measures the drawing viewport
-            // and the available NMR panel height. These layout messages
-            // are unrelated to the tool's pointer command ownership.
+            // The first real redraw also measures the drawing viewport.
+            // This layout message is unrelated to the tool's pointer
+            // command ownership.
             let messages: Vec<_> = messages
                 .into_iter()
-                .filter(|message| {
-                    !matches!(
-                        message,
-                        Message::Viewport(_) | Message::Nmr(super::nmr::Action::Layout(_))
-                    )
-                })
+                .filter(|message| !matches!(message, Message::Viewport(_)))
                 .collect();
             assert!(
                 matches!(messages.as_slice(),
@@ -384,7 +379,7 @@ async fn first_escape_cancels_focused_atom_label_without_applying_the_draft() {
     );
     assert!(messages.iter().any(|message| matches!(
         message,
-        Message::AtomText(super::atom_text::Action::Input(_))
+        Message::AtomText(super::atom_text::Action::Editor(_))
     )));
     apply(&mut app, messages);
     assert!(ui.input(&app, "atom-text").1);

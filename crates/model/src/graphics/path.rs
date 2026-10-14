@@ -2,11 +2,45 @@
 use super::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand};
 use crate::document::Point;
 
+pub const MIN_OPEN_NODES: usize = 2;
+pub const MIN_CLOSED_NODES: usize = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PathHandle {
     pub index: usize,
     pub point: Point,
     pub node: bool,
+}
+
+/// A connected path's handles and the node rules shared by its editors.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PathSummary {
+    pub handles: Vec<PathHandle>,
+    pub closed: bool,
+}
+impl PathSummary {
+    /// Nodes in path order, with the closing seam represented only once.
+    pub fn nodes(&self) -> impl DoubleEndedIterator<Item = &PathHandle> {
+        self.handles.iter().filter(|handle| handle.node)
+    }
+    pub fn node_count(&self) -> usize {
+        self.nodes().count()
+    }
+    pub fn can_close(&self) -> bool {
+        self.node_count() >= MIN_CLOSED_NODES
+    }
+    pub fn can_delete_node(&self) -> bool {
+        self.node_count()
+            > if self.closed {
+                MIN_CLOSED_NODES
+            } else {
+                MIN_OPEN_NODES
+            }
+    }
+    /// Whether a zero-based node ordinal has a following segment.
+    pub fn has_following(&self, ordinal: usize) -> bool {
+        self.closed || ordinal.saturating_add(1) < self.node_count()
+    }
 }
 
 #[derive(Clone)]
@@ -24,12 +58,6 @@ struct Path {
     segments: Vec<Segment>,
     closed: bool,
     closing_alias: Option<usize>,
-}
-fn lerp(a: Point, b: Point, t: f32) -> Point {
-    Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
-}
-fn finite(p: Point) -> bool {
-    p.x.is_finite() && p.y.is_finite()
 }
 impl Path {
     fn read(graphic: &Graphic) -> Option<Self> {
@@ -88,13 +116,33 @@ impl Path {
                 });
             }
         }
-        (path.nodes.len() >= 2).then_some(path)
+        (path.nodes.len() >= MIN_OPEN_NODES).then_some(path)
     }
     fn node(&self, index: usize) -> Option<usize> {
         self.nodes
             .iter()
             .position(|n| n.index == index)
             .or_else(|| (self.closing_alias == Some(index)).then_some(0))
+    }
+    fn handle_point(&self, index: usize) -> Option<Point> {
+        self.node(index)
+            .and_then(|node| self.nodes.get(node))
+            .map(|node| node.point)
+            .or_else(|| {
+                self.segments.iter().find_map(|segment| {
+                    let (Some([first, second]), Some([a, b])) = (segment.indices, segment.controls)
+                    else {
+                        return None;
+                    };
+                    if index == first {
+                        Some(a)
+                    } else if index == second {
+                        Some(b)
+                    } else {
+                        None
+                    }
+                })
+            })
     }
     fn reindex(&mut self) {
         let Some(first) = self.nodes.first_mut() else {
@@ -154,27 +202,21 @@ impl Path {
         if commands
             .iter()
             .flat_map(PathCommand::iter_points)
-            .any(|p| !finite(p))
+            .any(|p| !p.is_finite())
         {
             return Err("Path coordinates are out of range".into());
         }
         // Depth is expressed in this affine frame. Keep it when editing a
         // projected path, rather than assigning its old depth coefficients to
         // a new world-space frame.
-        let determinant = graphic.axis_x.x * graphic.axis_y.y - graphic.axis_x.y * graphic.axis_y.x;
+        let determinant = graphic.frame_determinant();
         if determinant.is_finite() && determinant.abs() >= 0.000_001 {
-            let local = |p: Point| {
-                let delta = Point::new(p.x - graphic.origin.x, p.y - graphic.origin.y);
-                Point::new(
-                    (delta.x * graphic.axis_y.y - delta.y * graphic.axis_y.x) / determinant,
-                    (graphic.axis_x.x * delta.y - graphic.axis_x.y * delta.x) / determinant,
-                )
-            };
+            let local = |p: Point| graphic.world_to_local(p, determinant);
             let commands: Vec<_> = commands.iter().map(|c| c.map(local)).collect();
             if commands
                 .iter()
                 .flat_map(PathCommand::iter_points)
-                .any(|p| !finite(p))
+                .any(|p| !p.is_finite())
             {
                 return Err("Path coordinates are out of range".into());
             }
@@ -183,9 +225,7 @@ impl Path {
             // A flat line can have a singular drawing frame; its constant
             // depth is also valid after converting its points to world units.
             graphic.path = commands;
-            graphic.origin = Point::default();
-            graphic.axis_x = Point::new(1., 0.);
-            graphic.axis_y = Point::new(0., 1.);
+            graphic.reset_frame();
         } else {
             return Err(
                 "Rotate this edge-on projected path toward the page before editing it".into(),
@@ -199,6 +239,10 @@ impl Graphic {
     /// Handles for a single connected path. A closed seam has only one node.
     /// Imported compound paths retain the existing generic point editor.
     pub fn path_handles(&self) -> Option<Vec<PathHandle>> {
+        self.path_summary().map(|summary| summary.handles)
+    }
+    /// Resolve a connected path's handles and node rules together.
+    pub fn path_summary(&self) -> Option<PathSummary> {
         let path = Path::read(self)?;
         let mut result: Vec<_> = path
             .nodes
@@ -224,7 +268,10 @@ impl Graphic {
             }
         }
         result.sort_by_key(|h| h.index);
-        Some(result)
+        Some(PathSummary {
+            handles: result,
+            closed: path.closed,
+        })
     }
     pub fn path_closed(&self) -> bool {
         self.commands()
@@ -234,16 +281,27 @@ impl Graphic {
     /// Move a connected path handle, reporting a frame that cannot be edited.
     /// Failed edits leave the graphic unchanged.
     pub fn move_path_point(&mut self, index: usize, point: Point) -> Result<(), String> {
-        let mut path = Path::read(self).ok_or("Select one continuous path")?;
-        if !finite(point) {
+        let path = Path::read(self).ok_or("Select one continuous path")?;
+        self.move_parsed_path_point(path, index, point)
+    }
+    pub(super) fn edit_connected_path_point(
+        &mut self,
+        index: usize,
+        point: Point,
+    ) -> Option<Result<(), String>> {
+        let path = Path::read(self)?;
+        Some(self.move_parsed_path_point(path, index, point))
+    }
+    fn move_parsed_path_point(
+        &mut self,
+        mut path: Path,
+        index: usize,
+        point: Point,
+    ) -> Result<(), String> {
+        if !point.is_finite() {
             return Ok(());
         }
-        if !self.path_handles().is_some_and(|handles| {
-            handles.iter().any(|handle| {
-                (handle.index == index || path.closing_alias == Some(index) && handle.index == 0)
-                    && handle.point != point
-            })
-        }) {
+        if path.handle_point(index).is_none_or(|old| old == point) {
             return Ok(());
         }
         if let Some(node) = path.node(index) {
@@ -299,14 +357,14 @@ impl Graphic {
         let a = path.point(node)?;
         let b = path.point((node + 1) % path.nodes.len())?;
         let (point, left, right) = if let Some([c, d]) = segment.controls {
-            let ac = lerp(a, c, 0.5);
-            let cd = lerp(c, d, 0.5);
-            let db = lerp(d, b, 0.5);
-            let l = lerp(ac, cd, 0.5);
-            let r = lerp(cd, db, 0.5);
-            (lerp(l, r, 0.5), Some([ac, l]), Some([r, db]))
+            let ac = a.lerp(c, 0.5);
+            let cd = c.lerp(d, 0.5);
+            let db = d.lerp(b, 0.5);
+            let l = ac.lerp(cd, 0.5);
+            let r = cd.lerp(db, 0.5);
+            (l.lerp(r, 0.5), Some([ac, l]), Some([r, db]))
         } else {
-            (lerp(a, b, 0.5), None, None)
+            (a.lerp(b, 0.5), None, None)
         };
         path.nodes.insert(node + 1, Node { point, index: 0 });
         path.segments
@@ -328,7 +386,13 @@ impl Graphic {
     pub fn delete_path_node(&mut self, index: usize) -> Result<usize, String> {
         let mut path = Path::read(self).ok_or("Select one continuous path")?;
         let node = path.node(index).ok_or("Select a round node")?;
-        if path.nodes.len() <= if path.closed { 3 } else { 2 } {
+        if path.nodes.len()
+            <= if path.closed {
+                MIN_CLOSED_NODES
+            } else {
+                MIN_OPEN_NODES
+            }
+        {
             return Err("Keep at least two open nodes or three closed nodes".into());
         }
         if !path.closed && node == 0 {
@@ -356,10 +420,10 @@ impl Graphic {
             let controls = (left.is_some() || right.is_some()).then(|| {
                 [
                     left.map(|[a, _]| a)
-                        .unwrap_or_else(|| lerp(a, removed, 1. / 3.)),
+                        .unwrap_or_else(|| a.lerp(removed, 1. / 3.)),
                     right
                         .map(|[_, b]| b)
-                        .unwrap_or_else(|| lerp(b, removed, 1. / 3.)),
+                        .unwrap_or_else(|| b.lerp(removed, 1. / 3.)),
                 ]
             });
             path.segments
@@ -389,8 +453,8 @@ impl Graphic {
         if curved {
             let bend = Point::new(-(b.y - a.y) * 0.25, (b.x - a.x) * 0.25);
             segment.controls = Some([
-                lerp(a, b, 1. / 3.).offset(bend.x, bend.y),
-                lerp(a, b, 2. / 3.).offset(bend.x, bend.y),
+                a.lerp(b, 1. / 3.).offset(bend.x, bend.y),
+                a.lerp(b, 2. / 3.).offset(bend.x, bend.y),
             ]);
         } else {
             segment.controls = None;
@@ -406,12 +470,12 @@ impl Graphic {
             return Ok(());
         }
         if closed {
-            if path.nodes.len() < 3 {
+            if path.nodes.len() < MIN_CLOSED_NODES {
                 return Err("A closed path needs at least three nodes".into());
             }
             if path.nodes.last().map(|n| n.point) == path.nodes.first().map(|n| n.point) {
                 path.nodes.pop();
-                if path.nodes.len() < 3 {
+                if path.nodes.len() < MIN_CLOSED_NODES {
                     return Err("A closed path needs at least three distinct nodes".into());
                 }
             } else {
@@ -438,9 +502,7 @@ impl Graphic {
         );
         graphic.path = graphic.commands();
         graphic.kind = GraphicKind::Path;
-        graphic.origin = Point::default();
-        graphic.axis_x = Point::new(1., 0.);
-        graphic.axis_y = Point::new(0., 1.);
+        graphic.reset_frame();
         graphic
     }
     /// A click appends a line. Dragging a new node establishes its outgoing
@@ -454,7 +516,7 @@ impl Graphic {
         if path.closed {
             return Err("Open this path before adding nodes".into());
         }
-        if !finite(point) || direction.is_some_and(|p| !finite(p)) {
+        if !point.is_finite() || direction.is_some_and(|p| !p.is_finite()) {
             return Err("Non-finite path point".into());
         }
         let last_node = path.nodes.last().ok_or("Invalid path node")?;
@@ -470,7 +532,7 @@ impl Graphic {
                     .map(|[_, incoming]| {
                         Point::new(2. * last.x - incoming.x, 2. * last.y - incoming.y)
                     })
-                    .unwrap_or_else(|| lerp(last, point, 1. / 3.)),
+                    .unwrap_or_else(|| last.lerp(point, 1. / 3.)),
                 Point::new(2. * point.x - direction.x, 2. * point.y - direction.y),
             ]
         });

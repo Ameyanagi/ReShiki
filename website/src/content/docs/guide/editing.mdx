@@ -16,7 +16,7 @@ import Screenshot from "../../../components/Screenshot.astro";
 | Remove a region        | **Alt-drag** around it                      |
 | Select everything      | **⌘/Ctrl+A**                                |
 
-Drag a selected object to move it. Drag a corner handle to resize proportionally. Drag a side handle to change only width or height; labels and stroke widths keep their sizes. use the top handle to rotate. **Shift** snaps rotation to 15°.
+Drag a selected object to move it. Drag a corner handle to resize proportionally. Drag a side handle to change only width or height; labels and stroke widths keep their sizes. Use the top handle to rotate. **Shift** snaps rotation to 15°.
 
 Moving a bonded endpoint or collapsed group follows the configured bond length and angle grid. Hold **Option/Alt** to move freely. Whole molecules move without changing their internal geometry. Whole objects snap their edges, centers and gaps to other objects on screen, and thin magenta smart guides show each match; **Option/Alt** also moves without guides, and **View → Smart guides** turns them off.
 
@@ -35,11 +35,23 @@ Right-click a selection → **3D tilt** also offers X/Y step commands. The top c
 
 Right-click menus now show relevant commands under **Arrange & transform…**, **Bond appearance…** and **Attachment points…**. Select the objects first to see their actions.
 
+### Work with 3D molecules
+
+Available in Nightly builds; not in ReShiki 0.11.0.
+
+A MOL file with 3D coordinates keeps them when you open it, so you can tilt the molecule. Ordinary hydrogens become H counts on their atoms. Save a `.rsk` file to keep the 3D shape; MOL export keeps it too.
+
+To fade the bonds behind the front face of a 3D molecule such as C60, open **Properties → 3D appearance**. Type a value in **Rear opacity** and choose **Apply**. **100%** keeps the drawing opaque, and **0%** hides the rear bonds. With nothing selected, the setting applies to every molecule. A `.rsk` file keeps the setting; SVG, PDF and PNG keep the look.
+
+**3D optimize…** (**⌘/Ctrl+Shift+D**) builds a 3D shape for one molecule and shows a preview before you apply it. The largest molecule it accepts depends on free memory, from about 128 to 640 atoms.
+
 ## Keep related objects together
 
 Select a molecule and its caption, then **Group** (**⌘/Ctrl+G**). Use **Shift+⌘/Ctrl+G** to ungroup.
 
-**Properties** offers alignment, distribution, **Flip H/V**, and **Add frame**. **Duplicate** makes another editable copy.
+The context row offers alignment, distribution, **Flip horizontal**, **Flip vertical** and **Rotate 180°**. **Properties → Grouping & frames** offers **Add frame…**. **Duplicate** makes another editable copy.
+
+A fixed **Hydrogen position** (**Left**, **Right**, **Above** or **Below**) turns with a flip or rotation, so the H stays on the matching side. At other angles it takes the nearest side. **Automatic** labels keep following their bonds.
 
 To align a reaction, select its molecules and arrow, right-click, and open **Arrange & transform… → Align middles**. Each molecule or group moves as a unit. The same submenu offers other edges and even spacing.
 
@@ -47,6 +59,21 @@ To align a reaction, select its molecules and arrow, right-click, and open **Arr
   src="/manual/selection-group.png"
   alt="Acetic acid and its caption selected as one group, with grouping controls visible."
 />
+
+## Align a bond exactly or stretch one bond
+
+Available in Nightly builds; not in ReShiki 0.11.0.
+
+1. Select both atoms of a bond, or a shape with a straight edge.
+2. Open **Properties → Transform → Reference: align / stretch** and choose the bond or edge under **Reference**.
+3. Choose **Horizontal** or **Vertical**, or type an angle in **Direction** and choose **To angle**. 0° points right and 90° points down.
+4. To turn by an angle instead, type it in **Turn** and choose **Rotate**. **Copy + rotate** keeps the original and selects the rotated copy.
+
+**Moves** chooses what turns: the **Connected fragment** or only the **Selected objects**. **Pivot** chooses the center of the turn. **Pin selected center** pins the center of the current selection, for example to place copies at 90°, 180° and 270° around it.
+
+To stretch a bond that links two parts of a molecule, type a value in **Length** and choose **Set length**, or choose **Drag to stretch** and drag the moving end along the bond. One end stays fixed; **Swap fixed end** fixes the other end instead. Everything beyond the moving end moves with it and keeps its shape. Ring bonds cannot be stretched alone.
+
+Each alignment, turn, copy or stretch is one Undo step.
 
 ## Change color
 
@@ -68,9 +95,30 @@ For a filled ring, select its complete cycle, choose **Ring interiors**, then a 
 
 ## Join fragments
 
-For a direct join, select one attachment atom in each of two separate fragments and press **Cmd/Ctrl+J** to share those atoms. To fuse along a bond, select both endpoints of one bond in each fragment (four atoms total), then press **Cmd/Ctrl+J**.
+Select the atoms, then press **⌘/Ctrl+J** or choose **Join** in the context row. In the right-click menu it is **Join selected atoms or bonds**.
+
+| Selection                                          | Result                                                                 |
+| -------------------------------------------------- | ---------------------------------------------------------------------- |
+| One atom in each of two fragments                  | The fragments share that atom                                          |
+| Both ends of one bond in each fragment             | The fragments fuse along that bond                                     |
+| Three or more atoms                                | They merge into the first atom you selected; the other atoms stay put  |
+| A donor atom (N, O, S or P) and a transition metal | A dative bond from the donor to the metal is added; neither atom moves |
+
+Shift-click to choose the order. When atoms merge, the first atom you select is kept. If four atoms form two bonds, Join fuses the bonds. To merge all four atoms into one instead, choose **Merge atoms** in the context row or **Merge selected atoms** in the right-click menu. Merging three or more atoms and the donor-to-metal bond are available in Nightly builds; not in ReShiki 0.11.0.
 
 For interactive placement, select the fragment and choose **Move & attach…** above the canvas. Choose its source attachment point and connection mode, then click or drag at the destination to preview and commit the join.
+
+### Connect a ligand to a metal
+
+Available in Nightly builds; not in ReShiki 0.11.0.
+
+1. Select the ligand and choose **Coordinate in place…** above the canvas or in the right-click menu.
+2. Click the donor atom (N, O, S or P) in the preview, then click the metal on the drawing. Neither atom moves.
+3. Repeat for each donor of a chelate. Each contact is one Undo step.
+
+In keyboard drawing, mark the donor with **[**, move to the metal and press **}**.
+
+To show the contact as a wedge or hash, choose **Solid wedge** or **Hashed wedge** under **Properties → Bond appearance → Style**. **Properties → Crossings & direction → Reverse projection tip** narrows the wedge at the other end. Click a plain dative bond again with the **Dative** tool to reverse it: donor and acceptor swap, the same as **Properties → Crossings & direction → Reverse bonds**.
 
 **Help → Open shortcut examples** opens an editable drawing in a **Shortcut examples** tab in the current window. Opening it again switches to an unchanged examples tab. **Save** asks for a location for your own copy.
 

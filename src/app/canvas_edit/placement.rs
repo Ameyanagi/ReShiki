@@ -1,11 +1,101 @@
 //! Drawing gestures that place new structure.
-use crate::app::App;
-use crate::canvas::Tool;
+use crate::app::{App, joining};
+use crate::canvas::pick::PICK_RADIUS_PX;
+use crate::canvas::{Edit, Tool};
 use reshiki::document::{Document, Point};
 use reshiki::editing;
 use reshiki::graphics::Graphic;
+use reshiki::joining::Placed;
 
 impl App {
+    pub(super) fn place_text_bond(&mut self, edit: Edit, before: Document) {
+        let Edit::TextBond {
+            source,
+            source_text,
+            start,
+            end,
+            target,
+            target_text,
+        } = edit
+        else {
+            return;
+        };
+        if !self.tool.bonds_from_text() {
+            return;
+        }
+        let conversion =
+            convert_bond_text(&self.tab.doc, (source, source_text), (target, target_text));
+        let (doc, source, target) = match conversion {
+            Ok(converted) => converted,
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+                return;
+            }
+        };
+        let revision = self.tab.revision;
+        // A converted caption never stays in the drawing without its Undo step.
+        let fallback = before.clone();
+        self.tab.doc = doc;
+        if let Some(end) = end {
+            self.place_bond(start, end, source, target, before);
+        } else if let Some(source) = source
+            && self.default_bond_from_atom(source)
+        {
+            self.changed(before);
+        }
+        if self.tab.revision == revision {
+            self.tab.doc = fallback;
+            return;
+        }
+        self.status = "Bond from text".into();
+        self.error = false;
+    }
+
+    pub(super) fn place_chain_from_text(
+        &mut self,
+        points: &[Point],
+        source: Option<u64>,
+        source_text: Option<u64>,
+        target: Option<u64>,
+        before: Document,
+    ) {
+        let Some(text) = source_text else {
+            return self.place_chain(points, source, target, before);
+        };
+        if !self.tool.bonds_from_text() {
+            return;
+        }
+        let result =
+            reshiki::atom_text::text_to_atom(&self.tab.doc, text).and_then(|(doc, source)| {
+                reshiki::chains::place(
+                    &doc,
+                    points,
+                    Some(source),
+                    target,
+                    self.tab.camera.world_len(PICK_RADIUS_PX),
+                )
+            });
+        match result {
+            Ok((doc, ids)) => {
+                self.tab.doc = doc;
+                self.tab.selected = ids;
+            }
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+                return;
+            }
+        }
+        let revision = self.tab.revision;
+        self.changed(before);
+        if self.tab.revision == revision {
+            return;
+        }
+        self.status = "Bond from text".into();
+        self.error = false;
+    }
+
     pub(super) fn place_chain(
         &mut self,
         points: &[Point],
@@ -18,7 +108,7 @@ impl App {
             points,
             source,
             target,
-            10.0 / self.tab.camera.zoom,
+            self.tab.camera.world_len(PICK_RADIUS_PX),
         ) {
             Ok((doc, ids)) => {
                 self.tab.doc = doc;
@@ -59,7 +149,7 @@ impl App {
                     start,
                     end,
                     constrain,
-                    10. / self.tab.camera.zoom,
+                    self.tab.camera.world_len(PICK_RADIUS_PX),
                 ) {
                     Ok(id) => self.tab.selected = vec![id],
                     Err(error) => {
@@ -101,32 +191,29 @@ impl App {
                 self.error = true;
                 return;
             }
-            match state.prepared.place(
+            match state.prepared.place_outcome(
                 anchor,
                 direction,
-                10. / self.tab.camera.zoom,
+                self.tab.camera.world_len(PICK_RADIUS_PX),
                 state.anchor,
                 state.mode,
             ) {
-                Ok((document, selected)) => {
-                    let coordination = state.mode == reshiki::templates::Connection::Coordinate;
-                    let unchanged = document == before;
-                    self.tab.doc = document;
+                Ok((outcome, selected)) => {
+                    let status = match &outcome {
+                        Placed::Coordinated(coordination) => {
+                            joining::coordination_status(coordination, false)
+                        }
+                        Placed::Joined(_) => {
+                            "Fragments joined · Undo restores their original positions"
+                        }
+                    };
+                    self.tab.doc = outcome.into_document(&state.prepared.original);
                     self.tab.selected = selected;
                     self.tab.joining = None;
                     self.tool = Tool::Select;
                     self.changed(before);
                     self.error = false;
-                    self.status = if coordination {
-                        if unchanged {
-                            "This donor is already coordinated to that metal"
-                        } else {
-                            "Donor → metal contact added in place · Undo removes it"
-                        }
-                    } else {
-                        "Fragments joined · Undo restores their original positions"
-                    }
-                    .into();
+                    self.status = status.into();
                     self.sync_typography();
                 }
                 Err(error) => {
@@ -146,7 +233,7 @@ impl App {
             &self.tab.doc,
             anchor,
             direction,
-            10.0 / self.tab.camera.zoom,
+            self.tab.camera.world_len(PICK_RADIUS_PX),
             self.templates.anchor,
             self.templates.connection,
         ) {
@@ -180,7 +267,12 @@ impl App {
             alternate,
             connect,
         };
-        match drawing.place(&self.tab.doc, anchor, direction, 10. / self.tab.camera.zoom) {
+        match drawing.place(
+            &self.tab.doc,
+            anchor,
+            direction,
+            self.tab.camera.world_len(PICK_RADIUS_PX),
+        ) {
             Ok((doc, ids)) => {
                 self.tab.doc = doc;
                 self.tab.selected = ids;
@@ -206,7 +298,7 @@ impl App {
             anchor,
             size,
             aromatic,
-            10.0 / self.tab.camera.zoom,
+            self.tab.camera.world_len(PICK_RADIUS_PX),
             direction,
         ) {
             Ok(ids) => self.tab.selected = ids,
@@ -298,5 +390,25 @@ impl App {
             self.tab.selected = vec![b];
         }
         self.changed(before);
+    }
+}
+
+/// Convert both ends on a candidate so a refusal never installs half an edit.
+fn convert_bond_text(
+    doc: &Document,
+    source: (Option<u64>, Option<u64>),
+    target: (Option<u64>, Option<u64>),
+) -> Result<(Document, Option<u64>, Option<u64>), String> {
+    let (doc, source) = if let Some(text) = source.1 {
+        let (doc, id) = reshiki::atom_text::text_to_atom(doc, text)?;
+        (doc, Some(id))
+    } else {
+        (doc.clone(), source.0)
+    };
+    if let Some(text) = target.1 {
+        let (doc, target) = reshiki::atom_text::text_to_atom(&doc, text)?;
+        Ok((doc, source, Some(target)))
+    } else {
+        Ok((doc, source, target.0))
     }
 }

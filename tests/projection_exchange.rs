@@ -232,7 +232,7 @@ async fn aromatic_bold_front_edge_copies_as_editable_bonds_without_stereo() -> a
     use anyhow::Context;
     use reshiki::engine::{LocalEngine, Request};
     let source: Document =
-        serde_json::from_str(include_str!("../docs/changes/fixtures/arene-bold-join.rsk"))?;
+        serde_json::from_str(include_str!("fixtures/bond-joins/arene-bold-join.rsk"))?;
     let engine = LocalEngine::default();
     let reference = engine
         .request(Request::molecule("analyze", source.clone()))

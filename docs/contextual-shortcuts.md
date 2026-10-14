@@ -51,6 +51,7 @@ After a keyboard step, a stationary pointer does not steal its new target.
 | l                             | Enter Cl at an atom or empty hotspot; place the double line left at a bond   |
 | Enter at an atom              | Edit its label, including after a ring selected several atoms                |
 | [ / ]                         | Mark an atom / connect the active atom to the marked atom with a single bond |
+| }                             | Coordinate the marked donor atom to the active metal (dative bond)           |
 | F8 / Keyboard drawing control | Turn keyboard drawing off for this tab; classic arrow nudging returns        |
 | F8 when off                   | Turn it back on and return to Select                                         |
 | Escape                        | Ordinary cancel/return to Select; preserve this tab's on/off choice          |
@@ -214,24 +215,40 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 
 ## Files, clipboard and help
 
-| Keys                      | Action                                    |
-| ------------------------- | ----------------------------------------- |
-| F1                        | Help and editable examples                |
-| Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save      |
-| Cmd/Ctrl+Shift+S          | Save as                                   |
-| Cmd/Ctrl+W                | Close tab                                 |
-| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab                       |
-| Cmd/Ctrl+1–8 / 9          | Tab 1–8 / last tab                        |
-| Cmd/Ctrl+P                | Print                                     |
-| Cmd/Ctrl+I                | Import                                    |
-| Cmd/Ctrl+Shift+E          | Open Export                               |
-| Cmd/Ctrl+C / X / V        | Copy / cut / paste editable selection     |
-| Cmd/Ctrl+Shift+C          | Copy as an image                          |
-| Cmd/Ctrl+D                | Copy CDXML text                           |
-| Cmd/Ctrl+Alt+C / O        | Copy SMILES / MOL text                    |
-| Cmd/Ctrl+Alt+P            | Paste                                     |
-| Cmd/Ctrl+Z / Shift+Z      | Undo / redo; Windows also supports Ctrl+Y |
-| Cmd/Ctrl+Enter            | Finish editing a label or caption         |
+| Keys                      | Action                                                                      |
+| ------------------------- | --------------------------------------------------------------------------- |
+| F1                        | Help and editable examples                                                  |
+| Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save                                        |
+| Cmd/Ctrl+Shift+S          | Save as                                                                     |
+| Cmd/Ctrl+W                | Close tab                                                                   |
+| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab                                                         |
+| Cmd/Ctrl+1–8 / 9          | Tab 1–8 / last tab                                                          |
+| Cmd/Ctrl+P                | Print                                                                       |
+| Cmd/Ctrl+I                | Import                                                                      |
+| Cmd/Ctrl+Shift+E          | Open Export                                                                 |
+| Cmd/Ctrl+C / X / V        | Copy / cut / paste editable selection                                       |
+| Cmd/Ctrl+Shift+C          | Copy as an image                                                            |
+| Cmd/Ctrl+D                | Copy CDXML text                                                             |
+| Cmd/Ctrl+Alt+C / O        | Copy chemical text (SMILES, or ChemDoodle JSON for one reaction) / MOL text |
+| Cmd/Ctrl+Alt+P            | Paste                                                                       |
+| Cmd/Ctrl+Z / Shift+Z      | Undo / redo; Windows also supports Ctrl+Y                                   |
+| Cmd/Ctrl+Enter            | Finish editing a label or caption                                           |
+
+**Cmd/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps.
+To paste a structure into a text field such as SciFinder's, select it and use
+**Cmd/Ctrl+Alt+C**. With one clear reaction arrow, that shortcut copies bounded
+ChemDoodle reaction JSON; without an arrow, it copies molecular SMILES.
+
+## Atom label editor
+
+| Keys           | Action                                                 |
+| -------------- | ------------------------------------------------------ |
+| Cmd/Ctrl+-     | Turn subscript on or off for the selected characters   |
+| Cmd/Ctrl++ / = | Turn superscript on or off for the selected characters |
+| Cmd/Ctrl+T     | Plain: remove the formatting                           |
+| Enter / Escape | Apply / cancel                                         |
+
+With nothing selected, these keys format the whole label. Chemical abbreviations and group labels cannot be formatted.
 
 ## Selection and drawing constraints
 
@@ -242,7 +259,7 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 | Cmd/Ctrl+Shift+D                           | Start 3D optimization (MMFF94, MMFF94s, or UFF); preview before Apply                     |
 | Cmd/Ctrl+Shift+Right                       | Add a reaction arrow and a copy of the selected molecule to its right                     |
 | Space with Select active                   | Select the whole most recently edited molecule                                            |
-| Cmd/Ctrl+J                                 | Join selected atoms or bonds                                                              |
+| Cmd/Ctrl+J                                 | Join two fragments, merge three or more atoms, or connect a donor to a metal              |
 | Cmd/Ctrl+Shift+K                           | Preview cleanup                                                                           |
 | Cmd/Ctrl+L / E                             | Toggle fixed bond length / fixed angles                                                   |
 | Option/Alt-drag                            | Temporarily draw or move freely, without bond constraints or smart guides                 |

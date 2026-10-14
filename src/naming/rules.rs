@@ -94,9 +94,7 @@ impl Context {
                 return Err("Local organic naming supports C, N, O, F, Cl, Br, I and selected aromatic S parents; other elements are unsupported".into());
             }
         }
-        if state.metadata.atoms.iter().any(|m| m.chiral_tag > 2)
-            || state.metadata.bonds.iter().any(|m| m.stereo > 5)
-        {
+        if crate::molecule_names::has_nonclassical_stereo(&state) {
             return Err(
                 "This naming profile supports tetrahedral R/S and ordinary alkene E/Z only".into(),
             );
@@ -191,7 +189,7 @@ pub(super) fn generate(smiles: &str) -> Result<String, String> {
     ranked.sort();
     let name = ranked.into_iter().next().map(|(_, n)| n)
         .ok_or("The graph is outside the declared local organic naming profile (parent, functional group, branch or stereo context is unsupported)")?;
-    if name.len() > 2048 {
+    if name.len() > super::worker::MAX_NAME_BYTES {
         return Err("Generated local name exceeds the supported length".into());
     }
     Ok(name)
@@ -245,7 +243,7 @@ fn collect_stereo(
         .metadata
         .atoms
         .iter()
-        .filter(|m| matches!(m.chiral_tag, 1 | 2))
+        .filter(|m| crate::molecule_names::is_tetrahedral(m.chiral_tag))
         .count();
     let expected_bonds = state
         .metadata

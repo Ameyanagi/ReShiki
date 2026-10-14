@@ -1,10 +1,34 @@
 use super::{Job, Message, Pending};
+use crate::session::Host;
 use iced::Task;
 use reshiki::engine::Request;
 use std::path::PathBuf;
 
 const SAVE: &str = "Save";
 const DONT_SAVE: &str = "Don’t Save";
+const ADDIN_SAVE_STATUS: &str =
+    "Saving recovery draft and waiting for Microsoft 365 to confirm the drawing update…";
+const OFFICE_SESSION_ENDED: &str =
+    "The Office edit session has ended; save this drawing to another file";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SaveBackend {
+    Addin,
+    OfficeOle,
+    LibreOfficeRetry,
+    Atomic,
+}
+
+/// Native Office backends on Windows; other platforms use atomic writes
+/// for every host except the Microsoft 365 add-in.
+pub(super) fn save_backend(host: Option<Host>) -> SaveBackend {
+    match host {
+        Some(Host::Microsoft365) => SaveBackend::Addin,
+        Some(Host::Office) => SaveBackend::OfficeOle,
+        Some(Host::LibreOffice) => SaveBackend::LibreOfficeRetry,
+        None => SaveBackend::Atomic,
+    }
+}
 
 /// Asks with the system dialog whether to save `name` before continuing a
 /// pending action; the answer arrives as Save, Discard or Cancel.
@@ -79,6 +103,20 @@ pub(super) async fn save_path(title: &str, name: &str, extension: &str) -> Optio
     Some(path)
 }
 
+/// Save bytes through the native dialog, preserving cancellation and write errors.
+pub(super) async fn save_bytes(
+    title: &str,
+    suggested_name: &str,
+    extension: &str,
+    bytes: &[u8],
+) -> Result<Option<PathBuf>, String> {
+    let Some(path) = save_path(title, suggested_name, extension).await else {
+        return Ok(None);
+    };
+    reshiki::storage::write_atomic(&path, bytes)?;
+    Ok(Some(path))
+}
+
 #[derive(Default)]
 pub(super) struct State {
     pub(super) saving: bool,
@@ -108,15 +146,7 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             .map_err(|e| format!("Could not open document: {e}"))?;
         Ok(Prepared::Native(Box::new(doc)))
     } else {
-        let format = match extension.as_str() {
-            "mol" => "mol",
-            "rxn" => "rxn",
-            "rsmi" => "rsmi",
-            "cdxml" => "cdxml",
-            "cdx" => "cdx",
-            "inchi" => "inchi",
-            _ => "smiles",
-        };
+        let format = reshiki::compatibility::structure_format(&extension).unwrap_or("smiles");
         Ok(Prepared::Import {
             format,
             contents: super::import::contents(format, contents)?,
@@ -213,7 +243,7 @@ impl super::App {
                         .tab
                         .office
                         .as_ref()
-                        .is_some_and(|binding| binding.host == super::office::Host::LibreOffice)
+                        .is_some_and(|binding| binding.host == Host::LibreOffice)
                     {
                         "Drawing saved for LibreOffice. Return to the document to check the update."
                     } else {
@@ -276,7 +306,7 @@ impl super::App {
                     return iced::Task::none();
                 }
                 self.clear_recovery();
-                self.tab.file_epoch = self.next_epoch();
+                self.begin_file_epoch();
                 self.tab.doc = *doc;
                 self.sync_drawing_defaults();
                 self.tab.styles.editor = None;
@@ -310,7 +340,7 @@ impl super::App {
         let office_host = office
             .as_ref()
             .filter(|_| self.office_document() && !save_as)
-            .map(|binding| binding.host.label());
+            .map(|binding| binding.host);
         let (path, suggested_name) = self.drawing_save_target(save_as);
         if self.file_io.saving {
             // Only this tab's own save can go on with the dialog's action.
@@ -322,8 +352,8 @@ impl super::App {
         }
         self.file_io.saving = true;
         self.file_io.saving_tab = Some(self.tab.id);
-        if office_host == Some("Microsoft 365") {
-            self.status = "Saving recovery draft and waiting for Microsoft 365 to confirm the drawing update…".into();
+        if office_host == Some(Host::Microsoft365) {
+            self.status = ADDIN_SAVE_STATUS.into();
             self.error = false;
         }
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
@@ -358,15 +388,18 @@ impl super::App {
                     } else {
                         Some(crate::desktop::write_target(&save_path)?)
                     };
-                    let office_host = if let Some(binding) = office.as_ref().filter(|binding| binding.same_path(&save_path)) {
+                    let office_host = if let Some(binding) = office
+                        .as_ref()
+                        .filter(|binding| binding.same_path(&save_path))
+                    {
                         if !binding.writable() {
-                            return Err("The Office edit session has ended; save this drawing to another file".to_owned());
+                            return Err(OFFICE_SESSION_ENDED.to_owned());
                         }
-                        Some(binding.host.label())
+                        Some(binding.host)
                     } else {
                         None
                     };
-                    if office_host == Some("Microsoft 365") {
+                    if save_backend(office_host) == SaveBackend::Addin {
                         reshiki::office_addin::save(&save_path, &bytes)?;
                     } else {
                         #[cfg(windows)]

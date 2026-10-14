@@ -131,7 +131,7 @@ async fn update_reopens_saved_tabs_in_order_and_restores_each_front() {
         let reopen = original.update_reopen_paths();
         assert_eq!(&reopen[..paths.len()], paths);
         assert_eq!(reopen.last(), paths.get(front));
-        let args = super::super::startup::parse(reopen.iter().flat_map(|path| {
+        let args = crate::session::parse(reopen.iter().flat_map(|path| {
             [
                 std::ffi::OsString::from("--open"),
                 path.as_os_str().to_owned(),

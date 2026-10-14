@@ -36,9 +36,9 @@ retain contributor credits and links to their validation evidence.
   not guarantee a global energy minimum; timed-out sampling can fall back to
   one conformer. The documented initial paclitaxel preview is not converged,
   and larger fullerenes such as C70 have not been validated here. This
-  limitation describes 0.11.0; a Nightly rendering correction is
-  [under review in PR #271](https://github.com/Ameyanagi/ReShiki/pull/271),
-  with [matched evidence](projected-double-bonds-review.md).
+  limitation describes 0.11.0. This is fixed in Nightly builds
+  ([PR #271](https://github.com/Ameyanagi/ReShiki/pull/271)); see the
+  [matched evidence](projected-double-bonds-review.md).
 - **Receiving chemical text:** the verified ordinary-Copy reaction route is
   ReShiki Cmd+C → ChemDoodle Open text field Cmd+V → Load on macOS. The tested
   direct canvas paste did not import the selection. CAS Draw's tested molecule
@@ -319,3 +319,8 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
   publication highlights while retaining the merged application code and
   excluding the ongoing refactoring branches.
   [PR #185](https://github.com/Ameyanagi/ReShiki/pull/185) · @Ameyanagi.
+
+- **0.11.0 release validation:** document the tagged source, six-platform
+  release checks, public-download checksums and macOS signing and native-worker
+  verification. [Validation record](release-0.11.0-validation.md)
+  · [PR #187](https://github.com/Ameyanagi/ReShiki/pull/187) · @Ameyanagi.

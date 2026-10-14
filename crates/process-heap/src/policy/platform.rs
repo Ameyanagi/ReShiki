@@ -3,6 +3,17 @@
 #[cfg(target_os = "linux")]
 use std::fs;
 
+#[cfg(target_os = "macos")]
+const RLIMIT_DATA: i32 = 2;
+#[cfg(target_os = "macos")]
+const RLIMIT_AS: i32 = 5;
+#[cfg(target_os = "macos")]
+const HOST_VM_INFO: i32 = 2;
+#[cfg(target_os = "macos")]
+const HOST_VM_INFO_COUNT: usize = 15;
+#[cfg(target_os = "macos")]
+const RLIM_INFINITY_FLOOR: u64 = 1 << 60;
+
 #[cfg(any(target_os = "linux", target_os = "macos", test))]
 fn minimum(values: impl IntoIterator<Item = Option<u64>>) -> Option<u64> {
     values.into_iter().flatten().min()
@@ -56,13 +67,7 @@ fn process_limits_headroom(limits: &str, status: &str) -> Option<u64> {
         ]
         .into_iter()
         .map(|(name, usage)| {
-            let limit = limits
-                .lines()
-                .find_map(|line| line.strip_prefix(name))?
-                .split_whitespace()
-                .next()?
-                .parse::<u64>()
-                .ok()?;
+            let limit = first_number_after(limits, name)?;
             Some(observed_limit_headroom(limit, kib_field(status, usage)))
         }),
     )
@@ -160,20 +165,21 @@ fn mach_memory() -> (Option<u64>, Option<u64>) {
         return (total, None);
     }
     let mut page = 0usize;
-    // HOST_VM_INFO's legacy layout is fixed at 15 natural_t words. Only the
-    // free/inactive page fields are read; free already includes speculative
-    // pages. Layout, flavor and ownership checked against the Darwin SDK's
+    // HOST_VM_INFO's legacy layout has HOST_VM_INFO_COUNT (15) natural_t words.
+    // Only the free/inactive page fields are read; free already includes
+    // speculative pages. Layout, flavor and ownership checked against the Darwin SDK's
     // mach/{vm_statistics.h,host_info.h,mach_host.h,mach_init.h}.
-    let mut values = [0u32; 15];
+    let mut values = [0u32; HOST_VM_INFO_COUNT];
     let mut count = values.len() as u32;
     // SAFETY: page and the complete aligned 15-word buffer are writable for
     // these synchronous calls. The APIs neither retain nor free their pointers.
     let ok = unsafe {
         host_page_size(host.0, &mut page) == 0
-            && host_statistics(host.0, 2, values.as_mut_ptr().cast(), &mut count) == 0
+            && host_statistics(host.0, HOST_VM_INFO, values.as_mut_ptr().cast(), &mut count) == 0
     };
-    let available = if ok && count == 15 && page > 0 {
-        available_pages(values[0], values[2], page as u64)
+    let available = if ok && count == HOST_VM_INFO_COUNT as u32 && page > 0 {
+        let [free, _, inactive, ..] = values;
+        available_pages(free, inactive, page as u64)
     } else {
         None
     };
@@ -190,7 +196,7 @@ fn process_headroom() -> Option<u64> {
     unsafe extern "C" {
         fn getrlimit(resource: i32, limit: *mut Limit) -> i32;
     }
-    let limit = [2, 5]
+    let limit = [RLIMIT_DATA, RLIMIT_AS]
         .into_iter()
         .filter_map(|resource| {
             let mut limit = Limit {
@@ -200,7 +206,7 @@ fn process_headroom() -> Option<u64> {
             // SAFETY: Darwin rlimit has two u64 fields. The stack object is writable
             // for the complete call; getrlimit neither retains nor frees its pointer.
             let result = unsafe { getrlimit(resource, &mut limit) };
-            (result == 0 && limit.current < (1u64 << 60)).then_some(limit.current)
+            (result == 0 && limit.current < RLIM_INFINITY_FLOOR).then_some(limit.current)
         })
         .min()?;
     let pid = std::process::id().to_string();
@@ -255,15 +261,18 @@ pub(super) fn memory_headroom() -> Option<u64> {
 }
 
 #[cfg(any(target_os = "linux", test))]
-fn kib_field(input: &str, name: &str) -> Option<u64> {
-    input
-        .lines()
-        .find_map(|line| line.strip_prefix(name))?
+fn first_number_after(text: &str, prefix: &str) -> Option<u64> {
+    text.lines()
+        .find_map(|line| line.strip_prefix(prefix))?
         .split_whitespace()
         .next()?
         .parse::<u64>()
-        .ok()?
-        .checked_mul(1024)
+        .ok()
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn kib_field(input: &str, name: &str) -> Option<u64> {
+    first_number_after(input, name)?.checked_mul(1024)
 }
 
 #[cfg(any(target_os = "macos", test))]
@@ -318,74 +327,4 @@ fn command(program: &str, args: &[&str]) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn platform_samples_are_checked_and_constrained_by_the_smallest_ceiling() {
-        assert_eq!(
-            kib_field("MemAvailable:  1024 kB\n", "MemAvailable:"),
-            Some(1024 * 1024)
-        );
-        assert_eq!(
-            kib_field("MemAvailable: 18446744073709551615 kB", "MemAvailable:"),
-            None
-        );
-        assert_eq!(minimum([Some(32_000), Some(512), None]), Some(512));
-        assert_eq!(available_pages(13, 20, 16384), Some(33 * 16384));
-        assert_eq!(available_pages(u32::MAX, u32::MAX, u64::MAX), None);
-    }
-
-    #[test]
-    fn finite_process_data_and_address_space_limits_are_both_observed() {
-        let status = "VmSize:  8 kB\nVmData:  2 kB\n";
-        let limits = "Max address space 16384 16384 bytes\nMax data size 4096 4096 bytes\n";
-        assert_eq!(process_limits_headroom(limits, status), Some(2048));
-        let limits = "Max address space unlimited unlimited bytes\nMax data size 4096 4096 bytes\n";
-        assert_eq!(process_limits_headroom(limits, status), Some(2048));
-        assert_eq!(process_limits_headroom(limits, "VmData:  5 kB\n"), Some(0));
-        assert_eq!(process_limits_headroom(limits, ""), Some(0));
-        assert_eq!(observed_limit_headroom(0, None), 0);
-        assert_eq!(observed_limit_headroom(4096, None), 0);
-        assert_eq!(observed_limit_headroom(4096, Some(1024)), 3072);
-    }
-
-    #[test]
-    fn nested_cgroup_memory_and_exhausted_ancestors_constrain_host_headroom() {
-        let root =
-            std::env::temp_dir().join(format!("reshiki-policy-cgroup-{}", std::process::id()));
-        let leaf = root.join("parent/leaf");
-        std::fs::create_dir_all(&leaf).unwrap();
-        for (directory, limit, used) in [
-            (&root, "1000", "200"),
-            (&root.join("parent"), "600", "150"),
-            (&leaf, "10000", "9500"),
-        ] {
-            std::fs::write(directory.join("memory.max"), limit).unwrap();
-            std::fs::write(directory.join("memory.current"), used).unwrap();
-        }
-        assert_eq!(
-            cgroup_headroom(&root, "/parent/leaf", "memory.max", "memory.current"),
-            Some(450)
-        );
-        std::fs::write(root.join("memory.max"), "max").unwrap();
-        assert_eq!(
-            cgroup_headroom(&root, "/parent/leaf", "memory.max", "memory.current"),
-            Some(450)
-        );
-        std::fs::write(leaf.join("memory.current"), "10001").unwrap();
-        assert_eq!(
-            cgroup_headroom(&root, "/parent/leaf", "memory.max", "memory.current"),
-            Some(0)
-        );
-        std::fs::remove_file(leaf.join("memory.current")).unwrap();
-        assert_eq!(
-            cgroup_headroom(&root, "/parent/leaf", "memory.max", "memory.current"),
-            Some(0)
-        );
-        assert_eq!(
-            cgroup_headroom(&root, "/../escape", "memory.max", "memory.current"),
-            None
-        );
-        std::fs::remove_dir_all(root).unwrap();
-    }
-}
+mod tests;

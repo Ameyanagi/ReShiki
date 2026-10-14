@@ -1,5 +1,5 @@
 //! Direct molecule-context naming, using the same bounded local worker and
-//! native identity gate as the existing Names inspector.
+//! native identity gate as the Chemical names inspector.
 use super::*;
 
 pub(super) fn target(doc: &Document, hit: &[u64], selected: &[u64]) -> Option<Vec<u64>> {
@@ -26,27 +26,14 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        let ticket = self.naming_ticket();
-        self.tab.naming.pending = Some(Pending::Caption(ticket));
+        let (ticket, cancel) = self.begin_naming(Pending::Caption);
         self.tab.naming.label_target = Some(atoms.clone());
-        let cancel = naming::Cancel::default();
-        self.tab.naming.local_cancel = Some(cancel.clone());
         let document = self.tab.doc.clone();
         self.status = "Generating chemical name locally…".into();
         self.error = false;
-        Task::perform(
-            async move {
-                let identity = tokio::task::spawn_blocking(move || {
-                    naming::selected_identity(&document, &atoms)
-                })
-                .await
-                .map_err(|error| error.to_string())??;
-                naming::generate_name(&identity, cancel)
-                    .await
-                    .map(Outcome::Structure)
-            },
-            move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
-        )
+        Task::perform(generate_for_atoms(document, atoms, cancel), move |result| {
+            Message::Naming(Action::Finished(ticket, Box::new(result)))
+        })
     }
 
     pub(super) fn place_molecule_name(&mut self, atoms: &[u64], record: Record) {
@@ -69,7 +56,7 @@ impl App {
         );
         if let Err(error) = result {
             self.tab.doc = before;
-            self.tab.naming.notice = Some(error.clone());
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Failed, error.clone()));
             self.status = error;
             self.error = true;
             return;

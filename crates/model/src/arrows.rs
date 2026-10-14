@@ -45,6 +45,73 @@ impl Preset {
             .find(|p| p.kind() == kind)
             .unwrap_or_default()
     }
+    pub const fn supports_attachments(self) -> bool {
+        matches!(self, Self::Curved | Self::Fishhook)
+    }
+}
+
+/// Editable arrow handles in their visible and pick order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowHandle {
+    Start,
+    End,
+    Bend,
+    Departure,
+    Arrival,
+}
+impl ArrowHandle {
+    pub const fn index(self) -> usize {
+        match self {
+            Self::Start => 0,
+            Self::End => 1,
+            Self::Bend => 2,
+            Self::Departure => 3,
+            Self::Arrival => 4,
+        }
+    }
+    pub const fn from_index(index: usize) -> Option<Self> {
+        match index {
+            0 => Some(Self::Start),
+            1 => Some(Self::End),
+            2 => Some(Self::Bend),
+            3 => Some(Self::Departure),
+            4 => Some(Self::Arrival),
+            _ => None,
+        }
+    }
+    pub const fn is_endpoint(self) -> bool {
+        matches!(self, Self::Start | Self::End)
+    }
+    pub const fn is_direction(self) -> bool {
+        matches!(self, Self::Departure | Self::Arrival)
+    }
+}
+
+/// Up to five visible handles without a heap allocation.
+#[derive(Debug, Clone, Copy)]
+pub struct ArrowHandles {
+    points: [Point; 5],
+    len: usize,
+}
+impl std::ops::Deref for ArrowHandles {
+    type Target = [Point];
+
+    fn deref(&self) -> &Self::Target {
+        self.points.get(..self.len).unwrap_or(&self.points)
+    }
+}
+impl ArrowHandles {
+    pub fn typed(&self) -> impl ExactSizeIterator<Item = (ArrowHandle, Point)> + '_ {
+        [
+            ArrowHandle::Start,
+            ArrowHandle::End,
+            ArrowHandle::Bend,
+            ArrowHandle::Departure,
+            ArrowHandle::Arrival,
+        ]
+        .into_iter()
+        .zip(self.iter().copied())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -140,9 +207,6 @@ pub struct ArrowPath {
     pub style: GraphicStyle,
     pub filled: bool,
 }
-fn lerp(a: Point, b: Point, t: f32) -> Point {
-    Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
-}
 fn unit(a: Point, b: Point) -> Point {
     let d = a.distance(b).max(0.0001);
     Point::new((b.x - a.x) / d, (b.y - a.y) / d)
@@ -154,7 +218,7 @@ fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
     } else {
         0.
     };
-    p.distance(lerp(a, b, t.clamp(0., 1.)))
+    p.distance(a.lerp(b, t.clamp(0., 1.)))
 }
 impl Arrow {
     pub fn new(id: u64, start: Point, end: Point, preset: Preset, style: ArrowStyle) -> Self {
@@ -170,6 +234,10 @@ impl Arrow {
             style: Some(style),
         }
     }
+    /// Returns whether either endpoint has an attachment anchor.
+    pub fn is_attached(&self) -> bool {
+        self.start_anchor.is_some() || self.end_anchor.is_some()
+    }
     pub fn appearance(&self) -> ArrowStyle {
         self.style
             .clone()
@@ -181,7 +249,7 @@ impl Arrow {
         }
         self.control.or_else(|| {
             matches!(self.kind.as_str(), "curved" | "fishhook" | "bent").then(|| {
-                lerp(self.start, self.end, 0.5).offset(
+                self.start.lerp(self.end, 0.5).offset(
                     -(self.end.y - self.start.y) * 0.5,
                     (self.end.x - self.start.x) * 0.5,
                 )
@@ -196,27 +264,26 @@ impl Arrow {
         }
         self.cubic.or_else(|| {
             self.control_point()
-                .map(|c| [lerp(self.start, c, 2. / 3.), lerp(self.end, c, 2. / 3.)])
+                .map(|c| [self.start.lerp(c, 2. / 3.), self.end.lerp(c, 2. / 3.)])
         })
     }
     pub fn point(&self, t: f32) -> Point {
         if let Some([a, b]) = self.cubic {
-            return lerp(
-                lerp(lerp(self.start, a, t), lerp(a, b, t), t),
-                lerp(lerp(a, b, t), lerp(b, self.end, t), t),
-                t,
-            );
+            let ab = a.lerp(b, t);
+            let left = self.start.lerp(a, t).lerp(ab, t);
+            let right = ab.lerp(b.lerp(self.end, t), t);
+            return left.lerp(right, t);
         }
         match self.control_point() {
             Some(c) if self.kind == "bent" => {
                 if t <= 0.5 {
-                    lerp(self.start, c, t * 2.)
+                    self.start.lerp(c, t * 2.)
                 } else {
-                    lerp(c, self.end, (t - 0.5) * 2.)
+                    c.lerp(self.end, (t - 0.5) * 2.)
                 }
             }
-            Some(c) => lerp(lerp(self.start, c, t), lerp(c, self.end, t), t),
-            None => lerp(self.start, self.end, t),
+            Some(c) => self.start.lerp(c, t).lerp(c.lerp(self.end, t), t),
+            None => self.start.lerp(self.end, t),
         }
     }
     fn velocity(&self, t: f32) -> Point {
@@ -298,30 +365,39 @@ impl Arrow {
             offset * (a.x - v.x * projection) / speed,
         )
     }
-    pub fn handles(&self) -> Vec<Point> {
-        let mut handles = vec![self.start, self.end, self.point(0.5)];
-        if let Some(controls) = self.bezier_controls() {
-            handles.extend(controls);
-        }
-        handles
+    pub fn handles(&self) -> ArrowHandles {
+        let bend = self.point(0.5);
+        let (points, len) = match self.bezier_controls() {
+            Some([departure, arrival]) => ([self.start, self.end, bend, departure, arrival], 5),
+            None => (
+                [
+                    self.start,
+                    self.end,
+                    bend,
+                    Point::default(),
+                    Point::default(),
+                ],
+                3,
+            ),
+        };
+        ArrowHandles { points, len }
     }
     /// Select the nearest visible handle when short tangent stems overlap.
     pub fn handle_at(&self, p: Point, radius: f32) -> Option<usize> {
         self.handles()
-            .into_iter()
-            .enumerate()
-            .map(|(index, handle)| (index, handle.distance(p)))
+            .typed()
+            .map(|(handle, point)| (handle, point.distance(p)))
             .filter(|(_, distance)| *distance < radius)
             .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(index, _)| index)
+            .map(|(handle, _)| handle.index())
     }
     pub fn edit_handle(&mut self, index: usize, p: Point) {
-        if !p.x.is_finite() || !p.y.is_finite() {
+        if !p.is_finite() {
             return;
         }
         let control = self.control_point();
-        match index {
-            0 => {
+        match ArrowHandle::from_index(index) {
+            Some(ArrowHandle::Start) => {
                 self.start_anchor = None;
                 if let Some([a, _]) = self.cubic.as_mut() {
                     *a = a.offset(p.x - self.start.x, p.y - self.start.y);
@@ -329,7 +405,7 @@ impl Arrow {
                 self.start = p;
                 self.control = control;
             }
-            1 => {
+            Some(ArrowHandle::End) => {
                 self.end_anchor = None;
                 if let Some([_, b]) = self.cubic.as_mut() {
                     *b = b.offset(p.x - self.end.x, p.y - self.end.y);
@@ -337,7 +413,7 @@ impl Arrow {
                 self.end = p;
                 self.control = control;
             }
-            2 => {
+            Some(ArrowHandle::Bend) => {
                 if let Some([a, b]) = self.cubic {
                     let middle = self.point(0.5);
                     let dx = (p.x - middle.x) * 4. / 3.;
@@ -345,20 +421,24 @@ impl Arrow {
                     self.cubic = Some([a.offset(dx, dy), b.offset(dx, dy)]);
                     return;
                 }
-                let mid = lerp(self.start, self.end, 0.5);
+                let mid = self.start.lerp(self.end, 0.5);
                 self.control = Some(if self.kind == "bent" {
                     p
                 } else {
                     Point::new(2. * p.x - mid.x, 2. * p.y - mid.y)
                 });
             }
-            3 | 4 => {
+            Some(handle @ (ArrowHandle::Departure | ArrowHandle::Arrival)) => {
                 if let Some([a, b]) = self.bezier_controls() {
-                    self.cubic = Some(if index == 3 { [p, b] } else { [a, p] });
+                    self.cubic = Some(if handle == ArrowHandle::Departure {
+                        [p, b]
+                    } else {
+                        [a, p]
+                    });
                     self.control = None;
                 }
             }
-            _ => {}
+            None => {}
         }
     }
     pub fn map_points(&mut self, mut f: impl FnMut(Point) -> Point) {
@@ -391,43 +471,47 @@ impl Arrow {
             self.reverse();
             return true;
         }
-        let curved = |kind: &str| matches!(kind, "curved" | "fishhook");
-        if self.kind != preset.kind() && !(curved(&self.kind) && curved(preset.kind())) {
+        self.set_preset(preset, style);
+        false
+    }
+    /// Set an arrow preset and style without cycling its direction or half-head.
+    pub fn set_preset(&mut self, preset: Preset, style: &ArrowStyle) {
+        if self.kind != preset.kind()
+            && !(matches!(self.kind.as_str(), "curved" | "fishhook")
+                && preset.supports_attachments())
+        {
             self.control = None;
             self.cubic = None;
         }
         self.kind = preset.kind().into();
         self.style = Some(style.clone());
-        false
     }
     pub fn straighten(&mut self) {
-        if self.start_anchor.is_some() || self.end_anchor.is_some() {
+        if self.is_attached() {
             self.cubic = Some([
-                lerp(self.start, self.end, 1. / 3.),
-                lerp(self.start, self.end, 2. / 3.),
+                self.start.lerp(self.end, 1. / 3.),
+                self.start.lerp(self.end, 2. / 3.),
             ]);
             self.control = None;
             return;
         }
         self.cubic = None;
-        self.control = Some(lerp(self.start, self.end, 0.5));
+        self.control = Some(self.start.lerp(self.end, 0.5));
     }
     pub fn flip_bend(&mut self) {
+        let start = self.start;
+        let u = unit(start, self.end);
+        let reflect = |c: Point| {
+            let d = (c.x - start.x) * u.x + (c.y - start.y) * u.y;
+            let projection = start.offset(u.x * d, u.y * d);
+            Point::new(2. * projection.x - c.x, 2. * projection.y - c.y)
+        };
         if let Some([a, b]) = self.cubic {
-            let u = unit(self.start, self.end);
-            let reflect = |c: Point| {
-                let d = (c.x - self.start.x) * u.x + (c.y - self.start.y) * u.y;
-                let projection = self.start.offset(u.x * d, u.y * d);
-                Point::new(2. * projection.x - c.x, 2. * projection.y - c.y)
-            };
             self.cubic = Some([reflect(a), reflect(b)]);
             return;
         }
         if let Some(c) = self.control_point() {
-            let u = unit(self.start, self.end);
-            let d = (c.x - self.start.x) * u.x + (c.y - self.start.y) * u.y;
-            let projection = self.start.offset(u.x * d, u.y * d);
-            self.control = Some(Point::new(2. * projection.x - c.x, 2. * projection.y - c.y));
+            self.control = Some(reflect(c));
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -443,7 +527,7 @@ impl Arrow {
             .into_iter()
             .flatten()
             .chain(self.cubic.into_iter().flatten())
-            .any(|p| !p.x.is_finite() || !p.y.is_finite())
+            .any(|p| !p.is_finite())
         {
             return Err("Non-finite arrow position".into());
         }
@@ -607,7 +691,7 @@ impl Arrow {
         }
         let c = self
             .control_point()
-            .unwrap_or_else(|| lerp(self.start, self.end, 0.5));
+            .unwrap_or_else(|| self.start.lerp(self.end, 0.5));
         let d = if self.kind == "bent" {
             if t < 0.5 {
                 unit(self.start, c)
@@ -615,7 +699,7 @@ impl Arrow {
                 unit(c, self.end)
             }
         } else {
-            unit(lerp(self.start, c, t), lerp(c, self.end, t))
+            unit(self.start.lerp(c, t), c.lerp(self.end, t))
         };
         if reverse { Point::new(-d.x, -d.y) } else { d }
     }

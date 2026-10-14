@@ -1,6 +1,6 @@
 # Ctrl+J coordination: Windows native check
 
-Under review in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283), addressing
+Merged, unreleased, in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283), addressing
 [#246](https://github.com/Ameyanagi/ReShiki/issues/246). Contribution: @Ameyanagi,
 project creator and maintainer. This supplements the unchanged
 [macOS shortcut record](coordination-join-shortcut.md).
@@ -8,7 +8,7 @@ project creator and maintainer. This supplements the unchanged
 ## Before and fix
 
 Select exactly donor N5 and Co1 in the controlled
-[original Co(en)3 drawing](assets/coordination-join-windows-20261010/co-en3-before.rsk),
+[original Co(en)3 drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/assets/coordination-join-windows-20261010/co-en3-before.rsk),
 then use **Ctrl+J**. The Windows baseline reports “No compatible attachment”;
 the candidate adds the directed N5→Co1 coordination contact without sharing or
 moving either atom. Selecting N2 and Co1 next closes the same NCCN chelate.
@@ -34,7 +34,7 @@ and [chelate Undo](assets/coordination-join-windows-20261010/candidate-chelate-s
 The separate macOS record verifies the full six-contact assembly.
 
 Native [Save As](assets/coordination-join-windows-20261010/candidate-windows-chelate-saved.jpg)
-produced the exact [saved drawing](assets/coordination-join-windows-20261010/co-en-windows-chelate-after.rsk),
+produced the exact [saved drawing](../../tests/fixtures/coordination/windows-native-20261010/co-en-windows-chelate-after.rsk),
 SHA-256 `d97663421707af458b258e1d37dcc0a5ab1b3ebcfb830d973ef87f43fefe4d56`.
 A clean close, fresh Explorer launch and native Open preserved **13 atoms,
 11 bonds, C6H24CoN6+3**, with Undo and Redo disabled. It was not resaved.
@@ -66,8 +66,8 @@ are omitted from this package.
 The candidate is exact PR head `44d198c4e6791a15017af7ac6d356c245b7073ca`, built
 in [run 38002254770](https://github.com/Ameyanagi/ReShiki/actions/runs/38002254770/job/114062843997),
 attempt 1, terminal job success. The
-[raw build receipt](assets/coordination-join-windows-20261010/windows-build-receipt.txt)
-and [independent artifact audit](assets/coordination-join-windows-20261010/root-artifact-source-audit.txt)
+[raw build receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/assets/coordination-join-windows-20261010/windows-build-receipt.txt)
+and [independent artifact audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/assets/coordination-join-windows-20261010/root-artifact-source-audit.txt)
 bind executable SHA-256
 `752743a45e6afda49de4661d68bfcf07b7ef736c4aa3a3829d799171dae6a894`
 to 2,642 exact Git files, 15 freshly compiled own targets and 564 normalized
@@ -85,7 +85,7 @@ Live raw receipts bind baseline PID 6988, save producer 12908 and fresh reopen
 
 ## Portable verification
 
-From the repository root:
+This historical command uses archived [verify.py](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/assets/coordination-join-windows-20261010/verify.py); restore the cited evidence to a matching source checkout and run it from that repository root.
 
 ```sh
 python3 docs/changes/assets/coordination-join-windows-20261010/verify.py
@@ -98,3 +98,11 @@ the GUI/history actions nor reconstructs the full CI source inventory. Exact
 raw JSON receipts use `.txt` to preserve their original bytes. The captures,
 controlled fixtures and compact records are covered by the package manifest;
 existing macOS evidence, contribution records and license agreements are unchanged.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/assets/coordination-join-windows-20261010](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/assets/coordination-join-windows-20261010) on the evidence archive branch.
+
+| Archived files                                                                                                                                                                             | What they record                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| [docs/changes/assets/coordination-join-windows-20261010](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/assets/coordination-join-windows-20261010) | Windows Ctrl+J controlled input, build/source/process receipts and the finite graph/coordinate verifier. |

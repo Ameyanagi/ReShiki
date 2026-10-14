@@ -102,33 +102,45 @@ impl App {
     }
 
     pub(super) fn text_range(&self) -> Option<Range<usize>> {
-        let cursor = self.tab.caption_editor.cursor();
-        let offset = |p: iced::widget::text_editor::Position| {
-            self.tab
-                .caption
-                .split_inclusive('\n')
-                .take(p.line)
-                .map(str::len)
-                .sum::<usize>()
-                + p.column
-        };
-        let a = offset(cursor.position).min(self.tab.caption.len());
-        let b = offset(cursor.selection?).min(self.tab.caption.len());
-        let selected = self.tab.caption_editor.selection()?;
-        if selected.is_empty() {
-            return None;
-        }
-        let start = a.min(b);
-        if self.tab.caption.get(start..start + selected.len()) == Some(selected.as_str()) {
-            return Some(start..start + selected.len());
-        }
-        // Word/line selections expose their anchor rather than normalized bounds.
-        self.tab
-            .caption
-            .match_indices(&selected)
-            .min_by_key(|(i, _)| i.abs_diff(start))
-            .map(|(i, s)| i..i + s.len())
+        super::inline_text::editor_range(&self.tab.caption_editor, &self.tab.caption)
     }
+    /// The script the Style bar shows as active. Selected text labels report
+    /// a script that covers the whole label; element atoms take their scripts
+    /// from the chemistry and do not count.
+    pub(super) fn toolbar_script(&self) -> Script {
+        if self.tab.inline_text.is_some() || self.tab.caption_target.is_some() {
+            return self.current_text_style().script;
+        }
+        let mut scripts = self
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .filter(|atom| {
+                self.tab.selected.contains(&atom.id)
+                    && self.tab.doc.atom_visible(atom.id)
+                    && self.tab.doc.abbreviation(atom.id).is_none()
+                    && text_label(&self.tab.doc.generic, atom)
+            })
+            .map(|atom| {
+                let runs = reshiki::typography::effective_label_runs(&atom.display);
+                match runs.first() {
+                    Some((_, script)) if runs.iter().all(|(_, current)| current == script) => {
+                        *script
+                    }
+                    _ => Script::Normal,
+                }
+            });
+        let Some(first) = scripts.next() else {
+            return self.current_text_style().script;
+        };
+        if scripts.all(|script| script == first) {
+            first
+        } else {
+            Script::Normal
+        }
+    }
+
     pub(super) fn current_text_style(&self) -> &TextStyle {
         if let Some(range) = self.text_range() {
             self.tab.caption_format.at(range.start)
@@ -384,42 +396,11 @@ impl App {
         if changed {
             self.inline_checkpoint();
         }
-        let selection = self.text_range();
-        let deletion = matches!(
+        if let Some((text, replaced)) = super::inline_text::perform_editor_action(
+            &mut self.tab.caption_editor,
+            &self.tab.caption,
             action,
-            iced::widget::text_editor::Action::Edit(
-                iced::widget::text_editor::Edit::Backspace
-                    | iced::widget::text_editor::Edit::Delete
-            )
-        );
-        let cursor = self.tab.caption_editor.cursor().position;
-        let hint = selection.as_ref().map(|r| r.start).unwrap_or_else(|| {
-            self.tab
-                .caption
-                .split_inclusive('\n')
-                .take(cursor.line)
-                .map(str::len)
-                .sum::<usize>()
-                + cursor.column
-        });
-        self.tab.caption_editor.perform(action);
-        if changed {
-            let text = self.tab.caption_editor.text();
-            let replaced = selection.unwrap_or_else(|| {
-                if deletion && text.len() < self.tab.caption.len() {
-                    let cursor = self.tab.caption_editor.cursor().position;
-                    let after = text
-                        .split_inclusive('\n')
-                        .take(cursor.line)
-                        .map(str::len)
-                        .sum::<usize>()
-                        + cursor.column;
-                    let start = after.min(hint);
-                    start..start + self.tab.caption.len() - text.len()
-                } else {
-                    hint..hint
-                }
-            });
+        ) {
             self.tab
                 .caption_format
                 .edited(&self.tab.caption, &text, replaced);
@@ -507,6 +488,17 @@ impl App {
         let group_members = self.apply_group_text_style(&change);
         for atom in &mut self.tab.doc.atoms {
             if self.tab.selected.contains(&atom.id) && !group_members.contains(&atom.id) {
+                // The Style bar sends the toggled script (see toolbar_script);
+                // a text label stores it as one run over the whole label.
+                if let StyleChange::Script(script) = change
+                    && text_label(&self.tab.doc.generic, atom)
+                {
+                    atom.display.label_scripts = vec![reshiki::typography::ScriptRun {
+                        start: 0,
+                        end: atom.display.variable.as_ref().map_or(0, String::len),
+                        script,
+                    }];
+                }
                 let style = atom
                     .text_style
                     .get_or_insert_with(|| self.tab.doc.drawing_style.text_style());
@@ -923,6 +915,11 @@ impl App {
             self.status = "Text width must be 10–2000 pt, or blank for automatic width".into();
         }
     }
+}
+
+/// A free text label on a dummy atom, which can carry manual scripts.
+fn text_label(generic: &reshiki::generic::Generic, atom: &reshiki::document::Atom) -> bool {
+    atom.element == "*" && atom.display.variable.is_some() && !generic.owns_label(atom.id)
 }
 
 #[cfg(test)]

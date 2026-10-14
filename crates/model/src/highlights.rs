@@ -13,10 +13,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 // label size changes.
 const KAPPA: f32 = 0.552_284_8;
 // Cubic circle segments overshoot the true radius by at most 0.0273%.
-const CAPSULE_RADIUS_SCALE: f32 = 1.0003;
+pub(crate) const CAPSULE_RADIUS_SCALE: f32 = 1.0003;
 
-fn radius(doc: &Document) -> f32 {
-    let style = &doc.drawing_style;
+pub(crate) fn radius(style: &crate::style::DrawingStyle) -> f32 {
     style.bond_length_world * style.bond_spacing_ratio * 1.5 + style.line_width() / 2.
 }
 
@@ -58,10 +57,10 @@ fn bond_radius(doc: &Document, bond: &Bond, joins: &crate::bond_joins::Joins<'_>
             ));
         }
     }
-    radius(doc).max(envelope + style.line_width())
+    radius(style).max(envelope + style.line_width())
 }
 
-fn label_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)> {
+pub(crate) fn label_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)> {
     let mut bounds = crate::scene::atom_label_ink_bounds(atom, doc);
     for part in crate::scientific::styled_mark_parts(atom, &doc.drawing_style) {
         let pad = part.style.width() / 2.;
@@ -81,13 +80,21 @@ fn label_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)> {
 
 /// Elliptical label caps are centered on the left and right ink bounds.
 fn label_shape(doc: &Document, atom: &Atom) -> (Point, Point, f32, f32) {
-    let radius = radius(doc);
-    if let Some((lo, hi)) = label_bounds(doc, atom) {
+    let radius = radius(&doc.drawing_style);
+    label_shape_from(label_bounds(doc, atom), atom.position, radius)
+}
+
+pub(crate) fn label_shape_from(
+    bounds: Option<(Point, Point)>,
+    position: Point,
+    radius: f32,
+) -> (Point, Point, f32, f32) {
+    if let Some((lo, hi)) = bounds {
         let ry = (hi.y - lo.y + radius) / 2.;
         let y = (lo.y + hi.y) / 2.;
         (Point::new(lo.x, y), Point::new(hi.x, y), ry / 2., ry)
     } else {
-        (atom.position, atom.position, radius, radius)
+        (position, position, radius, radius)
     }
 }
 
@@ -292,9 +299,9 @@ pub(crate) fn primitives_with_opacity(
         // scientific symbols have independent geometry and are not text boxes.
         let boxes: Vec<_> = [a, b]
             .into_iter()
-            .filter(|atom| opacity.atom(atom.id) > 0. && atom_color(doc, atom).is_none())
             .filter(|atom| {
-                crate::atom_labels::visible(atom, doc) || doc.abbreviation(atom.id).is_some()
+                crate::scene::label_trims_bonds(atom, doc, Some(opacity))
+                    && atom_color(doc, atom).is_none()
             })
             .flat_map(|atom| crate::scene::atom_label_ink_boxes(atom, doc))
             .collect();
@@ -305,7 +312,7 @@ pub(crate) fn primitives_with_opacity(
         if commands.is_empty() {
             continue;
         }
-        if opacity.is_empty() {
+        if !opacity.has_visibility() {
             bonds
                 .entry((color, 1_f32.to_bits()))
                 .or_default()
@@ -347,7 +354,7 @@ pub(crate) fn primitives_with_opacity(
         // A matching bond cap covers an unlabeled atom when no other bond
         // color can overpaint it (including unrelated crossing bonds). Avoid
         // drawing that same boundary twice and darkening its antialiased edge.
-        if opacity.is_empty()
+        if !opacity.has_visibility()
             && a == b
             && rx == ry
             && bonds.len() == 1
@@ -356,7 +363,7 @@ pub(crate) fn primitives_with_opacity(
             continue;
         }
         let commands = capsule(a, b, Point::new(rx, 0.), Point::new(0., ry));
-        if opacity.is_empty() {
+        if !opacity.has_visibility() {
             atoms
                 .entry((color, 1_f32.to_bits()))
                 .or_default()
@@ -372,7 +379,7 @@ pub(crate) fn primitives_with_opacity(
             );
         }
     }
-    if !opacity.is_empty() {
+    if opacity.has_visibility() {
         // Batch translucent rear paint to avoid doubling identical endpoint
         // halos. Keep opaque front atoms above opaque bond halos across colors,
         // as in the legacy scene, instead of globally sorting their colors.

@@ -1,131 +1,171 @@
 # Move and attach existing fragments
 
-**Join** in the selection row or context menu (Cmd/Ctrl+J) shares two selected
-attachment atoms, or fuses the four endpoints of two bonds. These existing routes
-move a complete source fragment to a separate destination fragment.
+**Join** connects two fragments at the atoms or bonds you select, or merges
+three or more selected atoms into one. **Move & attach…** moves a whole fragment
+onto another, and **Coordinate in place…** adds a donor → metal bond without
+moving anything.
 
-With three or more selected atoms, Join also merges the selected atoms into the
-first selected atom at the center of the selected visible label-ink bounds.
-An atom with a hidden label contributes its position instead. Its ID, element
-label and label color/style survive; surrounding atoms and captions stay in place. Add
-atoms with Shift-click to control which atom is selected first. For four atoms
-that form two selected bonds, Join retains bond fusion; choose **Merge atoms**
-to explicitly merge all four atoms into one instead.
+## Use it
+
+### Join selected atoms or bonds
+
+1. Select the atoms. Shift-click adds atoms in the order you want; the first
+   atom you select is kept when atoms merge.
+2. Choose **Join** in the context row, or right-click and choose **Join
+   selected atoms or bonds** (Ctrl+J, ⌘J on macOS).
+
+| Selection                                      | Result                                             |
+| ---------------------------------------------- | -------------------------------------------------- |
+| One atom in each of two fragments              | The fragments share that atom.                     |
+| Both ends of one bond in each of two fragments | The fragments fuse along the bond.                 |
+| Three or more atoms                            | The atoms merge into one. Nothing else moves.      |
+| A donor atom and a metal                       | A donor → metal bond is added. Neither atom moves. |
+
+Join merges three or more atoms into the first atom you selected. The merged
+atom sits at the center of the selected atom labels and keeps the first atom's
+ID, element, label color and style. Surrounding atoms and captions stay in
+place. Merging three or more atoms is available in Nightly builds; not in
+ReShiki 0.11.0.
+
+Four atoms that form two bonds fuse the bonds. To merge all four atoms into one
+instead, choose **Merge atoms** in the context row, or **Merge selected atoms**
+in the right-click menu.
+
+### Move a fragment onto another
+
+1. Select an atom or molecule and choose **Move & attach…** above the canvas.
+   The whole connected fragment moves, together with selected captions,
+   graphics and groups.
+2. Pick the attachment atom or bond in the inspector preview, and choose how it
+   connects:
+   - **Connect with a bond** adds a single bond to a destination atom.
+   - **Share an atom** merges the attachment atom with a matching atom.
+   - **Fuse along a bond** shares the attachment bond's two atoms with a
+     matching bond. Picking a bond in the preview selects this mode.
+3. Hover a destination to preview the result. Click to join, or drag from the
+   destination to choose the direction. Shift or Ctrl snaps the direction; Alt
+   releases it.
+
+Escape, **Cancel** or switching tools leaves the drawing unchanged. Each join is
+one Undo step.
+
+### Coordination contacts in place
+
+Available in Nightly builds; not in ReShiki 0.11.0.
+
+1. Select a donor atom or ligand and choose **Coordinate in place…** above the
+   canvas or in the right-click menu. **Coordinate in place (donor → metal)** in
+   the **Move & attach** mode list does the same.
+2. Pick the donor (N, O, S or P) in the preview, then click a metal on the
+   drawing. Neither atom moves.
+3. Repeat for each donor of a chelate, even when both donors are already in the
+   same molecule.
+
+You can also select exactly the donor atom and the metal and press **Ctrl+J**
+(**⌘J** on macOS). Select the two atoms, not the whole ligand. In keyboard
+drawing, mark the donor with **[**, move to the metal, then choose
+**Coordinate }** or press **}** (Shift+] on a US keyboard). See
+[keyboard drawing](3d-keyboard-drawing.md).
+
+Each new contact is one Undo step, and adding a contact that already exists does
+nothing. Donor hydrogens and the metal's charge stay as you drew them.
+
+To show the contact as a wedge or hash, choose a style such as **Solid wedge**
+or **Hashed wedge** in the bond **Style** control. **Reverse projection tip** in
+**Crossings & direction** narrows the wedge at the other end. Clicking a plain
+dative bond again with the **Dative** tool swaps donor and metal, the same as
+**Reverse bonds**.
+
+## Limits
+
+- The two fragments must be separate. Join and Move & attach check element,
+  bond order, valence and stereo at the attachment site, as template
+  attachment does.
+- Expand abbreviations before you join or merge at their atoms.
+- A merge is rejected when the atoms have different charge, isotope, fixed
+  hydrogens, radical, aromatic, map or mark states, or when it would merge
+  stereocenters or bonds with stereo.
+- Join placement and selection still need work for some cases
+  ([issue #246](https://github.com/Ameyanagi/ReShiki/issues/246)).
+- Coordinate in place works for neutral or −1 N, O, S and P donors and the
+  transition metals Sc–Zn, Y–Cd and Hf–Hg, with up to 12 contacts per metal.
+  It does not predict stability, geometry, oxidation state or Δ/Λ stereo.
+- Wedge and hash styles on a contact only show the projection. They do not
+  assign stereochemistry.
+- ChemDraw shows coordination contacts as arrows and drops their wedge and hash
+  styles. Use a `.rsk` file or SVG, PDF or PNG to keep the look.
+
+## Implementation notes
+
+### Multi-atom merge
+
 Bond fusion requires four distinct endpoints. Two adjacent bonds among four
-selected atoms use the multi-atom merge.
+selected atoms use the multi-atom merge. The merged position is the center of
+the selected atoms' visible label-ink bounds; an atom with a hidden label
+contributes its position instead.
 
 Merging removes internal self-bonds and combines identical duplicate bonds.
 Conflicting bond metadata, charge, isotope, fixed hydrogen, radical, aromatic,
-map or mark states are rejected with a diagnostic. Abbreviations must be expanded
-first. Merging stereocenters or incident stereo bonds, collapsing stereo neighbors,
-centroid/attachment target sets or painted rings, and conflicting reaction roles
-or depth paint are also rejected. Compatible remote stereo, groups, reaction
-coefficients and atom references are remapped. The whole merge is one Undo step.
-Projection depth retains the mean of the selected depths; the XY label-bounds
-placement does not establish a ChemDraw-compatible 3D rule. Headless model calls
-use the selected atom-position bounds center unless supplied a finite position.
+map or mark states are rejected with a diagnostic. Abbreviations must be
+expanded first. Merging stereocenters or incident stereo bonds, collapsing
+stereo neighbors, centroid/attachment target sets or painted rings, and
+conflicting reaction roles or depth paint are also rejected. Compatible remote
+stereo, groups, reaction coefficients and atom references are remapped. The
+whole merge is one Undo step. Projection depth retains the mean of the selected
+depths; the XY label-bounds placement does not establish a ChemDraw-compatible
+3D rule. Headless model calls (`merge_atoms`) use the selected atom-position
+bounds center unless supplied a finite position (`merge_atoms_at`).
 
-Select an atom or molecule and choose **Move & attach…** above the canvas.
-The entire connected fragment moves, so selecting one endpoint never cuts its
-other bonds. Explicitly selected captions/graphics and integral groups move too.
+### Move & attach
 
-Use the inspector preview to choose the exact source atom or bond:
+The preview and final join use the same placement geometry. Moved objects
+retain their IDs; shared atoms retain the destination IDs. Groups and captions
+are reconciled, unrelated objects stay fixed, and remote stereo references
+survive remapping. A document revision/file guard prevents an old preview from
+overwriting newer edits. Assistant application waits until an active joining
+gesture finishes or is cancelled. Common five/six-member aromatic fusion can
+reassign Kekulé bonds; this is not an unrestricted graph merge or general
+stereocenter-merging tool.
 
-- **Connect with a bond** joins the chosen source atom to a destination atom with
-  a new single bond, aligning both attachment directions.
-- **Share an atom** merges compatible source and destination atoms.
-- **Fuse along a bond** shares the chosen source bond's atoms with a compatible
-  destination bond. Choosing a source bond switches to this mode.
+The [original Move & attach checks](changes/move-and-attach-20260920.md)
+record the first build's tests and desktop check.
 
-Hover a destination to preview. Click to join, or drag from the destination to
-choose direction/side. Shift/Ctrl snaps the direction; Alt releases it. The
-preview and final join use the same placement geometry. Escape, Cancel or
-switching tools leaves the original drawing intact. Joining is one Undo step.
+### Coordination
 
-Moved objects retain their IDs; shared atoms retain the destination IDs. Groups
-and captions are reconciled, unrelated objects stay fixed, and remote stereo
-references survive remapping. A document revision/file guard prevents an old
-preview from overwriting newer edits. Assistant application waits until an
-active joining gesture finishes or is cancelled.
+For the Ctrl+J shortcut, either selection order creates the same donor→metal
+contact without moving or merging atoms. For two ordinary nonmetal atoms, the
+shortcut still shares compatible atoms; four ordinary bond endpoints still fuse
+the bonds. Unsupported donor valence, radicals, atom stereo and unexpanded
+groups give a specific diagnostic. Ordinary **Connect with a bond** keeps its
+covalent valence checks, and **Share an atom** still merges compatible atoms.
+**]** in keyboard drawing remains an ordinary single-bond connection.
 
-The destination must be a separate existing fragment. The same chemistry
-restrictions as template attachment apply: compatible element, bond order,
-valence and stereo at the attachment site. Expand abbreviations before using
-their anchors. Common five/six-member aromatic fusion can reassign Kekulé bonds;
-this is not an unrestricted graph merge or general stereocenter-merging tool.
+A directed dative contact can use **Solid wedge**, **Hashed wedge**, **Hollow
+wedge**, **Bold** or **Hashed** paint. These styles depict projection and keep
+chemical order 5 and the donor→metal direction; they do not assign tetrahedral
+or complex stereochemistry. Changing back to **Dative** or **Coordination
+(dashed)** keeps the same direction, and a reversed drawing gesture does not
+reverse it. **Reverse projection tip** switches between donor- and
+metal-narrowed paint without swapping chemical endpoints.
 
-`tests/joining.rs` checks connect/share/fuse identities, stable IDs, captions,
-groups, single-atom/edge merging, remote tetrahedral stereo and rejected input.
-App tests check cancellation, mode selection, stale previews and atomic Undo/Redo.
-A 2026-09-20 desktop check selected an existing furan edge, fused it onto benzene,
-verified Undo/Redo and saved the resulting nine-atom, ten-bond drawing. Reopening
-and chemistry analysis produced benzofuran (C8H6O).
-
-## Coordination contacts in place
-
-The [native desktop validation](coordination-desktop-validation.md) records
-ordinary rejection, in-place contacts, labeled keyboard controls, projection-tip
-reversal and saved-file graph checks. The contribution remains under review.
-
-Select a donor atom or ligand and choose **Coordinate in place…** above the
-canvas or in its context menu. You can also choose **Coordinate in place
-(donor → metal)** in the Move & attach mode list. Choose the donor in the
-preview, then click the existing metal atom. Neither atom moves or disappears.
-Repeat for the second donor of a chelate, even when both are already in the
-same connected molecule. Each new contact is one Undo step; Escape cancels
-without editing. Repeating an existing donor→metal contact is a no-op.
-
-For a selection shortcut, select exactly the donor atom and the metal, then
-press **Ctrl+J** (**⌘J** on macOS). Either selection order creates the same
-donor→metal contact without moving or merging atoms. Repeat with the other
-donor to close a chelate; an existing contact adds no Undo step. Select the
-two endpoint atoms rather than the whole ligand. For two ordinary nonmetal
-atoms, this shortcut still shares compatible atoms; four ordinary bond
-endpoints still fuse the bonds.
-
-The [selected-pair shortcut check](changes/coordination-join-shortcut.md) records
-matched native before/after, field-focus protection and Save/reopen controls.
-
-The explicit operation supports neutral/−1 charged N, O, S and P lone-pair
-donors and transition-metal acceptors Sc–Zn, Y–Cd and Hf–Hg, with up to 12
-contacts at a metal. Unsupported donor valence, radicals, atom stereo and
-unexpanded groups give a specific diagnostic. This drawing workflow does not
-predict stability, coordination geometry, oxidation state or Δ/Λ stereo.
-It retains entered charge and hydrogen metadata. Ordinary **Connect with a
-bond** keeps its covalent valence checks, and **Share an atom** still merges
-compatible atoms.
-
-For marked keyboard drawing, mark the donor with **[**, navigate to the metal,
-then choose **Coordinate }** or press **}** (Shift+] on a US keyboard).
-**]** remains an ordinary single-bond connection. See
-[keyboard drawing](3d-keyboard-drawing.md).
-
-An existing directed dative contact can use Solid wedge, Hashed wedge, Hollow
-wedge, Bold or Hashed paint from the bond Style control. These styles depict
-projection and preserve chemical order 5 and donor→metal direction; they do
-not assign tetrahedral or complex stereochemistry. Changing back to Dative
-or Coordination (dashed) retains the same direction. A reversed drawing
-gesture does not reverse that chemical direction. Choose **Reverse projection tip**
-in Crossings & direction to switch between donor- and metal-narrowed wedge/hash
-paint. This changes the tip appearance without swapping chemical endpoints.
-
-Native ReShiki and supported CDXML retain charge, direction and projection
-paint. CDXML writes explicit `Order="dative"` with donor B and metal E; a
-wedge can be narrowed at its donor (Begin) or metal/acceptor (End), independently
-of the chemical direction. CDX preserves the same order/end/display properties.
-This retains the projection attributes for ReShiki roundtrips. Actual ChemDraw
-26.0.0.6599 review of the paired Co(en)3 fixture displayed dative contacts as
-arrows, ignoring wedge/hash Display attributes, and removed those attributes
-on save. Its graph still retained all donor→Co contacts, NH2 and Co3+.
-Use native ReShiki or SVG/PDF/PNG for faithful coordination projection paint;
-CDXML/CDX cannot guarantee that appearance in ChemDraw.
-Older ReShiki builds reject projected order-5 styles
-at validation instead of silently reading them as covalent stereo.
-MOL export retains directed dative type 9 in V3000 and charge, but omits
-projection paint and may redraw coordinates for chemical stereo; the export
-reports this limitation. Use native/CDXML or figure export for the drawing.
+`.rsk` files and supported CDXML keep charge, direction and projection paint.
+CDXML writes explicit `Order="dative"` with donor B and metal E; a wedge can be
+narrowed at its donor (Begin) or metal/acceptor (End), independently of the
+chemical direction. CDX preserves the same order/end/display properties. This
+retains the projection attributes for ReShiki roundtrips. ChemDraw 26.0.0.6599
+displayed the paired Co(en)3 fixture's dative contacts as arrows, ignored their
+wedge/hash Display attributes and removed those attributes on save. Its graph
+still retained all donor→Co contacts, NH2 and Co3+. CDXML/CDX cannot guarantee
+that appearance in ChemDraw. Older ReShiki builds reject projected order-5
+styles at validation instead of silently reading them as covalent stereo. MOL
+export retains directed dative type 9 in V3000 and charge, but omits projection
+paint and may redraw coordinates for chemical stereo; the export reports this
+limitation. Use a `.rsk` file, CDXML or figure export for the drawing.
 
 Direction and donor-valence semantics follow the
 [RDKit Book](https://github.com/rdkit/rdkit/blob/master/Docs/Book/RDKit_Book.rst).
 Revvity also documents unified coordination/dative behavior in its
 [official release notes](https://revvitysignals.com/whats-new/all?sort_order=ASC).
+The [desktop validation](coordination-desktop-validation.md) and the
+[selected-pair shortcut record](changes/coordination-join-shortcut.md) describe
+the checks for this feature.

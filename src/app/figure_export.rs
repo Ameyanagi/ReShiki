@@ -17,7 +17,7 @@ impl App {
         self.figure_exporting = true;
         self.error = false;
         let label = match format {
-            "svg-office" => "SVG · Office picture".into(),
+            "svg-office" => super::inspector::FigureFormat::SvgOffice.to_string(),
             _ => format.to_uppercase(),
         };
         self.status = format!("Preparing {label} export…");

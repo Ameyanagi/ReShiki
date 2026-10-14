@@ -13,11 +13,11 @@ use super::{
     error::{ErrorKind, OpError},
     exec::Context,
     export::{self, export_bytes},
-    import::{self, Import, Source, import_document, warnings},
+    import::{self, Import, Source, import_document},
     policy::Access,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, Principal, envelope_json, handle_schema, nullable},
+    wire::{DocHandle, Principal, handle_schema, nullable, warnings},
 };
 use crate::{
     access::{
@@ -26,10 +26,9 @@ use crate::{
     },
     document::Document,
     engine::LocalEngine,
-    envelope::{Envelope, ExportReceipt, ValidationStatus, Versions},
+    envelope::{ExportReceipt, Versions},
     tool_spec::{Hints, ToolSpec},
 };
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -197,13 +196,9 @@ pub(crate) struct Save {
     pages: bool,
 }
 
-fn invalid(message: impl AsRef<str>) -> OpError {
-    OpError::new(ErrorKind::InvalidArguments, message)
-}
-
 fn check_length(path: &str) -> Result<(), OpError> {
     if path.len() > MAX_PATH_BYTES {
-        return Err(invalid(format!(
+        return Err(OpError::invalid(format!(
             "path_invalid: the path is {} bytes; at most {MAX_PATH_BYTES} are allowed",
             path.len()
         )));
@@ -226,7 +221,7 @@ fn resolve(
         return Err(extension_not_allowed(path, allowed).into());
     };
     match requested {
-        Some(requested) if requested != format => Err(invalid(format!(
+        Some(requested) if requested != format => Err(OpError::invalid(format!(
             "format {requested} does not match the .{} extension, which {verb} as {format}",
             row.ext
         ))),
@@ -244,7 +239,7 @@ pub(crate) fn decode_open(args: Value) -> Result<Open, OpError> {
     let format = OPEN_FORMATS
         .into_iter()
         .find(|format| format.name() == name)
-        .ok_or_else(|| invalid(format!("format {name} cannot be opened")))?;
+        .ok_or_else(|| OpError::invalid(format!("format {name} cannot be opened")))?;
     Ok(Open { path, format })
 }
 
@@ -264,10 +259,10 @@ pub(crate) fn decode_save(args: Value) -> Result<Save, OpError> {
     let format = SaveFormat::ALL
         .into_iter()
         .find(|format| format.name() == name)
-        .ok_or_else(|| invalid(format!("format {name} cannot be saved")))?;
+        .ok_or_else(|| OpError::invalid(format!("format {name} cannot be saved")))?;
     let pages = pages.unwrap_or(false);
     if pages && format != SaveFormat::Pdf {
-        return Err(invalid("pages is valid only with format pdf"));
+        return Err(OpError::invalid("pages is valid only with format pdf"));
     }
     Ok(Save {
         document,
@@ -278,20 +273,10 @@ pub(crate) fn decode_save(args: Value) -> Result<Save, OpError> {
     })
 }
 
-/// File contents as import text, exactly as the app reads a structure file
-/// (src/app/import.rs `contents`): binary CDX as base64, everything else as
-/// UTF-8.
+/// File contents through [`reshiki_io::compatibility::import_text`]: binary
+/// CDX as base64, everything else as UTF-8.
 fn contents(format: import::Format, bytes: Vec<u8>) -> Result<String, OpError> {
-    if format == import::Format::Cdx {
-        Ok(STANDARD.encode(bytes))
-    } else {
-        String::from_utf8(bytes).map_err(|error| {
-            OpError::new(
-                ErrorKind::Failed,
-                format!("The file is not valid UTF-8: {error}"),
-            )
-        })
-    }
+    reshiki_io::compatibility::import_text(format.name(), bytes).map_err(OpError::failed)
 }
 
 /// Opens a granted file of at most [`Budgets::max_text_bytes`] as a new
@@ -346,9 +331,7 @@ struct Saved {
 /// most `limit` ([`Budgets::max_output_bytes`]) bytes, as [`export_bytes`]
 /// bounds every other format.
 fn native_bytes(doc: &Document, limit: usize) -> Result<Vec<u8>, OpError> {
-    let bytes = doc
-        .file_json()
-        .map_err(|error| OpError::new(ErrorKind::Failed, error))?;
+    let bytes = doc.file_json().map_err(OpError::failed)?;
     if bytes.len() > limit {
         return Err(OpError::new(
             ErrorKind::Budget,
@@ -419,8 +402,8 @@ pub(crate) async fn file_save(
         .effect(move || Ok(grants.write_atomic(&path, &bytes, mode, &WRITE)?))
         .await?;
     messages.extend(warnings(written.warnings));
-    let value = envelope_json(&Envelope {
-        value: Saved {
+    Ok(ToolResult::valid(
+        Saved {
             receipt: SaveReceipt {
                 path: written.path,
                 format: receipt.format,
@@ -429,16 +412,9 @@ pub(crate) async fn file_save(
                 detail: receipt.detail,
             },
         },
-        warnings: messages,
-        validation: ValidationStatus::Valid,
+        messages,
         versions,
-    });
-    Ok(ToolResult {
-        value,
-        images: Vec::new(),
-        files: Vec::new(),
-        is_error: false,
-    })
+    ))
 }
 
 #[cfg(test)]

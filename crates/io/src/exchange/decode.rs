@@ -1,6 +1,9 @@
 use super::{values::*, *};
 use std::collections::HashSet;
 
+const EXTERNAL_CONNECTION_NUM: u16 = 0x044b;
+const NODE_TYPE: u16 = 0x0400;
+
 /// Read only document-level style properties from stationery. Unlike a drawing
 /// import, template artwork may contain arbitrary objects: traverse their binary
 /// framing, but do not interpret or import them. Older CDS files omit the root
@@ -250,10 +253,15 @@ fn escape(out: &mut String, text: &str, attribute: bool) -> Result<()> {
     Ok(())
 }
 fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
-    if tree.raw.iter().any(|(tag, _)| *tag == 0x044b)
-        && (tree.raw.iter().filter(|(tag, _)| *tag == 0x044b).count() != 1
-            || tree.raw.iter().filter(|(tag, _)| *tag == 0x0400).count() != 1)
-    {
+    let (mut connection_count, mut node_type_count) = (0usize, 0usize);
+    for (tag, _) in &tree.raw {
+        match *tag {
+            EXTERNAL_CONNECTION_NUM => connection_count += 1,
+            NODE_TYPE => node_type_count += 1,
+            _ => (),
+        }
+    }
+    if connection_count >= 1 && (connection_count != 1 || node_type_count != 1) {
         return Err(
             "Numbered external connection needs unique number and NodeType properties".into(),
         );
@@ -386,7 +394,7 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
                 let mut values = Vec::new();
                 for _ in 0..count.unsigned_abs() {
                     let n = r.u16()?;
-                    if !(1..=118).contains(&n) {
+                    if !(1..=MAX_ATOMIC_NUMBER).contains(&n) {
                         return Err("Invalid element-list atomic number".into());
                     }
                     values.push(n.to_string());

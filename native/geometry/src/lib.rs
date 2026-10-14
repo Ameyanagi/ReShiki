@@ -16,6 +16,19 @@ pub const MAX_BONDS: usize = 4096;
 pub const MAX_CONFORMERS: u32 = 32;
 pub const MAX_ITERATIONS: u32 = 10_000;
 
+/// Original atom capacity used by the default admission envelope.
+const LEGACY_MAX_ATOMS: usize = 512;
+/// Original bond capacity used by the default admission envelope.
+const LEGACY_MAX_BONDS: usize = 2048;
+/// Original coordinate capacity, independent of the current structural ceiling.
+const LEGACY_MAX_COORDINATES: usize = 4096;
+/// Heap anchor for the historical default atom capacity.
+const REFERENCE_HEAP_BYTES: usize = 256 * 1024 * 1024;
+/// Heap allowance per atom up to the historical capacity.
+const HEAP_BYTES_PER_BASE_ATOM: usize = 512 * 1024;
+/// Heap allowance per atom beyond the historical capacity.
+const HEAP_BYTES_PER_EXTRA_ATOM: usize = 2 * 1024 * 1024;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Capacity {
@@ -26,9 +39,9 @@ pub struct Capacity {
 impl Default for Capacity {
     fn default() -> Self {
         Self {
-            atoms: 512,
-            bonds: 2048,
-            coordinates: 4096,
+            atoms: LEGACY_MAX_ATOMS,
+            bonds: LEGACY_MAX_BONDS,
+            coordinates: LEGACY_MAX_COORDINATES,
         }
     }
 }
@@ -38,10 +51,10 @@ impl Capacity {
     /// every additional original atom reserves 2 MiB, up to the validated ceiling.
     /// Eligibility does not guarantee optimization success or measured usage.
     pub fn for_heap(heap_bytes: usize) -> Self {
-        let reference_heap = 256 * 1024 * 1024;
-        let base = (heap_bytes / (512 * 1024)).min(512);
-        let additional =
-            (heap_bytes.saturating_sub(reference_heap) / (2 * 1024 * 1024)).min(MAX_ATOMS - 512);
+        let base = (heap_bytes / HEAP_BYTES_PER_BASE_ATOM).min(LEGACY_MAX_ATOMS);
+        let additional = (heap_bytes.saturating_sub(REFERENCE_HEAP_BYTES)
+            / HEAP_BYTES_PER_EXTRA_ATOM)
+            .min(MAX_ATOMS - LEGACY_MAX_ATOMS);
         let atoms = base.saturating_add(additional).min(MAX_ATOMS);
         Self {
             atoms,

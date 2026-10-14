@@ -3,6 +3,8 @@ use super::*;
 use crate::{
     arrow_anchors::{self, Pick, Target},
     arrows::{ArrowStyle, Preset},
+    atom_text::{self, Mode},
+    document::{Document, Point},
     generic::{
         Alternative, AlternativeSite, Crossing, JOIN_NOTICE, LinkNode, RepeatCount, RepeatPattern,
         RepeatUnit,
@@ -37,6 +39,19 @@ fn chain(doc: &mut Document, x: f32, y: f32) -> [u64; 3] {
     doc.add_bond(a, b, 1, "plain");
     doc.add_bond(b, c, 1, "plain");
     [a, b, c]
+}
+
+fn element_chain(elements: &[&str]) -> Document {
+    let mut doc = Document::default();
+    let mut last = None;
+    for (i, element) in elements.iter().enumerate() {
+        let id = doc.add_atom(element, Point::new(i as f32 * 42., 0.));
+        if let Some(previous) = last {
+            doc.add_bond(previous, id, 1, "plain");
+        }
+        last = Some(id);
+    }
+    doc
 }
 
 fn define(doc: &mut Document, site: u64, kind: Definition) {
@@ -214,7 +229,9 @@ fn coordinate_atoms_rejects_generic_donor_and_metal_components_before_chemistry(
             for existing_contact in [false, true] {
                 let (mut doc, metal, donor, second, remote) = chelate();
                 if existing_contact {
-                    doc = templates::coordinate_atoms(&doc, donor, metal).unwrap();
+                    doc = crate::joining::coordinate_atoms(&doc, donor, metal)
+                        .unwrap()
+                        .into_document(&doc);
                 }
                 let site = if host_side {
                     let [a, b, _] = chain(&mut doc, -180., 0.);
@@ -229,13 +246,13 @@ fn coordinate_atoms_rejects_generic_donor_and_metal_components_before_chemistry(
                 unchanged(
                     &doc,
                     &before,
-                    templates::coordinate_atoms(&doc, second, metal),
+                    crate::joining::coordinate_atoms(&doc, second, metal),
                 );
                 // An already existing contact must not bypass the unresolved-site guard.
                 unchanged(
                     &doc,
                     &before,
-                    templates::coordinate_atoms(&doc, donor, metal),
+                    crate::joining::coordinate_atoms(&doc, donor, metal),
                 );
             }
         }
@@ -481,7 +498,9 @@ fn ordinary_joins_preserve_disconnected_generic_components_and_arrow_references(
     let (mut doc, metal, donor, _, _) = chelate();
     let [_, gb, _] = chain(&mut doc, 600., 300.);
     define(&mut doc, gb, Definition::Link);
-    let after = templates::coordinate_atoms(&doc, donor, metal).unwrap();
+    let after = crate::joining::coordinate_atoms(&doc, donor, metal)
+        .unwrap()
+        .into_document(&doc);
     assert_eq!(after.atoms, doc.atoms);
     assert_eq!(after.generic, doc.generic);
     assert_eq!(after.bonds.len(), doc.bonds.len() + 1);
@@ -500,4 +519,214 @@ fn ordinary_joins_preserve_disconnected_generic_components_and_arrow_references(
         assert_eq!(after.atom(id), before.atom(id));
     }
     after.validate().unwrap();
+}
+
+#[test]
+fn prepared_join_rejects_remote_generic_source_before_selection_or_deletion() {
+    let mut source = element_chain(&["C", "C", "C"]);
+    source.add_atom("C", Point::new(250., 0.));
+    let source = atom_text::apply(&source, 3, "[C,N]", Mode::Auto).unwrap();
+    let before = source.clone();
+    let error = crate::joining::Prepared::new(&source, &[1]).unwrap_err();
+    assert_eq!(error, JOIN_NOTICE);
+    assert_eq!(source, before);
+}
+
+#[test]
+fn prepared_join_rechecks_generic_target_and_remote_source_before_placement() {
+    use crate::templates::{Anchor, Connection};
+    let mut source = Document::default();
+    source.add_atom("C", Point::default());
+    let start = source.add_atom("C", Point::new(180., 0.));
+    let end = source.add_atom("C", Point::new(222., 0.));
+    source.add_bond(start, end, 1, "plain");
+    let target_generic = atom_text::apply(&source, 1, "[C,N]", Mode::Auto).unwrap();
+    let prepared = crate::joining::Prepared::new(&target_generic, &[start]).unwrap();
+    let before = target_generic.clone();
+    let base = prepared.base.clone();
+    let fragment = prepared.fragment.clone();
+    assert_eq!(
+        prepared
+            .place(
+                Point::default(),
+                None,
+                5.,
+                Anchor::Atom(start),
+                Connection::ShareAtom
+            )
+            .unwrap_err(),
+        JOIN_NOTICE
+    );
+    assert_eq!(target_generic, before);
+    assert_eq!(prepared.base, base);
+    assert_eq!(prepared.fragment, fragment);
+
+    let mut prepared = crate::joining::Prepared::new(&source, &[start]).unwrap();
+    prepared.fragment = atom_text::apply(&prepared.fragment, end, "[C,N]", Mode::Auto).unwrap();
+    let base = prepared.base.clone();
+    let fragment = prepared.fragment.clone();
+    assert_eq!(
+        prepared
+            .place(
+                Point::default(),
+                None,
+                5.,
+                Anchor::Atom(start),
+                Connection::Connect
+            )
+            .unwrap_err(),
+        JOIN_NOTICE
+    );
+    assert_eq!(prepared.base, base);
+    assert_eq!(prepared.fragment, fragment);
+}
+
+#[test]
+fn direct_template_share_fuse_and_connect_reject_referenced_generic_ports() {
+    use crate::templates::{self, Anchor, Connection};
+    let host = atom_text::apply(&element_chain(&["C", "C"]), 1, "[C,N]", Mode::Auto).unwrap();
+    let part = element_chain(&["C", "C"]);
+    let host_before = host.clone();
+    let part_before = part.clone();
+    for (mode, point, anchor) in [
+        (Connection::ShareAtom, Point::default(), Anchor::Atom(1)),
+        (Connection::Connect, Point::default(), Anchor::Atom(1)),
+        (
+            Connection::FuseBond,
+            Point::new(21., 0.),
+            Anchor::Bond(1, 2),
+        ),
+    ] {
+        assert_eq!(
+            templates::place_with_mode(&host, &part, point, None, 2., anchor, mode).unwrap_err(),
+            JOIN_NOTICE
+        );
+    }
+    assert_eq!(
+        templates::place_anchored(
+            &host,
+            &part,
+            Point::new(21., 0.),
+            None,
+            2.,
+            Anchor::Bond(1, 2)
+        )
+        .unwrap_err(),
+        JOIN_NOTICE
+    );
+    assert_eq!(host, host_before);
+    assert_eq!(part, part_before);
+
+    let part = atom_text::apply(&element_chain(&["C", "C", "C"]), 3, "[C,N]", Mode::Auto).unwrap();
+    let ordinary_host = element_chain(&["C", "C"]);
+    let before = part.clone();
+    assert_eq!(
+        templates::place_with_mode(
+            &ordinary_host,
+            &part,
+            Point::default(),
+            None,
+            2.,
+            Anchor::Atom(1),
+            Connection::ShareAtom
+        )
+        .unwrap_err(),
+        JOIN_NOTICE
+    );
+    assert_eq!(part, before);
+}
+
+#[test]
+fn plain_joins_and_free_generic_insertion_keep_unrelated_host_definitions() {
+    use crate::templates::{self, Anchor, Connection};
+    let mut host = element_chain(&["C", "C"]);
+    let unrelated = host.add_atom("C", Point::new(300., 0.));
+    let host = atom_text::apply(&host, unrelated, "[C,N]", Mode::Auto).unwrap();
+    let part = element_chain(&["C", "C"]);
+    let before = host.clone();
+    let (joined, _) = templates::place_with_mode(
+        &host,
+        &part,
+        Point::default(),
+        None,
+        2.,
+        Anchor::Atom(1),
+        Connection::Connect,
+    )
+    .unwrap();
+    assert_eq!(joined.generic, host.generic);
+    assert_eq!(joined.atom(unrelated), host.atom(unrelated));
+    assert_eq!(joined.bonds.len(), host.bonds.len() + part.bonds.len() + 1);
+    joined.validate().unwrap();
+    assert_eq!(host, before);
+
+    let generic_part = atom_text::apply(&part, 2, "[C,N]", Mode::Auto).unwrap();
+    let (inserted, _) = templates::place_anchored(
+        &host,
+        &generic_part,
+        Point::new(600., 0.),
+        None,
+        2.,
+        Anchor::Atom(1),
+    )
+    .unwrap();
+    assert_eq!(inserted.generic.alternatives.len(), 2);
+    assert_eq!(
+        inserted.generic.alternatives[0],
+        host.generic.alternatives[0]
+    );
+    inserted.validate().unwrap();
+    assert_eq!(host, before);
+}
+
+#[test]
+fn prepared_generic_source_keeps_invalid_anchor_and_geometry_errors_first() {
+    let mut doc = Document::default();
+    doc.add_atom("Co", Point::default());
+    let donor = doc.add_atom("N", Point::new(180., 0.));
+    let remote = doc.add_atom("C", Point::new(222., 0.));
+    doc.add_bond(donor, remote, 1, "plain");
+    let mut prepared = Prepared::with_mode(&doc, &[donor], Connection::Coordinate).unwrap();
+    prepared.fragment = atom_text::apply(&prepared.fragment, remote, "[C,N]", Mode::Auto).unwrap();
+    assert!(crate::generic::intersects(
+        &prepared.fragment,
+        &prepared.fragment.all_ids()
+    ));
+    let anchor_error = "Choose an exact source atom or bond in the fragment preview.";
+    let geometry_error = "Invalid connection target geometry.";
+    for mode in [Connection::Connect, Connection::Coordinate] {
+        for (point, radius, anchor, expected) in [
+            (Point::default(), 5., Anchor::Atom(u64::MAX), anchor_error),
+            (Point::default(), 5., Anchor::Auto, anchor_error),
+            (
+                Point::new(f32::NAN, 0.),
+                5.,
+                Anchor::Atom(donor),
+                geometry_error,
+            ),
+            (
+                Point::new(0., f32::INFINITY),
+                5.,
+                Anchor::Atom(donor),
+                geometry_error,
+            ),
+            (
+                Point::default(),
+                f32::NAN,
+                Anchor::Atom(donor),
+                geometry_error,
+            ),
+            (Point::default(), 0., Anchor::Atom(donor), geometry_error),
+            (Point::default(), -1., Anchor::Atom(donor), geometry_error),
+        ] {
+            assert_eq!(
+                prepared
+                    .place(point, None, radius, anchor, mode)
+                    .unwrap_err(),
+                expected,
+                "{mode:?} {anchor:?} {point:?} {radius}"
+            );
+            assert!(!prepared.generic_rejection(point, radius, anchor, mode));
+        }
+    }
 }

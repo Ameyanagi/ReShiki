@@ -124,6 +124,7 @@ pub(crate) fn ring_stroke(
     doc: &Document,
     ring: &Circle,
     mut stroke: Primitive,
+    opacity: &crate::rear_opacity::Paint,
 ) -> (Primitive, Vec<(usize, Gap)>) {
     let Primitive::Path {
         commands,
@@ -133,7 +134,6 @@ pub(crate) fn ring_stroke(
     else {
         return (stroke, Vec::new());
     };
-    let opacity = crate::rear_opacity::Paint::new(doc);
     let paths = flattened(commands);
     let bounds = commands.iter().flat_map(PathCommand::iter_points).fold(
         None::<(Point, Point)>,

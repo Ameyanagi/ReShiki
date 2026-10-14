@@ -21,7 +21,14 @@ fn representation(kind: &str, data: &str) -> Representation {
     Representation {
         kind: kind.into(),
         data: STANDARD.encode(data),
+        read_error: None,
+        source: None,
     }
+}
+
+fn expected_read(mut representation: Representation) -> Representation {
+    representation.source = Some(representation.kind.clone());
+    representation
 }
 
 #[test]
@@ -47,7 +54,7 @@ fn explicit_structure_copies_offer_native_data_and_plain_text() -> Result<(), St
         )?;
         assert_eq!(
             read(&board, false)?,
-            vec![representation(native_kind, data)]
+            vec![expected_read(representation(native_kind, data))]
         );
         let text = board
             .dataForType(&NSString::from_str("public.utf8-plain-text"))
@@ -101,6 +108,8 @@ fn every_copy_as_format_publishes_exact_native_types_and_bytes() -> Result<(), S
         .map(|kind| Representation {
             kind: (*kind).into(),
             data: STANDARD.encode(data),
+            read_error: None,
+            source: None,
         })
         .collect();
         let mut expected = output_types.to_vec();
@@ -108,6 +117,8 @@ fn every_copy_as_format_publishes_exact_native_types_and_bytes() -> Result<(), S
             request.push(Representation {
                 kind: "public.utf8-plain-text".into(),
                 data: STANDARD.encode(text),
+                read_error: None,
+                source: None,
             });
             expected.push("public.utf8-plain-text");
         }
@@ -155,17 +166,17 @@ fn private_pasteboard_priorities_formats_and_invalid_writes() -> Result<(), Stri
             vec![legacy, png.clone()],
             representation("dev.moruno.drawing", "legacy"),
         ),
-        (vec![text, png.clone()], png.clone()),
+        (vec![text.clone(), png.clone()], text.clone()),
     ] {
         write(&board, &input)?;
-        assert_eq!(read(&board, false)?, vec![expected]);
+        assert_eq!(read(&board, false)?, vec![expected_read(expected)]);
     }
     write(&board, &[native.clone(), png.clone()])?;
-    assert_eq!(read(&board, true)?, vec![png.clone()]);
+    assert_eq!(read(&board, true)?, vec![expected_read(png.clone())]);
     for &kind in PICTURES {
         let image = representation(kind, kind);
         write(&board, std::slice::from_ref(&image))?;
-        assert_eq!(read(&board, false)?, vec![image]);
+        assert_eq!(read(&board, false)?, vec![expected_read(image)]);
     }
     write(&board, std::slice::from_ref(&native))?;
     assert!(read(&board, true)?.is_empty());
@@ -176,6 +187,8 @@ fn private_pasteboard_priorities_formats_and_invalid_writes() -> Result<(), Stri
         vec![Representation {
             kind: native.kind.clone(),
             data: "!".into(),
+            read_error: None,
+            source: None,
         }],
         vec![representation("public.png", "")],
         vec![
@@ -191,10 +204,212 @@ fn private_pasteboard_priorities_formats_and_invalid_writes() -> Result<(), Stri
         vec![Representation {
             kind: "chemical/x-cdxml".into(),
             data: "A".repeat((LIMIT / 3).div_ceil(3) * 4 + 4),
+            read_error: None,
+            source: None,
         }],
     ] {
         assert!(write(&board, &invalid).is_err());
-        assert_eq!(read(&board, false)?, vec![native.clone()]);
+        assert_eq!(read(&board, false)?, vec![expected_read(native.clone())]);
     }
+    Ok(())
+}
+
+#[test]
+fn synthetic_reads_use_shared_order_and_fetch_one_candidate_per_request() -> Result<(), String> {
+    let text = "public.utf8-plain-text";
+    let png = "public.png";
+    let cdx = "com.perkinelmer.chemdraw.cdx-clipboard";
+    let native = "dev.reshiki.drawing";
+    for (available, expected) in [
+        (vec![text, png], text),
+        (vec![cdx, text, png], cdx),
+        (vec![native, cdx, "com.mdli.molfile", text, png], native),
+        (vec![text, "public.tiff"], text),
+        (vec!["com.adobe.pdf"], "com.adobe.pdf"),
+        (vec!["public.jpeg", "public.tiff"], "public.tiff"),
+    ] {
+        let mut fetched = Vec::new();
+        let result = read_next(
+            &[],
+            &[],
+            false,
+            |kind| available.contains(&kind),
+            |kind| {
+                fetched.push(kind.to_owned());
+                Ok(kind.as_bytes().to_vec())
+            },
+        )?;
+        assert_eq!(result, [expected_read(representation(expected, expected))]);
+        assert_eq!(fetched, [expected]);
+    }
+    // After the editor rejects nonchemical text, only the picture is fetched.
+    let formats: Vec<_> = READABLE
+        .iter()
+        .filter(|kind| **kind != text)
+        .map(|kind| (*kind).to_owned())
+        .collect();
+    for contents in ["CCO", "hello", "title\nM  END\n"] {
+        let available = [
+            representation(text, contents),
+            representation(png, "picture"),
+        ];
+        let request = if contents == "hello" {
+            formats.as_slice()
+        } else {
+            &[]
+        };
+        let result = read_next(
+            request,
+            &[],
+            false,
+            |kind| available.iter().any(|item| item.kind == kind),
+            |kind| {
+                let item = available
+                    .iter()
+                    .find(|item| item.kind == kind)
+                    .ok_or("Missing synthetic data")?;
+                STANDARD
+                    .decode(&item.data)
+                    .map_err(|error| error.to_string())
+            },
+        )?;
+        assert_eq!(
+            result,
+            [expected_read(
+                available
+                    .get(usize::from(contents == "hello"))
+                    .ok_or("Missing expected representation")?
+                    .clone()
+            )]
+        );
+    }
+    let explicit = read_next(
+        &[],
+        &[],
+        true,
+        |kind| [native, text, png].contains(&kind),
+        |kind| Ok(kind.as_bytes().to_vec()),
+    )?;
+    assert_eq!(explicit, [expected_read(representation(png, png))]);
+    Ok(())
+}
+
+#[test]
+fn failed_native_transfer_is_reported_without_fetching_alternatives() -> Result<(), String> {
+    let mut reads = Vec::new();
+    let result = read_next(
+        &[],
+        &[],
+        false,
+        |kind| ["dev.reshiki.drawing", "public.png"].contains(&kind),
+        |kind| {
+            reads.push(kind.to_owned());
+            Err("Clipboard data exceeds the 64 MB limit".into())
+        },
+    )?;
+    assert_eq!(reads, ["dev.reshiki.drawing"]);
+    let item = result.first().ok_or("Missing failure representation")?;
+    assert_eq!(item.kind, "dev.reshiki.drawing");
+    assert!(item.data.is_empty());
+    assert_eq!(
+        item.read_error.as_deref(),
+        Some("Clipboard data exceeds the 64 MB limit")
+    );
+    assert!(priority::read_formats(&vec!["public.png".into(); READABLE.len() + 1], false).is_err());
+    assert!(priority::read_formats(&["unknown".into()], false).is_err());
+    Ok(())
+}
+
+#[test]
+fn retry_skips_the_failed_pasteboard_alias_without_reading_it_again() -> Result<(), String> {
+    let failed = "com.revvity.chemdraw.cdx-clipboard";
+    let alternate = "com.perkinelmer.chemdraw.cdx-clipboard";
+    let mut reads = Vec::new();
+    let result = read_next(
+        &[],
+        &[failed.into()],
+        false,
+        |kind| [failed, alternate, "public.png"].contains(&kind),
+        |kind| {
+            reads.push(kind.to_owned());
+            Ok(b"valid alternate".to_vec())
+        },
+    )?;
+    assert_eq!(reads, [alternate]);
+    let item = result.first().ok_or("Missing alternate representation")?;
+    assert_eq!(item.kind, alternate);
+    assert_eq!(item.source.as_deref(), Some(alternate));
+    assert!(priority::validate_skip_sources(&vec!["public.png".into(); 129]).is_err());
+    assert!(priority::validate_skip_sources(&["bad\0source".into()]).is_err());
+    Ok(())
+}
+
+#[test]
+fn generation_change_stops_retry_before_applying_old_exclusions() -> Result<(), String> {
+    let first = read_generation(None, || "7".into(), || Ok(Vec::new()))?;
+    assert_eq!(first.generation.as_deref(), Some("7"));
+    let read = std::cell::Cell::new(false);
+    let retry = read_generation(
+        first.generation.as_deref(),
+        || "8".into(),
+        || {
+            read.set(true);
+            Ok(Vec::new())
+        },
+    );
+    assert!(matches!(retry, Err(error) if error == priority::CLIPBOARD_CHANGED));
+    assert!(
+        !read.get(),
+        "replacement data must not be read with old exclusions"
+    );
+    Ok(())
+}
+
+#[test]
+fn generation_change_during_acquisition_overrides_candidate_errors() {
+    use std::cell::Cell;
+    for fails in [false, true] {
+        let count = Cell::new(7);
+        let result = read_generation(
+            None,
+            || count.get().to_string(),
+            || {
+                count.set(8);
+                if fails {
+                    Err("selected representation failed".into())
+                } else {
+                    Ok(vec![representation("public.png", "picture")])
+                }
+            },
+        );
+        assert!(matches!(result, Err(error) if error == priority::CLIPBOARD_CHANGED));
+    }
+}
+
+#[test]
+fn private_pasteboard_replacement_invalidates_retry_generation() -> Result<(), String> {
+    let _lock = PASTEBOARD_TEST
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let board = NSPasteboard::pasteboardWithUniqueName();
+    let _release = PrivatePasteboard(&board);
+    let cdx = "com.revvity.chemdraw.cdx-clipboard";
+    write(&board, &[representation(cdx, "damaged")])?;
+    let first = read_requested(&board, false, &[], &[], None)?;
+    write(
+        &board,
+        &[
+            representation(cdx, "replacement"),
+            representation("public.png", "png"),
+        ],
+    )?;
+    let retry = read_requested(
+        &board,
+        false,
+        &[],
+        &[cdx.into()],
+        first.generation.as_deref(),
+    );
+    assert!(matches!(retry, Err(error) if error == priority::CLIPBOARD_CHANGED));
     Ok(())
 }

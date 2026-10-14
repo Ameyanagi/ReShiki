@@ -201,6 +201,8 @@ impl Document {
                 return Err("Invalid group ID or membership".into());
             }
         }
+        #[cfg(test)]
+        crate::generic::probe::enter(crate::generic::probe::Stage::GroupPairs);
         for (i, g) in self.groups.iter().enumerate() {
             for other in self.groups.iter().skip(i.saturating_add(1)) {
                 let overlap = g

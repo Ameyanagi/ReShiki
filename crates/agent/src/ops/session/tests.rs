@@ -197,6 +197,147 @@ fn revision(store: &SessionStore, handle: &DocHandle) -> Revision {
         .revision
 }
 
+/// Compare the prediction with independently observed mutation and label state.
+fn assert_prospect_matches_mutation(
+    mut entry: Entry,
+    edit: Edit,
+    labels: Option<Result<Refresh, String>>,
+    expected: Applied,
+) {
+    let predicted = prospect(&entry, &edit, labels.as_ref());
+    assert_eq!(predicted, expected);
+    let before = Arc::clone(&entry.doc);
+    let revision = entry.revision;
+    let mut after = match &edit {
+        Edit::Replace { doc, .. } => doc.clone(),
+        Edit::Step { redo, .. } => entry.history.peek(*redo).unwrap_or(&before).clone(),
+    };
+    let notice = match &labels {
+        Some(Ok(refresh)) => refresh.notice.clone(),
+        Some(Err(error)) => Some(error.clone()),
+        None => None,
+    };
+    if expected.chemistry_changed {
+        atom_labels::clear_computed(&mut after);
+        if let Some(Ok(refresh)) = &labels {
+            refresh.apply(&mut after);
+        }
+    }
+    mutate(&mut entry, edit, labels);
+    assert_eq!(*entry.doc, after);
+    let chemistry_changed = transaction::chemistry_changed(&before, &entry.doc);
+    let observed = Applied {
+        revision: Revision(entry.revision),
+        recorded: entry.revision != revision,
+        chemistry_changed,
+        label_notice: if chemistry_changed { notice } else { None },
+    };
+    assert_eq!(predicted, observed);
+}
+
+fn prospect_entry(doc: Document, history: History) -> Entry {
+    Entry {
+        owner: alice(),
+        weight: cost(&doc),
+        doc: Arc::new(doc),
+        history,
+        revision: 7,
+        last_used: Instant::now(),
+        receipts: VecDeque::new(),
+    }
+}
+
+#[test]
+fn prospect_matches_mutation_for_replacements() {
+    type EditDocument = fn(&mut Document);
+    let edits: [(EditDocument, bool, bool); 4] = [
+        (|_| {}, false, false),
+        (|doc| doc.drawing_style.name = "Custom".into(), true, false),
+        (|doc| doc.atoms[0].label_h = 4, true, false),
+        (|doc| doc.atoms[0].element = "N".into(), true, true),
+    ];
+    for (edit, recorded, chemistry_changed) in edits {
+        for history_present in [false, true] {
+            for labels_kind in 0..3 {
+                let before = with_carbons(1);
+                let mut history = History::default();
+                if history_present {
+                    assert!(history.commit(Document::default(), &before));
+                }
+                let entry = prospect_entry(before.clone(), history);
+                let mut doc = before.clone();
+                edit(&mut doc);
+                let reconciled = transaction::reconcile(&mut doc, before).unwrap();
+                let labels = match labels_kind {
+                    0 => None,
+                    1 => Some(Err("Labels could not be computed".into())),
+                    _ => {
+                        let mut refresh = Refresh::calculate(&doc, &Refresh::default()).unwrap();
+                        refresh.notice = Some("Label refresh notice".into());
+                        Some(Ok(refresh))
+                    }
+                };
+                let label_notice = match labels_kind {
+                    1 if chemistry_changed => Some("Labels could not be computed".into()),
+                    2 if chemistry_changed => Some("Label refresh notice".into()),
+                    _ => None,
+                };
+                assert_prospect_matches_mutation(
+                    entry,
+                    Edit::Replace { doc, reconciled },
+                    labels,
+                    Applied {
+                        revision: Revision(if recorded { 8 } else { 7 }),
+                        recorded,
+                        chemistry_changed,
+                        label_notice,
+                    },
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn prospect_matches_mutation_for_undo_and_redo() {
+    for redo in [false, true] {
+        for history_present in [false, true] {
+            for chemistry in [false, true] {
+                let before = with_carbons(1);
+                let mut doc = before.clone();
+                let mut history = History::default();
+                if history_present {
+                    if chemistry {
+                        doc.atoms[0].element = "N".into();
+                    } else {
+                        doc.drawing_style.name = "Custom".into();
+                    }
+                    assert!(history.commit(before, &doc));
+                    if redo {
+                        assert!(history.undo(&mut doc));
+                    }
+                }
+                let chemistry_changed = history_present && chemistry;
+                assert_prospect_matches_mutation(
+                    prospect_entry(doc, history),
+                    Edit::Step {
+                        redo,
+                        chemistry_changed: chemistry,
+                    },
+                    Some(Err("Labels could not be computed".into())),
+                    Applied {
+                        revision: Revision(if history_present { 8 } else { 7 }),
+                        recorded: history_present,
+                        chemistry_changed,
+                        label_notice: chemistry_changed
+                            .then(|| "Labels could not be computed".into()),
+                    },
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn another_principals_handle_is_an_unknown_document() {
     let store = store();

@@ -1,6 +1,7 @@
 //! Canvas-local derived data, invalidated by document contents rather than edit hooks.
 //! Keeping one snapshot covers imports, undo/redo, styles and in-place edits alike.
-use super::{Camera, Document, Rectangle, SelectionBox};
+use super::{Camera, Document, Rectangle, SelectionBox, nmr};
+use reshiki::rear_opacity::Paint;
 use reshiki::scene::{self, Primitive};
 use std::{collections::HashSet, rc::Rc};
 
@@ -8,6 +9,9 @@ use std::{collections::HashSet, rc::Rc};
 pub(super) struct SceneCache {
     document: Option<Document>,
     scene: Option<Rc<[Primitive]>>,
+    stretch: Option<Rc<reshiki::editing::reference::Stretch>>,
+    stretch_key: Option<(u64, u64)>,
+    opacity: Option<Rc<Paint>>,
     ids: Vec<u64>,
     selection: Option<Option<SelectionBox>>,
     markers: Option<Rc<super::markers::Markers>>,
@@ -16,6 +20,55 @@ pub(super) struct SceneCache {
     /// Keyed by the dragged IDs alone: hovering reads the selection box of
     /// another selection during a drag.
     guides: Option<(Vec<u64>, Option<Rc<super::smart_guides::Layout>>)>,
+    nmr: NmrCache,
+    foreground_orbital: Option<bool>,
+}
+
+#[derive(Default)]
+struct NmrCache {
+    entry: Option<(NmrKey, Rc<[nmr::Assignment]>)>,
+    widths: nmr::WidthMemo,
+}
+
+struct NmrKey {
+    rows: Vec<(u64, Option<u64>)>,
+    mode: nmr::LabelMode,
+    camera: [u32; 3],
+    bounds: [u32; 4],
+}
+
+impl NmrKey {
+    fn camera(camera: Camera) -> [u32; 3] {
+        [
+            camera.center.x.to_bits(),
+            camera.center.y.to_bits(),
+            camera.zoom.to_bits(),
+        ]
+    }
+
+    fn bounds(bounds: Rectangle) -> [u32; 4] {
+        [
+            bounds.x.to_bits(),
+            bounds.y.to_bits(),
+            bounds.width.to_bits(),
+            bounds.height.to_bits(),
+        ]
+    }
+
+    fn rows<'a>(context: nmr::Context<'a>) -> impl Iterator<Item = (u64, Option<u64>)> + 'a {
+        context
+            .report
+            .rows
+            .iter()
+            .map(|row| (row.atom_id, row.shift().map(f64::to_bits)))
+    }
+
+    fn matches(&self, context: nmr::Context<'_>, camera: Camera, bounds: Rectangle) -> bool {
+        self.mode == context.mode
+            && self.camera == Self::camera(camera)
+            && self.bounds == Self::bounds(bounds)
+            && self.rows.iter().copied().eq(Self::rows(context))
+    }
 }
 
 impl SceneCache {
@@ -23,12 +76,17 @@ impl SceneCache {
         if self.document.as_ref() != Some(doc) {
             self.document = Some(doc.clone());
             self.scene = None;
+            self.stretch = None;
+            self.stretch_key = None;
+            self.opacity = None;
             self.ids.clear();
             self.selection = None;
             self.markers = None;
             self.whole = false;
             self.copy = None;
             self.guides = None;
+            self.nmr.entry = None;
+            self.foreground_orbital = None;
         }
     }
 
@@ -48,6 +106,23 @@ impl SceneCache {
     pub fn whole_document(&mut self, doc: &Document, ids: &[u64]) -> bool {
         self.selected(doc, ids);
         self.whole
+    }
+
+    pub fn stretch(
+        &mut self,
+        doc: &Document,
+        fixed: u64,
+        moving: u64,
+    ) -> Option<Rc<reshiki::editing::reference::Stretch>> {
+        self.document(doc);
+        let key = (fixed, moving);
+        if self.stretch_key != Some(key) {
+            self.stretch = reshiki::editing::reference::Stretch::new(doc, fixed, moving)
+                .ok()
+                .map(Rc::new);
+            self.stretch_key = Some(key);
+        }
+        self.stretch.clone()
     }
 
     /// The selection extracted for a Ctrl/Cmd drag copy.
@@ -78,6 +153,14 @@ impl SceneCache {
         self.copy = None;
     }
 
+    /// Rear-opacity paint shared by rendering and picking for the same document.
+    pub fn opacity(&mut self, doc: &Document) -> Rc<Paint> {
+        self.document(doc);
+        self.opacity
+            .get_or_insert_with(|| Rc::new(Paint::new(doc)))
+            .clone()
+    }
+
     pub fn render(
         &mut self,
         doc: &Document,
@@ -88,11 +171,44 @@ impl SceneCache {
             .markers
             .get_or_insert_with(|| Rc::new(super::markers::Markers::new(doc, ids)))
             .clone();
+        let paint = self.opacity.get_or_insert_with(|| Rc::new(Paint::new(doc)));
         let scene = self
             .scene
-            .get_or_insert_with(|| scene::primitives(doc).into())
+            .get_or_insert_with(|| scene::primitives_with_opacity(doc, paint).into())
             .clone();
         (markers, scene)
+    }
+
+    pub fn nmr_assignments(
+        &mut self,
+        doc: &Document,
+        context: nmr::Context<'_>,
+        camera: Camera,
+        bounds: Rectangle,
+    ) -> Rc<[nmr::Assignment]> {
+        self.document(doc);
+        if let Some((key, assignments)) = &self.nmr.entry
+            && key.matches(context, camera, bounds)
+        {
+            return assignments.clone();
+        }
+        let key = NmrKey {
+            rows: NmrKey::rows(context).collect(),
+            mode: context.mode,
+            camera: NmrKey::camera(camera),
+            bounds: NmrKey::bounds(bounds),
+        };
+        let assignments: Rc<[nmr::Assignment]> =
+            nmr::memoized_placements(doc, context, camera, bounds, &mut self.nmr.widths).into();
+        self.nmr.entry = Some((key, assignments.clone()));
+        assignments
+    }
+
+    pub fn foreground_orbital(&mut self, doc: &Document) -> bool {
+        self.document(doc);
+        *self
+            .foreground_orbital
+            .get_or_insert_with(|| super::hit::foreground_orbital(doc))
     }
 
     pub fn selection(

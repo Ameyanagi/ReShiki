@@ -283,7 +283,7 @@ fn picture_transforms_selection_copy_and_undo_preserve_embedded_data() {
         serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap()
     );
     let mut unchanged = doc.graphics[0].clone();
-    unchanged.edit_point(0, Point::new(1000., 1000.));
+    let _ = unchanged.edit_point(0, Point::new(1000., 1000.));
     assert_eq!(unchanged, doc.graphics[0]);
 }
 

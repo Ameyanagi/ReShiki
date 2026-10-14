@@ -210,22 +210,22 @@ impl App {
                     })
                     .and_then(|(a, b)| {
                         if coordinate {
-                            reshiki::templates::coordinate_atoms(&self.tab.doc, a, b)
+                            reshiki::joining::coordinate_atoms(&self.tab.doc, a, b).map(|outcome| {
+                                let status = super::joining::coordination_status(&outcome, true);
+                                (outcome.into_document(&self.tab.doc), status)
+                            })
                         } else {
-                            connect_atoms(&self.tab.doc, a, b)
+                            connect_atoms(&self.tab.doc, a, b).map(|doc| {
+                                (doc, "Connected marked atom · Undo restores the open chain")
+                            })
                         }
                     });
-                let unchanged = result.as_ref().is_ok_and(|doc| *doc == self.tab.doc);
-                if self.commit_hotkey(
-                    result.map(|doc| (doc, target.atoms())),
-                    if coordinate && unchanged {
-                        "This marked donor is already coordinated to that metal"
-                    } else if coordinate {
-                        "Marked donor → metal contact added in place · Undo removes it"
-                    } else {
-                        "Connected marked atom · Undo restores the open chain"
-                    },
-                ) {
+                // commit_hotkey ignores the success status when an edit failed.
+                let status = result.as_ref().map_or(
+                    "Connected marked atom · Undo restores the open chain",
+                    |(_, status)| *status,
+                );
+                if self.commit_hotkey(result.map(|(doc, _)| (doc, target.atoms())), status) {
                     self.tab.keyboard_drawing.clear_mark();
                     self.tab.keyboard_drawing.set_target(target, &self.tab.doc);
                 }

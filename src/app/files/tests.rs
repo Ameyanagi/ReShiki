@@ -1,7 +1,20 @@
 use super::*;
 use crate::app::{App, Message, Pending, inline_text};
+use crate::session::Binding;
 use reshiki::document::{Document, Point};
 use rfd::MessageDialogResult as Answer;
+
+#[test]
+fn each_office_host_selects_its_save_backend() {
+    for (host, expected) in [
+        (None, SaveBackend::Atomic),
+        (Some(Host::Office), SaveBackend::OfficeOle),
+        (Some(Host::LibreOffice), SaveBackend::LibreOfficeRetry),
+        (Some(Host::Microsoft365), SaveBackend::Addin),
+    ] {
+        assert_eq!(save_backend(host), expected);
+    }
+}
 
 fn prepared() -> Opened {
     let mut document = Document::default();
@@ -155,10 +168,7 @@ fn microsoft_365_save_waits_for_receipt_and_failure_cancels_close_without_cleari
     let (mut app, _) = App::new();
     let path = PathBuf::from("recovery/drawing.rsk");
     app.tab.path = Some(path.clone());
-    app.tab.office = Some(super::super::office::Binding::standalone(
-        path,
-        super::super::office::Host::Microsoft365,
-    ));
+    app.tab.office = Some(Binding::standalone(path, Host::Microsoft365));
     app.tab.doc.add_atom("O", Point::default());
     let snapshot = app.tab.doc.clone();
     let saved_before = app.tab.saved.clone();

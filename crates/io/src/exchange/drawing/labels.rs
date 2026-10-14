@@ -177,18 +177,57 @@ impl Writer<'_> {
                     .text_style
                     .clone()
                     .unwrap_or_else(|| doc.drawing_style.text_style());
-                // Preserve the same chemical typography as the visible label.
-                // This does not assign elements or expand a named dummy.
-                style.formula |= crate::atom_labels::condensed_label(label).is_some();
-                self.text(
+                let manual = !a.display.label_scripts.is_empty();
+                let runs = crate::typography::effective_label_runs(&a.display);
+                let condensed = crate::atom_labels::condensed_label(label).is_some();
+                // ChemDraw's Formula face draws an uncharged condensed label
+                // (CCl2, CO2Et) exactly like these runs, so it keeps that face.
+                let formula = !manual
+                    && condensed
+                    && runs
+                        .iter()
+                        .all(|(_, script)| *script != Script::Superscript);
+                let spans = if !formula
+                    && (manual || runs.iter().any(|(_, script)| *script != Script::Normal))
+                {
+                    // Explicit scripts preserve the visible typography without
+                    // asking ChemDraw to reinterpret counts or charge text.
+                    style.script = Script::Normal;
+                    style.formula = false;
+                    runs.into_iter()
+                        .map(|(range, script)| TextSpan {
+                            start: range.start,
+                            end: range.end,
+                            style: TextStyle {
+                                script,
+                                ..style.clone()
+                            },
+                        })
+                        .collect()
+                } else {
+                    // Labels without scripts and uncharged condensed labels keep
+                    // the existing export path, formula face included.
+                    style.formula |= condensed;
+                    Vec::new()
+                };
+                let text = self.text(
                     node,
                     label,
                     &TextFormat {
                         style,
+                        spans,
                         ..Default::default()
                     },
                     [("p", self.position(a.position))],
                 )?;
+                if manual {
+                    // Standard object names survive CDX without adding a
+                    // rendered annotation or changing chemical interpretation.
+                    // This distinguishes deliberate scripts that happen to
+                    // match the automatic formula look from automatic export.
+                    self.tree
+                        .set(text, "Name", "ReShiki manual label scripts")?;
+                }
                 continue;
             }
             if crate::attachments::hidden(a, doc) {
@@ -210,7 +249,12 @@ impl Writer<'_> {
             if super::ligands::implicit_carbon(a, doc) {
                 self.tree.set(node, "IgnoreWarnings", "yes")?;
             }
-            if a.explicit_h != 0 && !super::ligands::implicit_carbon(a, doc) {
+            // A typed charge or other explicit label without hydrogens (N+,
+            // O-) writes zero, or import would add automatic hydrogens. Plain
+            // carbons keep their skeletal vertex in external readers.
+            let no_hydrogens =
+                a.no_implicit && a.explicit_h == 0 && (a.charge != 0 || a.element != "C");
+            if (a.explicit_h != 0 || no_hydrogens) && !super::ligands::implicit_carbon(a, doc) {
                 self.tree
                     .set(node, "NumHydrogens", a.explicit_h.to_string())?;
             }
@@ -742,3 +786,6 @@ impl Writer<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

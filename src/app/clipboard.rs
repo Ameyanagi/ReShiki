@@ -37,6 +37,33 @@ impl App {
         } else {
             snapshot
         };
+        self.copy_as_snapshot(snapshot, format, false)
+    }
+
+    pub(super) fn copy_chemical_text(&mut self) -> Task<Message> {
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        let snapshot = reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
+        let (format, snapshot) =
+            match reshiki::clipboard::chemical_text_snapshot(&self.tab.doc, &snapshot) {
+                Ok(chemical) => chemical,
+                Err(reason) => {
+                    self.status = reason.into();
+                    self.error = true;
+                    return Task::none();
+                }
+            };
+        self.copy_as_snapshot(snapshot, format, true)
+    }
+
+    fn copy_as_snapshot(
+        &mut self,
+        snapshot: Document,
+        format: CopyFormat,
+        chemical_text: bool,
+    ) -> Task<Message> {
         if let Some(reason) = format.unavailable_reason(&snapshot) {
             self.status = reason.into();
             self.error = true;
@@ -52,8 +79,15 @@ impl App {
         self.tab.clipboard_busy = true;
         self.error = false;
         self.status = format!("Preparing {} for the clipboard…", format.label());
+        let engine = self.engine.clone();
         Task::perform(
-            reshiki::clipboard::prepare_as(self.engine.clone(), snapshot, format),
+            async move {
+                if chemical_text {
+                    reshiki::clipboard::prepare_chemical_text(engine, snapshot, format).await
+                } else {
+                    reshiki::clipboard::prepare_as(engine, snapshot, format).await
+                }
+            },
             move |result| Message::CopyAsPrepared(key.clone(), Box::new(result)),
         )
     }
@@ -159,22 +193,12 @@ impl App {
             vec![]
         };
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
-        let reaction = if image_only {
-            Ok(None)
-        } else {
-            reshiki::reactions::copy_reaction(&self.tab.doc, &snapshot)
-        };
         self.native_copy_busy = true;
         self.tab.clipboard_busy = true;
         self.error = false;
         self.status = "Preparing clipboard…".into();
         Task::perform(
-            reshiki::clipboard::copy_with_reaction(
-                self.engine.clone(),
-                snapshot,
-                image_only,
-                reaction,
-            ),
+            reshiki::clipboard::copy(self.engine.clone(), snapshot, image_only),
             move |result| Message::ClipboardWritten {
                 epoch,
                 revision,
@@ -250,17 +274,8 @@ impl App {
         } else {
             "Copied · editable in ReShiki; picture in other apps"
         };
-        let action = match outcome.chemical_format {
-            Some(CopyFormat::Smiles) => {
-                format!("{action} · SMILES text copied for structure input")
-            }
-            Some(CopyFormat::ChemDoodleReaction) => {
-                format!("{action} · Reaction JSON copied for ChemDoodle Open")
-            }
-            _ => action.to_owned(),
-        };
         self.status = if outcome.notices.is_empty() {
-            action
+            action.to_owned()
         } else {
             format!("{action} · Review details\n{}", outcome.notices.join("\n"))
         };

@@ -413,9 +413,7 @@ pub(super) fn read_embedded(picture_only: bool) -> Result<Option<EmbeddedData>> 
         let _apartment = Apartment::new()?;
         // SAFETY: OLE is initialized on this STA; data never leaves the thread.
         let data = retry_clipboard_acquisition(|| unsafe { OleGetClipboard() })?;
-        read_data_object(&data, [source, embedded], picture_only, || {
-            clipboard::has_chemical_format().map(|has| !has)
-        })
+        read_data_object(&data, [source, embedded], picture_only)
     })
     .join()
     .map_err(|_| anyhow::anyhow!("Office clipboard read thread failed"))?
@@ -437,7 +435,6 @@ fn read_data_object(
     data: &IDataObject,
     formats: [u32; 2],
     picture_only: bool,
-    allow_foreign: impl FnOnce() -> Result<bool>,
 ) -> Result<Option<EmbeddedData>> {
     let mut foreign = Vec::with_capacity(2);
     let mut acquisition_error: Option<anyhow::Error> = None;
@@ -487,10 +484,8 @@ fn read_data_object(
     }
     // Check both own classes before reading foreign payloads, retaining each
     // medium so expensive IDataObject rendering is never requested a second time.
-    // Only then query standalone chemistry without a clipboard lock or data read.
-    if !picture_only && (!foreign.is_empty() || acquisition_error.is_some()) && !allow_foreign()? {
-        return Ok(None);
-    }
+    // Foreign Office objects precede every standalone representation. A failed
+    // read is reported once; the editor retries with embedded reads disabled.
     for medium in foreign {
         // SAFETY: only checked TYMED_ISTORAGE media enter this list; the storage
         // remains borrowed from its release owner on the same initialized STA.
@@ -499,8 +494,8 @@ fn read_data_object(
             return Ok(Some(EmbeddedData::ChemDraw(bytes)));
         }
     }
-    // Unclassified acquisition errors must not hide a usable later object or
-    // standalone chemistry, but retain their legacy diagnostic if nothing wins.
+    // Unclassified acquisition errors must not hide a usable later object;
+    // retain their diagnostic when no embedded object wins.
     match acquisition_error {
         Some(error) => Err(error),
         None => Ok(None),

@@ -111,9 +111,10 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     part
 }
 
-/// Prepaid expansion-only selection. Keep complete native dependencies exactly;
-/// a partial reference/component rejects rather than invoking deletion repair.
-/// The opaque model input caller owns the allowance and source validation.
+/// The part of `doc` that generic expansion copies: the selected components
+/// with every caption, arrow link, group, scope and reaction they reference; a
+/// selection that would cut one of these is an error rather than a repair, and
+/// the caller has already charged the work and validated `doc`.
 pub(crate) fn preserved_expansion_selection(
     doc: &Document,
     selected: &[u64],
@@ -137,13 +138,7 @@ pub(crate) fn preserved_expansion_selection(
             return Err(unsupported());
         }
     }
-    let anchor_ids = |a: &crate::arrow_anchors::Anchor| -> Vec<u64> {
-        match a.target {
-            crate::arrow_anchors::Target::Atom { atom }
-            | crate::arrow_anchors::Target::LonePair { atom, .. } => vec![atom],
-            crate::arrow_anchors::Target::Bond { a, b, .. } => vec![a, b],
-        }
-    };
+    let anchor_ids = |a: &crate::arrow_anchors::Anchor| -> Vec<u64> { a.target.atoms().collect() };
     for arrow in &doc.arrows {
         let refs: Vec<_> = arrow
             .start_anchor
@@ -267,8 +262,11 @@ enum AppendMode {
     Ordinary,
     Preserved,
 }
-/// Internal prepared-expansion remap only. No public skip-reconcile switch.
-/// The model caller pays work, validates/proves the detached part and appends it.
+/// Remaps a generic expansion product into `doc`'s IDs, translated by `offset`
+/// and otherwise exactly as stored (no display defaults copied, no arrow
+/// reconciliation), and rejects a product whose label or drawing defaults
+/// differ from `doc`; the caller charges the work and certifies the result
+/// before appending it.
 pub(crate) fn preserved_append_part(
     doc: &Document,
     source: &Document,
@@ -427,13 +425,13 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.depth_appearance.extend(part.depth_appearance);
     doc.generic.extend(part.generic);
     if crate::rear_opacity::present(doc) {
-        doc.version = doc.version.max(22);
+        doc.require_version(crate::document::REAR_OPACITY);
     }
     if !doc.reactions.is_empty() {
-        doc.version = doc.version.max(15);
+        doc.require_version(crate::document::REACTIONS);
     }
     if !doc.abbreviations.is_empty() {
-        doc.version = doc.version.max(11);
+        doc.require_version(crate::document::ABBREVIATION_EDITING);
     }
 }
 
@@ -1047,16 +1045,14 @@ fn shared_atom_label(
                 .is_some_and(|stereo| stereo.neighbors.contains(&id))
         })
         || doc.bonds.iter().any(|b| {
+            // Unlike Bond::specifies_stereo: markers count only on order 1 (or a
+            // wavy double), and stereo_authoritative is not checked.
             b.stereo_atoms.contains(&id)
                 || (b.a == id || b.b == id)
                     && (b.stereo.is_some()
                         || !b.stereo_atoms.is_empty()
                         || (!b.projection
-                            && ((b.order == 1
-                                && matches!(
-                                    b.display.as_str(),
-                                    "wedge" | "hollow_wedge" | "bold" | "hash" | "hashed" | "wavy"
-                                ))
+                            && ((b.order == 1 && crate::bonds::is_stereo_marker(&b.display))
                                 || (b.order == 2 && b.display == "wavy"))))
         });
     let reason = if stereo {

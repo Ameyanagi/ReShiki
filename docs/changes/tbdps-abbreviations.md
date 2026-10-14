@@ -57,9 +57,9 @@ to the entire molecule. Desktop verification covered entry, dialog reopening,
 expansion, Undo, and saving. Save/reopen and exchange round trips are verified
 separately by the automated tests.
 
-The actual desktop-saved [OTBDPS drawing](../images/tbdps/desktop-otbdps-expanded.rsk)
+The actual desktop-saved [OTBDPS drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/tbdps/desktop-otbdps-expanded.rsk)
 contains 20 atoms including O–Si, while the
-[TBDPS drawing](../images/tbdps/desktop-tbdps-expanded.rsk) contains 19 atoms and
+[TBDPS drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/tbdps/desktop-tbdps-expanded.rsk) contains 19 atoms and
 no oxygen. Both are expanded, contain no wildcard atoms, and independently
 reproduce the formula and InChIKey below through the pinned Python/RDKit worker.
 
@@ -105,3 +105,11 @@ This deliberately corrects the earlier Python/native parity behavior for selecte
 Rust and Python regressions exercise both protecting groups, each phenyl ring, partial rings, explicit Ph, full-group selection, unchanged input, and expansion. The original rendered and desktop examples above remain unchanged; this correction concerns selected-fragment eligibility and is established by the molecular-state assertions.
 
 The selection correction was genuinely recaptured on macOS, Linux, and Windows in [workflow run 36512854135](https://github.com/Ameyanagi/ReShiki/actions/runs/36512854135). Each platform retained all 13,425 saved request/response records byte-for-byte; only capture ancestry and the `engine/abbreviations.py` source hash changed. [Capture receipts](../../tests/fixtures/tbdps-selection-provenance.json) record successful job URLs, artifact digests, and unchanged record hashes. No unchanged-output assertion was relaxed. After all three successful capture artifacts were saved and inspected, redundant remaining test jobs in that dispatch were canceled; the receipt links identify the successful capture jobs. The final PR-head CI runs separately.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/images/tbdps](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/tbdps) on the evidence archive branch.
+
+| Archived files                                                                                                   | What they record                                |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| [docs/images/tbdps](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/tbdps) | Actual native TBDPS and OTBDPS expansion saves. |

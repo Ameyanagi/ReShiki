@@ -1,17 +1,17 @@
 # Connected pen paths and direct node editing
 
-Under review in [PR #288](https://github.com/Ameyanagi/ReShiki/pull/288) for [issue #67](https://github.com/Ameyanagi/ReShiki/issues/67),
+Merged, unreleased, in [PR #288](https://github.com/Ameyanagi/ReShiki/pull/288) through [PR #297](https://github.com/Ameyanagi/ReShiki/pull/297) for [issue #67](https://github.com/Ameyanagi/ReShiki/issues/67),
 contributed by @Ameyanagi. Stacked on
 [mechanism-arrow curvature, PR #276](https://github.com/Ameyanagi/ReShiki/pull/276),
 branch `feat/mechanism-curve-controls`, base `5e68c9b4`. This work remains
-unreleased until review, merge and release.
+unreleased until a release is published.
 
 Draw one connected path with straight and cubic segments. Drag the first
 segment, click for a line, or drag a new node to set a curve. **Finish** ends
 authoring; click the first node or use **Close path** to close the outline.
 In **Edit curve points**, round nodes carry their adjacent tangents and square
 controls adjust one tangent independently. Properties offers **Insert after**,
-**Delete node**, **Straight segment**, **Curved segment**, **Open path** and
+**Delete node**, **Straight** and **Curved** under **Next segment**, **Open path** and
 **Continue drawing**. A stationary handle click selects without changing the
 path; a drag preserves the initial grab offset. Continue retains the selected
 open path from both Select and Edit Points. Existing Escape cancels a gesture;
@@ -114,14 +114,14 @@ All final native drawing fixtures contain one path graphic and no molecular
 atoms, bonds, arrows, annotations or groups. The independent native audit
 compares every serialized field, not just node counts or screenshots. Chemical
 graph preservation is additionally covered by app tests with an unrelated
-C–O graph. The compact [evidence manifest](tunable-pen-lines-evidence.json)
+C–O graph. The compact [evidence manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-evidence.json)
 records public fixture and image hashes, audit results and build provenance.
-The [independent receipt](tunable-pen-lines-audit.json) records 5,094 passing
+The [independent receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-audit.json) records 5,094 passing
 assertions. Its public JSON is formatting-only relative to the original receipt
 at `22eea450`: every parsed value and assertion remains unchanged. The formatted
 public receipt has SHA256 `694e9495bb66e4a11cd26050c295ad878d4e00f982a4bed1bc0341ba55b46fd2`; the retained original receipt has
 `1d4f4d3a20aceb882bc5fb9369be58419f83abff8b79b525ca6562958b500d1a`. The compact manifest distinguishes these hashes.
-The [archival checker](tunable-pen-lines-audit.py) remains byte for byte unchanged
+The [archival checker](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-audit.py) remains byte for byte unchanged
 with its original scratch-environment paths. It is an audit record, not a
 portable checkout/CI command. Its excluded-trial metadata does not turn the
 private exploratory files into published evidence.
@@ -184,3 +184,13 @@ continue the same object without unintended edits.**
 Reusable image: `docs/images/tunable-pen-lines/pen-final-continued-clean.jpg`.
 Original code, drawing fixtures and ReShiki screenshots are contributed under
 MIT OR Apache-2.0. No vendor artwork or third-party source was added.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/tunable-pen-lines-audit.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-audit.json), [docs/changes/tunable-pen-lines-audit.py](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-audit.py), [docs/changes/tunable-pen-lines-evidence.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-evidence.json) on the evidence archive branch.
+
+| Archived files                                                                                                                                                         | What they record                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [docs/changes/tunable-pen-lines-audit.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-audit.json)       | Independent native-state and geometry audit results.             |
+| [docs/changes/tunable-pen-lines-audit.py](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-audit.py)           | The portable independent native-state and geometry audit helper. |
+| [docs/changes/tunable-pen-lines-evidence.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/tunable-pen-lines-evidence.json) | Original source, executable, capture and native-file provenance. |

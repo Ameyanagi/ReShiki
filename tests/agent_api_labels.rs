@@ -122,8 +122,11 @@ fn initialize_names_the_server_experimental() {
 #[test]
 fn cli_help_opens_with_the_notice() {
     let output = cli(&["help"]);
+    assert!(output.stderr.is_empty(), "{:?}", output.stderr);
     let help = String::from_utf8(output.stdout).expect("UTF-8 help");
     assert_eq!(help.lines().next(), Some(NOTICE), "{help}");
+    let documentation = format!("Documentation: {GUIDE_URL}");
+    assert_eq!(help.lines().last(), Some(documentation.as_str()), "{help}");
 }
 
 #[test]
@@ -131,6 +134,12 @@ fn cli_json_is_marked_experimental() {
     let info = json_line(&cli(&["info"]));
     assert_eq!(info["experimental"], true, "{info}");
     assert_eq!(info["stability"], STABILITY, "{info}");
+    for args in [&["tools"][..], &["help", "--json"][..]] {
+        let discovered = json_line(&cli(args));
+        assert_eq!(discovered["experimental"], true, "{discovered}");
+        assert_eq!(discovered["api"]["stability"], STABILITY, "{discovered}");
+        assert_eq!(discovered["api"], info["api"], "{discovered}");
+    }
     let analyzed = json_line(&cli(&["analyze", "--smiles", "CCO"]));
     assert_eq!(analyzed["experimental"], true, "{analyzed}");
     assert_eq!(

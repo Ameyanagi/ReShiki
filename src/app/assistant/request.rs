@@ -273,10 +273,7 @@ impl App {
         super::chat_scroll(scroll)
     }
     pub(super) fn assistant_stop(&mut self) {
-        let checking_connection = self.assistant.connection == super::setup::Connection::Checking;
-        if checking_connection {
-            self.assistant.connection = super::setup::Connection::Cancelled;
-        }
+        let checking_connection = self.assistant.connection.cancel_check();
         self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
         self.assistant.reading_image = false;
         self.assistant.waiting_for_canvas_edit = false;
@@ -311,18 +308,14 @@ impl App {
         self.assistant.pending_proposal = None;
         self.assistant.viewed_image = None;
         self.assistant.source_image = None;
-        self.assistant.guided_example = false;
-        self.assistant.requires_apply = false;
-        self.assistant.example_reference = None;
-        if self.assistant.connection == super::setup::Connection::Checking {
-            self.assistant.connection = super::setup::Connection::Cancelled;
-        }
+        self.assistant.connection.cancel_check();
         self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
         self.assistant.reading_image = false;
         self.assistant.waiting_for_canvas_edit = false;
         self.assistant.cancel.stop();
         let serial = self.assistant.serial.wrapping_add(1);
         self.assistant.draft = None;
+        self.assistant.clear_example();
         self.assistant.preview = None;
         self.assistant.plan.clear();
         self.assistant.completed = None;

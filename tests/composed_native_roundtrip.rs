@@ -12,11 +12,9 @@ use reshiki::{
 use std::collections::{BTreeMap, HashMap};
 
 const CAGE: &[u8] = include_bytes!("fixtures/rear-opacity/c60-rear-opacity-25.rsk");
-const METAFILE: &[u8] = include_bytes!(
-    "../docs/changes/fixtures/emf-import/windows-native-20261010/desktop-import-20261010.rsk"
-);
-const EMF: &[u8] =
-    include_bytes!("../docs/changes/fixtures/emf-import/windows-native-20261010/source.emf");
+const METAFILE: &[u8] =
+    include_bytes!("fixtures/emf-import/windows-native-20261010/desktop-import-20261010.rsk");
+const EMF: &[u8] = include_bytes!("fixtures/emf-import/windows-native-20261010/source.emf");
 
 fn composed() -> Document {
     // Authentic fixture versions are left intact; only new save output uses VERSION.

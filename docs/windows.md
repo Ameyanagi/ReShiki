@@ -15,10 +15,24 @@ Use `.rsk` for an editable original, including pages, pictures and styles.
 SVG/PDF/PNG and EMF export figures; chemical interchange formats retain their supported
 subset. Windows file dialogs support paths containing spaces and Unicode.
 
-**Export → Figure → EMF** saves a vector picture for Microsoft Office with
-outlined text, the canvas background and the drawing's physical dimensions.
-Keep the `.rsk` file to edit the original drawing. See [figure export](figure-export.md)
-for format details and limits.
+**Export → Figure → EMF for Office** saves a vector picture for Microsoft
+Office with outlined text, the canvas background and the drawing's physical
+dimensions. **SVG for Office** (Nightly builds; not in ReShiki 0.11.0) gives
+the same physical size and outlined text as SVG. Keep the `.rsk` file to edit
+the original drawing. See [figure export](figure-export.md) for format details
+and limits.
+
+**Import → Choose file…** also inserts `.emf` pictures, such as spectra, at the
+size recorded in the file. The `.rsk` file keeps the original EMF and a preview;
+other platforms show the preview. See [pictures](pictures.md). Available in
+Nightly builds; not in ReShiki 0.11.0.
+
+When ReShiki is running, opening another file adds it as a tab in the existing
+window, and a file that is already open switches to its tab. Each drawing
+opened from Office gets its own tab, and saving it updates only that Office
+document. Available in Nightly builds; not in ReShiki 0.11.0. See
+[the open-in-tab record](changes/windows-linux-open-tabs.md) for the transport
+and its limits.
 
 ## Clipboard
 
@@ -158,14 +172,16 @@ linked into the application. No .NET runtime, C# compiler or extra native helper
 is needed. The editor forbids unsafe Rust; Win32 FFI is isolated in
 `native/windows`, with bounded data and ownership guards.
 
-The experimental `reshiki.exe --cli` commands (Nightly builds only; not in
-ReShiki 0.11.0) follow the same rule as `--graphics-info`: release builds have
+The experimental `reshiki.exe --cli` commands (Nightly builds since 2026-10-08; not
+in ReShiki 0.11.0) follow the same rule as `--graphics-info`: release builds have
 no console, so their output and error messages appear only when piped or
 redirected, for example `.\reshiki.exe --cli info | Write-Output` or
 `.\reshiki.exe --cli convert --smiles CCO -o ethanol.mol 2> errors.txt`. Piping
-also makes PowerShell wait for the command to finish. MCP clients connect pipes
-when they start `reshiki.exe --mcp`, so the MCP server is unaffected. See
-[Connect AI agents](https://reshiki.com/guide/agents/).
+also makes PowerShell wait for the command to finish, and `$LASTEXITCODE` then
+holds its exit status. MCP clients connect pipes when they start
+`reshiki.exe --mcp`, so the MCP server is unaffected. See
+[Connect AI agents](https://reshiki.com/guide/agents/) and the
+[command-line reference](agent-cli.md#windows).
 
 ## Verification scope
 

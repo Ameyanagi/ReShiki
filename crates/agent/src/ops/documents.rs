@@ -35,7 +35,9 @@ pub const EXPORT_FORMATS: &[&str] = &["svg", "pdf", "png", "cdxml", "mol", "smil
 pub const INFO: ToolSpec = ToolSpec {
     name: "info",
     title: Some("Server info"),
-    description: "Report ReShiki's versions, the limits this server enforces (budgets) and the import and export formats. Read-only.",
+    description: "Report ReShiki's versions, the limits this server enforces (budgets), the import \
+                  and export formats, the granted folders and the file extensions file_open and \
+                  file_save accept. Read-only.",
     input_schema: no_arguments_schema,
     hints: Some(Hints {
         read_only: true,
@@ -125,18 +127,11 @@ fn ok<const N: usize>(fields: [(&str, Value); N], versions: &Versions) -> ToolRe
         .map(|(name, value)| (name.to_owned(), value))
         .collect();
     value.insert("versions".into(), versions_json(versions));
-    ToolResult {
-        value,
-        images: Vec::new(),
-        files: Vec::new(),
-        is_error: false,
-    }
+    ToolResult::plain(value)
 }
 
-/// `{operation_api, stability, versions, budgets, formats: {import, export},
-/// grants: {read, write}, files: {read, write}}`: `stability` is
-/// [`STABILITY`], `grants` are the granted folders as the user spelled them,
-/// `files` the extensions file_open and file_save accept.
+/// Reports server information; the successful flat result contract is in
+/// [`super::catalog::RESULTS`].
 pub(crate) fn info(versions: &Versions, budgets: &Budgets, grants: &Grants) -> ToolResult {
     let granted = grants.summary();
     ok(
@@ -158,7 +153,9 @@ pub(crate) fn info(versions: &Versions, budgets: &Budgets, grants: &Grants) -> T
     )
 }
 
-fn budgets_json(budgets: &Budgets) -> Value {
+/// The budgets reported by `info`, shared with generated reference pages.
+#[doc(hidden)]
+pub fn budgets_json(budgets: &Budgets) -> Value {
     let render = &budgets.render;
     json!({
         "max_request_bytes": budgets.max_request_bytes,
@@ -190,7 +187,8 @@ fn budgets_json(budgets: &Budgets) -> Value {
 }
 
 /// Creates an empty document, as the app's new tab does
-/// (src/app/document_tab.rs). `{document, revision, versions}`.
+/// (src/app/document_tab.rs). The successful flat result contract is in
+/// [`super::catalog::RESULTS`].
 pub(crate) async fn document_new(
     mut ctx: Context,
     store: Arc<dyn Documents>,
@@ -209,7 +207,8 @@ pub(crate) async fn document_new(
     ))
 }
 
-/// `{documents: [{document, revision, objects}], versions}`.
+/// Lists live documents; the successful flat result contract is in
+/// [`super::catalog::RESULTS`].
 pub(crate) async fn document_list(
     ctx: Context,
     store: Arc<dyn Documents>,
@@ -230,7 +229,8 @@ pub(crate) async fn document_list(
     Ok(ok([("documents", Value::Array(documents))], &versions))
 }
 
-/// `{document, closed: true, versions}`.
+/// Closes a document; the successful flat result contract is in
+/// [`super::catalog::RESULTS`].
 pub(crate) async fn document_close(
     mut ctx: Context,
     store: Arc<dyn Documents>,

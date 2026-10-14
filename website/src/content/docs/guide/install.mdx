@@ -28,12 +28,10 @@ Downloaded apps include these texts in their `Licenses` directory
 | Linux x64         | `linux-x64.tar.gz`        | Extract, then run `reshiki`                     |
 | Linux ARM         | `linux-arm64.tar.gz`      | Extract, then run `reshiki`                     |
 
-Windows setup installs for your account. Mac downloads are signed and notarized; Windows downloads are unsigned. Portable ZIP downloads are also available. Keep a portable download’s extracted contents together.
+Windows setup installs for your account. Mac downloads are signed and notarized. Windows downloads are not code-signed yet, so Windows may warn before running setup. Portable ZIP downloads are also available. Keep a portable download’s extracted contents together.
 
 Read the [Code signing policy](/developer/code-signing-policy/) and
-[privacy policy](/developer/privacy-policy/). SignPath access is provisioned;
-the release certificate and Windows signing activation are pending. Existing
-Windows downloads are unsigned.
+[privacy policy](/developer/privacy-policy/).
 
 To uninstall on Windows, open **Settings → Apps**, select **ReShiki**, and choose
 **Uninstall**. Uninstalling removes the installed application and its shortcuts;
@@ -53,6 +51,10 @@ To try a nightly, open [GitHub Releases](https://github.com/Ameyanagi/ReShiki/re
 Installers replace the existing ReShiki installation. To retain Stable, choose a portable archive and extract it into a separate folder, keeping its contents together. Use copies of drawings when testing. Older nightlies may offer only unsigned portable archives; the release notes identify the available packages.
 
 The all-releases page includes stable releases and nightlies; a newer nightly can appear above stable. The **Latest** label and the stable download links identify the stable release.
+
+### File compatibility
+
+Nightly builds save drawings in a newer format. ReShiki 0.11.0 cannot open them and asks you to update. If you share files with people on 0.11.0, keep a copy saved by 0.11.0.
 
 ## 2. Start drawing
 

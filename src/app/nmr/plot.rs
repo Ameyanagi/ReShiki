@@ -1,12 +1,16 @@
 //! Chemical-shift sticks with atom-linked labels. Heights are deliberately
 //! uniform; the backend supplies shifts, not intensities or a spin simulation.
-use super::{Action, Message, Nucleus, Report, site_description};
+use super::presentation::{Presentation, row_label};
+use super::view::site_description;
+use super::{Action, Message, Nucleus, Report};
+use crate::canvas::overlay::ACCENT;
 use iced::advanced::{
     Clipboard, Layout, Renderer as _, Shell, Widget, layout, mouse, renderer,
     widget::{Operation, Tree, tree},
 };
 use iced::widget::{button, responsive, text};
-use iced::{Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, touch};
+use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, touch};
+use std::borrow::Cow;
 
 pub(super) const HEIGHT: f32 = 112.;
 const MARGIN: f32 = 16.;
@@ -15,6 +19,15 @@ const STICK_TOP: f32 = 38.;
 const LABEL_HEIGHT: f32 = 18.;
 const LABEL_SIZE: f32 = 10.;
 const LABEL_GAP: f32 = 3.;
+const TICK_LABEL_Y: f32 = 86.;
+const AXIS_TITLE_Y: f32 = 100.;
+// The tick marks' lower edge is also the hit band's lower edge.
+const TICK_HEIGHT: f32 = 4.;
+const HIT_TOLERANCE: f32 = 9.;
+const SELECTED_STICK_WIDTH: f32 = 2.5;
+const STICK_WIDTH: f32 = 1.5;
+const LABEL_LINE_HEIGHT: f32 = 13.;
+const MAX_SITE_NAME: usize = 512;
 
 #[derive(Debug, Clone, Copy)]
 struct Axis {
@@ -36,13 +49,7 @@ impl Axis {
                 200.
             },
         };
-        for shift in report
-            .rows
-            .iter()
-            .filter_map(|r| r.statistics.as_ref())
-            .map(|s| s.median)
-            .filter(|s| s.is_finite())
-        {
+        for (_, shift) in report.shifts() {
             let low = (shift / step).floor() * step;
             let high = (shift / step).ceil() * step;
             axis.low = axis.low.min(if low.is_finite() { low } else { shift });
@@ -61,6 +68,9 @@ impl Axis {
         };
         MARGIN + fraction.clamp(0., 1.) as f32 * (width - 2. * MARGIN).max(0.)
     }
+    fn ticks(self) -> impl Iterator<Item = f64> {
+        (0..=4).map(move |index| self.low + (self.high - self.low) * index as f64 / 4.)
+    }
 }
 
 #[derive(Debug)]
@@ -70,37 +80,93 @@ struct Group {
     lane: usize,
 }
 
+pub(super) struct Labels {
+    atoms: Vec<Label>,
+    counts: Vec<Label>,
+}
+
+struct Label {
+    text: String,
+    width: f32,
+}
+
+impl Label {
+    fn new(text: String) -> Self {
+        let width = crate::app::text_width(&text, LABEL_SIZE);
+        Self { text, width }
+    }
+}
+
+impl Labels {
+    pub(super) fn new(report: &Report) -> Self {
+        Self {
+            atoms: report
+                .rows
+                .iter()
+                .map(|row| Label::new(label_for(1, row.atom_id)))
+                .collect(),
+            counts: (0..=report.rows.len())
+                .map(|count| Label::new(format!("{count} sites")))
+                .collect(),
+        }
+    }
+
+    fn label(&self, count: usize, index: usize) -> Option<&Label> {
+        if count == 1 {
+            self.atoms.get(index)
+        } else {
+            self.counts.get(count)
+        }
+    }
+}
+
+fn label_for(count: usize, atom_id: u64) -> String {
+    if count == 1 {
+        format!("#{atom_id}")
+    } else {
+        format!("{count} sites")
+    }
+}
+
+#[cfg(test)]
 fn group_label(report: &Report, indices: &[usize]) -> String {
     let mut rows = indices.iter().filter_map(|&index| report.rows.get(index));
     let Some(first) = rows.next() else {
         return "0 sites".into();
     };
     let count = 1 + rows.count();
-    if count == 1 {
-        format!("#{}", first.atom_id)
-    } else {
-        format!("{count} sites")
-    }
+    label_for(count, first.atom_id)
 }
 
+#[cfg(test)]
 fn marker_name(report: &Report, indices: &[usize]) -> String {
-    // Native accessibility limits each name to 4096 bytes. A dense marker
-    // keeps all owners in its action, while individual result rows provide
-    // complete per-site detail instead of an unbounded combined description.
-    let rows = indices.iter().filter_map(|&index| report.rows.get(index));
+    marker_name_with_presentation(report, indices, None)
+}
+
+fn marker_name_with_presentation(
+    report: &Report,
+    indices: &[usize],
+    presentation: Option<&Presentation>,
+) -> String {
+    // Native accessibility snapshots reject names over 4096 bytes (the
+    // validation in src/accessibility/tree.rs). A dense marker keeps all
+    // owners in its action, while individual result rows provide complete
+    // per-site detail instead of an unbounded combined description.
+    let rows = indices
+        .iter()
+        .filter_map(|&index| report.rows.get(index).map(|row| (index, row)));
     let count = rows.clone().count();
     let mut description = rows
         .take(3)
-        .map(|row| {
-            let mut text = site_description(report.nucleus, row);
-            if text.len() > 512 {
-                let end = text
-                    .char_indices()
-                    .map(|(i, _)| i)
-                    .take_while(|&i| i <= 512)
-                    .last()
-                    .unwrap_or(0);
-                text.truncate(end);
+        .map(|(index, row)| {
+            let mut text = presentation
+                .and_then(|presentation| presentation.rows.get(index))
+                .map_or_else(
+                    || site_description(report.nucleus, row, &row_label(report.nucleus, row, None)),
+                    |site| site.description.clone(),
+                );
+            if text.len() > MAX_SITE_NAME {
+                text.truncate(text.floor_char_boundary(MAX_SITE_NAME));
                 text.push('…');
             }
             text
@@ -109,7 +175,7 @@ fn marker_name(report: &Report, indices: &[usize]) -> String {
         .join("; ");
     if count > 3 {
         description.push_str(&format!(
-            "; {} additional sites. Full predictions are in the atom-linked result rows",
+            "; {} additional sites. Full predictions are in the results table",
             count - 3
         ));
     }
@@ -121,18 +187,18 @@ fn marker_name(report: &Report, indices: &[usize]) -> String {
     format!("Predicted shift marker. {description}.{help}")
 }
 
+#[cfg(test)]
 fn groups(report: &Report, axis: Axis, width: f32) -> Vec<Group> {
-    let mut shifts: Vec<_> = report
-        .rows
-        .iter()
-        .enumerate()
-        .filter_map(|(index, row)| {
-            row.statistics
-                .as_ref()
-                .filter(|s| s.median.is_finite())
-                .map(|s| (index, s.median))
-        })
-        .collect();
+    groups_with_labels(report, axis, width, None)
+}
+
+fn groups_with_labels(
+    report: &Report,
+    axis: Axis,
+    width: f32,
+    labels: Option<&Labels>,
+) -> Vec<Group> {
+    let mut shifts: Vec<_> = report.shifts().collect();
     shifts.sort_by(|a, b| b.1.total_cmp(&a.1));
     struct Placed {
         start: usize,
@@ -151,12 +217,13 @@ fn groups(report: &Report, axis: Axis, width: f32) -> Vec<Group> {
         let mut center = shift;
         loop {
             let count = end - start + 1;
-            let label = if count == 1 {
-                format!("#{}", row.atom_id)
-            } else {
-                format!("{count} sites")
-            };
-            let label_width = (crate::app::text_width(&label, LABEL_SIZE) + 6.).min(width);
+            let measured = labels
+                .and_then(|labels| labels.label(count, index))
+                .map_or_else(
+                    || crate::app::text_width(&label_for(count, row.atom_id), LABEL_SIZE),
+                    |label| label.width,
+                );
+            let label_width = (measured + 6.).min(width);
             let x =
                 (axis.x(center, width) - label_width / 2.).clamp(0., (width - label_width).max(0.));
             let previous_ends = ends;
@@ -220,18 +287,24 @@ fn groups(report: &Report, axis: Axis, width: f32) -> Vec<Group> {
         .collect()
 }
 
+#[cfg(test)]
 pub(super) fn view<'a>(report: &'a Report, selected: &'a [u64]) -> Element<'a, Message> {
-    responsive(move |size| view_at_width(report, selected, size.width))
+    view_with_presentation(report, selected, None)
+}
+
+pub(super) fn view_with_presentation<'a>(
+    report: &'a Report,
+    selected: &'a [u64],
+    presentation: Option<&'a Presentation>,
+) -> Element<'a, Message> {
+    responsive(move |size| view_at_width(report, selected, presentation, size.width))
         .height(HEIGHT)
         .into()
 }
 
 fn marker_style(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
-        let color = crate::appearance::color(
-            crate::appearance::is_dark(theme),
-            Color::from_rgb8(19, 135, 116),
-        );
+        let color = crate::appearance::themed(theme, ACCENT);
         button::Style {
             text_color: color,
             background: matches!(status, button::Status::Hovered | button::Status::Pressed)
@@ -241,12 +314,21 @@ fn marker_style(selected: bool) -> impl Fn(&Theme, button::Status) -> button::St
     }
 }
 
-fn view_at_width<'a>(report: &'a Report, selected: &'a [u64], width: f32) -> Element<'a, Message> {
+fn view_at_width<'a>(
+    report: &'a Report,
+    selected: &'a [u64],
+    presentation: Option<&'a Presentation>,
+    width: f32,
+) -> Element<'a, Message> {
     let axis = Axis::new(report);
     let mut children = Vec::new();
     let mut positions = Vec::new();
-    for group in groups(report, axis, width) {
-        let Some(first) = group.indices.first().and_then(|&i| report.rows.get(i)) else {
+    let labels = presentation.map(|presentation| &presentation.plot_labels);
+    for group in groups_with_labels(report, axis, width, labels) {
+        let Some(&index) = group.indices.first() else {
+            continue;
+        };
+        let Some(first) = report.rows.get(index) else {
             continue;
         };
         let selected = group
@@ -254,14 +336,21 @@ fn view_at_width<'a>(report: &'a Report, selected: &'a [u64], width: f32) -> Ele
             .iter()
             .filter_map(|&i| report.rows.get(i))
             .any(|r| selected.contains(&r.atom_id));
-        let label = group_label(report, &group.indices);
+        let label = labels
+            .and_then(|labels| labels.label(group.indices.len(), index))
+            .map_or_else(
+                || Cow::Owned(label_for(group.indices.len(), first.atom_id)),
+                |label| Cow::Borrowed(label.text.as_str()),
+            );
         let button = reshiki::accessibility::button(
             format!("nmr.marker.{}.{}", report.nucleus.code(), first.atom_id),
-            marker_name(report, &group.indices),
+            marker_name_with_presentation(report, &group.indices, presentation),
             text(label)
                 .size(LABEL_SIZE)
                 .font(iced::Font::with_name(reshiki::style::ui_font_family()))
-                .line_height(iced::widget::text::LineHeight::Absolute(13.into()))
+                .line_height(iced::widget::text::LineHeight::Absolute(
+                    LABEL_LINE_HEIGHT.into(),
+                ))
                 .wrapping(iced::widget::text::Wrapping::None),
         )
         .padding([2, 3])
@@ -271,13 +360,12 @@ fn view_at_width<'a>(report: &'a Report, selected: &'a [u64], width: f32) -> Ele
         children.push(button.into());
         positions.push((group.center, group.lane as f32 * LABEL_HEIGHT));
     }
-    for index in 0..=4 {
-        let shift = axis.low + (axis.high - axis.low) * index as f64 / 4.;
+    for shift in axis.ticks() {
         children.push(text(format!("{shift:.0}")).size(10).into());
-        positions.push((shift, 86.));
+        positions.push((shift, TICK_LABEL_Y));
     }
     children.push(text("δ / ppm").size(9).into());
-    positions.push((axis.low, 100.));
+    positions.push((axis.low, AXIS_TITLE_Y));
     Element::new(Plot {
         report,
         selected,
@@ -299,24 +387,20 @@ struct State {
     pressed: Option<(Vec<usize>, Option<touch::Finger>)>,
 }
 impl Plot<'_> {
-    fn hit(&self, point: Point, bounds: Rectangle) -> Vec<usize> {
-        if !bounds.contains(point)
+    fn hits(&self, point: Point, bounds: Rectangle) -> impl Iterator<Item = usize> + '_ {
+        let outside = !bounds.contains(point)
             || point.y < bounds.y + STICK_TOP
-            || point.y > bounds.y + BASELINE + 4.
-        {
-            return vec![];
-        }
-        self.report
-            .rows
-            .iter()
-            .enumerate()
-            .filter_map(|(index, row)| {
-                let shift = row.statistics.as_ref()?.median;
-                (shift.is_finite()
-                    && (self.axis.x(shift, bounds.width) + bounds.x - point.x).abs() <= 9.)
-                    .then_some(index)
-            })
-            .collect()
+            || point.y > bounds.y + BASELINE + TICK_HEIGHT;
+        let rows = if outside {
+            &[]
+        } else {
+            self.report.rows.as_slice()
+        };
+        rows.iter().enumerate().filter_map(move |(index, row)| {
+            let shift = row.shift()?;
+            ((self.axis.x(shift, bounds.width) + bounds.x - point.x).abs() <= HIT_TOLERANCE)
+                .then_some(index)
+        })
     }
 }
 impl Widget<Message, Theme, Renderer> for Plot<'_> {
@@ -388,17 +472,17 @@ impl Widget<Message, Theme, Renderer> for Plot<'_> {
                 },
                 color,
             );
+            let stick = crate::appearance::themed(theme, ACCENT);
             for row in &self.report.rows {
-                let Some(shift) = row
-                    .statistics
-                    .as_ref()
-                    .map(|s| s.median)
-                    .filter(|s| s.is_finite())
-                else {
+                let Some(shift) = row.shift() else {
                     continue;
                 };
                 let selected = self.selected.contains(&row.atom_id);
-                let width = if selected { 2.5 } else { 1.5 };
+                let width = if selected {
+                    SELECTED_STICK_WIDTH
+                } else {
+                    STICK_WIDTH
+                };
                 renderer.fill_quad(
                     renderer::Quad {
                         bounds: Rectangle {
@@ -409,21 +493,17 @@ impl Widget<Message, Theme, Renderer> for Plot<'_> {
                         },
                         ..Default::default()
                     },
-                    crate::appearance::color(
-                        crate::appearance::is_dark(theme),
-                        Color::from_rgb8(19, 135, 116),
-                    ),
+                    stick,
                 );
             }
-            for index in 0..=4 {
-                let shift = self.axis.low + (self.axis.high - self.axis.low) * index as f64 / 4.;
+            for shift in self.axis.ticks() {
                 renderer.fill_quad(
                     renderer::Quad {
                         bounds: Rectangle {
                             x: bounds.x + self.axis.x(shift, bounds.width),
                             y: bounds.y + BASELINE,
                             width: 1.,
-                            height: 4.,
+                            height: TICK_HEIGHT,
                         },
                         ..Default::default()
                     },
@@ -495,7 +575,7 @@ impl Widget<Message, Theme, Renderer> for Plot<'_> {
             _ => None,
         };
         if let Some((point, finger)) = press {
-            let indices = self.hit(point, layout.bounds());
+            let indices: Vec<_> = self.hits(point, layout.bounds()).collect();
             if !indices.is_empty() {
                 state.pressed = Some((indices, finger));
                 shell.capture_event();
@@ -513,7 +593,12 @@ impl Widget<Message, Theme, Renderer> for Plot<'_> {
         if let Some((point, finger)) = release
             && let Some((indices, owner)) = state.pressed.take()
         {
-            if owner == finger && indices == self.hit(point, layout.bounds()) {
+            if owner == finger
+                && indices
+                    .iter()
+                    .copied()
+                    .eq(self.hits(point, layout.bounds()))
+            {
                 shell.publish(Message::Nmr(Action::SelectMarker(indices)));
             }
             shell.capture_event();
@@ -547,7 +632,7 @@ impl Widget<Message, Theme, Renderer> for Plot<'_> {
             .unwrap_or_else(|| {
                 if cursor
                     .position()
-                    .is_some_and(|p| !self.hit(p, layout.bounds()).is_empty())
+                    .is_some_and(|p| self.hits(p, layout.bounds()).next().is_some())
                 {
                     mouse::Interaction::Pointer
                 } else {

@@ -1,4 +1,4 @@
-# MOL 3D import review — under review, unreleased
+# MOL 3D import review — merged, unreleased
 
 MOL import retains the source 3D conformation for the existing tilt controls
 and draws removable ordinary hydrogens implicitly. Isotopic, charged, radical,
@@ -54,12 +54,12 @@ banner. Recovery dismissal did not delete a file.
 
 ## Retained controls and verification
 
-| Control                   | Retained file                                                                 |
-| ------------------------- | ----------------------------------------------------------------------------- |
-| Imported source XYZ       | [Initial native save](evidence/mol-import-3d/candidate-alkane-3d-desktop.rsk) |
-| Both rotations            | [Rotated save](evidence/mol-import-3d/candidate-alkane-3d-rotated.rsk)        |
-| Undo twice                | [Undo save](evidence/mol-import-3d/candidate-alkane-3d-undo.rsk)              |
-| Redo twice, then reopened | [Redo save](evidence/mol-import-3d/candidate-alkane-3d-redo.rsk)              |
+| Control                   | Retained file                                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Imported source XYZ       | [Initial native save](../../tests/fixtures/mol-import-3d/candidate-alkane-3d-desktop.rsk)                                                                     |
+| Both rotations            | [Rotated save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/candidate-alkane-3d-rotated.rsk) |
+| Undo twice                | [Undo save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/candidate-alkane-3d-undo.rsk)       |
+| Redo twice, then reopened | [Redo save](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/candidate-alkane-3d-redo.rsk)       |
 
 The [28 original typed fixtures](../../tests/fixtures/mol-import-3d/README.md)
 cover V2000/V3000, reordered explicit-H neighbors, both R/S and E/Z, mixed
@@ -70,14 +70,14 @@ checks pass. The exact preserved candidate passes all28 independent RDKit
 executable graph/stereo/XYZ/native/MOL cases. The baseline controls record two
 explicit-unknown-double → E regressions, fixed in the candidate.
 
-- [Validation counts and fresh-process check](evidence/mol-import-3d/validation.json)
-- [Candidate independent results](evidence/mol-import-3d/candidate-independent-results.json)
-- [Frozen baseline results, including known defects](evidence/mol-import-3d/baseline-independent-results.json)
-- [Initial source XYZ check](evidence/mol-import-3d/desktop-initial-independent-check.json)
-- [Proper rotation and conformation check](evidence/mol-import-3d/desktop-rotated-independent-check.json)
-- [Exact Undo/Redo document equality](evidence/mol-import-3d/desktop-history-independent-check.json)
-- [Build, image and source provenance](evidence/mol-import-3d/provenance.json)
-- [Bounded pre-fix source audit](evidence/mol-import-3d/stereochemistry-source-audit.md); its double-bond authority and ANY findings are fixed and tested in the preserved candidate.
+- [Validation counts and fresh-process check](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/validation.json)
+- [Candidate independent results](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/candidate-independent-results.json)
+- [Frozen baseline results, including known defects](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/baseline-independent-results.json)
+- [Initial source XYZ check](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/desktop-initial-independent-check.json)
+- [Proper rotation and conformation check](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/desktop-rotated-independent-check.json)
+- [Exact Undo/Redo document equality](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/desktop-history-independent-check.json)
+- [Build, image and source provenance](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/provenance.json)
+- [Bounded pre-fix source audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d/stereochemistry-source-audit.md); its double-bond authority and ANY findings are fixed and tested in the preserved candidate.
 
 Base source: `51fa0991`; production app: `3a6be135`; reference harness:
 `9785f8b6`. All15 own-workspace build artifacts are fresh and use this
@@ -104,5 +104,13 @@ dataset or new dependency is added.
 
 Release caption: “MOL import retains the original 3D conformation for rotation
 and draws ordinary hydrogens implicitly while protecting isotope and stereo
-information.” Reuse the matched pair above; this remains under review until
-the PR is merged and a release is published.
+information.” Reuse the matched pair above; this remains unreleased until
+a release is published.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/evidence/mol-import-3d](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d) on the evidence archive branch.
+
+| Archived files                                                                                                                                       | What they record                                                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [docs/changes/evidence/mol-import-3d](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/evidence/mol-import-3d) | Original/candidate imported drawings, native review data and the stereochemistry source audit. |

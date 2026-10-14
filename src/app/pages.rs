@@ -256,7 +256,9 @@ impl App {
                     Ok(layout) => {
                         let before = self.tab.doc.clone();
                         self.tab.doc.page_layout = Some(layout);
-                        self.tab.doc.version = self.tab.doc.version.max(15);
+                        self.tab
+                            .doc
+                            .require_version(reshiki::document::EDITOR_BASELINE);
                         self.changed(before);
                         self.tab.pages.editor = None;
                         self.tab.pages.active = self.tab.pages.active.min(

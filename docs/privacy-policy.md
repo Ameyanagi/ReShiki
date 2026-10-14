@@ -1,16 +1,17 @@
 # Privacy policy
 
 This page describes ReShiki's application and project website. Updated
-2026-10-08. ReShiki is maintained by
+2026-10-13. ReShiki is maintained by
 [@Ameyanagi](https://github.com/Ameyanagi); its source and documentation are
 available in the [project repository](https://github.com/Ameyanagi/ReShiki).
 
 ## Local drawing and chemistry
 
 Drawing, file imports and exports, clipboard operations, molecular properties,
-structure checks, cleanup, and 3D calculations run on your computer. They do not
-upload your drawings for processing. Chemistry workers run from the same
-application executable, without downloading a runtime or chemistry environment.
+chemical name conversion, NMR prediction, structure checks, cleanup, and 3D
+calculations run on your computer. They do not upload your drawings for
+processing. Chemistry workers run from the same application executable, without
+downloading a runtime or chemistry environment.
 
 Drawings you save, recovery drafts, templates, and preferences can be stored
 locally. ReShiki does not provide a drawing-upload or cloud-sync service. Sharing
@@ -72,7 +73,7 @@ sending a request or image.
 ReShiki has an experimental agent API: `reshiki --mcp`, a Model Context
 Protocol (MCP) server for AI clients such as Claude Code, Claude Desktop and
 Codex, and `reshiki --cli`, a command line for conversions, renders and
-analysis. It is in Nightly builds only, not in ReShiki 0.11.0. Both modes run
+analysis. It is in Nightly builds since 2026-10-08, not in ReShiki 0.11.0. Both modes run
 only when you, or an MCP client you configured, start `reshiki --mcp` or
 `reshiki --cli ...`. Neither opens a network listener or makes network
 requests: they make no update checks, downloads or telemetry.

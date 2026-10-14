@@ -8,6 +8,8 @@ use reshiki::{
     engine::{ChemistryEngine, Request, Response},
 };
 
+const INSERT_STRUCTURE_FAILED: &str = "Could not insert structure";
+
 impl App {
     pub(super) fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
         if self.tab.busy {
@@ -132,24 +134,39 @@ impl App {
             }
         }
     }
+    /// Place a document beside the drawing, centered on the camera's row.
+    /// An empty drawing centers it on the camera instead. Returns the inserted
+    /// IDs, or `None` when append inserts nothing, leaving the drawing unchanged
+    /// if IDs are exhausted or a document is invalid.
+    pub(super) fn insert_beside_drawing(&mut self, document: &Document) -> Option<Vec<u64>> {
+        let center = editing::center(document, &document.all_ids());
+        let offset = if self.tab.doc.all_ids().is_empty() {
+            Point::new(
+                self.tab.camera.center.x - center.x,
+                self.tab.camera.center.y - center.y,
+            )
+        } else {
+            let (_, existing_max) = self.tab.doc.bounds();
+            let (insert_min, _) = document.bounds();
+            Point::new(
+                existing_max.x + self.tab.doc.drawing_style.bond_length_world - insert_min.x,
+                self.tab.camera.center.y - center.y,
+            )
+        };
+        let ids = editing::append(&mut self.tab.doc, document, offset);
+        (!ids.is_empty()).then_some(ids)
+    }
+
     fn structure_inserted(&mut self, response: Response) {
         if let Some(document) = response.document {
             let before = self.tab.doc.clone();
-            let center = editing::center(&document, &document.all_ids());
-            let offset = if self.tab.doc.all_ids().is_empty() {
-                Point::new(
-                    self.tab.camera.center.x - center.x,
-                    self.tab.camera.center.y - center.y,
-                )
-            } else {
-                let (_, existing_max) = self.tab.doc.bounds();
-                let (insert_min, _) = document.bounds();
-                Point::new(
-                    existing_max.x + self.tab.doc.drawing_style.bond_length_world - insert_min.x,
-                    self.tab.camera.center.y - center.y,
-                )
+            let Some(selected) = self.insert_beside_drawing(&document) else {
+                self.tab.doc = before;
+                self.error = true;
+                self.status = INSERT_STRUCTURE_FAILED.into();
+                return;
             };
-            self.tab.selected = editing::append(&mut self.tab.doc, &document, offset);
+            self.tab.selected = selected;
             self.changed(before);
             self.fit();
             self.tool = Tool::Select;
@@ -169,6 +186,7 @@ impl App {
                 return;
             }
             reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+            self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
             self.tab.labels_dirty = false;
             self.tab.analysis = response.analysis;
             self.tool = Tool::Select;
@@ -203,6 +221,7 @@ impl App {
         // orders/stereo or inserting a step into Undo/Redo.
         if let Some(document) = response.document {
             reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+            self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
         }
         self.tab.analysis = response.analysis;
         self.tab.chemistry_notice = None;
@@ -216,6 +235,7 @@ impl App {
             self.tab.doc = document.clone();
             self.changed(before);
             reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+            self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
             self.tab.labels_dirty = false;
             self.tab.chemistry_notice = None;
             self.tab.selected.clear();
@@ -226,7 +246,7 @@ impl App {
                 self.tab.path = None;
                 self.tab.untitled_name = None;
                 self.tab.saved = Document::default();
-                self.tab.file_epoch = self.next_epoch();
+                self.begin_file_epoch();
             }
         }
         self.tab.analysis = response.analysis;

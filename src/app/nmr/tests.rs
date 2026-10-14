@@ -1,39 +1,231 @@
+use super::test_support::{accept, ethyl_acetate_doc, predicted};
+use super::view::{Placement, panel_description};
 use super::*;
+#[cfg(windows)]
+use iced::widget::{Space, container};
+#[cfg(windows)]
+use iced::{Length, Theme};
+use iced::{Size, Vector};
 use reshiki::document::Point;
 
+fn armed_report() -> (App, Arc<Report>) {
+    let mut app = ethyl_acetate();
+    let report = predicted(&app.tab.doc, Nucleus::H1);
+    accept(&mut app, Arc::clone(&report));
+    app.tab.nmr.labels.visible = true;
+    (app, report)
+}
+
+fn assert_report(app: &App, report: &Arc<Report>) {
+    assert!(Arc::ptr_eq(
+        app.tab.nmr.job.result.as_ref().unwrap(),
+        report
+    ));
+    assert!(app.tab.nmr.job.notice.is_none());
+    assert!(app.tab.nmr.labels.visible);
+}
+
+fn assert_stale(app: &App) {
+    assert!(app.tab.nmr.job.result.is_none());
+    assert!(app.tab.nmr.job.pending.is_none());
+    assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(STALE_NOTICE));
+    assert!(!app.tab.nmr.labels.visible && !app.tab.nmr.labels.menu);
+}
+
 #[test]
-fn nmr_surfaces_keep_the_platform_shadow_policy_and_theme() {
-    for theme in [Theme::Light, Theme::Dark] {
-        let style = surface(&theme);
-        let dark = crate::appearance::is_dark(&theme);
-        assert_eq!(
-            style.shadow,
-            if cfg!(windows) {
-                Shadow::default()
-            } else {
-                Shadow {
-                    color: Color::BLACK.scale_alpha(if dark { 0.2 } else { 0.08 }),
-                    offset: Vector::new(0., 3.),
-                    blur_radius: 12.,
-                }
-            }
-        );
-        assert_eq!(style.text_color, Some(theme.palette().text));
-        assert_eq!(style.border.width, 1.);
-        assert_eq!(style.border.radius, 6.into());
-        assert_eq!(
-            style.background,
-            Some(
-                if dark {
-                    theme.extended_palette().background.base.color
-                } else {
-                    Color::WHITE
-                }
-                .into()
-            )
-        );
-        assert_eq!(table_surface(&theme).shadow, Shadow::default());
+fn geometry_move_keeps_accepted_report() {
+    let (mut app, report) = armed_report();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].position.x += 42.;
+    app.changed(before);
+    let _ = app.update(Message::InspectorScroll(0.));
+    assert_report(&app, &report);
+}
+
+#[test]
+fn element_change_clears_accepted_report() {
+    let (mut app, _) = armed_report();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].element = "N".into();
+    app.changed(before);
+    assert_stale(&app);
+}
+
+#[test]
+fn generic_edit_clears_accepted_report() {
+    let mut app = app();
+    let bracket = generic_nmr_bracket(&mut app, 42.);
+    let report = predicted(&app.tab.doc, Nucleus::H1);
+    accept(&mut app, report);
+    let _ = app.update(Message::Generic(crate::app::generic::Action::DefineRepeat(
+        bracket,
+    )));
+    assert_stale(&app);
+}
+
+#[test]
+fn undo_and_redo_validate_accepted_reports() {
+    let (mut app, original) = armed_report();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].element = "N".into();
+    app.changed(before);
+    let edited = predicted(&app.tab.doc, Nucleus::H1);
+    accept(&mut app, edited);
+    let _ = app.update(Message::Undo);
+    assert_stale(&app);
+    accept(&mut app, original);
+    let _ = app.update(Message::Redo);
+    assert_stale(&app);
+}
+
+#[test]
+fn open_and_restore_keep_source_report_in_its_epoch() {
+    use reshiki::recovery::{Candidate, Snapshot};
+    for restore in [false, true] {
+        let (mut app, report) = armed_report();
+        let source = app.tab.id;
+        let epoch = app.tab.file_epoch;
+        if restore {
+            app.recovered.push(Candidate {
+                path: "nmr-cache-draft.json".into(),
+                snapshot: Snapshot {
+                    document: ethyl_acetate_doc(),
+                    source: None,
+                    saved_at: 1,
+                },
+            });
+            let _ = app.update(Message::Restore);
+        } else {
+            let _ = app.update(Message::FilePrepared(Some((
+                "nmr-cache-open.rsk".into(),
+                Ok(files::Prepared::Native(Box::new(ethyl_acetate_doc()))),
+            ))));
+        }
+        assert_ne!(app.tab.id, source);
+        assert!(app.tab.file_epoch > epoch);
+        assert!(app.tab.nmr.job.result.is_none());
+        let source_tab = app.strip().find(|tab| tab.id == source).unwrap();
+        assert_eq!(source_tab.file_epoch, epoch);
+        assert!(Arc::ptr_eq(
+            source_tab.nmr.job.result.as_ref().unwrap(),
+            &report
+        ));
+        assert!(source_tab.nmr.job.notice.is_none());
     }
+}
+
+#[test]
+fn background_engine_chemistry_change_clears_accepted_report() {
+    use crate::app::{Job, tabs::tests::Front};
+    use reshiki::engine::Response;
+    let (mut app, _) = armed_report();
+    let source = app.tab.id;
+    let revision = app.tab.revision;
+    let mut document = app.tab.doc.clone();
+    document.atoms[0].element = "N".into();
+    let front = Front::new(&mut app);
+    let _ = app.update(Message::Tab(
+        source,
+        Box::new(Message::EngineDone {
+            revision,
+            kind: Job::Import,
+            result: Box::new(Ok(Response {
+                document: Some(document),
+                analysis: None,
+                output: None,
+                engine_version: "test".into(),
+                warnings: vec![],
+            })),
+        }),
+    ));
+    front.assert_unchanged(&app);
+    let source_tab = app.strip().find(|tab| tab.id == source).unwrap();
+    assert!(source_tab.nmr.job.result.is_none());
+    assert_eq!(source_tab.nmr.job.notice.as_deref(), Some(STALE_NOTICE));
+}
+
+#[test]
+fn continuing_drag_preserves_report_and_one_undo_step() {
+    let (mut app, report) = armed_report();
+    let original = app.tab.doc.clone();
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].position.x += 10.;
+    app.changed_continuing(before, false);
+    let revision = app.tab.revision;
+    let _ = app.update(Message::InspectorScroll(0.));
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].position.x += 10.;
+    app.changed_continuing(before, true);
+    assert!(app.tab.revision > revision);
+    let _ = app.update(Message::InspectorScroll(0.));
+    assert_report(&app, &report);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert_report(&app, &report);
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].element = "N".into();
+    app.changed_continuing(before, true);
+    assert_stale(&app);
+}
+
+#[test]
+fn repeated_idle_messages_preserve_accepted_state() {
+    let (mut app, report) = armed_report();
+    app.tab.nmr.labels.menu = true;
+    let serial = app.tab.nmr.job.serial;
+    let revision = app.tab.revision;
+    for _ in 0..3 {
+        for message in [
+            Message::Canvas(crate::canvas::Edit::Hover(Some(Point::new(10., 20.)))),
+            Message::Tick,
+            Message::InspectorScroll(0.),
+            Message::Nmr(Action::Move(iced::Point::new(100., 120.))),
+            Message::Nmr(Action::Resize(Size::new(400., 300.))),
+            Message::Nmr(Action::RenderedSize(Size::new(400., 300.))),
+        ] {
+            let _ = app.update(message);
+            assert_report(&app, &report);
+            assert_eq!(app.tab.nmr.job.serial, serial);
+            assert_eq!(app.tab.revision, revision);
+            assert!(app.tab.nmr.labels.menu);
+        }
+    }
+}
+
+#[test]
+fn cached_validation_observes_direct_job_input_changes() {
+    for input in ["report", "result epoch", "pending"] {
+        let (mut app, report) = armed_report();
+        let _ = app.update(Message::InspectorScroll(0.));
+        match input {
+            "report" => {
+                let mut replacement = (*report).clone();
+                replacement.fingerprint = "changed fingerprint".into();
+                app.tab.nmr.job.result = Some(Arc::new(replacement));
+            }
+            "result epoch" => app.tab.nmr.job.result_epoch = None,
+            "pending" => {
+                app.tab.nmr.job.pending = Some(JobKey {
+                    serial: app.tab.nmr.job.serial,
+                    epoch: app.tab.file_epoch,
+                    ids: report.atom_ids.clone(),
+                    fingerprint: "changed fingerprint".into(),
+                });
+            }
+            _ => unreachable!(),
+        }
+        let _ = app.update(Message::InspectorScroll(0.));
+        assert_stale(&app);
+    }
+}
+
+#[test]
+fn cached_validation_observes_same_document_file_epoch_change() {
+    let (mut app, _) = armed_report();
+    let _ = app.update(Message::InspectorScroll(0.));
+    app.begin_file_epoch();
+    let _ = app.update(Message::InspectorScroll(0.));
+    assert_stale(&app);
 }
 
 #[cfg(windows)]
@@ -52,10 +244,10 @@ fn nmr_surfaces_partial_redraws_preserve_unchanged_pixels() {
             let mut app = ethyl_acetate();
             let _ = app.nmr_action(Action::Open);
             finish_prediction(&mut app);
-            app.tab.nmr.position = Some(iced::Point::new(400., 100.));
+            app.tab.nmr.palette.position = Some(iced::Point::new(400., 100.));
             app.tab.nmr.collapsed = mode == "collapsed";
-            app.tab.nmr.labels = mode == "label popup";
-            app.tab.nmr.label_menu = mode == "label popup";
+            app.tab.nmr.labels.visible = mode == "label popup";
+            app.tab.nmr.labels.menu = mode == "label popup";
             let document = app.tab.doc.clone();
             let camera = app.tab.camera;
             let mut renderer = iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(
@@ -63,7 +255,7 @@ fn nmr_surfaces_partial_redraws_preserve_unchanged_pixels() {
                 iced::Pixels(16.),
             ));
             let view = if mode == "docked" {
-                container(app.nmr_panel(false))
+                container(app.nmr_panel(Placement::Docked))
                     .width(360)
                     .height(500)
                     .padding(20)
@@ -196,16 +388,16 @@ fn app() -> App {
 fn pending_prediction_survives_move_but_chemical_edits_reject_stale_result() {
     let mut app = app();
     let _ = app.nmr_action(Action::Predict(Nucleus::H1));
-    let key = app.tab.nmr.pending.clone().unwrap();
+    let key = app.tab.nmr.job.pending.clone().unwrap();
     let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
     let before = app.tab.doc.clone();
     app.tab.doc.atoms[0].position.x += 42.;
     app.changed(before);
-    assert_eq!(app.tab.nmr.pending.as_ref(), Some(&key));
+    assert_eq!(app.tab.nmr.job.pending.as_ref(), Some(&key));
     let before = app.tab.doc.clone();
     app.tab.doc.atoms[0].element = "N".into();
     app.changed(before);
-    assert!(app.tab.nmr.pending.is_none());
+    assert!(app.tab.nmr.job.pending.is_none());
     let report = engine::Report {
         nucleus: Nucleus::H1,
         atom_ids: request.atom_ids,
@@ -218,14 +410,14 @@ fn pending_prediction_survives_move_but_chemical_edits_reject_stale_result() {
         attribution: String::new(),
     };
     let _ = app.nmr_action(Action::Finished(key, Ok(Arc::new(report))));
-    assert!(app.tab.nmr.result.is_none());
+    assert!(app.tab.nmr.job.result.is_none());
 }
 #[test]
 fn foreground_or_background_result_never_lands_in_another_tab() {
     use crate::app::tabs::tests::Front;
     let mut app = app();
     let _ = app.nmr_action(Action::Predict(Nucleus::H1));
-    let key = app.tab.nmr.pending.clone().unwrap();
+    let key = app.tab.nmr.job.pending.clone().unwrap();
     let id = app.tab.id;
     let front = Front::new(&mut app);
     let _ = app.update(Message::Tab(
@@ -236,9 +428,9 @@ fn foreground_or_background_result_never_lands_in_another_tab() {
         ))),
     ));
     front.assert_unchanged(&app);
-    assert!(app.tabs.background[0].nmr.pending.is_none());
+    assert!(app.tabs.background[0].nmr.job.pending.is_none());
     assert_eq!(
-        app.tabs.background[0].nmr.notice.as_deref(),
+        app.tabs.background[0].nmr.job.notice.as_deref(),
         Some("Expected dataset diagnostic")
     );
 }
@@ -291,9 +483,9 @@ impl NmrUi {
     fn panel_bounds(&mut self, app: &App) -> iced::Rectangle {
         use iced::advanced::{layout, widget::Tree};
         let mut panel = palette::floating(
-            app.nmr_panel(true),
-            app.tab.nmr.position,
-            Size::new(app.tab.nmr.width, self.size.height),
+            app.nmr_panel(Placement::Floating),
+            app.tab.nmr.palette.position,
+            app.tab.nmr.palette.width,
             !app.tab.nmr.collapsed,
         );
         let mut tree = Tree::new(&panel);
@@ -331,7 +523,7 @@ impl NmrUi {
     fn resize_glyph(&mut self, app: &App, rect: iced::Rectangle) -> iced::Rectangle {
         use iced::advanced::{Layout, layout, widget::Tree};
         // Inspect the actual final footer glyph, independently of its hit area.
-        let mut panel = app.nmr_panel(true);
+        let mut panel = app.nmr_panel(Placement::Floating);
         let mut tree = Tree::new(&panel);
         let node = panel
             .as_widget_mut()
@@ -447,12 +639,12 @@ impl NmrUi {
 }
 
 fn finish_prediction(app: &mut App) {
-    let Some(key) = app.tab.nmr.pending.clone() else {
-        assert!(app.tab.nmr.result.is_some());
+    let Some(key) = app.tab.nmr.job.pending.clone() else {
+        assert!(app.tab.nmr.job.result.is_some());
         return;
     };
     let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
-    let report = Arc::new(engine::predict(&request, app.tab.nmr.nucleus).unwrap());
+    let report = Arc::new(engine::predict(&request, app.tab.nmr.job.nucleus).unwrap());
     let _ = app.nmr_action(Action::Finished(key, Ok(report)));
 }
 
@@ -482,10 +674,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
     };
     for size in [Size::new(940., 620.), Size::new(1280., 820.)] {
         let mut app = app();
-        app.tab.doc = Document::from_json(include_bytes!(
-            "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
-        ))
-        .unwrap();
+        app.tab.doc = ethyl_acetate_doc();
         app.tab.selected.clear();
         let _ = app.inspector_action(super::super::inspector::Action::Section(
             super::super::inspector::Section::Molecule,
@@ -493,7 +682,6 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         ));
         app.inspector_open = true;
         app.inspector_tab = InspectorTab::Properties;
-        app.tab.nmr.available = size;
         let mut ui = NmrUi::new(size).await;
         let snapshot = ui.snapshot(&app);
         let entry = snapshot
@@ -513,7 +701,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         // background prediction, without executing an external UI task here.
         app.tab.selected = vec![2];
         let _ = app.nmr_action(Action::Open);
-        let key = app.tab.nmr.pending.clone().unwrap();
+        let key = app.tab.nmr.job.pending.clone().unwrap();
         let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
         let report = Arc::new(engine::predict(&request, Nucleus::H1).unwrap());
         let _ = app.nmr_action(Action::Finished(key, Ok(report)));
@@ -533,7 +721,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
                 .expanded,
             Some(false)
         );
-        let _ = app.nmr_action(Action::Details);
+        let _ = app.nmr_action(Action::ToggleDetails);
         let snapshot = ui.snapshot(&app);
         let find = |id: &str| snapshot.nodes.iter().find(|n| n.id == id).unwrap();
         assert_eq!(find("nmr.predict.1H").checked, Some(true));
@@ -542,21 +730,14 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         let method = find("nmr.method").value.as_deref().unwrap();
         assert!(method.contains(engine::DATA_VERSION));
         assert!(method.contains("HOSE spherical environments"));
-        assert!(method.contains("3 of 3 atom-linked sites supported"));
+        assert!(method.contains("3 of 3 atoms predicted"));
         assert!(method.contains("273–323"));
         assert!(method.contains("Connectivity-only"));
         assert!(method.contains("not a calibrated confidence interval"));
         let site = find("nmr.site.1H.2");
         assert_eq!(site.role, Role::ToggleButton);
         assert_eq!(site.checked, Some(true));
-        for text in [
-            "¹H",
-            "atom #2",
-            "unresolved group",
-            "4.160 ppm",
-            "sphere 3",
-            "17 independent references",
-        ] {
+        for text in ["¹H", "C #2 · 2H", "4.160 ppm", "shell 3", "17 references"] {
             assert!(site.name.contains(text), "{text}: {}", site.name);
         }
         assert!(site.value.as_deref().unwrap().contains("CDCl3"));
@@ -567,14 +748,14 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         for (id, expected) in [
             ("nmr.predict.1H", "Predict(H1)"),
             ("nmr.predict.13C", "Predict(C13)"),
-            ("nmr.collapse", "Collapse"),
+            ("nmr.collapse", "ToggleCollapsed"),
             ("nmr.close", "Close"),
-            ("nmr.method", "Details"),
+            ("nmr.method", "ToggleDetails"),
             ("nmr.copy", "Copy"),
             ("nmr.export", "Export"),
-            ("nmr.site.1H.2", "Select(1)"),
+            ("nmr.site.1H.2", "SelectRow(1)"),
             ("nmr.mode", "Dock"),
-            ("nmr.labels", "Labels"),
+            ("nmr.labels", "ToggleLabels"),
         ] {
             let node = find(id);
             assert!(node.enabled && node.visible_bounds.is_some(), "{id}");
@@ -610,7 +791,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         assert!(ui.activate(&app, "nmr.size.less").is_none());
         let _ = app.nmr_action(Action::Resize(Size::new(600., 640.)));
         assert!(ui.activate(&app, "nmr.size.more").is_none());
-        let _ = app.nmr_action(Action::Collapse);
+        let _ = app.nmr_action(Action::ToggleCollapsed);
         assert_eq!(
             ui.snapshot(&app)
                 .nodes
@@ -621,7 +802,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
             Some(false)
         );
         assert!(ui.activate(&app, "nmr.copy").is_none());
-        let _ = app.nmr_action(Action::Collapse);
+        let _ = app.nmr_action(Action::ToggleCollapsed);
         let _ = app.nmr_action(Action::Predict(Nucleus::C13));
         let waiting = ui.snapshot(&app);
         assert!(
@@ -648,7 +829,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         // Real unsupported CH2 / exchangeable OH metadata is exposed too.
         let mut unsupported = super::tests::app();
         let _ = unsupported.nmr_action(Action::Open);
-        let key = unsupported.tab.nmr.pending.clone().unwrap();
+        let key = unsupported.tab.nmr.job.pending.clone().unwrap();
         let request = engine::prepare(&unsupported.tab.doc, &unsupported.tab.selected).unwrap();
         let report = Arc::new(engine::predict(&request, Nucleus::H1).unwrap());
         let _ = unsupported.nmr_action(Action::Finished(key, Ok(report)));
@@ -657,7 +838,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
             unsupported_tree
                 .nodes
                 .iter()
-                .any(|n| n.id.starts_with("nmr.site.1H.") && n.name.contains("Unsupported:"))
+                .any(|n| n.id.starts_with("nmr.site.1H.") && n.name.contains("Not predicted:"))
         );
         assert!(
             unsupported_tree
@@ -676,10 +857,7 @@ async fn floating_nmr_preserves_canvas_and_owns_only_its_pointer_input() {
     for size in [Size::new(940., 620.), Size::new(1280., 820.)] {
         for inspector in [false, true] {
             let mut app = app();
-            app.tab.doc = Document::from_json(include_bytes!(
-                "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
-            ))
-            .unwrap();
+            app.tab.doc = ethyl_acetate_doc();
             app.tab.saved = app.tab.doc.clone();
             app.tab.busy = false;
             app.tab.selected.clear();
@@ -772,11 +950,11 @@ async fn floating_nmr_preserves_canvas_and_owns_only_its_pointer_input() {
             }
             assert_view(&app);
             for action in [
-                Action::Details,
+                Action::ToggleDetails,
                 Action::Resize(Size::new(600., 640.)),
-                Action::Collapse,
-                Action::Collapse,
-                Action::Details,
+                Action::ToggleCollapsed,
+                Action::ToggleCollapsed,
+                Action::ToggleDetails,
             ] {
                 let _ = app.nmr_action(action);
                 ui.redraw(&mut app);
@@ -914,7 +1092,7 @@ async fn compact_nmr_scrolls_to_later_sites_without_scrolling_the_drawing() {
     finish_prediction(&mut app);
     ui.redraw(&mut app);
     let camera = app.tab.camera;
-    let report = app.tab.nmr.result.as_ref().unwrap();
+    let report = app.tab.nmr.job.result.as_ref().unwrap();
     assert_eq!(report.rows.len(), 10);
     let first = format!("nmr.site.13C.{}", report.rows[0].atom_id);
     let last = format!("nmr.site.13C.{}", report.rows.last().unwrap().atom_id);
@@ -963,14 +1141,176 @@ async fn compact_nmr_scrolls_to_later_sites_without_scrolling_the_drawing() {
 
 fn ethyl_acetate() -> App {
     let (mut app, _) = App::new();
-    app.tab.doc = Document::from_json(include_bytes!(
-        "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
-    ))
-    .unwrap();
+    app.tab.doc = ethyl_acetate_doc();
     app.tab.saved = app.tab.doc.clone();
     app.tab.selected.clear();
     app.tab.busy = false;
     app
+}
+
+fn open_result_modal(app: &mut App, atom_text: bool) {
+    use crate::app::{CleanupPreview, atom_text, cleanup};
+    if atom_text {
+        let id = app.tab.doc.atoms[0].id;
+        let _ = app.update(Message::AtomText(atom_text::Action::Begin(Some(id))));
+        assert!(app.tab.atom_text.is_some());
+    } else {
+        app.tab.cleanup = Some(CleanupPreview {
+            job: cleanup::CleanupJob {
+                options: Default::default(),
+                selection: vec![],
+                serial: app.tab.cleanup_serial,
+                epoch: app.tab.file_epoch,
+            },
+            warnings: vec![],
+            document: app.tab.doc.clone(),
+            analysis: None,
+            revision: app.tab.revision,
+            epoch: app.tab.file_epoch,
+            original: false,
+        });
+    }
+}
+
+#[test]
+fn update_accepts_prediction_under_atom_text_and_cleanup_without_editing() {
+    for atom_text in [true, false] {
+        let mut app = ethyl_acetate();
+        let before = app.tab.doc.clone();
+        let task = app.update(Message::Nmr(Action::Predict(Nucleus::H1)));
+        assert!(task.units() > 0);
+        let key = app.tab.nmr.job.pending.clone().unwrap();
+        let report = predicted(&before, Nucleus::H1);
+        open_result_modal(&mut app, atom_text);
+        let _ = app.update(Message::Tab(
+            app.tab.id,
+            Box::new(Message::Nmr(Action::Finished(key, Ok(report.clone())))),
+        ));
+        assert!(app.tab.nmr.job.pending.is_none());
+        assert!(Arc::ptr_eq(
+            app.tab.nmr.job.result.as_ref().unwrap(),
+            &report
+        ));
+        assert_eq!(app.tab.atom_text.is_some(), atom_text);
+        assert_eq!(app.tab.cleanup.is_some(), !atom_text);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.error);
+    }
+}
+
+#[test]
+fn update_reports_nmr_export_under_atom_text_and_cleanup_without_editing() {
+    for atom_text in [true, false] {
+        let mut app = ethyl_acetate();
+        let before = app.tab.doc.clone();
+        open_result_modal(&mut app, atom_text);
+        app.error = true;
+        let _ = app.update(Message::Nmr(Action::Exported(Ok(Some(
+            "Predicted NMR shifts.tsv".into(),
+        )))));
+        assert_eq!(
+            app.status,
+            "Exported predicted NMR shifts to Predicted NMR shifts.tsv"
+        );
+        assert!(!app.error);
+        assert_eq!(app.tab.atom_text.is_some(), atom_text);
+        assert_eq!(app.tab.cleanup.is_some(), !atom_text);
+        assert_eq!(app.tab.doc, before);
+    }
+}
+
+#[test]
+fn restore_during_prediction_keeps_source_work_and_allows_prediction_in_the_recovered_tab() {
+    use reshiki::recovery::{Candidate, Snapshot};
+    let directory = tempfile::tempdir().unwrap();
+    let mut app = ethyl_acetate();
+    let source = app.tab.id;
+    let epoch = app.tab.file_epoch;
+    let original = app.tab.doc.clone();
+    assert!(
+        app.update(Message::Nmr(Action::Predict(Nucleus::H1)))
+            .units()
+            > 0
+    );
+    let key = app.tab.nmr.job.pending.clone().unwrap();
+    let recovered = ethyl_acetate_doc();
+    let path = directory.path().join("4294967294-nmr.json");
+    std::fs::write(&path, "draft").unwrap();
+    app.tabs.recovery_root = Some(directory.path().into());
+    app.recovered = vec![Candidate {
+        path,
+        snapshot: Snapshot {
+            document: recovered.clone(),
+            source: None,
+            saved_at: 1,
+        },
+    }];
+    let _ = app.update(Message::Restore);
+    assert!(app.recovered.is_empty());
+    assert_eq!(app.strip().count(), 2);
+    assert_ne!(app.tab.id, source);
+    assert!(app.tab.file_epoch > epoch);
+    assert_eq!(app.tab.doc, recovered);
+    assert!(!app.tab.nmr.is_pending());
+    let original_tab = app.strip().find(|tab| tab.id == source).unwrap();
+    assert_eq!(original_tab.file_epoch, epoch);
+    assert_eq!(original_tab.doc, original);
+    assert_eq!(original_tab.nmr.job.pending.as_ref(), Some(&key));
+    let front = app.tab.id;
+    assert!(
+        app.update(Message::Nmr(Action::Predict(Nucleus::H1)))
+            .units()
+            > 0
+    );
+    let current = app.tab.nmr.job.pending.clone().unwrap();
+    let report = predicted(&original, Nucleus::H1);
+    let _ = app.update(Message::Tab(
+        source,
+        Box::new(Message::Nmr(Action::Finished(key, Ok(report.clone())))),
+    ));
+    assert_eq!(app.tab.id, front);
+    assert_eq!(app.tab.nmr.job.pending.as_ref(), Some(&current));
+    assert!(app.tab.nmr.job.result.is_none());
+    let original_tab = app.strip().find(|tab| tab.id == source).unwrap();
+    assert!(!original_tab.nmr.is_pending());
+    assert!(Arc::ptr_eq(
+        original_tab.nmr.job.result.as_ref().unwrap(),
+        &report
+    ));
+}
+
+#[test]
+fn file_epoch_clears_nmr_pending_but_keeps_report_and_notice() {
+    let mut app = ethyl_acetate();
+    assert!(
+        app.update(Message::Nmr(Action::Predict(Nucleus::H1)))
+            .units()
+            > 0
+    );
+    let old = app.tab.nmr.job.pending.clone().unwrap();
+    let report = predicted(&app.tab.doc, Nucleus::H1);
+    app.tab.nmr.job.result = Some(report.clone());
+    app.tab.nmr.job.notice = Some("Retained NMR diagnostic".into());
+    app.begin_file_epoch();
+    assert!(app.tab.nmr.job.pending.is_none());
+    assert!(Arc::ptr_eq(
+        app.tab.nmr.job.result.as_ref().unwrap(),
+        &report
+    ));
+    assert_eq!(
+        app.tab.nmr.job.notice.as_deref(),
+        Some("Retained NMR diagnostic")
+    );
+    assert!(
+        app.update(Message::Nmr(Action::Predict(Nucleus::H1)))
+            .units()
+            > 0
+    );
+    let current = app.tab.nmr.job.pending.clone().unwrap();
+    assert_ne!(current, old);
+    let _ = app.update(Message::Nmr(Action::Finished(old, Ok(report))));
+    assert_eq!(app.tab.nmr.job.pending.as_ref(), Some(&current));
+    assert!(app.tab.nmr.job.result.is_none());
 }
 
 #[test]
@@ -982,31 +1322,40 @@ fn hybrid_docking_preserves_report_and_camera_and_restores_a_hidden_inspector() 
     let camera = app.tab.camera;
     let _ = app.nmr_action(Action::Open);
     finish_prediction(&mut app);
-    assert!(!app.tab.nmr.docked && !app.inspector_open);
-    assert!(app.tab.nmr.plot && !app.tab.nmr.details && !app.tab.nmr.labels);
-    let report = app.tab.nmr.result.clone().unwrap();
+    assert!(!app.tab.nmr.dock.docked && !app.inspector_open);
+    assert!(app.tab.nmr.plot && !app.tab.nmr.details && !app.tab.nmr.labels.visible);
+    let report = app.tab.nmr.job.result.clone().unwrap();
     let tsv = engine::to_tsv(&report);
     let doc = app.tab.doc.clone();
     let _ = app.nmr_action(Action::Move(iced::Point::new(180., 160.)));
     let _ = app.nmr_action(Action::Dock);
     assert!(app.inspector_open);
-    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
     app.set_viewport(Size::new(500., 600.));
     assert_eq!(app.tab.camera.zoom, camera.zoom);
     assert_eq!(app.tab.camera.center, camera.center);
     assert!(app.tab.fit_to_view);
-    assert!(Arc::ptr_eq(&report, app.tab.nmr.result.as_ref().unwrap()));
+    assert!(Arc::ptr_eq(
+        &report,
+        app.tab.nmr.job.result.as_ref().unwrap()
+    ));
     // Only the dock layout is exempted; a real later resize still fits.
     app.set_viewport(Size::new(600., 450.));
     assert_ne!(app.tab.camera.zoom, camera.zoom);
     let camera = app.tab.camera;
     let _ = app.nmr_action(Action::Undock);
     app.set_viewport(Size::new(900., 450.));
-    assert!(!app.inspector_open && !app.tab.nmr.docked);
-    assert_eq!(app.tab.nmr.position, Some(iced::Point::new(180., 160.)));
+    assert!(!app.inspector_open && !app.tab.nmr.dock.docked);
+    assert_eq!(
+        app.tab.nmr.palette.position,
+        Some(iced::Point::new(180., 160.))
+    );
     assert_eq!(app.tab.camera.zoom, camera.zoom);
     assert_eq!(app.tab.camera.center, camera.center);
-    assert_eq!(engine::to_tsv(app.tab.nmr.result.as_ref().unwrap()), tsv);
+    assert_eq!(
+        engine::to_tsv(app.tab.nmr.job.result.as_ref().unwrap()),
+        tsv
+    );
     assert_eq!(app.tab.doc, doc);
     assert!(!app.tab.history.can_undo());
 }
@@ -1016,27 +1365,27 @@ fn assignment_labels_survive_geometry_but_close_and_chemical_edits_clear_them() 
     let mut app = ethyl_acetate();
     let _ = app.nmr_action(Action::Predict(Nucleus::C13));
     finish_prediction(&mut app);
-    let _ = app.nmr_action(Action::Labels);
+    let _ = app.nmr_action(Action::ToggleLabels);
     assert_eq!(app.nmr_canvas().unwrap().mode, LabelMode::Atom);
     let _ = app.nmr_action(Action::LabelMode(LabelMode::Both));
     let before = app.tab.doc.clone();
     let ids = app.tab.doc.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
     app.tab.doc.translate(&ids, 40., -20.);
     app.changed(before);
-    assert!(app.tab.nmr.labels);
+    assert!(app.tab.nmr.labels.visible);
     assert_eq!(app.nmr_canvas().unwrap().mode, LabelMode::Both);
     let _ = app.nmr_action(Action::Close);
     assert!(app.nmr_canvas().is_none());
     let _ = app.nmr_action(Action::Open);
-    assert!(!app.tab.nmr.labels && !app.tab.nmr.details);
-    assert_eq!(app.tab.nmr.label_mode, LabelMode::Both);
+    assert!(!app.tab.nmr.labels.visible && !app.tab.nmr.details);
+    assert_eq!(app.tab.nmr.labels.mode, LabelMode::Both);
     finish_prediction(&mut app);
-    let _ = app.nmr_action(Action::Labels);
+    let _ = app.nmr_action(Action::ToggleLabels);
     let before = app.tab.doc.clone();
     app.tab.doc.atom_mut(1).unwrap().element = "N".into();
     app.changed(before);
-    assert!(app.tab.nmr.result.is_none());
-    assert!(!app.tab.nmr.labels);
+    assert!(app.tab.nmr.job.result.is_none());
+    assert!(!app.tab.nmr.labels.visible);
     assert!(app.nmr_canvas().is_none());
 }
 
@@ -1084,7 +1433,7 @@ async fn hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edi
                 .iter()
                 .find(|n| n.id == "nmr.marker.13C.4")
                 .unwrap();
-            assert!(marker.name.contains("170.700 ppm") && marker.name.contains("atom #4"));
+            assert!(marker.name.contains("170.700 ppm") && marker.name.contains("C #4."));
             fully_visible(marker);
             let point = marker.bounds.center();
             for event in [
@@ -1101,10 +1450,11 @@ async fn hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edi
                 }
             }
             assert_eq!(app.tab.selected, [4]);
-            let Message::Nmr(Action::Labels) = ui.activate(&app, "nmr.labels").unwrap() else {
+            let Message::Nmr(Action::ToggleLabels) = ui.activate(&app, "nmr.labels").unwrap()
+            else {
                 panic!("Label toggle must be real");
             };
-            let _ = app.nmr_action(Action::Labels);
+            let _ = app.nmr_action(Action::ToggleLabels);
             assert_eq!(app.nmr_canvas().unwrap().mode, LabelMode::Atom);
             let _ = app.nmr_action(Action::LabelMenu(true));
             let Message::Nmr(Action::LabelMode(LabelMode::Shift)) =
@@ -1142,7 +1492,7 @@ async fn hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edi
                     let _ = app.update(message);
                 }
             }
-            assert!(app.tab.nmr.position.is_some());
+            assert!(app.tab.nmr.palette.position.is_some());
             let moved = ui.panel_bounds(&app);
             assert!(moved.x < rect.x && moved.y <= rect.y);
             let press = iced::Point::new(moved.x + moved.width - 3., moved.y + moved.height - 3.);
@@ -1161,15 +1511,15 @@ async fn hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edi
                     let _ = app.update(message);
                 }
             }
-            assert_eq!(app.tab.nmr.width, moved.width + 60.);
-            assert!(app.tab.nmr.resized);
+            assert_eq!(app.tab.nmr.palette.width, moved.width + 60.);
+            assert!(app.tab.nmr.palette.resized);
             ui.redraw(&mut app);
             assert_eq!(app.viewport, viewport);
             assert_eq!(app.tab.camera.zoom, camera.zoom);
             assert_eq!(app.tab.camera.center, camera.center);
             let _ = app.nmr_action(Action::Dock);
             ui.redraw(&mut app);
-            assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+            assert_eq!(app.inspector_tab, InspectorTab::Predict);
             assert_eq!(app.tab.camera.zoom, camera.zoom);
             assert_eq!(app.tab.camera.center, camera.center);
             let dock = ui.snapshot(&app);
@@ -1197,7 +1547,7 @@ async fn hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edi
             assert_eq!(app.viewport, viewport);
             assert_eq!(app.tab.camera.zoom, camera.zoom);
             assert_eq!(app.tab.camera.center, camera.center);
-            let _ = app.nmr_action(Action::Plot);
+            let _ = app.nmr_action(Action::TogglePlot);
             assert!(
                 !ui.snapshot(&app)
                     .nodes
@@ -1252,16 +1602,16 @@ fn reopening_from_properties_predicts_the_newly_selected_molecule() {
     let other = app.tab.doc.add_atom("C", Point::new(500., 300.));
     app.changed(before);
     assert!(
-        app.tab.nmr.result.is_some(),
+        app.tab.nmr.job.result.is_some(),
         "Unrelated second molecule does not invalidate original report"
     );
     app.tab.selected = vec![other];
     let _ = app.nmr_action(Action::Open);
-    assert!(app.tab.nmr.result.is_none());
-    assert_eq!(app.tab.nmr.pending.as_ref().unwrap().ids, [other]);
-    let _ = app.nmr_action(Action::Labels);
+    assert!(app.tab.nmr.job.result.is_none());
+    assert_eq!(app.tab.nmr.job.pending.as_ref().unwrap().ids, [other]);
+    let _ = app.nmr_action(Action::ToggleLabels);
     assert!(
-        !app.tab.nmr.labels,
+        !app.tab.nmr.labels.visible,
         "A pending report has no assignments to show"
     );
 }
@@ -1283,11 +1633,8 @@ async fn tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls() {
     app.add_tab();
     ui.redraw(&mut app);
     assert!(!app.inspector_open);
-    assert!(!app.tab.nmr.docked);
-    app.tab.doc = Document::from_json(include_bytes!(
-        "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
-    ))
-    .unwrap();
+    assert!(!app.tab.nmr.dock.docked);
+    app.tab.doc = ethyl_acetate_doc();
     app.tab.saved = app.tab.doc.clone();
     let _ = app.nmr_action(Action::Open);
     finish_prediction(&mut app);
@@ -1305,8 +1652,8 @@ async fn tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls() {
     singleton(&ui.snapshot(&app));
     let _ = app.update(Message::Tabs(super::super::tabs::Action::Select(docked_id)));
     ui.redraw(&mut app);
-    assert!(app.inspector_open && app.tab.nmr.docked);
-    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+    assert!(app.inspector_open && app.tab.nmr.dock.docked);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
     assert_eq!(app.viewport, dock_viewport);
     assert_eq!(app.tab.camera.zoom, dock_camera.zoom);
     assert_eq!(app.tab.camera.center, dock_camera.center);
@@ -1315,7 +1662,7 @@ async fn tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls() {
         floating_id,
     )));
     ui.redraw(&mut app);
-    assert!(!app.inspector_open && !app.tab.nmr.docked);
+    assert!(!app.inspector_open && !app.tab.nmr.dock.docked);
     singleton(&ui.snapshot(&app));
     // A different document may open an ordinary equally wide inspector. A's
     // dock restoration still must not refit its saved larger-view camera.
@@ -1325,7 +1672,7 @@ async fn tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls() {
     let _ = app.update(Message::Tabs(super::super::tabs::Action::Select(docked_id)));
     ui.redraw(&mut app);
     assert!(app.tab.fit_to_view);
-    assert_eq!(app.inspector_tab, InspectorTab::Nmr);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
     assert_eq!(app.viewport, dock_viewport);
     assert_eq!(app.tab.camera.zoom, dock_camera.zoom);
     assert_eq!(app.tab.camera.center, dock_camera.center);
@@ -1334,12 +1681,12 @@ async fn tab_switch_restores_dock_and_never_duplicates_floating_nmr_controls() {
         floating_id,
     )));
     ui.redraw(&mut app);
-    assert!(app.inspector_open && !app.tab.nmr.docked);
+    assert!(app.inspector_open && !app.tab.nmr.dock.docked);
     assert_eq!(app.inspector_tab, InspectorTab::Properties);
     singleton(&ui.snapshot(&app));
     // Defensive view ownership also covers a stale global inspector choice.
     app.inspector_open = true;
-    app.inspector_tab = InspectorTab::Nmr;
+    app.inspector_tab = InspectorTab::Predict;
     singleton(&ui.snapshot(&app));
 }
 
@@ -1422,9 +1769,9 @@ async fn native_batched_palette_drags_keep_press_position_and_release_ownership(
     let revision = app.tab.revision;
     for cross_batch in [false, true] {
         for resize in [false, true] {
-            app.tab.nmr.position = Some(iced::Point::new(500., 220.));
-            app.tab.nmr.width = 400.;
-            app.tab.nmr.resized = false;
+            app.tab.nmr.palette.position = Some(iced::Point::new(500., 220.));
+            app.tab.nmr.palette.width = 400.;
+            app.tab.nmr.palette.resized = false;
             ui.redraw(&mut app);
             let rect = ui.panel_bounds(&app);
             let press = if resize {
@@ -1466,12 +1813,12 @@ async fn native_batched_palette_drags_keep_press_position_and_release_ownership(
                 let _ = app.update(message);
             }
             if resize {
-                assert_eq!(app.tab.nmr.width, rect.width + delta.x);
-                assert_eq!(app.tab.nmr.height, rect.height + delta.y);
-                assert_eq!(app.tab.nmr.position, Some(rect.position()));
+                assert_eq!(app.tab.nmr.palette.width, rect.width + delta.x);
+                assert_eq!(app.tab.nmr.palette.height, rect.height + delta.y);
+                assert_eq!(app.tab.nmr.palette.position, Some(rect.position()));
             } else {
-                assert_eq!(app.tab.nmr.position, Some(rect.position() + delta));
-                assert_eq!(app.tab.nmr.width, rect.width);
+                assert_eq!(app.tab.nmr.palette.position, Some(rect.position() + delta));
+                assert_eq!(app.tab.nmr.palette.width, rect.width);
             }
             let outside = iced::Point::new(160., 200.);
             let (_, messages) = ui.event(
@@ -1629,10 +1976,10 @@ async fn visible_resize_glyph_drags_without_stealing_footer_controls() {
     let revision = app.tab.revision;
     for minimum in [false, true] {
         for corner in [false, true] {
-            app.tab.nmr.position = Some(iced::Point::new(500., 220.));
-            app.tab.nmr.width = if minimum { 320. } else { 400. };
-            app.tab.nmr.height = 180.;
-            app.tab.nmr.resized = minimum;
+            app.tab.nmr.palette.position = Some(iced::Point::new(500., 220.));
+            app.tab.nmr.palette.width = if minimum { 320. } else { 400. };
+            app.tab.nmr.palette.height = 180.;
+            app.tab.nmr.palette.resized = minimum;
             ui.redraw(&mut app);
             let rect = ui.panel_bounds(&app);
             let glyph = ui.resize_glyph(&app, rect);
@@ -1670,15 +2017,15 @@ async fn visible_resize_glyph_drags_without_stealing_footer_controls() {
                 assert_eq!(size, Size::new(rect.width + delta.x, rect.height + delta.y));
                 let _ = app.nmr_action(Action::Resize(size));
             }
-            assert_eq!(app.tab.nmr.position, Some(rect.position()));
+            assert_eq!(app.tab.nmr.palette.position, Some(rect.position()));
             ui.redraw(&mut app);
         }
     }
     // The visible footer controls beside the corner keep their own activation.
     for id in ["nmr.copy", "nmr.export", "nmr.method"] {
-        app.tab.nmr.position = Some(iced::Point::new(500., 220.));
-        app.tab.nmr.width = 400.;
-        app.tab.nmr.resized = false;
+        app.tab.nmr.palette.position = Some(iced::Point::new(500., 220.));
+        app.tab.nmr.palette.width = 400.;
+        app.tab.nmr.palette.resized = false;
         ui.redraw(&mut app);
         let snapshot = ui.snapshot(&app);
         let press = snapshot
@@ -1703,7 +2050,7 @@ async fn visible_resize_glyph_drags_without_stealing_footer_controls() {
             (&messages[0], id),
             (Message::Nmr(Action::Copy), "nmr.copy")
                 | (Message::Nmr(Action::Export), "nmr.export")
-                | (Message::Nmr(Action::Details), "nmr.method")
+                | (Message::Nmr(Action::ToggleDetails), "nmr.method")
         ));
     }
     // A grip-owned release terminates even when an overlay masks the cursor.
@@ -1768,8 +2115,8 @@ async fn default_and_reset_palette_clear_fixture_drawing_without_moving_camera()
             let revision = app.tab.revision;
             let _ = app.nmr_action(Action::Predict(Nucleus::C13));
             finish_prediction(&mut app);
-            let _ = app.nmr_action(Action::Labels);
-            let report = app.tab.nmr.result.clone().unwrap();
+            let _ = app.nmr_action(Action::ToggleLabels);
+            let report = app.tab.nmr.job.result.clone().unwrap();
             let export = engine::to_tsv(&report);
             for reset in [false, true] {
                 if reset {
@@ -1780,7 +2127,7 @@ async fn default_and_reset_palette_clear_fixture_drawing_without_moving_camera()
                     let _ = app.nmr_action(Action::ResetPosition);
                 }
                 ui.redraw(&mut app);
-                assert!(app.tab.nmr.position.is_none());
+                assert!(app.tab.nmr.palette.position.is_none());
                 let panel = ui.panel_bounds(&app);
                 assert!((ui.size.width - panel.x - panel.width - 12.).abs() < 0.01);
                 let window = Rectangle::with_size(ui.size);
@@ -1860,8 +2207,14 @@ async fn default_and_reset_palette_clear_fixture_drawing_without_moving_camera()
                 assert_eq!(app.tab.selected, selected);
                 assert_eq!(app.tab.revision, revision);
                 assert!(!app.tab.history.can_undo());
-                assert!(Arc::ptr_eq(app.tab.nmr.result.as_ref().unwrap(), &report));
-                assert_eq!(engine::to_tsv(app.tab.nmr.result.as_ref().unwrap()), export);
+                assert!(Arc::ptr_eq(
+                    app.tab.nmr.job.result.as_ref().unwrap(),
+                    &report
+                ));
+                assert_eq!(
+                    engine::to_tsv(app.tab.nmr.job.result.as_ref().unwrap()),
+                    export
+                );
             }
         }
     }
@@ -1903,8 +2256,8 @@ async fn mock_aligned_panel_measures_rows_and_recovers_small_viewport_scrolling(
         "nmr.size.less" | "nmr.size.more" | "nmr.position.reset" | "nmr.plot"
     )));
     for mode in [LabelMode::Atom, LabelMode::Shift, LabelMode::Both] {
-        app.tab.nmr.labels = true;
-        app.tab.nmr.label_mode = mode;
+        app.tab.nmr.labels.visible = true;
+        app.tab.nmr.labels.mode = mode;
         assert_eq!(
             ui.panel_bounds(&app).size(),
             original.size(),
@@ -1922,7 +2275,7 @@ async fn mock_aligned_panel_measures_rows_and_recovers_small_viewport_scrolling(
     let normal_row_height = normal_row.bounds.height;
     // A long unsupported explanation must be measured as actual wrapped text
     // inside its owning row, rather than relying on the ordinary-row constant.
-    let report = Arc::make_mut(app.tab.nmr.result.as_mut().unwrap());
+    let report = Arc::make_mut(app.tab.nmr.job.result.as_mut().unwrap());
     report.rows[0].statistics = None;
     report.rows[0].limitation = Some("Unsupported site: this atom has no qualified independent reference observations for its molecular environment; inspect the source conditions before interpreting the remaining predicted sites.".into());
     let wrapped = ui.snapshot(&app);
@@ -1933,7 +2286,7 @@ async fn mock_aligned_panel_measures_rows_and_recovers_small_viewport_scrolling(
         .unwrap();
     assert!(row.bounds.height > normal_row_height * 2.);
     fully_visible(row);
-    let _ = app.nmr_action(Action::Details);
+    let _ = app.nmr_action(Action::ToggleDetails);
     let detailed = ui.snapshot(&app);
     fully_visible(
         detailed
@@ -1942,7 +2295,7 @@ async fn mock_aligned_panel_measures_rows_and_recovers_small_viewport_scrolling(
             .find(|n| n.id == "nmr.site.13C.1")
             .unwrap(),
     );
-    let _ = app.nmr_action(Action::Plot);
+    let _ = app.nmr_action(Action::TogglePlot);
     let no_plot = ui.snapshot(&app);
     fully_visible(
         no_plot
@@ -1962,7 +2315,7 @@ async fn mock_aligned_panel_measures_rows_and_recovers_small_viewport_scrolling(
     // the fixed controls remain disjoint and the last result becomes readable.
     app.tab.nmr.details = false;
     app.tab.nmr.plot = true;
-    app.tab.nmr.resized = false;
+    app.tab.nmr.palette.resized = false;
     assert_eq!(app.tab.camera.zoom, camera.zoom);
     assert_eq!(app.tab.camera.center, camera.center);
     // Exercise both sides of Iced's rounded scroll offset with actual
@@ -2027,7 +2380,7 @@ async fn label_checkbox_and_popup_use_real_checked_actions_and_own_batched_click
         mouse::Cursor::Available(point),
     );
     assert_eq!(messages.len(), 1);
-    assert!(matches!(messages[0], Message::Nmr(Action::Labels)));
+    assert!(matches!(messages[0], Message::Nmr(Action::ToggleLabels)));
     let _ = app.update(messages.into_iter().next().unwrap());
     assert_eq!(
         ui.snapshot(&app)
@@ -2054,12 +2407,12 @@ async fn label_checkbox_and_popup_use_real_checked_actions_and_own_batched_click
     );
     assert!(matches!(
         keyboard_messages.as_slice(),
-        [Message::Nmr(Action::Labels)]
+        [Message::Nmr(Action::ToggleLabels)]
     ));
     for message in keyboard_messages {
         let _ = app.update(message);
     }
-    assert!(!app.tab.nmr.labels);
+    assert!(!app.tab.nmr.labels.visible);
     let message = ui.activate(&app, "nmr.labels").unwrap();
     let _ = app.update(message);
     let snapshot = ui.snapshot(&app);
@@ -2091,7 +2444,7 @@ async fn label_checkbox_and_popup_use_real_checked_actions_and_own_batched_click
     for message in messages {
         let _ = app.update(message);
     }
-    assert!(app.tab.nmr.label_menu);
+    assert!(app.tab.nmr.labels.menu);
     let popup = ui.snapshot(&app);
     // FocusOverlay marks the live menu Foreground: native accessibility must
     // expose its choices, not the background anchor, while it is open.
@@ -2139,8 +2492,8 @@ async fn label_checkbox_and_popup_use_real_checked_actions_and_own_batched_click
     for message in messages {
         let _ = app.update(message);
     }
-    assert_eq!(app.tab.nmr.label_mode, LabelMode::Both);
-    assert!(!app.tab.nmr.label_menu);
+    assert_eq!(app.tab.nmr.labels.mode, LabelMode::Both);
+    assert!(!app.tab.nmr.labels.menu);
     let closed = ui.snapshot(&app);
     let anchor = closed
         .nodes
@@ -2171,7 +2524,7 @@ async fn opening_and_resetting_palette_preserve_origin_when_resizing_visible_cor
         if reset {
             let _ = app.nmr_action(Action::ResetPosition);
         }
-        assert!(app.tab.nmr.position.is_none());
+        assert!(app.tab.nmr.palette.position.is_none());
         let rect = ui.panel_bounds(&app);
         let glyph = ui.resize_glyph(&app, rect);
         // The left side of the visible glyph also belongs to the handle.
@@ -2227,7 +2580,7 @@ async fn label_menu_dismissal_and_foreign_canvas_release_keep_pointer_ownership(
     let _ = app.nmr_action(Action::Predict(Nucleus::C13));
     finish_prediction(&mut app);
     ui.redraw(&mut app);
-    let _ = app.nmr_action(Action::Labels);
+    let _ = app.nmr_action(Action::ToggleLabels);
     let outside = iced::Point::new(160., 200.);
     for touch_input in [false, true] {
         let _ = app.nmr_action(Action::LabelMenu(true));
@@ -2278,7 +2631,7 @@ async fn label_menu_dismissal_and_foreign_canvas_release_keep_pointer_ownership(
         assert!(!messages.iter().any(
             |message| matches!(message, Message::Canvas(edit) if !matches!(edit, Edit::Hover(_)))
         ));
-        assert!(!app.tab.nmr.label_menu);
+        assert!(!app.tab.nmr.labels.menu);
     }
     let _ = app.nmr_action(Action::LabelMenu(true));
     let (_, messages) = ui.event(
@@ -2388,23 +2741,24 @@ fn generic_definition_blocks_pending_and_completed_nmr_and_old_delivery_after_cl
         let mut app = app();
         let bracket = generic_nmr_bracket(&mut app, 42.);
         let _ = app.nmr_action(Action::Predict(Nucleus::H1));
-        let key = app.tab.nmr.pending.clone().unwrap();
+        let key = app.tab.nmr.job.pending.clone().unwrap();
         let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
         let report = generic_nmr_report(&request);
         if completed {
             let _ = app.nmr_action(Action::Finished(key.clone(), Ok(Arc::clone(&report))));
-            app.tab.nmr.labels = true;
-            app.tab.nmr.label_menu = true;
-            assert!(app.tab.nmr.result.is_some());
+            app.tab.nmr.labels.visible = true;
+            app.tab.nmr.labels.menu = true;
+            assert!(app.tab.nmr.job.result.is_some());
         }
         let _ = app.generic_action(crate::app::generic::Action::DefineRepeat(bracket));
         assert!(!app.error);
-        assert!(app.tab.nmr.pending.is_none());
-        assert!(app.tab.nmr.result.is_none());
-        assert!(!app.tab.nmr.labels && !app.tab.nmr.label_menu);
+        assert!(app.tab.nmr.job.pending.is_none());
+        assert!(app.tab.nmr.job.result.is_none());
+        assert!(!app.tab.nmr.labels.visible && !app.tab.nmr.labels.menu);
         assert!(
             app.tab
                 .nmr
+                .job
                 .notice
                 .as_deref()
                 .unwrap()
@@ -2412,39 +2766,40 @@ fn generic_definition_blocks_pending_and_completed_nmr_and_old_delivery_after_cl
         );
         let generic_source = app.tab.doc.clone();
         let _ = app.nmr_action(Action::Finished(key.clone(), Ok(Arc::clone(&report))));
-        assert!(app.tab.nmr.result.is_none());
+        assert!(app.tab.nmr.job.result.is_none());
         assert_eq!(app.tab.doc, generic_source);
         let _ = app.nmr_action(Action::Predict(Nucleus::H1));
-        assert!(app.tab.nmr.pending.is_none());
+        assert!(app.tab.nmr.job.pending.is_none());
         assert!(
             app.tab
                 .nmr
+                .job
                 .notice
                 .as_deref()
                 .unwrap()
-                .contains("Expand Generic Structures")
+                .contains("Expand generic structures")
         );
         let _ = app.generic_action(crate::app::generic::Action::ClearRepeat(bracket));
         let _ = app.nmr_action(Action::Finished(key, Ok(report)));
         assert!(
-            app.tab.nmr.result.is_none(),
+            app.tab.nmr.job.result.is_none(),
             "clearing does not revive old worker capabilities"
         );
 
         let _ = app.nmr_action(Action::Predict(Nucleus::H1));
-        let key = app.tab.nmr.pending.clone().unwrap();
+        let key = app.tab.nmr.job.pending.clone().unwrap();
         let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
         let _ = app.nmr_action(Action::Finished(key, Ok(generic_nmr_report(&request))));
-        assert!(app.tab.nmr.result.is_some());
+        assert!(app.tab.nmr.job.result.is_some());
         app.step_history(false);
         assert!(reshiki::generic::present(&app.tab.doc));
         assert!(
-            app.tab.nmr.result.is_none(),
+            app.tab.nmr.job.result.is_none(),
             "undo restores unresolved chemistry and invalidates concrete results"
         );
         app.step_history(true);
         assert!(!reshiki::generic::present(&app.tab.doc));
-        assert!(app.tab.nmr.result.is_none());
+        assert!(app.tab.nmr.job.result.is_none());
     }
 }
 
@@ -2458,25 +2813,445 @@ fn unrelated_generic_definition_keeps_pending_result_and_nmr_labels_through_hist
     app.tab.doc.add_bond(b, c, 1, "plain");
     let bracket = generic_nmr_bracket(&mut app, 342.);
     let _ = app.nmr_action(Action::Predict(Nucleus::H1));
-    let key = app.tab.nmr.pending.clone().unwrap();
+    let key = app.tab.nmr.job.pending.clone().unwrap();
     let request = engine::prepare(&app.tab.doc, &app.tab.selected).unwrap();
     let report = generic_nmr_report(&request);
     let _ = app.generic_action(crate::app::generic::Action::DefineRepeat(bracket));
-    assert_eq!(app.tab.nmr.pending.as_ref(), Some(&key));
+    assert_eq!(app.tab.nmr.job.pending.as_ref(), Some(&key));
     let _ = app.nmr_action(Action::Finished(key, Ok(Arc::clone(&report))));
-    assert!(Arc::ptr_eq(app.tab.nmr.result.as_ref().unwrap(), &report));
-    app.tab.nmr.labels = true;
-    app.tab.nmr.label_menu = true;
-    let serial = app.tab.nmr.serial;
+    assert!(Arc::ptr_eq(
+        app.tab.nmr.job.result.as_ref().unwrap(),
+        &report
+    ));
+    app.tab.nmr.labels.visible = true;
+    app.tab.nmr.labels.menu = true;
+    let serial = app.tab.nmr.job.serial;
     let _ = app.generic_action(crate::app::generic::Action::ClearRepeat(bracket));
     app.step_history(false);
     app.step_history(true);
-    assert_eq!(app.tab.nmr.serial, serial);
-    assert!(Arc::ptr_eq(app.tab.nmr.result.as_ref().unwrap(), &report));
-    assert!(app.tab.nmr.labels && app.tab.nmr.label_menu);
-    assert!(app.tab.nmr.notice.is_none());
+    assert_eq!(app.tab.nmr.job.serial, serial);
+    assert!(Arc::ptr_eq(
+        app.tab.nmr.job.result.as_ref().unwrap(),
+        &report
+    ));
+    assert!(app.tab.nmr.labels.visible && app.tab.nmr.labels.menu);
+    assert!(app.tab.nmr.job.notice.is_none());
     assert_eq!(
         engine::fingerprint(&app.tab.doc, &request.atom_ids).unwrap(),
         request.fingerprint
+    );
+}
+
+const STATUS_SENTINEL: &str = "Existing status sentinel";
+const NOTICE_SENTINEL: &str = "Existing NMR notice";
+const PREDICTION_ERROR: &str = "Expected dataset diagnostic";
+const EXPORT_ERROR: &str = "Could not write predicted NMR shifts";
+
+// Hard-coded so that a wording change in the method, data version, conditions,
+// limitations or attribution fails these tests instead of updating both sides.
+const PROVENANCE: &str = concat!(
+    "HOSE spherical environments · median · ReShiki v1. ",
+    "nmrshiftdb2 2026-03-15 · measured CDCl3 subset v1. ",
+    "CDCl3; recorded temperature 273–323 K, pooled without temperature/concentration correction. ",
+    "Connectivity-only 2D environments do not distinguish E/Z or relative configurations, ",
+    "stereoisomers, or resolve diastereotopic H. Multiple attached H are an unresolved group ",
+    "median, not an assigned peak. Exchangeable H, charged/radical structures, metals and ",
+    "non-default isotope labels are unsupported. Reference spread is descriptive and is not a ",
+    "calibrated confidence interval.. ",
+    "Contains information from nmrshiftdb2 (https://nmrshiftdb.nmr.uni-koeln.de), available ",
+    "under the nmrshiftdb2 Database License ",
+    "(https://svn.code.sf.net/p/nmrshiftdb2/code/trunk/snapshots/nmrshiftdb2datalicense.txt).",
+);
+
+fn description_with_provenance(prefix: &str) -> String {
+    format!("{prefix} {PROVENANCE}")
+}
+
+#[test]
+fn finished_prediction_status_text_pins_both_supported_ethyl_acetate_reports() {
+    const H1_STATUS: &str = "¹H NMR · 3 of 3 atoms predicted";
+    const C13_STATUS: &str = "¹³C NMR · 4 of 4 atoms predicted";
+    const H1_DESCRIPTION: &str = "Status: ¹H NMR · 3 of 3 atoms predicted.";
+    const C13_DESCRIPTION: &str = "Status: ¹³C NMR · 4 of 4 atoms predicted.";
+
+    for (nucleus, count, status, description) in [
+        (Nucleus::H1, 3, H1_STATUS, H1_DESCRIPTION),
+        (Nucleus::C13, 4, C13_STATUS, C13_DESCRIPTION),
+    ] {
+        let mut app = ethyl_acetate();
+        app.status = STATUS_SENTINEL.into();
+        app.error = true;
+        app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
+        let report = predicted(&app.tab.doc, nucleus);
+        assert_eq!(report.rows.len(), count);
+        assert_eq!(
+            report
+                .rows
+                .iter()
+                .filter(|row| row.statistics.is_some())
+                .count(),
+            count
+        );
+        accept(&mut app, report);
+
+        assert_eq!(app.status, status);
+        assert!(!app.error);
+        assert_eq!(app.tab.nmr.job.notice, None);
+        assert_eq!(
+            panel_description(&app.tab.nmr),
+            description_with_provenance(description)
+        );
+    }
+}
+
+#[test]
+fn failed_prediction_status_text_pins_error_and_notice() {
+    let mut app = ethyl_acetate();
+    let _ = app.nmr_action(Action::Predict(Nucleus::H1));
+    let key = app.tab.nmr.job.pending.clone().unwrap();
+    let _ = app.nmr_action(Action::Finished(key, Err(PREDICTION_ERROR.into())));
+
+    assert_eq!(app.status, PREDICTION_ERROR);
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(PREDICTION_ERROR));
+    assert_eq!(app.tab.nmr.job.pending, None);
+    assert!(app.tab.nmr.job.result.is_none());
+    assert_eq!(
+        panel_description(&app.tab.nmr),
+        description_with_provenance("Status: Expected dataset diagnostic.")
+    );
+}
+
+// Current behavior: selecting a result preserves the error flag and notice.
+#[test]
+fn selected_carbon_status_text_pins_linked_atom() {
+    let mut app = ethyl_acetate();
+    let report = predicted(&app.tab.doc, Nucleus::C13);
+    let atom_id = report.rows[0].atom_id;
+    let shift = report.rows[0].shift().unwrap();
+    accept(&mut app, report);
+    app.error = true;
+    app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::SelectRow(0));
+
+    assert_eq!(app.status, format!("Atom #{atom_id} · {shift:.3} ppm"));
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(NOTICE_SENTINEL));
+    assert_eq!(app.tab.selected, [atom_id]);
+}
+
+#[test]
+fn nmr_row_and_marker_selection_refresh_caption_and_atom_controls() {
+    use crate::canvas::Edit;
+    use reshiki::atom_labels::Number;
+    use reshiki::document::Annotation;
+    use reshiki::typography::{TextFormat, TextStyle};
+
+    for marker in [false, true] {
+        let mut app = ethyl_acetate();
+        let atom_id = app.tab.doc.atoms[0].id;
+        let atom_style = TextStyle {
+            family: "Arial".into(),
+            size_pt: 13.,
+            italic: true,
+            ..Default::default()
+        };
+        let atom = app.tab.doc.atom_mut(atom_id).unwrap();
+        atom.text_style = Some(atom_style.clone());
+        atom.display.number = Some(Number {
+            text: "C-17".into(),
+            offset: None,
+            style: TextStyle::default(),
+        });
+        let caption_id = app.tab.doc.next_id();
+        let caption_format = TextFormat {
+            style: TextStyle {
+                family: "Times New Roman".into(),
+                size_pt: 24.,
+                bold: true,
+                ..Default::default()
+            },
+            width_pt: Some(150.),
+            ..Default::default()
+        };
+        app.tab.doc.annotations.push(Annotation {
+            id: caption_id,
+            position: Point::new(100., 340.),
+            text: "Styled caption before NMR selection".into(),
+            format: caption_format.clone(),
+        });
+        let report = predicted(&app.tab.doc, Nucleus::C13);
+        let index = report
+            .rows
+            .iter()
+            .position(|row| row.atom_id == atom_id)
+            .unwrap();
+        let row = &report.rows[index];
+        let selected: Vec<_> = std::iter::once(row.atom_id)
+            .chain(row.hydrogen_ids.iter().copied())
+            .collect();
+        let _ = app.update(Message::Nmr(Action::Predict(Nucleus::C13)));
+        let key = app.tab.nmr.job.pending.clone().unwrap();
+        let _ = app.update(Message::Canvas(Edit::Select(vec![caption_id])));
+        assert_eq!(app.tab.caption_target, Some(caption_id));
+        assert_eq!(app.tab.caption, "Styled caption before NMR selection");
+        assert_eq!(app.tab.caption_format, caption_format);
+        assert!(app.tab.labels.number.is_empty());
+
+        let _ = app.update(Message::Nmr(Action::Finished(key, Ok(report))));
+        let action = if marker {
+            Action::SelectMarker(vec![index])
+        } else {
+            Action::SelectRow(index)
+        };
+        let _ = app.update(Message::Nmr(action));
+
+        assert_eq!(app.tab.selected, selected);
+        assert_eq!(app.tab.caption_target, None);
+        assert_eq!(
+            app.tab.caption_format,
+            TextFormat {
+                style: atom_style,
+                ..Default::default()
+            }
+        );
+        assert_eq!(app.tab.labels.number, "C-17");
+    }
+}
+
+// Current behavior: selecting a result preserves the error flag and notice.
+#[test]
+fn selected_proton_status_text_pins_atom_hydrogen_count_and_shift() {
+    let mut app = ethyl_acetate();
+    let report = predicted(&app.tab.doc, Nucleus::H1);
+    let index = report
+        .rows
+        .iter()
+        .position(|row| row.hydrogen_count > 1)
+        .unwrap();
+    let row = &report.rows[index];
+    let (atom_id, count, shift) = (row.atom_id, row.hydrogen_count, row.shift().unwrap());
+    accept(&mut app, report);
+    app.error = true;
+    app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::SelectRow(index));
+
+    assert_eq!(
+        app.status,
+        format!("Atom #{atom_id} · {count}H · {shift:.3} ppm")
+    );
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(NOTICE_SENTINEL));
+    assert_eq!(app.tab.selected, [atom_id]);
+}
+
+// Current behavior: export success clears the error flag while preserving the notice.
+#[test]
+fn successful_export_status_text_pins_relative_tsv_path() {
+    const EXPORTED_STATUS: &str = "Exported predicted NMR shifts to Predicted NMR shifts.tsv";
+    let mut app = ethyl_acetate();
+    app.status = STATUS_SENTINEL.into();
+    app.error = true;
+    app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::Exported(Ok(Some(std::path::PathBuf::from(
+        "Predicted NMR shifts.tsv",
+    )))));
+
+    assert_eq!(app.status, EXPORTED_STATUS);
+    assert!(!app.error);
+    assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(NOTICE_SENTINEL));
+}
+
+// Current behavior: cancellation preserves even an existing error and notice.
+#[test]
+fn cancelled_export_status_text_preserves_sentinels() {
+    let mut app = ethyl_acetate();
+    app.status = STATUS_SENTINEL.into();
+    app.error = true;
+    app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::Exported(Ok(None)));
+
+    assert_eq!(app.status, STATUS_SENTINEL);
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(NOTICE_SENTINEL));
+}
+
+// Current behavior: export errors change the status without changing the notice.
+#[test]
+fn failed_export_status_text_pins_error_and_retains_notice() {
+    let mut app = ethyl_acetate();
+    app.status = STATUS_SENTINEL.into();
+    app.error = false;
+    app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
+    let _ = app.nmr_action(Action::Exported(Err(EXPORT_ERROR.into())));
+
+    assert_eq!(app.status, EXPORT_ERROR);
+    assert!(app.error);
+    assert_eq!(app.tab.nmr.job.notice.as_deref(), Some(NOTICE_SENTINEL));
+}
+
+#[test]
+fn panel_description_pins_no_result_pending_and_notice_text() {
+    let mut app = ethyl_acetate();
+    assert_eq!(
+        panel_description(&app.tab.nmr),
+        description_with_provenance("Status: No prediction result.")
+    );
+    app.tab.nmr.job.notice = Some(PREDICTION_ERROR.into());
+    assert_eq!(
+        panel_description(&app.tab.nmr),
+        description_with_provenance("Status: Expected dataset diagnostic.")
+    );
+
+    for (nucleus, description) in [
+        (Nucleus::H1, "Status: Calculating ¹H shifts."),
+        (Nucleus::C13, "Status: Calculating ¹³C shifts."),
+    ] {
+        let mut app = ethyl_acetate();
+        let _ = app.nmr_action(Action::Predict(nucleus));
+        assert!(app.tab.nmr.job.pending.is_some());
+        assert_eq!(
+            panel_description(&app.tab.nmr),
+            description_with_provenance(description)
+        );
+    }
+}
+
+#[test]
+fn empty_selection_is_a_neutral_empty_state_and_real_failures_stay_red() {
+    // An empty drawing, and two molecules with nothing selected: opening the
+    // tab shows the empty state, not an error.
+    let (mut empty, _) = App::new();
+    let mut two = ethyl_acetate();
+    let before = two.tab.doc.clone();
+    two.tab.doc.add_atom("C", Point::new(500., 300.));
+    two.changed(before);
+    for app in [&mut empty, &mut two] {
+        app.status = STATUS_SENTINEL.into();
+        app.error = true;
+        app.tab.nmr.job.notice = Some(NOTICE_SENTINEL.into());
+        let _ = app.update(Message::Inspector(InspectorTab::Predict));
+        assert!(app.tab.nmr.open && app.tab.nmr.dock.docked);
+        assert_eq!(app.status, EMPTY_STATUS);
+        assert!(!app.error);
+        assert_eq!(app.tab.nmr.notice(), None);
+        assert!(app.tab.nmr.job.result.is_none() && app.tab.nmr.job.pending.is_none());
+    }
+    assert_eq!(
+        reshiki::nmr::prepare(&empty.tab.doc, &[]).unwrap_err(),
+        engine::SELECT_ONE_MOLECULE
+    );
+
+    // Atoms selected in two molecules keep the actionable diagnostic.
+    let first = two.tab.doc.atoms.first().unwrap().id;
+    let last = two.tab.doc.atoms.last().unwrap().id;
+    two.tab.selected = vec![first, last];
+    let _ = two.nmr_action(Action::Predict(Nucleus::H1));
+    assert!(two.error);
+    assert_eq!(two.status, engine::SELECT_ONE_MOLECULE);
+    assert_eq!(two.tab.nmr.notice(), Some(engine::SELECT_ONE_MOLECULE));
+
+    // Unsupported chemistry is a real failure: one atom over the 128 limit.
+    let (mut large, _) = App::new();
+    let mut previous = large.tab.doc.add_atom("C", Point::new(0., 0.));
+    for index in 1..=128_u16 {
+        let atom = large
+            .tab
+            .doc
+            .add_atom("C", Point::new(f32::from(index) * 30., 0.));
+        large.tab.doc.add_bond(previous, atom, 1, "plain");
+        previous = atom;
+    }
+    let _ = large.nmr_action(Action::Open);
+    assert!(large.error);
+    assert_eq!(large.tab.nmr.notice(), Some(large.status.as_str()));
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer docked report and empty state check"]
+async fn docked_report_is_always_full_and_undock_restores_the_floating_collapse() {
+    let ids = |snapshot: &reshiki::accessibility::Snapshot| -> Vec<String> {
+        snapshot.nodes.iter().map(|node| node.id.clone()).collect()
+    };
+    let mut ui = NmrUi::new(Size::new(1280., 820.)).await;
+    let mut app = ethyl_acetate();
+    ui.redraw(&mut app);
+    let _ = app.nmr_action(Action::Open);
+    finish_prediction(&mut app);
+    let _ = app.nmr_action(Action::ToggleCollapsed);
+    let floating = ids(&ui.snapshot(&app));
+    assert!(floating.iter().any(|id| id == "nmr.collapse"));
+    assert!(!floating.iter().any(|id| id.starts_with("nmr.site.")));
+
+    let _ = app.nmr_action(Action::Dock);
+    ui.redraw(&mut app);
+    let docked = ids(&ui.snapshot(&app));
+    assert!(
+        app.tab.nmr.collapsed,
+        "Dock keeps the floating collapse state"
+    );
+    for id in ["nmr.mode", "nmr.close", "nmr.method", "nmr.site.1H.2"] {
+        assert!(docked.iter().any(|node| node == id), "{id}: {docked:?}");
+    }
+    assert!(!docked.iter().any(|id| id == "nmr.collapse"));
+
+    let _ = app.nmr_action(Action::Undock);
+    ui.redraw(&mut app);
+    let restored = ids(&ui.snapshot(&app));
+    assert!(restored.iter().any(|id| id == "nmr.collapse"));
+    assert!(!restored.iter().any(|id| id.starts_with("nmr.site.")));
+
+    // Nothing to predict: no Details or provenance, and Copy/Export stay off.
+    let (mut empty, _) = App::new();
+    ui.redraw(&mut empty);
+    let _ = empty.update(Message::Inspector(InspectorTab::Predict));
+    ui.redraw(&mut empty);
+    let snapshot = ui.snapshot(&empty);
+    assert!(!snapshot.nodes.iter().any(|node| node.id == "nmr.method"));
+    for id in ["nmr.copy", "nmr.export"] {
+        let node = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
+        assert!(!node.enabled, "{id}");
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer docked report scrolling check"]
+async fn wheel_over_the_docked_report_scrolls_the_inspector() {
+    use iced::{Event, mouse};
+    let mut ui = NmrUi::new(Size::new(940., 620.)).await;
+    let mut app = ethyl_acetate();
+    ui.redraw(&mut app);
+    let _ = app.nmr_action(Action::Open);
+    finish_prediction(&mut app);
+    let _ = app.nmr_action(Action::Dock);
+    ui.redraw(&mut app);
+    // The report overflows the inspector; wheel over one of its rows.
+    let row = ui
+        .snapshot(&app)
+        .nodes
+        .into_iter()
+        .find(|node| node.id == "nmr.site.1H.2")
+        .unwrap();
+    let point = row.visible_bounds.expect("Visible docked row").center();
+    let (_, messages) = ui.events(
+        &app,
+        &[
+            Event::Mouse(mouse::Event::CursorMoved { position: point }),
+            Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Lines { x: 0., y: -2. },
+            }),
+        ],
+        mouse::Cursor::Available(point),
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| matches!(message, Message::InspectorScroll(y) if *y > 0.)),
+        "The inspector scrolls under the docked report: {messages:?}"
+    );
+    assert!(
+        !messages
+            .iter()
+            .any(|message| matches!(message, Message::Canvas(_)))
     );
 }

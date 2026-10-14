@@ -69,7 +69,7 @@ async fn native_cp_and_returned_two_cp_drawing_keep_aromatic_editable_rings() ->
 async fn exported_cp_retains_charge_and_closed_curve_without_forced_carbon_labels()
 -> anyhow::Result<()> {
     let source: Document =
-        serde_json::from_str(include_str!("../docs/changes/fixtures/pi-ligands-copy.rsk"))?;
+        serde_json::from_str(include_str!("fixtures/ligand-exchange/pi-ligands-copy.rsk"))?;
     let xml = reshiki::exchange::drawing::write(&source, Default::default())?;
     let bytes = reshiki::exchange::to_cdx(&xml).map_err(anyhow::Error::msg)?;
     let decoded = reshiki::exchange::from_cdx(&bytes).map_err(anyhow::Error::msg)?;

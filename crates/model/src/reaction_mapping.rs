@@ -4,11 +4,39 @@ use crate::{
     document::{Document, Point},
     reactions::{Reaction, Role},
 };
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    cell::OnceCell,
+    collections::{BTreeMap, HashSet},
+};
 mod search;
 pub use search::{Budget, Proposal, Score, propose};
 
 pub const MAX_MAP: u32 = i32::MAX as u32;
+const COEFFICIENT_ERROR: &str = "Atom maps require one drawn molecule per participant; expand coefficients in the affected reaction first";
+
+/// The error for a map number outside 0..=MAX_MAP (or not a number at all).
+pub fn map_range_error() -> String {
+    format!("Enter an atom map from 1 to {MAX_MAP}, or 0 to clear")
+}
+
+/// Set the drawing-wide visibility and clear every per-atom visibility override.
+pub fn set_maps_visible(doc: &Document, show: bool) -> Document {
+    let mut candidate = doc.clone();
+    candidate.atom_labels.maps = show;
+    for atom in &mut candidate.atoms {
+        atom.display.mapping.show = None;
+    }
+    candidate
+}
+
+/// Restore automatic placement without changing map numbers or visibility.
+pub fn reset_label_offsets(doc: &Document) -> Document {
+    let mut candidate = doc.clone();
+    for atom in &mut candidate.atoms {
+        atom.display.mapping.offset = None;
+    }
+    candidate
+}
 
 pub fn reaction(doc: &Document, arrow: u64) -> Result<&Reaction, String> {
     doc.reactions
@@ -23,10 +51,25 @@ fn ids(reaction: &Reaction, role: Role) -> Vec<u64> {
         .flat_map(|p| p.atoms.iter().copied())
         .collect()
 }
+fn same_isotope_element(a_element: &str, a_isotope: u32, b_element: &str, b_isotope: u32) -> bool {
+    a_element == b_element && a_isotope == b_isotope
+}
 fn compatible(doc: &Document, a: u64, b: u64) -> bool {
+    // Element/isotope equality is symmetric, so callers may reverse atom order.
     doc.atom(a)
         .zip(doc.atom(b))
-        .is_some_and(|(a, b)| a.element == b.element && a.isotope == b.isotope)
+        .is_some_and(|(a, b)| same_isotope_element(&a.element, a.isotope, &b.element, b.isotope))
+}
+fn cross_side_conflict(
+    doc: &Document,
+    maps: &BTreeMap<u32, u64>,
+    other: &[u64],
+) -> Option<(u32, u64, u64)> {
+    other.iter().find_map(|other| {
+        let atom = doc.atom(*other)?;
+        let id = *maps.get(&atom.map_num)?;
+        (!compatible(doc, id, *other)).then_some((atom.map_num, id, *other))
+    })
 }
 /// Duplicate map classes are legal imported data. Editing/automatic matching
 /// creates the unique per-side labels required for ordinary atom correspondence.
@@ -45,38 +88,59 @@ fn unique(doc: &Document, atoms: &[u64]) -> Result<BTreeMap<u32, u64>, String> {
     }
     Ok(maps)
 }
-fn check_edit(doc: &Document, atom: u64, before: &Document) -> Result<(), String> {
-    let mut member = false;
-    for r in &doc.reactions {
-        for role in Role::ALL {
-            let side = ids(r, role);
-            if side.contains(&atom) {
-                let newly_mapped = doc.atom(atom).is_some_and(|a| {
-                    a.map_num != 0 && before.atom(atom).is_none_or(|old| old.map_num != a.map_num)
-                });
-                if newly_mapped
-                    && r.participants(role)
-                        .iter()
-                        .any(|p| p.coefficient != 1 && p.atoms.contains(&atom))
-                {
-                    return Err("Atom maps require one drawn molecule per participant; expand coefficients in the affected reaction first".into());
-                }
-                member = true;
-                unique(doc, &side)?;
-                if role != Role::Agent {
-                    let maps = unique(doc, &side)?;
-                    let opposite = ids(
-                        r,
-                        if role == Role::Reactant {
+fn validate_edited_atoms(doc: &Document, atoms: &[u64], before: &Document) -> Result<(), String> {
+    struct Side {
+        role: Role,
+        atoms: Vec<u64>,
+        maps: OnceCell<Result<BTreeMap<u32, u64>, String>>,
+    }
+    // Each reaction/role's IDs also serve as its opposite side's cached IDs.
+    // Initialize uniqueness lazily to keep coefficient errors ahead of it.
+    let scopes: Vec<_> = doc
+        .reactions
+        .iter()
+        .map(|reaction| {
+            let sides = Role::ALL.map(|role| Side {
+                role,
+                atoms: ids(reaction, role),
+                maps: OnceCell::new(),
+            });
+            (reaction, sides)
+        })
+        .collect();
+    for atom in atoms {
+        let mut member = false;
+        let newly_mapped = doc.atom(*atom).is_some_and(|a| {
+            a.map_num != 0
+                && before
+                    .atom(*atom)
+                    .is_none_or(|old| old.map_num != a.map_num)
+        });
+        for (reaction, sides) in &scopes {
+            for side in sides {
+                if side.atoms.contains(atom) {
+                    if newly_mapped
+                        && reaction
+                            .participants(side.role)
+                            .iter()
+                            .any(|p| p.coefficient != 1 && p.atoms.contains(atom))
+                    {
+                        return Err(COEFFICIENT_ERROR.into());
+                    }
+                    member = true;
+                    let maps = side
+                        .maps
+                        .get_or_init(|| unique(doc, &side.atoms))
+                        .as_ref()
+                        .map_err(Clone::clone)?;
+                    if side.role != Role::Agent {
+                        let opposite_role = if side.role == Role::Reactant {
                             Role::Product
                         } else {
                             Role::Reactant
-                        },
-                    );
-                    for other in opposite {
-                        if let Some(a) = doc.atom(other)
-                            && let Some(id) = maps.get(&a.map_num)
-                            && !compatible(doc, *id, other)
+                        };
+                        if let Some(opposite) = sides.iter().find(|s| s.role == opposite_role)
+                            && cross_side_conflict(doc, maps, &opposite.atoms).is_some()
                         {
                             return Err(
                                 "Matching atom maps must have the same element and isotope".into(),
@@ -86,20 +150,23 @@ fn check_edit(doc: &Document, atom: u64, before: &Document) -> Result<(), String
                 }
             }
         }
-    }
-    if !member {
-        let component = crate::reactions::molecules(doc, &[atom])
-            .into_iter()
-            .next()
-            .unwrap_or_default();
-        unique(doc, &component)?;
+        if !member {
+            let component = crate::reactions::molecules(doc, &[*atom])
+                .into_iter()
+                .next()
+                .unwrap_or_default();
+            unique(doc, &component)?;
+        }
     }
     Ok(())
+}
+fn check_edit(doc: &Document, atom: u64, before: &Document) -> Result<(), String> {
+    validate_edited_atoms(doc, &[atom], before)
 }
 /// Return a validated replacement; errors leave the caller's document untouched.
 pub fn set_map(doc: &Document, atom: u64, number: u32) -> Result<Document, String> {
     if number > MAX_MAP {
-        return Err("Enter an atom map from 1 to 2147483647, or 0 to clear".into());
+        return Err(map_range_error());
     }
     let mut candidate = doc.clone();
     candidate
@@ -112,6 +179,7 @@ pub fn set_map(doc: &Document, atom: u64, number: u32) -> Result<Document, Strin
     candidate.validate()?;
     Ok(candidate)
 }
+
 /// Assign a selected reactant/product atom pair. Existing labels remain locked.
 pub fn pair(doc: &Document, arrow: u64, selected: &[u64]) -> Result<Document, String> {
     let r = reaction(doc, arrow)?;
@@ -162,8 +230,7 @@ pub fn pair(doc: &Document, arrow: u64, selected: &[u64]) -> Result<Document, St
         .atom_mut(b)
         .ok_or("The selected atom is no longer available")?
         .map_num = number;
-    check_edit(&candidate, a, doc)?;
-    check_edit(&candidate, b, doc)?;
+    validate_edited_atoms(&candidate, &[a, b], doc)?;
     candidate.validate()?;
     Ok(candidate)
 }
@@ -178,13 +245,8 @@ pub fn align(doc: &Document, arrow: u64) -> Result<Document, String> {
     let products = ids(r, Role::Product);
     let rm = unique(doc, &reactants)?;
     unique(doc, &products)?;
-    for id in &products {
-        if let Some(product) = doc.atom(*id)
-            && let Some(other) = rm.get(&product.map_num)
-            && !compatible(doc, *id, *other)
-        {
-            return Err("Matching atom maps must have the same element and isotope".into());
-        }
+    if cross_side_conflict(doc, &rm, &products).is_some() {
+        return Err("Matching atom maps must have the same element and isotope".into());
     }
     let mean = |points: &[Point]| -> Point {
         let n = points.len().max(1) as f32;
@@ -253,3 +315,6 @@ pub fn align(doc: &Document, arrow: u64) -> Result<Document, String> {
     candidate.validate()?;
     Ok(candidate)
 }
+
+#[cfg(test)]
+mod tests;

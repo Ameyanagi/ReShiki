@@ -1,5 +1,12 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightLlmsTxt from "starlight-llms-txt";
+import { historicalTopics } from "./scripts/doc-topics.mjs";
+
+const archivedPages = [
+  "developer/changes-*",
+  ...historicalTopics.map((topic) => `developer/${topic}`),
+];
 
 export default defineConfig({
   site: "https://reshiki.com",
@@ -76,6 +83,48 @@ export default defineConfig({
         },
       ],
       description: "Draw molecules, build reaction schemes, and prepare publication figures.",
+      plugins: [
+        starlightLlmsTxt({
+          projectName: "ReShiki",
+          description:
+            "Free chemical drawing app (Rust) for molecules, reaction schemes and publication figures.",
+          details:
+            "AI agents can drive ReShiki through an experimental MCP server (`reshiki --mcp`) or command line (`reshiki --cli`), available in Nightly builds. Start with the [Agent API set](https://reshiki.com/_llms-txt/agent-api.txt); its tool reference is generated from the code.",
+          customSets: [
+            {
+              label: "Agent API",
+              description:
+                "Everything an AI agent needs to use ReShiki over MCP or the command line",
+              paths: [
+                "guide/agents",
+                "developer/agent-api",
+                "developer/agent-cli",
+                "developer/agent-reference",
+                "developer/agent-skill",
+                "developer/runtime-safety",
+              ],
+            },
+          ],
+          demote: archivedPages,
+          exclude: archivedPages,
+          // Custom sets are minified like llms-small.txt. Keep newlines so headings,
+          // tables and lists survive (check-llms.mjs looks for one heading per tool).
+          // Keep <details> too: the Proposal JSON Schema sits in one.
+          minify: { whitespace: false, details: false },
+          optionalLinks: [
+            {
+              label: "GitHub repository",
+              url: "https://github.com/Ameyanagi/ReShiki",
+              description: "Source code, releases and issue reports.",
+            },
+            {
+              label: "Privacy policy",
+              url: "https://reshiki.com/developer/privacy-policy/",
+              description: "Local processing and optional assistant data transfer.",
+            },
+          ],
+        }),
+      ],
       social: [
         { icon: "github", label: "Star on GitHub", href: "https://github.com/Ameyanagi/ReShiki" },
         {
@@ -97,6 +146,9 @@ export default defineConfig({
             { label: "Select and edit", slug: "guide/editing" },
             { label: "Shortcuts and examples", slug: "guide/shortcuts" },
             { label: "Labels and abbreviations", slug: "guide/labels" },
+            { label: "Use chemical names", slug: "guide/names" },
+            { label: "Predict NMR shifts", slug: "guide/nmr" },
+            { label: "Expand generic structures", slug: "guide/generic-structures" },
             { label: "Draw a reaction", slug: "guide/reactions" },
             { label: "Set up Codex", slug: "guide/assistant-setup" },
             { label: "Draw with the assistant", slug: "guide/assistant" },
@@ -132,11 +184,23 @@ export default defineConfig({
             { label: "Runtime safety", slug: "developer/runtime-safety" },
             { label: "Feature status", slug: "developer/feature-status" },
             {
+              label: "Agent API (experimental)",
+              collapsed: true,
+              items: [
+                { label: "Overview", slug: "developer/agent-api" },
+                { label: "Command line", slug: "developer/agent-cli" },
+                { label: "Tool reference", slug: "developer/agent-reference" },
+                { label: "Agent skill", slug: "developer/agent-skill" },
+                { label: "Runtime safety", slug: "developer/runtime-safety" },
+                { label: "Acceptance record", slug: "developer/agent-api-p1-validation" },
+              ],
+            },
+            {
               label: "Engineering notes",
               collapsed: true,
               items: [
+                "3d-keyboard-drawing",
                 "abbreviations",
-                "agent-api",
                 "arrows",
                 "assistant",
                 "atom-labels",
@@ -144,11 +208,14 @@ export default defineConfig({
                 "capabilities",
                 "chain-tools",
                 "changes-0.2",
+                "chemistry-resource-policy",
                 "clipboard",
                 "contextual-shortcuts",
                 "drawing-styles",
+                "figure-export",
                 "fragment-joining",
                 "framework-research",
+                "geometry-backend",
                 "getting-started",
                 "graphics",
                 "jacs-style",
@@ -163,10 +230,12 @@ export default defineConfig({
                 "selection-and-ring-placement",
                 "selection-cleanup",
                 "selection-transforms",
+                "signpath-setup",
                 "template-library",
                 "template-placement",
                 "tool-palettes",
                 "typography",
+                "windows",
                 "workspace-review",
               ].map((name) => ({ slug: `developer/${name}` })),
             },

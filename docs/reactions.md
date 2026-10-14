@@ -18,9 +18,11 @@ Assistant-generated schemes already contain reactant and product roles, includin
 
 ## Copy a drawn reaction
 
-Ordinary **Cmd/Ctrl+C** retains the selected editable drawing and adds chemical
-text when preparation succeeds. With no selected arrow, it prepares molecular
-SMILES and retains all selected disconnected molecular components. Inspect the
+**Cmd/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps.
+It supplies no chemical plain text. To paste a structure into a text field such
+as SciFinder's, select it and use **Cmd/Ctrl+Alt+C**. With no selected arrow,
+this copies molecular SMILES and retains all selected disconnected molecular
+components. Inspect the
 receiving editor's interpretation of a mixture or salt; copying all components
 does not establish receiver acceptance.
 
@@ -41,14 +43,15 @@ spanning explicit participants are rejected for chemical text even if the
 selection snapshot has pruned their reaction metadata. Unassigned no-arrow
 molecules continue to use the molecular copy path.
 
-The inferred roles exist only in the chemical export snapshot. The native
-clipboard retains its existing selected-drawing metadata. Copy does not move
-atoms, change the source document or create an Undo entry. Ambiguous or invalid
-inference omits optional chemical text and reports the reason while ordinary
-drawing Copy still succeeds. Chemical **Copy as** choices use the same selection
-rules and report an error when the requested conversion cannot be prepared.
+The inferred roles exist only in the chemical copy. The drawing retains its
+existing reaction roles. Copy does not move atoms, change the source document
+or create an Undo entry. Ambiguous or invalid inference leaves the previous
+clipboard intact and reports the reason. Chemical **Copy as** choices use the
+same selection rules and report an error when the requested conversion cannot
+be prepared.
 
-Ordinary reaction Copy uses bounded ChemDoodle JSON. Aromatic molecules use
+**Cmd/Ctrl+Alt+C** for one clear reaction uses bounded ChemDoodle JSON.
+Aromatic molecules use
 validated canonical Kekulé bonds with preserved attached hydrogen counts.
 Agents, non-unit coefficients, atom maps, stereochemistry, radicals, unsupported
 bonds, collapsed abbreviations and disconnected components grouped into one
@@ -68,11 +71,12 @@ with three double bonds and Cyclohexane with six single bonds; the screenshot
 showed `C6H12 (84.16) . C6H6 (78.11)`. MOL was checked only for text-field
 delivery, without Add/conversion. No searches were submitted, and
 vertical/reversed layouts remain covered locally rather than by these live
-checks.
+checks. That build supplied chemical text through ordinary Copy; current builds
+use **Cmd/Ctrl+Alt+C** for that text.
 
-The accepted workflow is ReShiki Cmd+C → Cmd+V into ChemDoodle's Open text
-field → Load. Both complete participants and their reactant/product roles were
-preserved in the tested benzene-to-cyclohexane fixture.
+Use ReShiki **Cmd/Ctrl+Alt+C** → **Cmd/Ctrl+V** into ChemDoodle's **Open** text
+field → **Load**. Both complete participants and their reactant/product roles
+were preserved in the tested benzene-to-cyclohexane fixture.
 [PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) added this
 workflow; direct canvas paste and CAS reaction integration are outside this
 change. The guide records the exact actions, baseline comparison and limits.
@@ -107,21 +111,107 @@ Molecular MOL/SMILES/InChI and current CDXML/CDX drawing exchange do not retain 
 
 ## Atom mapping and label placement
 
-Mapped reaction SMILES already use atom classes such as `[CH3:1][CH2:2][OH:3]>>[CH3:1][CH:2]=[O:3]`. Imported positive maps are visible by default. **Show maps** controls their ink, while the chemical map numbers remain in the document and RXN/reaction SMILES export. A map label derives its text from the atom's map number and has its own position/style; custom atom numbers such as `Cα` remain independent and can appear alongside it.
+Available in Nightly builds; not in ReShiki 0.11.0.
 
-Select one atom and use **Atom map → Set**, or right-click **Edit atom map…** / **Clear atom map**. Enter a positive map up to 2147483647; 0 clears it. Edits check uniqueness on that reaction side and element/isotope agreement with an existing counterpart. Select one reactant atom and one product atom, then **Pair selected atoms** to assign a shared map. Existing different labels must be cleared before pairing.
+Atom maps number the atoms that correspond between reactants and products. You
+can set them by hand, let **Auto-map** suggest them, show them on the drawing
+and align the products to the reactants.
 
-**Auto-map** prepares a detached proposal in Rust. It keeps existing maps as anchors, matches exact elements/isotopes, and excludes agents. It maximizes the number of corresponding atoms, then favors conserved heavy-atom adjacency, all adjacency, unchanged bond classes, fewer changed atom environments, and smaller charge/H/radical differences. Bond order, charge, attached hydrogens, degree and ring membership can change in a reaction and never exclude candidate pairs. Coordinates and stereochemistry are preserved; they are not used to infer a reaction mechanism.
+### Use atom maps
 
-Review the preview and click a **Map** row to select its pair in the drawing. **Apply reviewed proposal** changes the document in one Undo step. The review distinguishes one best map under this graph score, several equal-best maps, and a search-budget result whose optimality/uniqueness is unknown. A budget result still contains a complete feasible atom correspondence, and stays detached until accepted. Unmatched atoms retain their existing maps or remain unmapped; omitted coproducts are not invented. A changed drawing invalidates the proposal.
+1. Assign reactants and products first (see [Define a reaction](#define-a-reaction)).
+   The **Atom maps** section of the reaction inspector then shows how many atoms
+   are mapped.
+2. To set one map, select one atom, type a number in **Atom map** and choose
+   **Set**. **Clear** removes it. You can also right-click an atom and choose
+   **Edit atom map…** or **Clear atom map**.
+3. To pair two atoms, select one reactant atom and one product atom and choose
+   **Pair selected atoms**.
+4. To map the rest, choose **Auto-map**. **Review atom maps** lists each
+   suggested pair, for example `Map 1 · C #1 → C #5`. Click a row to select the
+   pair in the drawing.
+5. Choose **Apply maps** to keep the suggestion, or **Discard**.
+6. Choose **Align mapped structures** to turn and move each product so that its
+   mapped atoms line up with the reactants.
 
-The default search limits are 128 explicit atoms per side, 768 bonds, 16384 candidate pairs, 250000 search states, and 20000000 charged matching work units. Work is charged before candidate comparisons, maximum-matching scans, scoring, bounds and search choices. If that budget ends before a full feasible incumbent exists, Auto-map reports an error and creates no proposal. Chemical validation/preparation is bounded by the input caps; this budget is not a wall-clock deadline. Unit coefficients are required for Auto-map: draw each participant explicitly before mapping repeated molecules. A mapping edit also checks other reaction steps containing a shared intermediate, including their coefficients, so it cannot make an earlier exportable repeated participant unmappable. Same-side duplicate map classes can be valid imported SMILES data; the editor preserves them, displays them, and asks for unique anchors before Auto-map. The existing reaction exporter continues to reject duplicate maps on one side.
+**Show maps** shows or hides the map numbers. **Move labels** lets you drag each
+map number; press Escape when you are done. **Reset label positions** returns
+them to automatic placement. Atom-label size and font settings also apply to map
+numbers. Each edit is one Undo step.
 
-**Move map labels** opens the shared indicator handles. Drag a map label to set its own offset; **Reset map label positions** restores automatic collision-aware placement. Indicator size/font controls in Atom Labels also apply to map labels. These choices survive native save, Undo, native copy and figure export. RXN/reaction SMILES retain chemical maps; save `.rsk` for custom numbers and map label styling.
+Mapped reaction SMILES such as `[CH3:1][CH2:2][OH:3]>>[CH3:1][CH:2]=[O:3]`
+import with their maps visible.
 
-**Align mapped structures** is a separate command. It rotates/translates each whole product participant toward its mapped reactant coordinates using a common offset for the reaction's drawing lanes. It preserves bond lengths, depth, wedge appearance, chemical stereo and connectivity, without reflections or scaling. Molecules without a mapped counterpart stay in place. Alignment does not create maps and is one Undo step.
+### Atom map limits
 
-Concrete reaction SMILES and reaction SMARTS serve different purposes: query expressions such as `[N!0H:3]` are not concrete molecular atoms. The [Daylight SMILES specification](https://www.daylight.com/dayhtml/doc/theory/theory.smiles.html) explains atom classes, and the [RDKit Book](https://www.rdkit.org/docs/RDKit_Book.html#reaction-smarts) explains reaction SMARTS. The [mapped reaction example](https://future-chem.com/rdkit-chemical-rxn/#toc4) motivates correspondence and coordinated drawing. Gaussian/TS export remains future work; this editor supplies persistent chemical atom maps and visible labels.
+- **Auto-map** suggests a mapping for you to review. It compares structures
+  only; it does not determine a reaction mechanism.
+- **Auto-map** keeps maps you set. Reagents are not mapped.
+- **Auto-map** needs coefficients of 1 and at most 128 atoms per side. Draw a
+  repeated molecule explicitly before mapping it.
+- A map number must be unique on each side of the reaction and must match the
+  element and isotope of its partner.
+- Changing the drawing discards an unapplied suggestion.
+- RXN and reaction SMILES keep the map numbers. Save a `.rsk` file to keep
+  custom label positions and styles too.
+
+### Atom map implementation notes
+
+A map label derives its text from the atom's map number and has its own
+position and style. **Show maps** controls only the ink; the chemical map
+numbers stay in the document and in RXN/reaction SMILES export. Custom atom
+numbers such as `Cα` remain independent and can appear alongside a map label.
+Maps are positive integers up to 2147483647; 0 clears a map. Edits check
+uniqueness on that reaction side and element/isotope agreement with an existing
+counterpart. Existing different labels must be cleared before pairing.
+
+**Auto-map** runs in Rust and stays detached from the document until applied.
+It keeps existing maps as anchors, matches exact elements/isotopes, and excludes
+agents. It maximizes the number of corresponding atoms, then favors conserved
+heavy-atom adjacency, all adjacency, unchanged bond classes, fewer changed atom
+environments, and smaller charge/H/radical differences. Bond order, charge,
+attached hydrogens, degree and ring membership can change in a reaction and
+never exclude candidate pairs. Coordinates and stereochemistry are preserved;
+they are not used to infer a reaction mechanism.
+
+The review states whether it found one best map under this graph score
+(`One best mapping under the graph score`), several equal-best maps
+(`Several mappings tie under the graph score`), or a search-budget result whose
+optimality and uniqueness are unknown. A budget result still contains a
+complete feasible atom correspondence. Unmatched atoms keep their existing maps
+or stay unmapped; omitted coproducts are not invented.
+
+The default search limits are 128 explicit atoms per side, 768 bonds, 16384
+candidate pairs, 250000 search states, and 20000000 charged matching work
+units. Work is charged before candidate comparisons, maximum-matching scans,
+scoring, bounds and search choices. If that budget ends before a full feasible
+incumbent exists, Auto-map reports an error and creates no proposal. Chemical
+validation/preparation is bounded by the input caps; this budget is not a
+wall-clock deadline. A mapping edit also checks other reaction steps containing
+a shared intermediate, including their coefficients, so it cannot make an
+earlier exportable repeated participant unmappable. Same-side duplicate map
+classes can be valid imported SMILES data; the editor preserves them, displays
+them, and asks for unique anchors before Auto-map. The reaction exporter
+rejects duplicate maps on one side.
+
+Map label offsets and styles survive `.rsk` save, Undo, copy within ReShiki and
+figure export. **Align mapped structures** rotates and translates each whole
+product participant toward its mapped reactant coordinates, using a common
+offset for the reaction's drawing lanes. It preserves bond lengths, depth,
+wedge appearance, chemical stereo and connectivity, without reflections or
+scaling. Molecules without a mapped counterpart stay in place. Alignment does
+not create maps.
+
+Concrete reaction SMILES and reaction SMARTS serve different purposes: query
+expressions such as `[N!0H:3]` are not concrete molecular atoms. The
+[Daylight SMILES specification](https://www.daylight.com/dayhtml/doc/theory/theory.smiles.html)
+explains atom classes, and the
+[RDKit Book](https://www.rdkit.org/docs/RDKit_Book.html#reaction-smarts) explains
+reaction SMARTS. The
+[mapped reaction example](https://future-chem.com/rdkit-chemical-rxn/#toc4)
+motivates correspondence and coordinated drawing. Gaussian/TS export remains
+future work; this editor supplies persistent chemical atom maps and visible
+labels.
 
 ## Current limits and verification
 

@@ -1,5 +1,6 @@
 //! Selection decorations in world coordinates, retained with the current scene.
-use super::{Camera, Document, Point, Rectangle, World, layered, rgb};
+use super::{Camera, Document, Point, Rectangle, World, layered};
+use crate::canvas::overlay::ACCENT;
 use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Size};
 use std::collections::{HashMap, HashSet};
@@ -8,12 +9,39 @@ use std::collections::{HashMap, HashSet};
 pub(super) struct Markers {
     multiple: bool,
     bonds: Vec<(World, World)>,
-    atoms: Vec<World>,
-    atom_ids: Vec<u64>,
+    atoms: Vec<(u64, World)>,
     captions: Vec<(World, Size)>,
 }
 
 impl Markers {
+    pub fn text_hover(
+        doc: &Document,
+        id: u64,
+        frame: &mut layered::Frame<'_>,
+        camera: Camera,
+        bounds: Rectangle,
+    ) {
+        let Some((lo, hi)) = doc
+            .annotations
+            .iter()
+            .find(|a| a.id == id)
+            .and_then(reshiki::atom_text::text_ink_bounds)
+        else {
+            return;
+        };
+        let scale = camera.zoom.clamp(0.15, 1.);
+        let lo = camera.screen(lo, bounds) - iced::Vector::new(3. * scale, 3. * scale);
+        let hi = camera.screen(hi, bounds) + iced::Vector::new(3. * scale, 3. * scale);
+        let path = Path::rectangle(lo, Size::new(hi.x - lo.x, hi.y - lo.y));
+        // Match the ordinary atom-hover outline, including its zoom behavior.
+        frame.stroke(
+            &path,
+            Stroke::default()
+                .with_width(1.4 * scale.sqrt())
+                .with_color(ACCENT),
+        );
+    }
+
     pub fn new(doc: &Document, ids: &[u64]) -> Self {
         Self::build(doc, ids, true)
     }
@@ -49,12 +77,7 @@ impl Markers {
             atoms: ids
                 .iter()
                 .filter(|id| !hidden.contains(id))
-                .filter_map(|id| atoms.get(id).map(|atom| atom.position))
-                .collect(),
-            atom_ids: ids
-                .iter()
-                .filter(|id| !hidden.contains(id) && atoms.contains_key(id))
-                .copied()
+                .filter_map(|id| atoms.get(id).map(|atom| (*id, atom.position)))
                 .collect(),
             captions: doc
                 .annotations
@@ -80,6 +103,7 @@ impl Markers {
 
     /// Only selected, supported NMR owners use the filled assignment halo.
     /// Ordinary selection and hover retain their existing outlined markers.
+    /// `nmr_ids` is the sorted supported-owner slice from the NMR context.
     pub fn draw_with_nmr(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -108,33 +132,34 @@ impl Markers {
                         &Path::line(a, b),
                         Stroke::default()
                             .with_width(7. * scale)
-                            .with_color(Color::from_rgba8(19, 135, 116, 0.16)),
+                            .with_color(Color { a: 0.16, ..ACCENT }),
                     );
                 }
             }
-            for (&atom, id) in self.atoms.iter().zip(&self.atom_ids) {
+            for &(id, atom) in &self.atoms {
                 let center = camera.screen(atom, bounds);
                 if !visible(center, center, 8. * scale + 3.) {
                     continue;
                 }
                 let circle = Path::circle(center, 8. * scale);
+                let nmr_owner = nmr_ids.binary_search(&id).is_ok();
                 if selected {
-                    let fill = if nmr_ids.contains(id) {
+                    let fill = if nmr_owner {
                         // A display tint keeps this soft halo visibly teal;
                         // low-alpha ink becomes nearly gray under linear-light
                         // compositing. The frame adapts it to the page once.
                         Color::from_rgb8(208, 241, 235)
                     } else {
-                        Color::from_rgba8(19, 135, 116, 0.12)
+                        Color { a: 0.12, ..ACCENT }
                     };
                     frame.fill(&circle, fill);
                 }
-                if !selected || !nmr_ids.contains(id) {
+                if !selected || !nmr_owner {
                     frame.stroke(
                         &circle,
                         Stroke::default()
                             .with_width((if selected { 1.8 } else { 1.4 }) * scale.sqrt())
-                            .with_color(rgb([19, 135, 116])),
+                            .with_color(ACCENT),
                     );
                 }
             }

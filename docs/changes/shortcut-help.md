@@ -83,7 +83,7 @@ For the close-up below, section 7 was selected from that saved return document a
 
 ![Returned ligand examples selected as editable objects in the release app](../images/shortcut-help/pi-copy-return.png)
 
-[Editable two-Cp source](fixtures/pi-ligands-copy.rsk) · [Captured binary fixtures and provenance](../../tests/fixtures/ligand-exchange/README.md) · [Compatibility conversions](../clipboard.md#changes-made-for-an-external-copy). R/X labels returned as query nicknames are imported as uninterpreted atom text with a visible notice; molecular properties and query semantics are unavailable for that drawing. Other unsupported query chemistry remains rejected.
+[Editable two-Cp source](../../tests/fixtures/ligand-exchange/pi-ligands-copy.rsk) · [Captured binary fixtures and provenance](../../tests/fixtures/ligand-exchange/README.md) · [Compatibility conversions](../clipboard.md#changes-made-for-an-external-copy). R/X labels returned as query nicknames are imported as uninterpreted atom text with a visible notice; molecular properties and query semantics are unavailable for that drawing. Other unsupported query chemistry remains rejected.
 
 ## Move a ligand from its attachment point
 
@@ -95,7 +95,7 @@ For a deliberate endpoint adjustment, right-click the attachment and choose **Mo
 | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | ![Dragging the point detaches its location from the arene drawing](../images/shortcut-help/centroid-before.png) | ![Dragging the point translates the arene while keeping Ru fixed](../images/shortcut-help/centroid-after.png) |
 
-Both captures use the same [arene/Ru input](fixtures/attachment-movement.rsk) at 250% zoom and the same Option-drag offset. The title differs because the after build opens a copy. Selection changes can recenter a fitted view; saved coordinates confirm that Ru remains fixed. The ligand was already tilted in both builds; only the drag behavior differs.
+Both captures use the same [arene/Ru input](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/attachment-movement.rsk) at 250% zoom and the same Option-drag offset. The title differs because the after build opens a copy. Selection changes can recenter a fitted view; saved coordinates confirm that Ru remains fixed. The ligand was already tilted in both builds; only the drag behavior differs.
 
 ## Front and back after dragging or tilting
 
@@ -105,11 +105,11 @@ The ligand's stored X/Y/Z coordinates now determine clearance at each crossing. 
 | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | ![Ru contact incorrectly interrupted by the far arene edge and ellipse](../images/shortcut-help/depth-before.png) | ![Ru contact passes in front of the far arene edge and ellipse](../images/shortcut-help/depth-after.png) |
 
-These native screenshots open the same [saved ligand drawing](fixtures/ligand-depth.rsk) at 250% zoom. The before build is `83e93e8`; the after build includes this fix. No coordinates or bond orders were changed between these captures.
+These native screenshots open the same [saved ligand drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/ligand-depth.rsk) at 250% zoom. The before build is `83e93e8`; the after build includes this fix. No coordinates or bond orders were changed between these captures.
 
 Dragging translates the ligand without changing its orientation or depth. Further 3D tilts recalculate its thick and tapered perspective edges. Ordinary stereochemical wedges keep their meaning, and explicit front/back controls remain available. Automated cases cover Cp and arene, older saved shortcut contacts, crossing both sides of one ring, depth interpolation, reversible tilt, and save/reopen.
 
-The expanded [editable depth examples](fixtures/depth-examples.rsk) cover arene movement and further tilt, Cp vertex crossings, partial inner curves, a Cp* dimer with automatic contact depth, assistant retilting, and an unchanged Haworth projection. Each case was exported as SVG, PNG and PDF. The dimer is a drawing regression: its complete coordination and formal-charge assignment is not chemically validated.
+The expanded [editable depth examples](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/depth-examples.rsk) cover arene movement and further tilt, Cp vertex crossings, partial inner curves, a Cp* dimer with automatic contact depth, assistant retilting, and an unchanged Haworth projection. Each case was exported as SVG, PNG and PDF. The dimer is a drawing regression: its complete coordination and formal-charge assignment is not chemically validated.
 
 ![Eight examples of ligand depth, ring curves, further tilting and retained Haworth appearance](../images/shortcut-help/depth-examples.png)
 
@@ -133,7 +133,7 @@ Cp substitution replaces the ring carbon's stored hydrogen and retains its chemi
 
 ![New green bonds remain in the Cp and aromatic ring planes after tilting](../images/shortcut-help/plane-growth.png)
 
-[Editable examples](fixtures/plane-growth.rsk). Regenerate them with `cargo run --example plane_growth_qa -- /tmp/plane-growth-review`. The added bonds are colored green for review.
+[Editable examples](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/plane-growth.rsk). Regenerate them with `cargo run --example plane_growth_qa -- /tmp/plane-growth-review`. The added bonds are colored green for review.
 
 ## Bold edges meet alternating ring bonds
 
@@ -143,7 +143,7 @@ Automatic double-bond placement puts a ring's outer line on its skeleton. The jo
 | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
 | ![A bold arene edge ends in square protrusions beside double bonds](../images/shortcut-help/arene-bold-before.png) | ![The bold arene edge joins the neighboring thin outer lines](../images/shortcut-help/arene-bold-after.png) |
 
-Both figures use the same [saved arene drawing](fixtures/arene-bold-join.rsk). Only rendering changes; the coordinates, double bonds and green C–F bond are unchanged. Tests cover shared corners, rotated/reversed bonds, several tilt angles, transparent raster coverage and preservation of the separate inner double-bond lines.
+Both figures use the same [saved arene drawing](../../tests/fixtures/bond-joins/arene-bold-join.rsk). Only rendering changes; the coordinates, double bonds and green C–F bond are unchanged. Tests cover shared corners, rotated/reversed bonds, several tilt angles, transparent raster coverage and preservation of the separate inner double-bond lines.
 
 At a substituted carbon, all three bond directions define the junction. The thick ring edge meets the lower edge of C–F, and the thin ring edge meets its upper edge. Each color sector runs through the shared atom. The previous correction incorrectly preserved the unsubstituted ring corner and attached C–F to its outside, leaving a pointed shoulder below the substituent.
 
@@ -173,7 +173,7 @@ Choose **Text**, click empty canvas and type a standalone neutral formula such a
 | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | ![Formula captions with unformatted digits](../images/shortcut-help/formula-before.png) | ![Formula captions with subscripts and an unchanged Figure 2 caption](../images/shortcut-help/formula-after.png) |
 
-[Editable examples](fixtures/formula-text.rsk). The underlying text stays editable ASCII. Native documents and figure exports retain its formatting; the caption does not add atoms or change molecular properties. Detection is deliberately limited to complete neutral formulas: prose, units, unknown symbols and ambiguous charge notation remain unchanged. Use the Style row's **CH₂** and subscript/superscript controls for manual formatting. Existing captions keep their chosen format, and a manual formula or script choice overrides detection for that editing session. Undo/Redo retains both text and formatting.
+[Editable examples](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/formula-text.rsk). The underlying text stays editable ASCII. Native documents and figure exports retain its formatting; the caption does not add atoms or change molecular properties. Detection is deliberately limited to complete neutral formulas: prose, units, unknown symbols and ambiguous charge notation remain unchanged. Use the Style row's **CH₂** and subscript/superscript controls for manual formatting. Existing captions keep their chosen format, and a manual formula or script choice overrides detection for that editing session. Undo/Redo retains both text and formatting.
 
 Desktop verification typed `C2H2` into a new caption, observed automatic CH₂ activation and the subscripted Appearance preview, then applied it with Cmd+Enter. The applied caption displayed C₂H₂; the molecular formula of the separate arene remained C6H5F.
 
@@ -198,7 +198,7 @@ The capture shows oxygen added to a two-carbon chain in one drag. The saved draw
 
 ## Fixes found while checking the gallery
 
-An unrelated multi-center complex previously blocked a selected benzene's display change. The operation now checks the selected molecular components and leaves the other drawing content intact. Both captures use the same [input file](fixtures/shortcut-ring-display.rsk), select the left ring, and press **Cmd+Option+K** at 170% zoom.
+An unrelated multi-center complex previously blocked a selected benzene's display change. The operation now checks the selected molecular components and leaves the other drawing content intact. Both captures use the same [input file](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/shortcut-ring-display.rsk), select the left ring, and press **Cmd+Option+K** at 170% zoom.
 
 | Before: the whole-document check blocks the edit                                                                         | After: the selected ring changes; the complex stays intact                                                                        |
 | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -264,3 +264,11 @@ pdftoppm -scale-to 1400 -png /tmp/shortcut-review/shortcut-examples.pdf /tmp/sho
 Desktop checks also verified ligand dragging, Undo and explicit point-only movement. Saved coordinates confirm that the ring and its point translate together, Ru stays fixed, and every depth value is retained. Desktop checks exercised both ring gestures, the existing modifier shortcut, adding oxygen by dragging, separate-window Help on an unbounded canvas, optional rulers/crosshair, and copying a Boc example between windows. The copied example retained nine atoms, eight bonds and its seven-atom Boc definition, with no caption.
 
 Automated checks cover event handling, click versus drag, normal and free placement, projected-ring exclusions, undo, gallery copying and native round trips, identity-preserving display changes, isolation from unrelated complexes, and page-edge detection. Application, library and focused integration tests passed; Clippy is run with warnings denied. No new unsafe blocks or unchecked unwraps are needed.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) on the evidence archive branch.
+
+| Archived files                                                                                                           | What they record                                                           |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) | Editable shortcut gallery sections and the captured Help workflow drawing. |

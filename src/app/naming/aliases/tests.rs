@@ -1,20 +1,11 @@
+use super::super::test_support::ethanol;
 use super::*;
 
-fn ethanol() -> Document {
-    Document::from_json(include_bytes!(
-        "../../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
-    ))
-    .unwrap()
-}
 fn record() -> Record {
     Record {
         title: "ethanol".into(),
-        systematic_name: Some("ethan-1-ol".into()),
-        smiles: "CCO".into(),
-        canonical_smiles: "CCO".into(),
         synonyms: naming::aliases_for_smiles("CCO").unwrap(),
-        warnings: vec![],
-        provenance: naming::Provenance::LocalRules,
+        ..super::super::test_support::record("CCO")
     }
 }
 fn ready() -> App {
@@ -262,6 +253,7 @@ fn stale_selection_epoch_and_invalid_alias_never_partially_change_the_drawing() 
             .notice
             .as_ref()
             .unwrap()
+            .detail
             .contains("selection changed")
     );
     app.tab.selected = app.tab.doc.all_ids();

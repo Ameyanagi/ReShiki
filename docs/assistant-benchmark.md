@@ -1,10 +1,9 @@
 # Assistant image-to-structure benchmark
 
-Status: under review in [PR #281](https://github.com/Ameyanagi/ReShiki/pull/281).
+Status: in the source tree on `main`; not in ReShiki 0.11.0. The benchmark is a
+QA tool for developers, not an app feature.
 Author: @Ameyanagi, project creator and maintainer.
-Addresses [issue #94](https://github.com/Ameyanagi/ReShiki/issues/94) and is stacked
-on the guided setup change in [open PR #280](https://github.com/Ameyanagi/ReShiki/pull/280).
-The current stack parent is `f71479e69c0a25deae3d9a48cca7b25708f49cb8`.
+Addresses [issue #94](https://github.com/Ameyanagi/ReShiki/issues/94).
 Its [Wayland fixture publication follow-up](changes/wayland-fixture-publication-2026-10-09.md)
 was merged normally, with no changes to the benchmark runner/scorer, dataset,
 recorded results, Rust application source or original image bytes. Fresh live
@@ -123,7 +122,7 @@ uv run --locked python scripts/report_assistant_benchmark.py \
   --output /absolute/path/to/results
 ```
 
-The checked-in results contain configuration, statuses, timings, unresolved
+The archived result records contain configuration, statuses, timings, unresolved
 findings and localized scores. Native output graphs and representative actual
 application renders accompany successful and failed reconstructions. Large
 scratch previews and binaries stay outside Git. Inspect output artifacts for
@@ -131,7 +130,7 @@ unrelated or private data before publishing.
 
 ## Recorded baseline results · 9 October 2026
 
-[Per-case results and aggregate counts](assistant-benchmark-results/baseline-20261009/README.md)
+[Per-case results and aggregate counts](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/assistant-benchmark-results/baseline-20261009/README.md)
 include all 16 planned runs. The bounded baseline attempted 13 workflows in
 1,499.55 seconds: 7 completed drafts, 4 structured-output failures, 1 clarification,
 1 timeout and 3 not-run repeats. Every started workflow recorded
@@ -171,7 +170,7 @@ establish real-scan accuracy or a general peptide/macrocycle success rate.
 ## Separate native guided control
 
 The actual [PR #280](https://github.com/Ameyanagi/ReShiki/pull/280) desktop exercise is recorded separately in
-[the guided control receipt](assistant-benchmark-results/guided-20261009/README.md).
+[the guided control receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/assistant-benchmark-results/guided-20261009/README.md).
 One explicitly selected Sol/xhigh request produced an editable ethanol draft
 while the blank canvas remained unchanged until manual Apply. The exact native
 SaveAs independently scores as `CCO`, three heavy atoms, two single bonds and one
@@ -199,3 +198,12 @@ features. Report tests pin separate denominators for completed and provisional
 correct graphs and not-run cases. The Rust example tests ordinary Apply validation
 with a valid uncertain graph and a malformed bond endpoint, without mutating the
 base document.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/assistant-benchmark-results/baseline-20261009](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/assistant-benchmark-results/baseline-20261009), [docs/assistant-benchmark-results/guided-20261009](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/assistant-benchmark-results/guided-20261009) on the evidence archive branch.
+
+| Archived files                                                                                                                                                                     | What they record                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [docs/assistant-benchmark-results/baseline-20261009](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/assistant-benchmark-results/baseline-20261009) | Unassisted benchmark configuration, statuses, timings, unresolved findings and localized graph scores.  |
+| [docs/assistant-benchmark-results/guided-20261009](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/assistant-benchmark-results/guided-20261009)     | Guided ethanol request, ordinary Apply acceptance, saved-graph score and native Undo/Redo observations. |

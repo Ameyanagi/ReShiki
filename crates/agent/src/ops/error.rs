@@ -30,6 +30,23 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
+    /// Every operation error kind, in declaration order.
+    pub const ALL: &[Self] = &[
+        Self::UnknownTool,
+        Self::InvalidArguments,
+        Self::UnknownDocument,
+        Self::UnknownObject,
+        Self::Stale,
+        Self::Busy,
+        Self::Budget,
+        Self::Timeout,
+        Self::Rejected,
+        Self::Unsupported,
+        Self::Access,
+        Self::Failed,
+        Self::Cancelled,
+    ];
+
     /// The stable snake_case code clients see.
     pub fn code(self) -> &'static str {
         match self {
@@ -46,6 +63,38 @@ impl ErrorKind {
             Self::Access => "access_denied",
             Self::Failed => "failed",
             Self::Cancelled => "cancelled",
+        }
+    }
+
+    /// What the code means, for reference documentation. The match has no
+    /// wildcard, so a new kind needs a meaning before it compiles.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::UnknownTool => "No tool has this name; MCP reports it as a JSON-RPC error.",
+            Self::InvalidArguments => "The arguments break the tool's schema or one of its rules.",
+            Self::UnknownDocument => {
+                "The document handle is unknown, closed, expired or not the caller's."
+            }
+            Self::UnknownObject => "An object ID is not in the document.",
+            Self::Stale => {
+                "The document's revision is not the one the call was based on; nothing changed."
+            }
+            Self::Busy => {
+                "The server is stopping, the request ID is in flight or the queue is full."
+            }
+            Self::Budget => "The call would exceed a budget.",
+            Self::Timeout => "The call passed its deadline before it committed any change.",
+            Self::Rejected => "Validation or the document's edit policy refused the change.",
+            Self::Unsupported => "Reserved; no current tool returns it.",
+            Self::Access => {
+                "The file is outside the granted folders, has an extension the tool does not \
+                 accept, or the operating system denied access."
+            }
+            Self::Failed => {
+                "The operation failed, for example on unreadable chemistry, a missing or \
+                 existing file, an I/O error or an internal error."
+            }
+            Self::Cancelled => "The caller cancelled the request; no response is sent.",
         }
     }
 
@@ -77,6 +126,16 @@ impl OpError {
                 .take(Self::MAX_MESSAGE_CHARS)
                 .collect(),
         }
+    }
+
+    /// A failed operation with a bounded, client-facing message.
+    pub fn failed(message: impl AsRef<str>) -> Self {
+        Self::new(ErrorKind::Failed, message)
+    }
+
+    /// Invalid arguments with a bounded, client-facing message.
+    pub fn invalid(message: impl AsRef<str>) -> Self {
+        Self::new(ErrorKind::InvalidArguments, message)
     }
 }
 
@@ -194,3 +253,6 @@ fn shorten_list(list: &mut Vec<String>) {
         *list = vec![shorten(&joined)];
     }
 }
+
+#[cfg(test)]
+mod tests;

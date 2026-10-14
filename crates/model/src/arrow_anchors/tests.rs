@@ -5,6 +5,38 @@ use crate::{
     scientific::{self, SymbolKind},
     transaction,
 };
+#[test]
+fn target_atoms_lists_each_referenced_atom() {
+    for (target, expected) in [
+        (Target::Atom { atom: 7 }, vec![7]),
+        (
+            Target::Bond {
+                a: 3,
+                b: 9,
+                fraction: 0.25,
+            },
+            vec![3, 9],
+        ),
+        (Target::LonePair { atom: 7, mark: 11 }, vec![7]),
+    ] {
+        assert_eq!(target.atoms().collect::<Vec<_>>(), expected);
+    }
+}
+#[test]
+fn arrow_is_attached_with_either_anchor() {
+    let (mut doc, _, _, _) = fixture();
+    let mut arrow = doc.arrows.pop().unwrap();
+    let start = arrow.start_anchor.take();
+    let end = arrow.end_anchor.take();
+    assert!(!arrow.is_attached());
+    arrow.start_anchor = start.clone();
+    assert!(arrow.is_attached());
+    arrow.start_anchor = None;
+    arrow.end_anchor = end;
+    assert!(arrow.is_attached());
+    arrow.start_anchor = start;
+    assert!(arrow.is_attached());
+}
 fn near(a: Point, b: Point) {
     assert!(a.distance(b) < 0.001, "{a:?} != {b:?}");
 }

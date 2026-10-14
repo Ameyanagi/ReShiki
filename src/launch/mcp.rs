@@ -1,0 +1,348 @@
+#![deny(clippy::print_stdout, clippy::print_stderr)]
+//! MCP request parsing, grants, stdio serving and bounded shutdown.
+
+#[cfg(windows)]
+use super::protect_standard_handles;
+use super::{exit, heap_budget, runtime};
+use reshiki::{
+    cli::{FAILURE, MCP_USAGE, SUCCESS, USAGE, heap::HEAP_VARIABLE},
+    updates::CURRENT_VERSION,
+};
+use reshiki_agent::{
+    access::{self, GRANT_EXIT_CODE, GrantSummary, Grants},
+    ops::{budget::Budgets, headless::HeadlessHost, host::ToolHost, wire::Principal},
+};
+use reshiki_mcp::{
+    framing::Limits,
+    log::{Level, Log, LogDone, UnknownLevel},
+    server::{self, Finished, Identity, Quit, ServeError},
+};
+use std::{
+    ffi::OsString,
+    fmt,
+    io::{self, IsTerminal, Write},
+    path::PathBuf,
+    process,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::runtime::Runtime;
+
+/// The startup banner, logged whatever the level.
+const BANNER: &str = "ReShiki agent API (experimental)";
+
+/// How long shutdown may wait for running calls to end, the output to
+/// drain and the log to stop.
+const SHUTDOWN: Duration = Duration::from_secs(3);
+/// The longest wait for running calls to end once serving stopped.
+const DRAIN_GRACE: Duration = Duration::from_secs(1);
+/// The longest wait for the log to flush before exiting.
+const LOG_GRACE: Duration = Duration::from_millis(200);
+/// How long the runtime's leftover tasks get before the process exits.
+const RUNTIME_GRACE: Duration = Duration::from_millis(500);
+
+/// What `reshiki --mcp <args>` asks for.
+#[derive(Debug, PartialEq, Eq)]
+enum McpRequest {
+    Serve {
+        level: Level,
+        /// `--allow-read` folders, in order.
+        read: Vec<PathBuf>,
+        /// `--allow-write` folders, in order.
+        write: Vec<PathBuf>,
+    },
+    Help,
+}
+
+/// Why `reshiki --mcp <args>` cannot start; each exits 2.
+#[derive(Debug, PartialEq, Eq)]
+enum McpUsageError {
+    /// `--attach` is reserved for connecting to a running app.
+    Attach,
+    /// An option given more than once.
+    Duplicate(&'static str),
+    /// `--log-level` without a value.
+    MissingLevel,
+    /// `--allow-read` or `--allow-write` without a folder, or with an empty
+    /// one.
+    MissingFolder(&'static str),
+    /// `--log-level` with an unknown value, lossily decoded.
+    InvalidLevel(String),
+    /// Any other token, lossily decoded.
+    Unknown(String),
+}
+
+impl fmt::Display for McpUsageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Attach => f.write_str(
+                "reshiki --mcp --attach connects to a running ReShiki app and is not available in \
+                 this version",
+            ),
+            Self::Duplicate(option) => write!(f, "reshiki --mcp: {option} given more than once"),
+            Self::MissingLevel => f.write_str("reshiki --mcp: --log-level needs a value"),
+            Self::MissingFolder(option) => write!(f, "reshiki --mcp: {option} needs a folder"),
+            Self::InvalidLevel(level) => {
+                write!(
+                    f,
+                    "reshiki --mcp: unknown log level `{level}`; {UnknownLevel}"
+                )
+            }
+            Self::Unknown(token) => write!(f, "reshiki --mcp: unknown option `{token}`"),
+        }
+    }
+}
+
+/// Parses the tokens after `--mcp`. `--allow-read` and `--allow-write` may
+/// repeat, every other option appears at most once, and the first problem
+/// wins; `--help` counts only when nothing is wrong.
+fn mcp_request(args: &[OsString]) -> Result<McpRequest, McpUsageError> {
+    let mut level = None;
+    let mut help = false;
+    let mut read = Vec::new();
+    let mut write = Vec::new();
+    let mut tokens = args.iter();
+    while let Some(token) = tokens.next() {
+        let folders = if token == "--allow-read" {
+            Some(("--allow-read", &mut read))
+        } else if token == "--allow-write" {
+            Some(("--allow-write", &mut write))
+        } else {
+            None
+        };
+        if let Some((option, folders)) = folders {
+            let folder = tokens.next().filter(|folder| !folder.is_empty());
+            folders.push(PathBuf::from(
+                folder.ok_or(McpUsageError::MissingFolder(option))?,
+            ));
+        } else if token == "--log-level" {
+            if level.is_some() {
+                return Err(McpUsageError::Duplicate("--log-level"));
+            }
+            let value = tokens.next().ok_or(McpUsageError::MissingLevel)?;
+            let parsed = value.to_str().and_then(|text| text.parse().ok());
+            level = Some(
+                parsed
+                    .ok_or_else(|| McpUsageError::InvalidLevel(value.to_string_lossy().into()))?,
+            );
+        } else if token == "--help" || token == "-h" {
+            if help {
+                return Err(McpUsageError::Duplicate("--help"));
+            }
+            help = true;
+        } else if token == "--attach" {
+            return Err(McpUsageError::Attach);
+        } else {
+            return Err(McpUsageError::Unknown(token.to_string_lossy().into()));
+        }
+    }
+    Ok(if help {
+        McpRequest::Help
+    } else {
+        McpRequest::Serve {
+            level: level.unwrap_or(Level::Warn),
+            read,
+            write,
+        }
+    })
+}
+
+/// The folders granted on the command line and in `agent-access.json`;
+/// relative command-line folders resolve against the current folder.
+fn load_grants(read: Vec<PathBuf>, write: Vec<PathBuf>) -> Result<Grants, String> {
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(_) if read.iter().chain(&write).all(|folder| folder.is_absolute()) => PathBuf::new(),
+        Err(error) => return Err(format!("cannot resolve relative folders: {error}")),
+    };
+    access::load(read, write, cwd).map_err(|error| error.to_string())
+}
+
+/// The startup banner's value: the version and the granted folders, counted,
+/// or listed at debug level. Paths never reach stderr otherwise.
+fn banner(version: &str, grants: &GrantSummary, level: Level) -> String {
+    if level == Level::Debug {
+        // Debug formatting escapes control characters, keeping one line.
+        format!(
+            "{version}; granted folders: read {:?}, write {:?}",
+            grants.read, grants.write
+        )
+    } else {
+        format!(
+            "{version}; granted folders: {} read, {} write",
+            grants.read.len(),
+            grants.write.len()
+        )
+    }
+}
+
+/// `reshiki --mcp`: serves MCP on stdin and stdout until stdin ends or
+/// stdout fails, then exits 0 if every response was delivered, else 1.
+///
+/// On Windows the standard handles are first kept out of worker processes;
+/// failing that prints one stderr line and exits 1.
+///
+/// The heap ceiling starts and the granted folders are opened before
+/// anything is read: an invalid [`HEAP_VARIABLE`], a folder that cannot be
+/// granted, or an unreadable `agent-access.json`, prints one stderr line and
+/// exits 2 ([`GRANT_EXIT_CODE`]).
+///
+/// Stdout carries MCP messages only: the framing's writer thread takes its
+/// lock for the whole connection, and nothing else here writes it. Stderr
+/// gets usage and grant errors before the log starts and only the bounded,
+/// content-free log after, so neither stream can block shutdown once the
+/// input ended: stdin is read on its own thread, every wait below shares
+/// one deadline, and [`exit`] never locks a std stream.
+///
+/// A client that stops reading stdout also stops the reader (the framing's
+/// backpressure), so input it sent after that point, including its end, is
+/// read only once it reads stdout again or closes it; closing it fails the
+/// writer and exits 1.
+pub(crate) fn mcp(args: Vec<OsString>) -> ! {
+    #[cfg(windows)]
+    let protected = protect_standard_handles();
+    let (level, read, write) = match mcp_request(&args) {
+        Ok(McpRequest::Serve { level, read, write }) => (level, read, write),
+        Ok(McpRequest::Help) => {
+            let _ = io::stderr().write_all(MCP_USAGE.as_bytes());
+            process::exit(SUCCESS)
+        }
+        Err(error) => {
+            let mut stderr = io::stderr().lock();
+            let _ = writeln!(stderr, "{error}");
+            if error != McpUsageError::Attach {
+                let _ = stderr.write_all(MCP_USAGE.as_bytes());
+            }
+            process::exit(USAGE)
+        }
+    };
+    match heap_budget(std::env::var_os(HEAP_VARIABLE)) {
+        Ok(bytes) => reshiki_process_heap::begin(bytes),
+        Err(error) => {
+            let _ = writeln!(io::stderr(), "reshiki --mcp: {error}");
+            process::exit(USAGE)
+        }
+    }
+    let grants = match load_grants(read, write) {
+        Ok(grants) => grants,
+        Err(error) => {
+            // One line, even for a folder name with a line break in it.
+            let error: String = error
+                .chars()
+                .map(|c| if c.is_control() { ' ' } else { c })
+                .collect();
+            let _ = writeln!(io::stderr(), "reshiki --mcp: {error}");
+            process::exit(GRANT_EXIT_CODE)
+        }
+    };
+    let (log, log_done) = Log::start(io::stderr, level);
+    reshiki_mcp::install_panic_hook(log.clone());
+    log.notice(BANNER, &banner(CURRENT_VERSION, &grants.summary(), level));
+    #[cfg(windows)]
+    log.event(
+        Level::Debug,
+        "stdio: standard pipes protected from worker processes",
+        &[
+            ("stdin", u64::from(protected.stdin)),
+            ("stdout", u64::from(protected.stdout)),
+            ("stderr", u64::from(protected.stderr)),
+        ],
+    );
+    if io::stdin().is_terminal() {
+        log.event(
+            Level::Warn,
+            "reshiki --mcp speaks MCP on stdin/stdout and is meant to be launched by an MCP client",
+            &[],
+        );
+    }
+    let budgets = Budgets::default();
+    // The blocking pool runs the host's operations, with room for two more;
+    // stdin and stdout have their own threads and never use it.
+    let runtime = match runtime(budgets.concurrency.saturating_add(2)) {
+        Ok(runtime) => runtime,
+        Err(_) => {
+            log.event(Level::Error, "could not start the runtime", &[]);
+            log_done.finish(LOG_GRACE);
+            process::exit(FAILURE)
+        }
+    };
+    let limits = Limits::from_budgets(&budgets);
+    let host = Arc::new(HeadlessHost::new(CURRENT_VERSION, budgets).with_grants(Arc::new(grants)));
+    let result = runtime.block_on(server::serve(
+        Arc::clone(&host),
+        Principal::local(),
+        io::stdin(),
+        || io::stdout().lock(),
+        Identity {
+            app_version: CURRENT_VERSION.into(),
+        },
+        limits,
+        log.clone(),
+    ));
+    let code = shutdown(&runtime, &host, result, &log, log_done);
+    exit(runtime, code, RUNTIME_GRACE)
+}
+
+/// Drains running calls, settles output and finishes the log under one deadline.
+fn shutdown(
+    runtime: &Runtime,
+    host: &HeadlessHost,
+    result: Result<Finished, ServeError>,
+    log: &Log,
+    log_done: LogDone,
+) -> i32 {
+    // One deadline, set before any waiting, bounds the rest of shutdown.
+    let started = Instant::now();
+    let remaining = || SHUTDOWN.saturating_sub(started.elapsed());
+    // Running calls are cancelled; their blocking work may outlast this.
+    let drain = remaining().min(DRAIN_GRACE);
+    let drained =
+        runtime.block_on(async { tokio::time::timeout(drain, host.drained()).await.is_ok() });
+    if !drained {
+        log.event(Level::Warn, "calls still running at exit", &[]);
+    }
+    let code = match result {
+        Ok(finished) => {
+            let delivered = finished.writer.wait(remaining());
+            exit_code(
+                finished.reason,
+                delivered,
+                finished.tracker.unanswered(),
+                log,
+            )
+        }
+        // `serve` already logged the failure at error level.
+        Err(ServeError::Init | ServeError::Catalog) => FAILURE,
+    };
+    log_done.finish(remaining().min(LOG_GRACE));
+    code
+}
+
+/// The exit code once serving ended: 0 only when the input ended, the writer
+/// finished with everything queued written (`delivered`) and no request the
+/// client did not cancel is `unanswered`. Once the writer finished, nothing
+/// can answer such a request: rmcp abandoned its response while stdout was
+/// blocked, the transport abandoned the error reply it owed, or the request
+/// was dropped with the service.
+fn exit_code(reason: Quit, delivered: bool, unanswered: usize, log: &Log) -> i32 {
+    match reason {
+        Quit::WriterFailed => FAILURE,
+        Quit::Eof if !delivered => {
+            log.event(Level::Warn, "output not delivered before exit", &[]);
+            FAILURE
+        }
+        Quit::Eof if unanswered > 0 => {
+            let requests = u64::try_from(unanswered).unwrap_or(u64::MAX);
+            log.event(
+                Level::Warn,
+                "requests left unanswered",
+                &[("requests", requests)],
+            );
+            FAILURE
+        }
+        Quit::Eof => SUCCESS,
+    }
+}
+
+#[cfg(test)]
+mod tests;

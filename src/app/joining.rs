@@ -1,11 +1,12 @@
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
+use crate::canvas::pick::PICK_RADIUS_PX;
 use crate::canvas::{TemplateAnchorPreview, Tool};
-use iced::widget::{column, container, row, text};
+use iced::widget::{column, row, text};
 use iced::{Element, Length, Task};
 use reshiki::{
     document::{Document, Point},
-    joining::Prepared,
+    joining::{Coordination, JoinPlan, Prepared},
     templates::{Anchor, Connection},
 };
 
@@ -24,6 +25,74 @@ pub struct State {
     pub revision: u64,
     pub epoch: u64,
 }
+impl State {
+    fn is_coordination(&self) -> bool {
+        self.mode == Connection::Coordinate
+    }
+}
+
+const CONNECT_DETAIL: &str = "Click a destination atom to add a single bond.";
+const SHARE_ATOM_DETAIL: &str = "Click a matching atom to merge the two atoms.";
+const FUSE_BOND_DETAIL: &str = "Click a matching bond to share its two atoms.";
+const ATTACH_INTRO: &str = "Pick the attachment atom or bond in the preview.";
+const COORDINATION_INTRO: &str =
+    "Pick the donor (N, O, S or P) in the preview, then click a metal on the drawing.";
+/// The full donor, chelate and stereo notes are in docs/fragment-joining.md.
+const COORDINATION_HINT: &str = "Atoms stay in place · Escape cancels · One Undo step per contact";
+/// Dragging from the destination orients the fragment in every join mode.
+const JOIN_HINT: &str = "Drag to orient · Shift/Ctrl snaps · Escape cancels";
+
+/// What Join (⌘J) does, in the row and menu tooltip and in Help.
+pub(super) const JOIN_COMMAND_HINT: &str =
+    "Join two fragments, merge three or more atoms, or connect a donor to a metal";
+
+/// The wording shared by the inspector panel and the canvas bar.
+struct JoinModeTexts {
+    title: &'static str,
+    intro: &'static str,
+    /// What a click on the drawing does. Coordination says it in the intro.
+    instruction: Option<&'static str>,
+    footer: &'static str,
+    bar_subtitle: &'static str,
+}
+
+fn join_mode_texts(mode: Connection) -> JoinModeTexts {
+    let instruction = match mode {
+        Connection::Connect | Connection::Auto => CONNECT_DETAIL,
+        Connection::ShareAtom => SHARE_ATOM_DETAIL,
+        Connection::FuseBond => FUSE_BOND_DETAIL,
+        Connection::Coordinate => {
+            return JoinModeTexts {
+                title: "Coordinate in place",
+                intro: COORDINATION_INTRO,
+                instruction: None,
+                footer: COORDINATION_HINT,
+                bar_subtitle: "Pick a donor, then a metal",
+            };
+        }
+    };
+    JoinModeTexts {
+        title: "Move & attach",
+        intro: ATTACH_INTRO,
+        instruction: Some(instruction),
+        footer: JOIN_HINT,
+        bar_subtitle: "Choose a destination · Drag to orient",
+    }
+}
+
+/// The attachment point under the preview; coordination names its donor.
+fn anchor_label(state: &State) -> String {
+    match state.anchor {
+        Anchor::Atom(id) if state.is_coordination() => {
+            state.prepared.fragment.atom(id).map_or_else(
+                || state.anchor.to_string(),
+                |atom| format!("Donor: {} (atom {id})", atom.element),
+            )
+        }
+        anchor => anchor.to_string(),
+    }
+}
+
 impl App {
     /// Before committing style/text drafts: inspect only actual Join routes.
     /// Pure model guards remain authoritative for direct callers and previews.
@@ -41,7 +110,7 @@ impl App {
                     && state.epoch == self.tab.file_epoch
                     && state.prepared.generic_rejection(
                         *point,
-                        10. / self.tab.camera.zoom,
+                        self.tab.camera.world_len(PICK_RADIUS_PX),
                         state.anchor,
                         state.mode,
                     )
@@ -80,40 +149,12 @@ impl App {
         {
             return false;
         }
-        let touched = |ids: &[u64]| {
-            reshiki::generic::intersects(doc, ids)
-                || reshiki::generic::component_intersects(doc, ids)
+        let plan = if matches!(action, super::shortcuts::Action::MergeAtoms) {
+            (selected.len() >= 3).then_some(JoinPlan::Merge)
+        } else {
+            reshiki::joining::join_plan(doc, selected)
         };
-        if matches!(action, super::shortcuts::Action::MergeAtoms) {
-            return selected.len() >= 3 && touched(selected);
-        }
-        if let [source, target] = selected {
-            if [source, target].into_iter().any(|id| {
-                doc.atom(*id)
-                    .is_some_and(reshiki::templates::coordination_metal)
-            }) {
-                return touched(selected);
-            }
-            return reshiki::joining::source_intersects_generic(doc, &[*source])
-                || touched(&[*target]);
-        }
-        if selected.len() == 4 {
-            let bonds: Vec<_> = doc
-                .bonds
-                .iter()
-                .filter(|bond| selected.contains(&bond.a) && selected.contains(&bond.b))
-                .collect();
-            if let [source, target] = bonds.as_slice()
-                && source.a != target.a
-                && source.a != target.b
-                && source.b != target.a
-                && source.b != target.b
-            {
-                return reshiki::joining::source_intersects_generic(doc, &[source.a, source.b])
-                    || touched(&[target.a, target.b]);
-            }
-        }
-        selected.len() >= 3 && touched(selected)
+        plan.is_some_and(|plan| plan.generic_blocked(doc, selected))
     }
 
     /// Shared by the context row, its overflow menu and the selection menu.
@@ -135,17 +176,44 @@ impl App {
         [
             RowCommand {
                 label: "Join",
-                menu: "Join selected atoms / bonds",
-                hint: "Share two attachment sites or combine three or more selected atoms",
+                menu: "Join selected atoms or bonds",
+                hint: JOIN_COMMAND_HINT,
                 message: Message::Shortcut(shortcuts::Action::Join),
                 enabled: active && atoms && self.tab.selected.len() >= 2,
             },
             RowCommand {
                 label: "Merge atoms",
                 menu: "Merge selected atoms",
-                hint: "Combine three or more atoms into the first selected atom; surrounding atoms stay in place",
+                hint: "Merge three or more atoms into the first selected atom; surrounding atoms stay in place",
                 message: Message::Shortcut(shortcuts::Action::MergeAtoms),
                 enabled: active && atoms && self.tab.selected.len() >= 3,
+            },
+        ]
+    }
+
+    /// Move & attach and Coordinate in place, shared by the context row, its
+    /// overflow menu and the selection menu.
+    pub(super) fn selected_attach_commands(&self) -> [super::workspace::RowCommand; 2] {
+        use super::workspace::RowCommand;
+        let atoms = self
+            .tab
+            .selected
+            .iter()
+            .any(|id| self.tab.doc.atom(*id).is_some());
+        [
+            RowCommand {
+                label: "Move & attach…",
+                menu: "Move & attach…",
+                hint: "Join the selection to another structure at an atom or bond",
+                message: Message::Join(Action::Begin),
+                enabled: atoms,
+            },
+            RowCommand {
+                label: "Coordinate in place…",
+                menu: "Coordinate in place…",
+                hint: "Pick a donor (N, O, S or P), then a metal; atoms and hydrogens stay in place",
+                message: Message::Join(Action::BeginCoordination),
+                enabled: atoms,
             },
         ]
     }
@@ -153,9 +221,7 @@ impl App {
     /// Use only selected chemical labels, falling back to the atom position when
     /// its label is hidden. Other objects and selection handles do not contribute.
     pub(super) fn merge_selected_atoms(&self) -> Result<(Document, Vec<u64>), String> {
-        if reshiki::generic::intersects(&self.tab.doc, &self.tab.selected)
-            || reshiki::generic::component_intersects(&self.tab.doc, &self.tab.selected)
-        {
+        if reshiki::generic::touches(&self.tab.doc, &self.tab.selected) {
             return Err(reshiki::generic::JOIN_NOTICE.into());
         }
         let mut bounds: Option<(Point, Point)> = None;
@@ -221,9 +287,10 @@ impl App {
                         let selected_donor = (mode == Connection::Coordinate)
                             .then(|| {
                                 self.tab.selected.iter().copied().find(|id| {
-                                    prepared.fragment.atom(*id).is_some_and(|a| {
-                                        matches!(a.element.as_str(), "N" | "O" | "S" | "P")
-                                    })
+                                    prepared
+                                        .fragment
+                                        .atom(*id)
+                                        .is_some_and(reshiki::joining::coordination_donor)
                                 })
                             })
                             .flatten();
@@ -233,7 +300,9 @@ impl App {
                                     .hover
                                     .filter(|(_, epoch)| *epoch == self.tab.file_epoch)
                                     .and_then(|(p, _)| {
-                                        prepared.fragment.nearest(p, 10. / self.tab.camera.zoom)
+                                        prepared
+                                            .fragment
+                                            .nearest(p, self.tab.camera.world_len(PICK_RADIUS_PX))
                                     })
                             })
                             .map(Anchor::Atom)
@@ -251,7 +320,12 @@ impl App {
                         self.inspector_open = true;
                         self.inspector_tab = InspectorTab::Properties;
                         self.tab.fit_to_view = false;
-                        self.status = if mode == Connection::Coordinate { "Choose the donor N/O/S/P in the preview, then click the metal. All positions are retained." } else { "Choose the source atom or bond in the preview, then its destination on the canvas" }.into();
+                        let status = if mode == Connection::Coordinate {
+                            "Pick a donor, then click a metal"
+                        } else {
+                            "Pick an attachment point, then click a destination"
+                        };
+                        self.status = status.into();
                         self.error = false;
                     }
                     Err(error) => {
@@ -309,9 +383,11 @@ impl App {
         Task::none()
     }
     pub(super) fn join_panel(&self) -> Element<'_, Message> {
+        use super::workspace::{accessible_command, muted_text};
         let Some(state) = &self.tab.joining else {
             return text("Select a fragment to attach").into();
         };
+        let texts = join_mode_texts(state.mode);
         let preview: Element<'_, Anchor> = canvas(TemplateAnchorPreview {
             document: &state.prepared.fragment,
             anchor: state.anchor,
@@ -319,69 +395,74 @@ impl App {
         .width(Length::Fill)
         .height(200)
         .into();
-        column![
-            text(if state.mode == Connection::Coordinate { "Coordinate in place" } else { "Move & attach" }).size(18),
-            text("Choose the atom or bond on this fragment to use as its attachment point.").size(12).style(super::workspace::muted_text),
-            crate::appearance::pick_list([Connection::Connect,Connection::ShareAtom,Connection::FuseBond,Connection::Coordinate], Some(state.mode), |mode| Message::Join(Action::Mode(mode))).text_size(12).width(Length::Fill),
-            reshiki::accessibility::button("coordination.mode", "Coordinate in place: donor to metal", text("Coordinate in place").size(12)).checked(state.mode == Connection::Coordinate).style(super::workspace::control(state.mode == Connection::Coordinate)).on_press(Message::Join(Action::Mode(Connection::Coordinate))),
+        // The pick list is the one mode control, Coordinate in place included.
+        let mut panel = column![
+            text(texts.title).size(18),
+            text(texts.intro).size(12).style(muted_text),
+            crate::appearance::pick_list(
+                [
+                    Connection::Connect,
+                    Connection::ShareAtom,
+                    Connection::FuseBond,
+                    Connection::Coordinate
+                ],
+                Some(state.mode),
+                |mode| Message::Join(Action::Mode(mode))
+            )
+            .text_size(12)
+            .width(Length::Fill),
             preview.map(|anchor| Message::Join(Action::Anchor(anchor))),
-            text(state.anchor.to_string()).size(11).style(super::workspace::muted_text),
-            text(match state.mode {
-                Connection::Connect | Connection::Auto => "Click a destination atom to add a single bond. Drag from that atom to set the direction.",
-                Connection::ShareAtom => "Click a matching destination atom to merge the two atoms. Drag from it to choose the orientation.",
-                Connection::FuseBond => "Click a matching destination bond to share its two atoms. Drag from it to choose the side.",
-                Connection::Coordinate => "Click a transition-metal atom to add a directed donor → metal contact. Positions, donor hydrogens and metal charge are retained, including within an existing chelate."
-            }).size(12),
-            text(if state.mode == Connection::Coordinate { "No atoms move. Escape cancels. Each new contact is one Undo step. Wedge/hash styling depicts projection; it does not assign complex stereochemistry." } else { "Shift/Ctrl drag snaps the direction. Escape cancels. Joining is one Undo step." }).size(11).style(super::workspace::muted_text),
-            reshiki::accessibility::button("coordination.cancel", "Cancel attachment", text("Cancel")).on_press(Message::Join(Action::Cancel)).style(super::workspace::control(false))
-        ].spacing(12).into()
+            text(anchor_label(state)).size(11).style(muted_text),
+        ]
+        .spacing(12);
+        if let Some(instruction) = texts.instruction {
+            panel = panel.push(text(instruction).size(12));
+        }
+        panel
+            .push(text(texts.footer).size(11).style(muted_text))
+            .push(
+                accessible_command("coordination.cancel", "Cancel attachment", "Cancel")
+                    .on_press(Message::Join(Action::Cancel)),
+            )
+            .into()
     }
+    /// The canvas bar's content while a preparation is open; the context bar
+    /// draws its frame.
     pub(super) fn join_bar(&self) -> Element<'_, Message> {
-        container(
-            row![
-                text(
-                    if self
-                        .tab
-                        .joining
-                        .as_ref()
-                        .is_some_and(|state| state.mode == Connection::Coordinate)
-                    {
-                        "Coordinate in place"
-                    } else {
-                        "Move & attach"
-                    }
-                )
-                .size(12),
-                text(
-                    if self
-                        .tab
-                        .joining
-                        .as_ref()
-                        .is_some_and(|state| state.mode == Connection::Coordinate)
-                    {
-                        "Choose a metal · Positions stay fixed"
-                    } else {
-                        "Choose a destination · Drag to orient"
-                    }
-                )
-                .size(11)
-                .style(super::workspace::muted_text),
-                reshiki::accessibility::button(
-                    "coordination.cancel-bar",
-                    "Cancel attachment",
-                    text("Cancel")
-                )
-                .on_press(Message::Join(Action::Cancel))
-                .style(super::workspace::control(false))
-            ]
-            .spacing(12)
-            .align_y(iced::Alignment::Center),
-        )
-        .height(46)
-        .padding([5, 14])
-        .center_y(46)
-        .style(super::workspace::panel)
+        use super::workspace::{CONTEXT_GAP, accessible_command, muted_text};
+        let coordination = self
+            .tab
+            .joining
+            .as_ref()
+            .is_some_and(State::is_coordination);
+        let texts = join_mode_texts(if coordination {
+            Connection::Coordinate
+        } else {
+            Connection::Connect
+        });
+        row![
+            text(texts.title).size(12),
+            text(texts.bar_subtitle).size(11).style(muted_text),
+            accessible_command("coordination.cancel-bar", "Cancel attachment", "Cancel")
+                .on_press(Message::Join(Action::Cancel)),
+        ]
+        .spacing(CONTEXT_GAP)
+        .align_y(iced::Alignment::Center)
         .into()
+    }
+}
+
+/// The canvas status for a coordination placement that changed the drawing.
+pub(super) const CONTACT_ADDED: &str = "Donor → metal contact added in place · Undo removes it";
+
+pub(super) fn coordination_status(outcome: &Coordination, marked: bool) -> &'static str {
+    match (outcome, marked) {
+        (Coordination::Added(_), false) => CONTACT_ADDED,
+        (Coordination::AlreadyPresent, false) => "This donor is already coordinated to that metal",
+        (Coordination::Added(_), true) => "Marked donor → metal contact added · Undo removes it",
+        (Coordination::AlreadyPresent, true) => {
+            "This marked donor is already coordinated to that metal"
+        }
     }
 }
 

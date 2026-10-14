@@ -98,13 +98,12 @@ regressions. These checks are independent of the retained `eddd2123` Windows
 candidate executable; subsequent cfg/test lint changes preserve its transport
 semantics. They do not prove native GUI or Office adapter acceptance.
 
-The narrow [Ubuntu `Desktop IPC runtime` job](https://github.com/Ameyanagi/ReShiki/actions/runs/37908216546/job/113746750833)
-also passed strict Clippy and five active socket/flock/peer/child-generation
-tests. Its one ignored child helper is explicitly spawned by the parent test.
-`scripts/test_linux_desktop_ipc.py` copies the exact module/tests into a
-temporary rustix-only package, prints source hashes and its dependency lock,
-and requires no display or GUI/clipboard dependencies. The logged hashes match
-the production Linux module and tests.
+The Linux native transport tests in `native/linux/src/desktop/tests.rs` run in
+the [Checks workflow](../../.github/workflows/checks.yml)'s ubuntu-22.04 `rust`
+job as part of `cargo test --workspace --locked --no-default-features`.
+The historical one-off [Ubuntu `Desktop IPC runtime` job](https://github.com/Ameyanagi/ReShiki/actions/runs/37908216546/job/113746750833)
+passed strict Clippy and five active transport tests using a since-removed
+copy script. The parent test spawned its ignored child helper.
 
 **Pending acceptance:** matched real Windows/Linux shell-open interaction and
 screenshots; simultaneous cold launch and first-Office-launch timing;

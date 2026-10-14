@@ -34,8 +34,10 @@ mod markers;
 mod movement;
 pub(crate) mod nmr;
 pub(crate) mod optimization;
+pub(crate) mod overlay;
 mod pages;
 mod paper;
+pub(crate) mod pick;
 mod previews;
 mod render;
 mod selection;
@@ -46,6 +48,12 @@ pub(crate) mod tilt;
 mod tool;
 
 #[cfg(test)]
+mod bond_text_render_tests;
+#[cfg(test)]
+mod bond_text_tests;
+#[cfg(test)]
+pub(crate) use bond_text_tests::bond_text_drag_edits;
+#[cfg(test)]
 pub(crate) mod label_click_tests;
 #[cfg(test)]
 mod performance;
@@ -55,8 +63,6 @@ mod render_parity_tests;
 pub(crate) mod rotation_gesture_tests;
 #[cfg(test)]
 mod template_style_tests;
-#[cfg(test)]
-mod tests;
 
 #[cfg(test)]
 pub(crate) mod pen_tests;
@@ -64,7 +70,7 @@ pub(crate) mod pen_tests;
 mod transform_shortcut_tests;
 
 use grid::GridCache;
-pub use hit::{distance_to_segment, hit_object};
+pub use hit::{bond_text_at, distance_to_segment, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 pub use previews::{
@@ -72,11 +78,15 @@ pub use previews::{
     ScientificPreview, TemplateAnchorPreview, TemplateThumbnail,
 };
 use reshiki::{
+    arrow_anchors::Pick,
+    arrows::{ArrowStyle, Preset},
     chains::{BondDrawing, ChainDrawing},
     document::{Document, Point as World},
-    graphics::{BracketSides, GraphicStyle},
+    graphics::{ArcGeometry, BracketSides, GraphicStyle},
+    scientific::Phase,
 };
 use selection::{Handle, SelectionBox, TransformDrag};
+use std::sync::LazyLock;
 pub(crate) use text_cache::prepare_fonts;
 pub use tool::Tool;
 
@@ -128,6 +138,7 @@ pub enum Edit {
     Chain {
         points: Vec<World>,
         source: Option<u64>,
+        source_text: Option<u64>,
         target: Option<u64>,
     },
     Graphic(World, World, bool),
@@ -194,6 +205,15 @@ pub enum Edit {
         y: f32,
     },
     Bond(World, World, Option<u64>, Option<u64>),
+    TextBond {
+        source: Option<u64>,
+        source_text: Option<u64>,
+        start: World,
+        end: Option<World>,
+        target: Option<u64>,
+        target_text: Option<u64>,
+    },
+    TextBondRefused(String),
     PlaneBond(u64, reshiki::projection::growth::Endpoint),
     Ring(World, Option<World>),
     DelocalizedRing(World, Option<World>, u8),
@@ -217,6 +237,11 @@ impl Default for Camera {
     }
 }
 impl Camera {
+    /// Convert a screen-pixel length to world units at this zoom.
+    pub(crate) fn world_len(self, px: f32) -> f32 {
+        px / self.zoom
+    }
+
     pub(crate) fn screen(self, p: World, bounds: Rectangle) -> Point {
         Point::new(
             (p.x - self.center.x) * self.zoom + bounds.width / 2.0,
@@ -238,6 +263,8 @@ pub struct State {
     gesture: Option<Gesture>,
     relaxation: Option<optimization::Drag>,
     cursor: Option<Point>,
+    /// Only caption transitions during a bond drag need an application hint.
+    bond_text_hover: Option<u64>,
     last_click: Option<(std::time::Instant, u64)>,
     last_transform_click: Option<HandleClick>,
     modifiers: iced::keyboard::Modifiers,
@@ -253,6 +280,7 @@ impl State {
     /// Every drag ends here, so a Ctrl/Cmd drag copy never outlives its drag.
     fn end_gesture(&mut self) -> Option<Gesture> {
         self.scene.get_mut().release_copy();
+        self.bond_text_hover = None;
         self.gesture.take()
     }
 }
@@ -265,6 +293,7 @@ enum Gesture {
         start: World,
         pressed: World,
         source: Option<u64>,
+        source_text: Option<u64>,
         points: Vec<World>,
         snaking: bool,
         dragged: bool,
@@ -292,7 +321,9 @@ enum Gesture {
     Tilt(tilt::TiltDrag),
     Draw {
         start: World,
+        pressed: World,
         id: Option<u64>,
+        text: Option<u64>,
     },
     Ring {
         start: World,
@@ -339,6 +370,70 @@ fn delocalized_ring_size(tool: Tool, size: u8, modifiers: iced::keyboard::Modifi
     }
 }
 
+/// Arrow tool styling and attachment options.
+#[derive(Debug, Clone, Copy)]
+pub struct ArrowOptions<'a> {
+    pub preset: Preset,
+    pub style: &'a ArrowStyle,
+    pub source: Option<&'a Pick>,
+    pub attach_targets: bool,
+}
+
+impl Default for ArrowOptions<'_> {
+    fn default() -> Self {
+        Self {
+            preset: Default::default(),
+            style: &ArrowStyle::DEFAULT,
+            source: None,
+            attach_targets: false,
+        }
+    }
+}
+
+static DEFAULT_GRAPHIC_STYLE: LazyLock<GraphicStyle> = LazyLock::new(GraphicStyle::default);
+
+/// Graphic tool geometry, styling and scientific placement options.
+#[derive(Debug, Clone, Copy)]
+pub struct GraphicOptions<'a> {
+    pub constrain: bool,
+    pub arc: ArcGeometry,
+    pub style: &'a GraphicStyle,
+    pub point: Option<(u64, usize)>,
+    pub phase: Phase,
+    pub flipped: bool,
+    pub attach: bool,
+    pub snap: bool,
+    pub bracket_sides: BracketSides,
+}
+
+impl Default for GraphicOptions<'_> {
+    fn default() -> Self {
+        Self {
+            constrain: false,
+            arc: Default::default(),
+            style: &DEFAULT_GRAPHIC_STYLE,
+            point: None,
+            phase: Default::default(),
+            flipped: false,
+            attach: false,
+            snap: false,
+            bracket_sides: Default::default(),
+        }
+    }
+}
+
+/// Document-tab styles retained by a read-only name preview.
+#[derive(Debug, Clone, Copy)]
+pub struct PreviewStyles<'a> {
+    pub bond_drawing: BondDrawing,
+    pub chain_drawing: ChainDrawing,
+    pub arrow_preset: Preset,
+    pub arrow_style: &'a ArrowStyle,
+    pub orbital_phase: Phase,
+    pub graphic_style: &'a GraphicStyle,
+    pub bracket_sides: BracketSides,
+}
+
 pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
@@ -360,19 +455,61 @@ pub struct MoleculeCanvas<'a> {
     pub aromatic_ring: bool,
     pub template_connection: reshiki::templates::Connection,
     pub template: Option<(&'a reshiki::templates::Template, reshiki::templates::Anchor)>,
-    pub arrow_preset: reshiki::arrows::Preset,
-    pub arrow_style: &'a reshiki::arrows::ArrowStyle,
-    pub arrow_source: Option<&'a reshiki::arrow_anchors::Pick>,
-    pub attach_arrow_targets: bool,
-    pub orbital_phase: reshiki::scientific::Phase,
-    pub phase_flipped: bool,
-    pub attach_symbols: bool,
-    pub snap_orbitals: bool,
-    pub graphic_constrain: bool,
-    pub graphic_arc: reshiki::graphics::ArcGeometry,
-    pub graphic_style: &'a GraphicStyle,
-    pub graphic_point: Option<(u64, usize)>,
-    pub bracket_sides: BracketSides,
+    pub arrows: ArrowOptions<'a>,
+    pub graphics: GraphicOptions<'a>,
+}
+
+impl<'a> MoleculeCanvas<'a> {
+    fn arrow_attach_mode(&self) -> bool {
+        self.tool == Tool::Arrow
+            && self.arrows.attach_targets
+            && self.arrows.preset.supports_attachments()
+    }
+
+    fn attaching_arrows(&self, modifiers: iced::keyboard::Modifiers) -> bool {
+        self.arrow_attach_mode() && !modifiers.alt()
+    }
+
+    /// Build a name preview with the tab's styles and inactive tool options.
+    pub fn preview(
+        doc: &'a Document,
+        selected: &'a [u64],
+        camera: Camera,
+        styles: PreviewStyles<'a>,
+    ) -> Self {
+        Self {
+            nmr: None,
+            optimizer: None,
+            keyboard_target: None,
+            joining: None,
+            hidden_annotation: None,
+            bond_drawing: styles.bond_drawing,
+            chain_drawing: styles.chain_drawing,
+            doc,
+            element: "C",
+            selected,
+            tool: Tool::Select,
+            camera,
+            grid: false,
+            guides: Default::default(),
+            smart_guides: false,
+            ring_size: 6,
+            aromatic_ring: false,
+            template_connection: Default::default(),
+            template: None,
+            arrows: ArrowOptions {
+                preset: styles.arrow_preset,
+                style: styles.arrow_style,
+                ..Default::default()
+            },
+            graphics: GraphicOptions {
+                phase: styles.orbital_phase,
+                style: styles.graphic_style,
+                bracket_sides: styles.bracket_sides,
+                ..Default::default()
+            },
+        }
+    }
 }
 fn rgb(c: [u8; 3]) -> Color {
     Color::from_rgb8(c[0], c[1], c[2])
@@ -468,3 +605,6 @@ pub(crate) fn select_drag(
     canvas.selected = selected;
     tests::guided_drag(&canvas, from, to, modifiers).0
 }
+
+#[cfg(test)]
+mod tests;

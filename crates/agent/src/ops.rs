@@ -1,5 +1,5 @@
-//! Experimental operation API (OPERATION_API_VERSION 1); not wired to any
-//! transport in this crate.
+//! Experimental operation API (OPERATION_API_VERSION 1). Its transports live
+//! outside this crate: reshiki-mcp and reshiki::cli.
 //!
 //! # Layering
 //!
@@ -18,6 +18,10 @@
 //!
 //! [`headless::HeadlessHost`] puts the layers together for a process without
 //! the app: the [`catalog`] tools over session documents.
+//!
+//! Progress notifications ([`progress`]) are reserved for a later transport,
+//! such as an in-app host or MCP `progressToken`. The P1 transports pass
+//! `progress: None` in every [`host::Call`].
 //!
 //! # Effect rule
 //!
@@ -39,6 +43,11 @@
 //!   rule described in [`wire`], so serde and the schema's `required` agree.
 //! - Results are a [`result::ToolResult`] whose `value` is always a JSON
 //!   object, valid as `structuredContent` in every supported MCP revision.
+//!   `info`, document tools and `inspect` return flat objects with `versions`.
+//!   `import`, `compose`, `apply`, `analyze`, `render`, `export` and file tools
+//!   return `{value, warnings, validation, versions}` envelopes. Tool errors
+//!   are flat `{error: {code, message}, versions}` objects; rejected edits
+//!   retain the envelope with `value: null` and append the same `error` member.
 //! - Errors are an [`error::OpError`]; only [`error::ErrorKind::UnknownTool`]
 //!   is a protocol error, everything else is a tool execution error.
 pub mod analyze;

@@ -20,7 +20,8 @@ impl Reader<'_> {
             let line = self.next()?;
             let content = line
                 .strip_prefix("M  V30 ")
-                .ok_or_else(|| self.invalid("Missing V3000 line prefix"))?;
+                .ok_or_else(|| self.invalid("Missing V3000 line prefix"))?
+                .trim_end();
             let continuation = content.strip_suffix('-');
             output.push_str(continuation.unwrap_or(content));
             if output.len() > 1024 * 1024 {

@@ -259,6 +259,10 @@ impl Document {
     pub fn abbreviation(&self, anchor: u64) -> Option<&Abbreviation> {
         self.abbreviations.iter().find(|a| a.anchor == anchor)
     }
+    /// Returns the first abbreviation containing the atom as a member.
+    pub fn abbreviation_containing(&self, id: u64) -> Option<&Abbreviation> {
+        self.abbreviations.iter().find(|a| a.members.contains(&id))
+    }
     pub fn atom_visible(&self, id: u64) -> bool {
         !self
             .abbreviations
@@ -288,7 +292,7 @@ impl Document {
             .collect()
     }
     pub fn validate_abbreviations(&self) -> Result<(), String> {
-        if self.version < 10 && !self.abbreviations.is_empty() {
+        if self.version < crate::document::ABBREVIATIONS && !self.abbreviations.is_empty() {
             return Err("Abbreviations require document version 10".into());
         }
         if self.abbreviations.is_empty() {
@@ -341,7 +345,7 @@ impl Document {
         self.abbreviations
             .retain(|a| !a.members.iter().any(|id| abbreviation.members.contains(id)));
         self.abbreviations.push(abbreviation);
-        self.version = self.version.max(11);
+        self.require_version(crate::document::ABBREVIATION_EDITING);
         Ok(())
     }
     pub fn expand_abbreviations(&mut self, ids: &[u64]) -> usize {
@@ -421,3 +425,6 @@ pub fn label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
             .then_some(g.anchor)
     })
 }
+
+#[cfg(test)]
+mod tests;

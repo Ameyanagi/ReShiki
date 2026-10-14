@@ -6,7 +6,7 @@ This implements the Windows file-export portion of [#64](https://github.com/Amey
 
 ## Actual EMF output
 
-These images are Windows GDI+ playback of the actual exported `.emf` files, displayed 800 pixels wide. The source drawing, including caption spacing, is [emf-export.rsk](fixtures/emf-export.rsk). The drawing was not recreated or retouched for the review images.
+These images are Windows GDI+ playback of the actual exported `.emf` files, displayed 800 pixels wide. The source drawing, including caption spacing, is [emf-export.rsk](../../tests/fixtures/emf-export/emf-export.rsk). The drawing was not recreated or retouched for the review images.
 
 | Light canvas                                                                                                                            | Dark canvas                                                                                             |
 | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |

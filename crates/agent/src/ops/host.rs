@@ -17,6 +17,9 @@ pub struct Call {
     pub request: RequestId,
     pub tool: String,
     pub arguments: Value,
+    /// Receives progress reports. Reserved for a later transport (an in-app
+    /// host or MCP `progressToken`); the P1 transports, reshiki-mcp and
+    /// reshiki::cli, pass `None`.
     pub progress: Option<progress::Sink>,
 }
 

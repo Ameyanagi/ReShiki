@@ -333,6 +333,30 @@ pub fn input_style(
     }
 }
 
+/// Multi-line and rich text fields look like [`input_style`] inputs.
+pub fn editor_style(
+    theme: &Theme,
+    status: iced::widget::text_editor::Status,
+) -> iced::widget::text_editor::Style {
+    use iced::widget::{text_editor, text_input::Status as Input};
+    let field = input_style(
+        theme,
+        match status {
+            text_editor::Status::Active => Input::Active,
+            text_editor::Status::Hovered => Input::Hovered,
+            text_editor::Status::Focused { is_hovered } => Input::Focused { is_hovered },
+            text_editor::Status::Disabled => Input::Disabled,
+        },
+    );
+    text_editor::Style {
+        background: field.background,
+        border: field.border,
+        placeholder: field.placeholder,
+        value: field.value,
+        selection: field.selection,
+    }
+}
+
 pub fn primary(theme: &Theme, status: iced::widget::button::Status) -> iced::widget::button::Style {
     let mut style = iced::widget::button::primary(theme, status);
     style.border.radius = 6.0.into();

@@ -1,6 +1,51 @@
 use super::super::{document_tab::DocumentTab, tabs};
 use super::*;
+use crate::session::{Host, Lease};
 use reshiki::document::{Document, Point};
+use std::{
+    path::PathBuf,
+    sync::{Arc, atomic::Ordering},
+};
+
+#[test]
+fn binding_admission_preserves_standalone_and_watched_lease_rules() {
+    let standalone = Binding::standalone("standalone.rsk".into(), Host::Office);
+    assert!(standalone.preparable());
+    assert!(!standalone.has_token([1; 16]));
+    standalone.reject();
+    assert!(standalone.preparable());
+
+    let alive = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let watched = Arc::clone(&alive);
+    let lease = Lease::new([1; 16], move || watched.load(Ordering::Acquire));
+    let binding = Binding {
+        path: "watched.rsk".into(),
+        host: Host::Office,
+        lease: Some(lease.clone()),
+    };
+    assert!(binding.has_token([1; 16]));
+    assert!(!binding.has_token([2; 16]));
+    assert!(binding.preparable());
+    alive.store(false, Ordering::Release);
+    assert!(!binding.preparable());
+    alive.store(true, Ordering::Release);
+    binding.reject();
+    assert_eq!(lease.phase(), Phase::Rejected);
+    assert!(!binding.preparable());
+    binding.reject();
+    assert_eq!(lease.phase(), Phase::Rejected);
+
+    let lease = Lease::new([2; 16], || true);
+    let binding = Binding {
+        path: "open.rsk".into(),
+        host: Host::LibreOffice,
+        lease: Some(lease.clone()),
+    };
+    assert!(lease.transition(Phase::Prepared, Phase::Open));
+    assert!(!binding.preparable());
+    binding.reject();
+    assert_eq!(lease.phase(), Phase::Open);
+}
 
 fn open(app: &mut App, name: &str, host: Host, token: u8) -> (TabId, Lease) {
     let path = PathBuf::from(name);
@@ -18,6 +63,27 @@ fn open(app: &mut App, name: &str, host: Host, token: u8) -> (TabId, Lease) {
     ));
     assert_eq!(lease.phase(), Phase::Open);
     (app.tab.id, lease)
+}
+
+#[test]
+fn accessibility_bypasses_the_routing_tail_but_office_prepared_runs_it() {
+    let (mut app, _) = App::new();
+    let (id, lease) = open(&mut app, "closing.rsk", Host::Office, 1);
+    app.office.closing.push(id);
+    let _ = app.update(Message::Accessibility(
+        super::super::accessibility::Action::Refresh,
+    ));
+    assert_eq!(app.office.closing, [id]);
+    assert!(app.tab_index(id).is_some());
+    assert_eq!(lease.phase(), Phase::Open);
+
+    let _ = app.update(Message::OfficePrepared(
+        Binding::standalone("cancelled.rsk".into(), Host::LibreOffice),
+        None,
+    ));
+    assert!(app.office.closing.is_empty());
+    assert!(app.tab_index(id).is_none());
+    assert_eq!(lease.phase(), Phase::Closed);
 }
 
 #[test]

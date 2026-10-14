@@ -22,6 +22,19 @@ fn ring(size: usize) -> Graph {
 }
 
 #[test]
+fn memory_estimate_retains_the_base_and_per_structure_allowances() {
+    let empty = Graph {
+        atoms: Vec::new(),
+        bonds: Vec::new(),
+    };
+    assert_eq!(estimated_bytes(&empty, &[]), Some(BASE_ESTIMATE));
+    assert_eq!(
+        estimated_bytes(&ring(3), &[vec![0, 1, 2]]),
+        Some(3 * 128 + 3 * 64 + 3 * 32 + 128 + 8 * 1024 * 1024)
+    );
+}
+
+#[test]
 fn aromaticity_is_bounded_and_invalid_rings_leave_input_unchanged() -> Result<(), String> {
     let graph = ring(6);
     let before = serde_json::to_value(&graph).map_err(|e| e.to_string())?;

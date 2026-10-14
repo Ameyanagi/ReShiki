@@ -296,3 +296,113 @@ fn inline_caption_alignment_never_moves_group_labels_and_can_be_cancelled() -> R
     assert_eq!(app.tab.doc, before);
     Ok(())
 }
+
+#[test]
+fn selected_dummy_labels_toggle_whole_label_scripts_without_changing_chemistry() {
+    use reshiki::typography::ScriptRun;
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let dummy = app.tab.doc.add_atom("*", Point::default());
+    app.tab.doc =
+        reshiki::atom_text::apply(&app.tab.doc, dummy, "M2+", reshiki::atom_text::Mode::Text)
+            .unwrap();
+    let element = app.tab.doc.add_atom("Pd", Point::new(84., 0.));
+    let generic = app.tab.doc.add_atom("C", Point::new(168., 0.));
+    app.tab.doc =
+        reshiki::atom_text::apply(&app.tab.doc, generic, "C,N", reshiki::atom_text::Mode::Auto)
+            .unwrap();
+    app.tab.selected = vec![dummy, element, generic];
+    for script in [Script::Subscript, Script::Superscript] {
+        for expected in [script, Script::Normal] {
+            // The Style bar's x₂/x² buttons send the toggled script.
+            let toggled = if app.toolbar_script() == script {
+                Script::Normal
+            } else {
+                script
+            };
+            app.apply_text_style(StyleChange::Script(toggled));
+            let label = app.tab.doc.atom(dummy).unwrap();
+            assert_eq!(
+                label.display.label_scripts,
+                vec![ScriptRun {
+                    start: 0,
+                    end: 3,
+                    script: expected,
+                }]
+            );
+            assert_eq!(label.element, "*");
+            for id in [dummy, element, generic] {
+                assert_eq!(
+                    app.tab
+                        .doc
+                        .atom(id)
+                        .unwrap()
+                        .text_style
+                        .as_ref()
+                        .unwrap()
+                        .script,
+                    Script::Normal
+                );
+            }
+            for id in [element, generic] {
+                assert!(
+                    app.tab
+                        .doc
+                        .atom(id)
+                        .unwrap()
+                        .display
+                        .label_scripts
+                        .is_empty()
+                );
+            }
+            app.tab.doc.validate().unwrap();
+            // Element atoms and generic labels do not count toward the state.
+            assert_eq!(app.toolbar_script(), expected);
+            app.tab.selected = vec![dummy];
+            app.sync_typography();
+            assert_eq!(app.toolbar_script(), expected);
+            assert_eq!(
+                app.tab
+                    .doc
+                    .atom(dummy)
+                    .unwrap()
+                    .text_style
+                    .as_ref()
+                    .unwrap()
+                    .script,
+                Script::Normal
+            );
+            app.tab.selected = vec![dummy, element, generic];
+        }
+    }
+}
+
+#[test]
+fn mixed_text_label_scripts_all_take_the_toolbar_script() {
+    use reshiki::typography::ScriptRun;
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let lowered = app.tab.doc.add_atom("*", Point::default());
+    let plain = app.tab.doc.add_atom("*", Point::new(84., 0.));
+    for (id, label) in [(lowered, "R1"), (plain, "M")] {
+        app.tab.doc =
+            reshiki::atom_text::apply(&app.tab.doc, id, label, reshiki::atom_text::Mode::Text)
+                .unwrap();
+    }
+    app.tab.selected = vec![lowered];
+    app.apply_text_style(StyleChange::Script(Script::Subscript));
+    app.tab.selected = vec![lowered, plain];
+    assert_eq!(app.toolbar_script(), Script::Normal);
+    app.apply_text_style(StyleChange::Script(Script::Subscript));
+    for (id, end) in [(lowered, 2), (plain, 1)] {
+        assert_eq!(
+            app.tab.doc.atom(id).unwrap().display.label_scripts,
+            vec![ScriptRun {
+                start: 0,
+                end,
+                script: Script::Subscript,
+            }]
+        );
+    }
+    assert_eq!(app.toolbar_script(), Script::Subscript);
+}

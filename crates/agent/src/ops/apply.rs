@@ -19,19 +19,18 @@ use super::{
     error::{ErrorKind, OpError},
     exec::Context,
     ids,
-    import::{rejected, warnings},
     policy::{Access, Effect},
     result::ToolResult,
     store::{Applied, Change, Documents, Edit, IdempotencyKey, Receipt, Snapshot},
     wire::{
-        DocHandle, IdRemapJson, ObjectId, Principal, Revision, envelope_json, handle_schema,
-        ids_schema, nullable, revision_schema,
+        DocHandle, IdRemapJson, ObjectId, Principal, Revision, handle_schema, ids_schema, nullable,
+        revision_schema, warnings,
     },
 };
 use crate::{
     atom_labels::{self, refresh::Refresh},
     document::Document,
-    envelope::{Envelope, IdRemap, ValidationStatus, Versions},
+    envelope::{IdRemap, Versions},
     tool_spec::{Hints, ToolSpec},
     transaction,
 };
@@ -140,10 +139,6 @@ pub(crate) struct Apply {
     key: Option<IdempotencyKey>,
 }
 
-fn invalid(message: impl AsRef<str>) -> OpError {
-    OpError::new(ErrorKind::InvalidArguments, message)
-}
-
 /// The digest of an idempotent request: [`DefaultHasher`] over the canonical
 /// arguments, serde_json's compact text, whose object keys are sorted
 /// (serde_json without `preserve_order`).
@@ -178,7 +173,7 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Apply, OpError> {
     if let Some(key) = &idempotency_key
         && key.len() > max_key
     {
-        return Err(invalid(format!(
+        return Err(OpError::invalid(format!(
             "idempotency_key is {} bytes; at most {max_key} are allowed",
             key.len()
         )));
@@ -187,25 +182,25 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<Apply, OpError> {
         ids::check_count(ids, budgets)?;
     }
     let action = match (edit, source, ids) {
-        (Kind::Insert, None, _) => return Err(invalid(NO_SOURCE)),
+        (Kind::Insert, None, _) => return Err(OpError::invalid(NO_SOURCE)),
         (Kind::Insert, Some(source), ids) => Action::Insert {
             source,
             ids: ids.unwrap_or_default(),
         },
-        (Kind::Delete, Some(_), _) => return Err(invalid(DELETE_SOURCE)),
+        (Kind::Delete, Some(_), _) => return Err(OpError::invalid(DELETE_SOURCE)),
         (Kind::Delete, None, Some(ids)) if !ids.is_empty() => Action::Delete { ids },
-        (Kind::Delete, None, _) => return Err(invalid(NO_IDS)),
+        (Kind::Delete, None, _) => return Err(OpError::invalid(NO_IDS)),
         (Kind::Undo | Kind::Redo, None, None) => Action::Step {
             redo: edit == Kind::Redo,
         },
-        (Kind::Undo | Kind::Redo, _, _) => return Err(invalid(STEP_ARGUMENTS)),
+        (Kind::Undo | Kind::Redo, _, _) => return Err(OpError::invalid(STEP_ARGUMENTS)),
     };
     let guarded = match &action {
         Action::Insert { ids, .. } => !ids.is_empty(),
         Action::Delete { .. } | Action::Step { .. } => true,
     };
     if guarded && base_revision.is_none() {
-        return Err(invalid(NO_BASE));
+        return Err(OpError::invalid(NO_BASE));
     }
     Ok(Apply {
         document,
@@ -253,12 +248,10 @@ impl Report {
         }
     }
 
-    /// `{value: {effect: "applied", document, revision, recorded, inserted,
-    /// id_remap, deleted}, warnings, validation, versions}`, with the label
-    /// refresh's notice as a warning.
+    /// The successful result documented in [`super::catalog::RESULTS`].
     fn result(self, applied: &Applied) -> ToolResult {
-        let value = envelope_json(&Envelope {
-            value: Outcome {
+        ToolResult::valid(
+            Outcome {
                 effect: Effect::Applied,
                 document: &self.document,
                 revision: applied.revision,
@@ -267,16 +260,9 @@ impl Report {
                 id_remap: &self.id_remap,
                 deleted: &self.deleted,
             },
-            warnings: warnings(applied.label_notice.iter().cloned().collect()),
-            validation: ValidationStatus::Valid,
-            versions: self.versions,
-        });
-        ToolResult {
-            value,
-            images: Vec::new(),
-            files: Vec::new(),
-            is_error: false,
-        }
+            warnings(applied.label_notice.iter().cloned().collect()),
+            self.versions,
+        )
     }
 
     fn receipt(self) -> Receipt {
@@ -357,7 +343,7 @@ struct Edited {
 fn insert(base: &Document, fragment: &Document, ids: &[u64]) -> Result<Edited, OpError> {
     let replace = base.expand_abbreviation_selection(ids);
     let (_, deleted) = without(base, &replace);
-    let (doc, inserted) = crate::candidate(base, fragment, &replace).map_err(invalid)?;
+    let (doc, inserted) = crate::candidate(base, fragment, &replace).map_err(OpError::invalid)?;
     let id_remap = IdRemap {
         pairs: fragment
             .all_ids()
@@ -511,7 +497,13 @@ fn edit(
     } = edited;
     let reconciled = match transaction::reconcile(&mut doc, (*snapshot.doc).clone()) {
         Ok(reconciled) => reconciled,
-        Err(rejection) => return Ok(Prepared::Done(rejected(rejection, Vec::new(), &versions))),
+        Err(rejection) => {
+            return Ok(Prepared::Done(ToolResult::rejected(
+                rejection,
+                Vec::new(),
+                &versions,
+            )));
+        }
     };
     // The inputs `Reconciled::commit` decides with.
     let chemistry_changed = transaction::chemistry_changed(reconciled.before(), &doc);
@@ -549,10 +541,7 @@ fn edit(
 ///   [`ErrorKind::Cancelled`] (no response), and a retry with the same key
 ///   replays the stored receipt.
 ///
-/// `{value: {effect: "applied", document, revision, recorded, inserted,
-/// id_remap: [{source, inserted}], deleted}, warnings, validation,
-/// versions}`. `inserted` and `deleted` may share IDs (see the module docs);
-/// both are empty for undo and redo.
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn apply(
     mut ctx: Context,
     store: Arc<dyn Documents>,

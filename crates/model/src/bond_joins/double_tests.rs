@@ -64,7 +64,7 @@ fn raster(doc: &Document) -> Result<(resvg::tiny_skia::Pixmap, Point, f32), Stri
 fn colored_branches_join_the_same_ring_outline_without_changing_chemistry() -> anyhow::Result<()> {
     use anyhow::Context;
     let source: Document = serde_json::from_str(include_str!(
-        "../../../../docs/changes/fixtures/arene-bold-join.rsk"
+        "../../../../tests/fixtures/bond-joins/arene-bold-join.rsk"
     ))?;
     for rotation in (0..360).step_by(17).map(|r| r as f32).chain([47., 130.]) {
         for reversed in [false, true] {
@@ -147,7 +147,7 @@ fn colored_branches_join_the_same_ring_outline_without_changing_chemistry() -> a
 fn substituted_bold_ring_matches_the_three_way_vector_junction() -> anyhow::Result<()> {
     use anyhow::Context;
     let source: Document = serde_json::from_str(include_str!(
-        "../../../../docs/changes/fixtures/arene-bold-join.rsk"
+        "../../../../tests/fixtures/bond-joins/arene-bold-join.rsk"
     ))?;
     // Independently exported vector intersections, in points relative to the
     // substituted carbon. The source PDF rounds coordinates to 1/256 point.

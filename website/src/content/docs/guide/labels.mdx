@@ -60,6 +60,8 @@ The screenshots show the same sugar drawing with only the selected hydroxyl's hy
 
 Select an atom and press **Enter** to edit its label. **Automatic** recognizes elements and defined groups; **Chemical abbreviation** chooses a nickname explicitly, including names that conflict with element symbols. **Text label** keeps literal text such as M, L or X on a wildcard atom. Text labels do not imply an element, query or molecular formula.
 
+Free text labels such as `M2+`, `R1` or `L2` are drawn with subscripted counts and a superscripted trailing charge, as in ChemDraw: `R1` appears as R₁, `M2+` as M²⁺, and `SO4 2-` as SO₄²⁻. The label keeps the text you typed, and the styling adds no chemical meaning.
+
 Use **Properties → Labels & chemistry → Chemical abbreviations…** to replace a terminal group with a preset such as **OMe**, or contract a selected fragment. **Expand selected** restores its atoms for editing.
 
 Defined groups such as **Boc** retain their full atom/bond graph for composition. **Cp** is cyclopentadienyl (C5H5−); **Cp\*** is pentamethylcyclopentadienyl (C10H15−). Their attachment handles are not counted as atoms. Metal charge still needs the correct explicit assignment.
@@ -83,6 +85,32 @@ An explicit **NH3** label retains three hydrogens. At a metal, its donor contact
 />
 
 Group and template definitions may be revised in future releases. [Open the shortcut examples](/guide/shortcuts/) to try the current groups in one editable document.
+
+## Type a charge on an atom
+
+Select an atom, press **Enter**, and type the element with its charge, such as `Pd2+`, `Pd+2`, `Na+` or `Cl-`. In **Automatic** mode, this sets the element and its charge, and the charge is drawn as a superscript. Charges go from -8 to +8.
+
+A charged label gets no automatic hydrogens. Type the element alone to restore them. Choose **Text label** to keep the text exactly as typed.
+
+ChemDraw reads `Pd2+` as two palladium atoms; ReShiki reads it as one Pd²⁺ because a single atom cannot be two atoms.
+
+## Format part of an atom label
+
+Select characters in the label box and press **Cmd+-** for subscript or **Cmd++** for superscript (**Ctrl** on Windows and Linux; **Cmd/Ctrl+=** also works). You can also use **X₂** and **X²** under the box. **Plain** (**Cmd/Ctrl+T**) removes the formatting. With nothing selected, the change applies to the whole label. Once you format characters, **Appearance** under the box shows the result.
+
+In **Automatic** mode, `Pd` with a superscripted `2+` becomes a palladium atom with charge +2, and `NH` with a subscripted `4` and a superscripted `+` becomes ammonium. Other formatted text, such as M with a superscripted 2+ or R with a subscripted 1, stays a text label with your formatting. **Text label** always keeps the text and formatting as typed. Chemical abbreviations and group labels cannot be formatted.
+
+To format a whole text label without opening the editor, select its atom and use **x₂** or **x²** in the Style bar.
+
+The formatting is saved in the .rsk file and copied to ChemDraw files. Formatted text labels in ChemDraw files keep their formatting when you open them.
+
+## Bond to a text label
+
+You can draw a bond from a short caption, such as **Pd²⁺** typed with **Text**, as you would from an atom. Choose **Single bond** or another bond tool and drag from the caption's letters. The caption becomes an atom label and keeps its font, size, and color. **Pd²⁺** becomes a palladium atom with charge +2; other formatted text, such as M²⁺, stays a text label with its formatting.
+
+Click the caption to add a bond in the default direction. A bond can also end on a caption. **Straight chain** and **Snaking chain** can start from a caption too. **Hydrogen bond** does not convert captions.
+
+When you point at a caption with a bond tool, the status bar says whether it can become an atom label. Captions with more than one line or more than 32 characters, molecule names, and reaction conditions stay captions. One **Undo** restores the caption and removes the new bond.
 
 ## Attach to several atoms
 

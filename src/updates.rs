@@ -446,7 +446,8 @@ async fn open_nightly_download_with(
     };
     open(url).await
 }
-async fn open_url(url: String) -> Result<(), String> {
+/// Opens `url` in the default browser off the UI thread.
+pub async fn open_url(url: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         open::that(url).map_err(|e| format!("Could not open the browser: {e}"))
     })

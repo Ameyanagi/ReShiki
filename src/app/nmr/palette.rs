@@ -8,11 +8,35 @@ use iced::advanced::{
 use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector, touch};
 use std::collections::HashSet;
 
+// Palette geometry shared by state, the panel and its resize controls. Keep
+// these values and the order of floating-point layout operations unchanged.
+pub(super) const MIN_SIZE: Size = Size::new(320., 180.);
+pub(super) const MAX_SIZE: Size = Size::new(600., 640.);
+pub(super) const DEFAULT_SIZE: Size = Size::new(360., 440.);
+pub(super) const RESIZE_STEP: f32 = 40.;
+pub(super) const PANEL_PADDING: f32 = 10.;
+const TITLE_DRAG_HEIGHT: f32 = 36.;
+const RESIZE_HANDLE: Size = Size::new(24., 32.);
+pub(super) const PREFERRED_ROWS: usize = 4;
+pub(in crate::app) const OVERLAY_INSETS: iced::Padding = iced::Padding {
+    top: 150.,
+    right: 12.,
+    bottom: 38.,
+    left: 112.,
+};
+// Cap the visible height used to keep the title/handle reachable; this is
+// independent of the palette's default height or maximum resize height.
+const REACHABLE_HEIGHT: f32 = 360.;
+
+/// Pointer ownership for the docked report, which sits inside the
+/// inspector's scrollable. That scrollable handles wheel and touch scrolling
+/// only after its content, so this guard leaves them uncaptured.
 pub(super) fn guard<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     Element::new(Palette {
         content: content.into(),
         floating: None,
         dismiss: None,
+        nested: true,
     })
 }
 
@@ -21,13 +45,14 @@ pub(super) fn menu<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, 
         content: content.into(),
         floating: None,
         dismiss: Some(Action::LabelMenu(false)),
+        nested: false,
     })
 }
 
 pub(super) fn floating<'a>(
     content: impl Into<Element<'a, Message>>,
     position: Option<Point>,
-    size: Size,
+    width: f32,
     resizable: bool,
 ) -> Element<'a, Message> {
     Element::new(Palette {
@@ -35,30 +60,39 @@ pub(super) fn floating<'a>(
         dismiss: None,
         floating: Some(Floating {
             position,
-            size,
+            width,
             resizable,
         }),
+        nested: false,
     })
 }
 
 #[derive(Clone, Copy)]
 struct Floating {
     position: Option<Point>,
-    size: Size,
+    width: f32,
     resizable: bool,
 }
 
 // Keep the title and resize handle reachable at small window sizes. This
 // changes only the overlay, never the drawing's layout or world camera.
 pub(super) fn bounds(available: Size, position: Option<Point>, requested: Size) -> Rectangle {
-    let left = 112_f32.min((available.width - 320.).max(0.));
-    let top = 150_f32.min((available.height - requested.height.min(360.) - 38.).max(0.));
-    let size = Size::new(
-        requested.width.min((available.width - left - 12.).max(0.)),
-        requested.height.min((available.height - top - 38.).max(0.)),
+    let left = OVERLAY_INSETS
+        .left
+        .min((available.width - MIN_SIZE.width).max(0.));
+    let top = OVERLAY_INSETS.top.min(
+        (available.height - requested.height.min(REACHABLE_HEIGHT) - OVERLAY_INSETS.bottom).max(0.),
     );
-    let right = (available.width - size.width - 12.).max(left);
-    let bottom = (available.height - size.height - 38.).max(top);
+    let size = Size::new(
+        requested
+            .width
+            .min((available.width - left - OVERLAY_INSETS.right).max(0.)),
+        requested
+            .height
+            .min((available.height - top - OVERLAY_INSETS.bottom).max(0.)),
+    );
+    let right = (available.width - size.width - OVERLAY_INSETS.right).max(left);
+    let bottom = (available.height - size.height - OVERLAY_INSETS.bottom).max(top);
     let position = position.unwrap_or(Point::new(right, top));
     Rectangle {
         x: position.x.clamp(left, right),
@@ -71,6 +105,8 @@ struct Palette<'a> {
     content: Element<'a, Message>,
     floating: Option<Floating>,
     dismiss: Option<Action>,
+    /// Inside a parent scrollable: leave wheel and touch scrolling to it.
+    nested: bool,
 }
 
 #[derive(Default)]
@@ -160,7 +196,7 @@ impl Widget<Message, Theme, Renderer> for Palette<'_> {
             let area = bounds(
                 available,
                 floating.position,
-                Size::new(floating.size.width, available.height),
+                Size::new(floating.width, available.height),
             );
             let measured = self.content.as_widget_mut().layout(
                 child,
@@ -276,7 +312,7 @@ impl Widget<Message, Theme, Renderer> for Palette<'_> {
             && rect.contains(press)
         {
             let resize = config.resizable && resize_handle(rect).contains(press);
-            if resize || press.y < rect.y + 36. {
+            if resize || press.y < rect.y + TITLE_DRAG_HEIGHT {
                 if resize && config.position.is_none() {
                     // A newly opened/reset panel is anchored to the canvas
                     // edge. Pin its origin before resizing so the grip follows
@@ -336,6 +372,9 @@ impl Widget<Message, Theme, Renderer> for Palette<'_> {
             shell.capture_event();
         }
         let captured = match event {
+            Event::Mouse(mouse::Event::WheelScrolled { .. }) | Event::Touch(_) if self.nested => {
+                false
+            }
             Event::Mouse(mouse::Event::ButtonPressed(button)) if inside => {
                 state.buttons.insert(*button);
                 true
@@ -409,7 +448,11 @@ impl Widget<Message, Theme, Renderer> for Palette<'_> {
             renderer,
         );
         if interaction == mouse::Interaction::None && cursor.is_over(rect) {
-            if self.floating.is_some() && cursor.position().is_some_and(|p| p.y < rect.y + 36.) {
+            if self.floating.is_some()
+                && cursor
+                    .position()
+                    .is_some_and(|p| p.y < rect.y + TITLE_DRAG_HEIGHT)
+            {
                 mouse::Interaction::Grab
             } else {
                 mouse::Interaction::Idle
@@ -546,98 +589,12 @@ fn resize_handle(rect: Rectangle) -> Rectangle {
     // The footer glyph is centered in the command row above 10px of padding.
     // Include it without widening this strip into the neighboring controls.
     Rectangle {
-        x: rect.x + rect.width - 24.,
-        y: rect.y + rect.height - 32.,
-        width: 24.,
-        height: 32.,
+        x: rect.x + rect.width - RESIZE_HANDLE.width,
+        y: rect.y + rect.height - RESIZE_HANDLE.height,
+        width: RESIZE_HANDLE.width,
+        height: RESIZE_HANDLE.height,
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pointer_history_uses_ordered_motion_and_never_resyncs_from_redraw() {
-        let mut state = State::default();
-        let start = Point::new(500., 220.);
-        let end = Point::new(400., 170.);
-        let final_cursor = mouse::Cursor::Available(end);
-        assert_eq!(
-            state.event_cursor(
-                &Event::Mouse(mouse::Event::CursorMoved { position: start }),
-                final_cursor,
-            ),
-            mouse::Cursor::Available(start)
-        );
-        assert_eq!(
-            state.event_cursor(
-                &Event::Window(iced::window::Event::RedrawRequested(
-                    std::time::Instant::now()
-                )),
-                final_cursor,
-            ),
-            final_cursor
-        );
-        for event in [
-            mouse::Event::ButtonPressed(mouse::Button::Left),
-            mouse::Event::WheelScrolled {
-                delta: mouse::ScrollDelta::Lines { x: 0., y: 1. },
-            },
-        ] {
-            assert_eq!(
-                state.event_cursor(&Event::Mouse(event), final_cursor),
-                mouse::Cursor::Available(start)
-            );
-        }
-        assert_eq!(
-            state.event_cursor(
-                &Event::Mouse(mouse::Event::CursorMoved { position: end }),
-                final_cursor,
-            ),
-            final_cursor
-        );
-        assert_eq!(
-            state.event_cursor(
-                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-                final_cursor,
-            ),
-            final_cursor
-        );
-    }
-
-    #[test]
-    fn pointer_history_preserves_masks_and_invalidates_left_entry_and_unfocus() {
-        let start = Point::new(500., 220.);
-        let end = Point::new(400., 170.);
-        let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
-        for masked in [mouse::Cursor::Unavailable, mouse::Cursor::Levitating(end)] {
-            let mut state = State {
-                pointer: Some(start),
-                ..State::default()
-            };
-            assert_eq!(state.event_cursor(&press, masked), masked);
-            assert!(state.pointer.is_none());
-            assert_eq!(
-                state.event_cursor(&press, mouse::Cursor::Available(end)),
-                mouse::Cursor::Available(end)
-            );
-        }
-        for cancel in [
-            Event::Mouse(mouse::Event::CursorLeft),
-            Event::Mouse(mouse::Event::CursorEntered),
-            Event::Window(iced::window::Event::Unfocused),
-        ] {
-            let mut state = State {
-                pointer: Some(start),
-                ..State::default()
-            };
-            let _ = state.event_cursor(&cancel, mouse::Cursor::Available(end));
-            assert!(state.pointer.is_none());
-            assert_eq!(
-                state.event_cursor(&press, mouse::Cursor::Available(end)),
-                mouse::Cursor::Available(end)
-            );
-        }
-    }
-}
+mod tests;

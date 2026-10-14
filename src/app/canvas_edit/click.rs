@@ -13,7 +13,7 @@ impl App {
                     self.tab.doc.invalidate_chemistry(&[id]);
                     if let Some(a) = self.tab.doc.atom_mut(id) {
                         a.element = self.element.clone();
-                        a.display.variable = None;
+                        a.display.set_variable(None);
                         a.explicit_h = 0;
                         a.no_implicit = false;
                         a.charge = 0;
@@ -57,23 +57,10 @@ impl App {
                     self.tool = Tool::Select;
                 }
             }
-            Tool::Arrow
-                if self.tab.arrows.attach_targets
-                    && matches!(
-                        self.tab.arrow_style,
-                        reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
-                    ) =>
-            {
+            Tool::Arrow if self.arrow_attach_mode() => {
                 return self.arrow_target_click(p, false);
             }
-            Tool::Arrow => {
-                if let Some(id) = hit.filter(|id| self.tab.doc.arrows.iter().any(|a| a.id == *id)) {
-                    self.apply_arrow_tool(id);
-                } else {
-                    let length = self.tab.doc.drawing_style.bond_length_world * 2.;
-                    self.place_arrow(p, p.offset(length, 0.));
-                }
-            }
+            Tool::Arrow => self.place_or_restyle_arrow(p, hit),
             Tool::Erase => {
                 reshiki::erasing::stroke(&mut self.tab.doc, p, p, 7. / self.tab.camera.zoom)
             }
@@ -156,7 +143,7 @@ impl App {
                 .bond_preset()
                 .filter(|p| p.preserves_chemistry(&b))
             {
-                if b.order == 5 {
+                if b.is_dative() {
                     if let Some(bond) = self
                         .tab
                         .doc
@@ -173,6 +160,19 @@ impl App {
                 self.tab.doc.add_bond(b.a, b.b, order, display);
                 self.apply_current_bond_preset(b.a, b.b);
             }
+            // Swapping a plain dative's donor and acceptor changes chemistry,
+            // so invalidate its atoms first, as Reverse bonds does.
+            if reverse
+                && self
+                    .tab
+                    .doc
+                    .bonds
+                    .iter()
+                    .find(|bond| bond.a == b.a && bond.b == b.b)
+                    .is_some_and(|bond| bond.is_dative() && !bond.is_projected_dative())
+            {
+                self.tab.doc.invalidate_chemistry(&[b.a, b.b]);
+            }
             if reverse
                 && let Some(bond) = self
                     .tab
@@ -181,50 +181,54 @@ impl App {
                     .iter_mut()
                     .find(|bond| bond.a == b.a && bond.b == b.b)
             {
-                if bond.order == 5 {
-                    bond.reverse_projection();
-                } else {
-                    bond.reverse();
-                }
+                bond.reverse_drawn();
             }
             self.tab.selected = vec![b.a, b.b];
         } else {
-            let (order, display) = self.bond_style();
             let a = atom.unwrap_or_else(|| self.tab.doc.add_atom("C", p));
-            let Some(start) = self.tab.doc.atom(a).map(|a| a.position) else {
-                self.status = "The bond's starting atom is unavailable".into();
-                self.error = true;
+            if !self.default_bond_from_atom(a) {
                 return;
-            };
-            if let Some(endpoint) = reshiki::projection::growth::Plane::at(&self.tab.doc, a)
-                .and_then(|plane| plane.outward(self.tab.bond_drawing.length))
-            {
-                let preset = self
-                    .tool
-                    .bond_preset()
-                    .unwrap_or(reshiki::bonds::BondPreset::Single);
-                match reshiki::projection::growth::place(&self.tab.doc, a, endpoint, "C", preset) {
-                    Ok((doc, id)) => {
-                        self.tab.doc = doc;
-                        self.tab.selected = vec![id];
-                    }
-                    Err(error) => {
-                        self.status = error;
-                        self.error = true;
-                        return;
-                    }
-                }
-            } else {
-                let end = editing::bond_extension(&self.tab.doc, start, Some(a), order);
-                let ratio =
-                    self.tab.bond_drawing.length / reshiki::style::DEFAULT.bond_length_world;
-                let end = start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
-                let b = self.tab.doc.add_atom("C", end);
-                self.tab.doc.add_bond(a, b, order, display);
-                self.apply_current_bond_preset(a, b);
-                self.tab.selected = vec![b];
             }
         }
         self.changed(before);
     }
+    pub(super) fn default_bond_from_atom(&mut self, a: u64) -> bool {
+        let (order, display) = self.bond_style();
+        let Some(start) = self.tab.doc.atom(a).map(|a| a.position) else {
+            self.status = "The bond's starting atom is unavailable".into();
+            self.error = true;
+            return false;
+        };
+        if let Some(endpoint) = reshiki::projection::growth::Plane::at(&self.tab.doc, a)
+            .and_then(|plane| plane.outward(self.tab.bond_drawing.length))
+        {
+            let preset = self
+                .tool
+                .bond_preset()
+                .unwrap_or(reshiki::bonds::BondPreset::Single);
+            match reshiki::projection::growth::place(&self.tab.doc, a, endpoint, "C", preset) {
+                Ok((doc, id)) => {
+                    self.tab.doc = doc;
+                    self.tab.selected = vec![id];
+                }
+                Err(error) => {
+                    self.status = error;
+                    self.error = true;
+                    return false;
+                }
+            }
+        } else {
+            let end = editing::bond_extension(&self.tab.doc, start, Some(a), order);
+            let ratio = self.tab.bond_drawing.length / reshiki::style::DEFAULT.bond_length_world;
+            let end = start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
+            let b = self.tab.doc.add_atom("C", end);
+            self.tab.doc.add_bond(a, b, order, display);
+            self.apply_current_bond_preset(a, b);
+            self.tab.selected = vec![b];
+        }
+        true
+    }
 }
+
+#[cfg(test)]
+mod tests;

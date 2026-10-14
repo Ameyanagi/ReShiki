@@ -1,4 +1,7 @@
-use crate::typography::{TextFormat, TextStyle};
+use crate::{
+    generic::Generic,
+    typography::{TextFormat, TextStyle},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
 
@@ -16,6 +19,17 @@ impl Point {
     }
     pub fn offset(self, dx: f32, dy: f32) -> Self {
         Self::new(self.x + dx, self.y + dy)
+    }
+    /// Linearly interpolates from this point to another.
+    pub fn lerp(self, other: Self, t: f32) -> Self {
+        Self::new(
+            self.x + (other.x - self.x) * t,
+            self.y + (other.y - self.y) * t,
+        )
+    }
+    /// Returns whether both coordinates are finite.
+    pub fn is_finite(self) -> bool {
+        self.x.is_finite() && self.y.is_finite()
     }
 }
 
@@ -162,7 +176,48 @@ fn forward() -> String {
     "forward".into()
 }
 
+/// Collapsed abbreviations; older drawings carrying them are rejected.
+pub const ABBREVIATIONS: u32 = 10;
+/// Version that creating or appending abbreviations raises a drawing to: the
+/// format version (per-bond crossing depth) when abbreviation editing landed.
+pub const ABBREVIATION_EDITING: u32 = 11;
+/// Reaction membership and roles.
+pub const REACTIONS: u32 = 15;
+/// Lowest version the editor's write paths give a drawing: new drawings, open,
+/// recovery, page setup, printing, cleanup, styles, abbreviation detection and
+/// chemistry output. Each stamped the then-current version when reactions
+/// landed; saved files are now marked with [`VERSION`].
+pub const EDITOR_BASELINE: u32 = REACTIONS;
+/// Embedded custom themes and palette hues.
+pub const CUSTOM_THEMES: u32 = 16;
+/// Custom colors stored exactly as shown on either canvas.
+pub const EXACT_COLORS: u32 = 17;
+/// Persisted rear-side opacity for editable 3D molecules.
+pub const REAR_OPACITY: u32 = 22;
+
 /// The newest document format this build reads. Saved files are marked with it.
+///
+/// | Version | Added |
+/// | --- | --- |
+/// | 1 | Original native drawings. |
+/// | 2 | Arrow styles. |
+/// | 10 | Collapsed abbreviations. |
+/// | 11 | Per-bond crossing depth. |
+/// | 12 | Physical publication page layouts. |
+/// | 13 | Embedded pictures. |
+/// | 14 | Document drawing styles. |
+/// | 15 | Reaction membership and roles. |
+/// | 16 | Embedded custom themes (later also palette hues). |
+/// | 17 | Exact custom colors on either canvas; newer-version probing. |
+/// | 18 | Persistent atom and bond highlights. |
+/// | 19 | Editable 3D depth appearance and captured projection stereo (#146; 0.11.0). |
+/// | 20 | Retained EMF picture sources (#296); cubic arrow controls on a parallel branch. |
+/// | 21 | Arrow target links and attachment IDs (cubic-arrow branch). |
+/// | 22 | Persisted rear-side opacity (parallel branch). |
+/// | 23 | Not used. |
+/// | 24 | EMF sources, cubic arrows, target links and rear opacity integrated (#297). |
+/// | 25 | Linked molecule-name captions and reaction atom-map labels (#298). |
+/// | 26 | Generic structures and coordination joining (#300). |
 pub const VERSION: u32 = 26;
 
 fn newer_version(version: u64) -> String {
@@ -231,7 +286,7 @@ impl Default for Document {
             generic: Default::default(),
             ring_fills: vec![],
             depth_appearance: vec![],
-            version: 15,
+            version: EDITOR_BASELINE,
             drawing_style: Default::default(),
             canvas_theme: Default::default(),
             color_theme: Default::default(),
@@ -252,6 +307,10 @@ impl Default for Document {
     }
 }
 impl Document {
+    /// Raise the in-memory document version to at least this feature's floor.
+    pub fn require_version(&mut self, floor: u32) {
+        self.version = self.version.max(floor);
+    }
     /// Read a native drawing. The version is read first, so a drawing from a
     /// newer ReShiki is reported as such instead of as a parse error.
     pub fn from_json(bytes: &[u8]) -> Result<Self, String> {
@@ -279,7 +338,6 @@ impl Document {
     /// canvases, so a dark drawing stores what it showed. Ink and palette colors
     /// already follow the canvas.
     pub fn migrate(&mut self) {
-        const EXACT_COLORS: u32 = 17;
         if self.version >= EXACT_COLORS || self.canvas_theme.is_light() {
             return;
         }
@@ -295,7 +353,7 @@ impl Document {
     /// the version raised to at least 15, and computed labels cleared.
     pub fn from_native_file(bytes: &[u8]) -> Result<Self, String> {
         let mut doc = Self::from_json(bytes)?;
-        doc.version = doc.version.max(15);
+        doc.require_version(EDITOR_BASELINE);
         crate::atom_labels::clear_computed(&mut doc);
         Ok(doc)
     }
@@ -352,6 +410,17 @@ impl Document {
     pub fn atom_mut(&mut self, id: u64) -> Option<&mut Atom> {
         self.atoms.iter_mut().find(|a| a.id == id)
     }
+    /// Return the first bond connecting either endpoint order, with its index.
+    pub fn bond_between(&self, a: u64, b: u64) -> Option<(usize, &Bond)> {
+        self.bonds
+            .iter()
+            .enumerate()
+            .find(|(_, bond)| bond.connects(a, b))
+    }
+    /// Return the index of the first bond connecting either endpoint order.
+    pub fn bond_position(&self, a: u64, b: u64) -> Option<usize> {
+        self.bond_between(a, b).map(|(i, _)| i)
+    }
     pub fn nearest(&self, point: Point, radius: f32) -> Option<u64> {
         self.atoms
             .iter()
@@ -374,24 +443,14 @@ impl Document {
             .iter_mut()
             .find(|x| (x.a == a && x.b == b) || (x.a == b && x.b == a));
         let retained = previous.as_deref();
-        let fresh = Bond {
-            highlight: retained.and_then(|bond| bond.highlight),
-            ring_arc: false,
-            projection: false,
-            stereo_authoritative: false,
-            z_order: retained.map_or(0, |bond| bond.z_order),
-            indicator: retained.map_or_else(Default::default, |bond| bond.indicator.clone()),
-            cip_label: None,
-            a,
-            b,
-            order,
-            display: display.into(),
-            stereo: None,
-            stereo_atoms: vec![],
-            double_position: retained.map_or(Default::default(), |bond| bond.double_position),
-            secondary_display: None,
-            color: retained.map_or(Default::default(), |bond| bond.color),
-        };
+        let mut fresh = Bond::plain(a, b, order, display);
+        if let Some(retained) = retained {
+            fresh.highlight = retained.highlight;
+            fresh.z_order = retained.z_order;
+            fresh.indicator = retained.indicator.clone();
+            fresh.double_position = retained.double_position;
+            fresh.color = retained.color;
+        }
         if let Some(bond) = previous {
             *bond = fresh;
         } else {
@@ -503,6 +562,80 @@ impl Document {
             .chain(self.arrows.iter().map(|a| a.id))
             .chain(self.graphics.iter().map(|a| a.id))
     }
+    /// Clear drawing content while retaining document settings and preferences.
+    pub fn clear_content(&mut self) {
+        let Self {
+            generic,
+            canvas_theme: _,
+            color_theme: _,
+            custom_theme: _,
+            drawing_style: _,
+            page_layout: _,
+            abbreviations,
+            atom_labels: _,
+            ring_fills,
+            depth_appearance,
+            version: _,
+            atoms,
+            bonds,
+            annotations,
+            molecule_names,
+            arrows,
+            graphics,
+            groups,
+            reactions,
+            recent_colors: _,
+        } = self;
+        atoms.clear();
+        bonds.clear();
+        annotations.clear();
+        arrows.clear();
+        graphics.clear();
+        groups.clear();
+        abbreviations.clear();
+        reactions.clear();
+        ring_fills.clear();
+        depth_appearance.clear();
+        molecule_names.clear();
+        *generic = Generic::default();
+    }
+    /// Whether the document contains any drawing content.
+    pub fn has_content(&self) -> bool {
+        let Self {
+            generic,
+            canvas_theme: _,
+            color_theme: _,
+            custom_theme: _,
+            drawing_style: _,
+            page_layout: _,
+            abbreviations,
+            atom_labels: _,
+            ring_fills,
+            depth_appearance,
+            version: _,
+            atoms,
+            bonds,
+            annotations,
+            molecule_names,
+            arrows,
+            graphics,
+            groups,
+            reactions,
+            recent_colors: _,
+        } = self;
+        !atoms.is_empty()
+            || !bonds.is_empty()
+            || !annotations.is_empty()
+            || !arrows.is_empty()
+            || !graphics.is_empty()
+            || !groups.is_empty()
+            || !abbreviations.is_empty()
+            || !reactions.is_empty()
+            || !ring_fills.is_empty()
+            || !depth_appearance.is_empty()
+            || !molecule_names.is_empty()
+            || !generic.is_empty()
+    }
     pub fn validate(&self) -> Result<(), String> {
         crate::projection::validate(self)?;
         crate::depth_appearance::validate(self)?;
@@ -554,6 +687,9 @@ impl Document {
         let empty_neighbors = HashSet::new();
         for a in &self.atoms {
             a.display.validate()?;
+            if a.element != "*" && !a.display.label_scripts.is_empty() {
+                return Err("Atom label scripts require wildcard atoms".into());
+            }
             if a.map_num > i32::MAX as u32 {
                 return Err("Atom maps must be from 1 to 2147483647, or 0 to clear".into());
             }

@@ -178,7 +178,7 @@ impl ThemeFile {
     pub fn apply(self, doc: &mut Document) -> Result<(), String> {
         self.validate()?;
         self.base.apply(doc);
-        doc.version = doc.version.max(16);
+        doc.require_version(crate::document::CUSTOM_THEMES);
         doc.custom_theme = Some(Box::new(self.expanded()));
         Ok(())
     }

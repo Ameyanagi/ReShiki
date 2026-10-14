@@ -15,6 +15,7 @@ pub(super) fn event(message: &Message) -> Option<&'static str> {
         Message::Copy(false) => "copy",
         Message::Copy(true) => "cut",
         Message::CopyImage => "copy_image",
+        Message::CopyAsWritten(..) => "copy_as_written",
         Message::ClipboardWritten { .. } => "clipboard_written",
         Message::Paste => "paste",
         Message::ClipboardRead { .. } => "clipboard_read",

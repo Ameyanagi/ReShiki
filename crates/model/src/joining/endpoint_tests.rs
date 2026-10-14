@@ -533,7 +533,9 @@ fn first_coordination_bridge_stretches_but_second_contact_closes_a_cycle_with_li
         Target::Atom { atom: 2 },
         Target::Atom { atom: 1 },
     );
-    let first = templates::coordinate_atoms(&original, 2, 1).unwrap();
+    let first = crate::joining::coordinate_atoms(&original, 2, 1)
+        .unwrap()
+        .into_document(&original);
     assert_eq!(first.atoms, original.atoms);
     let stretch = Stretch::new(&first, 1, 2).unwrap();
     let stretched = stretch.apply(&first, stretch.length * 1.1).unwrap();
@@ -552,7 +554,9 @@ fn first_coordination_bridge_stretches_but_second_contact_closes_a_cycle_with_li
     );
     atom_target(&arrow(&stretched, id).start_anchor, 2);
     atom_target(&arrow(&stretched, id).end_anchor, 1);
-    let chelate = templates::coordinate_atoms(&stretched, 5, 1).unwrap();
+    let chelate = crate::joining::coordinate_atoms(&stretched, 5, 1)
+        .unwrap()
+        .into_document(&stretched);
     assert_eq!(chelate.atoms, stretched.atoms);
     assert!(
         Stretch::new(&chelate, 1, 2)

@@ -13,7 +13,7 @@ and vertical bonds. Rows show NH, CH₂, CCl₂, CF₂ and NMe.
 | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![Inline and centered internal labels shorten their connecting bonds](../images/hydrogen-placement/internal-before.png) | ![Internal labels stack above or below the attachment element and remain inline for vertical bonds](../images/hydrogen-placement/internal-after.png) |
 
-Open the [editable label examples](fixtures/internal-labels.rsk). Both images use
+Open the [editable label examples](../../tests/fixtures/internal-labels/internal-labels.rsk). Both images use
 the same atom coordinates, styles, scale and framing. They are SVG exports
 rendered at 1000 × 1080 pixels in a shared view box, without retouching. The before
 renderer is `ed5dc1f`, whose atom-label implementation is unchanged in base
@@ -37,7 +37,7 @@ inline form.
 | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | ![Horizontal NH shortens the bond toward the carbonyl](../images/hydrogen-placement/before.png) | ![H above N leaves both downward bonds clear](../images/hydrogen-placement/after.png) |
 
-The [editable molecule](fixtures/automatic-hydrogen.rsk) uses automatic placement.
+The [editable molecule](../../tests/fixtures/hydrogen-placement/automatic-hydrogen.rsk) uses automatic placement.
 Both captures have the same coordinates and 1000 × 601 framing.
 
 ## Behavior and scope

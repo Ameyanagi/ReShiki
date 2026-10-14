@@ -74,7 +74,7 @@ fn charges_isotopes_and_separate_deuterium_are_retained() {
 
 #[tokio::test]
 async fn unsupported_chemistry_has_no_prepared_payload() {
-    use super::super::{CopyFormat, prepare_as};
+    use super::super::{CopyFormat, chemical_text_snapshot, prepare_as, prepare_chemical_text};
     let source = reaction();
     let mut cases = Vec::new();
     let mut agents = source.clone();
@@ -100,16 +100,46 @@ async fn unsupported_chemistry_has_no_prepared_payload() {
     aromatic.atoms[0].aromatic = true;
     cases.push((aromatic, "aromatic"));
     for (doc, message) in cases {
+        let (format, chemical) = chemical_text_snapshot(&doc, &doc).unwrap();
+        assert_eq!(format, CopyFormat::ChemDoodleReaction);
         let error = prepare_as(Default::default(), doc, CopyFormat::ChemDoodleReaction)
             .await
             .unwrap_err();
         assert!(error.contains(message), "{error}");
+        let chemical_error = prepare_chemical_text(Default::default(), chemical, format)
+            .await
+            .unwrap_err();
+        assert_eq!(chemical_error, error);
     }
     let prepared = prepare_as(Default::default(), source, CopyFormat::ChemDoodleReaction)
         .await
         .unwrap();
     assert!(prepared.text().unwrap().contains("\"synthetic\""));
     assert!(!prepared.notices.is_empty());
+}
+
+#[tokio::test]
+async fn chemical_text_reaction_conversion_keeps_atom_limit() {
+    use super::super::{CopyFormat, chemical_text_snapshot, prepare_chemical_text};
+    let mut doc = reaction();
+    let first = doc.reactions[0].reactants[0].atoms[0];
+    for (id, i) in (doc.next_id()..).zip(doc.atoms.len()..=10_000) {
+        let mut atom = doc.atoms[0].clone();
+        atom.id = id;
+        atom.position = Point::new(i as f32, -240.);
+        let mut bond = doc.bonds[0].clone();
+        bond.a = first;
+        bond.b = atom.id;
+        doc.reactions[0].reactants[0].atoms.push(atom.id);
+        doc.atoms.push(atom);
+        doc.bonds.push(bond);
+    }
+    let (format, chemical) = chemical_text_snapshot(&doc, &doc).unwrap();
+    assert_eq!(format, CopyFormat::ChemDoodleReaction);
+    let error = prepare_chemical_text(Default::default(), chemical, format)
+        .await
+        .unwrap_err();
+    assert!(error.contains("10,000 atoms"), "{error}");
 }
 
 #[test]

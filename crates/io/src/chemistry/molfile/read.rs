@@ -604,19 +604,11 @@ pub fn read(text: &str) -> Result<Imported> {
 fn read_molecule(reader: &mut Reader<'_>) -> Result<Parsed> {
     reader.next()?;
     let info = reader.next()?;
-    let marked = info
-        .get(20..22)
-        .is_some_and(|s| s.eq_ignore_ascii_case("3D"));
-    let chemdraw = info.get(2..10) == Some("ChemDraw");
+    let marked = header_dimension(info).is_some_and(|s| s.eq_ignore_ascii_case("3D"));
+    let chemdraw = info.get(2..10) == Some("ChemDraw") || info.trim_start().starts_with("ChemDraw");
     reader.next()?;
     let counts = reader.next()?;
-    let n = reader.count(reader.field_integer(counts, 0, 3)?, 100_000)?;
-    let e = reader.count(reader.field_integer(counts, 3, 6)?, 300_000)?;
-    let version = if counts.len() > 35 {
-        reader.field(counts, 34, 39)?
-    } else {
-        "V2000"
-    };
+    let (n, e, version) = header_counts(reader, counts)?;
     let mut parsed = Parsed::new(marked);
     parsed.chemdraw = chemdraw;
     match version {
@@ -625,4 +617,89 @@ fn read_molecule(reader: &mut Reader<'_>) -> Result<Parsed> {
         _ => return Err(reader.invalid("Invalid version or V3000 header counts")),
     }
     Ok(parsed)
+}
+
+/// The 2D/3D code at columns 20-22 or, when leading spaces were lost, the
+/// token holding it alone or after the ten-digit date and time.
+fn header_dimension(info: &str) -> Option<&str> {
+    let dimension = |text: &str| text.eq_ignore_ascii_case("2D") || text.eq_ignore_ascii_case("3D");
+    info.get(20..22).filter(|s| dimension(s)).or_else(|| {
+        info.split_ascii_whitespace().find_map(|token| {
+            if dimension(token) {
+                return Some(token);
+            }
+            let start = token.len().checked_sub(2)?;
+            let code = token.get(start..).filter(|s| dimension(s))?;
+            let digits = token
+                .get(..start)?
+                .bytes()
+                .rev()
+                .take_while(u8::is_ascii_digit)
+                .count();
+            (digits >= 10).then_some(code)
+        })
+    })
+}
+
+fn header_counts<'a>(r: &Reader<'_>, line: &'a str) -> Result<(usize, usize, &'a str)> {
+    let fixed = (|| -> Result<_> {
+        let n = r.count(r.field_integer(line, 0, 3)?, 100_000)?;
+        let e = r.count(r.field_integer(line, 3, 6)?, 300_000)?;
+        let version = if line.len() > 35 {
+            r.field(line, 34, 39)?
+        } else {
+            "V2000"
+        };
+        Ok((n, e, version))
+    })();
+    if fixed
+        .as_ref()
+        .is_ok_and(|(_, _, version)| line.len() <= 35 || matches!(*version, "V2000" | "V3000"))
+    {
+        return fixed;
+    }
+    // Pasted text may have lost leading spaces. Restore them from the version
+    // tag's column so run-together counts such as ` 99100` keep their columns,
+    // then try tokens; a failed reading keeps the fixed-column result and its
+    // error.
+    let restored = || {
+        let tag = line.find("V2000").or_else(|| line.find("V3000"))?;
+        let padded = pad(line, 34_usize.checked_sub(tag)?)?;
+        let n = r
+            .count(r.field_integer(&padded, 0, 3).ok()?, 100_000)
+            .ok()?;
+        let e = r
+            .count(r.field_integer(&padded, 3, 6).ok()?, 300_000)
+            .ok()?;
+        Some((n, e, line.get(tag..tag + 5)?))
+    };
+    let tokens = || {
+        let mut tokens = line.split_ascii_whitespace();
+        let n = r.count(r.integer(tokens.next()?).ok()?, 100_000).ok()?;
+        let e = r.count(r.integer(tokens.next()?).ok()?, 300_000).ok()?;
+        let version = tokens.find(|s| matches!(*s, "V2000" | "V3000"))?;
+        Some((n, e, version))
+    };
+    restored().or_else(tokens).map_or(fixed, Ok)
+}
+
+/// `line` with `spaces` leading spaces put back, when any were lost.
+fn pad(line: &str, spaces: usize) -> Option<String> {
+    (spaces > 0).then(|| format!("{:spaces$}{line}", ""))
+}
+
+/// `line` with the leading spaces a paste dropped put back, found from where
+/// whitespace token `token` starts against `column`, the column it belongs at.
+fn restore_padding(line: &str, token: usize, column: usize) -> Option<String> {
+    let space = |c: char| c.is_ascii_whitespace();
+    let mut rest = line.trim_start_matches(space);
+    for _ in 0..token {
+        rest = rest
+            .trim_start_matches(|c| !space(c))
+            .trim_start_matches(space);
+    }
+    if rest.is_empty() {
+        return None;
+    }
+    pad(line, column.checked_sub(line.len() - rest.len())?)
 }

@@ -1,6 +1,6 @@
 # Coordination attachment: native desktop validation
 
-**Under review in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)**,
+**Merged, unreleased, in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)**,
 addressing [#246](https://github.com/Ameyanagi/ReShiki/issues/246).
 Contribution: @Ameyanagi, project creator and maintainer. The
 [coordination guide](fragment-joining.md#coordination-contacts-in-place) describes
@@ -18,15 +18,15 @@ The preserved macOS arm64 applications compare baseline
 build with no default features, preserved and ad-hoc signed independently of
 the shared Cargo target. Its signed executable SHA-256 is
 `77654ac99707cf6e1fc46a4ccc1bd3e10db97d802827873864a4a6973c2f2611`.
-The [bundle receipt](fixtures/coordination/bundle-provenance.json) and
-[source receipt](fixtures/coordination/final-source.json) record the exact source
+The [bundle receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/bundle-provenance.json) and
+[source receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/final-source.json) record the exact source
 commit, 1,065 source entrypoints and content hash. A packaging audit checked the
 preserved signed executable hash again; no new build was performed.
 
 Before implementation, a retained model/keyboard harness against unchanged
 baseline modules confirmed Co3+ covalent capacity zero, ordinary joining and
 keyboard rejection, and no document mutation. Its
-[output](fixtures/coordination/baseline.txt) is the initial behavior confirmation.
+[output](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/baseline.txt) is the initial behavior confirmation.
 The frozen-application native desktop comparisons below were replayed **after**
 implementation, on 2026-10-09; they are not described as pre-edit screenshots.
 Later documentation/evidence commits do not change the tested executable.
@@ -41,7 +41,7 @@ and coordinate preservation separately from those UI differences. Earlier
 recovery-banner Dismiss affected memory only; fresh-process captures retain the
 banner, and no recovery draft files were deleted.
 
-The [capture receipt](fixtures/coordination/capture-provenance.json) records the
+The [capture receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/capture-provenance.json) records the
 original image hashes/dimensions and new native-fixture hashes. Every image was
 inspected for legibility and unrelated/private content before packaging.
 
@@ -65,7 +65,7 @@ explicitly adds **donor 10 → Co1** using **Coordinate in place…**.
 The [one-contact native save](../tests/fixtures/coordination/co-en3-one-contact-desktop.rsk)
 contains exactly one new directed order-5 bond, **10 → 1**, with plain dative
 appearance and no stereo. The independent
-[one-contact audit](fixtures/coordination/desktop-one-contact-independent-audit.json)
+[one-contact audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/desktop-one-contact-independent-audit.json)
 confirms all 13 atom IDs, XYZ and every non-derived atom field exactly match the
 input; the original nine covalent bond records are unchanged. All coordinates
 are finite. Co charge +3 and all six nitrogen H2 labels remain unchanged.
@@ -96,7 +96,7 @@ another Undo entry. **Redo** restored 15 bonds. Save As produced
 | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![The complete six-contact complex after Save As, with 13 atoms and 15 bonds.](images/coordination/co-en3-assembled-saved.jpg) | ![Fresh-process reopening retains all six contacts and whole-drawing counts, with Undo disabled.](images/coordination/co-en3-assembled-reopened.jpg) |
 
-The retained [independent audit](fixtures/coordination/desktop-native-independent-audit.json)
+The retained [independent audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/desktop-native-independent-audit.json)
 confirms that all six new bonds are directed order 5 from donors
 2/5/6/9/10/13 to metal 1. All atom IDs, XYZ and chemical metadata are unchanged
 apart from the derived carbon-label cache noted above; all original covalent
@@ -170,7 +170,7 @@ comparison. The actual
 [ChemDraw Save As roundtrip](../tests/fixtures/coordination/co-en3-chemdraw-roundtrip.cdxml)
 retains all 26 atoms, 30 bonds, twelve directed dative B→E contacts, Co charge
 +3 and all N H2 values, but removes every dative projection `Display` attribute.
-The [XML contract check](fixtures/coordination/xml-reference-contract.txt)
+The [XML contract check](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/xml-reference-contract.txt)
 records that measured distinction. No external projection-paint fidelity is
 claimed.
 
@@ -179,7 +179,7 @@ attributes. Export warns about ChemDraw redraw/paint loss. MOL V3000 type 9
 retains directed dative chemistry but omits projection paint with a warning.
 Earlier VERSION 19 parsers accept a plain dative control and safely reject the
 new end-tip styles as unsupported appearance; the
-[retained executable control](fixtures/coordination/older-v19-projection-refusal.txt)
+[retained executable control](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/fixtures/coordination/older-v19-projection-refusal.txt)
 demonstrates refusal, rather than silent endpoint reversal or covalent stereo.
 Use native ReShiki or figure export when projection paint must remain faithful.
 
@@ -203,3 +203,11 @@ stopwatch. No source/test code, existing fixture bytes, solver run or new Cargo
 build changed during this documentation packaging. Original fixtures and
 captured evidence are identified in the fixture README; existing component
 notices remain in [NOTICE](../NOTICE).
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/fixtures/coordination](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/fixtures/coordination) on the evidence archive branch.
+
+| Archived files                                                                                                                     | What they record                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [docs/fixtures/coordination](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/fixtures/coordination) | Bundle/source/capture provenance, one-contact and assembled-complex audits, XML comparison and older-reader refusal output. |

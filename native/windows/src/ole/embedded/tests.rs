@@ -257,7 +257,6 @@ fn check_reader(
     storages: BTreeMap<u32, IStorage>,
     formats: [u32; 2],
     picture_only: bool,
-    allow_foreign: bool,
     failed_retrieval: Option<u32>,
     expected: Option<(&str, &[u8])>,
 ) -> Result<()> {
@@ -274,19 +273,12 @@ fn check_reader(
         busy_retrievals: 0,
     }
     .into();
-    let queried = Cell::new(false);
-    let result = super::super::read_data_object(&object, formats, picture_only, || {
-        queried.set(true);
-        Ok(allow_foreign)
-    })?;
+    let result = super::super::read_data_object(&object, formats, picture_only)?;
     assert_eq!(
         result.map(EmbeddedData::into_parts),
         expected.map(|(kind, bytes)| (kind, bytes.to_vec()))
     );
     assert_eq!(&*retrievals.borrow(), &expected_counts);
-    let own_result =
-        expected.is_some_and(|(kind, _)| kind == "dev.reshiki.drawing" || kind == "public.png");
-    assert_eq!(queried.get(), !picture_only && !own_result);
     Ok(())
 }
 
@@ -303,7 +295,6 @@ fn embedded_reader_retrieves_each_storage_once_and_checks_both_own_classes_first
             BTreeMap::from([(source, foreign_storage("CONTENTS", CHEMDRAW, None, false)?)]),
             formats,
             false,
-            true,
             None,
             Some(("com.revvity.chemdraw.cdx-clipboard", CHEMDRAW)),
         )?;
@@ -314,23 +305,19 @@ fn embedded_reader_retrieves_each_storage_once_and_checks_both_own_classes_first
             )]),
             formats,
             false,
+            None,
+            None,
+        )?;
+        check_reader(
+            BTreeMap::from([(
+                source,
+                foreign_storage("CONTENTS", CDX_SIGNATURE, Some(CDX_LIMIT as u64 + 1), false)?,
+            )]),
+            formats,
             true,
             None,
             None,
         )?;
-        for (picture_only, allow_foreign) in [(false, false), (true, true)] {
-            check_reader(
-                BTreeMap::from([(
-                    source,
-                    foreign_storage("CONTENTS", CDX_SIGNATURE, Some(CDX_LIMIT as u64 + 1), false)?,
-                )]),
-                formats,
-                picture_only,
-                allow_foreign,
-                None,
-                None,
-            )?;
-        }
         let document = br#"{"version":15,"atoms":[],"bonds":[]}"#;
         let preview = png();
         for picture_only in [false, true] {
@@ -352,7 +339,6 @@ fn embedded_reader_retrieves_each_storage_once_and_checks_both_own_classes_first
                 ]),
                 formats,
                 picture_only,
-                true,
                 None,
                 Some(if picture_only {
                     ("public.png", preview.as_slice())
@@ -369,7 +355,7 @@ fn embedded_reader_retrieves_each_storage_once_and_checks_both_own_classes_first
 }
 
 #[test]
-fn unavailable_first_embedded_format_preserves_other_own_and_standalone_priority() {
+fn unavailable_first_embedded_format_preserves_other_own_and_foreign_priority() {
     std::thread::spawn(|| -> Result<()> {
         let _apartment = Apartment::new()?;
         let source = clipboard::format("Embed Source")?;
@@ -386,18 +372,8 @@ fn unavailable_first_embedded_format_preserves_other_own_and_standalone_priority
             ]),
             formats,
             false,
-            true,
             Some(source),
             Some(("dev.reshiki.drawing", document)),
-        )?;
-        // Standalone chemistry can proceed when the first OLE acquisition fails.
-        check_reader(
-            BTreeMap::from([(source, foreign_storage("CONTENTS", CHEMDRAW, None, false)?)]),
-            formats,
-            false,
-            false,
-            Some(source),
-            None,
         )?;
         // A successfully acquired foreign CDX also wins over an earlier failure.
         check_reader(
@@ -410,7 +386,6 @@ fn unavailable_first_embedded_format_preserves_other_own_and_standalone_priority
             ]),
             formats,
             false,
-            true,
             Some(source),
             Some(("com.revvity.chemdraw.cdx-clipboard", CHEMDRAW)),
         )?;
@@ -427,7 +402,7 @@ fn unavailable_first_embedded_format_preserves_other_own_and_standalone_priority
             busy_retrievals: 0,
         }
         .into();
-        let error = match super::super::read_data_object(&object, formats, false, || Ok(true)) {
+        let error = match super::super::read_data_object(&object, formats, false) {
             Err(error) => error,
             Ok(_) => panic!("nonbusy retrieval unexpectedly succeeded"),
         };
@@ -459,8 +434,7 @@ fn embedded_get_data_retries_only_transient_clipboard_contention() {
                 busy_retrievals,
             }
             .into();
-            let result =
-                super::super::read_data_object(&object, [source, embedded], false, || Ok(true));
+            let result = super::super::read_data_object(&object, [source, embedded], false);
             if busy_retrievals == 2 {
                 assert_eq!(
                     result?.map(EmbeddedData::into_parts),
@@ -559,7 +533,7 @@ fn ole_get_clipboard_recovers_after_real_clipboard_contention() {
             result
         })?;
         assert_eq!(
-            super::super::read_data_object(&data, [source, embedded], false, || Ok(true))?
+            super::super::read_data_object(&data, [source, embedded], false)?
                 .map(EmbeddedData::into_parts),
             Some(("com.revvity.chemdraw.cdx-clipboard", CHEMDRAW.to_vec()))
         );
@@ -601,12 +575,22 @@ fn publish(
 }
 
 fn read(picture_only: bool) -> Result<(String, Vec<u8>)> {
+    read_with_options(picture_only, false)
+}
+
+fn read_with_options(picture_only: bool, skip_embedded: bool) -> Result<(String, Vec<u8>)> {
     let operation = if picture_only { "read_picture" } else { "read" };
-    let request = serde_json::to_vec(&serde_json::json!({ "operation": operation }))?;
+    let request = serde_json::to_vec(&serde_json::json!({
+        "operation": operation,
+        "skip_embedded": skip_embedded,
+    }))?;
     let packet: serde_json::Value = serde_json::from_slice(&clipboard::invoke(&request)?)?;
     let representations = packet["representations"].as_array().unwrap();
     assert_eq!(representations.len(), 1);
     let item = &representations[0];
+    if let Some(error) = item["read_error"].as_str() {
+        return Err(anyhow::anyhow!(error.to_owned()));
+    }
     Ok((
         item["type"].as_str().unwrap().into(),
         STANDARD.decode(item["data"].as_str().unwrap())?,
@@ -614,7 +598,7 @@ fn read(picture_only: bool) -> Result<(String, Vec<u8>)> {
 }
 
 #[test]
-fn office_chemdraw_storage_precedes_images_without_changing_image_only_or_native_paste() {
+fn office_chemdraw_storage_precedes_standalone_chemistry_images_and_native_paste() {
     let _clipboard = clipboard::CLIPBOARD_TEST_LOCK.lock().unwrap();
     assert!(CHEMDRAW.starts_with(CDX_SIGNATURE));
     let preview = png();
@@ -630,9 +614,19 @@ fn office_chemdraw_storage_precedes_images_without_changing_image_only_or_native
         );
         assert_eq!(read(false).unwrap(), (cdx_kind.into(), CHEMDRAW.to_vec()));
         assert_eq!(read(true).unwrap(), ("public.png".into(), preview.clone()));
+
+        publish(
+            embedded,
+            || foreign_storage("CONTENTS", CHEMDRAW, None, false),
+            vec![
+                (direct_cdx, b"standalone chemistry".to_vec()),
+                (png_format, preview.clone()),
+            ],
+        );
+        assert_eq!(read(false).unwrap(), (cdx_kind.into(), CHEMDRAW.to_vec()));
     }
 
-    // Standalone chemistry wins even when a foreign embedded CDX is oversized.
+    // Report a failed Office read once, then allow standalone chemistry on retry.
     publish(
         "Embed Source",
         || foreign_storage("CONTENTS", CDX_SIGNATURE, Some(CDX_LIMIT as u64 + 1), false),
@@ -641,7 +635,12 @@ fn office_chemdraw_storage_precedes_images_without_changing_image_only_or_native
             (png_format, preview.clone()),
         ],
     );
-    assert_eq!(read(false).unwrap(), (cdx_kind.into(), CHEMDRAW.to_vec()));
+    let error = read(false).unwrap_err().to_string();
+    assert!(error.contains("16 MB structure limit"), "{error}");
+    assert_eq!(
+        read_with_options(false, true).unwrap(),
+        (cdx_kind.into(), CHEMDRAW.to_vec())
+    );
 
     // The application's own embedded drawing still wins over standalone CDX.
     let own_preview = preview.clone();

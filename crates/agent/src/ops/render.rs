@@ -2,7 +2,7 @@
 //! assistant's canvas tools show the drawing. Publication files come from
 //! [`export`](super::export).
 use super::{
-    budget::Budgets,
+    budget::{Budgets, RenderBudget},
     catalog::arguments,
     error::{ErrorKind, OpError},
     exec::Context,
@@ -10,17 +10,20 @@ use super::{
     policy::Access,
     result::{Blob, Image, ToolResult},
     store::Documents,
-    wire::{DocHandle, ObjectId, Principal, envelope_json, handle_schema, ids_schema, nullable},
+    wire::{DocHandle, ObjectId, Principal, handle_schema, ids_schema, nullable},
 };
 use crate::{
     canvas_tools, editing,
-    envelope::{Envelope, ValidationStatus, Versions},
+    envelope::Versions,
     scene,
     tool_spec::{Hints, ToolSpec},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
+
+/// The `format` values the render operation accepts.
+pub const FORMATS: &[&str] = &["png", "svg"];
 
 pub const RENDER: ToolSpec = ToolSpec {
     name: "render",
@@ -40,7 +43,7 @@ fn schema() -> Value {
         "type": "object",
         "properties": {
             "document": handle_schema(),
-            "format": {"type": "string", "enum": ["png", "svg"]},
+            "format": {"type": "string", "enum": FORMATS},
             "max_width": nullable(side_schema()),
             "max_height": nullable(side_schema()),
             "ids": nullable(ids_schema()),
@@ -52,7 +55,11 @@ fn schema() -> Value {
 
 /// The default [`RenderBudget`](super::budget::RenderBudget) side limits.
 fn side_schema() -> Value {
-    json!({"type": "integer", "minimum": 1, "maximum": 8192})
+    json!({
+        "type": "integer",
+        "minimum": RenderBudget::DEFAULT.min_side,
+        "maximum": RenderBudget::DEFAULT.max_side,
+    })
 }
 
 /// A render `format`.
@@ -152,9 +159,8 @@ struct Rendered {
     byte_len: usize,
 }
 
-fn failed(message: impl AsRef<str>) -> OpError {
-    OpError::new(ErrorKind::Failed, message)
-}
+/// How to fit a preview over [`Budgets::max_output_bytes`].
+const SHRINK: &str = "Reduce max_width and max_height, or pass ids to render part of the drawing";
 
 /// The width and height in a PNG's IHDR chunk, which follows the 8-byte
 /// signature.
@@ -178,7 +184,7 @@ fn png_size(png: &[u8]) -> Option<(u32, u32)> {
 /// back as the file `drawing.svg`. Either must fit
 /// [`Budgets::max_output_bytes`].
 ///
-/// `{value: {width, height, byte_len}, warnings, validation, versions}`.
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn render(
     ctx: Context,
     store: Arc<dyn Documents>,
@@ -206,8 +212,9 @@ pub(crate) async fn render(
         let doc = part.as_ref().unwrap_or(&snapshot.doc);
         let (bytes, size, name) = match format {
             Format::Png => {
-                let png = canvas_tools::image_within(doc, width, height).map_err(failed)?;
-                let size = png_size(&png).ok_or_else(|| failed("internal error"))?;
+                let png =
+                    canvas_tools::image_within(doc, width, height).map_err(OpError::failed)?;
+                let size = png_size(&png).ok_or_else(|| OpError::failed("internal error"))?;
                 (png, Some(size), "png")
             }
             Format::Svg => (scene::svg(doc).into_bytes(), None, "svg"),
@@ -216,44 +223,31 @@ pub(crate) async fn render(
             return Err(OpError::new(
                 ErrorKind::Budget,
                 format!(
-                    "The {name} preview is {} bytes; max_output_bytes allows at most {}. Reduce max_width and max_height, or pass ids to render part of the drawing",
+                    "The {name} preview is {} bytes; max_output_bytes allows at most {}. {SHRINK}",
                     bytes.len(),
                     budgets.max_output_bytes
                 ),
             ));
         }
-        let value = envelope_json(&Envelope {
-            value: Rendered {
+        let result = ToolResult::valid(
+            Rendered {
                 width: size.map(|(width, _)| width),
                 height: size.map(|(_, height)| height),
                 byte_len: bytes.len(),
             },
-            warnings: Vec::new(),
-            validation: ValidationStatus::Valid,
+            Vec::new(),
             versions,
-        });
-        let (images, files) = match format {
-            Format::Png => (
-                vec![Image {
-                    mime: "image/png",
-                    bytes,
-                }],
-                Vec::new(),
-            ),
-            Format::Svg => (
-                Vec::new(),
-                vec![Blob {
-                    mime: "image/svg+xml",
-                    name: "drawing.svg".to_owned(),
-                    bytes,
-                }],
-            ),
-        };
-        Ok(ToolResult {
-            value,
-            images,
-            files,
-            is_error: false,
+        );
+        Ok(match format {
+            Format::Png => result.with_images(vec![Image {
+                mime: "image/png",
+                bytes,
+            }]),
+            Format::Svg => result.with_files(vec![Blob {
+                mime: "image/svg+xml",
+                name: "drawing.svg".to_owned(),
+                bytes,
+            }]),
         })
     })
     .await

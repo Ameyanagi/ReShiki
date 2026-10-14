@@ -1,0 +1,7 @@
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli analyze (INPUT | - | --smiles TEXT) [--from FORMAT]
+
+Prints the molecular properties of a structure or drawing as one JSON line:
+SMILES, formula, mass, exact mass, logP, TPSA, hydrogen-bond donors and
+acceptors, rings, unpaired electrons, InChI and InChIKey, under
+value.analysis. The input is read as for convert (reshiki --cli help convert).

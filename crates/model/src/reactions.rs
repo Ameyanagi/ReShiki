@@ -99,6 +99,13 @@ impl Reaction {
     }
 }
 
+/// Whether this annotation belongs to an explicitly tracked reaction.
+pub fn includes_text(doc: &Document, id: u64) -> bool {
+    doc.reactions
+        .iter()
+        .any(|reaction| reaction.annotations.contains(&id))
+}
+
 /// Includes complete connected molecules, including atoms hidden by abbreviations.
 pub fn molecules(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
     if selected.is_empty() {
@@ -326,7 +333,7 @@ pub fn assign(doc: &mut Document, arrow: u64, selected: &[u64], role: Role) -> R
     candidate.reactions.retain(|r| r.arrow != arrow);
     candidate.reactions.push(reaction);
     reconcile(&mut candidate)?;
-    candidate.version = 15;
+    candidate.version = crate::document::REACTIONS;
     candidate.validate()?;
     *doc = candidate;
     Ok(())

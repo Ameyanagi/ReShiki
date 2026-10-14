@@ -1,10 +1,12 @@
 //! Session-only NMR assignments. These labels never enter the chemical graph,
 //! persistent atom labels, the retained document scene or figure exports.
+use super::overlay::ACCENT;
 use super::{Camera, MoleculeCanvas, layered, rgb};
 use iced::widget::canvas::{Path, Stroke, Text};
 use iced::{Point, Rectangle, Size, Vector};
 use reshiki::document::Document;
-use reshiki_io::nmr::Report;
+use reshiki::nmr::Report;
+use std::{collections::HashMap, rc::Rc};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum LabelMode {
@@ -17,22 +19,30 @@ pub enum LabelMode {
 pub(crate) struct Context<'a> {
     pub report: &'a Report,
     pub mode: LabelMode,
+    /// Sorted supported owners retained in the report's presentation.
+    pub supported: Option<&'a [u64]>,
 }
-impl Context<'_> {
+impl<'a> Context<'a> {
     pub(super) fn supported_ids(self) -> Vec<u64> {
         self.report
             .rows
             .iter()
-            .filter(|row| {
-                row.statistics
-                    .as_ref()
-                    .is_some_and(|s| s.median.is_finite())
-            })
+            .filter(|row| row.shift().is_some())
             .map(|row| row.atom_id)
             .collect()
     }
+
+    pub(super) fn marker_ids(self) -> std::borrow::Cow<'a, [u64]> {
+        if let Some(ids) = self.supported {
+            return std::borrow::Cow::Borrowed(ids);
+        }
+        let mut ids = self.supported_ids();
+        ids.sort_unstable();
+        ids.dedup();
+        std::borrow::Cow::Owned(ids)
+    }
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct Assignment {
     pub atom_id: u64,
     pub anchor: Point,
@@ -43,6 +53,26 @@ pub(crate) struct Assignment {
 
 const TEXT_SIZE: f32 = 11.;
 const TEXT_HEIGHT: f32 = TEXT_SIZE * 1.3;
+const MAX_WIDTHS: usize = 512;
+
+#[derive(Default)]
+pub(super) struct WidthMemo {
+    widths: HashMap<String, f32>,
+}
+
+impl WidthMemo {
+    fn width(&mut self, text: &str) -> f32 {
+        if let Some(&width) = self.widths.get(text) {
+            return width;
+        }
+        let width = crate::app::text_width(text, TEXT_SIZE);
+        if self.widths.len() == MAX_WIDTHS {
+            self.widths.clear();
+        }
+        self.widths.insert(text.to_owned(), width);
+        width
+    }
+}
 
 fn padded(rect: Rectangle, amount: f32) -> Rectangle {
     Rectangle {
@@ -65,6 +95,28 @@ pub(crate) fn placements(
     context: Context<'_>,
     camera: Camera,
     bounds: Rectangle,
+) -> Vec<Assignment> {
+    placements_with_width(doc, context, camera, bounds, |text| {
+        crate::app::text_width(text, TEXT_SIZE)
+    })
+}
+
+pub(super) fn memoized_placements(
+    doc: &Document,
+    context: Context<'_>,
+    camera: Camera,
+    bounds: Rectangle,
+    widths: &mut WidthMemo,
+) -> Vec<Assignment> {
+    placements_with_width(doc, context, camera, bounds, |text| widths.width(text))
+}
+
+fn placements_with_width(
+    doc: &Document,
+    context: Context<'_>,
+    camera: Camera,
+    bounds: Rectangle,
+    mut width: impl FnMut(&str) -> f32,
 ) -> Vec<Assignment> {
     let mut occupied: Vec<_> = doc
         .atoms
@@ -104,23 +156,14 @@ pub(crate) fn placements(
         .collect();
     let mut result = Vec::new();
     for row in &context.report.rows {
-        let Some(shift) = row
-            .statistics
-            .as_ref()
-            .map(|s| s.median)
-            .filter(|s| s.is_finite())
-        else {
+        let Some(shift) = row.shift() else {
             continue;
         };
         let Some(atom) = doc.atom(row.atom_id) else {
             continue;
         };
         let collapsed = (!doc.atom_visible(atom.id))
-            .then(|| {
-                doc.abbreviations
-                    .iter()
-                    .find(|g| g.members.contains(&atom.id))
-            })
+            .then(|| doc.abbreviation_containing(atom.id))
             .flatten();
         let anchor = if let Some(group) = collapsed {
             let Some(anchor) = doc.atom(group.anchor) else {
@@ -143,10 +186,7 @@ pub(crate) fn placements(
         };
         // The nucleus and unresolved-H/abbreviation ownership remain in the
         // report and accessible site descriptions, rather than every label.
-        let size = Size::new(
-            crate::app::text_width(&text, TEXT_SIZE).min((bounds.width - 8.).max(1.)),
-            TEXT_HEIGHT,
-        );
+        let size = Size::new(width(&text).min((bounds.width - 8.).max(1.)), TEXT_HEIGHT);
         let mut best = None;
         for distance in [8., 18., 32., 48., 64.] {
             for offset in [
@@ -235,17 +275,21 @@ impl MoleculeCanvas<'_> {
         preview: &Document,
         selected: &[u64],
         bounds: Rectangle,
+        cache: Option<&std::cell::RefCell<super::cache::SceneCache>>,
     ) {
         let Some(context) = self.nmr else {
             return;
         };
-        for assignment in placements(preview, context, self.camera, bounds) {
+        let assignments: Rc<[Assignment]> = if let Some(cache) = cache {
+            cache
+                .borrow_mut()
+                .nmr_assignments(preview, context, self.camera, bounds)
+        } else {
+            placements(preview, context, self.camera, bounds).into()
+        };
+        for assignment in assignments.iter() {
             let selected = selected.contains(&assignment.atom_id);
-            let color = rgb(if selected {
-                [19, 105, 89]
-            } else {
-                [19, 135, 116]
-            });
+            let color = if selected { rgb([19, 105, 89]) } else { ACCENT };
             // Close labels need no callout. A displaced crowded label still
             // indicates its real atom or visible abbreviation anchor.
             if assignment.leader {
@@ -260,7 +304,7 @@ impl MoleculeCanvas<'_> {
                 );
             }
             frame.fill_text(Text {
-                content: assignment.text,
+                content: assignment.text.clone(),
                 position: assignment.bounds.position(),
                 size: TEXT_SIZE.into(),
                 color,

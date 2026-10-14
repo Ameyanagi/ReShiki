@@ -1,8 +1,8 @@
 # Optional mechanism-arrow target attachments
 
-Under review for [#92](https://github.com/Ameyanagi/ReShiki/issues/92), contributed
-by @Ameyanagi and stacked on [PR #276](https://github.com/Ameyanagi/ReShiki/pull/276).
-The draft PR link will be added when opened. This work remains unreleased, and
+Merged, unreleased, for [#92](https://github.com/Ameyanagi/ReShiki/issues/92) in
+[PR #286](https://github.com/Ameyanagi/ReShiki/pull/286) through [PR #297](https://github.com/Ameyanagi/ReShiki/pull/297), contributed by @Ameyanagi and stacked on
+[PR #276](https://github.com/Ameyanagi/ReShiki/pull/276). This work remains unreleased, and
 the user's personal visual acceptance remains pending.
 
 ## Problem
@@ -25,12 +25,12 @@ or an electron-accounting assertion.
 
 ## Solution
 
-**Attach targets (two clicks)** offers source-then-destination placement for
+**Attach ends to atoms and bonds** offers source-then-destination placement for
 electron-pair and fishhook arrows. An atom, an existing visible bond or a
 positioned lone pair can be a target. The first click highlights the source
 without changing the document or history; the second creates one editable cubic
 arrow in one Undo step. Escape cancels a pending source. Turning the checkbox
-off restores free clicking; Alt-click bypasses attachment, and dragging remains
+off restores free clicking; Option/Alt-click bypasses attachment, and dragging remains
 free placement.
 
 | Pending source                                                                                                                                                                          | Editable arrow and attachment actions                                                                                                                                              |
@@ -60,7 +60,7 @@ attachment links. Native files keep those links.
 ## Results from actual desktop review
 
 Independent desktop review verified 15 checks against 27 actual native readbacks and
-seven original desktop captures. The retained [independent receipt](../reviews/mechanism-attachments/desktop-independent-check.json)
+seven original desktop captures. The retained [independent receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/desktop-independent-check.json)
 records every check and file hash; [all 27 native saves](../../tests/fixtures/mechanism-attachments-92/desktop/)
 are unchanged copies of the originals.
 
@@ -128,7 +128,8 @@ executable SHA256:
 1. Open `before.rsk`, set 250%, turn F8 off and select **Curved / electron pair**.
 2. Click between the oxygen lone-pair dots (world 0, -29.166668; original screen
    969, 892), then the carbon tip (world -36.373, -21; original screen 787, 932).
-   On the candidate, leave **Attach targets (two clicks)** enabled.
+   On the candidate, leave **Attach targets (two clicks)** (now **Attach ends
+   to atoms and bonds**) enabled.
 3. On the baseline, each click creates an independent free arrow. On the
    candidate, the first click only highlights a source; the second creates one
    arrow. Deselect it to obtain the matched after view. One Undo removes that
@@ -147,19 +148,19 @@ text differs. The primary drawing scale, frame and style match. The obsolete
 keyboard-on carbonyl image and the earlier unselected, misnamed reopen-controls
 image are omitted; their originals remain in the local capture record.
 
-The [package manifest](../reviews/mechanism-attachments/package-manifest.json)
+The [package manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/package-manifest.json)
 proves byte equality for all seven images, 27 native files and retained receipts.
-The original [independent checker](../reviews/mechanism-attachments/verify_desktop.py)
+The original [independent checker](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/verify_desktop.py)
 is preserved unchanged as an audit source; it expects the original coordination
 layout and preserved application, rather than being an offline test command.
 
 All 1,067 tracked own Rust/Cargo source files were refreshed without content
 changes before the final locked build. Every own workspace/vendor compiler
-artifact reports `fresh:false`. The [build/package receipt](../reviews/mechanism-attachments/final-artifact-provenance.json)
-and [full source hashes](../reviews/mechanism-attachments/final-own-source-provenance.json)
+artifact reports `fresh:false`. The [build/package receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/final-artifact-provenance.json)
+and [full source hashes](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/final-own-source-provenance.json)
 bind the signed app to that source. A normal merge of the final Curves head
 `cd564d1a31ecb52a2ac2b9bd143bcd645422f1d3` retains the tested native-21 headless
-assertion and six capability transcripts. The [post-merge proof](../reviews/mechanism-attachments/post-merge-source-proof.json)
+assertion and six capability transcripts. The [post-merge proof](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/post-merge-source-proof.json)
 confirms all 1,067 Rust/Cargo filenames and hashes, and Cargo.lock, are unchanged.
 
 ## Compiled and export checks
@@ -180,11 +181,11 @@ The actual signed-app CLI check uses the frozen original and the retained
 [app-flow test result](../../tests/fixtures/mechanism-attachments-92/app-two-click-test.rsk).
 The original control SVG/PNG/PDF is byte-identical to the preserved baseline,
 and complete before/after chemical analyses agree. Molecular fields and
-lone-pair geometry remain exact. [Before analysis](../reviews/mechanism-attachments/before-analysis.json),
-[after test analysis](../reviews/mechanism-attachments/after-test-analysis.json),
-[SVG](../reviews/mechanism-attachments/after-test.svg),
-[CDXML](../reviews/mechanism-attachments/after-test.cdxml) and the
-[export receipt](../reviews/mechanism-attachments/matched-export-receipt.json)
+lone-pair geometry remain exact. [Before analysis](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/before-analysis.json),
+[after test analysis](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/after-test-analysis.json),
+[SVG](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/after-test.svg),
+[CDXML](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/after-test.cdxml) and the
+[export receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/matched-export-receipt.json)
 retain the property/interchange evidence separately from the desktop screenshots.
 CLI SVG/PNG/PDF/CDXML each report editing-link loss. CDX exact cubic geometry and
 link loss pass the actual IO writer/reader test; CLI CDX output is unsupported
@@ -200,3 +201,11 @@ Original code, tests, fixtures, screenshots and documentation are contributed
 under MIT OR Apache-2.0, following [CONTRIBUTING.md](../../CONTRIBUTING.md).
 No new third-party material is added. Review, merge, release and the user's
 personal visual acceptance remain pending.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/reviews/mechanism-attachments](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments) on the evidence archive branch.
+
+| Archived files                                                                                                                                     | What they record                                                                          |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [docs/reviews/mechanism-attachments](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments) | Independent native/export audits, attachment checks and the portable verification helper. |

@@ -7,6 +7,7 @@ use iced::widget::{column, container, row, stack, text, text_editor, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Rectangle, Renderer, Task, Theme, mouse};
 use reshiki::document::{Document, Point};
 use reshiki::engine::{ChemistryEngine, LocalEngine, Request};
+use reshiki::metafile::PICTURE_EXTENSIONS as PICTURES;
 use reshiki::pictures::Picture;
 use std::path::{Path, PathBuf};
 
@@ -28,10 +29,6 @@ const STRUCTURES: [(&str, &str); 6] = [
     ("smi", "smiles"),
     ("smiles", "smiles"),
 ];
-#[cfg(not(windows))]
-const PICTURES: &[&str] = &["png", "jpg", "jpeg", "tif", "tiff", "webp"];
-#[cfg(windows)]
-const PICTURES: &[&str] = &["png", "jpg", "jpeg", "tif", "tiff", "webp", "emf"];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Example(&'static str, &'static str);
@@ -198,12 +195,7 @@ impl Plan {
 
 /// Structure file contents as the engine reads them: binary CDX as base64.
 pub(super) fn contents(format: &str, bytes: Vec<u8>) -> Result<String, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD};
-    if format == "cdx" {
-        Ok(STANDARD.encode(bytes))
-    } else {
-        String::from_utf8(bytes).map_err(|error| format!("The file is not valid UTF-8: {error}"))
-    }
+    reshiki::compatibility::import_text(format, bytes)
 }
 
 /// A drawing holding just this picture, sized as a newly inserted picture.
@@ -219,7 +211,7 @@ async fn read(engine: &LocalEngine, path: &Path) -> Result<(Document, Vec<String
         Kind::Picture => {
             let picture = reshiki::metafile::open(path).await?;
             let warnings = if picture.emf().is_some() {
-                vec!["EMF imported at physical size. Save .rsk or export EMF on Windows to retain vectors; other formats use a preview.".into()]
+                vec![reshiki::metafile::EMF_IMPORT_NOTICE.into()]
             } else {
                 vec![]
             };
@@ -562,7 +554,7 @@ impl App {
             .size(12)
             .padding(8)
             .wrapping(text::Wrapping::WordOrGlyph)
-            .style(editor_style);
+            .style(crate::appearance::editor_style);
         let editor = reshiki::accessibility::editor(
             INPUT,
             "Structure or reaction to import",
@@ -741,26 +733,6 @@ impl App {
             )
             .push(container(tag).center(Length::Fill))
             .into()
-    }
-}
-
-fn editor_style(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
-    use iced::widget::text_input::Status as Input;
-    let field = crate::appearance::input_style(
-        theme,
-        match status {
-            text_editor::Status::Active => Input::Active,
-            text_editor::Status::Hovered => Input::Hovered,
-            text_editor::Status::Focused { is_hovered } => Input::Focused { is_hovered },
-            text_editor::Status::Disabled => Input::Disabled,
-        },
-    );
-    text_editor::Style {
-        background: field.background,
-        border: field.border,
-        placeholder: field.placeholder,
-        value: field.value,
-        selection: field.selection,
     }
 }
 

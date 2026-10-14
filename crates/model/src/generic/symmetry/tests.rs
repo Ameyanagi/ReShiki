@@ -51,14 +51,13 @@ fn six_benzene_positions_keep_one_first_representative_on_every_path() {
     }));
     let drawings = generic::expand_drawings(&source, Limits::default()).unwrap();
     assert_eq!(drawings.len(), 1);
-    let paired = generic::expand_inner(&source, Limits::default(), true).unwrap();
-    assert_eq!(paired.drawings.len(), paired.hydrogens.len());
+    let paired = generic::expand_drawing_inner(&source, Limits::default()).unwrap();
+    assert_eq!(paired.tiles.len(), drawings.len());
     assert!(
         paired
-            .drawings
+            .tiles
             .iter()
-            .zip(&paired.hydrogens)
-            .all(|(drawing, hydrogens)| drawing.document.atoms.len() == hydrogens.len())
+            .all(|tile| tile.document.atoms.len() == tile.hydrogens.len())
     );
     let batch = generic::prepare_expansion(&source, Limits::default()).unwrap();
     assert_eq!(batch.count(), 1);

@@ -222,7 +222,7 @@ fn encode_value(p: &Property, value: &str, element: &str) -> Result<Vec<u8>> {
                 .to_vec();
             for n in numbers {
                 let n = integer::<u16>(n)?;
-                if !(1..=118).contains(&n) {
+                if !(1..=MAX_ATOMIC_NUMBER).contains(&n) {
                     return Err("Invalid element-list atomic number".into());
                 }
                 append(&mut data, &n.to_le_bytes())?;

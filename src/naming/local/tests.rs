@@ -1,10 +1,18 @@
+#[cfg(unix)]
+use super::client::CancelOnDrop as StopOnDrop;
+use super::client::transient_measurement_error;
 use super::*;
 use serde_json::json;
+#[cfg(unix)]
+use std::{
+    process::{Command, Stdio},
+    time::{Duration, Instant},
+};
 
 fn reply(smiles: &str) -> serde_json::Value {
     json!({"operation":"parse","protocol":worker::PROTOCOL,"backend":worker::BACKEND,"port_version":worker::PORT_VERSION,"upstream_version":worker::UPSTREAM_VERSION,"upstream_commit":worker::UPSTREAM_COMMIT,"resource_fingerprint":worker::RESOURCE_FINGERPRINT,"options":worker::OPTIONS,"name":"example","status":"SUCCESS","message":"","warnings":[],"cxsmiles":smiles})
 }
-fn parse(value: serde_json::Value) -> Result<Record, String> {
+fn parse(value: serde_json::Value) -> Result<Record, Error> {
     parse_reply(&serde_json::to_vec(&value).unwrap(), "example")
 }
 
@@ -23,11 +31,14 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
         "C->N",
     ] {
         assert!(
-            parse(reply(smiles)).is_err(),
+            matches!(parse(reply(smiles)), Err(Error::Rejected(_))),
             "Simplified unsupported {smiles}"
         );
     }
-    assert!(parse(reply(&"C".repeat(513))).is_err());
+    assert!(matches!(
+        parse(reply(&"C".repeat(513))),
+        Err(Error::Rejected(_))
+    ));
     for (key, value) in [
         ("protocol", json!(3)),
         ("backend", json!("external-engine")),
@@ -50,10 +61,21 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
     ] {
         let mut result = reply("CCO");
         result[key] = value;
-        assert!(parse(result).is_err(), "Accepted inconsistent {key}");
+        let error = parse(result).unwrap_err();
+        if matches!(key, "cxsmiles" | "warnings") {
+            assert!(matches!(error, Error::Rejected(_)), "{key}: {error}");
+        } else {
+            assert!(matches!(error, Error::Worker(_)), "{key}: {error}");
+        }
     }
-    assert!(parse_reply(b"invalid", "example").is_err());
-    assert!(parse_reply(&vec![b' '; OUTPUT_LIMIT + 1], "example").is_err());
+    assert!(matches!(
+        parse_reply(b"invalid", "example"),
+        Err(Error::Worker(_))
+    ));
+    assert!(matches!(
+        parse_reply(&vec![b' '; OUTPUT_LIMIT + 1], "example"),
+        Err(Error::Worker(_))
+    ));
 }
 
 /// Independently written graphs encode substituent positions, ring topology
@@ -110,10 +132,14 @@ async fn actual_parser_rejects_ambiguous_stereo_polymers_salts_and_unknown_names
         "aspirin",
     ] {
         let error = resolve_name(name, Cancel::default()).await.expect_err(name);
-        assert!(!error.is_empty(), "No explanation for {name}");
+        assert!(!error.to_string().is_empty(), "No explanation for {name}");
+        assert!(matches!(error, Error::Rejected(_)), "{name}: {error}");
     }
     for name in ["", "\nethanol", &"x".repeat(2049)] {
-        assert!(resolve_name(name, Cancel::default()).await.is_err());
+        assert!(matches!(
+            resolve_name(name, Cancel::default()).await,
+            Err(Error::Rejected(_))
+        ));
     }
 }
 
@@ -124,6 +150,7 @@ fn parser_cannot_accept_a_rule_generation_response() {
     assert!(
         parse_reply(&serde_json::to_vec(&response).unwrap(), "example")
             .unwrap_err()
+            .to_string()
             .contains("different operation")
     );
 }
@@ -133,7 +160,12 @@ async fn missing_native_worker_fails_without_a_foreign_runtime_or_service() {
     let _parser_slot = SLOTS.acquire().await.unwrap();
     let path = std::env::temp_dir().join("reshiki-test-no-native-executable-50");
     let error = run_with_executable("ethanol", &Cancel::default(), &path).unwrap_err();
-    assert!(error.contains("Could not start bounded local naming worker"));
+    assert!(matches!(error, Error::Worker(_)));
+    assert!(
+        error
+            .to_string()
+            .contains("Could not start bounded local naming worker")
+    );
 }
 
 #[cfg(unix)]
@@ -181,14 +213,13 @@ async fn cancellation_kills_and_reaps_child_and_removes_private_payload() {
     let work = std::fs::read_to_string(&cwd).unwrap();
     let cancellation_started = Instant::now();
     cancel.stop();
-    assert!(
-        tokio::time::timeout(Duration::from_secs(3), worker)
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap_err()
-            .contains("cancelled")
-    );
+    let error = tokio::time::timeout(Duration::from_secs(3), worker)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert!(matches!(error, Error::Cancelled(_)));
+    assert!(error.to_string().contains("cancelled"));
     let cancellation_elapsed = cancellation_started.elapsed();
     eprintln!(
         "cancellation phases: startup={startup_elapsed:?}; cancellation_before_cleanup_check={cancellation_elapsed:?}"
@@ -245,7 +276,8 @@ async fn oversized_actual_child_output_is_bounded_and_worker_is_stopped() {
     std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o700)).unwrap();
     let started = Instant::now();
     let error = run_with_executable("ethanol", &Cancel::default(), &helper).unwrap_err();
-    assert!(error.contains("output exceeded"));
+    assert!(matches!(error, Error::Worker(_)));
+    assert!(error.to_string().contains("output exceeded"));
     assert!(started.elapsed() < Duration::from_secs(3));
 }
 
@@ -391,7 +423,8 @@ async fn an_escaped_pipe_holder_cannot_extend_the_completion_deadline() {
         "escaped-pipe phases: startup={startup_elapsed:?}; completion_before_cleanup={completion_elapsed:?}; cleanup={cleanup_elapsed:?}"
     );
     let error = result.unwrap_err();
-    assert!(error.contains("response pipes"), "{error}");
+    assert!(matches!(error, Error::Worker(_)));
+    assert!(error.to_string().contains("response pipes"), "{error}");
     assert!(
         completion_elapsed < Duration::from_secs(3),
         "{completion_elapsed:?}"
@@ -454,7 +487,7 @@ fn retained_lactic_name_is_exact_and_requires_its_specific_absolute_graph() {
                 );
             } else {
                 assert!(
-                    certified.is_err(),
+                    matches!(certified, Err(Error::Rejected(_))),
                     "retained name lost semantics for {smiles}"
                 );
             }
@@ -478,7 +511,9 @@ fn retained_lactic_name_is_exact_and_requires_its_specific_absolute_graph() {
 #[tokio::test]
 async fn retained_plus_lactic_name_uses_local_parser_and_exact_s_reverse() -> Result<(), String> {
     for name in ["(+)-lactic acid", "  (+)-LACTIC ACID  "] {
-        let record = resolve_name(name, Cancel::default()).await?;
+        let record = resolve_name(name, Cancel::default())
+            .await
+            .map_err(|error| error.to_string())?;
         super::super::verify_identity(PLUS_LACTIC_GRAPH, &record.smiles)?;
         assert!(super::super::verify_identity("C[C@@H](O)C(=O)O", &record.smiles).is_err());
         assert!(super::super::verify_identity("CC(O)C(=O)O", &record.smiles).is_err());
@@ -497,7 +532,8 @@ async fn retained_plus_lactic_name_uses_local_parser_and_exact_s_reverse() -> Re
             },
             Cancel::default(),
         )
-        .await?;
+        .await
+        .map_err(|error| error.to_string())?;
         assert_eq!(
             generated.systematic_name.as_deref(),
             Some(PLUS_LACTIC_PARSER_NAME)

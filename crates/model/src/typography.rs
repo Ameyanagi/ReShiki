@@ -64,6 +64,112 @@ pub enum Script {
     Superscript,
 }
 
+/// A manually selected script on unchanged UTF-8 label text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScriptRun {
+    pub start: usize,
+    pub end: usize,
+    pub script: Script,
+}
+
+/// Validate stored manual ranges without changing their meaning.
+pub fn validate_label_scripts(text: &str, runs: &[ScriptRun]) -> Result<(), String> {
+    let mut end = 0;
+    for run in runs {
+        if run.start < end
+            || run.start >= run.end
+            || run.end > text.len()
+            || !text.is_char_boundary(run.start)
+            || !text.is_char_boundary(run.end)
+        {
+            return Err(
+                "Atom label script ranges must be ordered, nonoverlapping UTF-8 boundaries".into(),
+            );
+        }
+        end = run.end;
+    }
+    Ok(())
+}
+
+/// Canonical manual formatting: normal gaps are implicit, adjacent equal
+/// scripts merge, and one full normal run records an explicitly plain label.
+pub fn normalize_label_scripts(text: &str, runs: &[ScriptRun]) -> Result<Vec<ScriptRun>, String> {
+    let mut nonempty = vec![];
+    for run in runs {
+        if run.start > run.end
+            || run.end > text.len()
+            || !text.is_char_boundary(run.start)
+            || !text.is_char_boundary(run.end)
+        {
+            return Err(
+                "Atom label script ranges must be ordered, nonoverlapping UTF-8 boundaries".into(),
+            );
+        }
+        if run.start != run.end {
+            nonempty.push(*run);
+        }
+    }
+    validate_label_scripts(text, &nonempty)?;
+    if nonempty.is_empty() {
+        return Ok(vec![]);
+    }
+    if nonempty.iter().all(|run| run.script == Script::Normal) {
+        return Ok(vec![ScriptRun {
+            start: 0,
+            end: text.len(),
+            script: Script::Normal,
+        }]);
+    }
+    let mut normalized: Vec<ScriptRun> = vec![];
+    for run in nonempty
+        .into_iter()
+        .filter(|run| run.script != Script::Normal)
+    {
+        if let Some(last) = normalized.last_mut()
+            && last.end == run.start
+            && last.script == run.script
+        {
+            last.end = run.end;
+        } else {
+            normalized.push(run);
+        }
+    }
+    Ok(normalized)
+}
+
+/// Resolve the displayed scripts once for rendering and exchange. Any manual
+/// run overrides automatic formula inference; uncovered text stays normal.
+pub fn effective_label_runs(
+    display: &crate::atom_labels::AtomDisplay,
+) -> Vec<(Range<usize>, Script)> {
+    let Some(text) = display.variable.as_deref() else {
+        return vec![];
+    };
+    if display.label_scripts.is_empty() {
+        return label_runs(text);
+    }
+    let mut runs: Vec<(Range<usize>, Script)> = vec![];
+    let mut manual = display.label_scripts.iter().peekable();
+    for (start, c) in text.char_indices() {
+        while manual.peek().is_some_and(|run| run.end <= start) {
+            manual.next();
+        }
+        let script = manual
+            .peek()
+            .filter(|run| run.start <= start && start < run.end)
+            .map_or(Script::Normal, |run| run.script);
+        let end = start + c.len_utf8();
+        if let Some((range, previous)) = runs.last_mut()
+            && *previous == script
+        {
+            range.end = end;
+        } else {
+            runs.push((start..end, script));
+        }
+    }
+    runs
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TextStyle {
@@ -319,6 +425,84 @@ pub struct Layout {
     pub height: f32,
 }
 
+/// Formula-style free labels, with a final single digit interpreted as charge
+/// unless it directly follows a letter/bracket in a label with multiple tokens.
+/// Runs cover the unchanged source text, including an optional charge space.
+pub fn label_runs(text: &str) -> Vec<(Range<usize>, Script)> {
+    let mut charge = text.len();
+    let mut tail = text.char_indices().rev();
+    if let Some((sign, '+' | '-' | '−' | '⁺' | '⁻')) = tail.next() {
+        charge = sign;
+        if let Some((digit, '1'..='9')) = tail.next() {
+            let before = text.get(..digit).unwrap_or_default();
+            let count = before
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphabetic() || matches!(c, ')' | ']'))
+                && before.chars().filter(|c| c.is_uppercase()).count() > 1;
+            if !count {
+                charge = digit;
+            }
+        }
+        if text.get(..charge).is_some_and(|s| s.ends_with(' ')) {
+            charge -= 1;
+        }
+        if !text
+            .get(..charge)
+            .is_some_and(|s| s.chars().any(|c| !c.is_whitespace()))
+        {
+            charge = text.len();
+        }
+    }
+    if text
+        .get(..charge)
+        .is_some_and(|s| s.chars().any(char::is_whitespace))
+    {
+        return vec![(0..text.len(), Script::Normal)];
+    }
+    let mut runs: Vec<(Range<usize>, Script)> = vec![];
+    let mut previous = ' ';
+    let mut subscript = false;
+    for (start, c) in text.char_indices() {
+        let script = if start >= charge {
+            Script::Superscript
+        } else if c.is_ascii_digit()
+            && (previous.is_alphabetic() || matches!(previous, ')' | ']') || subscript)
+        {
+            Script::Subscript
+        } else {
+            Script::Normal
+        };
+        let end = start + c.len_utf8();
+        if let Some((range, last)) = runs.last_mut()
+            && *last == script
+        {
+            range.end = end;
+        } else {
+            runs.push((start..end, script));
+        }
+        previous = c;
+        subscript = script == Script::Subscript;
+    }
+    runs
+}
+
+/// ChemDraw's Formula face for one character after `previous`: a digit after
+/// a letter, a closing bracket or a lowered digit is lowered, and a sign after
+/// a symbol is raised.
+pub fn formula_script(previous: char, c: char, lowered: bool) -> Script {
+    if c.is_ascii_digit() && (previous.is_alphabetic() || matches!(previous, ')' | ']') || lowered)
+    {
+        Script::Subscript
+    } else if matches!(c, '+' | '−' | '-')
+        && (previous.is_alphanumeric() || matches!(previous, ')' | ']'))
+    {
+        Script::Superscript
+    } else {
+        Script::Normal
+    }
+}
+
 /// One layout feeds canvas, hit testing, selection, SVG, PDF and PNG.
 pub fn layout(text: &str, format: &TextFormat) -> Layout {
     let mut lines: Vec<Vec<(char, TextStyle, f32)>> = vec![vec![]];
@@ -336,19 +520,8 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
         }
         let mut s = format.at(index).clone();
         if s.formula && s.script == Script::Normal {
-            if c.is_ascii_digit()
-                && (previous.is_alphabetic() || matches!(previous, ')' | ']') || formula_digit)
-            {
-                s.script = Script::Subscript;
-                formula_digit = true;
-            } else {
-                formula_digit = false;
-                if matches!(c, '+' | '−' | '-')
-                    && (previous.is_alphanumeric() || matches!(previous, ')' | ']'))
-                {
-                    s.script = Script::Superscript;
-                }
-            }
+            s.script = formula_script(previous, c, formula_digit);
+            formula_digit = s.script == Script::Subscript;
         }
         previous = c;
         let (family, advance) = style::glyph_metrics(c, &s);
@@ -440,3 +613,6 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
         height: y,
     }
 }
+
+#[cfg(test)]
+mod tests;

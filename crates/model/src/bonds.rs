@@ -2,6 +2,27 @@
 use crate::document::{Bond, Document};
 use serde::{Deserialize, Serialize};
 
+/// The directed donor→acceptor coordination order.
+pub const DATIVE: u8 = 5;
+
+/// Encode a projection narrowed at its acceptor endpoint.
+pub fn narrowed_display(display: &str) -> String {
+    format!("{display}_end")
+}
+
+/// Dative appearance projects unless it is plain or dashed.
+pub fn dative_projects(display: &str) -> bool {
+    !matches!(display, "plain" | "dashed")
+}
+
+/// Whether an appearance can mark chemical stereochemistry.
+pub fn is_stereo_marker(display: &str) -> bool {
+    matches!(
+        display,
+        "wedge" | "hollow_wedge" | "bold" | "hash" | "hashed" | "wavy"
+    )
+}
+
 /// A continuous wave with smooth tangents, shared by the canvas, icons and exports.
 pub fn wavy_path(
     start: crate::document::Point,
@@ -149,11 +170,12 @@ impl BondPreset {
             let (order, display, secondary) = p.parts();
             (order == bond.order
                 || bond.projection && display != "plain" && p.preserves_chemistry(bond))
-                && display == bond.display.strip_suffix("_end").unwrap_or(&bond.display)
+                && display == bond.base_display()
                 && secondary.unwrap_or(display)
-                    == bond.secondary_display.as_deref().unwrap_or_else(|| {
-                        bond.display.strip_suffix("_end").unwrap_or(&bond.display)
-                    })
+                    == bond
+                        .secondary_display
+                        .as_deref()
+                        .unwrap_or_else(|| bond.base_display())
         })
     }
     /// Wedge/line appearance on an aromatic edge depicts its ring projection,
@@ -164,7 +186,7 @@ impl BondPreset {
     /// Perspective paint on a directed dative edge never assigns tetrahedral
     /// stereochemistry or exchanges its donor and acceptor.
     pub fn preserves_coordination_order(self, bond: &Bond) -> bool {
-        bond.order == 5
+        bond.is_dative()
             && matches!(
                 self,
                 Self::Single
@@ -185,21 +207,22 @@ impl BondPreset {
     }
     pub fn apply(self, bond: &mut Bond) {
         let (order, display, secondary) = self.parts();
-        let narrow_at_acceptor = bond.order == 5 && bond.display.ends_with("_end");
+        let narrow_at_acceptor = bond.narrowed_at_acceptor();
         if self.preserves_chemistry(bond) {
             if matches!(bond.order, 4 | 5) {
-                bond.projection = !matches!(display, "plain" | "dashed");
+                // Aromatic projection shares the dative_projects appearance rule.
+                bond.projection = dative_projects(display);
             }
         } else {
             bond.ring_arc = false;
             bond.projection = false;
             bond.order = order;
         }
-        bond.display = if bond.order == 5
+        bond.display = if bond.is_dative()
             && narrow_at_acceptor
             && matches!(display, "wedge" | "hash" | "hollow_wedge")
         {
-            format!("{display}_end")
+            narrowed_display(display)
         } else {
             display.into()
         };
@@ -208,20 +231,21 @@ impl BondPreset {
     /// Shared by committed bond gestures and their live canvas preview. Avoid
     /// replacing an aromatic edge before deciding whether this is only styling.
     pub fn place(self, doc: &mut Document, a: u64, b: u64) {
-        if let Some(bond) = doc.bonds.iter_mut().find(|bond| {
-            ((bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
-                && self.preserves_chemistry(bond)
-        }) {
-            if bond.a != a && bond.order != 5 {
+        if let Some(bond) = doc
+            .bonds
+            .iter_mut()
+            .find(|bond| bond.connects(a, b) && self.preserves_chemistry(bond))
+        {
+            if bond.a != a && !bond.is_dative() {
                 bond.reverse();
             }
             self.apply(bond);
-            if bond.order == 5
+            if bond.is_dative()
                 && matches!(self, Self::Wedge | Self::HashedWedge | Self::HollowWedge)
             {
                 let display = self.parts().1;
                 bond.display = if bond.b == a {
-                    format!("{display}_end")
+                    narrowed_display(display)
                 } else {
                     display.into()
                 };
@@ -263,6 +287,59 @@ impl std::fmt::Display for BondPreset {
 }
 
 impl Bond {
+    /// A bond with default appearance and no stereochemistry. Pure: it never
+    /// touches a document (`Document::add_bond` builds on it).
+    pub fn plain(a: u64, b: u64, order: u8, display: &str) -> Bond {
+        Bond {
+            highlight: None,
+            ring_arc: false,
+            projection: false,
+            stereo_authoritative: false,
+            z_order: 0,
+            indicator: Default::default(),
+            cip_label: None,
+            a,
+            b,
+            order,
+            display: display.into(),
+            stereo: None,
+            stereo_atoms: vec![],
+            double_position: Default::default(),
+            secondary_display: None,
+            color: Default::default(),
+        }
+    }
+    /// Whether this bond has the directed coordination order.
+    pub fn is_dative(&self) -> bool {
+        self.order == DATIVE
+    }
+    /// Whether this directed coordination bond depicts projection depth.
+    pub fn is_projected_dative(&self) -> bool {
+        self.order == DATIVE && self.projection
+    }
+    /// Return the appearance with a single narrowed-end suffix removed.
+    pub fn base_display(&self) -> &str {
+        self.display.strip_suffix("_end").unwrap_or(&self.display)
+    }
+    /// Whether this coordination appearance narrows at the acceptor.
+    pub fn narrowed_at_acceptor(&self) -> bool {
+        self.is_dative() && self.display.ends_with("_end")
+    }
+    /// Whether this bond has a covalent chemical order.
+    pub fn is_covalent(&self) -> bool {
+        matches!(self.order, 1..=4 | 6 | 7)
+    }
+    /// Whether captured stereo or nonprojected appearance specifies stereochemistry.
+    pub fn specifies_stereo(&self) -> bool {
+        self.stereo.is_some()
+            || self.stereo_authoritative
+            || !self.stereo_atoms.is_empty()
+            || (!self.projection && is_stereo_marker(&self.display))
+    }
+    /// Whether this bond connects the endpoints in either direction.
+    pub fn connects(&self, a: u64, b: u64) -> bool {
+        (self.a == a && self.b == b) || (self.a == b && self.b == a)
+    }
     pub fn validate_appearance(&self) -> Result<(), String> {
         let allowed = match self.order {
             1 => [
@@ -287,7 +364,7 @@ impl Bond {
             ]
             .as_slice(),
             0 => ["dotted"].as_slice(),
-            5 if self.projection => [
+            DATIVE if self.projection => [
                 "plain",
                 "dashed",
                 "wedge",
@@ -300,7 +377,7 @@ impl Bond {
                 "hollow_wedge_end",
             ]
             .as_slice(),
-            5 => ["plain", "dashed"].as_slice(),
+            DATIVE => ["plain", "dashed"].as_slice(),
             7 => ["plain", "dashed"].as_slice(),
             _ => ["plain"].as_slice(),
         };
@@ -317,7 +394,7 @@ impl Bond {
     }
     /// Flip only the narrowed projection endpoint. Directed chemical a/b stays fixed.
     pub fn reverse_projection(&mut self) -> bool {
-        if self.order != 5 || !self.projection {
+        if !self.is_projected_dative() {
             return false;
         }
         self.display = match self.display.as_str() {
@@ -337,6 +414,16 @@ impl Bond {
         self.stereo_atoms.reverse();
         self.double_position = self.double_position.reversed();
     }
+    /// Reverse what the user sees, for both bond-tool clicks and Reverse bonds.
+    /// Plain datives swap donor and acceptor; projected datives flip only their
+    /// projection tip. Other bonds reverse their endpoints.
+    pub fn reverse_drawn(&mut self) {
+        if self.is_projected_dative() {
+            self.reverse_projection();
+        } else {
+            self.reverse();
+        }
+    }
 }
 
 /// A hydrogen bond connects a covalently bound explicit H to an acceptor.
@@ -352,3 +439,6 @@ pub fn hydrogen_endpoints(doc: &crate::document::Document, a: u64, b: u64) -> bo
             bond.order == 1 && ((bond.a == a && bond.b != b) || (bond.b == a && bond.a != b))
         })
 }
+
+#[cfg(test)]
+mod tests;

@@ -332,6 +332,371 @@ fn svg_preserves_annotations_and_escapes_xml() {
 }
 
 #[test]
+fn free_text_labels_render_formula_scripts_in_svg() -> Result<(), Box<dyn std::error::Error>> {
+    for size_pt in [8., 10., 18.] {
+        for (label, expected_normal, expected_subscript, expected_superscript) in [
+            ("M2+", "M", "", "2+"),
+            ("M2⁺", "M", "", "2+"),
+            ("M2⁻", "M", "", "2−"),
+            ("R1", "R", "1", ""),
+            ("SO4 2-", "SO", "4", "2−"),
+            ("SO42-", "SO", "4", "2−"),
+            ("NMe4+", "NMe", "4", "+"),
+            ("PPh4+", "PPh", "4", "+"),
+        ] {
+            let mut doc = Document::default();
+            let id = doc.add_atom("C", Point::new(20., 30.));
+            doc = crate::atom_text::apply(&doc, id, label, crate::atom_text::Mode::Text)?;
+            doc.atom_mut(id).ok_or("Atom")?.text_style = Some(crate::typography::TextStyle {
+                size_pt,
+                ..Default::default()
+            });
+            let before = doc.clone();
+            let svg = svg(&doc);
+            let xml = roxmltree::Document::parse(&svg)?;
+            let runs: Vec<_> = xml
+                .descendants()
+                .filter(|node| node.has_tag_name("text"))
+                .map(|node| {
+                    Ok::<_, Box<dyn std::error::Error>>((
+                        node.text().ok_or("Text content")?,
+                        node.attribute("font-size")
+                            .ok_or("Font size")?
+                            .parse::<f32>()?,
+                        node.attribute("y").ok_or("Text origin")?.parse::<f32>()?,
+                    ))
+                })
+                .collect::<Result<_, _>>()?;
+            let size = STYLE.world(size_pt);
+            let normal_y = runs
+                .iter()
+                .find(|(_, run_size, _)| (*run_size - size).abs() < 0.001)
+                .ok_or("Normal text run")?
+                .2;
+            let mut normal = String::new();
+            let mut subscript = String::new();
+            let mut superscript = String::new();
+            for (text, run_size, y) in runs {
+                assert!(!text.chars().any(char::is_whitespace), "{label}: {svg}");
+                if (run_size - size).abs() < 0.001 {
+                    assert!((y - normal_y).abs() < 0.001, "{label}: {svg}");
+                    normal.push_str(text);
+                } else {
+                    assert!((run_size - size * 0.7).abs() < 0.001, "{label}: {svg}");
+                    if y > normal_y {
+                        subscript.push_str(text);
+                    } else {
+                        assert!(y < normal_y, "{label}: {svg}");
+                        superscript.push_str(text);
+                    }
+                }
+            }
+            assert_eq!(normal, expected_normal, "{label}: {svg}");
+            assert_eq!(subscript, expected_subscript, "{label}: {svg}");
+            assert_eq!(superscript, expected_superscript, "{label}: {svg}");
+            assert_eq!(doc, before, "Rendering must preserve the stored label");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn all_normal_free_labels_keep_their_existing_primitive() -> Result<(), String> {
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::new(20., 30.));
+    let style = crate::typography::TextStyle {
+        size_pt: 14.,
+        bold: true,
+        italic: true,
+        color: crate::palette::Color::Custom([40, 80, 120]),
+        ..Default::default()
+    };
+    source.atom_mut(id).ok_or("Atom")?.text_style = Some(style.clone());
+    let size = STYLE.world(style.size_pt);
+    for label in [
+        "M",
+        "L",
+        "X",
+        "Ar",
+        "Boc",
+        "Cp*",
+        "custom ligand",
+        "2 eq",
+        "R₁",
+        "Cl,Br",
+    ] {
+        let doc = crate::atom_text::apply(&source, id, label, crate::atom_text::Mode::Text)?;
+        let atom = doc.atom(id).ok_or("Atom")?;
+        let expected = Primitive::Text {
+            position: atom.position.offset(
+                -crate::style::styled_text_width(label, size, &style) / 2.,
+                -crate::style::label_vertical_center(label, size, &style),
+            ),
+            text: label.into(),
+            size,
+            color: style.color.rgb(),
+            style: style.clone(),
+        };
+        assert_eq!(
+            format!("{:?}", atom_label_runs(atom, &doc)),
+            format!("{:?}", vec![expected]),
+            "{label}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn manual_label_scripts_override_formula_inference_in_core_and_condensed_suffix()
+-> Result<(), String> {
+    use crate::typography::{Script, ScriptRun};
+    let run = |start, end, script| ScriptRun { start, end, script };
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::new(20., 30.));
+    for (label, scripts, normal, subscript, superscript) in [
+        ("R1", vec![run(1, 2, Script::Superscript)], "R", "", "1"),
+        ("R1", vec![run(0, 2, Script::Normal)], "R1", "", ""),
+        ("CO2Et", vec![run(0, 5, Script::Normal)], "CO2Et", "", ""),
+        ("CO2Et", vec![run(0, 1, Script::Subscript)], "O2Et", "C", ""),
+        (
+            "NH42+",
+            vec![run(2, 3, Script::Subscript), run(3, 5, Script::Superscript)],
+            "NH",
+            "4",
+            "2+",
+        ),
+        (
+            "SO4 2⁻",
+            vec![run(2, 3, Script::Subscript), run(3, 8, Script::Superscript)],
+            "SO",
+            "4",
+            "2−",
+        ),
+    ] {
+        let doc = crate::atom_text::apply_with_scripts(
+            &source,
+            id,
+            label,
+            &scripts,
+            crate::atom_text::Mode::Text,
+        )?;
+        let before = doc.clone();
+        let mut actual_normal = String::new();
+        let mut actual_subscript = String::new();
+        let mut actual_superscript = String::new();
+        for primitive in atom_label_runs(doc.atom(id).ok_or("Atom")?, &doc) {
+            let Primitive::Text {
+                text, size, style, ..
+            } = primitive
+            else {
+                return Err("Unexpected label primitive".into());
+            };
+            assert!(!style.formula, "{label}: {style:?}");
+            assert_eq!(size, style.size(), "{label}");
+            match style.script {
+                Script::Normal => actual_normal.push_str(&text),
+                Script::Subscript => actual_subscript.push_str(&text),
+                Script::Superscript => actual_superscript.push_str(&text),
+            }
+        }
+        assert_eq!(
+            (
+                actual_normal.as_str(),
+                actual_subscript.as_str(),
+                actual_superscript.as_str()
+            ),
+            (normal, subscript, superscript),
+            "{label}"
+        );
+        assert_eq!(doc, before);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_fully_manual_superscript_label_is_raised_from_the_normal_baseline() -> Result<(), String> {
+    use crate::typography::{Script, ScriptRun};
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::new(20., 30.));
+    let normal = crate::atom_text::apply(&source, id, "M", crate::atom_text::Mode::Text)?;
+    let scripted = crate::atom_text::apply_with_scripts(
+        &source,
+        id,
+        "M",
+        &[ScriptRun {
+            start: 0,
+            end: 1,
+            script: Script::Superscript,
+        }],
+        crate::atom_text::Mode::Text,
+    )?;
+    let normal_runs = atom_label_runs(normal.atom(id).ok_or("Normal atom")?, &normal);
+    let [
+        Primitive::Text {
+            position: normal_position,
+            size: normal_size,
+            ..
+        },
+    ] = normal_runs.as_slice()
+    else {
+        return Err("Normal run".into());
+    };
+    let normal_position = *normal_position;
+    let normal_size = *normal_size;
+    let runs = atom_label_runs(scripted.atom(id).ok_or("Scripted atom")?, &scripted);
+    let [
+        Primitive::Text {
+            position,
+            size,
+            style,
+            ..
+        },
+    ] = runs.as_slice()
+    else {
+        return Err("Scripted run".into());
+    };
+    assert_eq!(style.script, Script::Superscript);
+    assert!(*size < normal_size);
+    assert!(position.y < normal_position.y);
+    Ok(())
+}
+
+#[test]
+fn manual_superscript_word_spaces_are_literal_except_for_a_trailing_charge_separator()
+-> Result<(), String> {
+    use crate::typography::{Script, ScriptRun};
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    for (label, start, end, expected_normal, expected_superscript) in [
+        ("custom ligand", 0, 13, "", "custom ligand"),
+        ("X ‡", 1, 5, "X", " ‡"),
+        ("X A B", 1, 5, "X", " A B"),
+        ("SO4 2-", 3, 6, "SO4", "2−"),
+        ("SO4 2-", 0, 6, "", "SO42−"),
+    ] {
+        let doc = crate::atom_text::apply_with_scripts(
+            &source,
+            id,
+            label,
+            &[ScriptRun {
+                start,
+                end,
+                script: Script::Superscript,
+            }],
+            crate::atom_text::Mode::Text,
+        )?;
+        let mut normal = String::new();
+        let mut superscript = String::new();
+        for primitive in atom_label_runs(doc.atom(id).ok_or("Atom")?, &doc) {
+            let Primitive::Text { text, style, .. } = primitive else {
+                return Err("Unexpected label primitive".into());
+            };
+            match style.script {
+                Script::Normal => normal.push_str(&text),
+                Script::Superscript => superscript.push_str(&text),
+                Script::Subscript => return Err("Unexpected inferred subscript".into()),
+            }
+        }
+        assert_eq!(
+            (normal.as_str(), superscript.as_str()),
+            (expected_normal, expected_superscript),
+            "{label}"
+        );
+        assert_eq!(
+            doc.atom(id).ok_or("Atom")?.display.variable.as_deref(),
+            Some(label)
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn generic_alternative_and_link_labels_keep_their_existing_runs() -> Result<(), String> {
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    let left = source.add_atom("C", Point::new(-60., 0.));
+    let right = source.add_atom("C", Point::new(60., 0.));
+    source.add_bond(left, id, 1, "plain");
+    source.add_bond(id, right, 1, "plain");
+    for label in ["C,N,R1", "M1-3"] {
+        let doc = crate::atom_text::apply(&source, id, label, crate::atom_text::Mode::Auto)?;
+        assert!(doc.generic.owns_label(id));
+        let runs = atom_label_runs(doc.atom(id).ok_or("Atom")?, &doc);
+        assert_eq!(runs.len(), 1, "{label}");
+        assert!(matches!(
+            runs.first(),
+            Some(Primitive::Text { text, size, .. })
+                if text == label && *size == STYLE.font_size()
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn scripted_free_label_ink_remains_hittable_and_clears_bonds() -> Result<(), String> {
+    for label in ["M2+", "R1", "SO4 2-"] {
+        for degrees in (0..360).step_by(30) {
+            let mut doc = Document::default();
+            let id = doc.add_atom("C", Point::default());
+            let end = doc.add_atom("C", Point::new(90., 0.));
+            doc.add_bond(id, end, 1, "plain");
+            doc = crate::atom_text::apply(&doc, id, label, crate::atom_text::Mode::Text)?;
+            let ids = doc.all_ids();
+            crate::editing::transform_about(&mut doc, &ids, Point::default(), 1., degrees as f32);
+            let atom = doc.atom(id).ok_or("Atom")?;
+            let runs = atom_label(atom, &doc);
+            let scripts: Vec<_> = runs
+                .iter()
+                .filter(
+                    |run| matches!(run, Primitive::Text { size, .. } if *size < STYLE.font_size()),
+                )
+                .cloned()
+                .collect();
+            assert!(!scripts.is_empty(), "{label} must have positioned scripts");
+            let script_ink = label_ink_boxes(&scripts);
+            assert!(!script_ink.is_empty(), "{label} must have script ink");
+            let bounds = atom_label_bounds(atom, &doc).ok_or("Label bounds")?;
+            for (lo, hi) in script_ink {
+                let center = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+                assert_eq!(atom_label_hit(&doc, center, 0.), Some(id), "{label}");
+                assert!(
+                    center.x >= bounds.0.x
+                        && center.x <= bounds.1.x
+                        && center.y >= bounds.0.y
+                        && center.y <= bounds.1.y,
+                    "{label} script is outside its label bounds"
+                );
+            }
+            let ink = label_ink_boxes(&runs);
+            let lines: Vec<_> = primitives(&doc)
+                .into_iter()
+                .filter_map(|primitive| match primitive {
+                    Primitive::Line(from, to, width) => Some((from, to, width)),
+                    _ => None,
+                })
+                .collect();
+            assert!(!lines.is_empty(), "Inspect an actual rendered bond");
+            for (from, to, width) in lines {
+                for step in 0..=100 {
+                    let t = step as f32 / 100.;
+                    let point = from.offset((to.x - from.x) * t, (to.y - from.y) * t);
+                    for (lo, hi) in &ink {
+                        assert!(
+                            point.x + width / 2. <= lo.x
+                                || point.x - width / 2. >= hi.x
+                                || point.y + width / 2. <= lo.y
+                                || point.y - width / 2. >= hi.y,
+                            "Bond crosses {label} at {degrees}°"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn publication_labels_clear_bonds_and_keep_scripts_separate() {
     let mut d = Document::default();
     let n = d.add_atom("N", Point::default());

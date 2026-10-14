@@ -163,6 +163,37 @@ fn new_takes_an_unchanged_empty_tab_and_otherwise_adds_one() {
 }
 
 #[test]
+fn new_keeps_pending_naming_on_the_source_and_allocates_a_fresh_epoch() {
+    use crate::app::naming;
+    let mut app = ready();
+    let source = app.tab.id;
+    let epoch = app.tab.file_epoch;
+    assert!(
+        app.update(Message::Naming(naming::Action::Generate))
+            .units()
+            > 0
+    );
+    let _ = app.update(Message::New);
+    assert_eq!(app.strip().count(), 2);
+    assert_ne!(app.tab.id, source);
+    assert!(app.tab.file_epoch > epoch);
+    assert!(!app.tab.naming.is_pending());
+    assert!(app.tab.doc.all_ids().is_empty());
+    let original = app.strip().find(|tab| tab.id == source).unwrap();
+    assert_eq!(original.file_epoch, epoch);
+    assert!(original.naming.is_pending());
+    let _ = app.update(Message::Tabs(Action::Select(source)));
+    assert_eq!(app.tab.id, source);
+    assert_eq!(app.tab.file_epoch, epoch);
+    assert_eq!(
+        app.update(Message::Naming(naming::Action::Generate))
+            .units(),
+        0,
+        "The source still owns its original naming request"
+    );
+}
+
+#[test]
 fn switching_keeps_each_tabs_view_selection_history_and_sections() {
     let mut app = ready();
     let atom = edit(&mut app, "N");

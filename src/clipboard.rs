@@ -17,7 +17,9 @@ use tokio::process::Command;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
-use linux::invoke;
+use linux::invoke_encoded;
+
+mod priority;
 
 const NATIVE: &str = "dev.reshiki.drawing";
 const LIMIT: usize = 64 * 1024 * 1024;
@@ -26,7 +28,8 @@ const JSON_LIMIT: usize = LIMIT * 2;
 mod browser_tests;
 mod copy_as;
 pub use copy_as::{
-    CopyFormat, PreparedCopy, chemical_snapshot, prepare_as, selection_or_drawing, write_prepared,
+    CopyFormat, PreparedCopy, chemical_snapshot, chemical_text_snapshot, prepare_as,
+    prepare_chemical_text, selection_or_drawing, write_prepared,
 };
 const CDX_TYPES: [&str; 3] = [
     "com.revvity.chemdraw.cdx-clipboard",
@@ -39,39 +42,84 @@ struct Representation {
     #[serde(rename = "type")]
     kind: String,
     data: Arc<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    read_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    embedded: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
 }
 impl Representation {
     fn new(kind: &str, data: &[u8]) -> Self {
         Self {
             kind: kind.into(),
             data: STANDARD.encode(data).into(),
+            read_error: None,
+            embedded: None,
+            source: None,
         }
     }
     fn aliases(kinds: &[&str], data: Arc<String>) -> impl Iterator<Item = Self> {
         kinds.iter().map(move |kind| Self {
             kind: (*kind).into(),
             data: Arc::clone(&data),
+            read_error: None,
+            embedded: None,
+            source: None,
         })
     }
     fn bytes(&self) -> Result<Vec<u8>, String> {
+        if let Some(error) = &self.read_error {
+            return Err(error.chars().take(1000).collect());
+        }
         if self.data.len() > LIMIT.div_ceil(3) * 4 {
             return Err("Clipboard data exceeds 64 MB".into());
         }
-        STANDARD
+        let bytes = STANDARD
             .decode(self.data.as_bytes())
-            .map_err(|_| "Invalid clipboard encoding".into())
+            .map_err(|_| "Invalid clipboard encoding".to_owned())?;
+        if bytes.len() > LIMIT {
+            return Err("Clipboard data exceeds 64 MB".into());
+        }
+        Ok(bytes)
     }
 }
 #[derive(Serialize)]
 struct CommandRequest<'a> {
     operation: &'a str,
     representations: &'a [Representation],
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    formats: &'a [String],
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    skip_sources: &'a [String],
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    skip_embedded: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    generation: Option<&'a str>,
 }
 
 fn encode_request(operation: &str, representations: &[Representation]) -> Result<Vec<u8>, String> {
+    encode_ordered_request(operation, representations, &[], &[], false, None)
+}
+
+fn encode_ordered_request(
+    operation: &str,
+    representations: &[Representation],
+    formats: &[String],
+    skip_sources: &[String],
+    skip_embedded: bool,
+    generation: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    priority::read_formats(formats, operation == "read_picture")?;
+    priority::validate_skip_sources(skip_sources)?;
+    priority::validate_generation(generation)?;
     let input = serde_json::to_vec(&CommandRequest {
         operation,
         representations,
+        formats,
+        skip_sources,
+        skip_embedded,
+        generation,
     })
     .map_err(|e| e.to_string())?;
     if input.len() > JSON_LIMIT {
@@ -83,13 +131,14 @@ fn encode_request(operation: &str, representations: &[Representation]) -> Result
 #[derive(Deserialize)]
 struct Packet {
     representations: Vec<Representation>,
+    #[serde(default)]
+    generation: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct CopyOutcome {
     pub external_editable: bool,
     pub image_only: bool,
-    pub chemical_format: Option<CopyFormat>,
     pub notices: Vec<String>,
 }
 
@@ -201,9 +250,13 @@ fn helper() -> Result<PathBuf, String> {
     std::env::current_exe().map_err(|e| format!("Could not locate the application: {e}"))
 }
 
-#[cfg(windows)]
 async fn invoke(operation: &str, representations: &[Representation]) -> Result<Packet, String> {
     let input = encode_request(operation, representations)?;
+    invoke_encoded(operation, input).await
+}
+
+#[cfg(windows)]
+async fn invoke_encoded(_operation: &str, input: Vec<u8>) -> Result<Packet, String> {
     let output = tokio::task::spawn_blocking(move || reshiki_windows::clipboard(&input))
         .await
         .map_err(|e| e.to_string())??;
@@ -211,10 +264,9 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
 }
 
 #[cfg(not(any(windows, target_os = "linux")))]
-async fn invoke(operation: &str, representations: &[Representation]) -> Result<Packet, String> {
-    let input = encode_request(operation, representations)?;
+async fn invoke_encoded(_operation: &str, input: Vec<u8>) -> Result<Packet, String> {
     let mut command = Command::new(helper()?);
-    command.arg("--clipboard-worker");
+    command.arg(crate::workers::CLIPBOARD_WORKER);
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -248,7 +300,7 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
             return Err(if message.trim().is_empty() {
                 "Native clipboard operation failed".into()
             } else {
-                message.chars().take(500).collect()
+                message.trim().chars().take(500).collect()
             });
         }
         serde_json::from_slice(&output).map_err(|_| "Invalid clipboard response".into())
@@ -263,19 +315,7 @@ pub async fn copy(
     original: Document,
     image_only: bool,
 ) -> Result<CopyOutcome, String> {
-    let reaction = crate::reactions::copy_reaction(&original, &original);
-    copy_with_reaction(engine, original, image_only, reaction).await
-}
-
-/// Carry selection-aware chemical roles separately from the native drawing.
-pub async fn copy_with_reaction(
-    engine: LocalEngine,
-    original: Document,
-    image_only: bool,
-    reaction: Result<Option<crate::reactions::Reaction>, &'static str>,
-) -> Result<CopyOutcome, String> {
-    let (outcome, representations) =
-        prepare_copy_with_reaction(engine, original, image_only, reaction).await?;
+    let (outcome, representations) = prepare_copy(engine, original, image_only).await?;
     let operation = if cfg!(windows) && !image_only {
         "write_embedded"
     } else {
@@ -285,21 +325,10 @@ pub async fn copy_with_reaction(
     Ok(outcome)
 }
 
-#[cfg(test)]
 async fn prepare_copy(
     engine: LocalEngine,
     original: Document,
     image_only: bool,
-) -> Result<(CopyOutcome, Vec<Representation>), String> {
-    let reaction = crate::reactions::copy_reaction(&original, &original);
-    prepare_copy_with_reaction(engine, original, image_only, reaction).await
-}
-
-async fn prepare_copy_with_reaction(
-    engine: LocalEngine,
-    original: Document,
-    image_only: bool,
-    reaction: Result<Option<crate::reactions::Reaction>, &'static str>,
 ) -> Result<(CopyOutcome, Vec<Representation>), String> {
     original.validate()?;
     if original.all_ids().is_empty() {
@@ -308,7 +337,6 @@ async fn prepare_copy_with_reaction(
     let mut outcome = CopyOutcome {
         external_editable: false,
         image_only,
-        chemical_format: None,
         notices: vec![],
     };
     let doc = match export::checked_document(&engine, original.clone()).await {
@@ -326,7 +354,6 @@ async fn prepare_copy_with_reaction(
         ..doc
     };
     let mut representations = Vec::new();
-    let mut chemical_text = None;
     if !image_only {
         representations.push(Representation::new(
             NATIVE,
@@ -378,28 +405,6 @@ async fn prepare_copy_with_reaction(
             Err(error) => outcome
                 .notices
                 .push(format!("Editable exchange unavailable: {error}")),
-        }
-        if !doc.atoms.is_empty() {
-            let chemical = async {
-                let reaction = reaction.map_err(str::to_owned)?;
-                let format = if reaction.is_some() {
-                    CopyFormat::ChemDoodleReaction
-                } else {
-                    CopyFormat::Smiles
-                };
-                let mut snapshot = doc.clone();
-                snapshot.reactions = reaction.into_iter().collect();
-                prepare_as(engine, snapshot, format).await
-            }
-            .await;
-            match chemical {
-                Ok(copy) => {
-                    chemical_text = copy.text.map(|text| (copy.format, text, copy.notices));
-                }
-                Err(error) => outcome
-                    .notices
-                    .push(format!("Chemical text unavailable: {error}")),
-            }
         }
     }
     let images = tokio::task::spawn_blocking(move || copy_images(&doc, image_only))
@@ -462,86 +467,7 @@ async fn prepare_copy_with_reaction(
     if image_count == 0 && image_only {
         return Err(outcome.notices.join(" · "));
     }
-    if let Some((format, text, notices)) = chemical_text {
-        if append_chemical_text(&mut representations, &text, LIMIT) {
-            outcome.chemical_format = Some(format);
-            outcome.notices.extend(
-                notices
-                    .into_iter()
-                    .map(|notice| format!("Chemical text: {notice}")),
-            );
-        } else {
-            outcome.notices.push(
-                "Chemical text omitted to keep the drawing within clipboard size limits; use Copy as for text only.".into(),
-            );
-        }
-    }
     Ok((outcome, representations))
-}
-
-/// Optional text must not make a previously fitting drawing copy fail. Count
-/// aliases separately and include Windows' UTF-16 terminator and wire overhead.
-fn append_chemical_text(
-    representations: &mut Vec<Representation>,
-    text: &str,
-    byte_limit: usize,
-) -> bool {
-    let text_bytes = if cfg!(windows) {
-        text.encode_utf16()
-            .count()
-            .saturating_mul(2)
-            .saturating_add(2)
-    } else {
-        text.len()
-    };
-    let (decoded, wire) = representations
-        .iter()
-        .fold((0usize, 128usize), |(n, w), r| {
-            let padding = usize::from(r.data.ends_with('=')) + usize::from(r.data.ends_with("=="));
-            #[cfg(windows)]
-            let bitmap_bytes = if r.kind == "public.png" {
-                // Non-OLE callers also publish CF_DIB. Reserve its space even
-                // when Office embedding might discard it; no raster decoding.
-                clipboard_dib_size(r).unwrap_or(byte_limit)
-            } else {
-                0
-            };
-            #[cfg(not(windows))]
-            let bitmap_bytes = 0;
-            (
-                n.saturating_add((r.data.len() / 4 * 3).saturating_sub(padding))
-                    .saturating_add(bitmap_bytes),
-                w.saturating_add(r.data.len())
-                    .saturating_add(r.kind.len())
-                    .saturating_add(32),
-            )
-        });
-    if decoded.saturating_add(text_bytes) > byte_limit
-        || wire
-            .saturating_add(text.len().div_ceil(3).saturating_mul(4))
-            .saturating_add(64)
-            > JSON_LIMIT
-    {
-        return false;
-    }
-    representations.push(Representation::new(
-        "public.utf8-plain-text",
-        text.as_bytes(),
-    ));
-    true
-}
-
-#[cfg(any(windows, test))]
-fn clipboard_dib_size(png: &Representation) -> Option<usize> {
-    // The first 24 PNG bytes contain the signature, IHDR tag, width and height.
-    let header = STANDARD.decode(png.data.get(..32)?).ok()?;
-    if header.get(..8)? != b"\x89PNG\r\n\x1a\n" || header.get(12..16)? != b"IHDR" {
-        return None;
-    }
-    let width = u32::from_be_bytes(header.get(16..20)?.try_into().ok()?) as usize;
-    let height = u32::from_be_bytes(header.get(20..24)?.try_into().ok()?) as usize;
-    let stride = width.checked_mul(3)?.checked_add(3)? & !3;
-    stride.checked_mul(height)?.checked_add(40)
 }
 
 fn copy_images(
@@ -631,21 +557,156 @@ pub async fn paste_with_warnings(
     engine: LocalEngine,
     image_only: bool,
 ) -> Result<PasteOutcome, String> {
-    let packet = invoke(if image_only { "read_picture" } else { "read" }, &[]).await?;
-    paste_packet_with_warnings(engine, packet).await
+    read_candidates(image_only, read_packet, move |item| {
+        paste_representation(engine.clone(), item)
+    })
+    .await?
+    .ok_or_else(|| "No supported drawing on the clipboard".into())
+}
+
+async fn read_packet(
+    formats: Vec<String>,
+    skip_sources: Vec<String>,
+    skip_embedded: bool,
+    generation: Option<String>,
+) -> Result<Packet, String> {
+    // Explicit picture requests contain only picture formats, including retries.
+    let picture_only = formats
+        .iter()
+        .all(|kind| priority::PICTURES.contains(&kind.as_str()));
+    let operation = if picture_only { "read_picture" } else { "read" };
+    let input = encode_ordered_request(
+        operation,
+        &[],
+        &formats,
+        &skip_sources,
+        skip_embedded,
+        generation.as_deref(),
+    )?;
+    invoke_encoded(operation, input).await
+}
+
+/// Fetch one candidate at a time so lazy clipboard providers never render an
+/// unused picture, and every request/response retains the existing byte limits.
+async fn read_candidates<T, Read, ReadFuture, Import, ImportFuture>(
+    picture_only: bool,
+    mut read: Read,
+    mut import: Import,
+) -> Result<Option<T>, String>
+where
+    Read: FnMut(Vec<String>, Vec<String>, bool, Option<String>) -> ReadFuture,
+    ReadFuture: std::future::Future<Output = Result<Packet, String>>,
+    Import: FnMut(Representation) -> ImportFuture,
+    ImportFuture: std::future::Future<Output = Result<T, String>>,
+{
+    let mut formats: Vec<_> = priority::read_formats(&[], picture_only)?
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let mut failure = None;
+    let mut skip_sources = Vec::new();
+    let mut skip_embedded = false;
+    let mut generation: Option<String> = None;
+    while !formats.is_empty() {
+        let embedded_allowed = !skip_embedded;
+        let packet = match read(
+            formats.clone(),
+            skip_sources.clone(),
+            skip_embedded,
+            generation.clone(),
+        )
+        .await
+        {
+            Ok(packet) => packet,
+            Err(error) => {
+                if error == priority::CLIPBOARD_CHANGED {
+                    return Err(error);
+                }
+                // A clipboard-owner failure cannot identify another candidate,
+                // but must not replace a more useful drawing/update diagnostic.
+                remember_failure(&mut failure, "", error);
+                break;
+            }
+        };
+        let current = packet
+            .generation
+            .as_deref()
+            .ok_or("Missing clipboard generation")?;
+        priority::validate_generation(Some(current))?;
+        if generation.as_deref().is_some_and(|first| first != current) {
+            return Err(priority::CLIPBOARD_CHANGED.into());
+        }
+        generation = packet.generation;
+        skip_embedded = true;
+        if packet.representations.len() > 1 {
+            return Err("Invalid clipboard read response".into());
+        }
+        let Some(item) = packet.representations.into_iter().next() else {
+            break;
+        };
+        if !formats.contains(&item.kind) {
+            return Err("The clipboard returned an unrequested representation".into());
+        }
+        if item.embedded == Some(true) && !embedded_allowed {
+            return Err("Invalid repeated Office clipboard response".into());
+        }
+        // An Office object's failed drawing must still permit standalone data
+        // of that same format. The next request skips only the Office object.
+        if let Some(source) = &item.source {
+            if skip_sources.contains(source) {
+                return Err("The clipboard repeated an already read representation".into());
+            }
+            skip_sources.push(source.clone());
+            priority::validate_skip_sources(&skip_sources)?;
+        } else if item.embedded != Some(true) {
+            formats.retain(|kind| *kind != item.kind);
+        }
+        let kind = item.kind.clone();
+        match import(item).await {
+            Ok(value) => return Ok(Some(value)),
+            Err(error) => remember_failure(&mut failure, &kind, error),
+        }
+    }
+    match failure {
+        Some((_, error)) => Err(error),
+        None => Ok(None),
+    }
+}
+
+fn remember_failure(failure: &mut Option<(usize, String)>, kind: &str, error: String) {
+    let rank = if error.contains("newer version of ReShiki") {
+        0
+    } else if matches!(kind, NATIVE | "dev.moruno.drawing") {
+        1
+    } else if kind.contains("cdx") || kind == "application/x-chemdraw" {
+        2
+    } else if matches!(kind, "com.mdli.molfile" | "org.opensmiles.smiles") {
+        3
+    } else if priority::PICTURES.contains(&kind) {
+        4
+    } else if kind == "public.utf8-plain-text" {
+        5
+    } else {
+        6
+    };
+    if failure
+        .as_ref()
+        .is_none_or(|(previous, _)| rank < *previous)
+    {
+        *failure = Some((rank, error));
+    }
 }
 
 /// Read only an explicitly requested clipboard image, without inserting it or
 /// falling back to chemical/text interpretation.
 pub async fn picture() -> Result<Option<crate::pictures::Picture>, String> {
-    let packet = invoke("read_picture", &[]).await?;
-    let Some(item) = packet.representations.first() else {
-        return Ok(None);
-    };
-    let data = item.bytes()?;
-    tokio::task::spawn_blocking(move || crate::pictures::Picture::import(&data).map(Some))
-        .await
-        .map_err(|e| e.to_string())?
+    read_candidates(true, read_packet, |item| async move {
+        let data = item.bytes()?;
+        tokio::task::spawn_blocking(move || crate::pictures::Picture::import(&data))
+            .await
+            .map_err(|e| e.to_string())?
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -653,14 +714,47 @@ async fn paste_packet(engine: LocalEngine, packet: Packet) -> Result<Document, S
     Ok(paste_packet_with_warnings(engine, packet).await?.document)
 }
 
+#[cfg(test)]
 async fn paste_packet_with_warnings(
     engine: LocalEngine,
     packet: Packet,
 ) -> Result<PasteOutcome, String> {
-    let item = packet
-        .representations
-        .first()
-        .ok_or("No supported drawing on the clipboard")?;
+    read_candidates(
+        false,
+        |formats, _, _, _| {
+            let item = formats.iter().find_map(|kind| {
+                packet
+                    .representations
+                    .iter()
+                    .find(|item| &item.kind == kind)
+                    .cloned()
+            });
+            std::future::ready(Ok(Packet {
+                representations: item.into_iter().collect(),
+                generation: Some("test".into()),
+            }))
+        },
+        move |item| paste_representation(engine.clone(), item),
+    )
+    .await?
+    .ok_or_else(|| "No supported drawing on the clipboard".into())
+}
+
+async fn paste_representation(
+    engine: LocalEngine,
+    item: Representation,
+) -> Result<PasteOutcome, String> {
+    let outcome = import_representation(engine, item).await?;
+    if outcome.document.all_ids().is_empty() {
+        return Err("The clipboard drawing is empty".into());
+    }
+    Ok(outcome)
+}
+
+async fn import_representation(
+    engine: LocalEngine,
+    item: Representation,
+) -> Result<PasteOutcome, String> {
     let data = item.bytes()?;
     if item.kind == NATIVE || item.kind == "dev.moruno.drawing" {
         return tokio::task::spawn_blocking(move || Document::from_json(&data))
@@ -682,7 +776,7 @@ async fn paste_packet_with_warnings(
             "cdxml",
             std::str::from_utf8(&data).map_err(|_| "Invalid XML text encoding")?,
         )
-    } else if item.kind.contains("cdx") {
+    } else if item.kind.contains("cdx") || item.kind == "application/x-chemdraw" {
         Request::import("cdx", &item.data)
     } else if item.kind == "com.mdli.molfile" {
         Request::import("mol", &mol_text(&data)?)

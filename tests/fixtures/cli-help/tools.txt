@@ -1,0 +1,7 @@
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli tools
+
+Prints one JSON line with the experimental notice, the data-not-instructions
+rule, the guide URL and every operation tool reshiki --mcp serves, including
+its title, description, inputSchema and hints. The catalog is versioned by
+api.operation_api. Run `reshiki --cli help --json` for the commands as JSON.

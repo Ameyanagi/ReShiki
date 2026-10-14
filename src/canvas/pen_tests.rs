@@ -225,7 +225,7 @@ fn pen_preview_commit_and_escape_share_segments_for_new_append_and_close() {
                         panic!("one completed pen segment")
                     };
                     let (committed, _, _) =
-                        pen::apply(doc, selected, canvas.graphic_style, stroke).unwrap();
+                        pen::apply(doc, selected, canvas.graphics.style, stroke).unwrap();
                     assert_eq!(committed, preview);
                     assert_eq!(committed.atoms, doc.atoms);
                     assert_eq!(committed.bonds, doc.bonds);
@@ -276,7 +276,7 @@ fn pen_first_click_is_inert_and_point_drag_carries_adjacent_tangents() {
     };
     assert_eq!((actual, index, point), (id, 3, to));
     let mut committed = doc.clone();
-    committed.graphics[0].edit_point(index, point);
+    let _ = committed.graphics[0].edit_point(index, point);
     let moved = committed.graphics[0].edit_points();
     for index in [2, 3, 4] {
         assert_eq!(moved[index], points[index].offset(20., -10.));

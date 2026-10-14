@@ -9,8 +9,43 @@ use std::collections::{HashMap, HashSet};
 
 mod atom_merge;
 pub use atom_merge::{merge_atoms, merge_atoms_at};
+mod coordination;
+pub use coordination::{Coordination, coordinate_atoms, coordination_donor, coordination_metal};
+mod plan;
+pub use plan::{JoinPlan, join_plan};
+
+/// The result of placing a prepared fragment or adding an in-place contact.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Placed {
+    /// A moved fragment was joined to its destination.
+    Joined(Document),
+    /// An in-place contact was added or was already present.
+    Coordinated(Coordination),
+}
+
+impl Placed {
+    /// Return the drawing to install, preserving duplicate-contact copy behavior.
+    pub fn into_document(self, original: &Document) -> Document {
+        match self {
+            Self::Joined(document) => document,
+            Self::Coordinated(outcome) => outcome.into_document(original),
+        }
+    }
+}
+
+enum Destination {
+    Coordinate {
+        donor: u64,
+        metal: u64,
+    },
+    Attach {
+        source_ids: Vec<u64>,
+        target_ids: Vec<u64>,
+    },
+}
 
 /// Source IDs that Move & attach will actually carry, before pruning data.
+/// See also [`crate::editing::reference::scope`], whose expansion order differs.
 fn moving_ids(doc: &Document, selected: &[u64]) -> Vec<u64> {
     // Moving a selected part of a molecule must never cut its external bonds.
     let mut moving: HashSet<_> = doc.expand_integral_groups(selected).into_iter().collect();
@@ -42,7 +77,7 @@ fn moving_ids(doc: &Document, selected: &[u64]) -> Vec<u64> {
 /// and in-place coordination deliberately do not expand integral groups.
 pub fn source_intersects_generic(doc: &Document, selected: &[u64]) -> bool {
     let moving = moving_ids(doc, selected);
-    crate::generic::intersects(doc, &moving) || crate::generic::component_intersects(doc, &moving)
+    crate::generic::touches(doc, &moving)
 }
 
 #[derive(Debug, Clone)]
@@ -65,9 +100,7 @@ impl Prepared {
         }
         let moving = moving_ids(doc, selected);
         // Selection and deletion must not prune unresolved definitions in the moving fragment.
-        if crate::generic::intersects(doc, &moving)
-            || crate::generic::component_intersects(doc, &moving)
-        {
+        if crate::generic::touches(doc, &moving) {
             return Err(crate::generic::JOIN_NOTICE.into());
         }
         let fragment = editing::selection(doc, &moving);
@@ -103,92 +136,36 @@ impl Prepared {
                 .iter()
                 .find(|a| {
                     self.fragment.atom_visible(a.id)
-                        && (mode != Connection::Coordinate
-                            || matches!(a.element.as_str(), "N" | "O" | "S" | "P"))
+                        && (mode != Connection::Coordinate || coordination_donor(a))
                 })
                 .map(|a| Anchor::Atom(a.id))
                 .unwrap_or(Anchor::Auto)
         }
     }
 
-    /// Generic-only preflight for an actual prepared placement. It reads the
-    /// same original/fragment and hit target as `place`, without posing a copy.
-    /// Invalid anchors or absent/mismatched targets keep their ordinary errors.
-    pub fn generic_rejection(
+    fn resolve_destination(
         &self,
         point: Point,
         radius: f32,
         anchor: Anchor,
         mode: Connection,
-    ) -> bool {
-        if !anchor.valid(&self.fragment)
-            || anchor == Anchor::Auto
-            || !point.x.is_finite()
-            || !point.y.is_finite()
-            || !radius.is_finite()
-            || radius <= 0.
-        {
-            return false;
-        }
-        if crate::generic::intersects(&self.original, &self.moving)
-            || crate::generic::component_intersects(&self.original, &self.moving)
-            || crate::generic::intersects(&self.fragment, &self.fragment.all_ids())
-        {
-            return true;
-        }
-        if mode == Connection::Coordinate {
-            let Anchor::Atom(donor) = anchor else {
-                return false;
-            };
-            let Some(metal) = self.original.nearest(point, radius) else {
-                return false;
-            };
-            return crate::generic::intersects(&self.original, &[donor, metal])
-                || crate::generic::component_intersects(&self.original, &[donor, metal]);
-        }
-        let target = self.base.nearest(point, radius);
-        let bond = target
-            .is_none()
-            .then(|| editing::nearest_bond(&self.base, point, radius))
-            .flatten()
-            .and_then(|index| self.base.bonds.get(index));
-        match mode {
-            Connection::Connect | Connection::ShareAtom
-                if target.is_none() || !matches!(anchor, Anchor::Atom(_)) =>
-            {
-                return false;
+    ) -> Result<Destination, String> {
+        let source_ids = match anchor {
+            Anchor::Atom(id) if anchor.valid(&self.fragment) => vec![id],
+            Anchor::Bond(a, b) if anchor.valid(&self.fragment) => vec![a, b],
+            _ => {
+                return Err("Choose an exact source atom or bond in the fragment preview.".into());
             }
-            Connection::FuseBond if bond.is_none() || !matches!(anchor, Anchor::Bond(..)) => {
-                return false;
-            }
-            Connection::Auto => return false,
-            _ => {}
-        }
-        let targets: Vec<_> = target
-            .into_iter()
-            .chain(bond.into_iter().flat_map(|b| [b.a, b.b]))
-            .collect();
-        crate::generic::intersects(&self.base, &targets)
-            || crate::generic::component_intersects(&self.base, &targets)
-    }
-
-    pub fn place(
-        &self,
-        point: Point,
-        direction: Option<Point>,
-        radius: f32,
-        anchor: Anchor,
-        mode: Connection,
-    ) -> Result<(Document, Vec<u64>), String> {
-        if !anchor.valid(&self.fragment) || anchor == Anchor::Auto {
-            return Err("Choose an exact source atom or bond in the fragment preview.".into());
-        }
+        };
         if !point.x.is_finite() || !point.y.is_finite() || !radius.is_finite() || radius <= 0. {
             return Err("Invalid connection target geometry.".into());
         }
         // Prepared is public. Recheck the unpruned original dependencies and
         // the current fragment before either the pose or the Coordinate route.
-        if self.generic_rejection(point, radius, anchor, mode) {
+        // The fragment keeps its direct check; generic::touches would add a component scan.
+        if crate::generic::touches(&self.original, &self.moving)
+            || crate::generic::intersects(&self.fragment, &self.fragment.all_ids())
+        {
             return Err(crate::generic::JOIN_NOTICE.into());
         }
         if mode == Connection::Coordinate {
@@ -199,17 +176,14 @@ impl Prepared {
                 .original
                 .nearest(point, radius)
                 .ok_or("Point to a metal atom in the drawing.")?;
-            return Ok((
-                templates::coordinate_atoms(&self.original, donor, metal)?,
-                vec![donor, metal],
-            ));
+            if crate::generic::touches(&self.original, &[donor, metal]) {
+                return Err(crate::generic::JOIN_NOTICE.into());
+            }
+            return Ok(Destination::Coordinate { donor, metal });
         }
-        let target = self.base.nearest(point, radius);
-        let bond = target
-            .is_none()
-            .then(|| editing::nearest_bond(&self.base, point, radius))
-            .flatten()
-            .and_then(|index| self.base.bonds.get(index));
+        let (target, bond) =
+            templates::attachment_target(&self.base, &self.fragment, point, radius);
+        let bond = bond.and_then(|index| self.base.bonds.get(index));
         match mode {
             Connection::Connect | Connection::ShareAtom
                 if target.is_none() || !matches!(anchor, Anchor::Atom(_)) =>
@@ -222,20 +196,69 @@ impl Prepared {
             Connection::Auto => return Err("Choose how to attach the fragment.".into()),
             _ => {}
         }
-        let source_ids = match anchor {
-            Anchor::Atom(id) => vec![id],
-            Anchor::Bond(a, b) => vec![a, b],
-            Anchor::Auto => vec![],
-        };
         let target_ids: Vec<_> = target
             .into_iter()
             .chain(bond.into_iter().flat_map(|b| [b.a, b.b]))
             .collect();
-        if crate::generic::intersects(&self.base, &target_ids)
-            || crate::generic::component_intersects(&self.base, &target_ids)
-        {
+        if crate::generic::touches(&self.base, &target_ids) {
             return Err(crate::generic::JOIN_NOTICE.into());
         }
+        Ok(Destination::Attach {
+            source_ids,
+            target_ids,
+        })
+    }
+
+    /// Generic-only preflight using the same destination admission as `place`,
+    /// without posing a copy. Invalid anchors and geometry retain priority over
+    /// generic definitions; ordinary destination errors do not trigger rejection.
+    pub fn generic_rejection(
+        &self,
+        point: Point,
+        radius: f32,
+        anchor: Anchor,
+        mode: Connection,
+    ) -> bool {
+        matches!(
+            self.resolve_destination(point, radius, anchor, mode),
+            Err(error) if error == crate::generic::JOIN_NOTICE
+        )
+    }
+
+    pub fn place(
+        &self,
+        point: Point,
+        direction: Option<Point>,
+        radius: f32,
+        anchor: Anchor,
+        mode: Connection,
+    ) -> Result<(Document, Vec<u64>), String> {
+        self.place_outcome(point, direction, radius, anchor, mode)
+            .map(|(placed, ids)| (placed.into_document(&self.original), ids))
+    }
+
+    /// Place with an explicit outcome for an added or already-present contact.
+    pub fn place_outcome(
+        &self,
+        point: Point,
+        direction: Option<Point>,
+        radius: f32,
+        anchor: Anchor,
+        mode: Connection,
+    ) -> Result<(Placed, Vec<u64>), String> {
+        let (source_ids, target_ids) =
+            match self.resolve_destination(point, radius, anchor, mode)? {
+                Destination::Coordinate { donor, metal } => {
+                    return Ok((
+                        Placed::Coordinated(coordinate_atoms(&self.original, donor, metal)?),
+                        vec![donor, metal],
+                    ));
+                }
+                Destination::Attach {
+                    source_ids,
+                    target_ids,
+                } => (source_ids, target_ids),
+            };
         if source_ids
             .iter()
             .any(|id| self.fragment.abbreviation(*id).is_some())
@@ -365,7 +388,10 @@ impl Prepared {
         crate::reactions::reconcile(&mut placed)?;
         crate::arrow_anchors::reconcile(&mut placed);
         placed.validate()?;
-        Ok((placed, ids.into_iter().map(original_id).collect()))
+        Ok((
+            Placed::Joined(placed),
+            ids.into_iter().map(original_id).collect(),
+        ))
     }
 }
 

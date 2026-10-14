@@ -2,8 +2,9 @@
 
 Cmd/Ctrl+J now merges three or more selected atoms into the first selected atom,
 retaining its ID, element and label color/style. Connected unselected atoms stay
-in place. The merge is one Undo step and also has a **Merge selected atoms**
-command in the shared selection menus.
+in place. The merge is one Undo step. It is also available as **Merge atoms**
+in the context row and **Merge selected atoms** in the right-click menu, next to
+**Join selected atoms or bonds**.
 
 **TODO — Join accuracy:** this is a supported subset. Reference behavior for
 endpoint selection, fragment placement and Co(en)3 coordination still needs
@@ -15,7 +16,7 @@ The original limitation is confirmed in
 [baseline source at 51fa0991](https://github.com/Ameyanagi/ReShiki/blob/51fa0991da2507bb00b27c1b420e807468de6423/src/app/shortcuts.rs#L356):
 only two selected IDs or four IDs with two bonds reach a successful Join branch;
 three selected IDs return the selection diagnostic. A separate
-[qualified native baseline check](fixtures/join-atom-merge/macos-qualified-baseline/README.md)
+[qualified native baseline check](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/join-atom-merge/macos-qualified-baseline/README.md)
 also reproduced that rejection on the unchanged input: Cmd+J left six atoms and
 three bonds, a clean title and disabled Undo/Redo. Its signed app includes
 unrelated Generic features, so it is not a clean main build; its three recorded
@@ -81,8 +82,8 @@ build and strict signed-bundle verification passed. Fifteen own shipping compile
 artifacts were actually `fresh=false`; 533 recorded shipping inputs and all
 2,552 frozen source files matched their pinned hashes. The later documentation
 head is distinct from that uncommitted compiled producer. See the compact
-[focused results](fixtures/join-atom-merge/validation/focused-results.json) and
-[producer/baseline summary](fixtures/join-atom-merge/validation/producer-summary.json).
+[focused results](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/join-atom-merge/validation/focused-results.json) and
+[producer/baseline summary](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/join-atom-merge/validation/producer-summary.json).
 The existing `block v0.1.6` future-incompatibility notice is retained in private
 raw logs; compilation had no errors.
 
@@ -114,9 +115,9 @@ The unchanged input and corrected Join result are version19.
 
 The asymmetric input's NH2/OH labels overlap before the merge. Raw captures retain
 that condition and ordinary chrome/notices. No screenshot was retouched. The
-[Mac evidence record](fixtures/join-atom-merge/macos-native-v2/README.md) includes
+[Mac evidence record](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/join-atom-merge/macos-native-v2/README.md) includes
 actual selection, after-action, Undo and Redo images, serialization disclosures
-and the [exact native saved drawing](fixtures/join-atom-merge/macos-native-v2/join-three-arms-native-after-v2.rsk).
+and the [exact native saved drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/join-atom-merge/macos-native-v2/join-three-arms-native-after-v2.rsk).
 
 ## Actual ChemDraw reference and placement correction
 
@@ -133,7 +134,7 @@ This single fixture supports selected visual-label bounds centering; it does not
 prove a universal ChemDraw algorithm. The native BEFORE CDXML was subsequently
 saved from the reopened unchanged original. Native font/color/default/auxiliary
 ID normalizations are disclosed in the
-[ChemDraw reference record](fixtures/join-atom-merge/chemdraw-26.1/README.md), which
+[ChemDraw reference record](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/join-atom-merge/chemdraw-26.1/README.md), which
 includes the authored input, exact native before/after XML and four original
 screenshots.
 
@@ -143,3 +144,11 @@ that XY behavior. The two applications use different inputs, units, font sizes
 and hydrogen display; no numerical cross-app identity, Windows/Linux ReShiki
 runtime parity, unrestricted stereo merge or ChemDraw-compatible 3D rule is
 claimed by these focused checks.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures/join-atom-merge](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/join-atom-merge) on the evidence archive branch.
+
+| Archived files                                                                                                                                           | What they record                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [docs/changes/fixtures/join-atom-merge](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/join-atom-merge) | Qualified Mac baseline/candidate saves, ChemDraw comparison, focused results and producer records. |

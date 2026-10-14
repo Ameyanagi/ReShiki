@@ -1,4 +1,4 @@
-# Rear-side opacity review
+# Rear opacity review
 
 This is the historical review of the initial midplane implementation. Its
 original captures remain unchanged. The [2026-10-10 visibility correction](changes/rear-visibility-20261010.md)
@@ -120,7 +120,7 @@ rear crossings. Picking retains the complete chemical graph at 0%.
 Automatic figure bounds may tighten when rear ink disappears; this does not
 change XYZ or the fixed desktop camera.
 
-The [independent signed-CLI audit](../tests/fixtures/rear-opacity/validation/independent-desktop-verification.json)
+The [independent signed-CLI audit](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-opacity/validation/independent-desktop-verification.json)
 passed 17 bounded commands. Analysis is identical at 100%, 25% and 0%, including
 SMILES, InChI and InChIKey. Typed-parent SVG/PNG/PDF exports are byte-identical
 to 100%. At 25%, every faded SVG primitive has one effective opacity wrapper;
@@ -140,7 +140,7 @@ clipboard conversion reports omitted opacity. Partial-opacity EMF is refused.
 Windows print/EMF runtime execution and a passing repository CI rerun remain pending. This
 record does not establish every molecule, external application or platform.
 
-[Evidence manifest](../tests/fixtures/rear-opacity/evidence-manifest.json) ·
+[Evidence manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/tests/fixtures/rear-opacity/evidence-manifest.json) ·
 [Fixture guide and portable checks](../tests/fixtures/rear-opacity/README.md)
 
 Release caption: **Make the back of a projected molecule lighter or transparent
@@ -148,3 +148,11 @@ with Rear opacity, while keeping its front and molecular data unchanged.**
 
 Original ReShiki screenshots, fixture data, code and documentation are offered
 under MIT OR Apache-2.0. No new third-party material or vendor artwork is added.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [tests/fixtures/rear-opacity](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/tests/fixtures/rear-opacity) on the evidence archive branch.
+
+| Archived files                                                                                                                       | What they record                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| [tests/fixtures/rear-opacity](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/tests/fixtures/rear-opacity) | Frozen public-artifact hashes and the independent signed-CLI analysis/export audit. |

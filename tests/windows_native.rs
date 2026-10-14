@@ -113,7 +113,7 @@ fn windows_emf_file_export_review() {
     );
     std::fs::create_dir_all(&output).unwrap();
     let mut doc: Document =
-        serde_json::from_str(include_str!("../docs/changes/fixtures/emf-export.rsk")).unwrap();
+        serde_json::from_str(include_str!("fixtures/emf-export/emf-export.rsk")).unwrap();
     for (name, theme) in [
         ("light", reshiki::canvas_theme::CanvasTheme::Light),
         ("dark", reshiki::canvas_theme::CanvasTheme::Dark),

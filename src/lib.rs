@@ -51,3 +51,4 @@ pub(crate) mod native_process;
 pub mod office_addin;
 pub mod printing;
 pub mod updates;
+pub mod workers;

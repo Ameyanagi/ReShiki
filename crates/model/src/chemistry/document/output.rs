@@ -1,6 +1,6 @@
 //! Convert verified chemistry back to an editable drawing. Full CIP labeling
 //! is an explicit dependency; legacy CIP codes must never become display labels.
-use super::{Error, Molecule, at, invalid};
+use super::{Error, Molecule, WORLD_PER_DEPICT_UNIT, at, invalid};
 use crate::{
     chemistry::{
         ELEMENTS, RDKIT_VERSION, kekulize, ranking,
@@ -45,40 +45,21 @@ impl Drawing {
     pub fn with_generic(mut self, generic: &crate::generic::Generic) -> Result<Self, Error> {
         self.document.generic = generic.clone();
         for site in &generic.alternatives {
-            let label = format!(
-                "[{}{}]",
-                if site.excluded { "NOT " } else { "" },
-                site.choices
-                    .iter()
-                    .map(|c| match c {
-                        crate::generic::Alternative::Element { symbol, isotope } =>
-                            if symbol == "H" && *isotope == 2 {
-                                "D"
-                            } else if symbol == "H" && *isotope == 3 {
-                                "T"
-                            } else {
-                                symbol.as_str()
-                            },
-                        crate::generic::Alternative::Group { label }
-                        | crate::generic::Alternative::Unresolved { label } => label.as_str(),
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",")
-            );
+            let label = site.label();
             let atom = self
                 .document
                 .atom_mut(site.atom)
                 .ok_or_else(|| invalid("Missing alternative atom"))?;
             atom.element = "*".into();
             atom.no_implicit = true;
-            atom.display.variable = Some(label);
+            atom.display.set_variable(Some(label));
         }
         for link in &generic.links {
             let atom = self
                 .document
                 .atom_mut(link.atom)
                 .ok_or_else(|| invalid("Missing link atom"))?;
-            atom.display.variable = Some(format!("[{}]{}-{}", atom.element, link.min, link.max));
+            atom.display.set_variable(Some(link.label(&atom.element)));
         }
         for index in 0..self.document.generic.repeats.len() {
             let unit = self
@@ -518,7 +499,7 @@ fn reconstruct(
     let ordered = ordered_bonds(base, &bonds_by_pair, e)?;
     let (bonds, bond_indices) = reconstruct_bonds(&work, molecule, ordered, e)?;
     let document = Document {
-        version: 15,
+        version: crate::document::EDITOR_BASELINE,
         atoms,
         bonds,
         ..base.cloned().unwrap_or_default()
@@ -592,8 +573,8 @@ fn reconstruct_atoms(
                 id,
                 element: element.into(),
                 position: Point {
-                    x: (p.x * 28.) as f32,
-                    y: (-p.y * 28.) as f32,
+                    x: (p.x * WORLD_PER_DEPICT_UNIT) as f32,
+                    y: (-p.y * WORLD_PER_DEPICT_UNIT) as f32,
                 },
                 charge: i32::from(a.charge),
                 isotope: u32::from(a.isotope),

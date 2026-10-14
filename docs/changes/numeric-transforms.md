@@ -87,7 +87,7 @@ Open the generated `numeric-transforms.rsk`, select the group, and expand
 - Undo restores the baseline; Redo restores Height `80`.
 - From the restored baseline, Width `0` and `NaN` show errors without making
   the drawing dirty or adding history. Redo still restores Height `80`.
-- Save the height-80 result with Cmd+S. The [saved native drawing](fixtures/numeric-height80-saved.rsk)
+- Save the height-80 result with Cmd+S. The [saved native drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/numeric-height80-saved.rsk)
   retains seven atoms, six bonds, the original group membership, caption
   formatting, and shape/arrow styling. The unselected oxygen stays at its
   original coordinates; its computed hydrogen label is refreshed.
@@ -144,3 +144,11 @@ labels prevent the initial interval from reaching a smaller target.
 
 Release caption: **Enter exact rotation, tilt, dimensions, and scale in the
 selection inspector, with optional proportional resizing and one-step Undo.**
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) on the evidence archive branch.
+
+| Archived files                                                                                                           | What they record                                                       |
+| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) | Native input/result drawings for independent width and height changes. |

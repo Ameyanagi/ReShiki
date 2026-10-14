@@ -15,7 +15,7 @@ unchanged.
 
 These are matched crops of actual Windows application captures at **100% display
 scale and 250% drawing zoom**, using the same JACS / ACS style and
-[controlled ethanol drawing](fixtures/windows-nmr-shadows/ethanol.rsk).
+[controlled ethanol drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/windows-nmr-shadows/ethanol.rsk).
 Both 6016 × 3324 captures use the same pixel crop, `(3520, 1128)` to
 `(4280, 2198)`, uniformly resized by 0.8 to 608 × 856; no content was retouched.
 The corrected report remained clear after 16 control interactions. Not every
@@ -74,3 +74,11 @@ remains open. Earlier successful Windows NMR checks are scoped historical
 results, not a guarantee against later redraw defects. NMR coverage and
 Co(en)3 accuracy are unchanged; [issue #246](https://github.com/Ameyanagi/ReShiki/issues/246)
 remains open. This correction introduces no third-party material.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures/windows-nmr-shadows](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/windows-nmr-shadows) on the evidence archive branch.
+
+| Archived files                                                                                                                                                   | What they record                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [docs/changes/fixtures/windows-nmr-shadows](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures/windows-nmr-shadows) | The controlled ethanol native drawing used in both Windows shadow captures. |

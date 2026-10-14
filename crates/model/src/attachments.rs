@@ -25,6 +25,13 @@ impl Kind {
     }
 }
 
+impl Atom {
+    /// Whether this atom is a variable attachment point.
+    pub fn is_variable_attachment(&self) -> bool {
+        self.attachment == Some(Kind::Variable)
+    }
+}
+
 /// Detached import patch with stable drawing IDs, never positional guesses.
 #[derive(Debug, Clone, Serialize)]
 pub struct Attachment {
@@ -93,7 +100,7 @@ pub fn interchange_graph(doc: &Document) -> Result<Document, String> {
     copy.generic = Default::default();
     for a in &mut copy.atoms {
         if a.element != "*" {
-            a.display.variable = None;
+            a.display.set_variable(None);
         }
     }
     for a in &mut copy.atoms {

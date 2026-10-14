@@ -22,6 +22,7 @@ mod desktop;
 mod launch;
 #[cfg(windows)]
 mod rendering;
+mod session;
 #[cfg(any(windows, test))]
 mod window_fit;
 
@@ -37,71 +38,16 @@ static ALLOCATOR: allocation_metrics::MeasuredAllocator<reshiki_process_heap::Bo
     allocation_metrics::MeasuredAllocator::new(reshiki_process_heap::BoundedHeap);
 
 fn main() -> iced::Result {
-    #[cfg(windows)]
-    if let Some(mode @ ("--emf-worker" | "--emf-file-worker" | "--emf-office-worker")) =
-        std::env::args_os()
-            .nth(1)
-            .as_deref()
-            .and_then(|arg| arg.to_str())
-    {
-        if let Err(error) = reshiki_windows::emf_worker(mode) {
-            eprintln!("EMF playback failed: {error}");
-            std::process::exit(1);
-        }
-        return Ok(());
-    }
-    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--naming-worker")) {
-        reshiki::naming::worker::run();
-        return Ok(());
-    }
-    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--geometry-worker")) {
-        reshiki::geometry::worker::run();
-        return Ok(());
-    }
-    if let Some(result) = reshiki::libreoffice::run(std::env::args_os().nth(1).as_deref()) {
-        if let Err(error) = result {
-            eprintln!("LibreOffice integration failed: {error}");
-            std::process::exit(1);
-        }
-        return Ok(());
-    }
     // Worker modes enter before graphics, AppKit/Office registration or Tokio.
     // Relaunching this executable keeps deadlines and memory failures isolated.
-    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--inchi-worker")) {
-        reshiki::chemistry::inchi::worker::run();
-        return Ok(());
-    }
-    #[cfg(target_os = "linux")]
-    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--clipboard-worker")) {
-        if let Err(error) = reshiki_linux::clipboard_worker() {
-            use std::io::Write;
-            let _ = writeln!(std::io::stderr(), "{error}");
-            std::process::exit(1);
-        }
-        return Ok(());
-    }
-    #[cfg(target_os = "macos")]
+    match std::env::args_os()
+        .nth(1)
+        .as_deref()
+        .and_then(reshiki::workers::run)
     {
-        let worker = match std::env::args_os()
-            .nth(1)
-            .as_deref()
-            .and_then(|arg| arg.to_str())
-        {
-            Some("--clipboard-worker") => {
-                Some(reshiki_macos::workers::clipboard as fn() -> Result<(), String>)
-            }
-            Some("--print-worker") => {
-                Some(reshiki_macos::workers::print as fn() -> Result<(), String>)
-            }
-            _ => None,
-        };
-        if let Some(worker) = worker {
-            if let Err(error) = worker() {
-                eprintln!("{error}");
-                std::process::exit(1);
-            }
-            return Ok(());
-        }
+        Some(0) => return Ok(()),
+        Some(code) => std::process::exit(code),
+        None => {}
     }
     // Headless modes enter before Office registration, graphics, Apple events
     // and the std::env::args() checks below.
@@ -169,11 +115,20 @@ fn main() -> iced::Result {
             }
         }
     }
+    let startup = session::parse(std::env::args_os().skip(1));
     #[cfg(any(windows, target_os = "linux"))]
-    let _desktop = desktop::launch(
-        &std::env::args_os().skip(1).collect::<Vec<_>>(),
-        &app::startup::parse(std::env::args_os().skip(1)),
-    );
+    let _desktop = {
+        let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+        match desktop::launch(&args, &startup) {
+            desktop::LaunchOutcome::Continue(mut host) => {
+                if let Some(events) = host.as_mut().and_then(desktop::GuiHost::take_events) {
+                    app::install_desktop_events(events);
+                }
+                host
+            }
+            desktop::LaunchOutcome::Exit(code) => std::process::exit(code),
+        }
+    };
     #[cfg(windows)]
     reshiki_windows::enable_office_embedding();
     #[cfg(windows)]
@@ -192,7 +147,9 @@ fn main() -> iced::Result {
     // The inline editor can shape a new font before the drawing reaches the
     // canvas. Install variable-weight aliases before either creates text buffers.
     canvas::prepare_fonts();
-    let result = iced::application(app::App::new, app::App::update, app::App::view)
+    // iced boots the app once; the closure hands it the arguments parsed above.
+    let boot = move || app::App::with_startup(startup.clone());
+    let result = iced::application(boot, app::App::update, app::App::view)
         .default_font(iced::Font::with_name(reshiki::style::ui_font_family()))
         .title(app::App::title)
         .theme(app::App::theme)

@@ -1,6 +1,20 @@
 use super::*;
 
 #[test]
+fn legacy_capacity_and_first_extra_atom_are_pinned() {
+    assert_eq!(
+        Capacity::default(),
+        Capacity {
+            atoms: 512,
+            bonds: 2048,
+            coordinates: 4096,
+        }
+    );
+    assert_eq!(Capacity::for_heap(258 * 1024 * 1024 - 1).atoms, 512);
+    assert_eq!(Capacity::for_heap(258 * 1024 * 1024).atoms, 513);
+}
+
+#[test]
 fn operational_capacity_is_bounded_by_independent_structural_limits() {
     assert!(Capacity::for_heap(0).validate().is_err());
     assert!(Capacity::for_heap(512 * 1024 - 1).validate().is_err());

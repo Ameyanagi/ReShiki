@@ -1,11 +1,9 @@
 //! Editable vector graphics in drawing coordinates. Shared by preview and export.
 mod arc;
 mod path;
-pub use path::PathHandle;
-#[cfg(test)]
-mod path_tests;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
+pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathSummary};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -226,6 +224,24 @@ fn back_layer() -> i32 {
     -1
 }
 impl Graphic {
+    /// Determinant of the drawing frame; callers choose their own singularity threshold.
+    pub(crate) fn frame_determinant(&self) -> f32 {
+        self.axis_x.x * self.axis_y.y - self.axis_x.y * self.axis_y.x
+    }
+    /// Frame coordinates of a world point; `determinant` is the checked `frame_determinant()`.
+    pub(crate) fn world_to_local(&self, p: Point, determinant: f32) -> Point {
+        let delta = Point::new(p.x - self.origin.x, p.y - self.origin.y);
+        Point::new(
+            (delta.x * self.axis_y.y - delta.y * self.axis_y.x) / determinant,
+            (self.axis_x.x * delta.y - self.axis_x.y * delta.x) / determinant,
+        )
+    }
+    /// Identity drawing frame, for paths stored in world units.
+    pub(crate) fn reset_frame(&mut self) {
+        self.origin = Point::default();
+        self.axis_x = Point::new(1., 0.);
+        self.axis_y = Point::new(0., 1.);
+    }
     pub fn dragged(
         id: u64,
         kind: GraphicKind,
@@ -490,17 +506,17 @@ impl Graphic {
         })
     }
 
-    pub fn edit_point(&mut self, index: usize, p: Point) {
+    /// Edit one handle, preserving a connected path if its frame rejects the edit.
+    pub fn edit_point(&mut self, index: usize, p: Point) -> Result<(), String> {
         if self.kind == GraphicKind::Arc {
             self.edit_arc_endpoint(index, p);
-            return;
+            return Ok(());
         }
         if self.kind == GraphicKind::Picture {
-            return;
+            return Ok(());
         }
-        if self.path_handles().is_some() {
-            let _ = self.move_path_point(index, p);
-            return;
+        if let Some(result) = self.edit_connected_path_point(index, p) {
+            return result;
         }
         let mut commands = self.commands();
         let mut n = 0;
@@ -512,10 +528,9 @@ impl Graphic {
             });
         }
         self.kind = GraphicKind::Path;
-        self.origin = Point::default();
-        self.axis_x = Point::new(1., 0.);
-        self.axis_y = Point::new(0., 1.);
+        self.reset_frame();
         self.path = commands;
+        Ok(())
     }
     pub fn validate(&self) -> Result<(), String> {
         self.style.validate()?;
@@ -548,7 +563,7 @@ impl Graphic {
         if [self.origin, self.axis_x, self.axis_y]
             .into_iter()
             .chain(self.path.iter().flat_map(PathCommand::iter_points))
-            .any(|p| !p.x.is_finite() || !p.y.is_finite())
+            .any(|p| !p.is_finite())
         {
             return Err("Non-finite graphic coordinates".into());
         }
@@ -566,6 +581,8 @@ pub fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
     };
     p.distance(a.offset(dx * t.clamp(0., 1.), dy * t.clamp(0., 1.)))
 }
+// windows(2): an unclosed contour has no closing edge, unlike the closed-contour tests in
+// scientific/label_clearance.rs `contains` and mark_placement.rs `intersects`.
 fn inside_polygon(p: Point, path: &[Point]) -> bool {
     let mut inside = false;
     for pair in path.windows(2) {
@@ -619,3 +636,6 @@ pub fn flattened(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     }
     paths
 }
+
+#[cfg(test)]
+mod path_tests;

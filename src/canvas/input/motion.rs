@@ -1,5 +1,6 @@
 //! Cursor motion: advance the active gesture, otherwise report hover.
 
+use crate::canvas::hit::bond_text_at;
 use crate::canvas::{Edit, Gesture, MoleculeCanvas, State, Tool};
 use iced::widget::canvas::Action;
 use iced::{Point, Rectangle};
@@ -28,6 +29,7 @@ impl MoleculeCanvas<'_> {
         if let Some(Gesture::Chain {
             start,
             source,
+            source_text,
             points,
             snaking,
             pressed,
@@ -42,7 +44,7 @@ impl MoleculeCanvas<'_> {
                 chains::snake(
                     points,
                     p,
-                    source.is_some(),
+                    source.is_some() || source_text.is_some(),
                     bond,
                     self.chain_drawing,
                     state.modifiers.shift(),
@@ -51,7 +53,7 @@ impl MoleculeCanvas<'_> {
                 *points = chains::straight(
                     *start,
                     p,
-                    source.is_some(),
+                    source.is_some() || source_text.is_some(),
                     bond,
                     self.chain_drawing,
                     state.modifiers.shift(),
@@ -83,6 +85,21 @@ impl MoleculeCanvas<'_> {
             );
         }
         if state.gesture.is_some() {
+            if let Some(Gesture::Draw { text, .. }) = state.gesture {
+                let hover = point
+                    .filter(|_| inside && self.tool.bonds_from_text())
+                    .map(|p| self.camera.world(p, bounds));
+                let caption = hover
+                    .and_then(|p| bond_text_at(self.doc, p, self.camera.world_len(12.)))
+                    .filter(|id| Some(*id) != text);
+                if caption != state.bond_text_hover {
+                    state.bond_text_hover = caption;
+                    return Some(
+                        Action::publish(Edit::Hover(hover.filter(|_| caption.is_some())))
+                            .and_capture(),
+                    );
+                }
+            }
             // A drag only changes its canvas preview. Avoid rebuilding and laying
             // out the whole application for every intermediate pointer event.
             return Some(Action::request_redraw().and_capture());

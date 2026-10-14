@@ -7,7 +7,7 @@ returned ethanol (CAS RN 64-17-5). An authorized CAS SciFinder account and your
 institution's normal access route are required.
 
 The October 2 molecule verification covers **one complete, connected molecule**.
-Ordinary Copy now also prepares chemical text for the selected drawing: molecular
+**Cmd/Ctrl+Alt+C** prepares chemical text for the selected drawing: molecular
 SMILES without an arrow, or bounded ChemDoodle reaction JSON for one clear
 reaction arrow. Reaction roles can be explicitly assigned or inferred for the
 copy alone. The browser remains responsible for sign-in, reviewing the query
@@ -15,24 +15,26 @@ and running the search. ReShiki has no automatic SciFinder search integration.
 
 ## Ordinary Copy and receiving fields
 
-Select the intended complete molecules and press **Cmd/Ctrl+C**. The clipboard
-keeps the editable ReShiki drawing and its existing exchange/image
-representations, and adds SMILES text when the selection has no reaction arrow.
-Every selected disconnected molecular component is retained; Copy does not
-choose only the first molecule. Inspect the receiver's handling of salts,
-mixtures and multiple components before searching. Their acceptance is outside
-the October 2 single-molecule verification.
+**Cmd/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps.
+It supplies no chemical plain text. To paste a structure into a text field
+such as SciFinder's, select it and use **Cmd/Ctrl+Alt+C**. The same shortcuts
+apply on Windows, macOS and Linux.
+
+With no selected reaction arrow, **Cmd/Ctrl+Alt+C** copies molecular SMILES.
+Every selected disconnected molecular component is retained. Inspect the
+receiver's handling of salts, mixtures and multiple components before searching.
+Their acceptance is outside the October 2 single-molecule verification.
 
 For an unassigned scheme, select all complete participant molecules and exactly
-one straight forward arrow. Copy infers starting materials toward the arrow's
-**start** and products toward its **end**, using the arrow's own axis. Vertical,
+one straight forward arrow. **Cmd/Ctrl+Alt+C** infers starting materials toward
+the arrow's **start** and products toward its **end**, using the arrow's own axis. Vertical,
 diagonal and right-to-left layouts follow the same rule. A molecule crossing
 or touching the arrow midpoint, an extra unexplained central component, an
 unsupported arrow or a missing reaction side prevents inference. Conditions do
 not become chemical agents automatically.
 
-Inference changes only the chemical copy snapshot. It does not add reaction
-roles to the native drawing, move atoms, change the source document or create
+Inference changes only the chemical copy. It does not add reaction
+roles to the `.rsk` drawing, move atoms, change the source document or create
 an Undo entry. Original explicit roles take precedence over positions. Select
 the complete defined reaction, including its arrow and associated captions, to
 copy it as a reaction. With no arrow selected, exactly one complete explicit
@@ -40,19 +42,19 @@ participant can be copied as a molecule. Partial explicit participants and
 selections spanning explicit participants are rejected for chemical text,
 even when the selection snapshot no longer contains their reaction metadata.
 
-Chemical text is optional in ordinary Copy. If inference or conversion is
-invalid, ambiguous or too large, the drawing still copies and the status reports
-that chemical text is unavailable or omitted. **Copy as** requests a particular
-format and reports conversion failure instead of preparing another format.
-Review the Copy status before using the receiving text field.
+If inference or conversion is invalid, ambiguous or too large,
+**Cmd/Ctrl+Alt+C** leaves the previous clipboard intact and reports the reason.
+**Copy as** requests a particular format and reports conversion failure instead
+of preparing another format. Review the copy status before using the receiving
+text field.
 
 In CAS Draw, paste molecular SMILES into the text-to-structure field and choose
-**Add to Editor**. The accepted reaction workflow is ReShiki **Cmd+C**, then
-**Cmd+V** into ChemDoodle's **Open** text field, followed by **Load**, as
-verified below.
+**Add to Editor**. For a reaction, use ReShiki **Cmd/Ctrl+Alt+C**, then
+**Cmd/Ctrl+V** into ChemDoodle's **Open** text field, followed by **Load**.
 **Direct Cmd+V into either editor's drawing canvas did not import the ReShiki
-selection in the October 5 checks**. ChemDoodle Open/Load did load the new
-ordinary-Copy reaction JSON. CAS Draw accepted the no-arrow two-ring SMILES
+selection in the October 5 checks**. That build supplied chemical text through
+ordinary Copy. ChemDoodle Open/Load did load its reaction JSON. CAS Draw
+accepted the no-arrow two-ring SMILES
 through its text field and Add; Center Structure revealed both complete rings.
 See the bounded October 5 results below; the October 2 checks describe earlier
 verified search routes.
@@ -63,8 +65,8 @@ verified search routes.
    Double-click a molecule with the selection tool to select its connected
    atoms. Check that other molecules are not selected. A partial selection can
    export a different chemical fragment.
-2. Press **Cmd/Ctrl+C** for ordinary Copy, or right-click the selection and
-   choose **Copy as → SMILES**. **Cmd/Ctrl+Alt+C** also requests SMILES.
+2. Press **Cmd/Ctrl+Alt+C**, or right-click the selection and
+   choose **Copy as → SMILES**.
    Review any reported export warning or error;
    an unsuccessful copy can leave the previous clipboard content in place.
 3. Open [CAS SciFinder](https://scifinder-n.cas.org/) through your usual
@@ -120,7 +122,7 @@ unrecognized format; its upload dialog offered only `.cxf` and `.mol`.
    the selection. Explicit roles override geometry; one clear unassigned straight
    forward arrow can supply copy-only roles from its start and end. For **Copy as**,
    clearing the selection uses the whole drawing.
-2. Press **Cmd/Ctrl+C** for the selected reaction, or right-click an object in
+2. Press **Cmd/Ctrl+Alt+C** for the selected reaction, or right-click an object in
    the selection and choose **Copy as → ChemDoodle JSON · reaction**.
    To copy the whole drawing, right-click blank canvas outside
    the selection bounds. Check that the submenu says **Copy as · whole drawing**.
@@ -163,10 +165,11 @@ establish that every ChemDoodle feature is accepted by SciFinder.
 | Captions, graphics, colors and document layout                                          | These are not an exact molecular identity and are not retained by ordinary molecular identifiers.                                                                                      |
 
 **Copy as** uses selected objects, or the whole drawing when nothing is selected.
-The SMILES/MOL keyboard shortcuts require a selection. For unassigned no-arrow
-molecules, partial selections can still export fragments; select the complete
-molecule. Molecular Copy as formats are disabled for a copied reaction. Select one complete explicit participant without its
-arrow for molecular text; omitting an arrow does not permit a selection spanning
+The chemical-text and MOL keyboard shortcuts require a selection. For unassigned
+no-arrow molecules, partial selections can still export fragments. Select the
+complete molecule. Molecular Copy as formats are disabled for a copied reaction.
+Select one complete explicit participant without its arrow for molecular text.
+Omitting an arrow does not permit a selection spanning
 explicit participants to flatten their reaction roles.
 
 ## Reproducible local preparation
@@ -205,7 +208,7 @@ Use a separate output directory:
 cargo run --locked --example scifinder_clipboard_qa -- /tmp/reshiki-scifinder-clipboard
 ```
 
-These fixtures exercise local preparation for the new ordinary-Copy behavior.
+These fixtures exercise the chemical-text preparation used by **Cmd/Ctrl+Alt+C**.
 Their generated text alone does not establish receiving-editor import or
 canvas paste; the separate live checks below record what was actually tested.
 
@@ -251,6 +254,10 @@ this fixture.
 
 ## October 5 clipboard and receiving-editor checks
 
+The checks below describe the October 5 build, where ordinary Copy included
+chemical text. Current builds use **Cmd/Ctrl+Alt+C** for that text and
+**Cmd/Ctrl+C** for the drawing.
+
 On October 5, 2026, an optimized arm64 QA build from
 `f6484656c34c5edc0bbccfbe535096f8fb157fd2` was checked with Microsoft Edge
 on macOS in the authorized SciFinder session. The public unassigned
@@ -294,12 +301,13 @@ For this inspected build, changing ReShiki's clipboard text or MIME formats
 alone cannot satisfy direct canvas Cmd+V. This diagnosis applies to the inspected
 build and does not establish behavior for every browser or editor release.
 
-The accepted reaction workflow is ReShiki Cmd+C → Cmd+V into ChemDoodle's Open
+The tested reaction workflow was ReShiki Cmd+C → Cmd+V into ChemDoodle's Open
 text field → Load. It preserved both complete participants and their
 reactant/product roles in the tested benzene-to-cyclohexane fixture.
 [PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) added this
-workflow. Direct canvas paste and CAS reaction integration are outside this
-change.
+workflow. Use **Cmd/Ctrl+Alt+C** to prepare the same chemical text in current
+builds. Direct canvas paste and CAS reaction integration are outside this
+workflow.
 
 ## Direct integration decision
 

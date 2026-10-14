@@ -17,13 +17,13 @@ their existing behavior.
 
 ## Reproduction and validation
 
-- Open the [selection fixture](fixtures/selection-canvas.rsk), activate Select,
+- Open the [selection fixture](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/selection-canvas.rsk), activate Select,
   and click its nitrogen atom.
 - Click again at exactly the same position within the double-click interval.
   The complete molecule is selected and the target remains under the pointer.
 - Repeat with the inspector hidden, at the 1040 × 680 minimum window size, and
   with a larger window. Selection controls can be scrolled horizontally.
-- Open the [inspector fixture](fixtures/selection-inspector.rsk), hide the
+- Open the [inspector fixture](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/selection-inspector.rsk), hide the
   inspector, and select the caption. Properties opens while the drawing keeps
   its screen position.
 
@@ -117,3 +117,11 @@ Selecting atoms and opening object properties keeps the drawing steady, making
 double-click molecule selection reliable.
 
 Reusable image: `docs/images/selection-canvas/after-1280-double-click.png`.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) on the evidence archive branch.
+
+| Archived files                                                                                                           | What they record                                                                |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) | Native drawings for double-click selection and mixed-canvas interaction checks. |

@@ -1,7 +1,7 @@
 //! Modal gates that run before message dispatch. Their order decides which modal surface wins.
 use super::{
-    App, InspectorTab, Message, atom_text, cleanup, color_popover, document_styles, import,
-    inline_text, joining, object_toolbar, optimization, pictures, printing, tabs, template_library,
+    App, InspectorTab, Message, atom_text, cleanup, color_popover, document_styles, generic,
+    import, inline_text, joining, object_toolbar, optimization, results, tabs, template_library,
     theme_generator, updates, view_settings,
 };
 use crate::canvas::{self, Edit, Tool};
@@ -16,18 +16,8 @@ impl App {
         let message = self.early_results_gate(message)?;
         let message = self.exit_gate(message)?;
         #[cfg(any(windows, target_os = "linux"))]
-        if self.desktop.opening
-            && matches!(
-                message,
-                Message::Close(_)
-                    | Message::Tabs(tabs::Action::Close(_))
-                    | Message::Updates(updates::Action::Install)
-            )
-        {
-            self.status = "Finish opening the requested drawings before closing the editor".into();
-            return Break(Task::none());
-        }
-        let message = self.labels_gate(message)?;
+        let message = self.desktop_opening_gate(message)?;
+        let message = self.background_results_gate(message)?;
         if let Some(task) = self.optimization_gate(&message) {
             return Break(task);
         }
@@ -37,13 +27,7 @@ impl App {
             return Break(Task::none());
         };
         let message = self.restart_gate(message)?;
-        // Join admission precedes hue/text commits and preview cancellation.
-        // Modal atom text/cleanup ownership and unrelated commands are unchanged.
-        if self.generic_join_rejection(&message) {
-            self.status = reshiki::generic::JOIN_NOTICE.into();
-            self.error = true;
-            return Break(Task::none());
-        }
+        let message = self.generic_join_gate(message)?;
         let message = self.style_menu_gate(message)?;
         let message = self.import_drag_gate(message)?;
         let message = self.atom_text_gate(message)?;
@@ -59,7 +43,24 @@ impl App {
         self.abbreviation_member_gate(message)
     }
 
+    /// Join admission precedes hue/text commits and preview cancellation.
+    /// Modal atom text/cleanup ownership and unrelated commands are unchanged.
+    fn generic_join_gate(&mut self, message: Message) -> Gate {
+        if self.generic_join_rejection(&message) {
+            self.status = reshiki::generic::JOIN_NOTICE.into();
+            self.error = true;
+            return Break(Task::none());
+        }
+        Continue(message)
+    }
+
     fn early_results_gate(&mut self, message: Message) -> Gate {
+        if let Message::Generic(generic::Action::Expanded { source, epoch, .. }) = &message
+            && self.generic_expansion_blocked()
+        {
+            self.discard_generic_expansion(*source, *epoch);
+            return Break(Task::none());
+        }
         if let Message::Autosaved(key, result) = message {
             return Break(self.autosaved(key, result));
         }
@@ -93,7 +94,27 @@ impl App {
         Continue(message)
     }
 
-    fn labels_gate(&mut self, message: Message) -> Gate {
+    /// While the editor reads drawings a desktop launch handed over, closing
+    /// the window or a tab and installing an update wait.
+    #[cfg(any(windows, target_os = "linux"))]
+    fn desktop_opening_gate(&mut self, message: Message) -> Gate {
+        if self.desktop.opening
+            && matches!(
+                message,
+                Message::Close(_)
+                    | Message::Tabs(tabs::Action::Close(_))
+                    | Message::Updates(updates::Action::Install)
+            )
+        {
+            self.status = "Finish opening the requested drawings before closing the editor".into();
+            return Break(Task::none());
+        }
+        Continue(message)
+    }
+
+    /// Installs front-tab label refreshes and mapping proposals before any modal gate.
+    /// exit_gate, which runs first, still defers them.
+    fn background_results_gate(&mut self, message: Message) -> Gate {
         if let Message::Mapping(action @ super::reaction_mapping::Action::Ready(..)) = message {
             return Break(self.mapping_action(action));
         }
@@ -206,6 +227,7 @@ impl App {
                 | Message::EngineDone { .. }
                 | Message::InspectorAction(_)
                 | Message::Viewport(_)
+                | Message::Nmr(super::nmr::Action::RenderedSize(_))
                 | Message::Updates(_)
                 | Message::Imports(import::Action::Loaded(..))
         ) {
@@ -340,11 +362,9 @@ impl App {
                         | cleanup::Action::Original(_)
                         | cleanup::Action::Scope(_)
                         | cleanup::Action::Orientation(_),
-                ) | Message::Printing(
-                    printing::Action::Prepared(..) | printing::Action::Finished(..)
-                ) | Message::Pictures(pictures::Action::Loaded(..))
-                    | Message::Imports(import::Action::Loaded(..))
-            ) || preview_passthrough(&message))
+                )
+            ) || preview_passthrough(&message)
+                || results::admitted(results::Modal::Cleanup, &message))
                 && !self.answers_save_dialog(&message)
             {
                 if !matches!(message, Message::Canvas(_)) {
@@ -377,7 +397,7 @@ impl App {
     }
 }
 
-/// View, window, file and async-result messages that both modal previews (cleanup, 3D) let through.
+/// View/window lifecycle and classified results shared by the cleanup and 3D previews.
 pub(super) fn preview_passthrough(message: &Message) -> bool {
     matches!(
         message,
@@ -399,24 +419,17 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
             )
             | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
             | Message::Tick
-            | Message::EngineDone { .. }
-            | Message::Naming(super::naming::Action::Finished(..))
             | Message::Close(_)
             | Message::Discard
             | Message::Cancel
             | Message::New
             | Message::Open
             | Message::Tabs(_)
-            | Message::Saved(..)
-            | Message::Exported(_)
-            | Message::FigureExported(_)
-            | Message::Opened(_)
-            | Message::ClipboardRead { .. }
-            | Message::ClipboardWritten { .. }
-            | Message::CopyAsPrepared(..)
-            | Message::CopyAsWritten(..)
-    )
+    ) || results::admitted(results::Modal::Preview, message)
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod result_tests;

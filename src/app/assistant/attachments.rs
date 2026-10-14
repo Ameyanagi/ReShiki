@@ -46,7 +46,7 @@ impl App {
             async {
                 let Some(file) = rfd::AsyncFileDialog::new()
                     .set_title("Attach a chemical drawing")
-                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "webp"])
+                    .add_filter("Images", reshiki::pictures::RASTER_EXTENSIONS)
                     .pick_file()
                     .await
                 else {
@@ -91,11 +91,7 @@ impl App {
             Ok(Some(image)) => {
                 // Keep the exact source for follow-up requests and show it in the composer.
                 self.assistant.source_image = Some(image);
-                self.assistant.guided_example = false;
-                if self.assistant.draft.is_none() {
-                    self.assistant.requires_apply = false;
-                }
-                self.assistant.example_reference = None;
+                self.assistant.clear_example();
                 self.assistant.error = false;
                 self.assistant.status =
                     "Image attached · Add instructions or Send to draw its structure.".into();
@@ -146,9 +142,7 @@ impl App {
         self.assistant.menu = None;
         self.assistant.source_image = None;
         if !self.assistant.busy && self.assistant.draft.is_none() {
-            self.assistant.guided_example = false;
-            self.assistant.requires_apply = false;
-            self.assistant.example_reference = None;
+            self.assistant.clear_example();
         }
         self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
         self.assistant.reading_image = false;

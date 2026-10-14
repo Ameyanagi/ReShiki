@@ -110,6 +110,15 @@ pub struct Reconciled {
     before: Document,
 }
 
+/// What committing an accepted edit will record and clear.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Outcome {
+    /// History will record the edit; `false` when the document is unchanged.
+    pub recorded: bool,
+    /// [`chemistry_changed`] holds, so computed labels will be cleared.
+    pub chemistry_changed: bool,
+}
+
 /// What [`Reconciled::commit`] changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Committed {
@@ -156,14 +165,15 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
 
 /// Consumed, immutable model proof. This is not constructible from a Document.
 pub struct PreparedInsertion {
-    data: crate::generic::PreparedData,
+    document: Document,
+    prepared: crate::generic::PreparedExpansion,
 }
 impl PreparedInsertion {
     pub fn count(&self) -> usize {
-        self.data.count
+        self.prepared.count()
     }
     pub fn bounds(&self) -> (crate::document::Point, crate::document::Point) {
-        self.data.bounds
+        self.prepared.bounds()
     }
 }
 /// Consume the one-shot transport before a host creates its output tab.
@@ -172,7 +182,7 @@ pub fn take_expansion(
 ) -> Result<PreparedInsertion, Rejection> {
     prepared
         .take()
-        .map(|data| PreparedInsertion { data })
+        .map(|document| PreparedInsertion { document, prepared })
         .map_err(Rejection::Invalid)
 }
 /// Install the exact measured native result into a fresh empty drawing. Ordinary
@@ -183,22 +193,12 @@ pub fn install_expansion(
     before: Document,
     prepared: PreparedInsertion,
 ) -> Result<Reconciled, Rejection> {
-    if *doc != before
-        || before.object_ids().next().is_some()
-        || !before.bonds.is_empty()
-        || !before.groups.is_empty()
-        || !before.molecule_names.is_empty()
-        || !before.depth_appearance.is_empty()
-        || !before.abbreviations.is_empty()
-        || !before.reactions.is_empty()
-        || !before.ring_fills.is_empty()
-        || !before.generic.is_empty()
-    {
+    if *doc != before || before.has_content() {
         return Err(Rejection::Invalid(
             "Prepared expansion requires a fresh empty drawing".into(),
         ));
     }
-    *doc = prepared.data.document;
+    *doc = prepared.document;
     Ok(Reconciled { before })
 }
 
@@ -206,6 +206,19 @@ impl Reconciled {
     /// The pre-edit snapshot, for observers that mirror [`History`].
     pub fn before(&self) -> &Document {
         &self.before
+    }
+
+    /// Predicts [`Self::commit`] without changing the document or history.
+    ///
+    /// A chemistry change still differs from `before` after computed labels
+    /// are cleared. Continuing frames change which snapshot history keeps,
+    /// but not whether it records the edit.
+    pub fn outcome(&self, doc: &Document) -> Outcome {
+        let chemistry_changed = chemistry_changed(&self.before, doc);
+        Outcome {
+            recorded: chemistry_changed || self.before != *doc,
+            chemistry_changed,
+        }
     }
 
     /// Clears computed labels after a chemistry change and records the edit.
@@ -216,14 +229,15 @@ impl Reconciled {
     /// recorded frame clears redo.
     pub fn commit(self, doc: &mut Document, history: &mut History, continuing: bool) -> Committed {
         let drawing_style_changed = self.before.drawing_style != doc.drawing_style;
-        let chemistry_changed = chemistry_changed(&self.before, doc);
-        if chemistry_changed {
+        let outcome = self.outcome(doc);
+        if outcome.chemistry_changed {
             crate::atom_labels::clear_computed(doc);
         }
         let recorded = history.commit_continuing(self.before, doc, continuing);
+        debug_assert_eq!(recorded, outcome.recorded, "outcome must predict History");
         Committed {
             recorded,
-            chemistry_changed,
+            chemistry_changed: outcome.chemistry_changed,
             drawing_style_changed,
         }
     }

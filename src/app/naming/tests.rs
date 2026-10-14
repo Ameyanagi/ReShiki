@@ -1,22 +1,87 @@
+use super::test_support::record;
 use super::*;
-use reshiki::naming::Provenance;
 
-fn record(smiles: &str) -> Record {
-    Record {
-        title: "ethan-1-ol".into(),
-        systematic_name: Some("ethan-1-ol".into()),
-        canonical_smiles: naming::canonical_smiles(smiles).unwrap(),
-        smiles: smiles.into(),
-        synonyms: vec![],
-        warnings: vec![],
-        provenance: Provenance::LocalRules,
-    }
+#[test]
+fn native_open_preserves_pending_naming_in_an_empty_source_tab() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let source = app.tab.id;
+    let epoch = app.tab.file_epoch;
+    assert!(app.update(Message::Naming(Action::Generate)).units() > 0);
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    assert!(!app.tab.reusable());
+    let mut document = Document::default();
+    document.add_atom("O", Point::default());
+    let _ = app.update(Message::FilePrepared(Some((
+        "pending-name-open.rsk".into(),
+        Ok(super::super::files::Prepared::Native(Box::new(
+            document.clone(),
+        ))),
+    ))));
+    assert_ne!(app.tab.id, source);
+    assert!(app.tab.file_epoch > epoch);
+    assert!(!app.tab.naming.is_pending());
+    assert_eq!(app.tab.doc, document);
+    let original = app.strip().find(|tab| tab.id == source).unwrap();
+    assert_eq!(original.file_epoch, epoch);
+    assert_eq!(original.naming.pending.unwrap().ticket(), ticket);
+    let front = app.tab.id;
+    let _ = app.update(Message::Tab(
+        source,
+        Box::new(Message::Naming(Action::Finished(
+            ticket,
+            Box::new(Ok(Outcome::Structure(record("CCO")))),
+        ))),
+    ));
+    let original = app.strip().find(|tab| tab.id == source).unwrap();
+    assert!(!original.naming.is_pending());
+    assert_eq!(original.naming.structure.as_ref().unwrap().0, ticket);
+    assert_eq!(app.tab.id, front);
+    assert_eq!(app.tab.doc, document);
+}
+
+#[test]
+fn file_epoch_clears_naming_and_old_completion_cannot_clear_a_new_request() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    assert!(app.update(Message::Naming(Action::Generate)).units() > 0);
+    let old = app.tab.naming.pending.unwrap().ticket();
+    assert!(app.tab.naming.local_cancel.is_some());
+    // Retained generated names stay visible as previous names after a file change.
+    app.tab.naming.structure = Some((old, record("CCO")));
+    app.tab.naming.import_alias = Some(0);
+    let epoch = app.tab.file_epoch;
+    app.begin_file_epoch();
+    assert!(app.tab.file_epoch > epoch);
+    assert!(!app.tab.naming.is_pending());
+    assert!(app.tab.naming.local_cancel.is_none());
+    assert!(app.tab.naming.import_alias.is_none());
+    assert_eq!(app.tab.naming.structure.as_ref().unwrap().0, old);
+    assert!(app.update(Message::Naming(Action::Generate)).units() > 0);
+    let current = app.tab.naming.pending.unwrap().ticket();
+    assert_ne!(current, old);
+    let _ = app.update(Message::Naming(Action::Finished(
+        old,
+        Box::new(Ok(Outcome::Structure(record("CCO")))),
+    )));
+    assert_eq!(app.tab.naming.pending.unwrap().ticket(), current);
+    assert!(app.tab.naming.local_cancel.is_some());
+    assert!(app.tab.naming.structure.is_none());
+    assert!(app.tab.naming.notice.is_none());
+    let _ = app.update(Message::Naming(Action::Finished(
+        current,
+        Box::new(Ok(Outcome::Structure(record("CCO")))),
+    )));
+    assert!(!app.tab.naming.is_pending());
+    assert_eq!(app.tab.naming.structure.as_ref().unwrap().0, current);
 }
 
 #[tokio::test]
 async fn preview_insertion_is_native_editable_and_one_history_step() -> Result<(), String> {
     let (mut app, _) = App::new();
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
+        .await
+        .map_err(|error| error.to_string())?;
     app.tab.naming.set_preview(preview);
     let preview = app.tab.naming.preview.as_ref().unwrap();
     let atom = preview.document.atoms[0].id;
@@ -51,6 +116,121 @@ async fn preview_insertion_is_native_editable_and_one_history_step() -> Result<(
 }
 
 #[tokio::test]
+async fn exhausted_ids_report_failed_name_preview_without_changing_the_drawing()
+-> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
+        .await
+        .map_err(|error| error.to_string())?;
+    app.tab.doc.add_atom("O", Point::new(120., 80.));
+    app.tab.doc.atoms[0].id = u64::MAX - 1;
+    app.tab.doc.validate()?;
+    let before = app.tab.doc.clone();
+    let mut attempted = before.clone();
+    assert!(editing::append(&mut attempted, &preview.document, Point::default()).is_empty());
+    assert_eq!(attempted, before);
+    app.tab.selected = before.all_ids();
+    app.tool = Tool::Text;
+    app.tab.camera.center = Point::new(320., -80.);
+    app.tab.camera.zoom = 2.;
+    let selected = app.tab.selected.clone();
+    let camera = app.tab.camera;
+    let revision = app.tab.revision;
+    let history = (
+        app.tab.history.can_undo(),
+        app.tab.history.can_redo(),
+        app.tab.history.frames(),
+    );
+    app.tab.naming.set_preview(preview);
+    let notice = "Keep the preview details";
+    app.tab.naming.notice = Some(Notice::new(NoticeKind::Info, notice));
+
+    let _ = app.naming_action(Action::Insert);
+
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(
+        (
+            app.tab.history.can_undo(),
+            app.tab.history.can_redo(),
+            app.tab.history.frames(),
+        ),
+        history
+    );
+    assert!(app.error);
+    assert_eq!(app.status, "Could not insert ethan-1-ol");
+    assert_eq!(
+        app.tab
+            .naming
+            .notice
+            .as_ref()
+            .map(|notice| notice.detail.as_str()),
+        Some(notice)
+    );
+    assert_eq!(app.tool, Tool::Text);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    Ok(())
+}
+
+#[tokio::test]
+async fn name_preview_is_placed_beside_a_caption_only_drawing() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc.annotations.push(reshiki::document::Annotation {
+        id: 1,
+        position: Point::new(250., 80.),
+        text: "Existing caption".into(),
+        format: Default::default(),
+    });
+    app.tab.camera.center = Point::new(-100., -60.);
+    let before = app.tab.doc.clone();
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
+        .await
+        .map_err(|error| error.to_string())?;
+    let source = preview.document.clone();
+    let center = editing::center(&source, &source.all_ids());
+    let (_, existing_max) = before.bounds();
+    let (insert_min, _) = source.bounds();
+    let offset = Point::new(
+        existing_max.x + before.drawing_style.bond_length_world - insert_min.x,
+        app.tab.camera.center.y - center.y,
+    );
+    app.tab.naming.set_preview(preview);
+
+    let _ = app.naming_action(Action::Insert);
+
+    assert_eq!(app.tab.doc.annotations, before.annotations);
+    assert_eq!(app.tab.doc.atoms.len(), source.atoms.len());
+    for (inserted, original) in app.tab.doc.atoms.iter().zip(&source.atoms) {
+        assert_eq!(
+            inserted.position,
+            original.position.offset(offset.x, offset.y)
+        );
+    }
+    assert_eq!(
+        app.tab.selected,
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .map(|atom| atom.id)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    assert_eq!(app.tab.history.frames(), 1);
+    assert!(!app.error);
+    let status = "Inserted editable name result · Undo removes the insertion";
+    assert_eq!(app.status, status);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    Ok(())
+}
+
+#[tokio::test]
 async fn native_preview_and_exchange_retain_specified_and_unspecified_stereo() -> Result<(), String>
 {
     let engine = LocalEngine::default();
@@ -63,7 +243,9 @@ async fn native_preview_and_exchange_retain_specified_and_unspecified_stereo() -
         "[13CH3]CO",
         "CC(=O)[O-]",
     ] {
-        let preview = prepare_preview(engine.clone(), record(smiles), smiles.into()).await?;
+        let preview = prepare_preview(engine.clone(), record(smiles), smiles.into())
+            .await
+            .map_err(|error| error.to_string())?;
         naming::verify_identity(
             smiles,
             &naming::document_identity(&preview.document)?.smiles,
@@ -90,7 +272,9 @@ async fn warnings_and_unapplied_smiles_edits_block_insertion() -> Result<(), Str
     let (mut app, _) = App::new();
     let mut source = record("CCO");
     source.warnings.push("Review native import layout".into());
-    let preview = prepare_preview(app.engine.clone(), source, "CCO".into()).await?;
+    let preview = prepare_preview(app.engine.clone(), source, "CCO".into())
+        .await
+        .map_err(|error| error.to_string())?;
     app.tab.naming.set_preview(preview);
     let _ = app.naming_action(Action::Insert);
     assert!(app.tab.doc.atoms.is_empty());
@@ -107,9 +291,13 @@ async fn warnings_and_unapplied_smiles_edits_block_insertion() -> Result<(), Str
 #[tokio::test]
 async fn changed_preview_no_longer_claims_original_chemical_name() -> Result<(), String> {
     let engine = LocalEngine::default();
-    let original = prepare_preview(engine.clone(), record("CCO"), "CCO".into()).await?;
+    let original = prepare_preview(engine.clone(), record("CCO"), "CCO".into())
+        .await
+        .map_err(|error| error.to_string())?;
     assert!(!original.modified);
-    let edited = prepare_preview(engine, record("CCO"), "CCN".into()).await?;
+    let edited = prepare_preview(engine, record("CCO"), "CCN".into())
+        .await
+        .map_err(|error| error.to_string())?;
     assert!(edited.modified);
     assert_eq!(edited.identity, "CCN");
     Ok(())
@@ -126,7 +314,9 @@ async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completi
         } else {
             "CCO"
         };
-        let preview = prepare_preview(app.engine.clone(), record("CCO"), initial.into()).await?;
+        let preview = prepare_preview(app.engine.clone(), record("CCO"), initial.into())
+            .await
+            .map_err(|error| error.to_string())?;
         app.tab.naming.set_preview(preview);
         let _ = app.naming_action(Action::Smiles("CCN".into()));
         let result_identity = if matches!(action, Action::RestorePreview) {
@@ -138,8 +328,9 @@ async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completi
         let stale = app.tab.naming.pending.unwrap().ticket();
         let _ = app.naming_action(Action::Smiles("CCC".into()));
         assert!(app.tab.naming.pending.is_none());
-        let old =
-            prepare_preview(app.engine.clone(), record("CCO"), result_identity.into()).await?;
+        let old = prepare_preview(app.engine.clone(), record("CCO"), result_identity.into())
+            .await
+            .map_err(|error| error.to_string())?;
         let _ = app.naming_action(Action::Finished(
             stale,
             Box::new(Ok(Outcome::Preview(Box::new(old.clone())))),
@@ -158,7 +349,9 @@ async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completi
         ));
         assert_eq!(app.tab.naming.pending.unwrap().ticket(), latest);
         assert_eq!(app.tab.naming.smiles, "CCC");
-        let current = prepare_preview(app.engine.clone(), record("CCO"), "CCC".into()).await?;
+        let current = prepare_preview(app.engine.clone(), record("CCO"), "CCC".into())
+            .await
+            .map_err(|error| error.to_string())?;
         let _ = app.naming_action(Action::Finished(
             latest,
             Box::new(Ok(Outcome::Preview(Box::new(current)))),
@@ -174,7 +367,9 @@ async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completi
 async fn preview_text_edits_do_not_cancel_independent_local_name_generation() -> Result<(), String>
 {
     let (mut app, _) = App::new();
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
+        .await
+        .map_err(|error| error.to_string())?;
     app.tab.doc = preview.document.clone();
     app.tab.selected = app.tab.doc.all_ids();
     app.tab.naming.set_preview(preview);
@@ -214,7 +409,9 @@ fn stale_results_cannot_reach_another_local_document_or_request() {
 #[tokio::test]
 async fn caption_requires_current_graph_and_is_undoable() -> Result<(), String> {
     let (mut app, _) = App::new();
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
+        .await
+        .map_err(|error| error.to_string())?;
     app.tab.doc = preview.document;
     app.tab.selected = app.tab.doc.all_ids();
     let ticket = Ticket {
@@ -245,7 +442,9 @@ async fn controls_publish_named_native_actions_and_editable_values() -> Result<(
     source
         .warnings
         .push("Check this source interpretation".into());
-    let preview = prepare_preview(app.engine.clone(), source.clone(), "CCO".into()).await?;
+    let preview = prepare_preview(app.engine.clone(), source.clone(), "CCO".into())
+        .await
+        .map_err(|error| error.to_string())?;
     app.tab.naming.set_preview(preview);
     app.tab.naming.structure = Some((
         Ticket {
@@ -321,7 +520,9 @@ async fn scrolled_insert_click_reaches_button_instead_of_preview() -> Result<(),
     use reshiki::accessibility::Collect;
     let (mut app, _) = App::new();
     app.tab.busy = false;
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into()).await?;
+    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
+        .await
+        .map_err(|error| error.to_string())?;
     app.tab.naming.set_preview(preview);
     let size = iced::Size::new(340., 620.);
     let mut renderer = <iced::Renderer as Headless>::new(
@@ -402,6 +603,10 @@ fn local_parse_cancels_obsolete_tickets() {
     let _ = app.naming_action(Action::Cancel);
     assert!(app.tab.naming.pending.is_none());
     assert!(app.tab.naming.local_cancel.is_none());
+    let notice = app.tab.naming.notice.as_ref().unwrap();
+    assert_eq!(notice.kind, NoticeKind::Retry);
+    assert_eq!(notice.detail, "Local name parsing was cancelled");
+    assert_eq!(notice.summary(), notice.detail);
     let _ = app.naming_action(Action::Finished(
         ticket,
         Box::new(Ok(Outcome::Names(vec![record("CCO")], None))),

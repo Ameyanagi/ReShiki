@@ -134,13 +134,15 @@ impl MoleculeCanvas<'_> {
     pub(super) fn chain_plan(
         &self,
         origin: (World, World),
-        source: Option<u64>,
+        source: (Option<u64>, Option<u64>),
         points: &[World],
         flags: (bool, bool),
         cursor: World,
         modifiers: iced::keyboard::Modifiers,
     ) -> (Vec<World>, Option<u64>) {
         let (start, pressed) = origin;
+        let (source, source_text) = source;
+        let attached = source.is_some() || source_text.is_some();
         let (snaking, dragged) = flags;
         let click = !dragged && pressed.distance(cursor) < 3.0 / self.camera.zoom;
         if dragged && pressed.distance(cursor) < 3.0 / self.camera.zoom {
@@ -192,10 +194,10 @@ impl MoleculeCanvas<'_> {
         };
         let mut points = if snaking && !click {
             let mut points = points.to_vec();
-            chains::snake(&mut points, cursor, source.is_some(), bond, chain, flip);
+            chains::snake(&mut points, cursor, attached, bond, chain, flip);
             points
         } else {
-            chains::straight(start, end, source.is_some(), bond, chain, flip)
+            chains::straight(start, end, attached, bond, chain, flip)
         };
         let target = if click || points.len() < 2 {
             None
@@ -218,7 +220,7 @@ impl MoleculeCanvas<'_> {
             && source.is_some()
             && chains::place(self.doc, &points, source, target, 8.).is_err()
         {
-            let other = chains::straight(start, end, source.is_some(), bond, chain, !flip);
+            let other = chains::straight(start, end, attached, bond, chain, !flip);
             if chains::place(self.doc, &other, source, target, 8.).is_ok() {
                 points = other;
             }

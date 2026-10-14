@@ -31,6 +31,7 @@ mod document_styles;
 mod document_tab;
 use document_tab::DocumentTab;
 mod engine_jobs;
+mod event_slot;
 mod figure_export;
 mod file_shortcuts;
 mod files;
@@ -57,7 +58,7 @@ mod naming;
 mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
-pub(crate) mod office;
+mod office;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 #[cfg(test)]
@@ -72,6 +73,7 @@ mod popover;
 mod printing;
 mod reaction_mapping;
 mod reactions;
+mod results;
 mod ring_edits;
 #[cfg(test)]
 mod rotation_tests;
@@ -80,7 +82,7 @@ mod shortcut_examples;
 #[cfg(test)]
 mod shortcut_focus_tests;
 mod shortcuts;
-pub(crate) mod startup;
+mod startup;
 mod tabs;
 mod template_library;
 #[cfg(test)]
@@ -103,6 +105,17 @@ pub(crate) use workspace::text_width;
 /// The status bar's idle message.
 const READY: &str = "Ready · Choose a tool to start drawing";
 
+// App::fit_bounds: screen pixels kept free around the fitted drawing, the
+// smallest usable viewport side (pixels) and the smallest fitted extent (world
+// units), so a tiny drawing is not zoomed in without bound.
+const FIT_MARGIN: f32 = 80.0;
+const MIN_VIEWPORT: f32 = 100.0;
+const MIN_FIT_WIDTH: f32 = 240.0;
+const MIN_FIT_HEIGHT: f32 = 200.0;
+/// Fit's zoom range; interactive zoom elsewhere clamps to 0.005..5.
+const MIN_ZOOM: f32 = 0.005;
+const MAX_FIT_ZOOM: f32 = 2.5;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InspectorTab {
     Reactions,
@@ -112,7 +125,9 @@ pub enum InspectorTab {
     Pages,
     Abbreviations,
     Properties,
-    Nmr,
+    /// Slow, model-based estimates that come with a report; NMR is its one
+    /// section today. Instant calculated values stay in Properties.
+    Predict,
     Labels,
     Templates,
     Import,
@@ -285,7 +300,7 @@ pub enum Message {
     )]
     Opened(Option<(PathBuf, Result<Vec<u8>, String>)>),
     FilePrepared(files::Opened),
-    OfficePrepared(office::Binding, files::Opened),
+    OfficePrepared(crate::session::Binding, files::Opened),
     #[cfg(any(windows, target_os = "linux"))]
     Desktop(desktop::Action),
     #[cfg(target_os = "macos")]
@@ -367,6 +382,7 @@ pub struct App {
     // The current tab's status; parked with its document when it leaves the front.
     status: String,
     error: bool,
+    bond_text_hint: Option<(String, bool, String)>,
     file_io: files::State,
     office: office::State,
     #[cfg(any(windows, target_os = "linux"))]
@@ -385,7 +401,23 @@ pub struct App {
     templates: template_library::State,
 }
 impl App {
+    /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
+    pub(super) fn begin_file_epoch(&mut self) {
+        self.tab.file_epoch = self.next_epoch();
+        // Invalidate tickets before clearing gestures that may switch the front tab's tool.
+        self.tab.naming.invalidate_name();
+        self.tab.mapping.clear_pending();
+        self.tab.arrows.cancel_source();
+        self.cancel_reference_stretch();
+        self.tab.nmr.clear_pending();
+    }
+
+    #[cfg(test)]
     pub fn new() -> (Self, Task<Message>) {
+        Self::with_startup(crate::session::Arguments::default())
+    }
+
+    pub fn with_startup(startup: crate::session::Arguments) -> (Self, Task<Message>) {
         let recovery = if cfg!(test) {
             None
         } else {
@@ -432,6 +464,7 @@ impl App {
             // A recovery offer in the status bar is the launch message.
             status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
+            bond_text_hint: None,
             file_io: files::State::default(),
             office: office::State::default(),
             #[cfg(any(windows, target_os = "linux"))]
@@ -448,11 +481,6 @@ impl App {
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
-        };
-        let startup = if cfg!(test) {
-            startup::Arguments::default()
-        } else {
-            startup::parse(std::env::args_os().skip(1))
         };
         let task = app.open_startup(startup);
         #[cfg(any(windows, target_os = "linux"))]
@@ -567,10 +595,7 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
-        if self.tab.doc != before {
-            self.tab.arrow_source = None;
-        }
-        self.tab.cleanup = None;
+        self.prepare_document_change(self.tab.doc != before);
         let reconciled = match reshiki::transaction::reconcile(&mut self.tab.doc, before) {
             Ok(reconciled) => reconciled,
             Err(rejection) => {
@@ -585,6 +610,35 @@ impl App {
             }
         };
         self.commit_changed(reconciled, continuing);
+    }
+    fn try_replace_document(
+        &mut self,
+        mut candidate: Document,
+        selected: Vec<u64>,
+    ) -> Result<(), String> {
+        let before = self.tab.doc.clone();
+        let reconciled = reshiki::transaction::reconcile(&mut candidate, before)
+            .map_err(|error| error.message().to_owned())?;
+        let changed = candidate != *reconciled.before();
+        // Reference edits used to reconcile twice (a preflight, then changed).
+        // Only the caption pass is not idempotent: run again, it detaches a
+        // linked caption that the first pass moved while its molecule stayed.
+        // Keep that pass so caption links come out as before.
+        reshiki::molecule_names::reconcile(&mut candidate, reconciled.before());
+        if changed {
+            self.tab.erase_stroke = false;
+        }
+        self.prepare_document_change(changed);
+        self.tab.doc = candidate;
+        self.tab.selected = selected;
+        self.commit_changed(reconciled, false);
+        Ok(())
+    }
+    fn prepare_document_change(&mut self, changed: bool) {
+        if changed {
+            self.tab.arrows.cancel_source();
+        }
+        self.tab.cleanup = None;
     }
     fn commit_changed(&mut self, reconciled: reshiki::transaction::Reconciled, continuing: bool) {
         self.tab.recent_molecules.record(
@@ -628,18 +682,24 @@ impl App {
         self.tab.selected.retain(|id| existing.contains(id));
     }
     fn fit(&mut self) {
-        self.tab.pages.fit = None;
         if self.display_document().all_ids().is_empty() {
+            self.tab.pages.fit = None;
             self.tab.camera = Camera::default();
             self.tab.fit_to_view = false;
             return;
         }
-        let (lo, hi) = self.display_document().bounds();
+        self.fit_bounds(self.display_document().bounds());
+    }
+    /// Centers and zooms the camera so the world rectangle `(lo, hi)` fits the paper viewport.
+    pub(super) fn fit_bounds(&mut self, (lo, hi): (Point, Point)) {
+        self.tab.pages.fit = None;
         self.tab.camera.center = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
         let viewport = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        self.tab.camera.zoom = ((viewport.width - 80.0).max(100.0) / (hi.x - lo.x).max(240.0))
-            .min((viewport.height - 80.0).max(100.0) / (hi.y - lo.y).max(200.0))
-            .clamp(0.005, 2.5);
+        let across =
+            (viewport.width - FIT_MARGIN).max(MIN_VIEWPORT) / (hi.x - lo.x).max(MIN_FIT_WIDTH);
+        let down =
+            (viewport.height - FIT_MARGIN).max(MIN_VIEWPORT) / (hi.y - lo.y).max(MIN_FIT_HEIGHT);
+        self.tab.camera.zoom = across.min(down).clamp(MIN_ZOOM, MAX_FIT_ZOOM);
         self.tab.fit_to_view = true;
     }
     /// Shows the save dialog for the tab in front; its answer continues `action`.
@@ -721,18 +781,10 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        #[cfg(any(windows, target_os = "linux"))]
-        if let Message::Desktop(action) = message {
-            return Task::batch([
-                self.desktop_action(action),
-                self.start_label_refresh(),
-                self.start_autosave(),
-                self.accessibility_refresh(),
-            ]);
-        }
-        if let Message::Accessibility(action) = message {
-            return self.accessibility_action(action);
-        }
+        let message = match self.update_untagged(message) {
+            ControlFlow::Break(task) => return task,
+            ControlFlow::Continue(message) => message,
+        };
         let keyboard_before = (
             self.tab.keyboard_drawing.target(),
             self.tab.keyboard_drawing.marked(),
@@ -756,6 +808,21 @@ impl App {
             Task::batch([task, self.accessibility_refresh()])
         }
     }
+
+    /// Native desktop ownership and accessibility actions belong to the window.
+    /// Handle them before tab routing, modal gates and the routing tail; their
+    /// tasks must not acquire a document tag.
+    fn update_untagged(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
+        #[cfg(any(windows, target_os = "linux"))]
+        if let Message::Desktop(action) = message {
+            return ControlFlow::Break(self.desktop_update(action));
+        }
+        if let Message::Accessibility(action) = message {
+            return ControlFlow::Break(self.accessibility_action(action));
+        }
+        ControlFlow::Continue(message)
+    }
+
     fn update_routed(&mut self, mut message: Message) -> Task<Message> {
         #[cfg(all(target_os = "linux", feature = "wayland-qa"))]
         let qa_event = wayland_qa::event(&message);
@@ -800,13 +867,10 @@ impl App {
     }
 
     fn update_front(&mut self, message: Message, background: bool) -> Task<Message> {
-        if let Message::OfficePrepared(binding, opened) = message {
-            return self.office_prepared(binding, opened);
-        }
-        #[cfg(target_os = "macos")]
-        if let Message::MacFiles(action) = message {
-            return self.mac_file_action(action);
-        }
+        let message = match self.update_ungated(message) {
+            ControlFlow::Break(task) => return task,
+            ControlFlow::Continue(message) => message,
+        };
         let previous = self.inspector_tab;
         let pointer_selection = match &message {
             Message::Canvas(Edit::Select(_)) => Some(
@@ -822,7 +886,12 @@ impl App {
             Message::Canvas(Edit::SelectAt(ids, _)) => Message::Canvas(Edit::Select(ids)),
             message => message,
         };
-        let opening_transform = matches!(&message, Message::Canvas(Edit::BeginTransform(_)));
+        // These open the inspector at the section they edit and scroll to it.
+        let reveals_section = matches!(
+            &message,
+            Message::Canvas(Edit::BeginTransform(_))
+                | Message::Mapping(reaction_mapping::Action::Open)
+        );
         let refresh_dimensions = matches!(
             &message,
             Message::EngineDone { .. } | Message::LabelsReady(..)
@@ -845,17 +914,20 @@ impl App {
             self.keyboard_pointer_selection(point);
         }
         let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
-        self.tab
-            .nmr
-            .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
+        self.tab.nmr.invalidate_if_changed_cached(
+            &self.tab.doc,
+            self.tab.file_epoch,
+            self.tab.revision,
+        );
         self.sync_numeric_transforms();
         if refresh_dimensions {
             self.refresh_numeric_dimensions();
         }
+        self.sync_mapping_preview();
         // Include inspector changes made by tool-specific handlers, which can
         // return early. Ordinary updates within a panel retain its scroll state.
         if !background
-            && !opening_transform
+            && !reveals_section
             && previous != self.inspector_tab
             && self.inspector_tab != InspectorTab::Assistant
         {
@@ -869,6 +941,20 @@ impl App {
         } else {
             task
         }
+    }
+
+    /// Open completions bypass modal gates inside the routed front update,
+    /// including its background-tab path. Their tasks still receive tab tags
+    /// and run the routing tail that closes Office tabs and replays held results.
+    fn update_ungated(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
+        if let Message::OfficePrepared(binding, opened) = message {
+            return ControlFlow::Break(self.office_prepared(binding, opened));
+        }
+        #[cfg(target_os = "macos")]
+        if let Message::MacFiles(action) = message {
+            return ControlFlow::Break(self.mac_file_action(action));
+        }
+        ControlFlow::Continue(message)
     }
 
     fn update_inner(&mut self, message: Message) -> Task<Message> {
@@ -968,17 +1054,13 @@ async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<Path
         "svg-office" => "svg",
         _ => format,
     };
-    let Some(path) = files::save_path(
+    files::save_bytes(
         "Export drawing",
         &format!("Molecule.{extension}"),
         extension,
+        &bytes,
     )
     .await
-    else {
-        return Ok(None);
-    };
-    reshiki::storage::write_atomic(&path, &bytes)?;
-    Ok(Some(path))
 }
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)

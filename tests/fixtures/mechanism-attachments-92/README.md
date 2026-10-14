@@ -19,7 +19,7 @@ control, not a candidate attachment drawing.
 review, including creation Undo/Redo, tangent edits, target/source motion,
 deletion, detach actions, Escape, explicit free mode, fresh reopen and the
 separate carbonyl atom/bond contexts. Their byte hashes and field checks are
-recorded in `docs/reviews/mechanism-attachments/desktop-independent-check.json`.
+recorded in [docs/reviews/mechanism-attachments/desktop-independent-check.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/reviews/mechanism-attachments/desktop-independent-check.json).
 The package manifest maps every archived file to its original coordination path.
 The original native versions and serialization are retained; these files were
 not normalized or rewritten for publication.

@@ -143,6 +143,13 @@ async fn python_bridge_preserves_identity_across_cleanup() {
 #[tokio::test]
 async fn bridge_can_restart_after_invalid_input() {
     let engine = LocalEngine::default();
+    // SMILES import rejects chemical names.
+    assert!(
+        engine
+            .request(Request::import_smiles("ethanol"))
+            .await
+            .is_err()
+    );
     assert!(
         engine
             .execute(Request::import_smiles("not a molecule"))

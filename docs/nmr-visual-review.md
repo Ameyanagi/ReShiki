@@ -1,6 +1,6 @@
 # Offline NMR desktop review
 
-Offline NMR prediction opens atom-linked ¹H parent-group medians and ¹³C shifts in a compact nonmodal palette. The drawing keeps its viewport and camera; reference columns and method information expand on demand. Native review of the compact revision is complete. [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) remains under review.
+Offline NMR prediction opens atom-linked ¹H parent-group medians and ¹³C shifts in a compact nonmodal palette. The drawing keeps its viewport and camera; reference columns and method information expand on demand. Native review of the compact revision is complete. [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) is merged, unreleased.
 
 ## Matched native before and after
 
@@ -24,7 +24,7 @@ Clicking row **C #4** selects the original carbonyl atom. Undo remains disabled 
 
 ![Carbon row selects the original carbonyl atom](images/nmr/compact/carbonyl-selection.jpg)
 
-**Details…** expands the reference columns and scrollable method information. Native review exercised the expanded height buttons from 250 to 270 and back to 250 pixels, then scrolled through method, conditions, limitations and attribution. The drawing remained at 250%. **Compact** returns to the small view.
+**Details** expands the reference columns and scrollable method information. Native review exercised the expanded height buttons from 250 to 270 and back to 250 pixels, then scrolled through method, conditions, limitations and attribution. The drawing remained at 250%. Choosing **Details** again returns to the small view.
 
 ![Expanded reference columns at the same drawing zoom](images/nmr/compact/details.jpg)
 
@@ -48,11 +48,11 @@ The existing application minimum is 1040×680 logical content pixels. macOS clam
 
 ## Source, evidence and reproduction
 
-The reviewed macOS arm64 default-feature debug bundle is the separately preserved `ReShiki NMR Compact.app`, signed executable SHA-256 `9d29f842dfb72748ba931332a7ce37e43183a6155a07b3a260118df9a5c42321`. See the [exact build and validation record](nmr-compact-validation.md) and [capture/artifact hash manifest](nmr-compact-native-evidence.json). Every image above preserves the original JPEG/JFIF desktop bytes without cropping, retouching or re-encoding.
+The reviewed macOS arm64 default-feature debug bundle is the separately preserved `ReShiki NMR Compact.app`, signed executable SHA-256 `9d29f842dfb72748ba931332a7ce37e43183a6155a07b3a260118df9a5c42321`. See the [exact build and validation record](nmr-compact-validation.md) and [capture/artifact hash manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/nmr-compact-native-evidence.json). Every image above preserves the original JPEG/JFIF desktop bytes without cropping, retouching or re-encoding.
 
 To reproduce, open the unchanged fixture, turn keyboard drawing off with F8, choose JACS / ACS Publication and Fit, expand Properties → Molecular properties, then choose **Predict NMR…**. Compare H and C with the inspector visible before exercising selection, Details…, height, scrolling, hide/show, close/reopen and export. Test palette padding and outside drawing input, then restore the graph after geometry and chemistry edits.
 
-The [final native saved drawing](evidence/nmr/ethyl-acetate-compact-desktop-final.rsk) is clean, with six atoms, five bonds, C4H8O2, original atom IDs and original positions. The [independent comparison](evidence/nmr/compact-desktop-independent-check.json) verifies source atom fields and positions, bond endpoints/order/display, neutral defaults and derived H. Existing serialization adds default fields and omits the fixture-only bond ID keys. This saved artifact proves graph restoration; it does not claim persistence of NMR results.
+The [final native saved drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/nmr/ethyl-acetate-compact-desktop-final.rsk) is clean, with six atoms, five bonds, C4H8O2, original atom IDs and original positions. The [independent comparison](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/nmr/compact-desktop-independent-check.json) verifies source atom fields and positions, bond endpoints/order/display, neutral defaults and derived H. Existing serialization adds default fields and omits the fixture-only bond ID keys. This saved artifact proves graph restoration; it does not claim persistence of NMR results.
 
 ## ChemDraw reference limit
 
@@ -67,3 +67,12 @@ The earlier baseline without NMR used source `51fa0991da2507bb00b27c1b420e807468
 See [the user guide](nmr-prediction.md), [data provenance and license](../data/nmr/README.md), and [held-out report](../data/nmr/validation.json). The original spherical encoder uses radii 2–4, longest supported radius first, median fallback, and at least two independent molecular connectivity groups. It pools stereoisomers and does not resolve diastereotopic H; multiple attached H represent an unresolved parent group. Reference SD is observed dispersion, not a calibrated confidence interval.
 
 Only neutral supported organic graphs up to 128 atoms and recorded CDCl3 measurements at 273–323 K are included. Exchangeable H, ions, radicals, metals and non-default isotope labels are unsupported. Sparse environments remain without numerical values. Held-out errors come from the same source release, not an independently acquired cohort: ¹H group-median MAE 0.307 ppm at 92.53% coverage; ¹³C MAE 2.047 ppm at 60.22% coverage. The paper’s published accuracy is not claimed.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/evidence/nmr](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/evidence/nmr), [docs/nmr-compact-native-evidence.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/nmr-compact-native-evidence.json) on the evidence archive branch.
+
+| Archived files                                                                                                                                           | What they record                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [docs/evidence/nmr](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/evidence/nmr)                                         | The final ethyl-acetate native drawing and independent graph-restoration comparison. |
+| [docs/nmr-compact-native-evidence.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/nmr-compact-native-evidence.json) | Original capture bytes, dimensions, displayed zoom and SHA-256 values.               |

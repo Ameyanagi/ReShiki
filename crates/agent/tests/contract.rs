@@ -5,12 +5,25 @@
 mod support;
 
 use reshiki_agent::{
-    Proposal, canvas_tools,
-    ops::catalog::{SPECS, catalog_json, decode_check},
+    Proposal,
+    access::Grants,
+    canvas_tools,
+    ops::{
+        budget::{Budgets, RenderBudget},
+        catalog::{RESULTS, SPECS, catalog_json, decode_check},
+        headless::HeadlessHost,
+        host::{Call, ToolHost},
+        inspect::MAX_TEXT_CHARS,
+        wire::{Principal, RequestId},
+    },
     tool_spec::valid_name,
 };
 use serde_json::{Value, json};
-use std::collections::{BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use support::{
     corpus::{self, Contract},
     json_schema,
@@ -236,6 +249,234 @@ fn the_operation_catalog_bytes_are_pinned() {
         .strip_suffix('\n')
         .expect("ops-catalog.json ends in one LF");
     assert_eq!(catalog_json().to_string(), golden);
+}
+
+/// The leading `{...}` lists only top-level keys; the prose after it
+/// documents nested fields and their meanings.
+fn result_keys(tool: &str) -> BTreeSet<&'static str> {
+    let description = RESULTS
+        .iter()
+        .find(|(name, _)| *name == tool)
+        .unwrap_or_else(|| panic!("no result documentation for {tool}"))
+        .1;
+    let (keys, prose) = description
+        .strip_prefix('{')
+        .and_then(|text| text.split_once('}'))
+        .unwrap_or_else(|| panic!("{tool}: result must start with {{top-level keys}}"));
+    assert!(!prose.trim().is_empty(), "{tool}: no result description");
+    let listed: Vec<_> = keys.split(',').map(str::trim).collect();
+    assert!(
+        listed.iter().all(|key| valid_name(key)),
+        "{tool}: invalid result keys {listed:?}"
+    );
+    let unique: BTreeSet<_> = listed.iter().copied().collect();
+    assert_eq!(listed.len(), unique.len(), "{tool}: duplicate result key");
+    unique
+}
+
+#[test]
+fn every_operation_has_exactly_one_result_description() {
+    let mut names = BTreeSet::new();
+    for (name, _) in RESULTS {
+        assert!(names.insert(*name), "duplicate result documentation {name}");
+        let _ = result_keys(name);
+    }
+    assert_eq!(names, SPECS.iter().map(|spec| spec.name).collect());
+}
+
+/// Match real request IDs to successful structured results in every tools
+/// transcript, including future fixtures in this directory.
+// Test fixtures are read directly, outside the agent's filesystem grants.
+#[allow(clippy::disallowed_methods)]
+fn golden_results() -> Vec<(PathBuf, String, Value)> {
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/mcp");
+    let mut paths: Vec<_> = std::fs::read_dir(&directory)
+        .expect("MCP fixture directory")
+        .map(|entry| entry.expect("MCP fixture entry").path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("tools-") && name.ends_with(".jsonl"))
+        })
+        .collect();
+    paths.sort();
+    assert!(!paths.is_empty(), "no tools-*.jsonl fixtures");
+    let mut successes = Vec::new();
+    for path in paths {
+        let mut requests = BTreeMap::new();
+        for line in std::fs::read_to_string(&path)
+            .expect("MCP tools fixture")
+            .lines()
+        {
+            if let Some(request) = line.strip_prefix("> ") {
+                let request: Value = serde_json::from_str(request).expect("request JSON");
+                if request["method"] == "tools/call" {
+                    let name = request["params"]["name"]
+                        .as_str()
+                        .expect("tool name")
+                        .to_owned();
+                    assert!(
+                        SPECS.iter().any(|spec| spec.name == name),
+                        "{}: unknown operation tool {name}",
+                        path.display()
+                    );
+                    requests.insert(request["id"].to_string(), name);
+                }
+            } else if let Some(response) = line.strip_prefix("< ") {
+                let response: Value = serde_json::from_str(response).expect("response JSON");
+                if let Some(name) = requests.remove(&response["id"].to_string())
+                    && response["result"]["isError"] == false
+                {
+                    successes.push((
+                        path.clone(),
+                        name,
+                        response["result"]["structuredContent"].clone(),
+                    ));
+                }
+            }
+        }
+    }
+    successes
+}
+
+async fn successful_result(host: &HeadlessHost, tool: &str, arguments: Value) -> Value {
+    let result = host
+        .call(Call {
+            principal: Principal::local(),
+            request: RequestId::Int(1),
+            tool: tool.to_owned(),
+            arguments,
+            progress: None,
+        })
+        .await
+        .unwrap_or_else(|error| panic!("{tool}: {error}"));
+    assert!(!result.is_error, "{tool}: {:?}", result.value);
+    Value::Object(result.value)
+}
+
+fn assert_result_keys(tool: &str, result: &Value, source: &str) {
+    let actual: BTreeSet<_> = result
+        .as_object()
+        .unwrap_or_else(|| panic!("{source}: {tool}: result is not an object"))
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(result_keys(tool), actual, "{source}: {tool}");
+}
+
+/// Prefer successful real-binary goldens. Tools without one run against the
+/// same operation API through HeadlessHost; native files need no engine.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(clippy::disallowed_methods, clippy::disallowed_types)]
+async fn documented_result_keys_match_successful_operations() {
+    let mut covered = BTreeSet::new();
+    for (path, tool, result) in golden_results() {
+        assert_result_keys(&tool, &result, &path.display().to_string());
+        covered.insert(tool);
+    }
+    let missing: Vec<_> = SPECS
+        .iter()
+        .filter(|spec| !covered.contains(spec.name))
+        .map(|spec| spec.name)
+        .collect();
+    if missing.is_empty() {
+        return;
+    }
+    let directory = tempfile::tempdir().expect("native file fixture directory");
+    let input = directory.path().join("input.rsk");
+    std::fs::write(
+        &input,
+        include_bytes!("../../../tests/fixtures/bond-join-regression.rsk"),
+    )
+    .expect("native input fixture");
+    let grants = Grants::open(
+        &[directory.path().to_path_buf()],
+        &[directory.path().to_path_buf()],
+    )
+    .expect("fixture grants");
+    let host = HeadlessHost::new("contract-test", Budgets::default()).with_grants(Arc::new(grants));
+    for tool in missing {
+        let arguments = match tool {
+            "info" | "document_new" | "document_list" => json!({}),
+            "document_close" | "file_save" => {
+                let created = successful_result(&host, "document_new", json!({})).await;
+                if tool == "document_close" {
+                    json!({"document": created["document"]})
+                } else {
+                    json!({
+                        "document": created["document"],
+                        "path": directory.path().join("output.rsk"),
+                        "format": null, "overwrite": false, "pages": null,
+                    })
+                }
+            }
+            "file_open" => json!({"path": input, "format": "auto"}),
+            _ => panic!("{tool}: add a successful golden or HeadlessHost fallback"),
+        };
+        let result = successful_result(&host, tool, arguments).await;
+        assert_result_keys(tool, &result, "HeadlessHost");
+        covered.insert(tool.to_owned());
+    }
+    assert_eq!(
+        covered,
+        SPECS.iter().map(|spec| spec.name.to_owned()).collect()
+    );
+}
+
+#[test]
+fn tool_description_limits_match_defaults() {
+    let description = |name| {
+        SPECS
+            .iter()
+            .find(|spec| spec.name == name)
+            .unwrap()
+            .description
+    };
+    let number = |text: &str, marker: &str| -> u64 {
+        text.split_once(marker)
+            .unwrap()
+            .1
+            .trim_start()
+            .chars()
+            .take_while(|character| character.is_ascii_digit() || *character == ',')
+            .filter(|character| *character != ',')
+            .collect::<String>()
+            .parse()
+            .unwrap()
+    };
+    let budgets = Budgets::default();
+    let new = description("document_new");
+    assert_eq!(
+        number(new, "without use (") * 60,
+        budgets.idle_ttl.as_secs()
+    );
+    assert_eq!(number(new, "max_documents ("), budgets.max_documents as u64);
+    assert_eq!(
+        number(description("inspect"), "Annotation text over "),
+        MAX_TEXT_CHARS as u64,
+    );
+    assert_eq!(
+        number(description("apply"), "idempotency_key (at most "),
+        budgets.max_idempotency_key_bytes as u64,
+    );
+    let render = description("render");
+    assert_eq!(
+        number(render, "scaled up to ") as f32,
+        canvas_tools::MAX_UPSCALE
+    );
+    let defaults = render.split_once("pixels (null for ").unwrap().1;
+    assert_eq!(
+        number(defaults, ""),
+        u64::from(budgets.render.default_width)
+    );
+    assert_eq!(
+        number(defaults, " × "),
+        u64::from(budgets.render.default_height)
+    );
+    let sides = render.split_once("each side ").unwrap().1;
+    assert_eq!(number(sides, ""), u64::from(budgets.render.min_side));
+    assert_eq!(number(sides, " to "), u64::from(budgets.render.max_side));
+    assert_eq!(budgets.render, RenderBudget::DEFAULT);
 }
 
 /// The pointers below `at` of every object-level subschema of `schema` that

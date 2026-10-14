@@ -27,6 +27,9 @@ pub enum Section {
     ExportChemical,
     ExportPages,
     ExportNative,
+    RepeatingUnit,
+    GenericStructure,
+    AtomMaps,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -85,7 +88,7 @@ impl std::fmt::Display for FigureFormat {
         f.write_str(match self {
             Self::Pdf => "PDF",
             Self::Svg => "SVG",
-            Self::SvgOffice => "SVG · Office picture",
+            Self::SvgOffice => "SVG for Office",
             Self::Png => "PNG",
             #[cfg(windows)]
             Self::Emf => "EMF for Office",
@@ -152,6 +155,7 @@ pub struct PropertyKey {
 }
 #[derive(Default)]
 pub(super) struct State {
+    expected_viewport: Option<iced::Size>,
     expanded: HashMap<Section, bool>,
     figure: FigureFormat,
     figure_menu: bool,
@@ -161,6 +165,16 @@ pub(super) struct State {
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
 }
 impl State {
+    pub(super) fn expect_viewport(&mut self, size: iced::Size) {
+        self.expected_viewport = Some(size);
+    }
+
+    pub(super) fn take_expected_viewport(&mut self, size: iced::Size) -> bool {
+        self.expected_viewport.take().is_some_and(|expected| {
+            (size.width - expected.width).abs() < 1. && (size.height - expected.height).abs() < 1.
+        })
+    }
+
     pub(super) fn menu_open(&self) -> bool {
         self.figure_menu || self.chemical_menu
     }
@@ -416,7 +430,7 @@ impl App {
         self.inspector_section_lazy(section, title, summary, expanded, || content)
     }
 
-    fn inspector_section_lazy<'a, Content: Into<Element<'a, Message>>>(
+    pub(super) fn inspector_section_lazy<'a, Content: Into<Element<'a, Message>>>(
         &'a self,
         section: Section,
         title: &'static str,
@@ -565,6 +579,9 @@ impl App {
         {
             body = body.push(card(container(self.graphic_panel()).padding(12)));
         }
+        if let Some(section) = self.repeating_unit_section() {
+            body = body.push(section);
+        }
         if self
             .tab
             .doc
@@ -590,7 +607,16 @@ impl App {
         if !self.tab.selected.is_empty() {
             body = body.push(self.selection_panel(&selected));
         }
-        if let Some(error) = &self.tab.chemistry_notice {
+        // The card replaces the informational notice of a generic drawing.
+        if let Some(section) = self.generic_structure_section() {
+            body = body.push(section);
+        }
+        if let Some(error) = self
+            .tab
+            .chemistry_notice
+            .as_deref()
+            .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
+        {
             body = body.push(
                 text(error)
                     .size(12)
@@ -628,58 +654,8 @@ impl App {
                 }
             },
         ));
-        let depth_ids = self.depth_ids();
-        if self.rear_opacity_visible(&depth_ids) {
-            use super::depth_appearance::{Action, Draft};
-            let value = self.rear_opacity_input(&depth_ids);
-            let revision = self.tab.revision;
-            let file_epoch = self.tab.file_epoch;
-            let apply = Message::DepthAppearance(Action::ApplyRear);
-            body = body.push(
-                self.inspector_section(
-                    Section::ProjectionAppearance,
-                    "3D appearance",
-                    "",
-                    true,
-                    column![
-                        text("Rear opacity (%)").size(12),
-                        row![
-                            reshiki::accessibility::text_input(
-                                "projection-rear-opacity",
-                                "Rear opacity percent",
-                                "Mixed",
-                                &value
-                            )
-                            .style(crate::appearance::input_style)
-                            .on_input(move |value| Message::DepthAppearance(Action::RearInput(
-                                Draft {
-                                    ids: depth_ids.clone(),
-                                    revision,
-                                    file_epoch,
-                                    value
-                                }
-                            )))
-                            .on_submit(apply.clone())
-                            .width(Length::Fixed(80.))
-                            .size(12),
-                            reshiki::accessibility::button(
-                                "projection-rear-opacity-apply",
-                                "Apply rear opacity",
-                                text("Apply").size(12)
-                            )
-                            .padding([7, 9])
-                            .style(super::workspace::control(false))
-                            .on_press(apply),
-                        ]
-                        .spacing(8)
-                        .align_y(Alignment::Center),
-                        text("100% keeps all ink. 0% hides occluded rear cage ink. Exposed outlines stay solid.")
-                            .size(11)
-                            .style(muted_text),
-                    ]
-                    .spacing(6),
-                ),
-            );
+        if let Some(section) = self.rear_opacity_section(self.depth_ids()) {
+            body = body.push(section);
         }
         body.push(
             self.inspector_section(
@@ -1049,7 +1025,7 @@ impl App {
                         ]
                         .spacing(6),
                         command(
-                            if bonds.iter().all(|b| b.order == 5 && b.projection) {
+                            if bonds.iter().all(|b| b.is_projected_dative()) {
                                 "Reverse projection tip"
                             } else {
                                 "Reverse bonds"

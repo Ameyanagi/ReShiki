@@ -469,7 +469,7 @@ fn composed_rear_orbital_editable_copy_restores_labels_and_matches_opaque_export
         assert!(
             notices
                 .iter()
-                .any(|notice| notice.contains("omits rear opacity"))
+                .any(|notice| notice == reshiki::rear_opacity::EXPORT_NOTICE)
         );
         let mut opaque = doc.clone();
         reshiki::depth_appearance::set_rear_opacity(&mut opaque, &ids, 1.).unwrap();

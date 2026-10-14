@@ -17,7 +17,7 @@ fn sampled(graphic: &reshiki::graphics::Graphic) -> Vec<Point> {
 #[tokio::test]
 async fn pen_multisegment_and_closed_edits_survive_editable_exchange_and_exports() {
     let mut doc = fixture();
-    doc.graphics[0].edit_point(3, Point::new(110., 15.));
+    let _ = doc.graphics[0].edit_point(3, Point::new(110., 15.));
     doc.graphics[0].insert_path_node(0).unwrap();
     doc.graphics[0]
         .append_pen_node(Point::new(340., 60.), Some(Point::new(350., 110.)))
@@ -95,7 +95,7 @@ fn compound_imported_paths_keep_generic_controls_without_node_operations() {
     assert!(graphic.path_handles().is_none());
     assert!(graphic.insert_path_node(0).is_err());
     assert!(graphic.delete_path_node(0).is_err());
-    graphic.edit_point(1, Point::new(0., -45.));
+    let _ = graphic.edit_point(1, Point::new(0., -45.));
     assert_eq!(graphic.edit_points()[1], Point::new(0., -45.));
     assert_eq!(graphic.commands()[0], first[0]);
     graphic.validate().unwrap();

@@ -343,6 +343,58 @@ fn numbered_attachments_follow_explicit_ids_instead_of_numeric_sorting() {
 }
 
 #[test]
+fn connection_validation_keeps_source_order_and_precedes_expansion() {
+    let bad_number = "<n NodeType='ExternalConnectionPoint' ExternalConnectionNum='0'/>";
+    let bad_type = "<b ExternalConnectionNum='0'/>";
+    for (first, second, message) in [
+        (
+            bad_number,
+            bad_type,
+            "ExternalConnectionNum must be a positive signed byte",
+        ),
+        (
+            bad_type,
+            bad_number,
+            "ExternalConnectionNum requires an external connection point",
+        ),
+    ] {
+        // The incomplete wrapper would fail expansion, but all source
+        // connection numbers are checked before any wrapper is expanded.
+        let text = format!("<CDXML><n NodeType='Fragment'/>{first}{second}</CDXML>");
+        assert_eq!(
+            outcome(&text),
+            format!("Invalid molecular CDXML: {message}")
+        );
+    }
+}
+
+#[test]
+fn definition_connection_numbers_keep_their_message_and_duplicate_errors() {
+    for (numbers, message) in [
+        (["128", "1"], "Invalid external connection number"),
+        (
+            ["1", "01"],
+            "Duplicate external connection numbers in abbreviation",
+        ),
+    ] {
+        let [first, second] = numbers;
+        let tree = Tree::parse(&format!(
+            "<CDXML><n id='1' BondOrdering='5 6'><fragment id='2' ConnectionOrder='3 4'><n id='3' NodeType='ExternalConnectionPoint' ExternalConnectionNum='{first}'/><n id='4' NodeType='ExternalConnectionPoint' ExternalConnectionNum='{second}'/></fragment></n></CDXML>"
+        ))
+        .unwrap();
+        let outer = tree.children(0, "n").unwrap()[0];
+        let inner = tree.children(outer, "fragment").unwrap()[0];
+        assert_eq!(
+            definition_atoms(&tree, outer, inner)
+                .err()
+                .unwrap()
+                .to_string(),
+            format!("Invalid molecular CDXML: {message}")
+        );
+    }
+}
+
+#[test]
 fn accepted_single_attachments_are_exact() {
     // Scale 2 with both `significant` spellings; OMe keeps its spelling.
     let xml = r#"<CDXML><page><fragment id="1"><n id="2" p="-30 0"></n><b id="10" B="2" E="5"></b><n id="5" p="0 0" Element="8"><t p="0 0"><s>OMe</s></t></n><n id="6" p="2e-05 2.4691358e+08"></n><b id="9" B="5" E="6"></b></fragment></page></CDXML>"#;

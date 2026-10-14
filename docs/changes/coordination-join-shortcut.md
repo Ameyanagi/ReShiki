@@ -1,6 +1,6 @@
 # Join a selected donor and metal with Ctrl+J
 
-**Under review in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)**,
+**Merged, unreleased, in [PR #283](https://github.com/Ameyanagi/ReShiki/pull/283)**,
 addressing [#246](https://github.com/Ameyanagi/ReShiki/issues/246).
 Contribution: @Ameyanagi, project creator and maintainer.
 

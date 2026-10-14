@@ -1,5 +1,6 @@
 //! Shared, bounded corners for normal, bold and tapered bond outlines.
 use crate::document::{Bond, Document, Point};
+use crate::scene::projected_bonds::FaceIndex;
 #[cfg(test)]
 mod double_tests;
 #[cfg(test)]
@@ -11,11 +12,11 @@ pub(crate) fn construction_count() -> usize {
     CONSTRUCTIONS.with(std::cell::Cell::get)
 }
 
-fn eligible(doc: &Document, b: &Bond) -> bool {
+fn eligible(faces: &FaceIndex<'_>, b: &Bond) -> bool {
     (b.order == 1
-        || matches!(b.order, 4 | 5) && b.projection
+        || (b.order == 4 && b.projection || b.is_projected_dative())
         || matches!(b.order, 2 | 7)
-            && match crate::scene::effective_double_position(doc, b) {
+            && match crate::scene::double_position(faces, b) {
                 crate::bonds::DoublePosition::Auto => false,
                 crate::bonds::DoublePosition::Left | crate::bonds::DoublePosition::Right => true,
                 crate::bonds::DoublePosition::Center => false,
@@ -38,6 +39,9 @@ pub struct Joins<'a> {
 }
 impl<'a> Joins<'a> {
     pub fn new(doc: &'a Document) -> Self {
+        Self::with_faces(doc, &FaceIndex::new(doc))
+    }
+    pub(crate) fn with_faces(doc: &'a Document, faces: &FaceIndex<'_>) -> Self {
         #[cfg(test)]
         CONSTRUCTIONS.with(|count| count.set(count.get() + 1));
         let atoms = doc
@@ -49,7 +53,7 @@ impl<'a> Joins<'a> {
             Default::default();
         let mut eligible_bonds = std::collections::HashSet::new();
         for (index, bond) in doc.bonds.iter().enumerate() {
-            if eligible(doc, bond) {
+            if eligible(faces, bond) {
                 eligible_bonds.insert((bond.a, bond.b));
                 if doc.bond_visible(bond.a, bond.b) {
                     for id in [bond.a, bond.b] {

@@ -1,12 +1,13 @@
 //! New mechanism-arrow targets use the same opacity/crossing/rail clipping as
 //! the bond scene. Persistent links deliberately do not use this hit-test gate.
 use super::*;
-use std::cell::OnceCell;
+use crate::polygon::signed_area;
+use std::{cell::OnceCell, rc::Rc};
 
 pub(crate) struct AttachmentInk<'a> {
     doc: &'a Document,
     active: bool,
-    opacity: OnceCell<crate::rear_opacity::Paint>,
+    opacity: OnceCell<Rc<crate::rear_opacity::Paint>>,
     bonds: OnceCell<Vec<Vec<Primitive>>>,
     incidents: OnceCell<std::collections::HashMap<u64, Vec<(usize, f32)>>>,
 }
@@ -20,10 +21,17 @@ impl<'a> AttachmentInk<'a> {
             incidents: OnceCell::new(),
         }
     }
+    pub(crate) fn with_paint(doc: &'a Document, paint: Rc<crate::rear_opacity::Paint>) -> Self {
+        Self {
+            opacity: OnceCell::from(paint),
+            ..Self::new(doc)
+        }
+    }
     fn opacity(&self) -> Option<&crate::rear_opacity::Paint> {
         self.active.then(|| {
             self.opacity
-                .get_or_init(|| crate::rear_opacity::Paint::new(self.doc))
+                .get_or_init(|| Rc::new(crate::rear_opacity::Paint::new(self.doc)))
+                .as_ref()
         })
     }
     pub(crate) fn atom(&self, id: u64) -> bool {
@@ -111,7 +119,7 @@ impl<'a> AttachmentInk<'a> {
         let Some(opacity) = self.opacity() else {
             return true;
         };
-        if opacity.is_empty() {
+        if !opacity.has_visibility() {
             return true;
         }
         let Some((a, b)) = self.doc.atom(bond.a).zip(self.doc.atom(bond.b)) else {
@@ -139,32 +147,17 @@ fn rendered_bond_parts(
     doc: &Document,
     opacity: &crate::rear_opacity::Paint,
 ) -> Vec<Vec<Primitive>> {
-    // Exactly the scene's detached color/style resolution and molecular bond
-    // pass. Ring strokes provide crossing gaps; their own ink is not attributed
-    // to an arbitrary bond. Unrelated labels, pictures and arrows cannot make a
-    // hidden chemical bond eligible. The one-time result is shared by all
-    // candidate bonds of this pointer/commit query.
-    let paint = crate::depth_appearance::Paint::new(doc);
-    let painted = paint.materialize(doc);
-    let resolved = crate::canvas_theme::canonical_document(&painted);
-    let doc = resolved.as_ref();
-    let RingStrokes {
-        arcs,
-        circles,
-        crossing_gaps,
-    } = push_ring_strokes(&mut Vec::new(), doc, opacity);
-    let labels = collect_atom_labels(doc, opacity);
-    let joins = crate::bond_joins::Joins::new(doc);
-    let scene = BondScene {
-        doc,
-        style: &doc.drawing_style,
-        arcs: &arcs,
-        circles: &circles,
-        label_bounds: &labels.bounds,
-        joins: &joins,
-        crossing_gaps: &crossing_gaps,
-        opacity,
-    };
+    // The scene's detached color/style preparation and molecular bond pass,
+    // including the drawn dative projection geometry. Ring strokes provide
+    // crossing gaps; their own ink is not attributed to an arbitrary bond.
+    // Unrelated labels, pictures and arrows cannot make a hidden chemical bond
+    // eligible. The one-time result is shared by all candidate bonds of this
+    // pointer/commit query.
+    let inputs = BondInputs::prepare(doc, opacity, Resolve::Scene);
+    let rings = push_ring_strokes(&mut Vec::new(), inputs.doc(), opacity);
+    let pass = BondPass::new(&inputs);
+    let doc = pass.doc;
+    let scene = pass.scene(&doc.drawing_style, &rings, opacity);
     doc.bonds
         .iter()
         .enumerate()
@@ -200,7 +193,7 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
             *alpha > 0. && intersects_fraction(primitive, origin, axis, at)
         }
         Primitive::Line(a, b, width) => *width > 0. && range(&[*a, *b], *width * 0.5),
-        Primitive::Polygon(points) => area(points).abs() > 1e-10 && range(points, 0.),
+        Primitive::Polygon(points) => signed_area(points).abs() > 1e-10 && range(points, 0.),
         Primitive::Path {
             commands,
             style,
@@ -210,7 +203,10 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
             // flattening for pointer tests. This is an ink eligibility test,
             // not a new per-pixel visibility certificate.
             crate::graphics::flattened(commands).iter().any(|path| {
-                (*filled && style.fill.is_some() && area(path).abs() > 1e-10 && range(path, 0.))
+                (*filled
+                    && style.fill.is_some()
+                    && signed_area(path).abs() > 1e-10
+                    && range(path, 0.))
                     || (style.width() > 0.
                         && path.windows(2).any(|line| range(line, style.width() * 0.5)))
             })
@@ -218,123 +214,6 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
         Primitive::Picture(_) | Primitive::Text { .. } => false,
     }
 }
-fn area(points: &[Point]) -> f64 {
-    let Some(origin) = points.first() else {
-        return 0.;
-    };
-    points
-        .iter()
-        .zip(points.iter().cycle().skip(1))
-        .take(points.len())
-        .map(|(a, b)| {
-            (f64::from(a.x) - f64::from(origin.x)) * (f64::from(b.y) - f64::from(origin.y))
-                - (f64::from(a.y) - f64::from(origin.y)) * (f64::from(b.x) - f64::from(origin.x))
-        })
-        .sum()
-}
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn fully_opaque_and_remote_pointer_queries_leave_visibility_caches_cold() {
-        let mut doc = Document::from_native_file(include_bytes!(
-            "../../../../tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk"
-        ))
-        .unwrap();
-        let ids = doc.all_ids();
-        crate::depth_appearance::set_rear_opacity(&mut doc, &ids, 1.).unwrap();
-        let ink = AttachmentInk::new(&doc);
-        assert!(ink.atom(52));
-        assert!(ink.bond(0, 0.5));
-        assert!(ink.opacity.get().is_none());
-        assert!(ink.bonds.get().is_none());
-        assert!(ink.incidents.get().is_none());
-        crate::depth_appearance::set_rear_opacity(&mut doc, &ids, 0.).unwrap();
-        let ink = AttachmentInk::new(&doc);
-        let remote = Point::new(50_000., 50_000.);
-        assert_eq!(ink.label_hit(remote, 2.), None);
-        assert_eq!(ink.nearest_atom(remote, 2.), None);
-        assert!(!ink.bond(0, -1.));
-        assert!(ink.opacity.get().is_none());
-        assert!(ink.bonds.get().is_none());
-        assert!(
-            !ink.bond(
-                doc.bonds
-                    .iter()
-                    .position(|b| b.a == 52 && b.b == 57)
-                    .unwrap(),
-                0.5
-            )
-        );
-        let cache = ink.bonds.get().unwrap().as_ptr();
-        assert!(
-            ink.bond(
-                doc.bonds
-                    .iter()
-                    .position(|b| b.a == 38 && b.b == 48)
-                    .unwrap(),
-                0.5
-            )
-        );
-        assert_eq!(
-            ink.bonds.get().unwrap().as_ptr(),
-            cache,
-            "All nearby candidates share one actual bond-scene construction"
-        );
-    }
-    #[test]
-    fn clipped_ink_fraction_does_not_bridge_hidden_middle_or_accept_zero_alpha() {
-        let a = Point::new(-80., 0.);
-        let axis = Point::new(1., 0.);
-        let pieces = [
-            Primitive::Line(a, Point::new(-5., 0.), 2.),
-            Primitive::Line(Point::new(5., 0.), Point::new(80., 0.), 2.),
-        ];
-        assert!(!pieces.iter().any(|p| intersects_fraction(p, a, axis, 80.)));
-        assert!(pieces.iter().any(|p| intersects_fraction(p, a, axis, 40.)));
-        for alpha in [0., 0.25] {
-            let part = Primitive::Opacity {
-                alpha,
-                primitive: Box::new(Primitive::Line(Point::new(-5., 0.), Point::new(5., 0.), 2.)),
-            };
-            assert_eq!(intersects_fraction(&part, a, axis, 80.), alpha > 0.);
-        }
-        // A genuine surviving secondary rail is eligible even away from the
-        // chemical backbone; absent neighboring bonds/arrows do not count.
-        assert!(intersects_fraction(
-            &Primitive::Line(Point::new(-5., 6.), Point::new(5., 6.), 1.),
-            a,
-            axis,
-            80.
-        ));
-    }
-    #[test]
-    fn actual_crossing_clip_hides_middle_and_keeps_exposed_bond_parts() {
-        let mut doc = Document::default();
-        let ids: Vec<_> = [
-            (-80., 0., -20.),
-            (80., 0., -20.),
-            (0., -50., 20.),
-            (0., 50., 20.),
-        ]
-        .into_iter()
-        .map(|(x, y, z)| {
-            let id = doc.add_atom("C", Point::new(x, y));
-            doc.atom_mut(id).unwrap().depth = z;
-            id
-        })
-        .collect();
-        doc.add_bond(ids[0], ids[1], 1, "plain");
-        doc.add_bond(ids[2], ids[3], 1, "plain");
-        doc.add_bond(ids[0], ids[2], 1, "plain");
-        crate::depth_appearance::set_rear_opacity(&mut doc, &ids, 0.).unwrap();
-        let ink = AttachmentInk::new(&doc);
-        assert!(!ink.bond(0, 0.5));
-        assert!(ink.bond(0, 0.25));
-        assert!(ink.bond(0, 0.75));
-        assert!(ink.bond(1, 0.5));
-        crate::depth_appearance::set_rear_opacity(&mut doc, &ids, 0.25).unwrap();
-        assert!(AttachmentInk::new(&doc).bond(0, 0.5));
-    }
-}
+mod tests;

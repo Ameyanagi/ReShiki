@@ -4,6 +4,7 @@ mod motion;
 mod press;
 mod release;
 
+use crate::canvas::pick::{HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::{Edit, Gesture, Handle, MoleculeCanvas, State, Tool, optimization};
 use iced::widget::canvas::Action;
 use iced::{Event, Point, Rectangle, mouse};
@@ -70,7 +71,7 @@ impl MoleculeCanvas<'_> {
                 if matches!(state.end_gesture(), Some(Gesture::Erase { .. })) {
                     return Some(Action::publish(Edit::EraseEnd));
                 }
-                if self.arrow_source.is_some() {
+                if self.arrows.source.is_some() {
                     Some(Action::publish(Edit::CancelArrowSource).and_capture())
                 } else {
                     Some(Action::request_redraw())
@@ -88,6 +89,7 @@ impl MoleculeCanvas<'_> {
             }
             Event::Mouse(mouse::Event::CursorLeft) => {
                 state.cursor = None;
+                state.bond_text_hover = None;
                 if matches!(state.gesture, Some(Gesture::Erase { .. })) {
                     state.gesture = None;
                     return Some(Action::publish(Edit::EraseEnd));
@@ -163,17 +165,21 @@ impl MoleculeCanvas<'_> {
             if matches!(state.gesture, Some(Gesture::StretchBond { .. })) {
                 return mouse::Interaction::Grabbing;
             }
-            if let Some(p) = cursor.position_in(bounds)
-                && let Ok(plan) = reshiki::editing::reference::Stretch::new(self.doc, fixed, moving)
-                && crate::canvas::hit::hit_selection(
-                    self.doc,
-                    self.camera.world(p, bounds),
-                    10. / self.camera.zoom,
-                )
-                .iter()
-                .any(|id| plan.ids.contains(id))
-            {
-                return mouse::Interaction::Grab;
+            if let Some(p) = cursor.position_in(bounds) {
+                // Its own statement, so the scene borrow ends before the hit test takes it again.
+                let plan = state.scene.borrow_mut().stretch(self.doc, fixed, moving);
+                if let Some(plan) = plan
+                    && crate::canvas::hit::hit_selection_with_orbital(
+                        self.doc,
+                        self.camera.world(p, bounds),
+                        self.camera.world_len(PICK_RADIUS_PX),
+                        state.scene.borrow_mut().foreground_orbital(self.doc),
+                    )
+                    .iter()
+                    .any(|id| plan.ids.contains(id))
+                {
+                    return mouse::Interaction::Grab;
+                }
             }
             return mouse::Interaction::Crosshair;
         }
@@ -199,7 +205,7 @@ impl MoleculeCanvas<'_> {
                 .any(|a| {
                     a.handles()
                         .iter()
-                        .any(|q| q.distance(p) < 8. / self.camera.zoom)
+                        .any(|q| q.distance(p) < self.camera.world_len(HANDLE_PICK_PX))
                 })
             {
                 return mouse::Interaction::Grab;

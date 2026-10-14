@@ -1,9 +1,26 @@
-use super::*;
-use crate::app::office::Host as OfficeHost;
+use super::{
+    ACCEPT_POLL, Event, HANDOFF,
+    admission::Admission,
+    client::{Client, office_proxy},
+    launch::{forwardable, office_role, private_nonce},
+    native,
+    protocol::{self, Command, NativePath, Process, Request, Response, Status},
+    server::{Core, Fences, Records, serve_once},
+    write_target,
+};
+use crate::session::{Host, Phase, parse};
 use std::{
     io::{Read, Write},
-    sync::mpsc as sync,
+    process::{Command as Child, Stdio},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc as sync,
+    },
+    thread,
+    time::{Duration, Instant},
 };
+use tokio::sync::mpsc;
 
 fn isolated() -> native::Endpoint {
     native::Endpoint::current()
@@ -47,13 +64,7 @@ fn test_child(
     TestChild(
         Child::new(std::env::current_exe().unwrap())
             .args(["--ignored", "--exact", role, "--nocapture"])
-            .env(
-                "RESHIKI_IPC_TEST_NONCE",
-                nonce
-                    .iter()
-                    .map(|byte| format!("{byte:02x}"))
-                    .collect::<String>(),
-            )
+            .env("RESHIKI_IPC_TEST_NONCE", protocol::token_hex(&nonce))
             .env("RESHIKI_IPC_TEST_FILE", source)
             .env("RESHIKI_IPC_TEST_MARKER", marker)
             .stdout(Stdio::null())
@@ -98,6 +109,40 @@ fn native_path_round_trip_and_bounds_preserve_filename_units() {
         assert_eq!(NativePath::encode(&path).unwrap().decode().unwrap(), path);
         assert!(NativePath::Unix(vec![0; 10]).decode().is_err());
         assert!(NativePath::Unix(vec![65; 4097]).decode().is_err());
+    }
+}
+
+#[test]
+fn token_text_preserves_hex_format_and_existing_radix_acceptance() {
+    let token = [
+        0x00, 0x01, 0x0f, 0x10, 0x7f, 0x80, 0xfe, 0xff, 0x02, 0x03, 0x04, 0x05, 0xa6, 0xb7, 0xc8,
+        0xd9,
+    ];
+    let text = protocol::token_hex(&token);
+    assert_eq!(text, "00010f107f80feff02030405a6b7c8d9");
+    assert_eq!(protocol::parse_token(&text).unwrap(), token);
+    assert_eq!(protocol::parse_token(&text.to_uppercase()).unwrap(), token);
+    // from_str_radix accepts a leading '+' within each two-character pair.
+    assert_eq!(protocol::parse_token(&"+f".repeat(16)).unwrap(), [15; 16]);
+    for invalid in [
+        String::new(),
+        "0".repeat(31),
+        "0".repeat(33),
+        "é".repeat(16),
+        "gg".repeat(16),
+        "-1".repeat(16),
+        " 1".repeat(16),
+    ] {
+        assert_eq!(
+            protocol::parse_token(&invalid).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidInput
+        );
+        assert_eq!(
+            private_nonce(&["--desktop-private".into(), invalid.into()])
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidInput
+        );
     }
 }
 
@@ -179,14 +224,14 @@ fn semantic_launch_flags_preserve_workers_and_explicit_gui_actions() {
     for flag in ["--office-edit", "--libreoffice-edit", "--office-addin-edit"] {
         let supported = args(&["--open", "a.rsk", flag]);
         assert!(
-            office_role(&supported, &crate::app::startup::parse(supported.clone()))
+            office_role(&supported, &parse(supported.clone()))
                 .unwrap()
                 .is_some()
         );
         let invalid = args(&["--open", "a.rsk", flag, "--shortcut-examples"]);
-        assert!(office_role(&invalid, &crate::app::startup::parse(invalid.clone())).is_err());
+        assert!(office_role(&invalid, &parse(invalid.clone())).is_err());
         let missing = args(&[flag]);
-        assert!(office_role(&missing, &crate::app::startup::parse(missing.clone())).is_err());
+        assert!(office_role(&missing, &parse(missing.clone())).is_err());
     }
 }
 
@@ -203,7 +248,7 @@ fn abandoned_or_expired_prepare_cannot_be_revived_by_a_late_ui_reply() {
             Command::Prepare {
                 token,
                 path: file("late.rsk"),
-                host: OfficeHost::Office,
+                host: Host::Office,
             },
         );
         let serving = core.clone();
@@ -262,7 +307,7 @@ fn office_busy_during_startup_can_retry_the_same_launch_after_ui_is_ready() {
         Command::Prepare {
             token: [8; 16],
             path: file("starting.rsk"),
-            host: OfficeHost::Office,
+            host: Host::Office,
         },
     );
     assert_eq!(core.dispatch(prepare.clone(), peer.clone()), Status::Busy);
@@ -283,7 +328,7 @@ fn wrong_generation_and_full_ui_queue_never_take_office_ownership() {
         Command::Prepare {
             token: [4; 16],
             path: file("full.rsk"),
-            host: OfficeHost::LibreOffice,
+            host: Host::LibreOffice,
         },
     );
     assert_eq!(
@@ -293,7 +338,7 @@ fn wrong_generation_and_full_ui_queue_never_take_office_ownership() {
     assert!(receiver.try_recv().is_err());
     for _ in 0..16 {
         core.events
-            .try_send(Event::Open(vec![], Reply::new()))
+            .try_send(Event::Open(vec![], Admission::new()))
             .unwrap();
     }
     let mut prepare = prepare;
@@ -342,7 +387,7 @@ fn host_write_fence_excludes_same_listener_successor_until_save_worker_finishes(
             Command::Prepare {
                 token: [token; 16],
                 path: NativePath::encode(&path).unwrap(),
-                host: OfficeHost::Office,
+                host: Host::Office,
             },
         )
     };
@@ -431,7 +476,7 @@ fn stalled_shared_prepare_leaves_private_fallback_unfenced() {
         Command::Prepare {
             token: [15; 16],
             path: file("fallback.rsk"),
-            host: OfficeHost::Office,
+            host: Host::Office,
         },
     );
     assert_eq!(
@@ -487,7 +532,7 @@ fn queue_full_commit_releases_uncommitted_writer_fence_before_retry() {
         Command::Prepare {
             token: [16; 16],
             path: file("queue-full.rsk"),
-            host: OfficeHost::Office,
+            host: Host::Office,
         },
     );
     let mut fences = Fences::default();
@@ -498,7 +543,7 @@ fn queue_full_commit_releases_uncommitted_writer_fence_before_retry() {
     let mut receiver = ui.join().unwrap();
     for _ in 0..16 {
         core.events
-            .try_send(Event::Open(vec![], Reply::new()))
+            .try_send(Event::Open(vec![], Admission::new()))
             .unwrap();
     }
     let commit = Request::new(
@@ -592,7 +637,7 @@ fn office_commit_retries_keep_one_lease_and_completion_survives_until_ack() {
         Command::Prepare {
             token,
             path: file("a.rsk"),
-            host: OfficeHost::Office,
+            host: Host::Office,
         },
     );
     assert_eq!(
@@ -638,14 +683,14 @@ fn native_pipe_or_socket_has_an_elected_authenticated_owner_and_deadlines() {
     );
     let mut listener = endpoint.listen(&election).unwrap();
     let server = thread::spawn(move || {
-        let (mut stream, peer) = listener.accept(Duration::from_secs(2)).unwrap();
+        let (mut stream, peer) = listener.accept(Duration::from_secs(2), HANDOFF).unwrap();
         assert!(peer.is_alive());
         let mut bytes = [0; 3];
         stream.read_exact(&mut bytes).unwrap();
         assert_eq!(&bytes, b"one");
         stream.write_all(b"two").unwrap();
         drop(stream);
-        let (mut silent, _) = listener.accept(Duration::from_secs(2)).unwrap();
+        let (mut silent, _) = listener.accept(Duration::from_secs(2), HANDOFF).unwrap();
         let start = Instant::now();
         assert!(silent.read_exact(&mut [0; 1]).is_err());
         assert!(start.elapsed() < Duration::from_secs(4));
@@ -666,8 +711,8 @@ fn native_pipe_or_socket_has_an_elected_authenticated_owner_and_deadlines() {
 fn office_proxy_child() {
     let endpoint = test_endpoint();
     let source = std::env::var_os("RESHIKI_IPC_TEST_FILE").unwrap();
-    let startup = crate::app::startup::parse(["--open".into(), source, "--office-edit".into()]);
-    std::process::exit(office_proxy(endpoint, &startup, OfficeHost::Office));
+    let startup = parse(["--open".into(), source, "--office-edit".into()]);
+    std::process::exit(office_proxy(endpoint, &startup, Host::Office));
 }
 
 #[test]
@@ -695,16 +740,9 @@ fn office_fake_host_child() {
         }
     });
     let mut fences = Fences::default();
+    let stopping = AtomicBool::new(false);
     loop {
-        if let Ok((mut stream, peer)) = listener.accept(Duration::from_millis(100))
-            && let Ok(request) = protocol::read::<Request>(&mut stream)
-        {
-            let status = fences.dispatch(&endpoint, &core, request, peer);
-            let _ = protocol::write(
-                &mut stream,
-                &Response::new(core.generation, core.process, status),
-            );
-        }
+        serve_once(&mut listener, &mut fences, &endpoint, &core, &stopping);
     }
 }
 
@@ -776,7 +814,7 @@ fn watched_office_proxy_process_stays_alive_until_its_session_closes() {
         let mut dropped_commit_reply = false;
         let mut dropped_queries = 0;
         while !stopping.load(Ordering::Acquire) {
-            if let Ok((mut stream, peer)) = listener.accept(Duration::from_millis(100))
+            if let Ok((mut stream, peer)) = listener.accept(ACCEPT_POLL, HANDOFF)
                 && let Ok(request) = protocol::read::<Request>(&mut stream)
             {
                 let commit = matches!(request.command, Command::Commit { .. });
@@ -816,56 +854,43 @@ fn watched_office_proxy_process_stays_alive_until_its_session_closes() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("drawing.rsk");
     std::fs::write(&source, b"fake-host-fixture").unwrap();
-    let mut child = Child::new(std::env::current_exe().unwrap())
-        .args([
-            "--ignored",
-            "--exact",
-            "desktop::tests::office_proxy_child",
-            "--nocapture",
-        ])
-        .env(
-            "RESHIKI_IPC_TEST_NONCE",
-            nonce
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>(),
-        )
-        .env("RESHIKI_IPC_TEST_FILE", &source)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut child = test_child(
+        "desktop::tests::office_proxy_child",
+        nonce,
+        &source,
+        &directory.path().join("session"),
+    );
     let lease = match lease_rx.recv_timeout(Duration::from_secs(5)) {
         Ok(lease) => lease,
         Err(error) => {
-            let _ = child.kill();
+            let _ = child.0.kill();
             panic!("Proxy did not open its lease: {error}");
         }
     };
     assert!(
-        child.try_wait().unwrap().is_none(),
+        child.0.try_wait().unwrap().is_none(),
         "Office's watched child must still be running after handoff"
     );
     thread::sleep(Duration::from_millis(900));
     assert!(
-        child.try_wait().unwrap().is_none(),
+        child.0.try_wait().unwrap().is_none(),
         "Lost commit ACK/temporary IPC loss is not completion"
     );
     assert_eq!(core.records.lock().unwrap().sessions.len(), 1);
     let client = Client::new(endpoint).unwrap();
     assert!(client.open(vec![], Instant::now() + HANDOFF));
     assert!(
-        child.try_wait().unwrap().is_none(),
+        child.0.try_wait().unwrap().is_none(),
         "Unrelated ordinary activation is not completion"
     );
     lease.transition(Phase::Open, Phase::Closed);
     let deadline = Instant::now() + Duration::from_secs(5);
     let exit = loop {
-        if let Some(exit) = child.try_wait().unwrap() {
+        if let Some(exit) = child.0.try_wait().unwrap() {
             break exit;
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
+            let _ = child.0.kill();
             panic!("Proxy did not exit after its lease completed");
         }
         thread::sleep(Duration::from_millis(25));

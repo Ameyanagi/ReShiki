@@ -4,6 +4,7 @@ use super::{AtomMark, MarkKind, Part, styled_mark_parts};
 use crate::{
     document::{Atom, Document, Point},
     graphics::{PathCommand, flattened},
+    polygon::closed_edges,
     scene::Primitive,
 };
 
@@ -19,8 +20,7 @@ pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, 
         .text_style
         .as_ref()
         .map_or(doc.drawing_style.font_size_pt, |style| style.size_pt);
-    // A modest positive gap, scaled with the actual label's font size. This is
-    // a ReShiki default, not a numerical claim about another application's UI.
+    // The pair sits 7% of the label's font size outside its ink.
     let gap = doc.drawing_style.world(font_pt * 0.07);
     let owner_ink = crate::scene::atom_label_ink_boxes(atom, doc);
     // Anchor the pair to the glyph nearest the atom center. Hydrogens and
@@ -48,31 +48,7 @@ pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, 
     chemistry.annotations.clear();
     let obstacles: Vec<_> = crate::scene::primitives(&chemistry)
         .into_iter()
-        .flat_map(|primitive| match primitive {
-            Primitive::Line(a, b, width) => vec![Obstacle {
-                points: vec![a, b],
-                width,
-                filled: false,
-            }],
-            Primitive::Polygon(points) => vec![Obstacle {
-                points,
-                width: 0.,
-                filled: true,
-            }],
-            Primitive::Path {
-                commands,
-                style,
-                filled,
-            } => flattened(&commands)
-                .into_iter()
-                .map(|points| Obstacle {
-                    points,
-                    width: style.width(),
-                    filled,
-                })
-                .collect(),
-            _ => Vec::new(),
-        })
+        .flat_map(primitive_obstacles)
         .collect();
     let candidates: Vec<_> = [(0., -1., 0.), (-1., 0., 90.), (0., 1., 0.), (1., 0., 90.)]
         .into_iter()
@@ -136,6 +112,35 @@ pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, 
     // Extremely crowded drawings retain a deterministic usable placement;
     // the user can still drag an exact offset or move the new mark afterward.
     fallback
+}
+
+fn primitive_obstacles(primitive: Primitive) -> Vec<Obstacle> {
+    match primitive {
+        Primitive::Opacity { alpha, primitive } if alpha > 0. => primitive_obstacles(*primitive),
+        Primitive::Line(a, b, width) => vec![Obstacle {
+            points: vec![a, b],
+            width,
+            filled: false,
+        }],
+        Primitive::Polygon(points) => vec![Obstacle {
+            points,
+            width: 0.,
+            filled: true,
+        }],
+        Primitive::Path {
+            commands,
+            style,
+            filled,
+        } => flattened(&commands)
+            .into_iter()
+            .map(|points| Obstacle {
+                points,
+                width: style.width(),
+                filled,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 fn new_mark_bounds(atom: &Atom, doc: &Document, kind: MarkKind, angle: f32) -> Box2 {
@@ -208,12 +213,7 @@ fn intersects(obstacle: &Obstacle, bounds: Box2) -> bool {
     }
     let center = Point::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5);
     let mut inside = false;
-    for (a, b) in obstacle
-        .points
-        .iter()
-        .zip(obstacle.points.iter().cycle().skip(1))
-        .take(obstacle.points.len())
-    {
+    for (a, b) in closed_edges(&obstacle.points) {
         if (a.y > center.y) != (b.y > center.y)
             && center.x < (b.x - a.x) * (center.y - a.y) / (b.y - a.y) + a.x
         {
@@ -239,31 +239,4 @@ fn segments_cross(a: Point, b: Point, c: Point, d: Point) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_wedge_closing_edge_blocks_a_mark_even_when_its_center_is_outside_the_fill() {
-        let wedge = Obstacle {
-            points: vec![
-                Point::new(-10., -10.),
-                Point::new(10., -10.),
-                Point::new(10., 10.),
-            ],
-            width: 0.,
-            filled: true,
-        };
-        assert!(intersects(
-            &wedge,
-            (Point::new(-1., -0.5), Point::new(1., 1.5))
-        ));
-        assert!(!intersects(
-            &wedge,
-            (Point::new(-5., 2.), Point::new(-3., 4.))
-        ));
-        assert!(intersects(
-            &wedge,
-            (Point::new(3., -1.), Point::new(4., 0.))
-        ));
-    }
-}
+mod tests;

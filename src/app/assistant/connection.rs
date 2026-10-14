@@ -36,29 +36,16 @@ impl App {
         self.assistant.started = None;
         match result {
             Ok(account) => {
-                self.assistant.connection = if account.connected {
-                    Connection::Ready
-                } else {
-                    Connection::SignInRequired
-                };
+                self.assistant.connection = Connection::from_account(&account);
                 self.assistant.error = !account.connected;
                 self.assistant.status = if account.connected {
                     "Connected to Codex".into()
                 } else {
-                    "Run `codex login` to sign in, then reconnect.".into()
+                    super::setup::SIGN_IN_STATUS.into()
                 };
                 self.assistant.account = Some(account);
             }
-            Err(error) => {
-                self.assistant.account = None;
-                self.assistant.connection = if error == codex::ConnectionError::Cancelled {
-                    Connection::Cancelled
-                } else {
-                    Connection::Failed(error)
-                };
-                self.assistant.status = error.to_string();
-                self.assistant.error = error != codex::ConnectionError::Cancelled;
-            }
+            Err(error) => self.assistant_connection_failed(error),
         }
         Task::none()
     }

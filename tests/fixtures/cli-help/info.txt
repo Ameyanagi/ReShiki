@@ -1,0 +1,8 @@
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli info
+
+Prints ReShiki's versions, the limits it enforces and the input and output
+formats as one JSON line.
+
+grants and files describe the file tools of reshiki --mcp; the command line
+uses neither.

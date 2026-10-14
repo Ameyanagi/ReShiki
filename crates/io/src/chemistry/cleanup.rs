@@ -464,7 +464,7 @@ impl Prepared {
         if let Some(error) = self.deferred_error {
             return Err(error.into());
         }
-        result.version = result.version.max(15);
+        result.require_version(reshiki_model::document::EDITOR_BASELINE);
         result.validate().map_err(Error::Document)?;
         let mut warnings = if crossed != 0 {
             vec![format!(

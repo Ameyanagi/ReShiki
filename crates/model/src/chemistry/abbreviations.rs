@@ -122,7 +122,7 @@ pub fn validate(document: &Document) -> Result<()> {
 /// Validate the abbreviation contract independently of preparation. Graph
 /// connectivity is indexed once, making even large collapsed groups linear.
 pub fn validate_with_policy(document: &Document, policy: AttachmentPolicy) -> Result<()> {
-    if !document.abbreviations.is_empty() && document.version < 10 {
+    if !document.abbreviations.is_empty() && document.version < crate::document::ABBREVIATIONS {
         return Err(Error::Version);
     }
     check_size(document)?;
@@ -321,7 +321,7 @@ pub fn find_with_policy(
             members,
         });
     }
-    result.version = result.version.max(15);
+    result.require_version(crate::document::EDITOR_BASELINE);
     validate_with_policy(&result, policy)?;
     Ok(result)
 }

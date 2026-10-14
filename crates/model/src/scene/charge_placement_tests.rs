@@ -8,7 +8,7 @@ use crate::{
 fn chelate(two_contacts: bool) -> Document {
     serde_json::from_str(if two_contacts {
         include_str!(
-            "../../../../docs/changes/assets/coordination-join-windows-20261010/co-en-windows-chelate-after.rsk"
+            "../../../../tests/fixtures/coordination/windows-native-20261010/co-en-windows-chelate-after.rsk"
         )
     } else {
         include_str!("../../../../tests/fixtures/coordination/join-shortcut/co-en3-cmd-j-native.rsk")

@@ -40,6 +40,19 @@ const SHORTCUT_GAP: f32 = 12.;
 const SCROLLBAR_WIDTH: f32 = 10.;
 const SCROLLBAR_GAP: f32 = 4.;
 
+/// A menu row's accessibility id: the command's own id where it has one,
+/// otherwise its page and position. Keyboard focus moves by the same id.
+fn item_id(page: Page, index: usize, action: &Action) -> String {
+    let named = match action {
+        Action::Run(message) => match message.as_ref() {
+            Message::Naming(super::naming::Action::OpenPanel(_)) => Some("menu-chemical-names"),
+            message => super::workspace::keyboard_control_id(message),
+        },
+        _ => None,
+    };
+    named.map_or_else(|| format!("menu-{page:?}-{index}"), str::to_owned)
+}
+
 /// The shortcut shown right-aligned beside a command.
 fn shortcut(action: &Action) -> Option<String> {
     match action {
@@ -221,8 +234,133 @@ impl App {
         }
     }
 
+    /// The selection menu, in groups: edit the clicked atom, name or select
+    /// its molecule, connect and reshape, generic structures, the clipboard,
+    /// then Properties and Delete.
     fn main_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
-        use Entry::Separator;
+        let command = Entry::command;
+        [
+            self.atom_entries(atoms),
+            self.molecule_entries(atoms),
+            self.structure_entries(atoms, bonds, tilt),
+            self.generic_entries(),
+            vec![
+                command("Cut", Message::Copy(true), true),
+                command("Copy", Message::Copy(false), true),
+                Entry::page("Copy as", Page::CopyAs),
+                command("Paste", Message::Paste, !self.tab.clipboard_busy),
+                command("Duplicate", Message::Duplicate, true),
+            ],
+            vec![
+                Entry::Item {
+                    label: "Properties…",
+                    action: Action::Properties(false),
+                    enabled: true,
+                },
+                command("Delete", Message::Delete, true),
+            ],
+        ]
+        .into_iter()
+        .filter(|group| !group.is_empty())
+        .collect::<Vec<_>>()
+        .join(&Entry::Separator)
+    }
+
+    /// The clicked atom's label and reaction map.
+    fn atom_entries(&self, atoms: bool) -> Vec<Entry> {
+        let command = Entry::command;
+        let mut entries = vec![];
+        if !atoms {
+            return entries;
+        }
+        if self.atom_text_target().is_some() {
+            entries.push(command(
+                "Edit atom label…",
+                Message::AtomText(super::atom_text::Action::Begin(None)),
+                true,
+            ));
+        }
+        if let Some(atom) = self.mapping_atom() {
+            entries.push(command(
+                "Edit atom map…",
+                Message::Mapping(super::reaction_mapping::Action::Open),
+                true,
+            ));
+            if self.tab.doc.atom(atom).is_some_and(|a| a.map_num != 0) {
+                entries.push(command(
+                    "Clear atom map",
+                    Message::Mapping(super::reaction_mapping::Action::Clear),
+                    true,
+                ));
+            }
+        }
+        let selected_atoms = self
+            .tab
+            .selected
+            .iter()
+            .filter(|id| self.tab.doc.atom(**id).is_some())
+            .count();
+        if selected_atoms > 1 {
+            entries.push(command(
+                "Create group label…",
+                Message::AtomText(super::atom_text::Action::ContractSelection),
+                true,
+            ));
+        }
+        entries
+    }
+
+    /// Name the clicked molecule, or select all of it.
+    fn molecule_entries(&self, atoms: bool) -> Vec<Entry> {
+        let command = Entry::command;
+        let mut entries = vec![];
+        if !atoms {
+            return entries;
+        }
+        if let Some(target) = self.context_name_target() {
+            let shown = reshiki::molecule_names::label(&self.tab.doc, &target).is_some();
+            entries.push(command(
+                if shown {
+                    "Hide chemical name"
+                } else {
+                    "Show chemical name"
+                },
+                Message::Naming(if shown {
+                    super::naming::Action::HideMoleculeName(target.clone())
+                } else {
+                    super::naming::Action::ShowMoleculeName(target.clone())
+                }),
+                self.naming_can_show_molecule(),
+            ));
+            entries.push(command(
+                "Chemical names…",
+                Message::Naming(super::naming::Action::OpenPanel(target)),
+                true,
+            ));
+        }
+        let connected: Vec<_> = reshiki::editing::groups(&self.tab.doc, &self.tab.doc.all_ids())
+            .into_iter()
+            .filter(|ids| {
+                ids.iter()
+                    .any(|id| self.tab.selected.contains(id) && self.tab.doc.atom(*id).is_some())
+            })
+            .flatten()
+            .collect();
+        if connected.len() != self.tab.selected.len()
+            || connected.iter().any(|id| !self.tab.selected.contains(id))
+        {
+            entries.push(command(
+                "Select molecule",
+                Message::Canvas(crate::canvas::Edit::Select(connected)),
+                true,
+            ));
+        }
+        entries
+    }
+
+    /// Connect and reshape the selection. Move & attach and Coordinate in
+    /// place stay in Arrange & transform, so the menu fits a 1280 × 820 window.
+    fn structure_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
         let command = Entry::command;
         let submenu = Entry::page;
         let mut entries = vec![];
@@ -232,95 +370,6 @@ impl App {
                     .into_iter()
                     .map(|c| command(c.menu, c.message, c.enabled)),
             );
-        }
-        if atoms && self.atom_text_target().is_some() {
-            entries.push(command(
-                "Edit atom label…",
-                Message::AtomText(super::atom_text::Action::Begin(None)),
-                true,
-            ));
-        }
-        if atoms
-            && self
-                .tab
-                .selected
-                .iter()
-                .filter(|id| self.tab.doc.atom(**id).is_some())
-                .count()
-                == 1
-        {
-            entries.push(command(
-                "Edit atom map…",
-                Message::Mapping(super::reaction_mapping::Action::Open),
-                true,
-            ));
-            entries.push(command(
-                "Clear atom map",
-                Message::Mapping(super::reaction_mapping::Action::Clear),
-                self.tab
-                    .selected
-                    .iter()
-                    .any(|id| self.tab.doc.atom(*id).is_some_and(|a| a.map_num != 0)),
-            ));
-        }
-        if atoms
-            && self
-                .tab
-                .selected
-                .iter()
-                .filter(|id| self.tab.doc.atom(**id).is_some())
-                .count()
-                > 1
-        {
-            entries.push(command(
-                "Create group label…",
-                Message::AtomText(super::atom_text::Action::ContractSelection),
-                true,
-            ));
-        }
-        if reshiki::generic::present(&self.tab.doc) {
-            entries.push(command(
-                "Expand Generic Structures",
-                Message::Generic(super::generic::Action::Expand),
-                true,
-            ));
-        }
-        if atoms {
-            if let Some(target) = self.context_name_target() {
-                let shown = reshiki::molecule_names::label(&self.tab.doc, &target).is_some();
-                entries.push(command(
-                    if shown {
-                        "Hide chemical name"
-                    } else {
-                        "Show chemical name"
-                    },
-                    Message::Naming(if shown {
-                        super::naming::Action::HideMoleculeName(target)
-                    } else {
-                        super::naming::Action::ShowMoleculeName(target)
-                    }),
-                    self.naming_can_show_molecule(),
-                ));
-            }
-            let connected: Vec<_> =
-                reshiki::editing::groups(&self.tab.doc, &self.tab.doc.all_ids())
-                    .into_iter()
-                    .filter(|ids| {
-                        ids.iter().any(|id| {
-                            self.tab.selected.contains(id) && self.tab.doc.atom(*id).is_some()
-                        })
-                    })
-                    .flatten()
-                    .collect();
-            if connected.len() != self.tab.selected.len()
-                || connected.iter().any(|id| !self.tab.selected.contains(id))
-            {
-                entries.push(command(
-                    "Select molecule",
-                    Message::Canvas(crate::canvas::Edit::Select(connected)),
-                    true,
-                ));
-            }
         }
         if tilt {
             entries.push(submenu("3D tilt", Page::Tilt));
@@ -370,20 +419,27 @@ impl App {
                 true,
             ));
         }
-        entries.push(Separator);
-        entries.push(command("Cut", Message::Copy(true), true));
-        entries.push(command("Copy", Message::Copy(false), true));
-        entries.push(submenu("Copy as", Page::CopyAs));
-        entries.push(command("Paste", Message::Paste, !self.tab.clipboard_busy));
-        entries.push(command("Duplicate", Message::Duplicate, true));
-        entries.push(Separator);
-        entries.push(Entry::Item {
-            label: "Properties…",
-            action: Action::Properties(false),
-            enabled: true,
-        });
-        entries.push(command("Delete", Message::Delete, true));
         entries
+    }
+
+    /// Expansion of the clicked component, including its native dependencies.
+    fn generic_entries(&self) -> Vec<Entry> {
+        let target = self
+            .context_menu
+            .as_ref()
+            .and_then(|menu| menu.hit.as_deref())
+            .unwrap_or(&self.tab.selected);
+        let Ok(scope) = reshiki::generic::component_scope(&self.tab.doc, target) else {
+            return vec![];
+        };
+        if !reshiki::generic::intersects(&self.tab.doc, &scope) {
+            return vec![];
+        }
+        vec![Entry::command(
+            super::generic::EXPAND,
+            Message::Generic(super::generic::Action::ExpandComponent(target.to_vec())),
+            self.generic_expand_enabled(),
+        )]
     }
 
     fn copy_as_entries(&self) -> Vec<Entry> {
@@ -476,36 +532,25 @@ impl App {
                 entries.push(command(label, Message::Arrange(action), true));
             }
         }
-        if atoms
-            || self.can_group()
-            || !self
-                .tab
-                .doc
-                .outer_selected_groups(&self.tab.selected)
-                .is_empty()
-        {
+        let group = self.can_group();
+        let ungroup = !self
+            .tab
+            .doc
+            .outer_selected_groups(&self.tab.selected)
+            .is_empty();
+        if atoms || group || ungroup {
             entries.push(Separator);
             if atoms {
-                entries.push(command(
-                    "Move & attach…",
-                    Message::Join(super::joining::Action::Begin),
-                    true,
-                ));
-                entries.push(command(
-                    "Coordinate in place…",
-                    Message::Join(super::joining::Action::BeginCoordination),
-                    true,
-                ));
+                entries.extend(
+                    self.selected_attach_commands()
+                        .into_iter()
+                        .map(|c| command(c.menu, c.message, c.enabled)),
+                );
             }
-            if self.can_group() {
+            if group {
                 entries.push(command("Group", Message::Group, true));
             }
-            if !self
-                .tab
-                .doc
-                .outer_selected_groups(&self.tab.selected)
-                .is_empty()
-            {
+            if ungroup {
                 entries.push(command("Ungroup", Message::Ungroup, true));
             }
         }
@@ -790,9 +835,10 @@ impl App {
             && menu.keyboard
             && let Some((level, index)) = menu.focused
             && let Some(page) = menu.page_at(level)
+            && let Some(Entry::Item { action, .. }) = self.context_entries(page).get(index)
         {
             return iced::advanced::widget::operate(reshiki::accessibility::FocusControl::new(
-                format!("menu-{page:?}-{index}"),
+                item_id(page, index, action),
             ))
             .discard()
             .chain(Task::done(Message::Accessibility(
@@ -894,13 +940,7 @@ impl App {
                                 .children
                                 .get(level)
                                 .is_some_and(|child| child.anchor == index));
-                    let id = match &action {
-                        Action::Run(message) => {
-                            super::workspace::keyboard_control_id(message).map(str::to_owned)
-                        }
-                        _ => None,
-                    }
-                    .unwrap_or_else(|| format!("menu-{page:?}-{index}"));
+                    let id = item_id(page, index, &action);
                     let item = reshiki::accessibility::button(id, accessible_name, content)
                         .padding([6, 10])
                         .width(Length::Fill)

@@ -11,6 +11,7 @@ async fn embedded_chemdraw_payload_imports_editable_chemistry_and_rejects_corrup
     let picture = paste_packet(
         LocalEngine::default(),
         Packet {
+            generation: Some("test".into()),
             representations: vec![preview.clone()],
         },
     )
@@ -27,6 +28,7 @@ async fn embedded_chemdraw_payload_imports_editable_chemistry_and_rejects_corrup
         1
     );
     let packet = |data: &[u8]| Packet {
+        generation: Some("test".into()),
         representations: vec![
             Representation::new("com.revvity.chemdraw.cdx-clipboard", data),
             preview.clone(),
@@ -61,13 +63,11 @@ async fn embedded_chemdraw_payload_imports_editable_chemistry_and_rejects_corrup
     );
     drawing.validate().unwrap();
 
-    // Recognized chemical data must report corruption rather than silently
-    // replacing an editable molecule with its otherwise valid image cache.
-    assert!(
-        paste_packet(LocalEngine::default(), packet(&cdx[..32]))
-            .await
-            .is_err()
-    );
+    let fallback = paste_packet(LocalEngine::default(), packet(&cdx[..32]))
+        .await
+        .unwrap();
+    assert!(fallback.atoms.is_empty());
+    assert_eq!(fallback.graphics.len(), 1);
 }
 
 #[derive(Serialize, Deserialize)]
@@ -263,6 +263,10 @@ async fn both_canvas_modes_copy_visible_ink_without_background_objects() {
             .await
             .unwrap();
         assert!(outcome.external_editable, "{:?}", outcome.notices);
+        assert!(representations.iter().all(|item| !matches!(
+            item.kind.as_str(),
+            "public.utf8-plain-text" | "org.opensmiles.smiles"
+        )));
         let native = representations.iter().find(|r| r.kind == NATIVE).unwrap();
         let original: Document = serde_json::from_slice(&native.bytes().unwrap()).unwrap();
         assert_eq!(original.canvas_theme, theme);
@@ -276,6 +280,7 @@ async fn both_canvas_modes_copy_visible_ink_without_background_objects() {
         let back = paste_packet(
             Default::default(),
             Packet {
+                generation: Some("test".into()),
                 representations: vec![binary],
             },
         )
@@ -319,7 +324,7 @@ async fn internal_condensed_labels_keep_editable_text_and_formula_formatting() -
 {
     use anyhow::{Context, ensure};
     let source: Document = serde_json::from_str(include_str!(
-        "../../docs/changes/fixtures/internal-labels.rsk"
+        "../../tests/fixtures/internal-labels/internal-labels.rsk"
     ))?;
     let (outcome, representations) = prepare_copy(Default::default(), source, false)
         .await
@@ -379,7 +384,7 @@ async fn projected_arene_with_bold_edge_has_editable_clipboard_and_native_depth(
 -> anyhow::Result<()> {
     use anyhow::{Context, ensure};
     let source: Document = serde_json::from_str(include_str!(
-        "../../docs/changes/fixtures/arene-bold-join.rsk"
+        "../../tests/fixtures/bond-joins/arene-bold-join.rsk"
     ))?;
     let (outcome, representations) = prepare_copy(Default::default(), source.clone(), false)
         .await
@@ -406,6 +411,7 @@ async fn projected_arene_with_bold_edge_has_editable_clipboard_and_native_depth(
     let back = paste_packet(
         Default::default(),
         Packet {
+            generation: Some("test".into()),
             representations: vec![binary.clone()],
         },
     )
@@ -444,6 +450,7 @@ async fn projected_double_bonds_keep_bold_rails_in_editable_clipboard() -> anyho
     let back = paste_packet(
         Default::default(),
         Packet {
+            generation: Some("test".into()),
             representations: vec![binary.clone()],
         },
     )
@@ -490,6 +497,7 @@ async fn copying_unvalidated_rings_keeps_editable_exchange_and_paste_warning() -
     let pasted = paste_packet_with_warnings(
         Default::default(),
         Packet {
+            generation: Some("test".into()),
             representations: vec![source],
         },
     )
@@ -508,6 +516,7 @@ async fn copying_unvalidated_rings_keeps_editable_exchange_and_paste_warning() -
     let back = paste_packet_with_warnings(
         Default::default(),
         Packet {
+            generation: Some("test".into()),
             representations: vec![binary.clone()],
         },
     )
@@ -557,6 +566,7 @@ async fn simplified_appearance_keeps_editable_atoms_and_the_native_original() ->
         let back = paste_packet(
             Default::default(),
             Packet {
+                generation: Some("test".into()),
                 representations: vec![binary.clone()],
             },
         )
@@ -613,6 +623,7 @@ async fn complete_shortcut_gallery_has_editable_cdx_without_altering_the_native_
     let back = paste_packet(
         Default::default(),
         Packet {
+            generation: Some("test".into()),
             representations: vec![cdx.clone()],
         },
     )
@@ -690,6 +701,7 @@ async fn previous_native_and_text_clipboards_remain_editable() -> anyhow::Result
         let restored = paste_packet_with_warnings(
             LocalEngine::default(),
             Packet {
+                generation: Some("test".into()),
                 representations: vec![Representation::new(kind, contents.as_bytes())],
             },
         )
@@ -731,6 +743,7 @@ async fn old_dark_reshiki_clipboards_convert_colors_once() -> anyhow::Result<()>
         let pasted = paste_packet_with_warnings(
             LocalEngine::default(),
             Packet {
+                generation: Some("test".into()),
                 representations: vec![Representation::new(NATIVE, data)],
             },
         )
@@ -785,6 +798,7 @@ async fn dark_depth_copy_materializes_external_paint_before_switching_paper() ->
         let pasted = paste_packet_with_warnings(
             Default::default(),
             Packet {
+                generation: Some("test".into()),
                 representations: vec![native_representation.clone()],
             },
         )
@@ -846,6 +860,7 @@ async fn only_reshiki_clipboards_keep_palette_references() -> anyhow::Result<()>
         let pasted = paste_packet_with_warnings(
             LocalEngine::default(),
             Packet {
+                generation: Some("test".into()),
                 representations: vec![Representation::new(kind, data)],
             },
         )
@@ -905,6 +920,7 @@ async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a
     let restored = paste_packet(
         LocalEngine::default(),
         Packet {
+            generation: Some("test".into()),
             representations: vec![native],
         },
     )
@@ -913,6 +929,7 @@ async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a
     let raster = paste_packet(
         LocalEngine::default(),
         Packet {
+            generation: Some("test".into()),
             representations: vec![png],
         },
     )
@@ -928,6 +945,7 @@ async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a
         paste_packet(
             LocalEngine::default(),
             Packet {
+                generation: Some("test".into()),
                 representations: vec![invalid]
             }
         )
@@ -946,6 +964,7 @@ async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a
         let result = paste_packet(
             LocalEngine::default(),
             Packet {
+                generation: Some("test".into()),
                 representations: vec![Representation::new(kind, &data.into_inner())],
             },
         )
@@ -1051,4 +1070,467 @@ fn adaptive_raster_wrappers_keep_publication_size_from_actual_resolution() {
             (f64::from(graphic.axis_y.y * style.points_per_world()) - cdx_height).abs() < 0.001
         );
     }
+}
+
+fn paste_test_picture(kind: &str, format: image::ImageFormat) -> Representation {
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(2, 2)
+        .write_to(&mut bytes, format)
+        .unwrap();
+    Representation::new(kind, bytes.get_ref())
+}
+
+#[tokio::test]
+async fn platform_packets_prefer_chemical_text_over_pictures_and_skip_other_text() {
+    let source = Document::from_json(include_bytes!(
+        "../../tests/fixtures/ui-drawn-ethanol.reshiki"
+    ))
+    .unwrap();
+    let mol = prepare_as(Default::default(), source.clone(), CopyFormat::Mol)
+        .await
+        .unwrap();
+    let mol_text = mol.text().unwrap();
+    let png = paste_test_picture("public.png", image::ImageFormat::Png);
+    let tiff = paste_test_picture("public.tiff", image::ImageFormat::Tiff);
+    let smiles = Representation::new("public.utf8-plain-text", b"CCO");
+    let caption = Representation::new("public.utf8-plain-text", b"hello");
+    let mol_text = Representation::new("public.utf8-plain-text", mol_text.as_bytes());
+    let native = Representation::new(NATIVE, &serde_json::to_vec(&source).unwrap());
+    let cdx_bytes = include_bytes!("../../tests/fixtures/native-ethyl-clipboard.cdx");
+    // Every platform sends portable kinds. Exercise each platform's CDX alias
+    // here on every host, rather than cfg-eliding two-thirds of the cases.
+    for (platform, cdx_kind) in [
+        ("macOS", "com.perkinelmer.chemdraw.cdx-clipboard"),
+        ("Windows", "com.revvity.chemdraw.cdx-clipboard"),
+        ("Linux", "chemical/x-cdx"),
+    ] {
+        let cdx = Representation::new(cdx_kind, cdx_bytes);
+        for (representations, atoms, picture, is_native) in [
+            (vec![png.clone(), smiles.clone()], 3, false, false),
+            (vec![caption.clone(), png.clone()], 0, true, false),
+            (
+                vec![png.clone(), smiles.clone(), cdx.clone()],
+                11,
+                false,
+                false,
+            ),
+            (
+                vec![
+                    png.clone(),
+                    smiles.clone(),
+                    cdx.clone(),
+                    mol_text.clone(),
+                    native.clone(),
+                ],
+                source.atoms.len(),
+                false,
+                true,
+            ),
+            (vec![tiff.clone(), mol_text.clone()], 3, false, false),
+        ] {
+            let pasted = paste_packet_with_warnings(
+                Default::default(),
+                Packet {
+                    generation: Some("test".into()),
+                    representations,
+                },
+            )
+            .await
+            .unwrap();
+            assert_eq!(pasted.document.atoms.len(), atoms, "{platform}");
+            assert_eq!(pasted.native, is_native, "{platform}");
+            assert_eq!(
+                pasted.document.graphics.iter().any(|g| g.picture.is_some()),
+                picture,
+                "{platform}"
+            );
+            assert!(
+                pasted.warnings.is_empty(),
+                "{platform}: {:?}",
+                pasted.warnings
+            );
+        }
+        let error = paste_packet(
+            Default::default(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![Representation::new("com.adobe.pdf", b"%PDF-1.7")],
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error,
+            "Paste supports PNG, JPEG, TIFF and WebP pictures. Export this PDF or SVG to PNG first",
+            "{platform}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn failed_native_cdx_and_cdxml_fall_through_and_newer_drawing_error_is_retained() {
+    let newer = Representation::new(
+        NATIVE,
+        &serde_json::to_vec(&serde_json::json!({
+            "version": u64::from(crate::document::VERSION) + 1,
+            "future_field": ["not readable by this version"],
+        }))
+        .unwrap(),
+    );
+    let cdx = Representation::new(
+        "com.revvity.chemdraw.cdx-clipboard",
+        include_bytes!("../../tests/fixtures/native-ethyl-clipboard.cdx"),
+    );
+    let fallback = paste_packet_with_warnings(
+        Default::default(),
+        Packet {
+            generation: Some("test".into()),
+            representations: vec![cdx.clone(), newer.clone()],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(fallback.document.atoms.len(), 11);
+    assert!(!fallback.native);
+    assert!(fallback.warnings.is_empty());
+
+    let mut source = Document::from_json(include_bytes!(
+        "../../tests/fixtures/ui-drawn-ethanol.reshiki"
+    ))
+    .unwrap();
+    let mol = prepare_as(Default::default(), source.clone(), CopyFormat::Mol)
+        .await
+        .unwrap();
+    let mol = Representation::new("com.mdli.molfile", mol.text().unwrap().as_bytes());
+    source.bonds[0].a = u64::MAX;
+    let invalid_native = Representation::new(NATIVE, &serde_json::to_vec(&source).unwrap());
+    let damaged_cdx =
+        Representation::new("com.revvity.chemdraw.cdx-clipboard", b"VjCD0100 damaged");
+    let damaged_cdxml = Representation::new("chemical/x-cdxml", b"<CDXML><bad");
+    for failed in [invalid_native, damaged_cdx.clone(), damaged_cdxml] {
+        let result = paste_packet_with_warnings(
+            Default::default(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![mol.clone(), failed],
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.document.atoms.len(), 3);
+        assert!(result.warnings.is_empty());
+    }
+    let error = paste_packet(
+        Default::default(),
+        Packet {
+            generation: Some("test".into()),
+            representations: vec![
+                newer,
+                damaged_cdx,
+                Representation::new("public.utf8-plain-text", b"hello"),
+                Representation::new("public.png", b"invalid picture"),
+            ],
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(error.contains("newer version of ReShiki"), "{error}");
+    assert!(error.contains("Update ReShiki"), "{error}");
+}
+
+#[tokio::test]
+async fn lazy_paste_reads_only_until_success_and_explicit_picture_paste_ignores_text() {
+    let png = paste_test_picture("public.png", image::ImageFormat::Png);
+    for (text, picture_only, expected_reads, atoms) in [
+        ("CCO", false, vec!["public.utf8-plain-text"], 3),
+        (
+            "hello",
+            false,
+            vec!["public.utf8-plain-text", "public.png"],
+            0,
+        ),
+        ("CCO", true, vec!["public.png"], 0),
+    ] {
+        let offered = [
+            png.clone(),
+            Representation::new("public.utf8-plain-text", text.as_bytes()),
+        ];
+        let mut reads = Vec::new();
+        let result = read_candidates(
+            picture_only,
+            |formats, _, _, _| {
+                let item = formats
+                    .iter()
+                    .find_map(|kind| offered.iter().find(|item| &item.kind == kind))
+                    .cloned();
+                if let Some(item) = &item {
+                    reads.push(item.kind.clone());
+                }
+                std::future::ready(Ok(Packet {
+                    generation: Some("test".into()),
+                    representations: item.into_iter().collect(),
+                }))
+            },
+            |item| paste_representation(Default::default(), item),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(reads, expected_reads);
+        assert_eq!(result.document.atoms.len(), atoms);
+        assert!(result.warnings.is_empty());
+    }
+    let mut broken = Representation::new(NATIVE, b"");
+    broken.read_error = Some("Clipboard data exceeds 64 MB".into());
+    let result = paste_packet(
+        Default::default(),
+        Packet {
+            generation: Some("test".into()),
+            representations: vec![broken, png],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.graphics.len(), 1);
+}
+
+#[tokio::test]
+async fn failed_office_drawing_retries_standalone_native_without_repeating_office() {
+    let source = Document::from_json(include_bytes!(
+        "../../tests/fixtures/ui-drawn-ethanol.reshiki"
+    ))
+    .unwrap();
+    let standalone = Representation::new(NATIVE, &serde_json::to_vec(&source).unwrap());
+    let mut office = Representation::new(NATIVE, b"invalid Office drawing");
+    office.embedded = Some(true);
+    let mut skips = Vec::new();
+    let result = read_candidates(
+        false,
+        |formats, _, skip_embedded, _| {
+            assert!(formats.contains(&NATIVE.to_owned()));
+            skips.push(skip_embedded);
+            std::future::ready(Ok(Packet {
+                generation: Some("test".into()),
+                representations: vec![if skip_embedded {
+                    standalone.clone()
+                } else {
+                    office.clone()
+                }],
+            }))
+        },
+        |item| paste_representation(Default::default(), item),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(skips, [false, true]);
+    assert_eq!(result.document, source);
+    assert!(result.native);
+}
+
+#[tokio::test]
+async fn failed_transport_alias_is_consumed_once_before_the_next_alias() {
+    let mut primary = Representation::new("com.revvity.chemdraw.cdx-clipboard", b"damaged CDX");
+    primary.source = Some("chemical/x-cdx".into());
+    let mut alternate = Representation::new(
+        "com.revvity.chemdraw.cdx-clipboard",
+        include_bytes!("../../tests/fixtures/native-ethyl-clipboard.cdx"),
+    );
+    alternate.source = Some("application/x-chemdraw".into());
+    let mut reads = Vec::new();
+    let result = read_candidates(
+        false,
+        |formats, skip_sources, _, _| {
+            assert!(formats.contains(&primary.kind));
+            let item = [&primary, &alternate]
+                .into_iter()
+                .find(|item| !skip_sources.contains(item.source.as_ref().unwrap()))
+                .cloned();
+            if let Some(item) = &item {
+                reads.push(item.source.clone().unwrap());
+            }
+            std::future::ready(Ok(Packet {
+                generation: Some("test".into()),
+                representations: item.into_iter().collect(),
+            }))
+        },
+        |item| paste_representation(Default::default(), item),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(reads, ["chemical/x-cdx", "application/x-chemdraw"]);
+    assert_eq!(result.document.atoms.len(), 11);
+    assert!(result.warnings.is_empty());
+}
+
+#[test]
+fn ordered_clipboard_requests_keep_format_and_source_lists_bounded() {
+    assert!(encode_ordered_request("read", &[], &["unknown".into()], &[], false, None).is_err());
+    assert!(
+        encode_ordered_request(
+            "read",
+            &[],
+            &[],
+            &vec!["image/png".into(); 129],
+            false,
+            None
+        )
+        .is_err()
+    );
+    assert!(
+        encode_ordered_request("read", &[], &[], &["bad\0source".into()], false, None).is_err()
+    );
+    let bytes = encode_ordered_request(
+        "read",
+        &[],
+        &["public.png".into()],
+        &["PNG".into()],
+        true,
+        Some("42"),
+    )
+    .unwrap();
+    let request: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(request["formats"], serde_json::json!(["public.png"]));
+    assert_eq!(request["skip_sources"], serde_json::json!(["PNG"]));
+    assert_eq!(request["skip_embedded"], true);
+    assert_eq!(request["generation"], "42");
+    for invalid in ["", "two tokens", "\0", &"x".repeat(129)] {
+        assert!(encode_ordered_request("read", &[], &[], &[], false, Some(invalid)).is_err());
+    }
+}
+
+#[tokio::test]
+async fn later_clipboard_owner_failure_keeps_the_newer_drawing_diagnostic() {
+    let newer = Representation::new(
+        NATIVE,
+        &serde_json::to_vec(&serde_json::json!({
+            "version": u64::from(crate::document::VERSION) + 1,
+        }))
+        .unwrap(),
+    );
+    let mut calls = 0;
+    let result = read_candidates(
+        false,
+        |_, _, _, _| {
+            calls += 1;
+            std::future::ready(if calls == 1 {
+                Ok(Packet {
+                    generation: Some("test".into()),
+                    representations: vec![newer.clone()],
+                })
+            } else {
+                Err("The clipboard owner is unavailable".into())
+            })
+        },
+        |item| paste_representation(Default::default(), item),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(calls, 2);
+    assert!(result.contains("Update ReShiki"), "{result}");
+}
+
+#[tokio::test]
+async fn empty_clipboard_drawing_falls_through_to_picture() {
+    let empty_mol = b"\n  example\n\n  0  0\nM  END\n";
+    let png = paste_test_picture("public.png", image::ImageFormat::Png);
+    for empty in [
+        Representation::new("public.utf8-plain-text", empty_mol),
+        Representation::new("com.mdli.molfile", empty_mol),
+        Representation::new(NATIVE, &serde_json::to_vec(&Document::default()).unwrap()),
+    ] {
+        let pasted = paste_packet_with_warnings(
+            Default::default(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![empty.clone(), png.clone()],
+            },
+        )
+        .await
+        .unwrap();
+        assert!(pasted.document.atoms.is_empty());
+        assert_eq!(pasted.document.graphics.len(), 1);
+        assert!(pasted.document.graphics[0].picture.is_some());
+        assert!(pasted.warnings.is_empty());
+        let error = paste_packet(
+            Default::default(),
+            Packet {
+                generation: Some("test".into()),
+                representations: vec![empty],
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error, "The clipboard drawing is empty");
+    }
+}
+
+#[tokio::test]
+async fn changed_generation_aborts_before_importing_the_replacement_candidate() {
+    for (first, replacement) in [
+        ("7", "8"),                       // macOS changeCount
+        ("windows:42:3", "windows:43:3"), // Windows owner and format count
+        ("x11:123:7", "x11:456:8"),
+        ("wayland:1:7", "wayland:1:8"),
+    ] {
+        let mut calls = 0;
+        let mut imports = 0;
+        let result = read_candidates(
+            false,
+            |_, sources, embedded, generation| {
+                calls += 1;
+                if calls == 1 {
+                    assert!(generation.is_none());
+                } else {
+                    assert_eq!(generation.as_deref(), Some(first));
+                    assert_eq!(sources, ["CDX"]);
+                    assert!(embedded);
+                }
+                let mut item = Representation::new("com.revvity.chemdraw.cdx-clipboard", b"cdx");
+                item.source = Some("CDX".into());
+                std::future::ready(Ok(Packet {
+                    generation: Some(if calls == 1 { first } else { replacement }.into()),
+                    representations: vec![item],
+                }))
+            },
+            |_| {
+                imports += 1;
+                std::future::ready(Err::<(), _>("damaged CDX".into()))
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(result, priority::CLIPBOARD_CHANGED);
+        assert_eq!(calls, 2);
+        assert_eq!(imports, 1);
+    }
+}
+
+#[tokio::test]
+async fn native_generation_change_error_overrides_an_earlier_update_diagnostic() {
+    let mut calls = 0;
+    let result = read_candidates(
+        false,
+        |_, _, _, _| {
+            calls += 1;
+            std::future::ready(if calls == 1 {
+                Ok(Packet {
+                    generation: Some("7".into()),
+                    representations: vec![Representation::new(NATIVE, b"future drawing")],
+                })
+            } else {
+                Err(priority::CLIPBOARD_CHANGED.into())
+            })
+        },
+        |_| {
+            std::future::ready(Err::<(), _>(
+                "A newer version of ReShiki is needed; Update ReShiki".into(),
+            ))
+        },
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(result, priority::CLIPBOARD_CHANGED);
+    assert_eq!(calls, 2);
 }

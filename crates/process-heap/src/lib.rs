@@ -3,6 +3,18 @@
 //! cannot subtract from the operation's usage. The helper exits on exhaustion;
 //! unwinding or recovering inside an allocator would be unsound.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented,
+        clippy::indexing_slicing
+    )
+)]
 
 #[cfg(feature = "allocation-metrics")]
 pub mod allocation_metrics;
@@ -20,16 +32,9 @@ use std::{
 pub struct BoundedHeap;
 static BUDGET: AtomicUsize = AtomicUsize::new(0);
 static USED: AtomicUsize = AtomicUsize::new(0);
-static PEAK: AtomicUsize = AtomicUsize::new(0);
 
 pub fn begin(bytes: usize) {
-    PEAK.store(USED.load(Ordering::SeqCst), Ordering::SeqCst);
     BUDGET.store(bytes, Ordering::SeqCst);
-}
-/// High-water mark of charged live Rust allocations in the dedicated worker.
-/// This excludes pre-budget buffers and allocations outside Rust's allocator.
-pub fn peak() -> usize {
-    PEAK.load(Ordering::SeqCst)
 }
 fn layout(original: Layout) -> Option<(Layout, usize)> {
     Layout::new::<usize>()
@@ -56,15 +61,12 @@ unsafe impl GlobalAlloc for BoundedHeap {
         };
         let budget = BUDGET.load(Ordering::SeqCst);
         let charge = if budget == 0 { 0 } else { layout.size() };
-        if charge != 0 {
-            match USED.try_update(Ordering::SeqCst, Ordering::SeqCst, |used| {
+        if charge != 0
+            && let Err(used) = USED.try_update(Ordering::SeqCst, Ordering::SeqCst, |used| {
                 used.checked_add(charge).filter(|&value| value <= budget)
-            }) {
-                Ok(used) => {
-                    PEAK.fetch_max(used + charge, Ordering::SeqCst);
-                }
-                Err(used) => exhausted(budget, used, charge),
-            }
+            })
+        {
+            exhausted(budget, used, charge);
         }
         // SAFETY: System receives the valid layout computed above.
         let base = unsafe { System.alloc(layout) };

@@ -2,6 +2,49 @@ use super::*;
 use crate::{app::App, app::Message, canvas::Tool};
 
 #[test]
+fn pending_per_file_work_prevents_reuse_until_it_is_cleared() {
+    use crate::app::{naming, nmr, reaction_mapping};
+    use reshiki::document::Arrow;
+    use reshiki::nmr::Nucleus;
+    for feature in ["naming", "mapping", "NMR"] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        assert!(app.tab.reusable());
+        let task = match feature {
+            "naming" => app.update(Message::Naming(naming::Action::Generate)),
+            "mapping" => {
+                let arrow = app.tab.doc.next_id();
+                app.tab.doc.arrows.push(Arrow::new(
+                    arrow,
+                    Point::default(),
+                    Point::new(42., 0.),
+                    Default::default(),
+                    Default::default(),
+                ));
+                app.update(Message::Mapping(reaction_mapping::Action::Auto))
+            }
+            "NMR" => {
+                app.tab.doc.add_atom("C", Point::default());
+                app.update(Message::Nmr(nmr::Action::Predict(Nucleus::H1)))
+            }
+            _ => unreachable!(),
+        };
+        assert!(task.units() > 0, "{feature}");
+        // Isolate the pending-work guard from document content without invalidating its job.
+        app.tab.doc = Default::default();
+        app.tab.saved = Default::default();
+        assert!(!app.tab.reusable(), "{feature}");
+        match feature {
+            "naming" => app.tab.naming.invalidate_name(),
+            "mapping" => app.tab.mapping.clear_pending(),
+            "NMR" => app.tab.nmr.clear_pending(),
+            _ => unreachable!(),
+        }
+        assert!(app.tab.reusable(), "{feature}");
+    }
+}
+
+#[test]
 fn a_replaced_tab_keeps_its_document_selection_view_and_undo() {
     let (mut app, _) = App::new();
     let before = app.tab.doc.clone();

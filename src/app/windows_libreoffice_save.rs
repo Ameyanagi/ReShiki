@@ -2,21 +2,25 @@
 //! Windows MoveFileEx cannot replace that destination until the reader closes.
 //! Only native Microsoft Office sessions use the OLE acknowledgement protocol.
 
+use super::files::{SaveBackend, save_backend};
+use crate::session::Host;
 use std::{
     io::{self, Write},
     path::Path,
     time::{Duration, Instant},
 };
 
-pub(super) fn save(path: &Path, bytes: &[u8], host: Option<&str>) -> Result<(), String> {
-    match host {
-        Some("Office") => {
+pub(super) fn save(path: &Path, bytes: &[u8], host: Option<Host>) -> Result<(), String> {
+    match save_backend(host) {
+        SaveBackend::OfficeOle => {
             reshiki_windows::prepare_office_save(path);
             reshiki::storage::write_atomic(path, bytes)?;
             reshiki_windows::wait_for_office_save(path, bytes)
         }
-        Some("LibreOffice") => write_atomic(path, bytes).map_err(|error| error.to_string()),
-        _ => reshiki::storage::write_atomic(path, bytes),
+        SaveBackend::LibreOfficeRetry => {
+            write_atomic(path, bytes).map_err(|error| error.to_string())
+        }
+        SaveBackend::Addin | SaveBackend::Atomic => reshiki::storage::write_atomic(path, bytes),
     }
 }
 

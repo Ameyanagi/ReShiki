@@ -1,8 +1,9 @@
 //! Per-document local name parsing, editable previews and rule-based name generation.
+use super::workspace::{accessible_checkbox, accessible_command, command, muted_text, section};
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
-use crate::canvas::{Camera, Edit, MoleculeCanvas, Tool};
-use iced::widget::{column, container, row, text};
+use crate::canvas::{Camera, Edit, MoleculeCanvas, PreviewStyles, Tool};
+use iced::widget::{Space, column, container, row, scrollable, text};
 mod aliases;
 mod import_dock;
 pub use aliases::{AliasAction, AliasTarget};
@@ -17,11 +18,21 @@ use reshiki::{
     naming::{self, Record},
 };
 
+const PANEL_INTRO: &str = "Read and generate names on this computer.";
+const NAME_HINT: &str = "Ambiguous names and unsupported stereo are rejected.";
+const PREVIEW_HINT: &str = "Drag atoms to arrange the layout.";
+const STRUCTURE_HINT: &str = "Neutral C, N, O and halogen molecules, up to 64 heavy atoms.";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ticket {
     epoch: u64,
     revision: u64,
     serial: u64,
+}
+impl Ticket {
+    fn is_current(self, revision: u64, epoch: u64) -> bool {
+        self.revision == revision && self.epoch == epoch
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,7 +40,7 @@ enum Pending {
     Request(Ticket),
     Preview(Ticket),
     Caption(Ticket),
-    Import(Ticket, bool),
+    Import { ticket: Ticket, add_caption: bool },
 }
 impl Pending {
     fn ticket(self) -> Ticket {
@@ -37,7 +48,7 @@ impl Pending {
             Self::Request(ticket)
             | Self::Preview(ticket)
             | Self::Caption(ticket)
-            | Self::Import(ticket, _) => ticket,
+            | Self::Import { ticket, .. } => ticket,
         }
     }
 }
@@ -63,7 +74,9 @@ pub enum Action {
     CopyName,
     Caption,
     Alias(AliasAction),
-    Finished(Ticket, Box<Result<Outcome, String>>),
+    /// Selects this molecule and opens the Chemical names inspector.
+    OpenPanel(Vec<u64>),
+    Finished(Ticket, Box<Result<Outcome, naming::Error>>),
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +117,45 @@ impl Preview {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NoticeKind {
+    Retry,
+    Unsupported,
+    Failed,
+    Info,
+}
+
+#[derive(Debug, Clone)]
+struct Notice {
+    kind: NoticeKind,
+    detail: String,
+}
+impl Notice {
+    fn new(kind: NoticeKind, detail: impl Into<String>) -> Self {
+        Self {
+            kind,
+            detail: detail.into(),
+        }
+    }
+
+    fn summary(&self) -> &str {
+        match self.kind {
+            NoticeKind::Retry | NoticeKind::Info => &self.detail,
+            NoticeKind::Unsupported => "Unsupported or ambiguous name. Try a more specific name.",
+            NoticeKind::Failed => "Could not import this name. See Details.",
+        }
+    }
+}
+impl From<naming::Error> for Notice {
+    fn from(error: naming::Error) -> Self {
+        match error {
+            naming::Error::Rejected(detail) => Self::new(NoticeKind::Unsupported, detail),
+            naming::Error::Worker(detail) => Self::new(NoticeKind::Failed, detail),
+            naming::Error::Cancelled(detail) => Self::new(NoticeKind::Retry, detail),
+        }
+    }
+}
+
 pub(super) struct State {
     name: String,
     local_cancel: Option<naming::Cancel>,
@@ -114,7 +166,7 @@ pub(super) struct State {
     smiles: String,
     acknowledged: bool,
     structure: Option<(Ticket, Record)>,
-    notice: Option<String>,
+    notice: Option<Notice>,
     label_target: Option<Vec<u64>>,
     add_name_below: bool,
     preview_open: bool,
@@ -150,18 +202,26 @@ impl Drop for State {
     }
 }
 impl State {
-    fn invalidate_name(&mut self) {
+    pub(super) fn is_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    fn stop_request(&mut self) {
+        if let Some(cancel) = self.local_cancel.take() {
+            cancel.stop();
+        }
         self.serial = self.serial.wrapping_add(1);
         self.pending = None;
         self.label_target = None;
+    }
+
+    pub(super) fn invalidate_name(&mut self) {
+        self.stop_request();
         self.candidates.clear();
         self.preview = None;
         self.notice = None;
         self.acknowledged = false;
         self.import_alias = None;
-        if let Some(cancel) = self.local_cancel.take() {
-            cancel.stop();
-        }
     }
     fn set_preview(&mut self, preview: Preview) {
         self.smiles = preview.identity.clone();
@@ -175,14 +235,19 @@ async fn prepare_preview(
     engine: LocalEngine,
     record: Record,
     smiles: String,
-) -> Result<Preview, String> {
-    let identity = naming::canonical_smiles(&smiles)?;
-    let response = engine.request(Request::import_smiles(&smiles)).await?;
+) -> Result<Preview, naming::Error> {
+    let identity = naming::canonical_smiles(&smiles).map_err(naming::Error::Rejected)?;
+    let response = engine
+        .request(Request::import_smiles(&smiles))
+        .await
+        .map_err(naming::Error::Worker)?;
     let document = response
         .document
-        .ok_or("The parser returned no editable drawing")?;
-    let actual = naming::document_identity(&document)?.smiles;
-    naming::verify_identity(&identity, &actual)?;
+        .ok_or_else(|| naming::Error::Worker("The parser returned no editable drawing".into()))?;
+    let actual = naming::document_identity(&document)
+        .map_err(naming::Error::Rejected)?
+        .smiles;
+    naming::verify_identity(&identity, &actual).map_err(naming::Error::Rejected)?;
     Ok(Preview::new(record, document, response.warnings, identity))
 }
 
@@ -190,13 +255,40 @@ async fn resolve_preview(
     engine: LocalEngine,
     name: String,
     cancel: naming::Cancel,
-) -> Result<Outcome, String> {
+) -> Result<Outcome, naming::Error> {
     let record = naming::resolve_name(&name, cancel).await?;
     let preview = prepare_preview(engine, record.clone(), record.smiles.clone()).await?;
     Ok(Outcome::Names(vec![record], Some(Box::new(preview))))
 }
 
+async fn generate_for_atoms(
+    document: Document,
+    atoms: Vec<u64>,
+    cancel: naming::Cancel,
+) -> Result<Outcome, naming::Error> {
+    let identity =
+        tokio::task::spawn_blocking(move || naming::selected_identity(&document, &atoms))
+            .await
+            .map_err(|error| naming::Error::Worker(error.to_string()))?
+            .map_err(naming::Error::Rejected)?;
+    naming::generate_name(&identity, cancel)
+        .await
+        .map(Outcome::Structure)
+}
+
 impl App {
+    fn name_preview_styles(&self) -> PreviewStyles<'_> {
+        PreviewStyles {
+            bond_drawing: self.tab.bond_drawing,
+            chain_drawing: self.tab.chain_drawing,
+            arrow_preset: self.tab.arrow_style,
+            arrow_style: &self.tab.arrows.style,
+            orbital_phase: self.tab.orbital_phase,
+            graphic_style: &self.tab.graphic_style,
+            bracket_sides: self.tab.bracket_sides,
+        }
+    }
+
     fn naming_ticket(&mut self) -> Ticket {
         self.tab.naming.serial = self.tab.naming.serial.wrapping_add(1);
         let ticket = Ticket {
@@ -216,6 +308,78 @@ impl App {
         ticket
     }
 
+    fn begin_naming(
+        &mut self,
+        pending: impl FnOnce(Ticket) -> Pending,
+    ) -> (Ticket, naming::Cancel) {
+        let ticket = self.naming_ticket();
+        self.tab.naming.pending = Some(pending(ticket));
+        let cancel = naming::Cancel::default();
+        self.tab.naming.local_cancel = Some(cancel.clone());
+        (ticket, cancel)
+    }
+
+    fn naming_finished(&mut self, ticket: Ticket, result: Result<Outcome, naming::Error>) {
+        if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
+            || ticket.epoch != self.tab.file_epoch
+        {
+            return;
+        }
+        let caption = matches!(self.tab.naming.pending, Some(Pending::Caption(_)));
+        let import_caption = match self.tab.naming.pending {
+            Some(Pending::Import { add_caption, .. }) => Some(add_caption),
+            _ => None,
+        };
+        let target = self.tab.naming.label_target.take();
+        self.tab.naming.pending = None;
+        self.tab.naming.local_cancel = None;
+        if ticket.revision != self.tab.revision {
+            self.tab.naming.notice = Some(Notice::new(
+                NoticeKind::Retry,
+                "The drawing changed. Try again.",
+            ));
+            if caption {
+                self.status = "The molecule changed while naming. Show its name again".into();
+                self.error = true;
+            }
+            return;
+        }
+        match result {
+            Err(error) => {
+                let notice = Notice::from(error);
+                if caption {
+                    self.status = notice.detail.clone();
+                    self.error = true;
+                }
+                self.tab.naming.notice = Some(notice);
+            }
+            Ok(Outcome::Names(records, preview)) => {
+                self.tab.naming.candidates = records;
+                if let Some(preview) = preview {
+                    self.tab.naming.set_preview(*preview);
+                    if let Some(caption) = import_caption {
+                        self.insert_import_preview(caption);
+                    }
+                } else if import_caption.is_some() {
+                    self.tab.naming.notice = Some(Notice::new(
+                        NoticeKind::Failed,
+                        "No supported structure was returned.",
+                    ));
+                }
+            }
+            Ok(Outcome::Preview(preview)) => self.tab.naming.set_preview(*preview),
+            Ok(Outcome::Structure(record)) => {
+                if caption {
+                    if let Some(atoms) = target {
+                        self.place_molecule_name(&atoms, record);
+                    }
+                } else {
+                    self.tab.naming.structure = Some((ticket, record));
+                }
+            }
+        }
+    }
+
     pub(super) fn naming_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Name(name) => {
@@ -223,22 +387,18 @@ impl App {
                 self.tab.naming.name = name;
             }
             Action::Cancel => {
-                if let Some(cancel) = self.tab.naming.local_cancel.take() {
-                    cancel.stop();
-                }
-                self.tab.naming.serial = self.tab.naming.serial.wrapping_add(1);
-                self.tab.naming.pending = None;
-                self.tab.naming.label_target = None;
-                self.tab.naming.notice = Some("Local name parsing was cancelled".into());
+                self.tab.naming.stop_request();
+                self.tab.naming.notice = Some(Notice::new(
+                    NoticeKind::Retry,
+                    "Local name parsing was cancelled",
+                ));
             }
             Action::Resolve => {
                 if self.tab.naming.name.trim().is_empty() || self.tab.naming.pending.is_some() {
                     return Task::none();
                 }
-                let ticket = self.naming_ticket();
+                let (ticket, cancel) = self.begin_naming(Pending::Request);
                 let name = self.tab.naming.name.clone();
-                let cancel = naming::Cancel::default();
-                self.tab.naming.local_cancel = Some(cancel.clone());
                 self.tab.naming.preview = None;
                 self.tab.naming.candidates.clear();
                 let engine = self.engine.clone();
@@ -250,23 +410,12 @@ impl App {
                 if self.tab.naming.pending.is_some() {
                     return Task::none();
                 }
-                let ticket = self.naming_ticket();
-                let cancel = naming::Cancel::default();
-                self.tab.naming.local_cancel = Some(cancel.clone());
+                let (ticket, cancel) = self.begin_naming(Pending::Request);
                 self.tab.naming.structure = None;
                 let document = self.tab.doc.clone();
                 let selected = self.tab.selected.clone();
                 return Task::perform(
-                    async move {
-                        let identity = tokio::task::spawn_blocking(move || {
-                            naming::selected_identity(&document, &selected)
-                        })
-                        .await
-                        .map_err(|e| e.to_string())??;
-                        naming::generate_name(&identity, cancel)
-                            .await
-                            .map(Outcome::Structure)
-                    },
+                    generate_for_atoms(document, selected, cancel),
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
@@ -307,61 +456,7 @@ impl App {
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
-            Action::Finished(ticket, result) => {
-                if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
-                    || ticket.epoch != self.tab.file_epoch
-                {
-                    return Task::none();
-                }
-                let caption = matches!(self.tab.naming.pending, Some(Pending::Caption(_)));
-                let import_caption = match self.tab.naming.pending {
-                    Some(Pending::Import(_, value)) => Some(value),
-                    _ => None,
-                };
-                let target = self.tab.naming.label_target.take();
-                self.tab.naming.pending = None;
-                self.tab.naming.local_cancel = None;
-                if ticket.revision != self.tab.revision {
-                    self.tab.naming.notice = Some("The drawing changed. Try again.".into());
-                    if caption {
-                        self.status =
-                            "The molecule changed while naming. Show its name again".into();
-                        self.error = true;
-                    }
-                    return Task::none();
-                }
-                match *result {
-                    Err(error) => {
-                        self.tab.naming.notice = Some(error.clone());
-                        if caption {
-                            self.status = error;
-                            self.error = true;
-                        }
-                    }
-                    Ok(Outcome::Names(records, preview)) => {
-                        self.tab.naming.candidates = records;
-                        if let Some(preview) = preview {
-                            self.tab.naming.set_preview(*preview);
-                            if let Some(caption) = import_caption {
-                                self.insert_import_preview(caption);
-                            }
-                        } else if import_caption.is_some() {
-                            self.tab.naming.notice =
-                                Some("No supported structure was returned.".into());
-                        }
-                    }
-                    Ok(Outcome::Preview(preview)) => self.tab.naming.set_preview(*preview),
-                    Ok(Outcome::Structure(record)) => {
-                        if caption {
-                            if let Some(atoms) = target {
-                                self.place_molecule_name(&atoms, record);
-                            }
-                        } else {
-                            self.tab.naming.structure = Some((ticket, record));
-                        }
-                    }
-                }
-            }
+            Action::Finished(ticket, result) => self.naming_finished(ticket, *result),
             Action::PreviewEdit(edit) => self.edit_name_preview(edit),
             Action::Acknowledge(value) => self.tab.naming.acknowledged = value,
             Action::Insert => self.insert_name_preview(),
@@ -391,6 +486,12 @@ impl App {
             }
             Action::Caption => self.insert_name_caption(None),
             Action::Alias(action) => return self.naming_alias_action(action),
+            Action::OpenPanel(atoms) => {
+                // Structure → name works on the selection.
+                let select = self.update(Message::Canvas(Edit::Select(atoms)));
+                let open = self.update(Message::Inspector(InspectorTab::Names));
+                return Task::batch([select, open]);
+            }
         }
         Task::none()
     }
@@ -463,33 +564,28 @@ impl App {
             return;
         }
         if self.tab.naming.smiles != preview.identity {
-            self.tab.naming.notice =
-                Some("Apply the edited SMILES to the preview before insertion".into());
+            self.tab.naming.notice = Some(Notice::new(
+                NoticeKind::Retry,
+                "Apply the edited SMILES to the preview before insertion",
+            ));
             return;
         }
         let actual = naming::document_identity(&preview.document)
             .and_then(|i| naming::verify_identity(&preview.identity, &i.smiles));
         if let Err(error) = actual {
-            self.tab.naming.notice = Some(error);
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
             return;
         }
         let document = preview.document.clone();
+        let title = preview.record.title.clone();
         let before = self.tab.doc.clone();
-        let center = editing::center(&document, &document.all_ids());
-        let offset = if self.tab.doc.atoms.is_empty() {
-            Point::new(
-                self.tab.camera.center.x - center.x,
-                self.tab.camera.center.y - center.y,
-            )
-        } else {
-            let (_, hi) = self.tab.doc.bounds();
-            let (lo, _) = document.bounds();
-            Point::new(
-                hi.x + self.tab.doc.drawing_style.bond_length_world - lo.x,
-                self.tab.camera.center.y - center.y,
-            )
+        let Some(selected) = self.insert_beside_drawing(&document) else {
+            self.tab.doc = before;
+            self.error = true;
+            self.status = format!("Could not insert {title}");
+            return;
         };
-        self.tab.selected = editing::append(&mut self.tab.doc, &document, offset);
+        self.tab.selected = selected;
         self.changed(before);
         self.tool = Tool::Select;
         self.fit();
@@ -498,24 +594,23 @@ impl App {
     }
 
     fn insert_name_caption(&mut self, alias: Option<usize>) {
-        if !self.naming_can_edit() || self.tab.naming.pending.is_some() {
+        if !self.naming_can_show_molecule() {
             return;
         }
         let Some((ticket, record)) = self.tab.naming.structure.clone() else {
             return;
         };
-        if ticket.revision != self.tab.revision || ticket.epoch != self.tab.file_epoch {
-            self.tab.naming.notice = Some(
-                "The drawing changed. Generate its name again before inserting a caption".into(),
-            );
+        if !ticket.is_current(self.tab.revision, self.tab.file_epoch) {
+            const DETAIL: &str =
+                "The drawing changed. Generate its name again before inserting a caption";
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Retry, DETAIL));
             return;
         }
         let current = naming::selected_identity(&self.tab.doc, &self.tab.selected);
         if !current.is_ok_and(|i| i.smiles == record.canonical_smiles) {
-            self.tab.naming.notice = Some(
-                "The selection changed. Select the named molecule before inserting a caption"
-                    .into(),
-            );
+            const DETAIL: &str =
+                "The selection changed. Select the named molecule before inserting a caption";
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Retry, DETAIL));
             return;
         }
         let atoms = editing::analysis_atoms(&self.tab.doc, &self.tab.selected);
@@ -529,155 +624,200 @@ impl App {
         }
     }
 
+    /// The Chemical names inspector, opened from a molecule's right-click
+    /// menu: a fixed header above the scrolling panel.
+    pub(super) fn naming_inspector(&self) -> Element<'_, Message> {
+        let header = column![
+            row![
+                command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
+                Space::new().width(Length::Fill),
+                accessible_command("naming.import", "Open SMILES import", "Import")
+                    .on_press(Message::Inspector(InspectorTab::Import)),
+            ]
+            .align_y(iced::Alignment::Center),
+            text("Chemical names").size(20),
+            text(PANEL_INTRO).size(11).style(muted_text),
+        ]
+        .spacing(8);
+        column![
+            container(header).padding([12, 16]),
+            scrollable(container(self.naming_panel()).padding(iced::Padding {
+                top: 0.,
+                right: 16.,
+                bottom: 16.,
+                left: 16.,
+            }))
+            .id("inspector-content")
+            .height(Length::Fill),
+        ]
+        .into()
+    }
+
+    /// Name → structure, then structure → name for the selection.
     pub(super) fn naming_panel(&self) -> Element<'_, Message> {
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
-        let mut content = column![
-            row![text("Chemical names").size(18), button("naming.import", "Open SMILES import", text("Import")).on_press(Message::Inspector(InspectorTab::Import))].spacing(12),
-            text("Local rule-based chemical naming.").size(12),
-            text("Name → structure").size(15),
-            text("Chemical names are parsed locally by ReShiki's Rust OPSIN backend; this name stays on your computer.").size(12),
-            text_input("naming.name", "Chemical name", "Chemical name, e.g. ethanol", &state.name).on_input(|s| Message::Naming(Action::Name(s))).on_submit(Message::Naming(Action::Resolve)).size(13),
-            text("Supported systematic and retained names produce an editable graph. Ambiguous names and unsupported stereo are rejected.").size(12),
-            button("naming.resolve", "Parse name locally", text("Parse name locally")).on_press_maybe((idle && !state.name.trim().is_empty()).then_some(Message::Naming(Action::Resolve))),
-        ].spacing(10);
+        let mut name = column![
+            section("NAME → STRUCTURE"),
+            text_input(
+                "naming.name",
+                "Chemical name",
+                "Chemical name, e.g. ethanol",
+                &state.name
+            )
+            .on_input(|s| Message::Naming(Action::Name(s)))
+            .on_submit(Message::Naming(Action::Resolve))
+            .size(13)
+            .padding(8),
+            text(NAME_HINT).size(11).style(muted_text),
+            accessible_command("naming.resolve", "Parse name locally", "Parse name")
+                .on_press_maybe(
+                    (idle && !state.name.trim().is_empty())
+                        .then_some(Message::Naming(Action::Resolve))
+                ),
+        ]
+        .spacing(10);
         if let Some(notice) = &state.notice {
-            content = content.push(text(notice).size(12).color(self.theme().palette().danger));
+            name = name.push(
+                text(&notice.detail)
+                    .size(12)
+                    .color(self.theme().palette().danger),
+            );
         }
         if !idle {
-            content = content.push(text("Working…").size(12));
+            let mut working = row![text("Working…").size(12)]
+                .spacing(10)
+                .align_y(iced::Alignment::Center);
             if state.local_cancel.is_some() {
-                content = content.push(
-                    button(
-                        "naming.cancel",
-                        "Cancel local naming",
-                        text("Cancel local naming"),
-                    )
-                    .on_press(Message::Naming(Action::Cancel)),
+                working = working.push(
+                    accessible_command("naming.cancel", "Cancel local naming", "Cancel")
+                        .on_press(Message::Naming(Action::Cancel)),
                 );
             }
+            name = name.push(working);
         }
         if let Some(preview) = &state.preview {
-            content = content.push(text(preview.record.provenance.label()).size(12));
-            content = content.push(text(&preview.record.title).size(14));
-            let drawing: Element<'_, Edit> = canvas(preview::Preview(MoleculeCanvas {
-                nmr: None,
-                optimizer: None,
-                keyboard_target: None,
-                joining: None,
-                hidden_annotation: None,
-                bond_drawing: self.tab.bond_drawing,
-                chain_drawing: self.tab.chain_drawing,
-                doc: &preview.document,
-                element: "C",
-                selected: &preview.selected,
-                tool: Tool::Select,
-                camera: preview.camera,
-                grid: false,
-                guides: Default::default(),
-                smart_guides: false,
-                ring_size: 6,
-                aromatic_ring: false,
-                template_connection: Default::default(),
-                template: None,
-                arrow_preset: self.tab.arrow_style,
-                arrow_style: &self.tab.arrows.style,
-                arrow_source: None,
-                attach_arrow_targets: false,
-                orbital_phase: self.tab.orbital_phase,
-                phase_flipped: false,
-                attach_symbols: false,
-                snap_orbitals: false,
-                graphic_constrain: false,
-                graphic_arc: Default::default(),
-                graphic_style: &self.tab.graphic_style,
-                graphic_point: None,
-                bracket_sides: self.tab.bracket_sides,
-            }))
-            .width(Length::Fill)
-            .height(180)
-            .into();
-            let drawing = drawing.map(|edit| Message::Naming(Action::PreviewEdit(edit)));
-            content = content.push(container(drawing).style(container::bordered_box));
-            content = content.push(text("Editable preview · Drag atoms to adjust layout. Edit SMILES to change chemistry.").size(12));
-            content = content.push(
-                text_input(
-                    "naming.smiles",
-                    "Editable preview SMILES",
-                    "Preview SMILES",
-                    &state.smiles,
-                )
-                .on_input(|s| Message::Naming(Action::Smiles(s)))
-                .size(12),
-            );
-            content = content.push(
-                row![
-                    button(
-                        "naming.update-preview",
-                        "Update preview",
-                        text("Update preview")
-                    )
+            name = name.push(self.naming_preview(preview));
+        }
+        let structure = column![
+            section("STRUCTURE → NAME"),
+            text(STRUCTURE_HINT).size(11).style(muted_text),
+            accessible_command(
+                "naming.generate",
+                "Generate selected structure name locally",
+                "Generate selected name",
+            )
+            .on_press_maybe(idle.then_some(Message::Naming(Action::Generate))),
+            self.generated_name_controls(),
+        ]
+        .spacing(10);
+        column![name, structure].spacing(24).into()
+    }
+
+    /// The parsed name's editable preview, its SMILES and the insertion.
+    fn naming_preview<'a>(&'a self, preview: &'a Preview) -> Element<'a, Message> {
+        let state = &self.tab.naming;
+        let idle = state.pending.is_none();
+        let needs_ack = !preview.record.warnings.is_empty() || !preview.warnings.is_empty();
+        let mut content = column![
+            text(preview.record.provenance.label())
+                .size(11)
+                .style(muted_text),
+            text(&preview.record.title).size(14),
+            self.name_preview_canvas(preview, 180.),
+            text(PREVIEW_HINT).size(11).style(muted_text),
+            text_input(
+                "naming.smiles",
+                "Editable preview SMILES",
+                "Preview SMILES",
+                &state.smiles,
+            )
+            .on_input(|s| Message::Naming(Action::Smiles(s)))
+            .size(12)
+            .padding(7),
+            row![
+                accessible_command("naming.update-preview", "Update preview", "Update")
                     .on_press_maybe(idle.then_some(Message::Naming(Action::UpdatePreview))),
-                    button(
-                        "naming.restore-preview",
-                        "Restore parsed structure",
-                        text("Restore parsed structure")
-                    )
-                    .on_press_maybe(idle.then_some(Message::Naming(Action::RestorePreview))),
-                ]
-                .spacing(6),
-            );
-            if preview.modified {
-                content = content.push(text("Edited chemical identity · The input name may no longer describe this preview.").size(12));
-            }
-            content = content.push(text(format!("{} atoms · {} bonds · Specified stereo is retained; unspecified stereo remains unspecified.", preview.document.atoms.len(), preview.document.bonds.len())).size(12));
-            let warnings = preview.record.warnings.iter().chain(&preview.warnings);
-            for warning in warnings {
-                content = content.push(text(warning).size(12));
-            }
-            let needs_ack = !preview.record.warnings.is_empty() || !preview.warnings.is_empty();
-            if needs_ack {
-                content = content.push(
-                    button(
-                        "naming.acknowledge",
-                        "I reviewed these warnings and the structure",
-                        text("I reviewed these warnings and the structure").size(12),
-                    )
-                    .checked(state.acknowledged)
-                    .style(super::workspace::control(state.acknowledged))
-                    .on_press(Message::Naming(Action::Acknowledge(!state.acknowledged))),
-                );
-            }
+                accessible_command(
+                    "naming.restore-preview",
+                    "Restore parsed structure",
+                    "Restore"
+                )
+                .on_press_maybe(idle.then_some(Message::Naming(Action::RestorePreview))),
+            ]
+            .spacing(4),
+        ]
+        .spacing(8);
+        if preview.modified {
             content = content.push(
+                text("Edited structure: the name may not match.")
+                    .size(11)
+                    .style(muted_text),
+            );
+        }
+        content = content.push(
+            text(format!(
+                "{} atoms · {} bonds",
+                preview.document.atoms.len(),
+                preview.document.bonds.len()
+            ))
+            .size(11)
+            .style(muted_text),
+        );
+        for warning in preview.record.warnings.iter().chain(&preview.warnings) {
+            content = content.push(text(warning).size(11));
+        }
+        if needs_ack {
+            content = content.push(accessible_checkbox(
+                "naming.acknowledge",
+                "I reviewed these warnings and the structure",
+                state.acknowledged,
+                Some(Message::Naming(Action::Acknowledge(!state.acknowledged))),
+            ));
+        }
+        let ready = idle
+            && self.naming_can_edit()
+            && (!needs_ack || state.acknowledged)
+            && state.smiles == preview.identity;
+        content
+            .push(row![
+                Space::new().width(Length::Fill),
+                // Right-aligned, as Insert is in the Import dock.
                 button(
                     "naming.insert",
                     "Insert editable structure",
-                    text("Insert editable structure"),
+                    text("Insert").size(12)
                 )
-                .on_press_maybe(
-                    (idle
-                        && self.naming_can_edit()
-                        && (!needs_ack || state.acknowledged)
-                        && state.smiles == preview.identity)
-                        .then_some(Message::Naming(Action::Insert)),
-                ),
-            );
-        }
-        content = content.push(text("Structure → name").size(15));
-        content = content.push(text("Local organic rules: neutral C/N/O/halogen molecules, up to 64 heavy atoms; supported chains, simple rings and functional groups. Isotopes, charged graphs and unsupported stereo contexts are rejected.").size(12));
-        content = content.push(text("Select a complete connected molecule. The local rule-based generator accepts a name only after local OPSIN reconstructs the exact graph, isotope, charge and specified stereo. Unsupported structures return an explanation.").size(12));
-        content = content.push(
-            button(
-                "naming.generate",
-                "Generate selected structure name locally",
-                text("Generate name locally"),
-            )
-            .on_press_maybe(idle.then_some(Message::Naming(Action::Generate))),
-        );
-        content = content.push(self.generated_name_controls());
-        content.into()
+                .padding([6, 12])
+                .style(crate::appearance::primary)
+                .on_press_maybe(ready.then_some(Message::Naming(Action::Insert))),
+            ])
+            .into()
+    }
+
+    /// The bordered, editable preview canvas shared by this panel and the
+    /// Import dock, which differ only in its height.
+    fn name_preview_canvas<'a>(
+        &'a self,
+        preview: &'a Preview,
+        height: f32,
+    ) -> Element<'a, Message> {
+        let drawing: Element<'a, Edit> = canvas(preview::Preview(MoleculeCanvas::preview(
+            &preview.document,
+            &preview.selected,
+            preview.camera,
+            self.name_preview_styles(),
+        )))
+        .width(Length::Fill)
+        .height(height)
+        .into();
+        container(drawing.map(|edit| Message::Naming(Action::PreviewEdit(edit))))
+            .style(container::bordered_box)
+            .into()
     }
 }
 
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;

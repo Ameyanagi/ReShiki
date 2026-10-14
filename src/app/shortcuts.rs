@@ -346,6 +346,9 @@ impl App {
                     self.status = "Select a structure to copy".into();
                     return Task::none();
                 }
+                if format == "smiles" {
+                    return self.copy_chemical_text();
+                }
                 if let Some(format) = reshiki::clipboard::CopyFormat::ALL
                     .into_iter()
                     .find(|candidate| candidate.code() == format)
@@ -361,92 +364,55 @@ impl App {
 
     pub(super) fn join_shortcut(&self) -> Result<(Document, Vec<u64>), String> {
         use reshiki::{
-            joining::Prepared,
+            joining::{self, JoinPlan, Prepared},
             templates::{Anchor, Connection},
         };
-        if reshiki::generic::intersects(&self.tab.doc, &self.tab.selected)
-            || reshiki::generic::component_intersects(&self.tab.doc, &self.tab.selected)
-        {
+        if reshiki::generic::touches(&self.tab.doc, &self.tab.selected) {
             return Err(reshiki::generic::JOIN_NOTICE.into());
         }
-        if let [source, target] = self.tab.selected.as_slice() {
-            let source_metal = self
-                .tab
-                .doc
-                .atom(*source)
-                .is_some_and(reshiki::templates::coordination_metal);
-            let target_metal = self
-                .tab
-                .doc
-                .atom(*target)
-                .is_some_and(reshiki::templates::coordination_metal);
-            if source_metal || target_metal {
+        match joining::join_plan(&self.tab.doc, &self.tab.selected) {
+            Some(JoinPlan::Coordinate { donor, metal }) => {
                 // A donor and metal remain distinct, even inside one molecule.
                 // Validate this pair before fragment preparation can remove an
                 // already-connected metal or attempt destructive atom sharing.
-                let (donor, metal) = if source_metal {
-                    (*target, *source)
-                } else {
-                    (*source, *target)
-                };
-                return reshiki::templates::coordinate_atoms(&self.tab.doc, donor, metal)
-                    .map(|doc| (doc, vec![donor, metal]));
+                joining::coordinate_atoms(&self.tab.doc, donor, metal)
+                    .map(|outcome| (outcome.into_document(&self.tab.doc), vec![donor, metal]))
             }
-            let prepared = Prepared::new(&self.tab.doc, &[*source])?;
-            let point = prepared
-                .base
-                .atom(*target)
-                .ok_or("Select attachment atoms from two separate fragments")?
-                .position;
-            return prepared.place(
-                point,
-                None,
-                1.,
-                Anchor::Atom(*source),
-                Connection::ShareAtom,
-            );
-        }
-        if self.tab.selected.len() == 4 {
-            let bonds: Vec<_> = self
-                .tab
-                .doc
-                .bonds
-                .iter()
-                .filter(|b| self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b))
-                .collect();
-            if let [source, target] = bonds.as_slice()
-                && source.a != target.a
-                && source.a != target.b
-                && source.b != target.a
-                && source.b != target.b
-            {
-                let prepared = Prepared::new(&self.tab.doc, &[source.a, source.b])?;
+            Some(JoinPlan::ShareAtom { source, target }) => {
+                let prepared = Prepared::new(&self.tab.doc, &[source])?;
+                let point = prepared
+                    .base
+                    .atom(target)
+                    .ok_or("Select attachment atoms from two separate fragments")?
+                    .position;
+                prepared.place(point, None, 1., Anchor::Atom(source), Connection::ShareAtom)
+            }
+            Some(JoinPlan::FuseBond { source, target }) => {
+                let prepared = Prepared::new(&self.tab.doc, &[source.0, source.1])?;
                 let a = prepared
                     .base
-                    .atom(target.a)
+                    .atom(target.0)
                     .ok_or("Choose bonds from separate fragments")?
                     .position;
                 let b = prepared
                     .base
-                    .atom(target.b)
+                    .atom(target.1)
                     .ok_or("Choose bonds from separate fragments")?
                     .position;
-                return prepared.place(
+                prepared.place(
                     Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.),
                     None,
                     1.,
-                    Anchor::Bond(source.a, source.b),
+                    Anchor::Bond(source.0, source.1),
                     Connection::FuseBond,
-                );
+                )
+            }
+            Some(JoinPlan::Merge) => self.merge_selected_atoms(),
+            None => {
+                const SELECTION_NOTICE: &str = "Select two atoms or two bonds from separate fragments, or at least three atoms to merge";
+                Err(SELECTION_NOTICE.into())
             }
         }
-        if self.tab.selected.len() >= 3 {
-            return self.merge_selected_atoms();
-        }
-        Err(
-            "Select two atoms or two bonds from separate fragments, or at least three atoms to merge"
-                .into(),
-        )
     }
 
     pub(super) fn commit_hotkey(

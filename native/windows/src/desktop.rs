@@ -10,8 +10,8 @@ use std::{
 use windows::{
     Win32::{
         Foundation::{
-            ERROR_BROKEN_PIPE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, FILETIME, HANDLE, HLOCAL,
-            LocalFree, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+            ERROR_BROKEN_PIPE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, FILETIME, GENERIC_READ,
+            GENERIC_WRITE, HANDLE, HLOCAL, LocalFree, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
         },
         Security::{
             Authorization::{
@@ -43,6 +43,10 @@ use windows::{
     },
     core::{PCWSTR, PWSTR},
 };
+
+const PIPE_INSTANCES: u32 = 16;
+const PIPE_BUFFER_SIZE: u32 = 4096;
+const RETRY_SLEEP: Duration = Duration::from_millis(10);
 
 fn error(error: windows::core::Error) -> io::Error {
     io::Error::other(error.to_string())
@@ -183,6 +187,9 @@ impl Endpoint {
     }
 
     pub fn private(&self, token: [u8; 16]) -> io::Result<Self> {
+        // The private suffix must stay byte-identical to the app's
+        // protocol::token_hex and the Linux backend (lowercase {:02x} per
+        // byte). This crate cannot import app code, so the copies stay in step.
         let suffix = token
             .iter()
             .map(|byte| format!("{byte:02x}"))
@@ -202,6 +209,9 @@ impl Endpoint {
         self.path_claim(path, "Write")
     }
     fn path_claim(&self, path: &std::path::Path, role: &str) -> io::Result<Option<Election>> {
+        // The claim hash must stay byte-identical to the Linux backend:
+        // canonicalize-or-original path, std DefaultHasher, {:016x}. Only the
+        // name around it is platform-specific.
         use std::hash::{Hash, Hasher};
         let mut hash = std::collections::hash_map::DefaultHasher::new();
         std::fs::canonicalize(path)
@@ -255,9 +265,9 @@ impl Endpoint {
                 PCWSTR(name.as_ptr()),
                 mode,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                16,
-                4096,
-                4096,
+                PIPE_INSTANCES,
+                PIPE_BUFFER_SIZE,
+                PIPE_BUFFER_SIZE,
                 0,
                 Some(&attributes),
             ))
@@ -283,7 +293,7 @@ impl Endpoint {
             let handle = unsafe {
                 CreateFileW(
                     PCWSTR(name.as_ptr()),
-                    0xc0000000,
+                    (GENERIC_READ | GENERIC_WRITE).0,
                     FILE_SHARE_MODE::default(),
                     None,
                     OPEN_EXISTING,
@@ -303,7 +313,7 @@ impl Endpoint {
             if Instant::now() >= deadline {
                 return Err(io::ErrorKind::TimedOut.into());
             }
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::sleep(RETRY_SLEEP);
         }
     }
 
@@ -397,7 +407,11 @@ pub struct Listener {
     pending: Option<OwnedHandle>,
 }
 impl Listener {
-    pub fn accept(&mut self, timeout: Duration) -> io::Result<(Stream, Peer)> {
+    pub fn accept(
+        &mut self,
+        timeout: Duration,
+        stream_deadline: Duration,
+    ) -> io::Result<(Stream, Peer)> {
         let handle = match self.pending.take() {
             Some(handle) => handle,
             None => self.endpoint.pipe(false)?,
@@ -421,7 +435,7 @@ impl Listener {
         Ok((
             Stream {
                 handle,
-                deadline: Instant::now() + Duration::from_secs(2),
+                deadline: Instant::now() + stream_deadline,
             },
             peer,
         ))

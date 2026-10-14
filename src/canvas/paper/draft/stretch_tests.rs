@@ -1,5 +1,5 @@
 use super::*;
-use crate::canvas::{Camera, Edit};
+use crate::canvas::{ArrowOptions, Edit, GraphicOptions};
 use iced::widget::canvas::Program;
 use iced::{Event, Size, mouse};
 use reshiki::{document::Document, editing::reference::Stretch};
@@ -9,42 +9,22 @@ fn canvas<'a>(
     arrow: &'a reshiki::arrows::ArrowStyle,
     graphic: &'a reshiki::graphics::GraphicStyle,
 ) -> MoleculeCanvas<'a> {
+    let base = crate::canvas::tests::chain_canvas(doc, crate::canvas::ChainMode::Straight);
     MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc,
-        element: "C",
-        selected: &[],
         tool: Tool::StretchBond {
             fixed: 1,
             moving: 2,
         },
-        camera: Camera::default(),
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
         template_connection: Default::default(),
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: arrow,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: graphic,
-        graphic_point: None,
-        bracket_sides: Default::default(),
+        arrows: ArrowOptions {
+            style: arrow,
+            ..base.arrows
+        },
+        graphics: GraphicOptions {
+            style: graphic,
+            ..base.graphics
+        },
+        ..base
     }
 }
 fn fixture() -> Document {
@@ -67,6 +47,154 @@ fn event(
     canvas
         .update(state, &event, bounds, mouse::Cursor::Available(p))
         .and_then(|a| a.into_inner().0)
+}
+
+#[test]
+fn stretch_plan_cache_reuses_matching_drawings_and_refreshes_changed_content() {
+    let mut doc = fixture();
+    let mut state = State::default();
+    let first = state.scene.get_mut().stretch(&doc, 1, 2).unwrap();
+    let repeated = state.scene.get_mut().stretch(&doc.clone(), 1, 2).unwrap();
+    assert!(std::rc::Rc::ptr_eq(&first, &repeated));
+    let swapped = state.scene.get_mut().stretch(&doc, 2, 1).unwrap();
+    assert_eq!((swapped.fixed, swapped.moving), (2, 1));
+    assert!(!std::rc::Rc::ptr_eq(&first, &swapped));
+    let previous = state.scene.get_mut().stretch(&doc, 1, 2).unwrap();
+    doc.translate(&[2, 3], 7., 9.);
+    let refreshed = state.scene.get_mut().stretch(&doc, 1, 2).unwrap();
+    assert!(!std::rc::Rc::ptr_eq(&previous, &refreshed));
+    assert_eq!(
+        refreshed.translated(&doc, 63.).unwrap(),
+        Stretch::commit(&doc, 1, 2, 63.).unwrap()
+    );
+    let before_ring = doc.clone();
+    doc.add_bond(3, 1, 1, "plain");
+    assert!(state.scene.get_mut().stretch(&doc, 1, 2).is_none());
+    assert!(state.scene.get_mut().stretch(&doc, 1, 2).is_none());
+    let restored = state.scene.get_mut().stretch(&before_ring, 1, 2).unwrap();
+    assert!(!std::rc::Rc::ptr_eq(&refreshed, &restored));
+    assert_eq!(
+        restored.translated(&before_ring, 63.).unwrap(),
+        Stretch::commit(&before_ring, 1, 2, 63.).unwrap()
+    );
+}
+
+#[test]
+fn stretch_preview_and_commit_have_identical_atom_positions_for_a_sample_drag() {
+    let doc = fixture();
+    let arrow = Default::default();
+    let graphic = Default::default();
+    let bounds = Rectangle::new(Point::new(20., 50.), Size::new(500., 350.));
+    let mut canvas = canvas(&doc, &arrow, &graphic);
+    canvas.camera.zoom = 1.75;
+    let start = doc.atom(2).unwrap().position;
+    let p = canvas.camera.screen(start, bounds) + iced::Vector::new(bounds.x, bounds.y);
+    let mut state = State::default();
+    event(
+        &canvas,
+        &mut state,
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        p,
+        bounds,
+    );
+    assert!(matches!(state.gesture, Some(Gesture::StretchBond { .. })));
+    let end = canvas.camera.screen(start.offset(19.25, -6.5), bounds)
+        + iced::Vector::new(bounds.x, bounds.y);
+    event(
+        &canvas,
+        &mut state,
+        Event::Mouse(mouse::Event::CursorMoved { position: end }),
+        end,
+        bounds,
+    );
+    let mut draft = Draft::new(&doc);
+    canvas.preview_move(&mut draft, &state, bounds);
+    let preview_positions: Vec<_> = draft
+        .preview
+        .atoms
+        .iter()
+        .map(|atom| (atom.id, atom.position))
+        .collect();
+    let edit = event(
+        &canvas,
+        &mut state,
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        end,
+        bounds,
+    )
+    .unwrap();
+    let Edit::StretchBond {
+        fixed,
+        moving,
+        length,
+    } = edit
+    else {
+        panic!("Expected one stretch edit");
+    };
+    let committed = Stretch::commit(&doc, fixed, moving, length).unwrap();
+    let committed_positions: Vec<_> = committed
+        .atoms
+        .iter()
+        .map(|atom| (atom.id, atom.position))
+        .collect();
+    assert_eq!(preview_positions, committed_positions);
+    assert_eq!(committed.atom(1), doc.atom(1));
+    assert_ne!(committed.atom(2).unwrap().position, start);
+}
+
+#[test]
+fn stretch_preview_and_commit_agree_after_an_undo_during_the_drag() {
+    let original = fixture();
+    let stretched = Stretch::commit(&original, 1, 2, 63.).unwrap();
+    let arrow = Default::default();
+    let graphic = Default::default();
+    let bounds = Rectangle::new(Point::new(20., 50.), Size::new(500., 350.));
+    let pressed = canvas(&stretched, &arrow, &graphic);
+    let start = stretched.atom(2).unwrap().position;
+    let p = pressed.camera.screen(start, bounds) + iced::Vector::new(bounds.x, bounds.y);
+    let mut state = State::default();
+    event(
+        &pressed,
+        &mut state,
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        p,
+        bounds,
+    );
+    assert!(matches!(state.gesture, Some(Gesture::StretchBond { .. })));
+    // Undo restores the 42-unit bond while the mouse button is still held.
+    let undone = canvas(&original, &arrow, &graphic);
+    let (s, c) = 17.3_f32.to_radians().sin_cos();
+    let end = undone.camera.screen(start.offset(21. * c, 21. * s), bounds)
+        + iced::Vector::new(bounds.x, bounds.y);
+    event(
+        &undone,
+        &mut state,
+        Event::Mouse(mouse::Event::CursorMoved { position: end }),
+        end,
+        bounds,
+    );
+    let mut draft = Draft::new(&original);
+    undone.preview_move(&mut draft, &state, bounds);
+    let preview = draft.preview.into_owned();
+    let Some(Edit::StretchBond {
+        fixed,
+        moving,
+        length,
+    }) = event(
+        &undone,
+        &mut state,
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        end,
+        bounds,
+    )
+    else {
+        panic!("Expected one stretch edit");
+    };
+    assert!((length - 84.).abs() < 0.001, "{length}");
+    let committed = Stretch::commit(&original, fixed, moving, length).unwrap();
+    assert_eq!(preview, committed);
+    let (a, b) = (committed.atom(1).unwrap(), committed.atom(2).unwrap());
+    assert!((a.position.distance(b.position) - 84.).abs() < 0.001);
 }
 
 #[test]

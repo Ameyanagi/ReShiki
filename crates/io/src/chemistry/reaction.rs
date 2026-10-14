@@ -59,7 +59,7 @@ struct OutputRow {
 fn prepare_output(
     doc: &Document,
     selected: Option<&[u64]>,
-    render: impl Fn(&document::Molecule) -> Result<String, Error>,
+    mut render: impl FnMut(&document::Molecule) -> Result<String, Error>,
 ) -> Result<Vec<OutputRow>, Error> {
     doc.validate().map_err(invalid)?;
     let selected: HashSet<_> = selected.unwrap_or_default().iter().copied().collect();
@@ -171,12 +171,18 @@ fn prepare_output(
 
 /// Export an RXN file with explicit participant roles and coefficients.
 pub fn write_rxn(doc: &Document, selected: Option<&[u64]>) -> Result<String, Error> {
+    write_rxn_with_fallback(doc, selected).map(|(output, _)| output)
+}
+
+pub(crate) fn write_rxn_with_fallback(
+    doc: &Document,
+    selected: Option<&[u64]>,
+) -> Result<(String, bool), Error> {
+    let mut fallback = false;
     let rows = prepare_output(doc, selected, |molecule| {
-        Ok(if molfile::has_projected_coordinates(doc) {
-            molfile::reaction_ctab_projected(molecule)?
-        } else {
-            molfile::reaction_ctab(molecule)?
-        })
+        let (output, part_fallback) = molfile::reaction_ctab_drawing(molecule, doc)?;
+        fallback |= part_fallback;
+        Ok(output)
     })?;
     let mut output = String::from("$RXN V3000\n\n      RDKit\n\nM  V30 COUNTS");
     for row in &rows {
@@ -200,7 +206,7 @@ pub fn write_rxn(doc: &Document, selected: Option<&[u64]>) -> Result<String, Err
         writeln!(output, "M  V30 END {label}")?;
     }
     output.push_str("M  END\n");
-    Ok(output)
+    Ok((output, fallback))
 }
 
 /// Canonical reaction SMILES, preserving grouped components and repeated roles.

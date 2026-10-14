@@ -1,5 +1,6 @@
 use crate::document::Document;
 use serde::{Deserialize, Serialize};
+pub(crate) mod export_notices;
 pub mod native_aromatic;
 pub mod native_cleanup;
 pub mod native_import;
@@ -316,31 +317,30 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             let reaction_smiles = format == "rsmi";
             use crate::chemistry::reaction;
             let document = request.document.take().ok_or("Missing reaction drawing")?;
-            let opacity = crate::rear_opacity::present(&document);
+            let mut warnings =
+                export_notices::notices(&document, format, export_notices::Route::Reaction);
             let selected = request.selected_ids.take();
             let output = tokio::task::spawn_blocking(move || {
                 if reaction_smiles {
                     reaction::write_smiles(&document, selected.as_deref())
+                        .map(|output| (output, false))
                 } else {
-                    reaction::write_rxn(&document, selected.as_deref())
+                    reaction::write_rxn_with_fallback(&document, selected.as_deref())
                 }
             })
             .await
             .map_err(|e| format!("Reaction export failed: {e}"))?;
             match output {
-                Ok(output) => {
+                Ok((output, fallback)) => {
+                    if fallback {
+                        warnings.push(crate::chemistry::molfile::STEREO_FALLBACK_NOTICE.into());
+                    }
                     return Ok(Response {
                         document: None,
                         analysis: None,
                         output: Some(output),
                         engine_version: crate::chemistry::RDKIT_VERSION.into(),
-                        warnings: {
-                            let mut warnings = vec![reaction::EXPORT_WARNING.into()];
-                            if opacity {
-                                warnings.push(crate::rear_opacity::EXPORT_NOTICE.into());
-                            }
-                            warnings
-                        },
+                        warnings,
                     });
                 }
                 Err(error) => return Err(error.to_string()),

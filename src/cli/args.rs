@@ -1,18 +1,13 @@
-//! The `reshiki --cli` grammar:
-//!
-//! ```text
-//! reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FMT] [--to FMT] [-o OUTPUT|-] [--pages] [--force] [--receipt]
-//! reshiki --cli render (INPUT | - | --smiles TEXT) [--from FMT] [--to png|svg] [-o OUTPUT|-] [--width N] [--height N] [--force]
-//! reshiki --cli compose (PROPOSAL | -) [--to FMT] [-o OUTPUT|-] [--pages] [--force] [--receipt]
-//! reshiki --cli analyze (INPUT | - | --smiles TEXT) [--from FMT]
-//! reshiki --cli info
-//! reshiki --cli help [COMMAND]
-//! ```
+//! Token parsing for the grammar in [`commands::COMMANDS`], described by
+//! `reshiki --cli help`.
 //!
 //! Tokens stay [`OsString`]s, so paths need not be UTF-8. `--` ends the
 //! options, each option is allowed at most once, and every problem is a
 //! usage error (exit 2) found before anything is read or run.
-use super::{input_format, input_formats, output_formats, render_formats};
+use super::{
+    commands::{self, CommandSpec},
+    input_format, input_formats, output_formats, render_formats,
+};
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
@@ -21,23 +16,24 @@ use std::{
 /// A parsed command line.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Command {
-    Help(Option<Topic>),
+    Help {
+        topic: Option<&'static CommandSpec>,
+        json: bool,
+    },
     Info,
+    Tools,
+    Schema(Schema),
+    Skill(Skill),
     Convert(Convert),
     Render(Render),
     Compose(Compose),
     Analyze(Input),
 }
 
-/// A command `help` describes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Topic {
-    Convert,
-    Render,
-    Compose,
-    Analyze,
-    Info,
-    Help,
+/// A schema the CLI can print without a tool host.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Schema {
+    Proposal,
 }
 
 /// Where the input comes from.
@@ -99,75 +95,98 @@ pub(crate) struct Compose {
     pub(crate) export: Export,
 }
 
-/// Every option; each command takes those in its own list.
-const OPTIONS: &[&str] = &[
-    "--smiles",
-    "--from",
-    "--to",
-    "-o",
-    "--width",
-    "--height",
-    "--pages",
-    "--force",
-    "--receipt",
-];
-const CONVERT_OPTIONS: &[&str] = &[
-    "--smiles",
-    "--from",
-    "--to",
-    "-o",
-    "--pages",
-    "--force",
-    "--receipt",
-];
-const RENDER_OPTIONS: &[&str] = &[
-    "--smiles", "--from", "--to", "-o", "--width", "--height", "--force",
-];
-const COMPOSE_OPTIONS: &[&str] = &["--to", "-o", "--pages", "--force", "--receipt"];
-const ANALYZE_OPTIONS: &[&str] = &["--smiles", "--from"];
+/// `skill`: an existing parent folder and the generated skill's identity.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Skill {
+    pub(crate) folder: PathBuf,
+    pub(crate) name: String,
+    pub(crate) executable: Option<PathBuf>,
+    pub(crate) force: bool,
+    pub(crate) receipt: bool,
+}
 
 /// Parses `name` and the tokens after it; `Err` is the usage message.
 pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> {
     let lossy = name.to_string_lossy();
-    match lossy.as_ref() {
-        "help" | "--help" | "-h" => help(rest),
+    if matches!(lossy.as_ref(), "--help" | "-h") {
+        return help(rest);
+    }
+    let spec = commands::find(&lossy).ok_or_else(|| unknown_command(&lossy))?;
+    match spec.name {
+        "help" => help(rest),
         "info" if rest.is_empty() => Ok(Command::Info),
         "info" => Err("info takes no arguments".into()),
-        "convert" => convert(&options("convert", CONVERT_OPTIONS, rest)?),
-        "render" => render(&options("render", RENDER_OPTIONS, rest)?),
-        "compose" => compose(&options("compose", COMPOSE_OPTIONS, rest)?),
-        "analyze" => {
-            input("analyze", &options("analyze", ANALYZE_OPTIONS, rest)?).map(Command::Analyze)
-        }
-        _ => Err(format!(
-            "unknown command `{lossy}`; run `reshiki --cli help`"
-        )),
+        "tools" if rest.is_empty() => Ok(Command::Tools),
+        "tools" => Err("tools takes no arguments".into()),
+        "schema" => schema(&options(spec, rest)?),
+        "skill" => skill(&options(spec, rest)?),
+        "convert" => convert(&options(spec, rest)?),
+        "render" => render(&options(spec, rest)?),
+        "compose" => compose(&options(spec, rest)?),
+        "analyze" => input(spec.name, &options(spec, rest)?).map(Command::Analyze),
+        _ => Err(unknown_command(&lossy)),
     }
 }
 
-/// `help [COMMAND]`.
+/// The usage message for a command name that is not in the table.
+fn unknown_command(name: &str) -> String {
+    format!("unknown command `{name}`; run `reshiki --cli help`")
+}
+
+/// The usage message for an option `command` does not take: a file command's
+/// flag names the command; any other flag, such as help's --json, stays an
+/// unknown option there, as it was before another command took it.
+fn foreign_option(command: &str, token: &OsStr) -> String {
+    match commands::FILE_COMMANDS
+        .iter()
+        .flat_map(|command| command.options)
+        .find(|option| token == option.flag)
+    {
+        Some(known) => format!("{command} does not take {}", known.flag),
+        None => format!("unknown option `{}`", token.to_string_lossy()),
+    }
+}
+
+/// `help [--json] [COMMAND]`; without `--json`, keep the original grammar.
 fn help(rest: &[OsString]) -> Result<Command, String> {
-    let [topic] = rest else {
-        return if rest.is_empty() {
-            Ok(Command::Help(None))
+    let mut json = false;
+    let mut topics = Vec::new();
+    for token in rest {
+        if token == "--json" {
+            if json {
+                return Err("--json given more than once".into());
+            }
+            json = true;
+        } else {
+            topics.push(token);
+        }
+    }
+    let [topic] = topics.as_slice() else {
+        return if topics.is_empty() {
+            Ok(Command::Help { topic: None, json })
         } else {
             Err("help takes at most one command".into())
         };
     };
-    let topic = match topic.to_string_lossy().as_ref() {
-        "convert" => Topic::Convert,
-        "render" => Topic::Render,
-        "compose" => Topic::Compose,
-        "analyze" => Topic::Analyze,
-        "info" => Topic::Info,
-        "help" => Topic::Help,
-        other => {
-            return Err(format!(
-                "unknown command `{other}`; run `reshiki --cli help`"
-            ));
-        }
-    };
-    Ok(Command::Help(Some(topic)))
+    let name = topic.to_string_lossy();
+    let topic = commands::find(&name).ok_or_else(|| unknown_command(&name))?;
+    Ok(Command::Help {
+        topic: Some(topic),
+        json,
+    })
+}
+
+/// `schema NAME`; reuse the standard option and positional-input errors.
+fn schema(options: &Options) -> Result<Command, String> {
+    let name = options
+        .input
+        .as_ref()
+        .ok_or("schema needs a name: proposal")?
+        .to_string_lossy();
+    match name.as_ref() {
+        "proposal" => Ok(Command::Schema(Schema::Proposal)),
+        _ => Err(format!("unknown schema `{name}`; supported: proposal")),
+    }
 }
 
 /// The tokens after a command, each option at most once.
@@ -181,13 +200,16 @@ struct Options {
     output: Option<OsString>,
     width: Option<OsString>,
     height: Option<OsString>,
+    name: Option<OsString>,
+    executable: Option<OsString>,
     pages: bool,
     force: bool,
     receipt: bool,
 }
 
-/// Splits `tokens` into options from `allowed` and one positional input.
-fn options(command: &str, allowed: &[&str], tokens: &[OsString]) -> Result<Options, String> {
+/// Splits `tokens` into the command's options and one positional input.
+fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
+    let command = spec.name;
     let mut options = Options::default();
     let mut seen: Vec<&str> = Vec::new();
     let mut ended = false;
@@ -207,38 +229,101 @@ fn options(command: &str, allowed: &[&str], tokens: &[OsString]) -> Result<Optio
             options.input = Some(token.clone());
             continue;
         }
-        let Some(&name) = OPTIONS.iter().find(|name| token == **name) else {
-            return Err(format!("unknown option `{}`", token.to_string_lossy()));
+        let Some(option) = spec.options.iter().find(|option| token == option.flag) else {
+            return Err(foreign_option(command, token));
         };
-        if !allowed.contains(&name) {
-            return Err(format!("{command} does not take {name}"));
-        }
+        let name = option.flag;
         if seen.contains(&name) {
             return Err(format!("{name} given more than once"));
         }
         seen.push(name);
-        match name {
-            "--pages" => options.pages = true,
-            "--force" => options.force = true,
-            "--receipt" => options.receipt = true,
-            _ => {
-                // The next token is the value, whatever it looks like.
-                let value = tokens
-                    .next()
-                    .cloned()
-                    .ok_or_else(|| format!("{name} needs a value"))?;
-                match name {
-                    "--smiles" => options.smiles = Some(value),
-                    "--from" => options.from = Some(value),
-                    "--to" => options.to = Some(value),
-                    "--width" => options.width = Some(value),
-                    "--height" => options.height = Some(value),
-                    _ => options.output = Some(value),
-                }
+        if option.value.is_some() {
+            // The next token is the value, whatever it looks like.
+            let value = tokens
+                .next()
+                .cloned()
+                .ok_or_else(|| format!("{name} needs a value"))?;
+            match name {
+                "--smiles" => options.smiles = Some(value),
+                "--from" => options.from = Some(value),
+                "--to" => options.to = Some(value),
+                "--width" => options.width = Some(value),
+                "--height" => options.height = Some(value),
+                "--name" => options.name = Some(value),
+                "--executable" => options.executable = Some(value),
+                _ => options.output = Some(value),
+            }
+        } else {
+            match name {
+                "--pages" => options.pages = true,
+                "--force" => options.force = true,
+                "--receipt" => options.receipt = true,
+                _ => {}
             }
         }
     }
     Ok(options)
+}
+
+/// A portable Agent Skill name, also used as exactly one directory component.
+pub(super) fn valid_skill_name(name: &str) -> bool {
+    (1..=64).contains(&name.len())
+        && name
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+        && !name.starts_with('-')
+        && !name.ends_with('-')
+        && !name.contains("--")
+        && !name.contains("claude")
+        && !name.contains("anthropic")
+}
+
+/// `skill`: the folder that receives NAME, the name and the executable path.
+fn skill(options: &Options) -> Result<Command, String> {
+    if let Some(input) = &options.input {
+        return Err(format!(
+            "skill takes no input; unexpected `{}`",
+            input.to_string_lossy()
+        ));
+    }
+    let folder = options
+        .output
+        .as_ref()
+        .filter(|path| !path.is_empty() && *path != "-")
+        .ok_or("skill writes a folder; pass -o FOLDER")?;
+    let name = options
+        .name
+        .as_deref()
+        .unwrap_or(OsStr::new(commands::DEFAULT_SKILL_NAME))
+        .to_str()
+        .ok_or("--name must be UTF-8")?;
+    if !valid_skill_name(name) {
+        let message = "--name must be 1-64 lowercase letters, digits or hyphens, with no leading, \
+trailing or double hyphen, and cannot contain claude or anthropic";
+        return Err(message.into());
+    }
+    let executable = options
+        .executable
+        .as_ref()
+        .map(|path| {
+            let text = path.to_str().ok_or("--executable must be UTF-8")?;
+            if text.chars().any(char::is_control) {
+                return Err("--executable must not contain control characters");
+            }
+            let path = PathBuf::from(path);
+            if !path.is_absolute() {
+                return Err("--executable must be an absolute path");
+            }
+            Ok(path)
+        })
+        .transpose()?;
+    Ok(Command::Skill(Skill {
+        folder: PathBuf::from(folder),
+        name: name.into(),
+        executable,
+        force: options.force,
+        receipt: options.receipt,
+    }))
 }
 
 /// The one input source and its format.
@@ -274,7 +359,7 @@ fn input(command: &str, options: &Options) -> Result<Input, String> {
         (_, Some(from)) => {
             let from = from.to_string_lossy();
             let formats = input_formats();
-            if !formats.iter().any(|format| *format == from) {
+            if !formats.contains(&from.as_ref()) {
                 return Err(format!(
                     "unknown input format `{from}`; supported: {}",
                     formats.join(", ")
@@ -304,7 +389,7 @@ fn convert(options: &Options) -> Result<Command, String> {
 /// `render`: the input, the image format and destination, then the size.
 fn render(options: &Options) -> Result<Command, String> {
     let input = input("render", options)?;
-    let (format, output) = destination(options, &render_formats())?;
+    let (format, output) = destination(options, render_formats())?;
     Ok(Command::Render(Render {
         input,
         format,
@@ -346,7 +431,7 @@ fn side(name: &str, value: Option<&OsStr>) -> Result<Option<u32>, String> {
 /// The file convert and compose write: the format and destination, then
 /// `--pages` for pdf only and `--receipt` only with `-o FILE`.
 fn export(options: &Options) -> Result<Export, String> {
-    let (format, output) = destination(options, &output_formats())?;
+    let (format, output) = destination(options, output_formats())?;
     if options.pages && format != "pdf" {
         return Err("--pages is valid only with pdf output".into());
     }
@@ -364,7 +449,7 @@ fn export(options: &Options) -> Result<Export, String> {
 
 /// Where the output goes and its format, one of `formats`: `--to`, or the
 /// extension of `-o FILE` (`.smi` is smiles).
-fn destination(options: &Options, formats: &[String]) -> Result<(String, Output), String> {
+fn destination(options: &Options, formats: &[&str]) -> Result<(String, Output), String> {
     let output = match &options.output {
         Some(path) if path == "-" => Output::Stdout,
         Some(path) if path.is_empty() => return Err("-o needs a file name".into()),
@@ -387,7 +472,7 @@ fn destination(options: &Options, formats: &[String]) -> Result<(String, Output)
             return Err("writing to standard output needs --to FORMAT".into());
         }
     };
-    if !formats.contains(&format) {
+    if !formats.contains(&format.as_str()) {
         return Err(format!(
             "unsupported output format `{format}`; supported: {}",
             formats.join(", ")

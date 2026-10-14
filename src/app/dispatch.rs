@@ -81,7 +81,7 @@ impl App {
             Message::AtomRadical(value) => self.set_radical(value),
             Message::ToggleInspector => return Some(self.toggle_inspector()),
             Message::Inspector(tab) => {
-                if tab == InspectorTab::Nmr {
+                if tab == InspectorTab::Predict {
                     return Some(self.nmr_action(super::nmr::Action::Dock));
                 }
                 if let Some(task) = self.show_inspector_tab(tab) {
@@ -207,6 +207,7 @@ impl App {
     }
 
     /// Background delivery calls these handlers without front-tab input or focus handling.
+    /// These arms must handle every Owner::Document completion in results.rs.
     pub(super) fn update_document_result(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Optimization(action) => return self.optimization_action(action),

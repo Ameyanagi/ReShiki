@@ -1,6 +1,6 @@
 # Pictures in drawings
 
-Use **Import → Choose file…**, or drop the file on the drawing, to insert a PNG, JPEG, TIFF or WebP file. The drawing stays responsive while the picture loads. Cancel leaves the drawing unchanged. If you switch tabs during loading, the picture still lands in the tab that requested it. If that drawing changes during loading, import again when ready; a late result never replaces newer work.
+Use **Import → Choose file…**, or drop the file on the drawing, to insert a PNG, JPEG, TIFF or WebP file or, on Windows, an EMF file. The drawing stays responsive while the picture loads. Cancel leaves the drawing unchanged. If you switch tabs during loading, the picture still lands in the tab that requested it. If that drawing changes during loading, import again when ready; a late result never replaces newer work.
 
 On macOS, ordinary **Paste** accepts pictures when no explicit editable drawing representation takes priority. **Import → Paste picture** chooses the raster representation explicitly. Clipboard reads are asynchronous and reject stale completion. PNG paste respects physical-resolution metadata.
 
@@ -10,7 +10,7 @@ Select a picture to move it, drag a corner to resize proportionally, or use the 
 - **Restore original proportions**, fitted inside the current frame.
 - **Replace picture…**, retaining the center, orientation, reflection and layer while fitting the new picture inside the old frame.
 
-Each insertion, replacement and transformation is undoable. Pictures are normalized to embedded PNG data, including transparency, so native files do not depend on the source image. Native Copy/Paste keeps the full frame; SVG/PDF/PNG export includes pictures alongside chemical drawing objects. The assistant can inspect pictures through its rendered canvas image.
+Each insertion, replacement and transformation is undoable. Raster pictures are stored as embedded PNG, including transparency, so `.rsk` files do not depend on the source image. EMF pictures keep the original file plus a PNG preview for other platforms. Native Copy/Paste keeps the full frame; SVG/PDF/PNG export includes pictures alongside chemical drawing objects. The assistant can inspect pictures through its rendered canvas image.
 
 CDXML export and editable macOS Copy also carry embedded pictures beside editable molecules, text and supported graphics. Pictures retain their physical size, position, rotation, transparency, stacking order and group membership. Reflections are encoded by reversing image pixels without resampling; the receiving editor still gets a separate picture object. Import accepts embedded PNG, TIFF, JPEG, GIF and BMP representations and normalizes them to PNG. Export placement includes pictures when calculating the page margin.
 

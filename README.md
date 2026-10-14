@@ -30,7 +30,7 @@ New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain suppo
 
 ## Install
 
-Download ReShiki for Apple Silicon or Intel macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). ReShiki includes the drawing and chemistry tools: no Python, RDKit, or uv installation is needed. Drawing, imports, cleanup, and molecular properties work offline from the first launch.
+Download ReShiki for Apple Silicon or Intel macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). ReShiki includes the drawing and chemistry tools: no Python, RDKit, or uv installation is needed. Drawing, imports, cleanup, and molecular properties work offline from the first launch. In Nightly builds, chemical names and NMR prediction work offline too.
 
 On Mac, open the disk image and drag ReShiki to Applications. On Windows, run setup. Click **ReShiki** in the app to check for updates.
 
@@ -45,6 +45,8 @@ Want to test upcoming changes? [Nightly builds](https://reshiki.com/guide/instal
 Open **Help → Open shortcut examples** for a single editable reference file. Double-click an example structure to select it, then copy it into your drawing. See the [clipboard compatibility table](docs/clipboard.md#changes-made-for-an-external-copy) for supported transfer and explicit conversions.
 
 The AI assistant is optional and uses your local Codex sign-in. [Install Codex and connect the assistant](docs/assistant-setup.md) for text and image requests; ordinary drawing and chemistry work offline without it.
+
+Experimental (Nightly): AI agents such as Claude Code and Codex can drive ReShiki through its MCP server or command line. [Connect AI agents](https://reshiki.com/guide/agents/)
 
 ## Acknowledging ReShiki
 
@@ -77,7 +79,9 @@ and confirm it in your pull request.
 
 Thanks to our [contributors](docs/contributors.md) for their code, testing, and feedback.
 
-ReShiki uses Rust and Iced, with chemistry, clipboard and printing in one application executable per platform. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions.
+ReShiki uses Rust and Iced, with chemistry, clipboard and printing in one application executable per platform. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions. For LLMs and AI agents, the site also publishes [llms.txt](https://reshiki.com/llms.txt) and the [Agent API set](https://reshiki.com/_llms-txt/agent-api.txt).
+
+See the [documentation and evidence policy](docs/README.md) when adding guides, review records or supporting assets.
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 

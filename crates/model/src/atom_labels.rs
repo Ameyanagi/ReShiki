@@ -1,8 +1,8 @@
 //! Atom-label appearance and owned number/stereochemistry indicators.
 //! Indicator appearance never changes the molecular graph or map numbers.
 use crate::{
-    document::{Atom, Document, Point},
-    typography::TextStyle,
+    document::{Atom, Bond, Document, Point},
+    typography::{ScriptRun, TextStyle},
 };
 use serde::{Deserialize, Serialize};
 pub mod refresh;
@@ -204,6 +204,9 @@ pub struct AtomDisplay {
     /// A free text label on a wildcard atom, without assigning an element.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variable: Option<String>,
+    /// Manual scripts on the variable label; empty uses formula inference.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub label_scripts: Vec<ScriptRun>,
     pub carbons: Option<Carbons>,
     pub hydrogens: Option<bool>,
     pub hydrogen_position: HydrogenPosition,
@@ -256,6 +259,11 @@ impl Default for StereoDisplay {
     }
 }
 impl AtomDisplay {
+    /// Replacing a label also discards formatting tied to its old byte offsets.
+    pub fn set_variable(&mut self, variable: Option<String>) {
+        self.variable = variable;
+        self.label_scripts.clear();
+    }
     pub fn is_default(&self) -> bool {
         self == &Self::default()
     }
@@ -264,6 +272,13 @@ impl AtomDisplay {
             v.trim().is_empty() || v.chars().count() > 32 || v.chars().any(char::is_control)
         }) {
             return Err("Atom text labels must contain 1–32 printable characters".into());
+        }
+        if !self.label_scripts.is_empty() {
+            let text = self
+                .variable
+                .as_deref()
+                .ok_or("Atom label scripts require a variable label")?;
+            crate::typography::validate_label_scripts(text, &self.label_scripts)?;
         }
         self.stereo.validate()?;
         self.mapping.validate()?;
@@ -470,6 +485,32 @@ impl Indicator {
     }
 }
 
+/// Automatic indicator candidate radii, innermost first. Generic ink bounds
+/// reserve the outermost one.
+pub(crate) const fn indicator_radii(height: f32) -> [f32; 5] {
+    [
+        height * 0.85 + 6.,
+        height * 1.35 + 6.,
+        height * 1.85 + 6.,
+        height * 2.5 + 6.,
+        height * 3.25 + 6.,
+    ]
+}
+
+/// Indicator visibility rules shared by `indicators` and generic ink bounds.
+/// The stereo rules ignore whether a CIP label is present.
+pub(crate) fn map_indicator_shown(a: &Atom, doc: &Document) -> bool {
+    a.map_num != 0 && a.display.mapping.show.unwrap_or(doc.atom_labels.maps)
+}
+
+pub(crate) fn stereo_indicator_shown(a: &Atom, doc: &Document) -> bool {
+    a.display.stereo.show.unwrap_or(doc.atom_labels.stereo)
+}
+
+pub(crate) fn bond_indicator_shown(b: &Bond, doc: &Document) -> bool {
+    b.indicator.show.unwrap_or(doc.atom_labels.stereo)
+}
+
 /// Try outward positions first, then minimize label/bond collisions. Manual
 /// offsets remain exact. The same positions are used by canvas and all exports.
 pub fn indicators(doc: &Document) -> Vec<Indicator> {
@@ -483,7 +524,7 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
                 n.style.clone(),
             ));
         }
-        if a.map_num != 0 && a.display.mapping.show.unwrap_or(doc.atom_labels.maps) {
+        if map_indicator_shown(a, doc) {
             labels.push((
                 Owner::Mapping(a.id),
                 a.map_num.to_string(),
@@ -491,7 +532,7 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
                 a.display.mapping.style.clone(),
             ));
         }
-        if a.display.stereo.show.unwrap_or(doc.atom_labels.stereo)
+        if stereo_indicator_shown(a, doc)
             && let Some(cip) = &a.cip_label
         {
             labels.push((
@@ -503,7 +544,7 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
         }
     }
     for b in doc.bonds.iter().filter(|b| doc.bond_visible(b.a, b.b)) {
-        if b.indicator.show.unwrap_or(doc.atom_labels.stereo)
+        if bond_indicator_shown(b, doc)
             && let Some(cip) = &b.cip_label
         {
             labels.push((
@@ -583,13 +624,7 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
             };
             let preferred = crate::editing::open_angle(anchor, &neighbors);
             let mut best = (f32::INFINITY, anchor.offset(0., -height));
-            for radius in [
-                height * 0.85 + 6.,
-                height * 1.35 + 6.,
-                height * 1.85 + 6.,
-                height * 2.5 + 6.,
-                height * 3.25 + 6.,
-            ] {
+            for radius in indicator_radii(height) {
                 for i in 0..24 {
                     let angle = preferred + i as f32 * std::f32::consts::TAU / 24.;
                     let center = anchor.offset(radius * angle.cos(), radius * angle.sin());

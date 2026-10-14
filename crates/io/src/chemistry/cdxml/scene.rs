@@ -18,7 +18,7 @@ use super::{
 use crate::{
     chemistry::{self, document::Molecule},
     document::{self, Document, Point},
-    typography::Script,
+    typography::{Script, ScriptRun},
 };
 pub use finish::import_cdxml;
 use roxmltree::Node;
@@ -221,6 +221,65 @@ fn label_presentation(text: NativeText) -> Result<(NativeTextStyle, Option<[u8; 
     }
     let hydrogen_color = hydrogen_color.map(|c| c.into_document()).transpose()?;
     Ok((style, hydrogen_color))
+}
+
+pub(super) const MANUAL_LABEL_SCRIPTS: &str = "ReShiki manual label scripts";
+
+/// Preserve scripts on drawing labels without treating ChemDraw's Formula
+/// face as a manual baseline override; beside explicit scripts it resolves to
+/// the counts and charge it draws. Automatic ReShiki exports already use
+/// explicit faces, so identical runs need their provenance name to stay manual.
+pub(super) fn imported_label_scripts(text: &NativeText, manual: bool) -> Result<Vec<ScriptRun>> {
+    const INVALID: SceneError = SceneError::Invalid("Invalid CDXML label script range");
+    let mut styles: Vec<(usize, usize, &NativeTextStyle)> = Vec::new();
+    let mut end = 0;
+    for span in &text.format.spans {
+        if !(end <= span.start && span.start < span.end && span.end <= text.text.len()) {
+            return Err(INVALID);
+        }
+        styles.push((end, span.start, &text.format.style));
+        styles.push((span.start, span.end, &span.style));
+        end = span.end;
+    }
+    styles.push((end, text.text.len(), &text.format.style));
+    let formula = styles
+        .iter()
+        .any(|(start, end, style)| start < end && style.formula);
+    let scripted = styles
+        .iter()
+        .any(|(start, end, style)| start < end && style.script != Script::Normal);
+    // Formula-face text beside explicit scripts keeps ChemDraw's formula look
+    // (SO4 in Formula, then a raised 2-), as typography::layout draws it.
+    let mut runs: Vec<ScriptRun> = Vec::new();
+    let (mut previous, mut lowered) = (' ', false);
+    for (start, end, style) in styles {
+        for (offset, c) in text.text.get(start..end).ok_or(INVALID)?.char_indices() {
+            let mut script = style.script;
+            if style.formula && script == Script::Normal {
+                script = crate::typography::formula_script(previous, c, lowered);
+                lowered = script == Script::Subscript;
+            }
+            previous = c;
+            let start = start + offset;
+            let end = start + c.len_utf8();
+            match runs.last_mut() {
+                Some(last) if last.end == start && last.script == script => last.end = end,
+                _ => runs.push(ScriptRun { start, end, script }),
+            }
+        }
+    }
+    if !scripted && (!manual || formula) {
+        return Ok(Vec::new());
+    }
+    if !manual
+        && runs
+            .iter()
+            .map(|run| (run.start..run.end, run.script))
+            .eq(crate::typography::label_runs(&text.text))
+    {
+        return Ok(Vec::new());
+    }
+    crate::typography::normalize_label_scripts(&text.text, &runs).map_err(|_| INVALID)
 }
 
 fn atom_slot(

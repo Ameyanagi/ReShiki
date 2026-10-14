@@ -1,6 +1,6 @@
 # Compact NMR palette validation
 
-Native desktop review of the compact revision is complete on the exact preserved executable below. [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) remains under review. The [matched before/after captures](nmr-visual-review.md#matched-native-before-and-after) document the revision after user review rejected the previous full-width results dock.
+Native desktop review of the compact revision is complete on the exact preserved executable below. [PR #272](https://github.com/Ameyanagi/ReShiki/pull/272) is merged, unreleased. The [matched before/after captures](nmr-visual-review.md#matched-native-before-and-after) document the revision after user review rejected the previous full-width results dock.
 
 ## Reviewed source and preserved bundle
 
@@ -50,8 +50,17 @@ The native desktop reviewer launched the exact signed compact bundle, used the u
 
 macOS clamps native resize attempts to the existing minimum in [src/main.rs](../src/main.rs). Native minimum captures display 204% after resizing; this is separate from the stable 250% palette interactions at 1280×820. The 940×620 cases remain renderer-only coverage.
 
-The [evidence manifest](nmr-compact-native-evidence.json) records each unmodified JPEG/JFIF capture, its source, dimensions, displayed zoom and SHA-256. The compact native export equals [ethyl-acetate-carbon-desktop.tsv](../tests/fixtures/nmr/ethyl-acetate-carbon-desktop.tsv), SHA-256 `23464aba142911f3fb3c635069f4bc8f2a8c0028934c6925d3065c036058b876`. It includes all four carbon rows and original provenance/limitations. The original fixture, export and historical images remain unchanged.
+The [evidence manifest](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/nmr-compact-native-evidence.json) records each unmodified JPEG/JFIF capture, its source, dimensions, displayed zoom and SHA-256. The compact native export equals [ethyl-acetate-carbon-desktop.tsv](../tests/fixtures/nmr/ethyl-acetate-carbon-desktop.tsv), SHA-256 `23464aba142911f3fb3c635069f4bc8f2a8c0028934c6925d3065c036058b876`. It includes all four carbon rows and original provenance/limitations. The original fixture, export and historical images remain unchanged.
 
-The [native final drawing](evidence/nmr/ethyl-acetate-compact-desktop-final.rsk), SHA-256 `08978db95416b8f58df2d8b12cbe949328327c8ddc0d0a75c7e32668e0f14cca`, and [independent comparison](evidence/nmr/compact-desktop-independent-check.json) establish the restored graph. Version 19 adds ordinary default fields and empty figure collections; the existing codec omits the old fixture's bond ID keys while retaining atom IDs 1–6. This is graph-restoration evidence, without an NMR-result persistence claim.
+The [native final drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/nmr/ethyl-acetate-compact-desktop-final.rsk), SHA-256 `08978db95416b8f58df2d8b12cbe949328327c8ddc0d0a75c7e32668e0f14cca`, and [independent comparison](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/evidence/nmr/compact-desktop-independent-check.json) establish the restored graph. Version 19 adds ordinary default fields and empty figure collections; the existing codec omits the old fixture's bond ID keys while retaining atom IDs 1–6. This is graph-restoration evidence, without an NMR-result persistence claim.
 
 The ChemDraw reference remains bounded: installed 26.0.0.6599 is Prime and lacks ChemNMR, as confirmed by [Revvity support](https://support.revvitysignals.com/hc/en-us/articles/4408233427220-ChemDraw-ChemNMR-options-do-not-appear-in-the-Structure-menu). Bundled official help describes a separate prediction window. It supports separating prediction results from the drawing layout; no live ChemNMR visual match was available or claimed. ReShiki predicts linked shifts and does not simulate a spectrum.
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/evidence/nmr](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/evidence/nmr), [docs/nmr-compact-native-evidence.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/nmr-compact-native-evidence.json) on the evidence archive branch.
+
+| Archived files                                                                                                                                           | What they record                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [docs/evidence/nmr](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/evidence/nmr)                                         | The final ethyl-acetate native drawing and independent graph-restoration comparison. |
+| [docs/nmr-compact-native-evidence.json](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/nmr-compact-native-evidence.json) | Original capture bytes, dimensions, displayed zoom and SHA-256 values.               |

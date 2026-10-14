@@ -523,7 +523,7 @@ pub fn set_hues(doc: &mut Document, hues: Hues) {
     if let Some(theme) = &mut doc.custom_theme {
         theme.hues = hues;
     }
-    doc.version = doc.version.max(16);
+    doc.require_version(crate::document::CUSTOM_THEMES);
 }
 
 #[cfg(test)]

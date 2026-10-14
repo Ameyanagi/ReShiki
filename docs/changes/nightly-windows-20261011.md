@@ -22,7 +22,7 @@ Native Windows Codex 0.156.1 ran the validator once in Session 2 with `gpt-6-sol
 
 ## Desktop and capture conditions
 
-The [verification receipt](../images/nightly-windows-20261011-v1/verification.json) records package/image hashes, route receipts and measured window/DPI data. The fresh editor was PID **10072**, Session **2**, on `WinSta0\Default`, Windows **10.0.26200.0**. Measured DPI was **96**, scale **1**, and `window_fits_work_area` was true: the outer 1260 × 762 physical-pixel window fit inside the 1276 × 778 work area.
+The [verification receipt](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/images/nightly-windows-20261011-v1/verification.json) records package/image hashes, route receipts and measured window/DPI data. The fresh editor was PID **10072**, Session **2**, on `WinSta0\Default`, Windows **10.0.26200.0**. Measured DPI was **96**, scale **1**, and `window_fits_work_area` was true: the outer 1260 × 762 physical-pixel window fit inside the 1276 × 778 work area.
 
 Captures show light appearance, JACS/ACS publication style and Arial 10 pt. Each 2556 × 1712 screenshot from the macOS Windows App remote session was cropped to the ReShiki window and uniformly resized to 1600 × 975. Untouched originals are retained privately; their hashes and crop box are in the public receipt. No AI content or retouching was used. Native measurements establish Windows DPI; canvas zoom is reported separately below.
 
@@ -92,9 +92,17 @@ ethanol spectrum.
 - This desktop review covers 96 DPI / 100% scale only. High and mixed DPI remain pending.
 - Fresh Office/ChemDraw clipboard and Office save-back checks were not repeated; earlier controlled desktop evidence remains historical.
 - The `(+)-lactic acid` GUI case was not repeated in this session; its native CI regressions passed.
-- Cage opacity, attached-arrow transforms, generic expansion and native save/reopen were not repeated in this Windows session.
+- Rear opacity, attached-arrow transforms, generic expansion and native save/reopen were not repeated in this Windows session.
 - Join/Co(en)3 accuracy remains TODO; [issue #246](https://github.com/Ameyanagi/ReShiki/issues/246) stays open.
 
 Reusable caption: **The published Windows Nightly retains arc edits through Undo,
 Redo and tab activation, and displays a linked ethanol caption with a floating
 atom-linked NMR report at 100% display scale.**
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/images/nightly-windows-20261011-v1](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/nightly-windows-20261011-v1) on the evidence archive branch.
+
+| Archived files                                                                                                                                               | What they record                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| [docs/images/nightly-windows-20261011-v1](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/images/nightly-windows-20261011-v1) | The Windows Nightly install, launched executable and native workflow verification record. |

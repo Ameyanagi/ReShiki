@@ -1,19 +1,30 @@
 //! Complete drawing graph adapter and separately licensed offline NMR index.
 use crate::{chemistry::document, document::Document, editing, reactions};
-use reshiki_model::chemistry::nmr::{
-    self as core, Environment, Index, Nucleus, Prediction, Statistics,
-};
+use reshiki_model::chemistry::nmr::{self as core, Environment, Index, Prediction, Statistics};
 use serde::Serialize;
 use std::sync::OnceLock;
 
 pub mod dataset;
-pub use core::Nucleus as ObservedNucleus;
+pub use core::{METHOD, Nucleus};
 pub const DATA_VERSION: &str = "nmrshiftdb2 2026-03-15 · measured CDCl3 subset v1";
 pub const CONDITIONS: &str =
     "CDCl3; recorded temperature 273–323 K, pooled without temperature/concentration correction";
 pub const ATTRIBUTION: &str = "Contains information from nmrshiftdb2 (https://nmrshiftdb.nmr.uni-koeln.de), available under the nmrshiftdb2 Database License (https://svn.code.sf.net/p/nmrshiftdb2/code/trunk/snapshots/nmrshiftdb2datalicense.txt).";
 pub const DATA_ACCESS: &str = "The derivative index and exact transformation method are available at https://github.com/Ameyanagi/ReShiki/tree/main/data/nmr and https://github.com/Ameyanagi/ReShiki/blob/main/crates/io/src/nmr/dataset.rs.";
 pub const LIMITATIONS: &str = "Connectivity-only 2D environments do not distinguish E/Z or relative configurations, stereoisomers, or resolve diastereotopic H. Multiple attached H are an unresolved group median, not an assigned peak. Exchangeable H, charged/radical structures, metals and non-default isotope labels are unsupported. Reference spread is descriptive and is not a calibrated confidence interval.";
+/// The solvent of the reference data, as shown next to results.
+pub const SOLVENT_LABEL: &str = "CDCl₃";
+/// Short notes on what the shift plot shows, one sentence each.
+pub const PLOT_NOTES: [&str; 4] = [
+    "The plot marks chemical shifts only.",
+    "Stick heights do not show intensity or integration.",
+    "J couplings, multiplets and second-order effects are not predicted.",
+    "Clicking a shared label again selects its next atom.",
+];
+/// Why a site has no prediction when the engine gives no reason.
+pub const NO_REFERENCE_DATA: &str = "No qualified reference data";
+/// The request is not one whole molecule: nothing, part of several, or several.
+pub const SELECT_ONE_MOLECULE: &str = "Select one whole molecule to predict NMR shifts";
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -30,6 +41,19 @@ pub struct Row {
     pub statistics: Option<Statistics>,
     pub limitation: Option<String>,
 }
+impl Row {
+    /// A finite predicted median suitable for plotting and drawing labels.
+    pub fn shift(&self) -> Option<f64> {
+        self.statistics
+            .as_ref()
+            .map(|statistics| statistics.median)
+            .filter(|shift| shift.is_finite())
+    }
+
+    pub fn has_statistics(&self) -> bool {
+        self.statistics.is_some()
+    }
+}
 #[derive(Debug, Clone, Serialize)]
 pub struct Report {
     pub nucleus: Nucleus,
@@ -42,6 +66,20 @@ pub struct Report {
     pub limitations: String,
     pub attribution: String,
 }
+impl Report {
+    /// Count rows with reference statistics, including nonfinite medians.
+    pub fn supported_count(&self) -> usize {
+        self.rows.iter().filter(|row| row.has_statistics()).count()
+    }
+
+    /// Finite shifts with their original row indices, in report order.
+    pub fn shifts(&self) -> impl Iterator<Item = (usize, f64)> + '_ {
+        self.rows
+            .iter()
+            .enumerate()
+            .filter_map(|(index, row)| row.shift().map(|shift| (index, shift)))
+    }
+}
 
 pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String> {
     document.validate()?;
@@ -52,7 +90,7 @@ pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String
     };
     let components = reactions::molecules(document, &selection);
     let [atom_ids] = components.as_slice() else {
-        return Err("Select atoms in one complete molecular structure for NMR prediction".into());
+        return Err(SELECT_ONE_MOLECULE.into());
     };
     if atom_ids.len() > core::MAX_ATOMS {
         return Err("NMR prediction supports at most 128 atoms".into());
@@ -84,7 +122,7 @@ pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String
 pub fn fingerprint(document: &Document, ids: &[u64]) -> Result<String, String> {
     if crate::generic::component_intersects(document, ids) {
         return Err(
-            "Expand Generic Structures before predicting NMR for this molecular component".into(),
+            "Expand generic structures before predicting NMR for this molecular component".into(),
         );
     }
     let wanted: std::collections::BTreeSet<_> = ids.iter().copied().collect();

@@ -394,11 +394,12 @@ impl App {
                     .height(Length::Fill)
             )
             .on_press(Message::Palette(Action::Close)),
+            // Share side insets with the sibling NMR palette; this popup
+            // starts higher and needs less clearance above the status bar.
             container(opaque(popup)).padding(iced::Padding {
                 top: 146.,
-                right: 12.,
                 bottom: 12.,
-                left: 112.
+                ..super::nmr::OVERLAY_INSETS
             })
         ]
         .into()
@@ -747,7 +748,8 @@ impl App {
         body
     }
     pub(super) fn select_tool(&mut self, tool: Tool) {
-        self.tab.arrow_source = None;
+        self.clear_bond_text_hint();
+        self.tab.arrows.cancel_source();
         self.tab.erase_stroke = false;
         self.palette = None;
         self.toolbar.remember(tool);

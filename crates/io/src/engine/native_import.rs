@@ -182,17 +182,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             finish_molecule(molecule, &imported.prepared.dummy_labels)?
         }
         "mol" => {
-            let imported = molfile::read(&text)?.for_display()?;
-            let drawing = imported.drawing()?;
-            let labels = drawing.labels()?;
-            let mut document =
-                drawing.finish_with(labels, |document| imported.restore_xyz(document))?;
-            let restored = imported.restore_haworth(&mut document);
-            let molecule = if restored {
-                molecular::prepare(&document)?
-            } else {
-                imported.molecule
-            };
+            let (document, molecule) = molfile::read(&text)?.display_document()?;
             Prepared {
                 molecule,
                 document,

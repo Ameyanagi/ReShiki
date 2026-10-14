@@ -1,6 +1,7 @@
 //! The in-process [`HeadlessHost`] a CLI command runs on, called through
 //! [`ToolHost::call`] like `reshiki --mcp` calls it.
 use super::{
+    WARNING_PREFIX,
     args::{Input, Source},
     io::{limit, read_input, text},
 };
@@ -127,13 +128,13 @@ fn warn(value: &Map<String, Value>, err: &mut dyn Write) {
     let warnings = value.get("warnings").and_then(Value::as_array);
     for warning in warnings.into_iter().flatten() {
         if let Some(message) = warning.get("message").and_then(Value::as_str) {
-            let _ = writeln!(err, "reshiki: warning: {message}");
+            let _ = writeln!(err, "{WARNING_PREFIX}{message}");
         }
     }
 }
 
 /// A JSON result as the CLI prints it: `value` plus `"experimental": true`
-/// and the `api` object every JSON result carries.
+/// and the `api` object every JSON result except the raw schema carries.
 pub(crate) fn labelled(mut value: Map<String, Value>) -> Value {
     value.insert("experimental".into(), Value::Bool(true));
     value.insert(

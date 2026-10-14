@@ -1,4 +1,4 @@
-//! Defined for the operation API (design Revision 1 items 14-15); not wired to any transport.
+//! Result envelopes and version numbers of the operation API.
 //!
 //! # IDs
 //!

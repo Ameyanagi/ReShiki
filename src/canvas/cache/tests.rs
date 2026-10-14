@@ -36,6 +36,25 @@ fn check(cache: &mut SceneCache, doc: &Document, ids: &[u64]) {
 }
 
 #[test]
+fn rear_opacity_is_shared_by_render_and_hover_until_the_document_changes() {
+    let mut cache = SceneCache::default();
+    let mut doc = drawing();
+    let ids = doc.all_ids();
+    let paint = cache.opacity(&doc);
+    assert!(Rc::ptr_eq(&paint, &cache.opacity(&doc.clone())));
+    check(&mut cache, &doc, &ids);
+    assert!(Rc::ptr_eq(&paint, &cache.opacity(&doc)));
+    check(&mut cache, &doc, &[]);
+    assert!(Rc::ptr_eq(&paint, &cache.opacity(&doc)));
+
+    doc.atoms[0].position.x -= 25.;
+    check(&mut cache, &doc, &ids);
+    let changed = cache.opacity(&doc);
+    assert!(!Rc::ptr_eq(&paint, &changed));
+    assert!(Rc::ptr_eq(&changed, &cache.opacity(&doc)));
+}
+
+#[test]
 fn document_edits_loads_and_history_cannot_reuse_stale_geometry() {
     let mut cache = SceneCache::default();
     let mut doc = drawing();
@@ -97,4 +116,198 @@ fn guide_layouts_outlive_other_selection_reads_but_not_edits() {
     assert!(Rc::ptr_eq(&first, &cache.guides(&doc, dragged).unwrap()));
     doc.atoms[0].position.x -= 25.;
     assert!(!Rc::ptr_eq(&first, &cache.guides(&doc, dragged).unwrap()));
+}
+
+fn nmr_drawing() -> (Document, reshiki::nmr::Report) {
+    let doc = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/nmr/ethyl-acetate.rsk"
+    ))
+    .unwrap();
+    let request = reshiki::nmr::prepare(&doc, &[]).unwrap();
+    let report = reshiki::nmr::predict(&request, reshiki::nmr::Nucleus::C13).unwrap();
+    (doc, report)
+}
+
+fn nmr_context(report: &reshiki::nmr::Report) -> super::super::nmr::Context<'_> {
+    super::super::nmr::Context {
+        report,
+        mode: super::super::nmr::LabelMode::Atom,
+        supported: None,
+    }
+}
+
+fn nmr_camera() -> Camera {
+    Camera {
+        center: Point::new(282.8, 219.),
+        zoom: 2.5,
+    }
+}
+
+#[test]
+fn moved_atoms_invalidate_nmr_placements_without_changing_the_report() {
+    let (mut doc, report) = nmr_drawing();
+    let mut cache = SceneCache::default();
+    let bounds = Rectangle::with_size(iced::Size::new(900., 600.));
+    let context = nmr_context(&report);
+    let first = cache.nmr_assignments(&doc, context, nmr_camera(), bounds);
+    assert_eq!(
+        first.as_ref(),
+        super::super::nmr::placements(&doc, context, nmr_camera(), bounds)
+    );
+    assert!(Rc::ptr_eq(
+        &first,
+        &cache.nmr_assignments(&doc, context, nmr_camera(), bounds)
+    ));
+    doc.atom_mut(2).unwrap().position.x += 30.;
+    let moved = cache.nmr_assignments(&doc, context, nmr_camera(), bounds);
+    assert!(!Rc::ptr_eq(&first, &moved));
+    assert_eq!(
+        moved.as_ref(),
+        super::super::nmr::placements(&doc, context, nmr_camera(), bounds)
+    );
+    let before = first.iter().find(|label| label.atom_id == 2).unwrap();
+    let after = moved.iter().find(|label| label.atom_id == 2).unwrap();
+    assert_eq!(after.anchor, before.anchor + iced::Vector::new(75., 0.));
+    assert_eq!(
+        reshiki::nmr::fingerprint(&doc, &report.atom_ids).unwrap(),
+        report.fingerprint
+    );
+}
+
+#[test]
+fn nmr_placements_use_mode_camera_bits_full_bounds_and_report_values() {
+    let (doc, mut report) = nmr_drawing();
+    let mut cache = SceneCache::default();
+    let bounds = Rectangle::with_size(iced::Size::new(900., 600.));
+    let camera = nmr_camera();
+    let first = cache.nmr_assignments(&doc, nmr_context(&report), camera, bounds);
+    // Selection and equivalent reports do not affect assignment geometry.
+    let _ = cache.render(&doc, &[2]);
+    let equivalent = report.clone();
+    assert!(Rc::ptr_eq(
+        &first,
+        &cache.nmr_assignments(&doc, nmr_context(&equivalent), camera, bounds)
+    ));
+    for changed in [
+        Camera {
+            center: camera.center.offset(1., 0.),
+            ..camera
+        },
+        Camera {
+            center: camera.center.offset(0., 1.),
+            ..camera
+        },
+        Camera { zoom: 3., ..camera },
+    ] {
+        let before = cache.nmr_assignments(&doc, nmr_context(&report), camera, bounds);
+        let after = cache.nmr_assignments(&doc, nmr_context(&report), changed, bounds);
+        assert!(!Rc::ptr_eq(&before, &after));
+        assert_eq!(
+            after.as_ref(),
+            super::super::nmr::placements(&doc, nmr_context(&report), changed, bounds)
+        );
+    }
+    let zero_camera = Camera {
+        center: Point::new(0., 0.),
+        ..camera
+    };
+    for changed in [
+        Camera {
+            center: Point::new(-0., 0.),
+            ..zero_camera
+        },
+        Camera {
+            center: Point::new(0., -0.),
+            ..zero_camera
+        },
+    ] {
+        let before = cache.nmr_assignments(&doc, nmr_context(&report), zero_camera, bounds);
+        let after = cache.nmr_assignments(&doc, nmr_context(&report), changed, bounds);
+        assert!(!Rc::ptr_eq(&before, &after));
+    }
+    for changed in [
+        Rectangle { x: -0., ..bounds },
+        Rectangle { y: -0., ..bounds },
+        Rectangle {
+            width: 901.,
+            ..bounds
+        },
+        Rectangle {
+            height: 601.,
+            ..bounds
+        },
+    ] {
+        let before = cache.nmr_assignments(&doc, nmr_context(&report), camera, bounds);
+        let after = cache.nmr_assignments(&doc, nmr_context(&report), camera, changed);
+        assert!(!Rc::ptr_eq(&before, &after));
+        assert_eq!(
+            after.as_ref(),
+            super::super::nmr::placements(&doc, nmr_context(&report), camera, changed)
+        );
+    }
+    for mode in [
+        super::super::nmr::LabelMode::Shift,
+        super::super::nmr::LabelMode::Both,
+    ] {
+        let before = cache.nmr_assignments(&doc, nmr_context(&report), camera, bounds);
+        let context = super::super::nmr::Context {
+            mode,
+            ..nmr_context(&report)
+        };
+        let after = cache.nmr_assignments(&doc, context, camera, bounds);
+        assert!(!Rc::ptr_eq(&before, &after));
+        assert_eq!(
+            after.as_ref(),
+            super::super::nmr::placements(&doc, context, camera, bounds)
+        );
+    }
+    let before = cache.nmr_assignments(&doc, nmr_context(&report), camera, bounds);
+    report.rows[0].statistics.as_mut().unwrap().median += 1.;
+    let after = cache.nmr_assignments(&doc, nmr_context(&report), camera, bounds);
+    assert!(!Rc::ptr_eq(&before, &after));
+    assert_eq!(
+        after.as_ref(),
+        super::super::nmr::placements(&doc, nmr_context(&report), camera, bounds)
+    );
+    let before = after;
+    report.rows.swap(0, 1);
+    let reordered = cache.nmr_assignments(&doc, nmr_context(&report), camera, bounds);
+    assert!(!Rc::ptr_eq(&before, &reordered));
+    assert_eq!(
+        reordered.as_ref(),
+        super::super::nmr::placements(&doc, nmr_context(&report), camera, bounds)
+    );
+}
+
+#[test]
+fn cached_foreground_orbitals_follow_edits_and_preserve_hit_selection() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle};
+    let mut doc = drawing();
+    let mut cache = SceneCache::default();
+    assert!(!cache.foreground_orbital(&doc));
+    let mut orbital = Graphic::dragged(
+        doc.next_id(),
+        GraphicKind::Orbital(reshiki::scientific::OrbitalKind::S),
+        Point::default(),
+        Point::new(0., -42.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    orbital.layer = 1;
+    doc.graphics.push(orbital);
+    for layer in [1, -1, 0] {
+        doc.graphics[0].layer = layer;
+        let flag = cache.foreground_orbital(&doc);
+        assert_eq!(flag, layer >= 0);
+        assert_eq!(cache.foreground_orbital(&doc), flag);
+        for p in [Point::default(), Point::new(-30., 0.), Point::new(42., 0.)] {
+            assert_eq!(
+                super::super::hit::hit_selection_with_orbital(&doc, p, 1., flag),
+                super::super::hit::hit_selection(&doc, p, 1.)
+            );
+        }
+    }
+    doc.graphics.clear();
+    assert!(!cache.foreground_orbital(&doc));
 }

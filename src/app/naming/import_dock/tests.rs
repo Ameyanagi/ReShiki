@@ -14,16 +14,15 @@ fn record() -> Record {
     Record {
         title: "ethanol".into(),
         systematic_name: None,
-        canonical_smiles: "CCO".into(),
-        smiles: "CCO".into(),
-        synonyms: vec![],
-        warnings: vec![],
         provenance: Provenance::OpsinRust,
+        ..super::super::test_support::record("CCO")
     }
 }
 
 async fn preview(app: &App, smiles: &str) -> Result<Preview, String> {
-    prepare_preview(app.engine.clone(), record(), smiles.into()).await
+    prepare_preview(app.engine.clone(), record(), smiles.into())
+        .await
+        .map_err(|error| error.to_string())
 }
 
 fn complete(app: &mut App, ticket: Ticket, preview: Preview) {
@@ -43,7 +42,13 @@ async fn one_insert_resolves_and_commits_structure_and_verified_caption_together
     let before = app.tab.doc.clone();
     let _ = app.insert_input();
     let pending = app.tab.naming.pending.unwrap();
-    assert!(matches!(pending, Pending::Import(_, true)));
+    assert!(matches!(
+        pending,
+        Pending::Import {
+            add_caption: true,
+            ..
+        }
+    ));
     assert!(!app.tab.naming.preview_open);
     let _ = app.insert_input();
     assert_eq!(app.tab.naming.pending, Some(pending));
@@ -84,6 +89,94 @@ async fn insert_without_caption_and_optional_preview_reuse_need_no_acknowledgeme
 }
 
 #[tokio::test]
+async fn exhausted_ids_report_failed_import_without_changing_the_drawing() -> Result<(), String> {
+    let mut app = ready();
+    let result = preview(&app, "CCO").await?;
+    app.tab.doc.add_atom("O", Point::new(120., 80.));
+    app.tab.doc.atoms[0].id = u64::MAX - 1;
+    app.tab.doc.validate()?;
+    let before = app.tab.doc.clone();
+    let mut attempted = before.clone();
+    assert!(editing::append(&mut attempted, &result.document, Point::default()).is_empty());
+    assert_eq!(attempted, before);
+    app.tab.selected = before.all_ids();
+    app.tool = Tool::Text;
+    app.tab.camera.center = Point::new(320., -80.);
+    app.tab.camera.zoom = 2.;
+    let selected = app.tab.selected.clone();
+    let camera = app.tab.camera;
+    let revision = app.tab.revision;
+    let history = (
+        app.tab.history.can_undo(),
+        app.tab.history.can_redo(),
+        app.tab.history.frames(),
+    );
+    app.tab.naming.set_preview(result);
+    let notice = "Keep the preview details";
+    app.tab.naming.notice = Some(Notice::new(NoticeKind::Info, notice));
+
+    let _ = app.insert_input();
+
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(
+        (
+            app.tab.history.can_undo(),
+            app.tab.history.can_redo(),
+            app.tab.history.frames(),
+        ),
+        history
+    );
+    assert!(app.error);
+    assert_eq!(app.status, "Could not insert ethanol");
+    assert_eq!(
+        app.tab
+            .naming
+            .notice
+            .as_ref()
+            .map(|notice| notice.detail.as_str()),
+        Some(notice)
+    );
+    assert_eq!(app.tool, Tool::Text);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    Ok(())
+}
+
+#[tokio::test]
+async fn ready_import_selects_the_inserted_objects_and_records_one_undo() -> Result<(), String> {
+    let mut app = ready();
+    let existing = app.tab.doc.add_atom("N", Point::new(-160., 40.));
+    app.tab.selected = vec![existing];
+    let before = app.tab.doc.clone();
+    let result = preview(&app, "CCO").await?;
+    app.tab.naming.set_preview(result);
+
+    let _ = app.insert_input();
+
+    let inserted = app
+        .tab
+        .doc
+        .all_ids()
+        .into_iter()
+        .filter(|id| *id != existing)
+        .collect::<Vec<_>>();
+    assert_eq!(inserted.len(), 4);
+    assert_eq!(app.tab.selected, inserted);
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    assert_eq!(app.tab.history.frames(), 1);
+    assert!(!app.error);
+    assert_eq!(app.status, "Inserted ethanol · Undo removes it");
+    assert!(app.tab.naming.notice.is_none());
+    assert_eq!(app.tool, Tool::Select);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    Ok(())
+}
+
+#[tokio::test]
 async fn edited_preview_never_inserts_original_name_or_unapplied_smiles() -> Result<(), String> {
     let mut app = ready();
     let result = preview(&app, "CCN").await?;
@@ -102,11 +195,101 @@ async fn edited_preview_never_inserts_original_name_or_unapplied_smiles() -> Res
         app.tab
             .naming
             .notice
-            .as_deref()
+            .as_ref()
+            .map(|notice| notice.detail.as_str())
             .unwrap()
             .contains("omitted")
     );
+    let notice = app.tab.naming.notice.as_ref().unwrap();
+    assert_eq!(notice.kind, NoticeKind::Info);
+    assert_eq!(
+        notice.detail,
+        "Edited structure inserted; original name omitted."
+    );
+    assert_eq!(notice.summary(), notice.detail);
     Ok(())
+}
+
+#[tokio::test]
+async fn changed_alias_choice_keeps_retry_detail_and_summary() -> Result<(), String> {
+    let mut app = ready();
+    let result = preview(&app, "CCO").await?;
+    app.tab.naming.set_preview(result);
+    app.tab.naming.import_alias = Some(usize::MAX);
+    let before = app.tab.doc.clone();
+
+    app.insert_import_preview(true);
+
+    let notice = app.tab.naming.notice.as_ref().unwrap();
+    assert_eq!(notice.kind, NoticeKind::Retry);
+    assert_eq!(
+        notice.detail,
+        "The alias choice changed. Choose its name again."
+    );
+    assert_eq!(notice.summary(), notice.detail);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    Ok(())
+}
+
+#[test]
+fn finished_errors_keep_details_and_choose_dock_summaries_from_their_kind() {
+    const PARSER_REJECTION: &str = "The OPSIN Rust port could not interpret this name unambiguously: unsupported optical rotation";
+    const DAEMONIZING_LAUNCHER: &str = "Local worker exited without closing its response pipes; daemonizing launchers are unsupported";
+    const UNSUPPORTED: &str = "Unsupported or ambiguous name. Try a more specific name.";
+    const FAILED: &str = "Could not import this name. See Details.";
+    for (error, kind, detail, summary) in [
+        (
+            naming::Error::Cancelled("Local name parsing was cancelled".into()),
+            NoticeKind::Retry,
+            "Local name parsing was cancelled",
+            "Local name parsing was cancelled",
+        ),
+        (
+            naming::Error::Cancelled("Local name generation was cancelled".into()),
+            NoticeKind::Retry,
+            "Local name generation was cancelled",
+            "Local name generation was cancelled",
+        ),
+        (
+            naming::Error::Rejected(PARSER_REJECTION.into()),
+            NoticeKind::Unsupported,
+            PARSER_REJECTION,
+            UNSUPPORTED,
+        ),
+        (
+            naming::Error::Rejected("The OPSIN Rust port returned no molecular structure".into()),
+            NoticeKind::Unsupported,
+            "The OPSIN Rust port returned no molecular structure",
+            UNSUPPORTED,
+        ),
+        (
+            naming::Error::Worker("Could not start bounded local naming worker".into()),
+            NoticeKind::Failed,
+            "Could not start bounded local naming worker",
+            FAILED,
+        ),
+        (
+            naming::Error::Worker(DAEMONIZING_LAUNCHER.into()),
+            NoticeKind::Failed,
+            DAEMONIZING_LAUNCHER,
+            FAILED,
+        ),
+    ] {
+        let mut app = ready();
+        let before = app.tab.doc.clone();
+        let _ = app.insert_input();
+        let ticket = app.tab.naming.pending.unwrap().ticket();
+
+        let _ = app.naming_action(Action::Finished(ticket, Box::new(Err(error))));
+
+        let notice = app.tab.naming.notice.as_ref().unwrap();
+        assert_eq!(notice.kind, kind);
+        assert_eq!(notice.detail, detail);
+        assert_eq!(notice.summary(), summary);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+    }
 }
 
 #[tokio::test]
@@ -177,17 +360,32 @@ fn busy_requests_and_unsupported_names_leave_drawing_and_history_untouched() {
     let before = app.tab.doc.clone();
     let _ = app.insert_input();
     let ticket = app.tab.naming.pending.unwrap().ticket();
-    let detail = "The OPSIN Rust port could not interpret this name unambiguously: unsupported optical rotation";
-    let _ = app.naming_action(Action::Finished(ticket, Box::new(Err(detail.into()))));
+    const DETAIL: &str = "The OPSIN Rust port could not interpret this name unambiguously: unsupported optical rotation";
+    let detail = DETAIL;
+    let _ = app.naming_action(Action::Finished(
+        ticket,
+        Box::new(Err(naming::Error::Rejected(detail.into()))),
+    ));
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
-    assert_eq!(app.tab.naming.notice.as_deref(), Some(detail));
     assert_eq!(
-        compact_notice(detail),
+        app.tab
+            .naming
+            .notice
+            .as_ref()
+            .map(|notice| notice.detail.as_str()),
+        Some(detail)
+    );
+    assert_eq!(
+        app.tab.naming.notice.as_ref().unwrap().summary(),
         "Unsupported or ambiguous name. Try a more specific name."
     );
     assert_eq!(
-        compact_notice("Could not start bounded local naming worker"),
+        Notice::new(
+            NoticeKind::Failed,
+            "Could not start bounded local naming worker"
+        )
+        .summary(),
         "Could not import this name. See Details."
     );
 }
@@ -203,7 +401,8 @@ async fn actual_local_parser_result_inserts_directly_with_verified_source_title(
         "ethanol".into(),
         naming::Cancel::default(),
     )
-    .await?;
+    .await
+    .map_err(|error| error.to_string())?;
     let _ = app.naming_action(Action::Finished(ticket, Box::new(Ok(outcome))));
     assert_eq!(app.tab.doc.atoms.len(), 3);
     assert_eq!(app.tab.doc.bonds.len(), 2);
@@ -340,8 +539,9 @@ async fn retained_plus_lactic_import_keeps_stereo_caption_and_atomic_history() -
     let _ = app.naming_action(Action::Name(name.into()));
     let _ = app.insert_input();
     let ticket = app.tab.naming.pending.unwrap().ticket();
-    let outcome =
-        resolve_preview(app.engine.clone(), name.into(), naming::Cancel::default()).await?;
+    let outcome = resolve_preview(app.engine.clone(), name.into(), naming::Cancel::default())
+        .await
+        .map_err(|error| error.to_string())?;
     let _ = app.naming_action(Action::Finished(ticket, Box::new(Ok(outcome))));
     assert!(!app.error);
     assert_eq!(app.tab.doc.atoms.len(), 6);

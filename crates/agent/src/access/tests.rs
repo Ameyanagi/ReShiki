@@ -9,6 +9,7 @@ use super::{
     *,
 };
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     slice,
@@ -16,6 +17,102 @@ use std::{
 };
 
 const FORMATS: &[&str] = &["rsk", "mol"];
+
+const ACCESS_ERROR_COUNT: usize = 11;
+
+// A new variant must be considered here even if its documentation or sample
+// is accidentally omitted. Sorted indices then detect omissions and duplicates.
+fn access_error_index(error: &AccessError) -> usize {
+    match error {
+        AccessError::PathInvalid { .. } => 0,
+        AccessError::PathNotGranted { .. } => 1,
+        AccessError::PathEscapesRoot { .. } => 2,
+        AccessError::NotARegularFile { .. } => 3,
+        AccessError::FileTooLarge { .. } => 4,
+        AccessError::FileExists { .. } => 5,
+        AccessError::FileNotFound { .. } => 6,
+        AccessError::ExtensionNotAllowed { .. } => 7,
+        AccessError::OsDenied { .. } => 8,
+        AccessError::NoClobberUnsupported { .. } => 9,
+        AccessError::Io { .. } => 10,
+    }
+}
+
+#[test]
+fn access_code_documentation_covers_every_variant_once() {
+    let path = || "example.rsk".to_owned();
+    let errors = [
+        AccessError::PathInvalid {
+            path: path(),
+            rule: "relative",
+        },
+        AccessError::PathNotGranted {
+            path: path(),
+            access: "reading",
+            roots: Vec::new(),
+        },
+        AccessError::PathEscapesRoot { path: path() },
+        AccessError::NotARegularFile { path: path() },
+        AccessError::FileTooLarge {
+            path: path(),
+            limit: 64,
+        },
+        AccessError::FileExists { path: path() },
+        AccessError::FileNotFound { path: path() },
+        AccessError::ExtensionNotAllowed {
+            path: path(),
+            allowed: vec!["mol".to_owned()],
+        },
+        AccessError::OsDenied { path: path() },
+        AccessError::NoClobberUnsupported { path: path() },
+        AccessError::Io {
+            path: path(),
+            message: "other I/O failure".to_owned(),
+        },
+    ];
+    let mut indices: Vec<_> = errors.iter().map(access_error_index).collect();
+    indices.sort_unstable();
+    assert_eq!(indices, (0..ACCESS_ERROR_COUNT).collect::<Vec<_>>());
+    let codes: HashSet<_> = errors.iter().map(AccessError::code).collect();
+    assert_eq!(codes.len(), ACCESS_ERROR_COUNT);
+    assert_eq!(AccessError::REASONS.len(), errors.len());
+    for error in errors {
+        let reasons: Vec<_> = AccessError::REASONS
+            .iter()
+            .filter(|reason| reason.code == error.code())
+            .collect();
+        let [reason] = reasons.as_slice() else {
+            panic!("{error:?}: {reasons:?}");
+        };
+        assert!(!reason.meaning.trim().is_empty(), "{error:?}");
+        let reported = crate::ops::error::OpError::from(error.clone());
+        assert_eq!(reason.error, reported.kind.code(), "{error:?}");
+    }
+}
+
+#[test]
+fn documented_access_codes_remain_stable() {
+    let codes: Vec<_> = AccessError::REASONS
+        .iter()
+        .map(|reason| reason.code)
+        .collect();
+    assert_eq!(
+        codes,
+        [
+            "path_invalid",
+            "path_not_granted",
+            "path_escapes_root",
+            "not_a_regular_file",
+            "file_too_large",
+            "file_exists",
+            "file_not_found",
+            "extension_not_allowed",
+            "os_denied",
+            "no_clobber_unsupported",
+            "io_error",
+        ]
+    );
+}
 
 // Grants is shared across threads and cloned into hosts.
 const _: () = {

@@ -537,6 +537,16 @@ impl App {
         })
     }
 
+    #[cfg(test)]
+    pub(super) fn optimization_key_for_test(&self) -> Option<Key> {
+        self.tab
+            .optimization
+            .as_ref()?
+            .flight
+            .as_ref()
+            .map(|flight| flight.key)
+    }
+
     pub(super) fn optimization_gate(&mut self, message: &Message) -> Option<Task<Message>> {
         self.tab.optimization.as_ref()?;
         if matches!(message, Message::Inspector(InspectorTab::Properties)) {
@@ -560,12 +570,9 @@ impl App {
                         | Edit::RelaxRotate { .. }
                 )
                 | Message::Tool(Tool::Select | Tool::Tilt)
-                | Message::Autosaved(..)
-                | Message::FilePrepared(_)
                 | Message::Updates(_)
         ) || super::gates::preview_passthrough(message)
-            || super::tabs::document_result(message)
-            || super::updates::background(message)
+            || super::results::admitted(super::results::Modal::Optimization, message)
             || self.answers_save_dialog(message);
         if allowed {
             None
@@ -577,13 +584,7 @@ impl App {
 
     pub(super) fn optimization_action(&mut self, action: Action) -> Task<Message> {
         if matches!(action, Action::Begin) {
-            if self.tab.busy
-                || self.tab.cleanup.is_some()
-                || self.tab.optimization.is_some()
-                || self.tab.inline_text.is_some()
-                || self.tab.atom_text.is_some()
-                || self.tab.joining.is_some()
-            {
+            if self.tab.busy || self.tab.drawing_edit_active() {
                 return Task::none();
             }
             let prepared = match Prepared::new(&self.tab.doc, &self.tab.selected) {

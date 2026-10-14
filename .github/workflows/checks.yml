@@ -49,6 +49,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint:js
       - run: bun run format:check
+      - run: bun scripts/check_docs_tree.mjs
   office-addin:
     name: Office add-in JavaScript regressions
     runs-on: ubuntu-24.04

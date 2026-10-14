@@ -1,6 +1,7 @@
 //! Pointer releases: finish the active gesture as one edit.
 
-use crate::canvas::hit::{bond_target_with, hit_object, plane_endpoint, region_selection};
+use crate::canvas::hit::{bond_target_with_text, hit_object, plane_endpoint, region_selection};
+use crate::canvas::pick::{CLICK_SLOP_PX, DRAG_SLOP_PX, HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::snapping::{arrow_endpoint, ring_gesture};
 use crate::canvas::{
     Edit, Gesture, HandleClick, MoleculeCanvas, State, Tool, TransformDrag, World,
@@ -8,6 +9,7 @@ use crate::canvas::{
 };
 use iced::widget::canvas::Action;
 use iced::{Point, Rectangle};
+use reshiki::arrows::ArrowHandle;
 use reshiki::graphics::GraphicKind;
 use std::ops::ControlFlow;
 
@@ -30,6 +32,7 @@ impl MoleculeCanvas<'_> {
                 start,
                 pressed,
                 source,
+                source_text,
                 points,
                 snaking,
                 dragged,
@@ -39,7 +42,7 @@ impl MoleculeCanvas<'_> {
                 }
                 let (points, target) = self.chain_plan(
                     (start, pressed),
-                    source,
+                    (source, source_text),
                     &points,
                     (snaking, dragged),
                     p,
@@ -51,40 +54,14 @@ impl MoleculeCanvas<'_> {
                 Edit::Chain {
                     points,
                     source,
+                    source_text,
                     target,
                 }
             }
-            Gesture::Graphic { start } => {
-                if self.tool == Tool::Graphic(GraphicKind::Path) {
-                    if !inside {
-                        return Some(Action::request_redraw().and_capture());
-                    }
-                    let Some(stroke) = self.pen_stroke(start, p) else {
-                        return Some(Action::request_redraw().and_capture());
-                    };
-                    return Some(Action::publish(Edit::PenSegment(stroke)).and_capture());
-                }
-                if !inside
-                    || (start.distance(p) < 3.0 / self.camera.zoom
-                        && !matches!(
-                            self.tool,
-                            Tool::Graphic(GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
-                        ))
-                {
-                    return Some(Action::request_redraw().and_capture());
-                }
-                let constrain = state.modifiers.shift() || self.graphic_constrain;
-                if matches!(self.tool, Tool::Graphic(GraphicKind::Orbital(_))) {
-                    Edit::Orbital(
-                        start,
-                        p,
-                        constrain,
-                        self.snap_orbitals && !state.modifiers.alt(),
-                    )
-                } else {
-                    Edit::Graphic(start, p, constrain)
-                }
-            }
+            Gesture::Graphic { start } => match self.release_graphic(state, start, p, inside) {
+                ControlFlow::Continue(edit) => edit,
+                ControlFlow::Break(action) => return Some(action),
+            },
             Gesture::ArrowHandle { id, index } => {
                 match self.release_arrow_handle(state, id, index, p, bounds, inside) {
                     ControlFlow::Continue(edit) => edit,
@@ -116,7 +93,12 @@ impl MoleculeCanvas<'_> {
                     ControlFlow::Break(action) => return Some(action),
                 }
             }
-            Gesture::Draw { start, id } => match self.release_draw(state, start, id, p, inside) {
+            Gesture::Draw {
+                start,
+                pressed,
+                id,
+                text,
+            } => match self.release_draw(state, (start, pressed), id, text, p, inside) {
                 ControlFlow::Continue(edit) => edit,
                 ControlFlow::Break(action) => return Some(action),
             },
@@ -129,13 +111,9 @@ impl MoleculeCanvas<'_> {
                 ControlFlow::Break(action) => return Some(action),
             },
             Gesture::StretchBond { start, plan } => {
-                if !inside || start.distance(p) < 1. / self.camera.zoom {
-                    return Some(Action::request_redraw().and_capture());
-                }
-                Edit::StretchBond {
-                    fixed: plan.fixed,
-                    moving: plan.moving,
-                    length: plan.dragged_length(World::new(p.x - start.x, p.y - start.y)),
+                match self.release_stretch(start, plan, p, inside) {
+                    ControlFlow::Continue(edit) => edit,
+                    ControlFlow::Break(action) => return Some(action),
                 }
             }
             Gesture::Select { start } => {
@@ -166,6 +144,45 @@ impl MoleculeCanvas<'_> {
         };
         Some(Action::publish(edit).and_capture())
     }
+    fn release_graphic(
+        &self,
+        state: &State,
+        start: World,
+        p: World,
+        inside: bool,
+    ) -> ControlFlow<Action<Edit>, Edit> {
+        if self.tool == Tool::Graphic(GraphicKind::Path) {
+            if !inside {
+                return ControlFlow::Break(Action::request_redraw().and_capture());
+            }
+            let Some(stroke) = self.pen_stroke(start, p) else {
+                return ControlFlow::Break(Action::request_redraw().and_capture());
+            };
+            return ControlFlow::Break(Action::publish(Edit::PenSegment(stroke)).and_capture());
+        }
+        if !inside
+            || (start.distance(p) < self.camera.world_len(DRAG_SLOP_PX)
+                && !matches!(
+                    self.tool,
+                    Tool::Graphic(GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
+                ))
+        {
+            return ControlFlow::Break(Action::request_redraw().and_capture());
+        }
+        let constrain = state.modifiers.shift() || self.graphics.constrain;
+        ControlFlow::Continue(
+            if matches!(self.tool, Tool::Graphic(GraphicKind::Orbital(_))) {
+                Edit::Orbital(
+                    start,
+                    p,
+                    constrain,
+                    self.graphics.snap && !state.modifiers.alt(),
+                )
+            } else {
+                Edit::Graphic(start, p, constrain)
+            },
+        )
+    }
     fn release_arrow_handle(
         &self,
         state: &State,
@@ -178,21 +195,22 @@ impl MoleculeCanvas<'_> {
         if !inside {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        if (self.tool == Tool::Arrow || index >= 3)
+        let handle = ArrowHandle::from_index(index);
+        if (self.tool == Tool::Arrow || handle.is_some_and(ArrowHandle::is_direction))
             && self
                 .doc
                 .arrows
                 .iter()
                 .find(|a| a.id == id)
                 .and_then(|a| a.handles().get(index).copied())
-                .is_some_and(|handle| handle.distance(p) < 3. / self.camera.zoom)
+                .is_some_and(|handle| handle.distance(p) < self.camera.world_len(DRAG_SLOP_PX))
         {
-            if index >= 3 {
+            if handle.is_some_and(ArrowHandle::is_direction) {
                 return ControlFlow::Break(Action::request_redraw().and_capture());
             }
             return ControlFlow::Break(Action::publish(Edit::ArrowClick(id)).and_capture());
         }
-        let end = if index < 2 {
+        let end = if handle.is_some_and(ArrowHandle::is_endpoint) {
             self.doc
                 .arrows
                 .iter()
@@ -257,6 +275,22 @@ impl MoleculeCanvas<'_> {
             }
         })
     }
+    fn release_stretch(
+        &self,
+        start: World,
+        plan: reshiki::editing::reference::Stretch,
+        p: World,
+        inside: bool,
+    ) -> ControlFlow<Action<Edit>, Edit> {
+        if !inside || start.distance(p) < self.camera.world_len(CLICK_SLOP_PX) {
+            return ControlFlow::Break(Action::request_redraw().and_capture());
+        }
+        ControlFlow::Continue(Edit::StretchBond {
+            fixed: plan.fixed,
+            moving: plan.moving,
+            length: plan.dragged_length(World::new(p.x - start.x, p.y - start.y)),
+        })
+    }
     fn release_ring(
         &self,
         state: &State,
@@ -272,7 +306,7 @@ impl MoleculeCanvas<'_> {
             start,
             p,
             attached || self.tool == Tool::Template || matches!(self.tool, Tool::RingPreset(_)),
-            10.0 / self.camera.zoom,
+            self.camera.world_len(PICK_RADIUS_PX),
         );
         ControlFlow::Continue(
             if let Some(size) = delocalized_ring_size(self.tool, self.ring_size, state.modifiers) {
@@ -296,66 +330,88 @@ impl MoleculeCanvas<'_> {
     fn release_draw(
         &self,
         state: &State,
-        start: World,
+        origin: (World, World),
         id: Option<u64>,
+        text: Option<u64>,
         p: World,
         inside: bool,
     ) -> ControlFlow<Action<Edit>, Edit> {
+        let (start, pressed) = origin;
         if !inside {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        ControlFlow::Continue(if start.distance(p) < 3.0 / self.camera.zoom {
-            if self.tool == Tool::Arrow
-                && self.attach_arrow_targets
-                && matches!(
-                    self.arrow_preset,
-                    reshiki::arrows::Preset::Curved | reshiki::arrows::Preset::Fishhook
-                )
-            {
-                Edit::ArrowTarget(p, state.modifiers.alt())
-            } else {
-                Edit::Click(p)
-            }
-        } else {
-            let origin = id
-                .and_then(|id| self.doc.atom(id).map(|a| a.position))
-                .unwrap_or(start);
-            let (end, target) = if self.tool == Tool::Arrow {
-                (
-                    arrow_endpoint(
+        ControlFlow::Continue(
+            if pressed.distance(p) < self.camera.world_len(DRAG_SLOP_PX) {
+                if text.is_some() {
+                    Edit::TextBond {
+                        source: id,
+                        source_text: text,
                         start,
-                        p,
-                        self.bond_drawing.fixed_angles && !state.modifiers.alt(),
-                    ),
-                    None,
-                )
+                        end: None,
+                        target: None,
+                        target_text: None,
+                    }
+                } else if self.arrow_attach_mode() {
+                    Edit::ArrowTarget(p, state.modifiers.alt())
+                } else {
+                    Edit::Click(p)
+                }
             } else {
-                bond_target_with(
-                    self.doc,
-                    origin,
-                    p,
-                    id,
-                    12.0 / self.camera.zoom,
-                    self.bond_drawing.unconstrained(state.modifiers.alt()),
-                )
-            };
-            if self.tool != Tool::Arrow
-                && target.is_none()
-                && let Some((id, endpoint)) = id.and_then(|id| {
-                    plane_endpoint(
+                let origin = id
+                    .and_then(|id| self.doc.atom(id).map(|a| a.position))
+                    .unwrap_or(start);
+                let target = if self.tool == Tool::Arrow {
+                    Ok((
+                        arrow_endpoint(
+                            start,
+                            p,
+                            self.bond_drawing.fixed_angles && !state.modifiers.alt(),
+                        ),
+                        None,
+                        None,
+                    ))
+                } else {
+                    bond_target_with_text(
                         self.doc,
-                        id,
+                        origin,
                         p,
+                        (id, text),
+                        12.0 / self.camera.zoom,
                         self.bond_drawing.unconstrained(state.modifiers.alt()),
+                        self.tool,
                     )
-                    .map(|endpoint| (id, endpoint))
-                })
-            {
-                Edit::PlaneBond(id, endpoint)
-            } else {
-                Edit::Bond(origin, end, id, target)
-            }
-        })
+                };
+                let (end, target, target_text) = match target {
+                    Ok(target) => target,
+                    Err(reason) => return ControlFlow::Continue(Edit::TextBondRefused(reason)),
+                };
+                if text.is_some() || target_text.is_some() {
+                    Edit::TextBond {
+                        source: id,
+                        source_text: text,
+                        start: origin,
+                        end: Some(end),
+                        target,
+                        target_text,
+                    }
+                } else if self.tool != Tool::Arrow
+                    && target.is_none()
+                    && let Some((id, endpoint)) = id.and_then(|id| {
+                        plane_endpoint(
+                            self.doc,
+                            id,
+                            p,
+                            self.bond_drawing.unconstrained(state.modifiers.alt()),
+                        )
+                        .map(|endpoint| (id, endpoint))
+                    })
+                {
+                    Edit::PlaneBond(id, endpoint)
+                } else {
+                    Edit::Bond(origin, end, id, target)
+                }
+            },
+        )
     }
     fn release_move(
         &self,
@@ -366,9 +422,10 @@ impl MoleculeCanvas<'_> {
         p: World,
         bounds: Rectangle,
     ) -> ControlFlow<Action<Edit>, Edit> {
-        ControlFlow::Continue(if start.distance(p) < 1.0 / self.camera.zoom {
+        let click_slop = self.camera.world_len(CLICK_SLOP_PX);
+        ControlFlow::Continue(if start.distance(p) < click_slop {
             if !state.modifiers.shift()
-                && let Some(label) = hit_object(self.doc, p, 8. / self.camera.zoom)
+                && let Some(label) = hit_object(self.doc, p, self.camera.world_len(HANDLE_PICK_PX))
                     .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id))
             {
                 let now = std::time::Instant::now();

@@ -4,6 +4,520 @@ use crate::{
     document::Point,
 };
 
+#[derive(Clone, Copy)]
+enum HeteroRepeat {
+    Polyester,
+    Pet,
+    Polyether,
+}
+
+fn hetero_repeat(kind: HeteroRepeat, imported_3d: bool) -> Document {
+    use crate::graphics::{BracketSides, Graphic, GraphicKind};
+    let mut source = match kind {
+        HeteroRepeat::Polyester => {
+            let mut source = chain(&["C", "O", "C", "C", "C"]);
+            let oxygen = source.add_atom("O", Point::new(84., -42.));
+            source.add_bond(3, oxygen, 2, "plain");
+            source
+        }
+        HeteroRepeat::Polyether => chain(&["C", "O", "C", "C", "C"]),
+        HeteroRepeat::Pet => {
+            let mut source = chain(&["C", "O", "C", "C", "O", "C"]);
+            let ring: Vec<_> = [
+                (252., 0.),
+                (273., -36.),
+                (315., -36.),
+                (336., 0.),
+                (315., 36.),
+                (273., 36.),
+            ]
+            .into_iter()
+            .map(|(x, y)| source.add_atom("C", Point::new(x, y)))
+            .collect();
+            source.add_bond(6, ring[0], 1, "plain");
+            for i in 0..6 {
+                source.add_bond(
+                    ring[i],
+                    ring[(i + 1) % 6],
+                    if i % 2 == 0 { 2 } else { 1 },
+                    "plain",
+                );
+            }
+            let carbonyl = source.add_atom("C", Point::new(378., 0.));
+            source.add_bond(ring[3], carbonyl, 1, "plain");
+            let end = source.add_atom("C", Point::new(420., 0.));
+            source.add_bond(carbonyl, end, 1, "plain");
+            for (carbon, x) in [(6, 210.), (carbonyl, 378.)] {
+                let oxygen = source.add_atom("O", Point::new(x, -42.));
+                source.add_bond(carbon, oxygen, 2, "plain");
+            }
+            source
+        }
+    };
+    if imported_3d {
+        // crates/io/src/chemistry/molfile/import.rs marks every 3D order-2 bond.
+        for bond in source.bonds.iter_mut().filter(|b| b.order == 2) {
+            bond.stereo_authoritative = true;
+            bond.projection = true;
+        }
+    }
+    let bracket = source.next_id();
+    let right = if matches!(kind, HeteroRepeat::Pet) {
+        398.
+    } else {
+        146.
+    };
+    source.graphics.push(Graphic::dragged(
+        bracket,
+        GraphicKind::Brackets,
+        Point::new(20., -10.),
+        Point::new(right, 10.),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    ));
+    define_bracket(&source, bracket, "3", RepeatPattern::HeadToTail).unwrap()
+}
+
+fn canonical_smiles(doc: &Document) -> String {
+    let molecule = crate::chemistry::document::prepare(doc).unwrap();
+    crate::chemistry::smiles::write::write(&molecule.state, Default::default())
+        .unwrap()
+        .text
+}
+
+fn assert_hetero_product(product: &Document, kind: HeteroRepeat) {
+    use super::drawing_test_support::formula;
+    let (expected_formula, atoms, bonds, expected_smiles) = match kind {
+        HeteroRepeat::Polyester => ("C8H12O6", 14, 13, "COC(=O)COC(=O)COC(=O)CC"),
+        HeteroRepeat::Pet => {
+            const PET: &str =
+                "COCCOC(=O)c1ccc(C(=O)OCCOC(=O)c2ccc(C(=O)OCCOC(=O)c3ccc(C(=O)C)cc3)cc2)cc1";
+            ("C32H30O12", 44, 46, PET)
+        }
+        HeteroRepeat::Polyether => ("C8H18O3", 11, 10, "COCCOCCOCCC"),
+    };
+    assert_eq!(formula(product), expected_formula);
+    assert_eq!(product.atoms.len(), atoms);
+    assert_eq!(product.bonds.len(), bonds);
+    let expected = crate::chemistry::smiles::read(expected_smiles).unwrap();
+    let expected =
+        crate::chemistry::smiles::write::write(&expected.prepared.state, Default::default())
+            .unwrap()
+            .text;
+    assert_eq!(canonical_smiles(product), expected);
+    assert!(!present(product));
+}
+
+fn check_hetero_expansion(kind: HeteroRepeat, drawing: bool, imported_3d: bool) {
+    let source = hetero_repeat(kind, imported_3d);
+    let before = source.clone();
+    let products = if drawing {
+        expand_drawings(&source, Limits::default())
+            .unwrap()
+            .into_iter()
+            .map(|p| p.document)
+            .collect::<Vec<_>>()
+    } else {
+        expand(&source, Limits::default()).unwrap()
+    };
+    assert_eq!(source, before);
+    assert_eq!(products.len(), 1);
+    assert_hetero_product(&products[0], kind);
+}
+
+#[test]
+fn polyester_tight_bracket_expands_chemistry() {
+    check_hetero_expansion(HeteroRepeat::Polyester, false, false);
+}
+
+#[test]
+fn polyester_tight_bracket_expands_drawings() {
+    check_hetero_expansion(HeteroRepeat::Polyester, true, false);
+}
+
+#[test]
+fn pet_tight_bracket_expands_chemistry() {
+    check_hetero_expansion(HeteroRepeat::Pet, false, false);
+}
+
+#[test]
+fn pet_tight_bracket_expands_drawings() {
+    check_hetero_expansion(HeteroRepeat::Pet, true, false);
+}
+
+#[test]
+fn pet_ring_bond_selection_requires_whole_molecules() {
+    let source = hetero_repeat(HeteroRepeat::Pet, false);
+    let before = source.clone();
+    let bond = source.bonds.iter().find(|b| b.a == 7 && b.b == 8).unwrap();
+    let result = prepare_expansion_input(&source, &[bond.a, bond.b], Limits::default())
+        .and_then(expand_prepared);
+    assert_eq!(
+        result.unwrap_err(),
+        "Select whole molecules, or clear the selection to expand the whole drawing"
+    );
+    assert_eq!(source, before);
+}
+
+#[test]
+fn pet_whole_molecule_selection_expands_prepared_drawing() {
+    let source = hetero_repeat(HeteroRepeat::Pet, false);
+    let selected = source.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
+    let input = prepare_expansion_input(&source, &selected, Limits::default()).unwrap();
+    let prepared = expand_prepared(input).unwrap();
+    assert_eq!(prepared.count(), 1);
+    assert_hetero_product(&prepared.take().unwrap(), HeteroRepeat::Pet);
+}
+
+#[test]
+fn pet_clicked_component_expands_without_unrelated_molecules() {
+    let mut source = hetero_repeat(HeteroRepeat::Pet, false);
+    let a = source.add_atom("C", Point::new(700., 0.));
+    let b = source.add_atom("O", Point::new(742., 0.));
+    source.add_bond(a, b, 1, "plain");
+    let before = source.clone();
+    let input = prepare_component_expansion_input(&source, &[7, 8], Limits::default()).unwrap();
+    assert_eq!(input.source, hetero_repeat(HeteroRepeat::Pet, false));
+    let prepared = expand_prepared(input).unwrap();
+    assert_eq!(prepared.count(), 1);
+    assert_hetero_product(&prepared.take().unwrap(), HeteroRepeat::Pet);
+    assert_eq!(source, before);
+}
+
+#[test]
+fn carbon_repeat_complete_selection_avoids_redundant_work_reservation() {
+    let mut source = chain(&["C"; 14]);
+    source.generic.repeats.push(unit(
+        (2..14).collect(),
+        Crossing {
+            inside: 2,
+            outside: 1,
+        },
+        Crossing {
+            inside: 13,
+            outside: 14,
+        },
+        3,
+        3,
+    ));
+    let whole = prepare_expansion_input(&source, &source.all_ids(), Limits::default()).unwrap();
+    let clicked = prepare_component_expansion_input(&source, &[2, 3], Limits::default()).unwrap();
+    let drawing = prepare_expansion_input(&source, &[], Limits::default()).unwrap();
+    for input in [whole, clicked, drawing] {
+        let prepared = expand_prepared(input).unwrap();
+        assert_eq!(prepared.count(), 1);
+        assert_eq!(prepared.take().unwrap().atoms.len(), 38);
+    }
+    assert_eq!(
+        prepare_expansion_input(&source, &[2, 3], Limits::default())
+            .err()
+            .unwrap(),
+        "Select whole molecules, or clear the selection to expand the whole drawing"
+    );
+}
+
+#[test]
+fn clicked_repeat_scope_includes_grouped_caption_brackets_and_attachments() {
+    let mut source = hetero_repeat(HeteroRepeat::Pet, false);
+    let bracket = source.generic.repeats[0].bracket.unwrap();
+    let caption = source.next_id();
+    source.annotations.push(crate::document::Annotation {
+        id: caption,
+        position: Point::new(150., 100.),
+        text: "PET".into(),
+        format: Default::default(),
+    });
+    let left = source.add_atom("C", Point::new(700., 0.));
+    let right = source.add_atom("C", Point::new(742., 0.));
+    source.add_bond(left, right, 1, "plain");
+    let attachment = crate::attachments::add(
+        &mut source,
+        &[left, right],
+        crate::attachments::Kind::MultiCenter,
+    )
+    .unwrap();
+    let ligand = source.add_atom("O", Point::new(721., -80.));
+    source.add_bond(attachment, ligand, 1, "plain");
+    source
+        .group_selection(&[7, bracket, caption, attachment])
+        .unwrap();
+    let expected = source.clone();
+    let unrelated = source.add_atom("C", Point::new(1000., 0.));
+    let before = source.clone();
+    let input = prepare_component_expansion_input(&source, &[7, 8], Limits::default()).unwrap();
+    assert_eq!(input.source, expected);
+    assert!(input.source.atom(unrelated).is_none());
+    assert_eq!(source, before);
+}
+
+#[test]
+fn huge_repeat_still_exceeds_shared_work_limit() {
+    let mut source = chain(&["C"; 4]);
+    source.generic.repeats.push(unit(
+        vec![2, 3],
+        Crossing {
+            inside: 2,
+            outside: 1,
+        },
+        Crossing {
+            inside: 3,
+            outside: 4,
+        },
+        1000,
+        1000,
+    ));
+    let before = source.clone();
+    for input in [
+        prepare_expansion_input(&source, &[], Limits::default()),
+        prepare_component_expansion_input(&source, &[2, 3], Limits::default()),
+    ] {
+        assert_eq!(
+            input.and_then(expand_prepared).unwrap_err(),
+            "Generic expansion exceeds the work limit"
+        );
+    }
+    assert_eq!(source, before);
+}
+
+#[test]
+fn generic_native_group_validation_is_prepaid_for_every_expansion_scope() {
+    use super::probe::{self, Stage};
+    use crate::{document::Annotation, grouping::Group};
+
+    let mut source = atom_text::apply(&chain(&["*", "C"]), 1, "[C,N]", Mode::Auto).unwrap();
+    for i in 0..2000_u64 {
+        let first = 3 + i * 3;
+        for id in [first, first + 1] {
+            source.annotations.push(Annotation {
+                id,
+                position: Point::new(0., 100.),
+                text: "a".into(),
+                format: Default::default(),
+            });
+        }
+        source.groups.push(Group {
+            id: first + 2,
+            members: vec![first, first + 1],
+            integral: false,
+        });
+    }
+    // The source is valid, and this probe observes the actual native pair scan.
+    probe::reset();
+    source.validate().unwrap();
+    assert_eq!(probe::count(Stage::GroupPairs), 1);
+    let before = source.clone();
+    let full = source.all_ids();
+    for selected in [&[][..], full.as_slice(), &[1, 2][..]] {
+        probe::reset();
+        let result =
+            prepare_expansion_input(&source, selected, Limits::default()).and_then(expand_prepared);
+        assert_eq!(
+            result.unwrap_err(),
+            "Generic expansion exceeds the work limit"
+        );
+        assert_eq!(probe::count(Stage::Validate), 0, "scope: {selected:?}");
+        assert_eq!(probe::count(Stage::GroupPairs), 0, "scope: {selected:?}");
+    }
+    probe::reset();
+    assert_eq!(
+        prepare_component_expansion_input(&source, &[1], Limits::default())
+            .and_then(expand_prepared)
+            .unwrap_err(),
+        "Generic expansion exceeds the work limit"
+    );
+    assert_eq!(probe::count(Stage::Validate), 0);
+    assert_eq!(probe::count(Stage::GroupPairs), 0);
+    // The direct chemistry and drawing entry points share the same admission.
+    for drawing in [false, true] {
+        probe::reset();
+        let error = if drawing {
+            expand_drawings(&source, Limits::default()).unwrap_err()
+        } else {
+            expand(&source, Limits::default()).unwrap_err()
+        };
+        assert_eq!(error, "Generic expansion exceeds the work limit");
+        assert_eq!(probe::count(Stage::Validate), 0);
+        assert_eq!(probe::count(Stage::GroupPairs), 0);
+    }
+    assert_eq!(source, before);
+}
+
+#[test]
+fn polyether_tight_bracket_expands_chemistry() {
+    check_hetero_expansion(HeteroRepeat::Polyether, false, false);
+}
+
+#[test]
+fn polyether_tight_bracket_expands_drawings() {
+    check_hetero_expansion(HeteroRepeat::Polyether, true, false);
+}
+
+#[test]
+fn imported_3d_hetero_units_expand_chemistry() {
+    for kind in [HeteroRepeat::Polyester, HeteroRepeat::Pet] {
+        check_hetero_expansion(kind, false, true);
+    }
+}
+
+#[test]
+fn imported_3d_hetero_units_expand_drawings() {
+    for kind in [HeteroRepeat::Polyester, HeteroRepeat::Pet] {
+        check_hetero_expansion(kind, true, true);
+    }
+}
+
+#[test]
+fn condensed_hetero_repeat_text_labels_explain_how_to_expand() {
+    for label in ["OCH2CH2", "CO2", "COO", "OCO"] {
+        let source = chain(&["C", "*", "C"]);
+        let mut source = atom_text::apply(&source, 2, label, Mode::Auto).unwrap();
+        source.generic.repeats.push(unit(
+            vec![2],
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 2,
+                outside: 3,
+            },
+            3,
+            3,
+        ));
+        let expected = format!(
+            "{label} is a text label, not atoms. Draw the repeat unit's atoms (for example O, C=O, CH2) to expand it."
+        );
+        assert_eq!(expand(&source, Limits::default()).unwrap_err(), expected);
+        assert_eq!(
+            expand_drawings(&source, Limits::default()).unwrap_err(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn condensed_hetero_link_text_label_names_the_base_label() {
+    let source = atom_text::apply(&chain(&["C", "*", "C"]), 2, "(OCH2CH2)2-4", Mode::Auto).unwrap();
+    const LINK: &str = "OCH2CH2 is a text label, not atoms. Draw the repeat unit's atoms (for example O, C=O, CH2) to expand it.";
+    assert_eq!(expand(&source, Limits::default()).unwrap_err(), LINK);
+    assert_eq!(
+        expand_drawings(&source, Limits::default()).unwrap_err(),
+        LINK
+    );
+}
+
+#[test]
+fn condensed_hetero_end_group_text_label_explains_how_to_expand() {
+    let source =
+        atom_text::apply(&chain(&["C", "C", "C", "*"]), 2, "[CH2]2-2", Mode::Auto).unwrap();
+    let source = atom_text::apply(&source, 4, "OCH2CH2", Mode::Auto).unwrap();
+    const END: &str = "OCH2CH2 is a text label, not atoms. Draw its atoms to expand it.";
+    assert_eq!(expand(&source, Limits::default()).unwrap_err(), END);
+    assert_eq!(
+        expand_drawings(&source, Limits::default()).unwrap_err(),
+        END
+    );
+}
+
+#[test]
+fn real_repeat_alkene_stereo_stays_refused_in_both_modes() {
+    for authority_only in [false, true] {
+        let mut source = chain(&["C", "C", "C", "C", "C", "C"]);
+        source.bonds[2].order = 2;
+        if authority_only {
+            source.bonds[2].stereo_authoritative = true;
+        } else {
+            source.bonds[2].stereo = Some("e".into());
+            source.bonds[2].stereo_atoms = vec![2, 5];
+        }
+        source.generic.repeats.push(unit(
+            vec![2, 3, 4, 5],
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 5,
+                outside: 6,
+            },
+            3,
+            3,
+        ));
+        const STEREO: &str = "Generic expansion involving specified atom or bond stereochemistry is unsupported; the source drawing is retained";
+        assert_eq!(expand(&source, Limits::default()).unwrap_err(), STEREO);
+        assert_eq!(
+            expand_drawings(&source, Limits::default()).unwrap_err(),
+            STEREO
+        );
+    }
+}
+
+#[test]
+fn isotope_and_coordination_alkene_stereo_in_a_repeat_unit_stays_refused() {
+    const STEREO: &str = "Generic expansion involving specified atom or bond stereochemistry is unsupported; the source drawing is retained";
+    for authority_only in [false, true] {
+        // A pendant -CH=CHD ([2H]/C=C/C keeps its E/Z) on a C-C unit.
+        let mut pendant = chain(&["C", "C", "C", "C"]);
+        let alkene = pendant.add_atom("C", Point::new(42., 42.));
+        let end = pendant.add_atom("C", Point::new(84., 84.));
+        let deuterium = pendant.add_atom("H", Point::new(126., 84.));
+        pendant.atom_mut(deuterium).unwrap().isotope = 2;
+        pendant.add_bond(2, alkene, 1, "plain");
+        pendant.add_bond(alkene, end, 2, "plain");
+        pendant.add_bond(end, deuterium, 1, "plain");
+        pendant.generic.repeats.push(unit(
+            vec![2, 3, alkene, end, deuterium],
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 3,
+                outside: 4,
+            },
+            3,
+            3,
+        ));
+        // N1/C=C/N->[Zn]<-1 is acyclic for ring perception.
+        let mut chelate = chain(&["C", "N", "C", "C", "N", "C"]);
+        let zinc = chelate.add_atom("Zn", Point::new(126., 42.));
+        chelate.add_bond(2, zinc, crate::bonds::DATIVE, "plain");
+        chelate.add_bond(5, zinc, crate::bonds::DATIVE, "plain");
+        chelate.bonds[2].order = 2;
+        chelate.generic.repeats.push(unit(
+            vec![2, 3, 4, 5, zinc],
+            Crossing {
+                inside: 2,
+                outside: 1,
+            },
+            Crossing {
+                inside: 5,
+                outside: 6,
+            },
+            3,
+            3,
+        ));
+        for (mut source, bond, controls) in
+            [(pendant, 4, vec![2, deuterium]), (chelate, 2, vec![2, 5])]
+        {
+            let bond = &mut source.bonds[bond];
+            assert_eq!(bond.order, 2);
+            if authority_only {
+                bond.stereo_authoritative = true;
+            } else {
+                bond.stereo = Some("e".into());
+                bond.stereo_atoms = controls;
+            }
+            assert_eq!(expand(&source, Limits::default()).unwrap_err(), STEREO);
+            assert_eq!(
+                expand_drawings(&source, Limits::default()).unwrap_err(),
+                STEREO
+            );
+        }
+    }
+}
+
 fn chain(elements: &[&str]) -> Document {
     let mut doc = Document::default();
     let mut last = None;
@@ -16,6 +530,107 @@ fn chain(elements: &[&str]) -> Document {
     }
     doc
 }
+
+#[test]
+fn shared_alternative_labels_keep_cdxml_import_isotope_spelling() {
+    let mut site = AlternativeSite {
+        atom: 1,
+        choices: vec![
+            Alternative::Element {
+                symbol: "H".into(),
+                isotope: 2,
+            },
+            Alternative::Element {
+                symbol: "H".into(),
+                isotope: 3,
+            },
+            Alternative::Element {
+                symbol: "H".into(),
+                isotope: 4,
+            },
+            Alternative::Element {
+                symbol: "C".into(),
+                isotope: 13,
+            },
+            Alternative::Group {
+                label: "OMe".into(),
+            },
+            Alternative::Unresolved { label: "R1".into() },
+        ],
+        excluded: true,
+    };
+    assert_eq!(site.label(), "[NOT D,T,H,C,OMe,R1]");
+    assert_eq!(
+        AlternativeSite::label_without_isotope_aliases(site.excluded, &site.choices),
+        "[NOT H,H,H,C,OMe,R1]"
+    );
+    site.excluded = false;
+    assert_eq!(site.label(), "[D,T,H,C,OMe,R1]");
+    assert_eq!(
+        AlternativeSite::label_without_isotope_aliases(site.excluded, &site.choices),
+        "[H,H,H,C,OMe,R1]"
+    );
+}
+
+#[test]
+fn shared_crossing_bond_position_uses_first_undirected_match() {
+    let mut doc = chain(&["C", "C", "C"]);
+    let mut duplicate = doc.bonds[0].clone();
+    std::mem::swap(&mut duplicate.a, &mut duplicate.b);
+    doc.bonds.push(duplicate);
+    assert_eq!(doc.bond_position(1, 2), Some(0));
+    assert_eq!(doc.bond_position(2, 1), Some(0));
+    assert_eq!(doc.bond_position(1, 3), None);
+}
+
+#[test]
+fn touches_is_intersects_or_component_intersects() {
+    let mut source = chain(&["O", "C", "C", "N"]);
+    let connected = source.add_atom("C", Point::new(-42., 0.));
+    source.add_bond(1, connected, 1, "plain");
+    let unrelated = source.add_atom("C", Point::new(200., 100.));
+    let bracket = source.next_id();
+    source.graphics.push(crate::graphics::Graphic::dragged(
+        bracket,
+        crate::graphics::GraphicKind::Brackets,
+        Point::new(20., -30.),
+        Point::new(104., 30.),
+        Default::default(),
+        crate::graphics::BracketSides::Both,
+        false,
+    ));
+    let source = define_bracket(&source, bracket, "1-3", RepeatPattern::HeadToTail).unwrap();
+    assert!(intersects(&source, &[bracket]));
+    assert!(!component_intersects(&source, &[bracket]));
+    assert!(!intersects(&source, &[connected]));
+    assert!(component_intersects(&source, &[connected]));
+    assert!(!touches(&source, &[unrelated]));
+    for ids in [
+        vec![],
+        vec![bracket],
+        vec![connected],
+        vec![2],
+        vec![unrelated],
+    ] {
+        assert_eq!(
+            touches(&source, &ids),
+            intersects(&source, &ids) || component_intersects(&source, &ids)
+        );
+    }
+}
+
+#[test]
+fn owns_label_reports_alternative_and_link_sites() {
+    let source = chain(&["C", "C", "C", "C"]);
+    assert!(!source.generic.owns_label(1));
+    let source = atom_text::apply(&source, 1, "[Cl,Br]", Mode::Auto).unwrap();
+    let source = atom_text::apply(&source, 2, "[CH2]1-3", Mode::Auto).unwrap();
+    assert!(source.generic.owns_label(1));
+    assert!(source.generic.owns_label(2));
+    assert!(!source.generic.owns_label(3));
+    assert!(!source.generic.owns_label(u64::MAX));
+}
+
 #[test]
 fn two_mixed_anonymous_sites_are_independent_real_fragments() {
     let source = chain(&["*", "C", "C", "*"]);
@@ -748,162 +1363,4 @@ fn native_current_version_preserves_generic_units_and_still_reads_version19() {
     );
     // Clipboard and recovery copies use the same established current gate.
     assert_eq!(source.current().version, crate::document::VERSION);
-}
-
-#[test]
-fn prepared_join_rejects_remote_generic_source_before_selection_or_deletion() {
-    let mut source = chain(&["C", "C", "C"]);
-    source.add_atom("C", Point::new(250., 0.));
-    let source = atom_text::apply(&source, 3, "[C,N]", Mode::Auto).unwrap();
-    let before = source.clone();
-    let error = crate::joining::Prepared::new(&source, &[1]).unwrap_err();
-    assert_eq!(error, JOIN_NOTICE);
-    assert_eq!(source, before);
-}
-
-#[test]
-fn prepared_join_rechecks_generic_target_and_remote_source_before_placement() {
-    use crate::templates::{Anchor, Connection};
-    let mut source = Document::default();
-    source.add_atom("C", Point::default());
-    let start = source.add_atom("C", Point::new(180., 0.));
-    let end = source.add_atom("C", Point::new(222., 0.));
-    source.add_bond(start, end, 1, "plain");
-    let target_generic = atom_text::apply(&source, 1, "[C,N]", Mode::Auto).unwrap();
-    let prepared = crate::joining::Prepared::new(&target_generic, &[start]).unwrap();
-    let before = target_generic.clone();
-    let base = prepared.base.clone();
-    let fragment = prepared.fragment.clone();
-    assert_eq!(
-        prepared
-            .place(
-                Point::default(),
-                None,
-                5.,
-                Anchor::Atom(start),
-                Connection::ShareAtom
-            )
-            .unwrap_err(),
-        JOIN_NOTICE
-    );
-    assert_eq!(target_generic, before);
-    assert_eq!(prepared.base, base);
-    assert_eq!(prepared.fragment, fragment);
-
-    let mut prepared = crate::joining::Prepared::new(&source, &[start]).unwrap();
-    prepared.fragment = atom_text::apply(&prepared.fragment, end, "[C,N]", Mode::Auto).unwrap();
-    let base = prepared.base.clone();
-    let fragment = prepared.fragment.clone();
-    assert_eq!(
-        prepared
-            .place(
-                Point::default(),
-                None,
-                5.,
-                Anchor::Atom(start),
-                Connection::Connect
-            )
-            .unwrap_err(),
-        JOIN_NOTICE
-    );
-    assert_eq!(prepared.base, base);
-    assert_eq!(prepared.fragment, fragment);
-}
-
-#[test]
-fn direct_template_share_fuse_and_connect_reject_referenced_generic_ports() {
-    use crate::templates::{self, Anchor, Connection};
-    let host = atom_text::apply(&chain(&["C", "C"]), 1, "[C,N]", Mode::Auto).unwrap();
-    let part = chain(&["C", "C"]);
-    let host_before = host.clone();
-    let part_before = part.clone();
-    for (mode, point, anchor) in [
-        (Connection::ShareAtom, Point::default(), Anchor::Atom(1)),
-        (Connection::Connect, Point::default(), Anchor::Atom(1)),
-        (
-            Connection::FuseBond,
-            Point::new(21., 0.),
-            Anchor::Bond(1, 2),
-        ),
-    ] {
-        assert_eq!(
-            templates::place_with_mode(&host, &part, point, None, 2., anchor, mode).unwrap_err(),
-            JOIN_NOTICE
-        );
-    }
-    assert_eq!(
-        templates::place_anchored(
-            &host,
-            &part,
-            Point::new(21., 0.),
-            None,
-            2.,
-            Anchor::Bond(1, 2)
-        )
-        .unwrap_err(),
-        JOIN_NOTICE
-    );
-    assert_eq!(host, host_before);
-    assert_eq!(part, part_before);
-
-    let part = atom_text::apply(&chain(&["C", "C", "C"]), 3, "[C,N]", Mode::Auto).unwrap();
-    let ordinary_host = chain(&["C", "C"]);
-    let before = part.clone();
-    assert_eq!(
-        templates::place_with_mode(
-            &ordinary_host,
-            &part,
-            Point::default(),
-            None,
-            2.,
-            Anchor::Atom(1),
-            Connection::ShareAtom
-        )
-        .unwrap_err(),
-        JOIN_NOTICE
-    );
-    assert_eq!(part, before);
-}
-
-#[test]
-fn plain_joins_and_free_generic_insertion_keep_unrelated_host_definitions() {
-    use crate::templates::{self, Anchor, Connection};
-    let mut host = chain(&["C", "C"]);
-    let unrelated = host.add_atom("C", Point::new(300., 0.));
-    let host = atom_text::apply(&host, unrelated, "[C,N]", Mode::Auto).unwrap();
-    let part = chain(&["C", "C"]);
-    let before = host.clone();
-    let (joined, _) = templates::place_with_mode(
-        &host,
-        &part,
-        Point::default(),
-        None,
-        2.,
-        Anchor::Atom(1),
-        Connection::Connect,
-    )
-    .unwrap();
-    assert_eq!(joined.generic, host.generic);
-    assert_eq!(joined.atom(unrelated), host.atom(unrelated));
-    assert_eq!(joined.bonds.len(), host.bonds.len() + part.bonds.len() + 1);
-    joined.validate().unwrap();
-    assert_eq!(host, before);
-
-    let generic_part = atom_text::apply(&part, 2, "[C,N]", Mode::Auto).unwrap();
-    let (inserted, _) = templates::place_anchored(
-        &host,
-        &generic_part,
-        Point::new(600., 0.),
-        None,
-        2.,
-        Anchor::Atom(1),
-    )
-    .unwrap();
-    assert_eq!(inserted.generic.alternatives.len(), 2);
-    assert_eq!(
-        inserted.generic.alternatives[0],
-        host.generic.alternatives[0]
-    );
-    inserted.validate().unwrap();
-    assert_eq!(host, before);
 }

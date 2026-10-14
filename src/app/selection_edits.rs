@@ -8,6 +8,15 @@ use reshiki::{
 };
 
 impl App {
+    /// Replaces the selection and refreshes its cached inspector controls.
+    pub(super) fn set_selection(&mut self, ids: Vec<u64>) {
+        self.tab.selected = ids;
+        self.sync_typography();
+        self.sync_graphics();
+        self.sync_arrows();
+        self.sync_bonds();
+    }
+
     pub(super) fn add_frame(&mut self, kind: reshiki::graphics::GraphicKind) {
         let mut ids = self.tab.doc.complete_selection(&self.tab.selected);
         if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &ids) {
@@ -108,11 +117,7 @@ impl App {
         self.changed(before);
     }
     pub(super) fn select_all_objects(&mut self) {
-        self.tab.selected = self.tab.doc.all_ids();
         self.tool = Tool::Select;
-        self.sync_typography();
-        self.sync_graphics();
-        self.sync_arrows();
-        self.sync_bonds();
+        self.set_selection(self.tab.doc.all_ids());
     }
 }

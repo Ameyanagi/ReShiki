@@ -1,0 +1,62 @@
+---
+title: Expand generic structures
+description: Draw element lists, variable positions and repeats, then expand them into every concrete structure.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+Available in Nightly builds; not in ReShiki 0.11.0.
+
+A generic structure keeps element and group lists, variable attachment points and repeat counts in one drawing. **Expand generic structures** turns it into every concrete structure.
+
+## List elements or groups at one atom
+
+1. Select one atom and press **Enter**.
+2. Choose **Automatic** and type a list, such as `[Cl,Br,I]` for one product per halogen or `[OMe,OPh]` for methoxy or phenoxy.
+3. Choose **Apply · Enter**.
+
+`[NOT Cl,Br,I]` means any atom except these. ReShiki keeps it, but does not expand it.
+
+## Let a substituent take several positions
+
+1. Select only the candidate atoms (2–300).
+2. Right-click and choose **Attachment points → Variable attachment**. You can also choose **Variable** under **Properties → Labels & chemistry → Attachment points**.
+3. Draw one single bond from the new `*` handle to the substituent.
+
+Expansion attaches the substituent to each candidate in turn. **Multi-center attachment** attaches to all selected atoms at once and is not expanded into positions.
+
+## Repeat one atom
+
+1. Select an atom with exactly two single bonds and press **Enter**.
+2. Choose **Automatic** and type, for example, `[CH2]1-3`.
+
+Expansion makes one product each with one, two and three CH₂ groups.
+
+## Define a repeating unit
+
+1. Draw a bracket around the repeating atoms. Leave the end groups outside.
+2. Select the bracket. In the **Repeating unit** section of **Properties**, type `1-3` in **Repeats** and choose **Head to tail** under **Pattern**.
+3. Choose **Define repeating unit**, or press **Enter** in **Repeats**.
+
+A number gives one length, and `1-3` gives every length from 1 to 3. Use `n` for an indefinite polymer; it stays generic. **Clear repeating unit** removes the definition and keeps the bracket.
+
+The unit also takes the side atoms on its backbone, such as the C=O oxygen of a polyester or the ring of PET, even when the bracket is tight. Heteroatom units such as polyesters and polyethers expand like carbon chains. Draw every atom of the unit: a condensed label such as `OCH2CH2` on one atom is text and cannot be expanded.
+
+## Expand
+
+1. Clear the selection to expand the whole drawing. To expand only some molecules, select them completely, with their captions, groups and attachments.
+2. Choose **Expand generic structures** in the **Generic structure** section of **Properties**. You can also right-click a generic molecule and choose the command to expand that whole molecule, including its brackets, captions, groups and attachments.
+3. All products open together in one new tab, **Generic expansion**. Duplicates are removed.
+
+Undo in the new tab removes all products. The source tab and its Undo history do not change. Save the source and the products as separate `.rsk` files.
+
+<Screenshot
+  src="/manual/generic-expansion.png"
+  alt="The Generic expansion tab after expanding toluene with a variable methoxy group: the ortho, meta and para methoxytoluene products."
+/>
+
+## Limits
+
+Expansion stops if it would create more than 500 structures or 100,000 atoms, counted before duplicates are removed, or if it needs too much work. Long repeat units can reach the work limit: PET, for example, expands up to 5 units. If any product fails, nothing is added. `R` and `X` placeholders, `[NOT …]` lists, `n` counts and the **Head to head** and **Mixed / unknown** patterns are kept but not expanded. Molecular properties, identifiers, NMR prediction and joining wait until you expand; ordinary molecules in the same drawing still work. A crowded or ambiguous placement rejects the whole expansion and keeps the source.
+
+[Implementation notes and the full list of limits →](/developer/generic-structures/)

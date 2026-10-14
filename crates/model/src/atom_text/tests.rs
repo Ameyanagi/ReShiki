@@ -2,6 +2,560 @@ use super::*;
 use crate::document::Point;
 
 #[test]
+fn formatted_labels_are_trimmed_with_their_runs() -> Result<(), String> {
+    let mut source = Document::default();
+    let id = source.add_atom("*", Point::default());
+    for mode in [Mode::Auto, Mode::Text] {
+        let result = apply_with_scripts(
+            &source,
+            id,
+            "  R1  ",
+            &[
+                ScriptRun {
+                    start: 0,
+                    end: 2,
+                    script: Script::Superscript,
+                },
+                ScriptRun {
+                    start: 3,
+                    end: 5,
+                    script: Script::Subscript,
+                },
+            ],
+            mode,
+        )?;
+        let atom = result.atom(id).ok_or("Atom")?;
+        assert_eq!(atom.display.variable.as_deref(), Some("R1"));
+        assert_eq!(
+            atom.display.label_scripts,
+            vec![ScriptRun {
+                start: 1,
+                end: 2,
+                script: Script::Subscript,
+            }]
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn manual_scripts_preserve_dummy_text_and_disambiguate_chemical_counts() -> Result<(), String> {
+    let run = |start, end, script| ScriptRun { start, end, script };
+    use Script::{Normal as N, Subscript as B, Superscript as P};
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    for (text, scripts, mode, element, hydrogens, charge) in [
+        ("Pd2+", vec![run(2, 4, P)], Mode::Auto, "Pd", 0, 2),
+        ("Pd2-", vec![run(2, 4, P)], Mode::Auto, "Pd", 0, -2),
+        ("Pd2+", vec![run(2, 4, P)], Mode::Text, "*", 0, 0),
+        (
+            "Pd2+",
+            vec![run(2, 3, B), run(3, 4, P)],
+            Mode::Auto,
+            "*",
+            0,
+            0,
+        ),
+        ("M2+", vec![run(1, 3, P)], Mode::Auto, "*", 0, 0),
+        ("M2+", vec![run(0, 3, N)], Mode::Auto, "*", 0, 0),
+        ("X‡", vec![run(1, 4, P)], Mode::Auto, "*", 0, 0),
+        (
+            "Pd9+",
+            vec![run(2, 3, B), run(3, 4, P)],
+            Mode::Auto,
+            "*",
+            0,
+            0,
+        ),
+        (
+            "Pd₂⁺",
+            vec![run(2, 5, B), run(5, 8, P)],
+            Mode::Auto,
+            "*",
+            0,
+            0,
+        ),
+        (
+            "NH12+",
+            vec![run(2, 4, B), run(4, 5, P)],
+            Mode::Auto,
+            "N",
+            12,
+            1,
+        ),
+        (
+            "NH4²⁺",
+            vec![run(2, 3, B), run(3, 8, P)],
+            Mode::Auto,
+            "N",
+            4,
+            2,
+        ),
+        (
+            "NH4+",
+            vec![run(2, 3, B), run(3, 4, P)],
+            Mode::Auto,
+            "N",
+            4,
+            1,
+        ),
+        (
+            "NH42+",
+            vec![run(2, 3, B), run(3, 5, P)],
+            Mode::Auto,
+            "N",
+            4,
+            2,
+        ),
+        (
+            "NH42+",
+            vec![run(2, 3, B), run(3, 5, P)],
+            Mode::Text,
+            "*",
+            0,
+            0,
+        ),
+        ("R1", vec![run(1, 2, P)], Mode::Auto, "*", 0, 0),
+        ("R1", vec![run(0, 2, N)], Mode::Auto, "*", 0, 0),
+        ("Pd2+", vec![run(0, 4, N)], Mode::Auto, "Pd", 0, 2),
+        ("NH4+", vec![run(0, 4, N)], Mode::Auto, "N", 4, 1),
+        ("Pd", vec![run(0, 2, N)], Mode::Auto, "Pd", 0, 0),
+        (
+            "NH42",
+            vec![run(2, 3, B), run(3, 4, P)],
+            Mode::Auto,
+            "*",
+            0,
+            0,
+        ),
+        ("Boc", vec![run(1, 2, P)], Mode::Auto, "*", 0, 0),
+        ("C,N", vec![run(0, 3, N)], Mode::Auto, "*", 0, 0),
+        (
+            "NH4-",
+            vec![run(2, 3, B), run(3, 4, P)],
+            Mode::Auto,
+            "N",
+            4,
+            -1,
+        ),
+        (
+            "NH42-",
+            vec![run(2, 3, B), run(3, 5, P)],
+            Mode::Auto,
+            "N",
+            4,
+            -2,
+        ),
+        (
+            "NH12-",
+            vec![run(2, 4, B), run(4, 5, P)],
+            Mode::Auto,
+            "N",
+            12,
+            -1,
+        ),
+    ] {
+        let result = apply_with_scripts(&source, id, text, &scripts, mode)?;
+        let atom = result.atom(id).ok_or("Atom")?;
+        assert_eq!(
+            (atom.element.as_str(), atom.explicit_h, atom.charge),
+            (element, hydrogens, charge),
+            "{text}: {mode:?} {scripts:?}"
+        );
+        assert!(result.generic.is_empty(), "{text}");
+        assert!(result.abbreviations.is_empty(), "{text}");
+        assert_eq!(result.atoms.len(), source.atoms.len());
+        assert_eq!(result.bonds, source.bonds);
+        if element == "*" {
+            assert_eq!(atom.display.variable.as_deref(), Some(text));
+            assert_eq!(
+                atom.display.label_scripts,
+                crate::typography::normalize_label_scripts(text, &scripts)?
+            );
+        } else {
+            assert!(atom.display.variable.is_none());
+            assert!(atom.display.label_scripts.is_empty());
+        }
+        let graph =
+            crate::chemistry::document::drawing_graph(&result).map_err(|e| e.to_string())?;
+        let chemical_atom = graph.atoms.first().ok_or("Chemical atom")?;
+        assert_eq!(chemical_atom.atomic_number == 0, element == "*", "{text}");
+        assert_eq!(
+            u32::from(chemical_atom.explicit_hydrogens),
+            hydrogens,
+            "{text}"
+        );
+        assert_eq!(i32::from(chemical_atom.charge), charge, "{text}");
+    }
+    Ok(())
+}
+
+#[test]
+fn empty_manual_runs_and_group_mode_keep_ordinary_entry_semantics() -> Result<(), String> {
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    for (text, mode) in [
+        ("Boc", Mode::Auto),
+        ("C,N", Mode::Auto),
+        ("  R1  ", Mode::Text),
+    ] {
+        assert_eq!(
+            apply_with_scripts(&source, id, text, &[], mode)?,
+            apply(&source, id, text, mode)?
+        );
+    }
+    let invalid = ScriptRun {
+        start: 100,
+        end: 0,
+        script: Script::Superscript,
+    };
+    assert_eq!(
+        apply_with_scripts(&source, id, "Boc", &[invalid], Mode::Group)?,
+        apply(&source, id, "Boc", Mode::Group)?
+    );
+    let manual = apply_with_scripts(
+        &source,
+        id,
+        "R1",
+        &[ScriptRun {
+            start: 1,
+            end: 2,
+            script: Script::Superscript,
+        }],
+        Mode::Text,
+    )?;
+    for (text, mode) in [("R1", Mode::Text), ("Pd", Mode::Auto), ("Boc", Mode::Group)] {
+        let edited = apply(&manual, id, text, mode)?;
+        assert!(
+            edited
+                .atoms
+                .iter()
+                .all(|atom| atom.display.label_scripts.is_empty())
+        );
+    }
+    assert!(
+        apply_with_scripts(
+            &source,
+            id,
+            "R₁",
+            &[ScriptRun {
+                start: 2,
+                end: 4,
+                script: Script::Subscript
+            }],
+            Mode::Text
+        )
+        .is_err()
+    );
+    assert_eq!(source.atom(id).ok_or("Original atom")?.element, "C");
+    assert_eq!(
+        apply_with_scripts(
+            &source,
+            id,
+            "Pd\n",
+            &[ScriptRun {
+                start: 0,
+                end: 3,
+                script: Script::Normal
+            }],
+            Mode::Auto
+        ),
+        Err("Use a single line of printable text".into())
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_charges_follow_element_hydride_text_and_link_grammars() -> Result<(), String> {
+    enum Expected {
+        Element(&'static str, u32, i32, &'static str),
+        Dummy,
+        Link,
+        Error(&'static str),
+    }
+    use Expected::{Dummy, Element, Error, Link};
+    let mut source = Document::default();
+    let left = source.add_atom("C", Point::default());
+    let id = source.add_atom("C", Point::new(42., 0.));
+    let right = source.add_atom("C", Point::new(84., 0.));
+    source.add_bond(left, id, 1, "plain");
+    source.add_bond(id, right, 1, "plain");
+    for (text, expected) in [
+        ("Pd2+", Element("Pd", 0, 2, "Pd2+")),
+        ("Pd+2", Element("Pd", 0, 2, "Pd2+")),
+        ("Fe3+", Element("Fe", 0, 3, "Fe3+")),
+        ("Na+", Element("Na", 0, 1, "Na+")),
+        ("Cl-", Element("Cl", 0, -1, "Cl-")),
+        ("O2-", Element("O", 0, -2, "O2-")),
+        ("Pd²⁺", Element("Pd", 0, 2, "Pd2+")),
+        ("NH4+", Element("N", 4, 1, "NH4+")),
+        ("OH-", Element("O", 1, -1, "OH-")),
+        (
+            "NH42+",
+            Error("Write the charge after the sign, for example NH4+2"),
+        ),
+        ("Pd9+", Error("Enter a charge from -8 to +8")),
+        ("SO4 2-", Dummy),
+        ("CH2 1-3", Link),
+        ("M2+", Dummy),
+    ] {
+        let result = apply(&source, id, text, Mode::Auto);
+        if let Error(message) = expected {
+            assert_eq!(result, Err(message.into()), "{text}");
+            continue;
+        }
+        let result = result?;
+        let atom = result.atom(id).ok_or("Missing atom")?;
+        assert_eq!(result.bonds, source.bonds, "{text}");
+        match expected {
+            Element(element, hydrogens, charge, canonical) => {
+                assert_eq!(atom.element, element, "{text}");
+                assert_eq!(atom.charge, charge, "{text}");
+                assert!(atom.no_implicit, "{text}");
+                assert_eq!(atom.explicit_h, hydrogens, "{text}");
+                // label_h is computed; the edit clears it until the next check.
+                assert_eq!(atom.label_h, 0, "{text}");
+                assert!(atom.display.variable.is_none(), "{text}");
+                assert!(result.generic.links.is_empty(), "{text}");
+                assert_eq!(entry(atom), canonical, "{text}");
+                assert_eq!(
+                    apply(&source, id, &entry(atom), Mode::Auto)?,
+                    result,
+                    "{text}"
+                );
+            }
+            Dummy => {
+                assert_eq!(atom.element, "*", "{text}");
+                assert_eq!(atom.charge, 0, "{text}");
+                assert_eq!(atom.display.variable.as_deref(), Some(text));
+                assert!(result.generic.links.is_empty(), "{text}");
+            }
+            Link => assert_eq!(
+                result.generic.links,
+                vec![crate::generic::LinkNode {
+                    atom: id,
+                    min: 1,
+                    max: 3,
+                }]
+            ),
+            Error(_) => unreachable!(),
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn charged_hydrogen_and_negative_hydrides_reopen_as_the_same_atom() -> Result<(), String> {
+    let mut source = Document::default();
+    let left = source.add_atom("C", Point::default());
+    let id = source.add_atom("C", Point::new(42., 0.));
+    source.add_bond(left, id, 1, "plain");
+    for (text, canonical) in [
+        ("H+", "H+"),
+        ("H-", "H-"),
+        ("NH4−2", "NH4-2"),
+        ("CH2⁻³", "CH2-3"),
+        ("NH12-1", "NH12-1"),
+    ] {
+        let typed = apply(&source, id, text, Mode::Auto)?;
+        let atom = typed.atom(id).ok_or("Missing atom")?;
+        assert!(atom.no_implicit, "{text}");
+        assert!(typed.generic.links.is_empty(), "{text}");
+        assert_eq!(entry(atom), canonical, "{text}");
+        assert_eq!(apply(&source, id, canonical, Mode::Auto)?, typed, "{text}");
+    }
+    // Hydrogen keeps its bare entry when it has no typed charge.
+    let neutral = apply(&source, id, "H", Mode::Auto)?;
+    assert_eq!(entry(neutral.atom(id).ok_or("Missing H")?), "H");
+    Ok(())
+}
+
+#[test]
+fn charged_label_shapes_normalization_and_existing_errors() -> Result<(), String> {
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    for (text, element, hydrogens, charge) in [
+        ("Co2+", "Co", 0, 2),
+        ("Hf2+", "Hf", 0, 2),
+        ("Hg+", "Hg", 0, 1),
+        ("Pd₂⁺", "Pd", 0, 2),
+        ("Pd⁺²", "Pd", 0, 2),
+        ("O⁻²", "O", 0, -2),
+        ("Cl−", "Cl", 0, -1),
+        ("Pd+8", "Pd", 0, 8),
+        ("O8-", "O", 0, -8),
+        ("NH4+2", "N", 4, 2),
+        ("NH12+1", "N", 12, 1),
+        ("H3O+", "O", 3, 1),
+        ("Hf", "Hf", 0, 0),
+        ("He", "He", 0, 0),
+        ("H+", "H", 0, 1),
+        ("H-", "H", 0, -1),
+        ("H⁺", "H", 0, 1),
+        ("NH4−2", "N", 4, -2),
+        ("NH4-2", "N", 4, -2),
+        ("CH2-3", "C", 2, -3),
+        ("NH12-1", "N", 12, -1),
+    ] {
+        let result = apply(&source, id, text, Mode::Auto)?;
+        let atom = result.atom(id).ok_or("Missing atom")?;
+        assert_eq!(atom.element, element, "{text}");
+        assert_eq!(atom.explicit_h, hydrogens, "{text}");
+        assert_eq!(atom.charge, charge, "{text}");
+        assert_eq!(
+            apply(&source, id, &entry(atom), Mode::Auto)?,
+            result,
+            "{text}"
+        );
+    }
+    for text in [
+        "Pd2+2", "Pd++", "Pd 2+", "Na+K", "A+B", "CN-", "*2+", "R-X", "ligand-1",
+    ] {
+        let result = apply(&source, id, text, Mode::Auto)?;
+        let atom = result.atom(id).ok_or("Missing atom")?;
+        assert_eq!(atom.element, "*", "{text}");
+        assert_eq!(atom.display.variable.as_deref(), Some(text));
+    }
+    for text in [
+        "Pd+9",
+        "Pd0+",
+        "Pd+0",
+        "Pd⁰⁺",
+        "C60+",
+        "Pd999999999999999999999+",
+        "Pd+999999999999999999999",
+        "NH3+9",
+    ] {
+        assert_eq!(
+            apply(&source, id, text, Mode::Auto),
+            Err("Enter a charge from -8 to +8".into()),
+            "{text}"
+        );
+    }
+    for text in ["CH32+", "NH4²⁺", "NH12-"] {
+        assert_eq!(
+            apply(&source, id, text, Mode::Auto),
+            Err("Write the charge after the sign, for example NH4+2".into()),
+            "{text}"
+        );
+    }
+    assert_eq!(
+        apply(&source, id, "NH3+foo", Mode::Auto),
+        Err("Use a charge such as +, - or +2".into())
+    );
+    assert_eq!(
+        apply(&source, id, "NH256", Mode::Auto),
+        Err("Hydrogen count must be at most 255".into())
+    );
+    Ok(())
+}
+
+#[test]
+fn charged_elements_have_specific_guidance_and_text_mode_stays_literal() -> Result<(), String> {
+    const CHARGED: &str = "An element with the typed charge. Hydrogens are not added; type the element alone to restore automatic hydrogens.";
+    const HYDRIDE: &str = "An atom with the entered hydrogen count. Checking chemistry will not rewrite this label. Type the element alone to restore automatic hydrogens.";
+    assert_eq!(description("Pd2+", Mode::Auto), CHARGED);
+    assert_eq!(description("NH4+", Mode::Auto), HYDRIDE);
+    assert_eq!(description("NH0+", Mode::Auto), HYDRIDE);
+    let mut source = Document::default();
+    let id = source.add_atom("Pd", Point::default());
+    let result = apply(&source, id, "Pd2+", Mode::Text)?;
+    let atom = result.atom(id).ok_or("Missing atom")?;
+    assert_eq!(atom.element, "*");
+    assert_eq!(atom.charge, 0);
+    assert_eq!(atom.display.variable.as_deref(), Some("Pd2+"));
+    assert_eq!(
+        description("Pd2+", Mode::Text),
+        "Text on a dummy atom; existing bonds stay connected."
+    );
+    Ok(())
+}
+
+#[test]
+fn text_and_unrecognized_automatic_entries_show_scripts_without_assigning_chemistry()
+-> Result<(), String> {
+    let mut source = Document::default();
+    let left = source.add_atom("C", Point::default());
+    let id = source.add_atom("Pd", Point::new(42., 0.));
+    let right = source.add_atom("C", Point::new(84., 0.));
+    source.add_bond(left, id, 1, "plain");
+    source.add_bond(id, right, 1, "plain");
+    for (text, mode, core, suffix, superscript) in [
+        ("Pd2+", Mode::Text, "Pd", "2+", true),
+        ("M2+", Mode::Auto, "M", "2+", true),
+        ("R1", Mode::Auto, "R", "1", false),
+        ("L2", Mode::Auto, "L", "2", false),
+    ] {
+        let result = apply(&source, id, text, mode)?;
+        let atom = result.atom(id).ok_or("Atom")?;
+        assert_eq!(atom.element, "*", "{text}");
+        assert_eq!(atom.charge, 0, "{text}");
+        assert_eq!(atom.explicit_h, 0, "{text}");
+        assert!(atom.no_implicit, "{text}");
+        assert_eq!(atom.display.variable.as_deref(), Some(text));
+        assert_eq!(
+            atom.position,
+            source.atom(id).ok_or("Original atom")?.position
+        );
+        assert_eq!(result.bonds, source.bonds, "{text}");
+        assert!(result.abbreviations.is_empty(), "{text}");
+        assert!(result.generic.is_empty(), "{text}");
+        assert_eq!(entry(atom), text);
+        let runs: Vec<_> = crate::scene::primitives(&result)
+            .into_iter()
+            .filter_map(|primitive| match primitive {
+                crate::scene::Primitive::Text {
+                    text,
+                    size,
+                    position,
+                    ..
+                } => Some((text, size, position)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(runs.len(), 2, "{text}: {runs:?}");
+        let normal = runs.first().ok_or("Normal run")?;
+        let script = runs.last().ok_or("Script run")?;
+        assert_eq!(normal.0, core, "{text}");
+        assert_eq!(script.0, suffix, "{text}");
+        assert_eq!(normal.1, crate::style::DEFAULT.font_size(), "{text}");
+        assert!(script.1 < normal.1, "{text}");
+        assert_eq!(script.2.y < normal.2.y, superscript, "{text}");
+        if !superscript {
+            assert!(script.2.y > normal.2.y, "{text}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn charged_entry_preserves_implicit_hydrogens_and_imported_isotopes() -> Result<(), String> {
+    for element in ["N", "Pt", "H"] {
+        let mut source = Document::default();
+        let id = source.add_atom(element, Point::default());
+        let atom = source.atom_mut(id).ok_or("Missing atom")?;
+        atom.charge = 1;
+        assert_eq!(entry(atom), element);
+        atom.no_implicit = true;
+        atom.isotope = 2;
+        let text = entry(atom);
+        assert_eq!(text, format!("{element}+"));
+        assert_eq!(apply(&source, id, &text, Mode::Auto)?, source);
+        let atom = source.atom_mut(id).ok_or("Missing atom")?;
+        atom.charge = 0;
+        assert_eq!(
+            entry(atom),
+            if element == "H" {
+                "H".into()
+            } else {
+                format!("{element}H0")
+            }
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn free_labels_retain_connections_style_coordinates_and_roundtrip()
 -> Result<(), Box<dyn std::error::Error>> {
     let mut doc = Document::default();

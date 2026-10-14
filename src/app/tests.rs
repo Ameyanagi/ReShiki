@@ -968,41 +968,52 @@ fn arrow_edits_keep_bend_history_and_new_resets_jacs_defaults() {
 }
 
 #[test]
-fn mechanism_independent_tangents_undo_redo_and_head_changes_preserve_curve() {
-    use reshiki::arrows::{Head, Preset};
-    let (mut app, _) = App::new();
-    app.tab.doc = Document::from_native_file(include_bytes!(
-        "../../tests/fixtures/mechanism-curvature-91/before.rsk"
-    ))
-    .unwrap();
-    app.tab.selected = vec![101];
-    let original = app.tab.doc.clone();
-    app.edit(Edit::ArrowHandle(101, 3, Point::new(42., -55.)));
-    let departure = app.tab.doc.clone();
-    assert_eq!(
-        (departure.arrows[0].start, departure.arrows[0].end),
-        (original.arrows[0].start, original.arrows[0].end)
-    );
-    app.edit(Edit::ArrowHandle(101, 4, Point::new(139., -55.)));
-    let arrival = app.tab.doc.clone();
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, departure);
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, original);
-    let _ = app.update(Message::Redo);
-    let _ = app.update(Message::Redo);
-    assert_eq!(app.tab.doc, arrival);
-    app.arrow_action(arrows::Action::Head(Head::Right));
-    assert_eq!(app.tab.doc.arrows[0].cubic, arrival.arrows[0].cubic);
-    let _ = app.update(Message::ArrowStyle(Preset::Fishhook));
-    assert_eq!(app.tab.doc.arrows[0].cubic, arrival.arrows[0].cubic);
-    assert_eq!(app.tab.doc.bonds, original.bonds);
-    assert_eq!(app.tab.doc.arrows[1], original.arrows[1]);
-    let bytes = app.tab.doc.file_json().unwrap();
-    assert_eq!(
-        Document::from_native_file(&bytes).unwrap(),
-        app.tab.doc.current()
-    );
+fn canvas_selection_and_select_all_refresh_bond_and_arrow_controls() {
+    use reshiki::arrows::{ArrowStyle, Preset};
+    use reshiki::palette::Color;
+
+    for path in ["canvas select", "canvas select at", "select all"] {
+        let (mut app, _) = App::new();
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.doc.bonds[0].color = Color::Custom([18, 52, 86]);
+        let arrow_id = app.tab.doc.next_id();
+        let arrow_style = ArrowStyle {
+            width_pt: 1.5,
+            color: Color::Custom([171, 205, 239]),
+            ..ArrowStyle::preset(Preset::Fishhook)
+        };
+        app.tab.doc.arrows.push(Arrow::new(
+            arrow_id,
+            Point::new(80., 0.),
+            Point::new(160., 0.),
+            Preset::Fishhook,
+            arrow_style.clone(),
+        ));
+        app.tool = Tool::Bond(1);
+        let before = app.tab.doc.clone();
+        let ids = app.tab.doc.all_ids();
+        let message = match path {
+            "canvas select" => Message::Canvas(Edit::Select(ids.clone())),
+            "canvas select at" => Message::Canvas(Edit::SelectAt(ids.clone(), Point::default())),
+            _ => Message::SelectAll,
+        };
+        let _ = app.update(message);
+
+        assert_eq!(app.tab.selected, ids, "{path}");
+        assert_eq!(app.tab.bond_color_input, "#123456", "{path}");
+        assert_eq!(app.tab.arrow_style, Preset::Fishhook, "{path}");
+        assert_eq!(app.tab.arrows.style, arrow_style, "{path}");
+        assert_eq!(app.tab.arrows.numbers[arrows::Field::Line as usize], "1.5");
+        assert_eq!(app.tab.arrows.color, "#ABCDEF", "{path}");
+        assert_eq!(app.tab.doc, before, "{path}");
+        assert!(!app.tab.history.can_undo(), "{path}");
+        if path == "select all" {
+            assert_eq!(app.tool, Tool::Select);
+        }
+    }
 }
 
 #[test]
@@ -1206,6 +1217,7 @@ fn entire_chain_is_one_history_step_and_draw_settings_do_not_edit_the_document()
     app.edit(Edit::Chain {
         points,
         source: None,
+        source_text: None,
         target: None,
     });
     assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (8, 7));
@@ -1217,6 +1229,7 @@ fn entire_chain_is_one_history_step_and_draw_settings_do_not_edit_the_document()
     app.edit(Edit::Chain {
         points: vec![Point::default(), Point::new(42., 0.)],
         source: None,
+        source_text: None,
         target: None,
     });
     assert!(app.error);
@@ -1433,6 +1446,191 @@ fn bond_styles_position_color_and_direction_are_undoable() {
     ));
     assert!(app.error);
     assert_eq!(app.tab.doc, before);
+}
+
+fn dative_click_fixture() -> (App, u64, u64, Point) {
+    use reshiki::bonds::{DATIVE, DoublePosition};
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let donor = app.tab.doc.add_atom("N", Point::default());
+    let acceptor = app.tab.doc.add_atom("Co", Point::new(84., 0.));
+    let first_neighbor = app.tab.doc.add_atom("C", Point::new(0., 42.));
+    let second_neighbor = app.tab.doc.add_atom("C", Point::new(84., 42.));
+    app.tab.doc.add_bond(donor, acceptor, DATIVE, "plain");
+    app.tab.doc.add_bond(donor, first_neighbor, 1, "plain");
+    app.tab.doc.add_bond(acceptor, second_neighbor, 1, "plain");
+    app.tab.doc.bonds[0].stereo_atoms = vec![first_neighbor, second_neighbor];
+    app.tab.doc.bonds[0].double_position = DoublePosition::Left;
+    app.tab.doc.atom_mut(donor).unwrap().label_h = 2;
+    app.tab.doc.reconcile_molecule_groups();
+    let midpoint = Point::new(42., 0.);
+    assert!(
+        app.tab
+            .doc
+            .nearest(midpoint, 10. / app.tab.camera.zoom)
+            .is_none()
+    );
+    assert!(!app.tab.history.can_undo());
+    (app, donor, acceptor, midpoint)
+}
+
+#[test]
+fn matching_dative_click_swaps_direction_like_reverse_bonds_in_one_undo_step() {
+    use reshiki::bonds::{BondPreset, DoublePosition};
+    let (mut app, donor, acceptor, midpoint) = dative_click_fixture();
+    app.tool = Tool::StyledBond(BondPreset::Dative);
+    let original = app.tab.doc.clone();
+    let _ = app.update(Message::Canvas(Edit::Click(midpoint)));
+    let clicked = app.tab.doc.clone();
+    assert!(!app.error, "{}", app.status);
+    assert_eq!((clicked.bonds[0].a, clicked.bonds[0].b), (acceptor, donor));
+    assert_eq!(clicked.bonds[0].double_position, DoublePosition::Right);
+    // Both app paths invalidate captured stereo before reversing the bond;
+    // reverse_drawn's own stereo_atoms reversal is covered by the model test.
+    assert!(!original.bonds[0].stereo_atoms.is_empty());
+    assert!(clicked.bonds[0].stereo_atoms.is_empty());
+    assert!(clicked.atoms.iter().all(|atom| atom.label_h == 0));
+    assert_eq!(app.tab.selected, vec![donor, acceptor]);
+    assert_eq!(
+        app.status,
+        "Drawing changed · Check structure to refresh properties"
+    );
+    assert_eq!(app.tab.history.undo_frames().count(), 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, clicked);
+
+    let (mut reversed, _) = App::new();
+    reversed.tab.doc = original;
+    reversed.tab.selected = vec![donor, acceptor];
+    let _ = reversed.update(Message::ReverseBonds);
+    assert!(!reversed.error, "{}", reversed.status);
+    assert_eq!(reversed.tab.doc.bonds, clicked.bonds);
+    assert_eq!(reversed.tab.doc, clicked);
+}
+
+#[test]
+fn matching_dative_click_invalidates_computed_chemistry_like_reverse_bonds() {
+    use reshiki::bonds::BondPreset;
+    let (mut clicked, donor, acceptor, midpoint) = dative_click_fixture();
+    // With no captured stereo, the endpoint swap itself must count as chemistry.
+    clicked.tab.doc.bonds[0].stereo_atoms.clear();
+    clicked.tab.doc.atom_mut(donor).unwrap().cip_label = Some("R".into());
+    clicked.tab.doc.bonds[0].cip_label = Some("E".into());
+    let original = clicked.tab.doc.clone();
+    let (mut reversed, _) = App::new();
+    reversed.tab.doc = original.clone();
+    reversed.tab.selected = vec![donor, acceptor];
+    let cached = reshiki::engine::Analysis {
+        smiles: "cached".into(),
+        formula: "cached".into(),
+        mass: 0.,
+        exact_mass: 0.,
+        logp: 0.,
+        tpsa: 0.,
+        donors: 0,
+        acceptors: 0,
+        rings: 0,
+        unpaired_electrons: 0,
+        inchi: String::new(),
+        inchikey: String::new(),
+    };
+    for app in [&mut clicked, &mut reversed] {
+        app.tab.analysis = Some(cached.clone());
+        app.tab.chemistry_notice = Some("Cached chemistry notice".into());
+        // Hold label refresh so the dirty flag remains observable after update.
+        app.tab.busy = true;
+        app.tab.labels_dirty = false;
+    }
+    clicked.tool = Tool::StyledBond(BondPreset::Dative);
+    let _ = clicked.update(Message::Canvas(Edit::Click(midpoint)));
+    let _ = reversed.update(Message::ReverseBonds);
+    for app in [&clicked, &reversed] {
+        assert!(!app.error, "{}", app.status);
+        assert!(chemistry_changed(&original, &app.tab.doc));
+        assert!(app.tab.labels_dirty);
+        assert!(app.tab.analysis.is_none());
+        assert!(app.tab.chemistry_notice.is_none());
+        assert!(
+            app.tab
+                .doc
+                .atoms
+                .iter()
+                .all(|atom| atom.cip_label.is_none())
+        );
+        assert!(
+            app.tab
+                .doc
+                .bonds
+                .iter()
+                .all(|bond| bond.cip_label.is_none())
+        );
+    }
+    assert_eq!(clicked.tab.doc, reversed.tab.doc);
+    assert_eq!(clicked.status, reversed.status);
+}
+
+#[test]
+fn matching_projected_dative_click_flips_only_the_projection_tip() {
+    use reshiki::bonds::BondPreset;
+    for (preset, start, end) in [
+        (BondPreset::Wedge, "wedge", "wedge_end"),
+        (BondPreset::HashedWedge, "hash", "hash_end"),
+        (BondPreset::HollowWedge, "hollow_wedge", "hollow_wedge_end"),
+    ] {
+        let (mut app, donor, acceptor, midpoint) = dative_click_fixture();
+        app.tab.doc.bonds[0].projection = true;
+        app.tab.doc.bonds[0].display = start.into();
+        app.tab.doc.bonds[0].cip_label = Some("E".into());
+        app.tab.doc.atom_mut(donor).unwrap().cip_label = Some("R".into());
+        app.tool = Tool::StyledBond(preset);
+        let original = app.tab.doc.clone();
+        for display in [end, start] {
+            let _ = app.update(Message::Canvas(Edit::Click(midpoint)));
+            let mut expected = original.clone();
+            expected.bonds[0].display = display.into();
+            assert_eq!(app.tab.doc, expected);
+            assert_eq!(
+                (app.tab.doc.bonds[0].a, app.tab.doc.bonds[0].b),
+                (donor, acceptor)
+            );
+            assert_eq!(app.tab.selected, vec![donor, acceptor]);
+            assert!(!chemistry_changed(&original, &app.tab.doc));
+            assert!(!app.tab.labels_dirty);
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.status, "Drawing updated");
+        }
+    }
+}
+
+#[test]
+fn dative_tool_converts_projected_dative_to_plain_without_reversing() {
+    use reshiki::bonds::BondPreset;
+    for display in ["wedge", "wedge_end"] {
+        let (mut app, donor, acceptor, midpoint) = dative_click_fixture();
+        app.tab.doc.bonds[0].projection = true;
+        app.tab.doc.bonds[0].display = display.into();
+        app.tool = Tool::StyledBond(BondPreset::Dative);
+        let original = app.tab.doc.clone();
+        let _ = app.update(Message::Canvas(Edit::Click(midpoint)));
+        let mut expected = original.clone();
+        expected.bonds[0].projection = false;
+        expected.bonds[0].display = "plain".into();
+        assert_eq!(app.tab.doc, expected);
+        assert_eq!(
+            (app.tab.doc.bonds[0].a, app.tab.doc.bonds[0].b),
+            (donor, acceptor)
+        );
+        assert_eq!(app.tab.selected, vec![donor, acceptor]);
+        assert!(!app.error, "{}", app.status);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+    }
 }
 
 #[test]
@@ -2526,171 +2724,4 @@ fn text_click_on_an_existing_label_selects_it_without_a_history_step() {
     assert_eq!(app.tab.doc, before, "no second label is placed");
     assert_eq!(app.tool, Tool::Text);
     assert!(!app.tab.history.can_undo());
-}
-
-#[test]
-fn rear_opacity_draft_apply_is_one_undo_and_rejects_stale_invalid_or_late_input()
--> Result<(), String> {
-    use super::depth_appearance::{Action, Draft};
-    let (mut app, _) = App::new();
-    app.tab.doc = Document::default();
-    let a = app.tab.doc.add_atom("C", Point::default());
-    let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
-    app.tab.doc.add_bond(a, b, 1, "plain");
-    app.tab.doc.atom_mut(a).unwrap().depth = -21.;
-    app.tab.doc.atom_mut(b).unwrap().depth = 21.;
-    app.tab.selected = vec![a];
-    app.tab.history = History::default();
-    app.tab.labels_dirty = false;
-    let before = app.tab.doc.clone();
-    let revision = app.tab.revision;
-    let draft = |app: &App, value: &str| Draft {
-        ids: app.depth_ids(),
-        revision: app.tab.revision,
-        file_epoch: app.tab.file_epoch,
-        value: value.into(),
-    };
-    for value in ["nan", "101", "-1", ""] {
-        let input = draft(&app, value);
-        let _ = app.update(Message::DepthAppearance(Action::RearInput(input)));
-        let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
-        assert!(app.error);
-        assert_eq!(app.tab.doc, before);
-        assert!(!app.tab.history.can_undo());
-    }
-    let input = draft(&app, "100");
-    let _ = app.update(Message::DepthAppearance(Action::RearInput(input)));
-    let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
-    assert!(!app.error);
-    assert_eq!(app.tab.doc, before);
-    assert!(!app.tab.history.can_undo());
-    let stale = draft(&app, "10");
-    let input = draft(&app, "25");
-    let _ = app.update(Message::DepthAppearance(Action::RearInput(input)));
-    assert_eq!(app.tab.doc, before);
-    assert_eq!(app.tab.revision, revision);
-    let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
-    assert!(!app.error, "{}", app.status);
-    let edited = app.tab.doc.clone();
-    assert_eq!(
-        reshiki::depth_appearance::rear_opacity(&edited, &[a, b]),
-        Some(0.25)
-    );
-    assert_eq!(edited.atoms, before.atoms);
-    assert_eq!(edited.bonds, before.bonds);
-    assert!(!chemistry_changed(&before, &edited));
-    assert_eq!(app.tab.revision, revision + 1);
-    assert_eq!(app.tab.history.frames(), 1);
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, before);
-    assert!(!app.tab.history.can_undo());
-    let _ = app.update(Message::Redo);
-    assert_eq!(app.tab.doc, edited);
-    let _ = app.update(Message::DepthAppearance(Action::RearInput(stale)));
-    let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
-    assert_eq!(app.tab.doc, edited);
-    assert_eq!(app.tab.history.frames(), 1);
-    let input = draft(&app, "0");
-    let _ = app.update(Message::DepthAppearance(Action::RearInput(input)));
-    app.tab.file_epoch += 1;
-    let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
-    assert_eq!(app.tab.doc, edited);
-    Ok(())
-}
-
-#[test]
-fn rgb_first_coordinate_contact_rear_apply_targets_one_molecule_and_retains_history() {
-    use super::depth_appearance::{Action, Draft};
-    let (mut app, _) = App::new();
-    app.tab.doc = Document::default();
-    let mut molecules = Vec::new();
-    for (x, depths) in [
-        (0., [-30., -10., 10., 30.]),
-        (400., [100., 120., 140., 160.]),
-    ] {
-        let mut ids = Vec::new();
-        for (i, z) in depths.into_iter().enumerate() {
-            let id = app
-                .tab
-                .doc
-                .add_atom("C", Point::new(x + i as f32 * 42., 0.));
-            app.tab.doc.atom_mut(id).unwrap().depth = z;
-            if let Some(previous) = ids.last() {
-                app.tab.doc.add_bond(*previous, id, 1, "plain");
-            }
-            ids.push(id);
-        }
-        molecules.push(ids);
-    }
-    app.tab
-        .doc
-        .add_bond(molecules[0][3], molecules[1][0], 5, "plain");
-    app.tab.selected.clear();
-    app.tab.labels_dirty = false;
-    let _ = app.update(Message::DepthAppearance(Action::Enhance(true)));
-    assert!(!app.error, "{}", app.status);
-    assert_eq!(app.tab.doc.depth_appearance.len(), 1);
-    let rgb_first = app.tab.doc.clone();
-    app.tab.history = History::default();
-    app.tab.selected = vec![molecules[0][0]];
-    assert_eq!(app.depth_ids(), molecules[0]);
-    let draft = Draft {
-        ids: app.depth_ids(),
-        revision: app.tab.revision,
-        file_epoch: app.tab.file_epoch,
-        value: "25".into(),
-    };
-    let _ = app.update(Message::DepthAppearance(Action::RearInput(draft)));
-    let _ = app.update(Message::DepthAppearance(Action::ApplyRear));
-    assert!(!app.error, "{}", app.status);
-    let edited = app.tab.doc.clone();
-    assert_eq!(
-        reshiki::depth_appearance::rear_opacity(&edited, &molecules[0]),
-        Some(0.25)
-    );
-    assert_eq!(
-        reshiki::depth_appearance::rear_opacity(&edited, &molecules[1]),
-        Some(1.)
-    );
-    assert_eq!(edited.atoms, rgb_first.atoms);
-    assert_eq!(edited.bonds, rgb_first.bonds);
-    for id in edited.all_ids() {
-        assert_eq!(
-            reshiki::depth_appearance::Paint::new(&edited).amount(id),
-            reshiki::depth_appearance::Paint::new(&rgb_first).amount(id)
-        );
-    }
-    assert_eq!(app.tab.history.frames(), 1);
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, rgb_first);
-    let _ = app.update(Message::Redo);
-    assert_eq!(app.tab.doc, edited);
-    app.tab.selected.clear();
-    for on in [false, true] {
-        let _ = app.update(Message::DepthAppearance(Action::Enhance(on)));
-        assert!(!app.error, "{}", app.status);
-        assert_eq!(
-            reshiki::depth_appearance::rear_opacity(&app.tab.doc, &molecules[0]),
-            Some(0.25)
-        );
-        assert_eq!(
-            reshiki::depth_appearance::rear_opacity(&app.tab.doc, &molecules[1]),
-            Some(1.)
-        );
-    }
-    let reopened = Document::from_json(&app.tab.doc.file_json().unwrap()).unwrap();
-    assert_eq!(reopened.depth_appearance, app.tab.doc.depth_appearance);
-}
-
-#[test]
-fn rear_target_selection_includes_quadruple_and_partial_covalent_bonds() {
-    for order in [6, 7] {
-        let (mut app, _) = App::new();
-        app.tab.doc = Document::default();
-        let a = app.tab.doc.add_atom("C", Point::default());
-        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
-        app.tab.doc.add_bond(a, b, order, "plain");
-        app.tab.selected = vec![a];
-        assert_eq!(app.depth_ids(), [a, b]);
-    }
 }

@@ -16,7 +16,7 @@ With another tool active, Space keeps its existing behavior of switching to Sele
 
 ## Reproduce and validate
 
-- Input: [editable starting molecule](fixtures/reaction-shortcuts-input.rsk). Open it, select an atom or double-click the molecule, and press **Cmd/Ctrl+Shift+Right**. [Resulting reaction drawing](fixtures/reaction-shortcuts-output.rsk) retains editable atoms and reaction data.
+- Input: [editable starting molecule](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reaction-shortcuts-input.rsk). Open it, select an atom or double-click the molecule, and press **Cmd/Ctrl+Shift+Right**. [Resulting reaction drawing](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reaction-shortcuts-output.rsk) retains editable atoms and reaction data.
 - Space example: on that product copy, change its terminal O to N; switch to Select, click empty canvas, then press **Space**. The whole product is selected.
 - Base: `0ae0fb6a21c5e5c5b90ae66730458fda4ea2a20d` (`origin/main` at branch creation). Head: this PR's implementation. macOS ARM64, debug build, 1200 × 760 application renderer, PNG at 1×, Fit command with a 1080 × 560 canvas viewport (225% displayed zoom). Images are actual application renders; the status line labels each shortcut. No drawing retouching is applied.
 - Regenerate both images and fixtures with `cargo test --bin reshiki molecule_shortcut_visual_evidence -- --ignored --nocapture`. This also exercises actual focused text-input widgets and verifies both key events are captured before global shortcut dispatch. Renderer evidence is distinct from a desktop interaction check.
@@ -36,8 +36,16 @@ Platform/build: macOS 26.5.1, ARM64 debug, 1280 × 820 logical content area; ori
 
 ![Native desktop: Space recalls the edited product, with three atoms and two bonds selected](../images/reaction-selection-shortcuts/desktop-space-selection.png)
 
-Repeating Cmd+Shift+Right extended the drawing to three molecules and two arrows (Fit at 106%), then the native document was saved. The [saved desktop fixture](fixtures/reaction-shortcuts-desktop-saved.rsk) contains nine atoms, six bonds, two distinct arrow IDs and two explicit reactions. The first reaction maps atoms `[1, 2, 3]` to `[4, 5, 6]`; the second reuses `[4, 5, 6]` as reactant and maps to `[8, 9, 10]`. All participant lists exactly match complete connected components, and all object IDs are unique.
+Repeating Cmd+Shift+Right extended the drawing to three molecules and two arrows (Fit at 106%), then the native document was saved. The [saved desktop fixture](https://github.com/Ameyanagi/ReShiki/blob/evidence/review-archive-2026-10/docs/changes/fixtures/reaction-shortcuts-desktop-saved.rsk) contains nine atoms, six bonds, two distinct arrow IDs and two explicit reactions. The first reaction maps atoms `[1, 2, 3]` to `[4, 5, 6]`; the second reuses `[4, 5, 6]` as reactant and maps to `[8, 9, 10]`. All participant lists exactly match complete connected components, and all object IDs are unique.
 
 An additional combined-build check applied numeric height 80 to a mixed object group, clicked empty canvas and pressed Space. Only the edited six-atom/six-bond ring was recalled. This checks interaction with the separate numeric-transform feature; it is not evidence that numeric controls belong to this PR.
 
 Release caption: **Build reaction steps with Cmd/Ctrl+Shift+Right, and use Space in Select mode to return to the molecule you just edited.**
+
+## Archived evidence
+
+The historical evidence cited in this record is preserved in [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) on the evidence archive branch.
+
+| Archived files                                                                                                           | What they record                                                             |
+| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| [docs/changes/fixtures](https://github.com/Ameyanagi/ReShiki/tree/evidence/review-archive-2026-10/docs/changes/fixtures) | Actual native drawings from reaction-member copy and Space selection review. |

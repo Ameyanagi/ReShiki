@@ -1,6 +1,6 @@
 # Runtime safety audit — 2026-09-20
 
-This records the worker-based application at the time of the audit. The validation counts and process descriptions below are historical; see [architecture](architecture.md) for the current Rust engine and isolated native InChI helper.
+The first sections record the worker-based application at the time of the audit. Their validation counts and process descriptions are historical; see [architecture](architecture.md) for the current Rust engine and isolated native InChI helper. The sections from [naming worker](#naming-worker) on describe current limits.
 
 The application and library forbid Rust `unsafe` code. Non-test builds deny
 `clippy::unwrap_used`, `expect_used`, `panic`, `unreachable`, `todo`,
@@ -50,11 +50,94 @@ Binary drawing parsing bounds input to 16 MB, nesting to 64 levels, objects to 1
 
 This update passes **135 Rust tests**, **42 Python tests**, formatting and strict Clippy. Test totals above record earlier milestones.
 
+## Naming worker
+
+Available in Nightly builds; not in ReShiki 0.11.0. Every name parse and every name generation starts a fresh child of the same executable in `--naming-worker` mode. `src/naming/client.rs` supervises it with `WORKER_LIMITS`, and `reshiki-process` (`native/process/`) applies those limits before the worker runs. That crate holds all of the platform FFI.
+
+| Limit           | Value                                                                                                                | Enforced by                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Wall-clock time | 15 s; the client polls every 25 ms                                                                                   | `DEADLINE` and `POLL` in `src/naming/client.rs`                          |
+| Memory          | 384 MiB resident, sampled at every poll on macOS and Linux; 384 MiB of job memory on Windows                         | `WORKER_LIMITS.memory_bytes`; `native/process/src/unix.rs`, `windows.rs` |
+| Address space   | 8 GiB, on Linux only (`RLIMIT_AS`)                                                                                   | `WORKER_LIMITS.address_bytes`; `unix.rs`                                 |
+| CPU time        | 20 s (`RLIMIT_CPU`; job user time on Windows)                                                                        | `WORKER_LIMITS.cpu_seconds`; `unix.rs`, `windows.rs`                     |
+| File size       | 8 MiB on macOS and Linux (`RLIMIT_FSIZE`)                                                                            | `WORKER_LIMITS.file_bytes`; `unix.rs`                                    |
+| Worker heap     | 96 MiB of live Rust allocations                                                                                      | `HEAP_BYTES` in `src/naming/worker.rs`                                   |
+| Request         | 32,768 bytes; a name has at most 2,048 bytes and no control characters                                               | `WIRE_LIMIT` and `MAX_NAME_BYTES` in `worker.rs`                         |
+| Response        | 65,536 bytes for a parse; 32,768 bytes for a generated name                                                          | `OUTPUT_LIMIT` in `worker.rs`; `src/naming/reverse.rs`                   |
+| Molecule size   | 512 atoms and 32,768 SMILES bytes for a naming identity; 1–64 heavy atoms and 200,000 work units for name generation | `crates/model/src/molecule_names.rs`, `src/naming/rules.rs`              |
+| Concurrency     | One parse and one generation at a time                                                                               | `SLOTS` in `src/naming/local.rs` and `reverse.rs`                        |
+
+The worker starts in a new temporary folder with core dumps off on macOS and Linux. On macOS and Linux it leads its own process group, and termination kills the whole group. Linux also kills the worker when the app exits (`PR_SET_PDEATHSIG`). On macOS a small observer process kills it when the app or the worker exits, and after 20 seconds at most. On Windows a job object allows one process and kills it when the job closes. The worker must close its pipes within one second of exiting, so a launcher that leaves a daemon behind fails. Cancelling or dropping a request kills the worker. Any exceeded limit returns an error, and nothing is inserted.
+
+`RESHIKI_NAMING_HELPER` can name another executable by absolute path. Test binaries refuse to start naming without it.
+
+### Alias catalog
+
+`src/naming/catalog.rs` loads the bundled `catalog/data.json` once, through `OnceLock`, and fails closed:
+
+- The data is at most 65,536 bytes (`MAX_CATALOG_BYTES`), with 1–40 entries (`MAX_ENTRIES`) and 1–5 names per entry (`MAX_ALIASES`).
+- A name is at most 128 bytes (`MAX_ALIAS_BYTES`) and has no control characters.
+- Each entry is one connected identity. Names, compared without ASCII case, and identities never repeat.
+
+An invalid catalog makes `aliases_for_smiles` fail. `src/naming/local.rs` and `reverse.rs` propagate that error, so every local name parse and name generation fails. Catalog edits must therefore pass `src/naming/catalog/tests.rs`.
+
+## EMF worker
+
+Available in Nightly builds; not in ReShiki 0.11.0. Windows only. EMF playback runs Windows GDI+ on picture data from files, so it never runs in the editor or its Office server. The app relaunches itself in one of three modes from `native/windows/src/metafile_worker.rs`:
+
+- `--emf-worker` plays an imported EMF file into its PNG preview. `src/metafile.rs` starts it.
+- `--emf-file-worker` and `--emf-office-worker` record an EMF figure file or Office object for a drawing that contains a retained EMF picture. `crates/io/src/native_windows.rs` starts them through `reshiki_windows::isolated_metafile`; drawings without such a picture record in process.
+
+| Limit                   | Value                                                                                                        | Enforced by                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Committed memory        | 512 MiB for the worker process, including allocations GDI+ makes outside Rust                                | The job object of `limited_job` in `metafile_worker.rs`            |
+| Playback time           | 30 s (`PLAYBACK_LIMIT`). The worker ends itself, and the caller stops waiting and kills it.                  | `deadline` and `record` in `metafile_worker.rs`; `src/metafile.rs` |
+| Import input            | 16 MiB, after `reshiki-metafile` checks the EMF framing, the record count (100,000) and the physical size    | `MAX_BYTES` and `MAX_RECORDS` in `crates/metafile/src/lib.rs`      |
+| Import preview          | 16 MiB; `Picture::from_emf` validates the EMF again, and the EMF and its preview must fit in 16 MiB together | `src/metafile.rs`, `crates/model/src/pictures.rs`                  |
+| Export input and output | 128 MiB                                                                                                      | `MAX_SNAPSHOT` in `metafile_worker.rs`                             |
+
+The worker reads only stdin and writes only stdout. Its stderr is discarded, and no console window opens. A failure or timeout returns an error and leaves the drawing unchanged.
+
+## Bounded editor jobs
+
+These jobs run off the UI thread. NMR prediction, generic expansion and Auto-map run on blocking tasks inside the app process; 3D geometry runs in its worker process. Each job has its own bounds, and a job that fails or runs out of budget leaves the drawing unchanged. These bounds are in Nightly builds; not in ReShiki 0.11.0.
+
+### NMR prediction
+
+Enforced in `crates/chemistry/src/nmr.rs`, `crates/io/src/nmr.rs` and `src/app/nmr/worker.rs`:
+
+- The encoder and the index lookup stop at a 3-second work deadline (`Environment::deadline`).
+- A 6-second outer timeout (`PREDICTION_TIMEOUT`) must exceed that deadline, so an engine error normally arrives first.
+- One calculation runs per process. A second request is refused at once with "An NMR calculation is already running; try again shortly". The permit stays held until the blocking work ends, even after the timeout.
+- A request covers one molecule of at most 128 atoms. The bundled index is at most 32 MiB.
+
+### Generic expansion
+
+Enforced in `crates/model/src/generic/limits.rs`, `Limits` in `crates/model/src/generic.rs`, `crates/model/src/generic/budget.rs` and `src/app/generic.rs`:
+
+- Each request has one work allowance of 5,000,000 units (`Limits::default`). Every stage pays from it before it copies or scans, and it never resets.
+- An expansion has at most 500 candidate products and 100,000 atoms in total, counted before duplicates are removed.
+- The source has at most 100,000 atoms and 300,000 bonds.
+- A drawing has at most 10,000 definitions, 118 choices per site, repeat counts from 1 to 1000, and 100,000 repeat members and crossing bonds in all. Labels have at most 64 characters (`MAX_LABEL_CHARS`).
+- One expansion runs at a time.
+
+### Auto-map
+
+Enforced in `crates/model/src/reaction_mapping/search.rs` (`Budget::default`), started from `src/app/reaction_mapping.rs`:
+
+- The search has 20,000,000 work units and 250,000 search states.
+- Running out of work before the search has a full correspondence is an error: "Auto-map search budget reached before a full correspondence was found; add manual anchors".
+- A search that reaches either limit after that keeps its best feasible mapping. The status reads "Search budget reached · Review the feasible proposal or add manual anchors", and the review panel shows "Budget reached · optimality and uniqueness unknown" above **Apply maps**.
+
+### 3D geometry
+
+Enforced in `crates/process-heap/src/policy.rs` and `crates/io/src/geometry/client.rs`. Each calculation resolves an allocator budget of 64–512 MiB and a deadline of 60–120 s from the machine's memory headroom and throughput, and runs in the `--geometry-worker` process. The [calculation resource policy](chemistry-resource-policy.md) gives the formulas, reservations and structural limits.
+
 ## Agent API (P1, experimental)
 
 The experimental agent API (`reshiki --mcp` and `reshiki --cli`; see the
-[agent API reference](agent-api.md)) is in Nightly builds only, not in ReShiki
-0.11.0. MCP asks servers to validate tool inputs, enforce access controls,
+[agent API reference](agent-api.md)) is in Nightly builds since 2026-10-08, not in
+ReShiki 0.11.0. MCP asks servers to validate tool inputs, enforce access controls,
 rate-limit calls and sanitize outputs
 ([MCP tools, Security Considerations](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)).
 This section records how P1 does each, what remains possible, and the tests
@@ -67,31 +150,35 @@ The operation budgets are `Budgets::default()` in
 `Limits::from_budgets` in `crates/mcp/src/framing.rs`. The `info` tool and
 `reshiki --cli info` report the operation budgets.
 
-| Limit                      | Value                                                      | When exceeded                                                    |
-| -------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------- |
-| Request line               | 24 MiB (25,165,824 bytes) before the newline               | JSON-RPC -32600 `Request exceeds N bytes`; serving continues     |
-| Request ID                 | 256 bytes for a string ID                                  | -32600 without an ID                                             |
-| Input text                 | 16 MiB (16,777,216 bytes) per import, file or CLI input    | `budget`                                                         |
-| CDX base64                 | 22,369,624 bytes, the base64 length of a 16 MiB CDX        | `budget`                                                         |
-| Documents                  | 16 per server                                              | `budget`                                                         |
-| Objects                    | 100,000 per document                                       | `budget`                                                         |
-| Object IDs                 | 5,000 per request                                          | `budget`                                                         |
-| Session weight             | 2,000,000: objects + 1, summed over documents and history  | `budget`, checked before any change                              |
-| Pictures                   | 128 MiB of unique picture data per server                  | `budget`                                                         |
-| History depth              | 20 undo steps per document                                 | The oldest step is dropped                                       |
-| Inspect                    | 5,000 objects per result                                   | `truncated: true`; counts stay complete                          |
-| Idempotency                | 32 receipts per document; keys of at most 128 bytes        | The oldest receipt is dropped; a longer key is invalid           |
-| Idle documents             | Expire after 60 minutes without use                        | `unknown_document`                                               |
-| Concurrency and queue      | 2 operations run; 8 more wait                              | `busy`                                                           |
-| Outstanding requests       | 12 (concurrency + queue + 2), holding at most 48 MiB       | The reader stops reading until a request completes               |
-| Deadline                   | 120 s per operation, checked cooperatively                 | `timeout` at the next checkpoint                                 |
-| Output                     | 16 MiB of raw output per result (about 21.3 MiB in base64) | `budget`                                                         |
-| MCP result                 | 48 MiB serialized                                          | `budget`: request a smaller render or fewer objects              |
-| Preview render             | 1600 × 1000 by default; sides 1-8192; 16,000,000 pixels    | `invalid_arguments` for a side, `budget` for the pixels          |
-| PNG export                 | 16,000,000 pixels                                          | Resolution steps down from the style's dpi until it fits         |
-| Error messages             | 500 characters                                             | Cut, so errors never echo large input                            |
-| `agent-access.json`        | 64 KiB                                                     | Exit 2 at startup                                                |
-| Heap (`--mcp` and `--cli`) | 2 GiB; `RESHIKI_AGENT_HEAP_MB` sets 256-16384 MiB          | stderr `RESHIKI_HEAP_LIMIT <budget> <used> <requested>`, exit 75 |
+The [generated budget table](agent-reference.md#budgets) lists the default
+operation limits and their units. Session weight counts objects plus one for
+each document and history frame. Picture memory counts unique picture data
+across documents and history.
+
+| Limit                                                                       | When exceeded                                            |
+| --------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Input text, CDX base64, documents, objects, object IDs, pictures and output | `budget`                                                 |
+| Session weight                                                              | `budget`, checked before any change                      |
+| History depth                                                               | The oldest step is dropped                               |
+| Inspect                                                                     | `truncated: true`; counts stay complete                  |
+| Idempotency                                                                 | The oldest receipt is dropped; a longer key is invalid   |
+| Idle documents                                                              | `unknown_document`                                       |
+| Concurrency and queue                                                       | `busy`                                                   |
+| Deadline                                                                    | `timeout` at the next cooperative checkpoint             |
+| Preview render                                                              | `invalid_arguments` for a side, `budget` for the pixels  |
+| PNG export                                                                  | Resolution steps down from the style's dpi until it fits |
+
+MCP framing and process limits also apply:
+
+| Limit                      | Value                                                | When exceeded                                                    |
+| -------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
+| Request line               | 24 MiB (25,165,824 bytes) before the newline         | JSON-RPC -32600 `Request exceeds N bytes`; serving continues     |
+| Request ID                 | 256 bytes for a string ID                            | -32600 without an ID                                             |
+| Outstanding requests       | 12 (concurrency + queue + 2), holding at most 48 MiB | The reader stops reading until a request completes               |
+| MCP result                 | 48 MiB serialized                                    | `budget`: request a smaller render or fewer objects              |
+| Error messages             | 500 characters                                       | Cut, so errors never echo large input                            |
+| `agent-access.json`        | 64 KiB                                               | Exit 2 at startup                                                |
+| Heap (`--mcp` and `--cli`) | See the [generated MCP help](agent-reference.md#mcp) | stderr `RESHIKI_HEAP_LIMIT <budget> <used> <requested>`, exit 75 |
 
 An invalid `RESHIKI_AGENT_HEAP_MB` is a usage error (exit 2) before anything
 is read. The heap ceiling counts the server or command's own allocations; the

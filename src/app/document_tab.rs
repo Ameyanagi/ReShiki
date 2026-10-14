@@ -6,6 +6,7 @@ use super::{
     pictures, reaction_mapping, reactions, typography,
 };
 use crate::canvas::Camera;
+use crate::session::Binding;
 use reshiki::{
     document::{Document, History, Point},
     engine::Analysis,
@@ -34,7 +35,7 @@ pub(super) struct DocumentTab {
     pub(super) file_epoch: u64,
     pub(super) recent_molecules: molecule_shortcuts::Recent,
     pub(super) path: Option<PathBuf>,
-    pub(super) office: Option<super::office::Binding>,
+    pub(super) office: Option<Binding>,
     pub(super) untitled_name: Option<&'static str>,
     // Selection and view.
     pub(super) selected: Vec<u64>,
@@ -59,6 +60,8 @@ pub(super) struct DocumentTab {
     pub(super) clipboard_busy: bool,
     pub(super) labels_dirty: bool,
     pub(super) label_refresh: label_refresh::State,
+    /// Counts computed-label writes that need not bump revision; keys the mapping thumbnail.
+    pub(super) label_generation: u64,
     pub(super) chemistry_notice: Option<String>,
     pub(super) reactions: reactions::State,
     pub(super) naming: naming::State,
@@ -83,7 +86,6 @@ pub(super) struct DocumentTab {
     pub(super) bracket_sides: BracketSides,
     pub(super) arrow_style: reshiki::arrows::Preset,
     pub(super) arrows: arrows::State,
-    pub(super) arrow_source: Option<reshiki::arrow_anchors::Pick>,
     pub(super) caption: String,
     pub(super) caption_editor: iced::widget::text_editor::Content,
     pub(super) caption_format: reshiki::typography::TextFormat,
@@ -108,6 +110,20 @@ pub(super) struct DocumentTab {
 }
 
 impl DocumentTab {
+    pub(super) fn detach_office(&mut self) {
+        if let Some(binding) = self.office.take() {
+            binding.finish();
+        }
+    }
+
+    pub(super) fn drawing_edit_active(&self) -> bool {
+        self.cleanup.is_some()
+            || self.joining.is_some()
+            || self.optimization.is_some()
+            || self.inline_text.is_some()
+            || self.atom_text.is_some()
+    }
+
     pub(super) fn new(recovery: Option<Recovery>) -> Self {
         Self {
             id: TabId(0),
@@ -143,6 +159,7 @@ impl DocumentTab {
             clipboard_busy: false,
             labels_dirty: false,
             label_refresh: Default::default(),
+            label_generation: 0,
             chemistry_notice: None,
             reactions: Default::default(),
             naming: Default::default(),
@@ -166,7 +183,6 @@ impl DocumentTab {
             bracket_sides: BracketSides::Both,
             arrow_style: Default::default(),
             arrows: Default::default(),
-            arrow_source: None,
             caption: "Reaction conditions".into(),
             caption_editor: iced::widget::text_editor::Content::with_text("Reaction conditions"),
             caption_format: Default::default(),
@@ -215,6 +231,9 @@ impl DocumentTab {
             && !self.dirty()
             && !self.busy
             && !self.clipboard_busy
+            && !self.naming.is_pending()
+            && !self.mapping.is_pending()
+            && !self.nmr.is_pending()
             && self.cleanup.is_none()
             && self.optimization.is_none()
             && self.inline_text.is_none()

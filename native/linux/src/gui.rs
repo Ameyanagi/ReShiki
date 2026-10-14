@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 
 use raw_window_handle::{HasDisplayHandle, RawDisplayHandle};
-use smithay_clipboard::rich::Client;
+use smithay_clipboard::rich::{Client, ReadFailure};
 
 use crate::protocol::{self, Response};
 
@@ -86,23 +86,57 @@ pub async fn gui_clipboard_request(input: &[u8]) -> Result<Option<Vec<u8>>, Stri
         Response::empty()
     } else {
         let picture_only = request.operation == "read_picture";
-        let mime_types = protocol::READABLE
-            .iter()
-            .filter(|(_, _, picture)| !picture_only || *picture)
-            .flat_map(|(_, types, _)| types.iter().map(|mime| (*mime).to_owned()))
-            .collect();
-        let item = client
-            .read(mime_types)
-            .await
-            .map_err(|error| error.to_string())?;
-        let representation = item
-            .map(|item| {
-                let (kind, _) = protocol::choose_type(|mime| mime == item.mime_type, picture_only)
-                    .ok_or("The clipboard returned an unrequested MIME representation")?;
-                protocol::representation(kind, &item.bytes)
-            })
-            .transpose()?;
-        Response::read(representation)
+        let formats = protocol::read_formats(&request.formats, picture_only)?;
+        let mime_types = protocol::requested_mime_types(&formats, &request.skip_sources);
+        let (representation, generation) = match client.read(mime_types, request.generation).await {
+            Ok(snapshot) => {
+                let Some(item) = snapshot.data else {
+                    let response = Response::read(None, snapshot.generation);
+                    return serde_json::to_vec(&response)
+                        .map(Some)
+                        .map_err(|error| error.to_string());
+                };
+                let (kind, _) = protocol::choose_type(
+                    |mime| {
+                        mime == item.mime_type
+                            && !request.skip_sources.iter().any(|source| source == mime)
+                    },
+                    &formats,
+                )
+                .ok_or("The clipboard returned an unrequested MIME representation")?;
+                (
+                    Some(protocol::selected_representation(
+                        kind,
+                        &item.mime_type,
+                        &item.bytes,
+                    )),
+                    snapshot.generation,
+                )
+            }
+            Err(error) => {
+                let failure = error
+                    .get_ref()
+                    .and_then(|error| error.downcast_ref::<ReadFailure>())
+                    .ok_or_else(|| error.to_string())?;
+                let (kind, _) = protocol::choose_type(
+                    |mime| {
+                        mime == failure.mime_type
+                            && !request.skip_sources.iter().any(|source| source == mime)
+                    },
+                    &formats,
+                )
+                .ok_or("The clipboard failed an unrequested MIME representation")?;
+                (
+                    Some(protocol::read_failure(
+                        kind,
+                        &failure.mime_type,
+                        error.to_string(),
+                    )),
+                    failure.generation.clone(),
+                )
+            }
+        };
+        Response::read(representation, generation)
     };
     let output = serde_json::to_vec(&response).map_err(|error| error.to_string())?;
     if output.len() > protocol::JSON_LIMIT {

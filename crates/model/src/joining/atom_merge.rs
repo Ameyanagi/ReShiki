@@ -35,9 +35,7 @@ fn merge_atoms_with_position(
         .iter()
         .map(|id| doc.atom(*id).ok_or("Select only atoms to merge."))
         .collect::<Result<_, _>>()?;
-    if crate::generic::intersects(doc, selected)
-        || crate::generic::component_intersects(doc, selected)
-    {
+    if crate::generic::touches(doc, selected) {
         return Err(crate::generic::JOIN_NOTICE.into());
     }
     let first = atoms.first().copied().ok_or("Select atoms to merge.")?;
@@ -199,6 +197,8 @@ fn merge_atoms_with_position(
         dedup(&mut scope.atoms);
         scope.weights = remap_weights(&scope.weights, &mapped)?;
         scope.overrides = remap_weights(&scope.overrides, &mapped)?;
+        scope.rear_weights = remap_weights(&scope.rear_weights, &mapped)?;
+        scope.rear_overrides = remap_weights(&scope.rear_overrides, &mapped)?;
     }
     crate::depth_appearance::validate(&result)
         .map_err(|_| "Joining would combine conflicting depth appearance scopes. Clear their depth appearance first.")?;
@@ -213,6 +213,7 @@ fn merge_atoms_with_position(
         .collect();
     crate::arrow_anchors::remap_for_join(&mut result, &doc.atoms, &endpoint_mapping);
     crate::atom_labels::clear_computed(&mut result);
+    crate::molecule_names::reconcile(&mut result, doc);
     result.validate()?;
     Ok((result, vec![survivor]))
 }
@@ -253,7 +254,8 @@ fn same_bond(a: &Bond, b: &Bond) -> bool {
     a.cip_label = None;
     b.cip_label = None;
     if a.a != b.a {
-        if a.order == 5 || matches!(a.display.as_str(), "wedge" | "hollow_wedge" | "hash") {
+        // This direction check uses fewer displays than bonds::is_stereo_marker.
+        if a.is_dative() || matches!(a.display.as_str(), "wedge" | "hollow_wedge" | "hash") {
             return false;
         }
         b.reverse();

@@ -144,6 +144,81 @@ fn numbered_connection_encoding_checks_applicability_and_signed_byte() {
 }
 
 #[test]
+fn shared_connection_validation_returns_numbers_and_preserves_error_precedence() {
+    for (text, number) in [("1", 1), (" +001 ", 1), ("127", 127)] {
+        assert_eq!(
+            external_connection_number("n", Some("ExternalConnectionPoint"), text),
+            Ok(number)
+        );
+    }
+    for number in ["", "0", "-1", "128", "1.5", "invalid"] {
+        assert_eq!(
+            external_connection_number("n", Some("ExternalConnectionPoint"), number).unwrap_err(),
+            "ExternalConnectionNum must be a positive signed byte"
+        );
+        for (name, kind) in [
+            ("b", Some("ExternalConnectionPoint")),
+            ("n", Some("Element")),
+            ("n", None),
+        ] {
+            assert_eq!(
+                external_connection_number(name, kind, number).unwrap_err(),
+                "ExternalConnectionNum requires an external connection point"
+            );
+        }
+    }
+}
+
+#[test]
+fn numbered_connection_property_uniqueness_keeps_decode_precedence() {
+    let frame = |properties: &[(u16, &[u8])]| {
+        let mut bytes = HEADER.to_vec();
+        for (object, id) in [(0x8000u16, 0u32), (0x8004, 1)] {
+            bytes.extend_from_slice(&object.to_le_bytes());
+            bytes.extend_from_slice(&id.to_le_bytes());
+        }
+        for &(tag, value) in properties {
+            property(&mut bytes, tag, value).unwrap();
+        }
+        bytes.extend_from_slice(&[0; 6]);
+        bytes
+    };
+    // Without a connection number, repeated NodeType properties keep their
+    // historical last-value behavior instead of triggering uniqueness checks.
+    assert_eq!(
+        from_cdx(&frame(&[(0x0400, &[12, 0]), (0x0400, &[1, 0])])).unwrap(),
+        "<CDXML><n id=\"1\" NodeType=\"Element\" /></CDXML>"
+    );
+    for properties in [
+        vec![(0x7777, &[][..]), (0x044b, &[0][..])],
+        vec![
+            (0x7777, &[][..]),
+            (0x044b, &[0][..]),
+            (0x0400, &[12, 0][..]),
+            (0x0400, &[12, 0][..]),
+        ],
+        vec![
+            (0x7777, &[][..]),
+            (0x044b, &[0][..]),
+            (0x044b, &[0][..]),
+            (0x0400, &[12, 0][..]),
+        ],
+    ] {
+        assert_eq!(
+            from_cdx(&frame(&properties)).unwrap_err(),
+            "Numbered external connection needs unique number and NodeType properties"
+        );
+    }
+    assert_eq!(
+        from_cdx(&frame(
+            &[(0x7777, &[]), (0x044b, &[0]), (0x0400, &[12, 0]),]
+        ))
+        .unwrap_err(),
+        "Unsupported binary drawing property 0x7777"
+    );
+}
+
+#[test]
 fn concurrent_codec_calls_keep_ids_and_counters_independent() {
     // With this test run alone, the concurrent decoders also initialize SCHEMA.
     let xml = "<CDXML><page id=\"1\"/></CDXML>";

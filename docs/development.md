@@ -14,7 +14,7 @@ cd reshiki
 cargo run --locked
 ```
 
-For Windows ARM, build with `--target aarch64-pc-windows-msvc` from an ARM64 Visual Studio tools shell. The application relaunches itself for bounded InChI operations; macOS clipboard and printing use separate modes of the same binary. There are no sibling runtime executables or Swift build steps. For offline Cargo builds, populate the dependency cache first and set `CARGO_NET_OFFLINE=true`.
+For Windows ARM, build with `--target aarch64-pc-windows-msvc` from an ARM64 Visual Studio tools shell. The application relaunches itself for bounded InChI, geometry and naming work, and for some platform services; see [worker modes](architecture.md#worker-modes). There are no sibling runtime executables or Swift build steps. For offline Cargo builds, populate the dependency cache first and set `CARGO_NET_OFFLINE=true`.
 
 ## Native checks
 
@@ -25,6 +25,8 @@ export RESHIKI_REQUIRE_INCHI_HELPER=1
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo check --workspace --all-targets --locked
+cargo build --locked --bin reshiki
+export RESHIKI_NAMING_HELPER="$PWD/target/debug/reshiki"
 cargo test --workspace --locked
 cargo run --locked -- --engine-check
 ```
@@ -36,14 +38,45 @@ cargo test --locked -p reshiki-chemistry
 cargo test --locked -p reshiki-model
 cargo test --locked -p reshiki-io
 cargo test --locked -p reshiki-agent
+cargo test --locked -p reshiki-mcp
+cargo test --locked -p reshiki-metafile
+cargo test --locked -p opsin
 cargo test --locked -p reshiki --test theme_reference
 ```
 
-A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
+A single-package build resolves features for that package alone, so the first run may compile some dependencies again with a smaller feature set. `reshiki-metafile` and `opsin` are not default members, so plain `cargo test` skips their tests. See [crates and layering](architecture.md#crates-and-layering) for what each crate contains.
 
-The development-only helper and fault-injection stub let library tests exercise subprocess transport independently of the GUI entry point. Keep `RESHIKI_INCHI_HELPER` set while running those tests. In PowerShell, use `python`, set `$env:RESHIKI_INCHI_HELPER = (Resolve-Path artifacts/inchi-helper/reshiki-inchi-helper.exe).Path`, and set `$env:RESHIKI_REQUIRE_INCHI_HELPER = '1'`. Required mode fails if native test binaries are missing. Default tests do not require Python or RDKit. Windows clipboard tests replace the desktop clipboard with test data.
+Naming integration tests start the built application in its `--naming-worker` mode. Build it first and point `RESHIKI_NAMING_HELPER` at it with an absolute path; if you set `CARGO_TARGET_DIR`, use the binary there. Without the variable, the tests fail with "Naming integration tests require RESHIKI_NAMING_HELPER…". Rebuild the binary after you change naming or worker code, because the tests run it as built.
+
+The development-only helper and fault-injection stub let library tests exercise subprocess transport independently of the GUI entry point. Keep `RESHIKI_INCHI_HELPER` set while running those tests. In PowerShell, use `python`, set `$env:RESHIKI_INCHI_HELPER = (Resolve-Path artifacts/inchi-helper/reshiki-inchi-helper.exe).Path`, and set `$env:RESHIKI_REQUIRE_INCHI_HELPER = '1'`. After `cargo build --locked --bin reshiki`, set `$env:RESHIKI_NAMING_HELPER = (Resolve-Path target/debug/reshiki.exe).Path`. Required mode fails if native test binaries are missing. Default tests do not require Python or RDKit. Windows clipboard tests replace the desktop clipboard with test data.
 
 Archive and installer checks run the installed app twice with Python, uv and the checkout unavailable. They reject separate worker executables, Python payloads and chemistry-environment creation. Release CI also runs the complete InChI framing and heap suite against the application’s `--inchi-worker` mode.
+
+## Opt-in renderer tests
+
+Tests that need a real renderer or a baseline folder are marked `#[ignore]`. Run them with `-- --ignored`, or with `-- --include-ignored` to run the ordinary tests too. Add `--test-threads=1` for renderer pixel tests. On macOS the only headless renderer is WGPU on Metal; Tiny Skia is built only on Windows.
+
+| Variable                | Used by                                                            | Meaning                                                                                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RESHIKI_DATA_DIR`      | View parity, UI snapshots and other app-level renderer tests       | The app's data folder: `App::new` reads recovery drafts and the template library from it. Point it at a new, empty folder before each run, so your own data cannot change the result.                                                                  |
+| `RESHIKI_UI_QA_DIR`     | `ui_layout_snapshots`                                              | Folder for PNG snapshots of key UI states at 1280 and 1040 px. Without it, the test writes to `reshiki-ui-qa` in the temporary folder.                                                                                                                 |
+| `RESHIKI_VIEW_PARITY`   | `views_match_captured_baseline`, `entries_match_captured_baseline` | Baseline folder for view and right-click menu parity. `RESHIKI_VIEW_PARITY_CAPTURE=1` writes the baseline; otherwise the test compares. `RESHIKI_VIEW_PARITY_ONLY` limits a capture to a case-name prefix during development; compare mode refuses it. |
+| `RESHIKI_CANVAS_PIXELS` | Canvas, paper-layer, text-placement and icon pixel baselines       | Baseline folder. `RESHIKI_CANVAS_CAPTURE_BASELINE=1` writes the baseline; otherwise the test compares.                                                                                                                                                 |
+| `RESHIKI_PERF_RENDERER` | Pixel, view-parity and canvas performance tests                    | Headless backend: `wgpu`, or `tiny-skia` on Windows. Without it, the default backend runs.                                                                                                                                                             |
+| `RESHIKI_MODEL_PARITY`  | `reshiki-model` captured-baseline tests                            | Baseline folder for model output. `RESHIKI_MODEL_CAPTURE_BASELINE=1` writes it.                                                                                                                                                                        |
+
+Capture a baseline on the parent commit, then compare on your change:
+
+```sh
+export RESHIKI_DATA_DIR="$PWD/artifacts/test-data"
+rm -rf "$RESHIKI_DATA_DIR" && mkdir -p "$RESHIKI_DATA_DIR"
+RESHIKI_VIEW_PARITY="$PWD/artifacts/view-parity" RESHIKI_VIEW_PARITY_CAPTURE=1 \
+  cargo test --locked --bin reshiki views_match_captured_baseline -- --ignored --nocapture
+```
+
+For the comparison, empty `RESHIKI_DATA_DIR` again and run the same command without `RESHIKI_VIEW_PARITY_CAPTURE`. Set `RESHIKI_NAMING_HELPER` and `RESHIKI_INCHI_HELPER` the same way for both runs: with the naming helper set, view parity also registers the cases that need chemical names.
+
+On Windows, CI runs every ignored `app::naming::` test, the `app::nmr::` and `canvas::nmr::` tests with `--include-ignored --test-threads=1`, and a few named focus and menu tests (`.github/workflows/checks.yml`). A new naming renderer test therefore runs there without a workflow change.
 
 ## Optional RDKit reference tests
 
@@ -103,7 +136,7 @@ Windows ARM64 and Linux ARM64 remain release targets with package and installer 
 
 Install [Bun 1.4.2](https://bun.com/docs/installation), then run `bun install --frozen-lockfile` to install the web tools and Lefthook hooks. Use `bun run --bun lefthook install` to reinstall hooks. Python changes also need the uv development environment above.
 
-Hooks check staged file types: Oxlint/Oxfmt for web and configuration files, Ruff/ty for Python, and Cargo fmt/Clippy/check for Rust. They do not rewrite or restage changes. Rust checks run sequentially. The repository uses LF line endings, including on Windows.
+Hooks check staged file types: Oxlint/Oxfmt for web and configuration files, Ruff/ty for Python, and Cargo fmt and Clippy for Rust. Clippy type-checks libraries and binaries; CI lints tests and examples on every pull request. They do not rewrite or restage changes. Rust checks run sequentially. The repository uses LF line endings, including on Windows.
 
 ```sh
 bun run lint:js
@@ -123,9 +156,13 @@ bun run docs:check
 bun run docs:build
 ```
 
-Edit the visual manual in `website/src/content/docs/guide/` and developer notes in `docs/*.md`. The sync script generates ignored Starlight copies of the developer notes; edit their originals. Landing page, navigation and theme live in `website/`. The production build checks local page and asset links.
+Edit the visual manual in `website/src/content/docs/guide/` and developer notes in `docs/*.md`. The sync script generates ignored Starlight copies of the developer notes; edit their originals. Landing page, navigation and theme live in `website/`. The production build checks local page and asset links. Follow [writing and terms](writing-style.md) for wording, UI labels and feature names.
 
 The Documentation workflow checks pull requests and deploys main to [GitHub Pages](https://reshiki.com/). Pages must use **GitHub Actions** as its source. See [release builds and signing](releasing.md) for distribution setup.
+
+## UI conventions
+
+Every floating surface (menus, popovers, palettes, dialogs) wraps its shadow in `crate::appearance::surface_shadow` (`src/appearance.rs`). On Windows it returns no shadow, because Windows can render with Tiny Skia, whose shadow pass ignores the damage clip and darkens retained pixels on partial redraws. The windows-2022 CI job runs the `app::nmr` partial-redraw test (`nmr_surfaces_partial_redraws_preserve_unchanged_pixels`), which checks the NMR surfaces.
 
 ## Windows development
 

@@ -29,6 +29,7 @@ pub const MAX_TRANSFERS: usize = 16;
 pub const MAX_RETAINED_BYTES: usize = 2 * MAX_BYTES;
 /// An operation or a consumer's pipe may not wait indefinitely.
 pub const TIMEOUT: Duration = Duration::from_secs(5);
+pub const CLIPBOARD_CHANGED: &str = "The clipboard changed while pasting; paste again";
 
 pub(crate) const MARKER_PREFIX: &str = "application/x-reshiki-clipboard-receipt-";
 const MAX_MIME_BYTES: usize = 255;
@@ -41,6 +42,48 @@ pub type Offer = BTreeMap<String, Arc<[u8]>>;
 pub struct Data {
     pub mime_type: String,
     pub bytes: Vec<u8>,
+}
+
+/// Identity and candidate from the same observed standard selection offer.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ReadSnapshot {
+    pub generation: String,
+    pub data: Option<Data>,
+}
+
+/// A receive failure after a MIME has been selected. Kept inside `io::Error`
+/// so callers can retry another representation without masking owner errors.
+#[derive(Debug)]
+pub struct ReadFailure {
+    pub mime_type: String,
+    pub generation: String,
+    source: io::Error,
+}
+
+impl std::fmt::Display for ReadFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.source, formatter)
+    }
+}
+
+impl std::error::Error for ReadFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+pub(crate) fn read_failure(mime_type: String, generation: String, source: io::Error) -> io::Error {
+    if source.to_string() == CLIPBOARD_CHANGED {
+        return source;
+    }
+    io::Error::new(source.kind(), ReadFailure { mime_type, generation, source })
+}
+
+pub(crate) fn check_generation(expected: Option<&str>, generation: &str) -> io::Result<()> {
+    if expected.is_some_and(|expected| expected != generation) {
+        return Err(io::Error::other(CLIPBOARD_CHANGED));
+    }
+    Ok(())
 }
 
 /// A cancellable reply. Dropping it stops pending preparation or pipe reads.
@@ -62,7 +105,7 @@ impl<T> Future for Request<T> {
             Poll::Ready(reply) => {
                 self.finished = true;
                 Poll::Ready(reply.unwrap_or_else(|_| Err(unavailable())))
-            }
+            },
         }
     }
 }
@@ -94,6 +137,7 @@ pub(crate) struct Inner {
     sequence: AtomicU64,
     pending: Arc<AtomicUsize>,
     pub memory: Arc<AtomicUsize>,
+    pub epoch: u64,
 }
 
 type Registry = Mutex<HashMap<usize, Weak<Inner>>>;
@@ -119,6 +163,7 @@ impl Client {
     }
 
     pub(crate) fn new(display_key: usize, sender: Sender<Command>) -> Self {
+        static NEXT_EPOCH: AtomicU64 = AtomicU64::new(1);
         let inner = Arc::new(Inner {
             sender,
             stopped: AtomicBool::new(false),
@@ -127,6 +172,7 @@ impl Client {
             sequence: AtomicU64::new(1),
             pending: Arc::new(AtomicUsize::new(0)),
             memory: Arc::new(AtomicUsize::new(0)),
+            epoch: NEXT_EPOCH.fetch_add(1, Ordering::Relaxed),
         });
         registry()
             .lock()
@@ -150,29 +196,32 @@ impl Client {
     /// generation in the focused seat's resulting standard selection offer.
     /// Queueing a request or completing a display roundtrip is not success.
     pub fn write(&self, offer: Offer) -> Request<()> {
-        self.submit(
-            |completion| match StoredOffer::new(offer, self.inner.memory.clone(), true) {
-                Ok(offer) => Some(Operation::Write { offer, completion }),
-                Err(error) => {
-                    completion.finish(Err(error));
-                    None
-                }
-            },
-        )
-    }
-
-    /// Receives the first supported MIME in caller priority order. `None`
-    /// means the selection is empty or has no requested representation.
-    /// Binary data is not decoded as text or normalized.
-    pub fn read(&self, mime_types: Vec<String>) -> Request<Option<Data>> {
-        self.submit(|completion| match validate_types(&mime_types) {
-            Ok(()) => Some(Operation::Read {
-                mime_types,
-                completion,
-            }),
+        self.submit(|completion| match StoredOffer::new(offer, self.inner.memory.clone(), true) {
+            Ok(offer) => Some(Operation::Write { offer, completion }),
             Err(error) => {
                 completion.finish(Err(error));
                 None
+            },
+        })
+    }
+
+    /// Receives the first supported MIME in caller priority order. The offer
+    /// identity is checked before selecting a MIME and when its pipe finishes.
+    /// Empty preferences still observe the generation. Binary data stays exact.
+    pub fn read(
+        &self,
+        mime_types: Vec<String>,
+        generation: Option<String>,
+    ) -> Request<ReadSnapshot> {
+        self.submit(|completion| {
+            match validate_types(&mime_types)
+                .and_then(|()| validate_generation(generation.as_deref()))
+            {
+                Ok(()) => Some(Operation::Read { mime_types, generation, completion }),
+                Err(error) => {
+                    completion.finish(Err(error));
+                    None
+                },
             }
         })
     }
@@ -195,15 +244,8 @@ impl Client {
         let id = self
             .inner
             .sequence
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-                value.checked_add(1)
-            });
-        let mut completion = Completion {
-            sender: Some(sender),
-            control,
-            permit: None,
-            id: 0,
-        };
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| value.checked_add(1));
+        let mut completion = Completion { sender: Some(sender), control, permit: None, id: 0 };
         if self.inner.stopped.load(Ordering::Acquire) || !self.inner.ready.load(Ordering::Acquire) {
             completion.finish(Err(unavailable()));
         } else if let (Ok(permit), Ok(id)) = (permit, id) {
@@ -227,15 +269,9 @@ pub(crate) struct Control {
 impl Control {
     pub fn error(&self, now: Instant) -> Option<io::Error> {
         if self.cancelled.load(Ordering::Acquire) {
-            Some(io::Error::new(
-                io::ErrorKind::Interrupted,
-                "clipboard request cancelled",
-            ))
+            Some(io::Error::new(io::ErrorKind::Interrupted, "clipboard request cancelled"))
         } else if now >= self.deadline {
-            Some(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "clipboard request timed out",
-            ))
+            Some(io::Error::new(io::ErrorKind::TimedOut, "clipboard request timed out"))
         } else {
             None
         }
@@ -264,7 +300,8 @@ pub(crate) enum Operation {
     },
     Read {
         mime_types: Vec<String>,
-        completion: Completion<Option<Data>>,
+        generation: Option<String>,
+        completion: Completion<ReadSnapshot>,
     },
 }
 
@@ -315,18 +352,11 @@ impl StoredOffer {
         }
         let marker = if receipt { Some(marker()?) } else { None };
         let memory = Counter::reserve(memory, size, MAX_RETAINED_BYTES)?;
-        Ok(Arc::new(Self {
-            data,
-            marker,
-            _memory: memory,
-        }))
+        Ok(Arc::new(Self { data, marker, _memory: memory }))
     }
 
     pub fn mime_types(&self) -> impl Iterator<Item = &str> {
-        self.data
-            .keys()
-            .map(String::as_str)
-            .chain(self.marker.as_deref())
+        self.data.keys().map(String::as_str).chain(self.marker.as_deref())
     }
 
     pub fn bytes(&self, mime: &str) -> Option<Arc<[u8]>> {
@@ -370,11 +400,22 @@ impl Drop for Counter {
 }
 
 fn validate_types(types: &[String]) -> io::Result<()> {
-    if types.is_empty() || types.len() > MAX_FORMATS {
+    if types.len() > MAX_FORMATS {
         return Err(io::Error::other("invalid clipboard MIME preference count"));
     }
     for mime in types {
         validate_type(mime)?;
+    }
+    Ok(())
+}
+
+fn validate_generation(generation: Option<&str>) -> io::Result<()> {
+    if generation.is_some_and(|token| {
+        token.is_empty()
+            || token.len() > 128
+            || token.bytes().any(|byte| !(b'!'..=b'~').contains(&byte))
+    }) {
+        return Err(io::Error::other("Invalid clipboard generation"));
     }
     Ok(())
 }
@@ -435,9 +476,7 @@ mod tests {
     }
 
     fn offer(bytes: &[u8]) -> Offer {
-        [("image/png".to_owned(), Arc::from(bytes))]
-            .into_iter()
-            .collect()
+        [("image/png".to_owned(), Arc::from(bytes))].into_iter().collect()
     }
 
     #[test]
@@ -446,17 +485,14 @@ mod tests {
         assert!(Client::for_display(key).is_none());
         let (sender, receiver) = channel::channel();
         let owner = Client::new(key, sender);
-        assert!(
-            Client::for_display(key).is_none(),
-            "initialization is not ready"
-        );
+        assert!(Client::for_display(key).is_none(), "initialization is not ready");
         owner.inner.ready.store(true, Ordering::Release);
         let clone = Client::for_display(key).unwrap();
-        let mut pending = clone.read(vec!["image/png".into()]);
+        let mut pending = clone.read(vec!["image/png".into()], None);
         assert!(poll(&mut pending).is_pending());
         owner.stop(key);
         assert!(Client::for_display(key).is_none());
-        let mut rejected = clone.read(vec!["image/png".into()]);
+        let mut rejected = clone.read(vec!["image/png".into()], None);
         assert!(matches!(poll(&mut rejected), Poll::Ready(Err(_))));
         // The owner worker dropping its command queue resolves pending replies.
         drop(receiver);
@@ -485,21 +521,14 @@ mod tests {
         let (key, client, commands) = ready_client();
         let mut request = client.write(offer(&[0, 255, 17]));
         assert!(poll(&mut request).is_pending());
-        let Command::Rich(operation) = commands.try_recv().unwrap() else {
-            panic!()
-        };
+        let Command::Rich(operation) = commands.try_recv().unwrap() else { panic!() };
         assert!(poll(&mut request).is_pending());
-        let Operation::Write { offer, completion } = operation else {
-            panic!()
-        };
+        let Operation::Write { offer, completion } = operation else { panic!() };
         let marker = offer.marker.as_ref().unwrap();
         assert!(marker.starts_with(MARKER_PREFIX));
         assert_eq!(marker.len(), MARKER_PREFIX.len() + 32);
         assert_eq!(offer.bytes("image/png").unwrap().as_ref(), [0, 255, 17]);
-        completion.finish(Err(io::Error::new(
-            io::ErrorKind::TimedOut,
-            "no ownership receipt",
-        )));
+        completion.finish(Err(io::Error::new(io::ErrorKind::TimedOut, "no ownership receipt")));
         assert!(
             matches!(poll(&mut request), Poll::Ready(Err(error)) if error.kind() == io::ErrorKind::TimedOut)
         );
@@ -512,9 +541,7 @@ mod tests {
     fn cancelling_a_request_marks_queued_work_and_wakes_maintenance() {
         let (key, client, commands) = ready_client();
         let request = client.write(offer(b"first"));
-        let Command::Rich(operation) = commands.try_recv().unwrap() else {
-            panic!()
-        };
+        let Command::Rich(operation) = commands.try_recv().unwrap() else { panic!() };
         assert!(operation.control().error(Instant::now()).is_none());
         drop(request);
         assert!(matches!(commands.try_recv(), Ok(Command::Wake)));
@@ -532,14 +559,14 @@ mod tests {
     fn dropping_rejected_requests_coalesces_maintenance_wakeups() {
         let (key, client, commands) = ready_client();
         for _ in 0..1_000 {
-            drop(client.read(Vec::new()));
+            drop(client.read(vec![String::new()], None));
         }
         assert!(matches!(commands.try_recv(), Ok(Command::Wake)));
         assert!(commands.try_recv().is_err());
         assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
         // The next maintenance pass rearms later cancellation wakeups.
         client.inner.wake_pending.store(false, Ordering::Release);
-        drop(client.read(Vec::new()));
+        drop(client.read(vec![String::new()], None));
         assert!(matches!(commands.try_recv(), Ok(Command::Wake)));
         assert!(commands.try_recv().is_err());
         client.stop(key);
@@ -553,9 +580,9 @@ mod tests {
         assert!(
             matches!(poll(&mut invalid), Poll::Ready(Err(error)) if error.to_string().contains("reserved"))
         );
-        let mut empty = client.read(Vec::new());
+        let mut empty = client.read(vec![String::new()], None);
         assert!(matches!(poll(&mut empty), Poll::Ready(Err(_))));
-        let mut invalid = client.read(vec!["text/plain\0injected".into()]);
+        let mut invalid = client.read(vec!["text/plain\0injected".into()], None);
         assert!(matches!(poll(&mut invalid), Poll::Ready(Err(_))));
         assert!(commands.try_recv().is_err());
         assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
@@ -563,18 +590,73 @@ mod tests {
     }
 
     #[test]
+    fn invalid_generation_requests_fail_before_the_worker_sees_them() {
+        let (key, client, commands) = ready_client();
+        for generation in [String::new(), "x".repeat(129), "bad token".into(), "日本語".into()] {
+            let mut invalid = client.read(Vec::new(), Some(generation));
+            assert!(
+                matches!(poll(&mut invalid), Poll::Ready(Err(error)) if error.to_string() == "Invalid clipboard generation")
+            );
+        }
+        assert!(commands.try_recv().is_err());
+        client.stop(key);
+    }
+
+    #[test]
+    fn owner_failures_before_mime_selection_have_no_read_failure_metadata() {
+        let (key, client, commands) = ready_client();
+        let mut request = client.read(vec!["text/plain".into(), "image/png".into()], None);
+        let Command::Rich(operation) = commands.try_recv().unwrap() else { panic!() };
+        operation.fail(io::Error::other("the clipboard owner is unavailable"));
+        let Poll::Ready(Err(error)) = poll(&mut request) else {
+            panic!("owner failure was not delivered")
+        };
+        assert_eq!(error.to_string(), "the clipboard owner is unavailable");
+        assert!(error.get_ref().unwrap().downcast_ref::<ReadFailure>().is_none());
+        client.stop(key);
+    }
+
+    #[test]
+    fn changed_offer_aborts_without_mime_failure_metadata() {
+        let original = "wayland:1:2:3";
+        assert!(check_generation(None, original).is_ok());
+        assert!(check_generation(Some(original), original).is_ok());
+        for current in ["wayland:1:2:4", "wayland:1:2:0", "wayland:2:2:3"] {
+            let error = check_generation(Some(original), current).unwrap_err();
+            assert_eq!(error.to_string(), CLIPBOARD_CHANGED);
+            let error = read_failure("text/plain".into(), current.into(), error);
+            assert!(error.get_ref().unwrap().downcast_ref::<ReadFailure>().is_none());
+        }
+    }
+
+    #[test]
+    fn empty_preferences_still_request_and_return_the_offer_identity() {
+        let (key, client, commands) = ready_client();
+        let mut request = client.read(Vec::new(), Some("wayland:1:2:3".into()));
+        let Command::Rich(Operation::Read { mime_types, generation, completion }) =
+            commands.try_recv().unwrap()
+        else {
+            panic!()
+        };
+        assert!(mime_types.is_empty());
+        assert_eq!(generation.as_deref(), Some("wayland:1:2:3"));
+        completion.finish(Ok(ReadSnapshot { generation: "wayland:1:2:3".into(), data: None }));
+        let Poll::Ready(Ok(snapshot)) = poll(&mut request) else { panic!() };
+        assert_eq!(snapshot.generation, "wayland:1:2:3");
+        assert!(snapshot.data.is_none());
+        client.stop(key);
+    }
+
+    #[test]
     fn pending_request_limit_rejects_without_growing_the_command_queue() {
         let (key, client, commands) = ready_client();
-        let mut requests: Vec<_> = (0..MAX_TRANSFERS)
-            .map(|_| client.read(vec!["image/png".into()]))
-            .collect();
-        let mut overflow = client.read(vec!["image/png".into()]);
+        let mut requests: Vec<_> =
+            (0..MAX_TRANSFERS).map(|_| client.read(vec!["image/png".into()], None)).collect();
+        let mut overflow = client.read(vec!["image/png".into()], None);
         assert!(matches!(poll(&mut overflow), Poll::Ready(Err(_))));
         for request in &mut requests {
             assert!(poll(request).is_pending());
-            let Command::Rich(operation) = commands.try_recv().unwrap() else {
-                panic!()
-            };
+            let Command::Rich(operation) = commands.try_recv().unwrap() else { panic!() };
             operation.fail(io::Error::other("test owner stopped"));
             assert!(matches!(poll(request), Poll::Ready(Err(_))));
         }
@@ -588,11 +670,7 @@ mod tests {
         let memory = Arc::new(AtomicUsize::new(0));
         let bytes: Arc<[u8]> = Arc::from([0_u8, 255, 128, 4]);
         let original = StoredOffer::new(
-            [
-                ("image/png".into(), bytes.clone()),
-                ("application/example".into(), bytes),
-            ]
-            .into(),
+            [("image/png".into(), bytes.clone()), ("application/example".into(), bytes)].into(),
             memory.clone(),
             false,
         )
@@ -602,10 +680,7 @@ mod tests {
         let replacement = StoredOffer::new(offer(b"new"), memory.clone(), false).unwrap();
         drop(original);
         assert_eq!(memory.load(Ordering::Acquire), 7);
-        assert_eq!(
-            serving_old_pipe.bytes("image/png").unwrap().as_ref(),
-            [0, 255, 128, 4]
-        );
+        assert_eq!(serving_old_pipe.bytes("image/png").unwrap().as_ref(), [0, 255, 128, 4]);
         assert_eq!(replacement.bytes("image/png").unwrap().as_ref(), b"new");
         drop(serving_old_pipe);
         assert_eq!(memory.load(Ordering::Acquire), 3);

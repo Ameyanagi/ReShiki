@@ -104,12 +104,6 @@ fn scroll_pans_both_axes_and_command_or_control_zooms_at_pointer() -> Result<(),
 fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
     let doc = Document::default();
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
         tool: Tool::Atom,
         guides: guides::Guides {
             rulers: true,
@@ -187,17 +181,7 @@ fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
 fn free_ring_preset_drag_keeps_its_start_as_rotation_anchor() {
     let doc = Document::default();
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
         tool: Tool::RingPreset(reshiki::rings::Preset::ChairUp),
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.,
-        },
         ..chain_canvas(&doc, ChainMode::Straight)
     };
     assert!(matches!(
@@ -320,18 +304,8 @@ fn arrow_handle_drag_is_one_edit_and_midpoint_hit_follows_curve() {
         ArrowStyle::default(),
     ));
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
         tool: Tool::Select,
         selected: &[1],
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.,
-        },
         ..chain_canvas(&doc, ChainMode::Straight)
     };
     assert!(matches!(
@@ -343,18 +317,8 @@ fn arrow_handle_drag_is_one_edit_and_midpoint_hit_follows_curve() {
     assert_eq!(hit_object(&doc, World::new(0., -55.), 4.), Some(1));
     assert_eq!(hit_object(&doc, World::new(0., 0.), 4.), None);
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
         tool: Tool::Arrow,
         selected: &[1],
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.,
-        },
         ..chain_canvas(&doc, ChainMode::Straight)
     };
     assert!(matches!(
@@ -728,19 +692,23 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         aromatic_ring: false,
         template_connection: reshiki::templates::Connection::Auto,
         template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &STYLE,
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        arrows: ArrowOptions {
+            preset: Default::default(),
+            style: &reshiki::arrows::ArrowStyle::DEFAULT,
+            source: None,
+            attach_targets: true,
+        },
+        graphics: GraphicOptions {
+            constrain: false,
+            arc: Default::default(),
+            style: &STYLE,
+            point: None,
+            phase: Default::default(),
+            flipped: false,
+            attach: true,
+            snap: true,
+            bracket_sides: BracketSides::Both,
+        },
         bond_drawing: Default::default(),
         chain_drawing: Default::default(),
     }
@@ -1178,6 +1146,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
     let Edit::Chain {
         points,
         source: a,
+        source_text: None,
         target: b,
     } = pointer_gesture(&canvas, Point::new(80., 150.), Point::new(320., 150.))
     else {
@@ -1187,7 +1156,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
     assert_eq!(points.len(), 7);
     let (preview, preview_target) = canvas.chain_plan(
         (World::new(-120., 0.), World::new(-120., 0.)),
-        Some(source),
+        (Some(source), None),
         &[World::new(-120., 0.)],
         (false, true),
         World::new(120., 0.),
@@ -1199,6 +1168,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
     let Edit::Chain {
         points,
         source: a,
+        source_text: None,
         target: b,
     } = pointer_gesture(&canvas, Point::new(84., 153.), Point::new(84., 153.))
     else {
@@ -1225,7 +1195,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
     let last = *initial.last().unwrap();
     let (extension, _) = canvas.chain_plan(
         (last, last),
-        ids.last().copied(),
+        (ids.last().copied(), None),
         &[last],
         (false, false),
         last,
@@ -1392,43 +1362,10 @@ fn freeform_selection_tracks_events_adds_subtracts_and_cancels() {
     let mut doc = Document::default();
     doc.add_atom("C", World::new(-50., 0.));
     doc.add_atom("O", World::new(50., 0.));
-    let style = GraphicStyle::default();
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
         selected: &[2],
         tool: Tool::Lasso,
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &style,
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
     let points = [
@@ -1514,43 +1451,9 @@ fn group_clicks_move_all_members_and_alt_selects_a_member() {
     doc.add_atom("C", World::new(-50., 0.));
     doc.add_atom("O", World::new(50., 0.));
     doc.group_selection(&[1, 2]).unwrap();
-    let style = GraphicStyle::default();
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Select,
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &style,
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     let result = pointer_gesture(&canvas, Point::new(150., 150.), Point::new(170., 170.));
     let Edit::Move(ids, dx, dy) = result else {
@@ -1589,14 +1492,6 @@ fn group_clicks_move_all_members_and_alt_selects_a_member() {
     // Alt-drag edits a member immediately, even when its group is selected.
     let selected = [1, 2];
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
         selected: &selected,
         ..canvas
     };
@@ -1653,41 +1548,8 @@ fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
     let doc = Document::default();
     let style = GraphicStyle::default();
     let mut canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Graphic(reshiki::graphics::GraphicKind::Rectangle),
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &style,
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     assert!(matches!(
         pointer_gesture(&canvas, Point::new(150., 100.), Point::new(250., 200.)),
@@ -1715,7 +1577,7 @@ fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
     assert_eq!(with_curve, original);
 
     let mut with_closed_path = with_curve.clone();
-    with_closed_path.graphics[0].edit_point(3, World::new(-50., 0.));
+    let _ = with_closed_path.graphics[0].edit_point(3, World::new(-50., 0.));
     with_closed_path.graphics[0].path.push(PathCommand::Close);
     canvas.doc = &with_closed_path;
     let original = with_closed_path.clone();
@@ -1768,43 +1630,9 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
         format: Default::default(),
     });
     doc.group_selection(&[atom, label]).unwrap();
-    let style = GraphicStyle::default();
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Select,
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &style,
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
     let point = Point::new(230., 160.);
@@ -1884,44 +1712,12 @@ fn template_drag_uses_the_target_bond_and_can_be_cancelled() {
     let b = doc.add_atom("C", World::new(30.0, 0.0));
     doc.add_bond(a, b, 1, "plain");
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Template,
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.0,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
         template: Some((
             &reshiki::templates::LIBRARY[0],
             reshiki::templates::Anchor::Auto,
         )),
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &GraphicStyle::default(),
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     let start = Point::new(200.0, 150.0);
     let end = Point::new(200.0, 200.0);
@@ -2035,41 +1831,9 @@ fn selection_handles_resize_and_rotate_without_moving_or_merging_atoms() {
     doc.add_bond(a, b, 1, "plain");
     let original = doc.clone();
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
         selected: &[a, b],
         tool: Tool::Select,
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.0,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &GraphicStyle::default(),
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     for (start, end, expected_pivot, expected_scale, expected_rotation) in [
         (
@@ -2143,41 +1907,8 @@ fn bond_midpoints_select_and_drag_both_atoms_without_losing_atom_targets() {
     assert_eq!(hit_selection(&doc, World::default(), 10.0), vec![a, b]);
     assert_eq!(hit_selection(&doc, World::new(-20.0, 0.0), 10.0), vec![a]);
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Select,
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.0,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &GraphicStyle::default(),
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     assert!(
         matches!(pointer_gesture(&canvas, Point::new(200.0, 150.0), Point::new(200.0, 150.0)), Edit::Select(ids) if ids == vec![a, b])
@@ -2187,14 +1918,6 @@ fn bond_midpoints_select_and_drag_both_atoms_without_losing_atom_targets() {
     );
     let selected = [a, b];
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
         selected: &selected,
         ..canvas
     };
@@ -2213,41 +1936,9 @@ fn keyboard_click_preserves_world_point_and_stationary_screen_motion_does_not_ha
     let b = doc.add_atom("C", World::new(21., 0.));
     doc.add_bond(a, b, 1, "plain");
     let mut canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
         keyboard_target: Some(World::default()),
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Select,
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &GraphicStyle::default(),
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     assert!(
         matches!(pointer_gesture(&canvas, Point::new(200., 150.), Point::new(200., 150.)), Edit::SelectAt(ids, point) if ids == vec![a, b] && point == World::default())
@@ -2302,38 +1993,9 @@ fn command_drag_duplicates_and_shift_drag_locks_to_one_axis() {
     doc.add_bond(b, c, 1, "plain");
     let selected = [a, b, c];
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
         selected: &selected,
         tool: Tool::Select,
-        camera: Camera::default(),
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &GraphicStyle::default(),
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     let (start, end) = (Point::new(200.0, 150.0), Point::new(290.0, 170.0));
     let gesture = |modifiers| pointer_gesture_with(&canvas, start, end, modifiers);
@@ -2349,9 +2011,6 @@ fn command_drag_duplicates_and_shift_drag_locks_to_one_axis() {
     // Duplicating a bonded part of a molecule copies it free of the rest.
     let partial = [b, c];
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
         selected: &partial,
         ..canvas
     };
@@ -2447,41 +2106,9 @@ fn ring_drag_snaps_at_release_or_keeps_its_initial_attachment() {
     let b = doc.add_atom("C", World::new(21.0, 0.0));
     doc.add_bond(a, b, 1, "plain");
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Ring,
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.0,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
         ring_size: 5,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &GraphicStyle::default(),
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     assert!(
         matches!(pointer_gesture(&canvas, Point::new(100.0, 50.0), Point::new(200.0, 150.0)), Edit::Ring(anchor, None) if anchor == World::default())
@@ -2495,38 +2122,8 @@ fn ring_drag_snaps_at_release_or_keeps_its_initial_attachment() {
 fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
     let doc = Document::default();
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Bond(1),
-        camera: Camera::default(),
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &GraphicStyle::default(),
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     let bounds = Rectangle::new(Point::new(100.0, 100.0), iced::Size::new(400.0, 300.0));
     let mut state = State {
@@ -2559,41 +2156,8 @@ fn short_endpoint_drag_grows_instead_of_snapping_to_its_source() {
     let mut doc = Document::default();
     let source = doc.add_atom("C", World::default());
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Bond(1),
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.0,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &GraphicStyle::default(),
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400.0, 300.0));
     let mut state = State::default();
@@ -2640,41 +2204,8 @@ fn drag_reuses_atoms_at_the_cursor_or_the_snapped_endpoint() {
 fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
     let doc = Document::default();
     let canvas = MoleculeCanvas {
-        nmr: None,
-        optimizer: None,
-        keyboard_target: None,
-        element: "C",
-        joining: None,
-        hidden_annotation: None,
-        bond_drawing: Default::default(),
-        chain_drawing: Default::default(),
-        doc: &doc,
-        selected: &[],
         tool: Tool::Bond(1),
-        camera: Camera {
-            center: World::default(),
-            zoom: 1.0,
-        },
-        grid: false,
-        guides: Default::default(),
-        smart_guides: true,
-        ring_size: 6,
-        aromatic_ring: false,
-        template_connection: reshiki::templates::Connection::Auto,
-        template: None,
-        arrow_preset: Default::default(),
-        arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
-        arrow_source: None,
-        attach_arrow_targets: true,
-        orbital_phase: Default::default(),
-        phase_flipped: false,
-        attach_symbols: true,
-        snap_orbitals: true,
-        graphic_constrain: false,
-        graphic_arc: Default::default(),
-        graphic_style: &GraphicStyle::default(),
-        graphic_point: None,
-        bracket_sides: BracketSides::Both,
+        ..chain_canvas(&doc, ChainMode::Straight)
     };
     let mut state = State::default();
     let bounds = Rectangle {
@@ -2942,7 +2473,7 @@ fn mechanism_attachment_92_pointer_click_bypass_drag_and_escape_dispatch() {
     let source = Pick::Atom(atom);
     let mut canvas = chain_canvas(&doc, ChainMode::Straight);
     canvas.tool = Tool::Arrow;
-    canvas.arrow_preset = reshiki::arrows::Preset::Curved;
+    canvas.arrows.preset = reshiki::arrows::Preset::Curved;
     let point = Point::new(200., 150.);
     assert!(matches!(
         pointer_gesture(&canvas, point, point),
@@ -2956,13 +2487,13 @@ fn mechanism_attachment_92_pointer_click_bypass_drag_and_escape_dispatch() {
         pointer_gesture(&canvas, point, Point::new(260., 160.)),
         Edit::Bond(_, _, None, None)
     ));
-    canvas.attach_arrow_targets = false;
+    canvas.arrows.attach_targets = false;
     assert!(matches!(
         pointer_gesture(&canvas, point, point),
         Edit::Click(_)
     ));
-    canvas.attach_arrow_targets = true;
-    canvas.arrow_source = Some(&source);
+    canvas.arrows.attach_targets = true;
+    canvas.arrows.source = Some(&source);
     let mut state = State::default();
     let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
     let event = Event::Keyboard(iced::keyboard::Event::KeyPressed {

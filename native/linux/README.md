@@ -36,6 +36,11 @@ representations use their explicit MIME types. Native/chemical formats precede
 pictures and text on ordinary Paste; Paste picture considers only raster formats.
 Advertising a picture does not claim it is editable chemistry.
 
+Ordinary **Ctrl+C** publishes drawing data, CDX, PDF, PNG and SVG without plain
+text aliases. Use **Ctrl+Alt+C** to copy chemical text separately: molecular SMILES
+or, for a supported selected reaction, ChemDoodle reaction JSON. Explicit text
+formats from **Copy as…** also publish ordinary clipboard text.
+
 Decoded data is limited to 64 MiB combined, the JSON request/response to 128 MiB,
 and offers to 128 formats, including the private Wayland receipt format. At most
 16 concurrent requests or pipe transfers can run. A Wayland operation or transfer
@@ -93,10 +98,11 @@ bash scripts/wayland_clipboard_qa.sh sway target/debug/reshiki artifacts/wayland
 
 The script requires a new output directory and the workflow's compositor, GTK4,
 input and Mesa packages. It sends real compositor keyboard events for Copy,
-Cut, Copy Image, Paste, Save and Undo. A separate focused GTK window reads exact
-native JSON/PNG/SVG bytes and publishes foreign clipboard items on a real F12
-event. Ordinary Copy's SMILES plaintext is also read and checked. Saved native
-drawings verify deletion, restoration and editable paste.
+chemical text, Cut, Copy Image, Paste, Save and Undo. A separate focused GTK window
+reads exact native JSON/CDX/PDF/PNG/SVG bytes and publishes foreign clipboard items
+on a real F12 event. Ordinary Copy is checked for absent plain text aliases;
+**Ctrl+Alt+C** is checked separately for SMILES text. Saved native drawings verify
+deletion, restoration and editable paste.
 
 The default-off `wayland-qa` feature observes normal App updates and offers two
 one-shot scheduling delays in the existing owner worker: before write submission
@@ -114,10 +120,10 @@ saved drawings. Default/release builds do not enable `wayland-qa`.
 
 App-exit checks create a fresh receiver to avoid a previous consumer's cache.
 Sway without a clipboard manager loses the selection. Mutter's built-in manager
-can preserve one preferred standard image/text MIME, so GNOME checks its exact
+can preserve one preferred standard image MIME, so GNOME checks its exact
 surviving bytes separately from the unavailable private drawing/receipt MIME.
-When ordinary Copy supplies chemical plaintext, the manager can prefer that
-text over PNG/SVG; each surviving payload must match its bytes before app exit.
+The app-exit test uses ordinary drawing Copy; each surviving payload must match
+its bytes before app exit.
 These tests establish the standard Wayland path and the tested compositor's
 manager behavior; third-party clipboard-manager extensions retain their own
 desktop-specific persistence policy.

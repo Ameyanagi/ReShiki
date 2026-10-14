@@ -13,7 +13,9 @@ from pathlib import Path
 
 NATIVE = "application/x-reshiki-drawing+json"
 TEXT = "text/plain;charset=utf-8"
-MIMES = [NATIVE, "image/png", "image/svg+xml", TEXT]
+TEXT_ALIASES = [TEXT, "text/plain", "UTF8_STRING"]
+DRAWING_MIMES = [NATIVE, "chemical/x-cdx", "application/pdf", "image/png", "image/svg+xml"]
+MIMES = [*DRAWING_MIMES, *TEXT_ALIASES]
 ROOT = Path(__file__).resolve().parents[3]
 PUBLICATION_TIMEOUT = 5
 
@@ -72,6 +74,16 @@ def verify_publication(result, expected):
         assert item.get("mime") == mime and item.get("sha256") == digest, (
             f"Fixture publication payload mismatch: {mime}: {item}"
         )
+
+
+def verify_drawing_copy(result):
+    """Ordinary Copy offers editable drawing and images without plain text."""
+    assert "dev.reshiki.drawing" in result["formats"], result
+    for mime in DRAWING_MIMES:
+        assert mime in result["formats"], result
+        assert "error" not in result[mime] and result[mime]["mime"] == mime, result
+    for mime in TEXT_ALIASES:
+        assert mime not in result["formats"] and "error" in result[mime], result
 
 
 def wait_for(check, description, timeout=30):
@@ -500,12 +512,16 @@ class Session:
         self.app_key("ctrl+c", "clipboard_written")
         self.receiver("receiver")
         copied = self.clipboard()
+        verify_drawing_copy(copied)
         original = json.loads(Path(copied[NATIVE]["file"]).read_text())
         assert graph(original)["atoms"] == ["C", "C", "O"]
         assert len(original["bonds"]) == 2
         assert copied["image/png"]["dimensions"][0] > 0
-        assert "error" not in copied["image/svg+xml"], copied
-        assert Path(copied[TEXT]["file"]).read_text() == "CCO"
+
+        self.app_key("ctrl+alt+c", "copy_as_written")
+        chemical_text = self.clipboard(mimes=[TEXT])
+        assert TEXT in chemical_text["formats"], chemical_text
+        assert Path(chemical_text[TEXT]["file"]).read_text() == "CCO"
 
         sentinel = self.out / "sentinel.txt"
         sentinel.write_text("foreign clipboard owner\n")
@@ -563,8 +579,7 @@ class Session:
         self.app_key("ctrl+a", "selected")
         self.app_key("ctrl+c", "clipboard_written")
         final_copy = self.clipboard()
-        for mime in MIMES:
-            assert "error" not in final_copy[mime], final_copy
+        verify_drawing_copy(final_copy)
         self.save("before-exit.rsk")
         if self.args.compositor == "sway":
             self.run(["swaymsg", f"[pid={self.app.pid}] kill"])
@@ -599,7 +614,7 @@ class Session:
         if self.args.compositor == "sway":
             assert not after_exit["formats"], after_exit
         else:
-            preserved = [mime for mime in MIMES[1:] if "error" not in after_exit[mime]]
+            preserved = [mime for mime in DRAWING_MIMES[1:] if "error" not in after_exit[mime]]
             assert preserved, after_exit
             for mime in preserved:
                 assert after_exit[mime]["sha256"] == final_copy[mime]["sha256"]
@@ -659,6 +674,8 @@ class Session:
             "publication_serials": serials,
             "checks": [
                 "real_keyboard_copy",
+                "drawing_copy_without_plain_text",
+                "chemical_text_copy_smiles",
                 "foreign_owner_replacement",
                 "focus_loss_cut_preserved",
                 "cancelled_source_retained",

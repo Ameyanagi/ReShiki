@@ -20,6 +20,61 @@ fn fixture_app() -> App {
 }
 
 #[test]
+fn compound_path_point_edit_matches_generic_preview_and_has_one_history_step() {
+    use reshiki::graphics::PathCommand;
+    let mut app = fixture_app();
+    let id = app.tab.selected[0];
+    let points = [
+        Point::new(0., 0.),
+        Point::new(40., 0.),
+        Point::new(40., 40.),
+        Point::new(80., 0.),
+        Point::new(100., 20.),
+        Point::new(110., 40.),
+        Point::new(140., 40.),
+        Point::new(160., 20.),
+    ];
+    let mut graphic =
+        reshiki::graphics::Graphic::pen_curve(id, points[0], points[1], Default::default());
+    graphic.path = vec![
+        PathCommand::Move(points[0]),
+        PathCommand::Line(points[1]),
+        PathCommand::Line(points[2]),
+        PathCommand::Move(points[3]),
+        PathCommand::Line(points[4]),
+        PathCommand::Cubic(points[5], points[6], points[7]),
+    ];
+    assert_eq!(graphic.path_handles(), None);
+    assert_eq!(graphic.edit_points(), points);
+    app.tab.doc.graphics[0] = graphic;
+    let before = app.tab.doc.clone();
+    let replacement = points[5].offset(-12., 17.);
+    let mut preview = before.clone();
+    preview.graphics[0].edit_point(5, replacement).unwrap();
+    assert!(!app.tab.history.can_undo());
+    app.edit(Edit::GraphicPoint(id, 5, replacement));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, preview);
+    let mut expected = points;
+    expected[5] = replacement;
+    assert_eq!(app.tab.doc.graphics[0].edit_points(), expected);
+    assert_eq!(app.tab.doc.graphics[1], before.graphics[1]);
+    assert_eq!(app.tab.path_point, Some((id, 5)));
+    assert!(app.tab.history.can_undo());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    assert!(app.tab.history.can_redo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, preview);
+    assert!(!app.tab.history.can_redo());
+    assert_eq!(
+        Document::from_native_file(&preview.file_json().unwrap()).unwrap(),
+        preview.current()
+    );
+}
+
+#[test]
 fn pen_each_completed_segment_is_one_undo_step_and_preserves_chemistry() {
     let mut app = fixture_app();
     let chemistry = app.tab.doc.add_atom("O", Point::new(400., 0.));

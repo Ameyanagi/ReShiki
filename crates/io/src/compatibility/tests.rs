@@ -36,6 +36,65 @@ fn native_extensions_accept_previous_drawings() {
 }
 
 #[test]
+fn structure_formats_match_known_extensions_without_a_default() {
+    for extension in NATIVE_EXTENSIONS {
+        assert_eq!(structure_format(extension), Some("reshiki"), "{extension}");
+        assert_eq!(
+            structure_format(&extension.to_ascii_uppercase()),
+            Some("reshiki"),
+            "{extension}"
+        );
+    }
+    for format in ["mol", "rxn", "rsmi", "cdxml", "cdx", "inchi"] {
+        assert_eq!(structure_format(format), Some(format), "{format}");
+        assert_eq!(
+            structure_format(&format.to_ascii_uppercase()),
+            Some(format),
+            "{format}"
+        );
+    }
+    assert_eq!(structure_format("CdXmL"), Some("cdxml"));
+    for extension in ["", "smi", "smiles", "txt", "svg", ".mol", "molfile"] {
+        assert_eq!(structure_format(extension), None, "{extension:?}");
+    }
+}
+
+#[test]
+fn cdx_import_text_uses_standard_base64_only_for_lower_case_format() {
+    assert_eq!(
+        import_text("cdx", vec![0xff, 0, 1, 0xfa]),
+        Ok("/wAB+g==".into())
+    );
+    assert_eq!(import_text("cdx", Vec::new()), Ok(String::new()));
+    for format in ["CDX", "Cdx", "mol", "smiles", "unknown"] {
+        assert_eq!(
+            import_text(format, b"file text".to_vec()),
+            Ok("file text".into()),
+            "{format}"
+        );
+    }
+}
+
+#[test]
+fn import_text_preserves_utf8_and_its_error_message() {
+    let text = "C=C\n硫\r\n";
+    assert_eq!(
+        import_text("mol", text.as_bytes().to_vec()),
+        Ok(text.into())
+    );
+    for format in ["CDX", "mol", "smiles", "unknown"] {
+        assert_eq!(
+            import_text(format, vec![0xff]),
+            Err(
+                "The file is not valid UTF-8: invalid utf-8 sequence of 1 bytes from index 0"
+                    .into()
+            ),
+            "{format}"
+        );
+    }
+}
+
+#[test]
 fn an_override_wins_and_the_missing_directory_error_is_unchanged() {
     let project = || Some(PathBuf::from("/platform/data"));
     let cases = [

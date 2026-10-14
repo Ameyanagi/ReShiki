@@ -6,17 +6,18 @@ use super::{
     error::{ErrorKind, OpError},
     exec::Context,
     ids,
-    import::{AnalysisJson, warnings},
     policy::Access,
     result::ToolResult,
     store::Documents,
-    wire::{DocHandle, ObjectId, Principal, envelope_json, handle_schema, ids_schema, nullable},
+    wire::{
+        AnalysisJson, DocHandle, ObjectId, Principal, handle_schema, ids_schema, nullable, warnings,
+    },
 };
 use crate::{
     document::Document,
     editing,
     engine::{LocalEngine, Request, Response},
-    envelope::{Envelope, ValidationStatus, Versions, Warning},
+    envelope::{Versions, Warning},
     tool_spec::{Hints, ToolSpec},
 };
 use serde::{Deserialize, Serialize};
@@ -116,10 +117,6 @@ struct Analyzed {
     analyzed_atoms: Vec<ObjectId>,
 }
 
-fn failed(message: impl AsRef<str>) -> OpError {
-    OpError::new(ErrorKind::Failed, message)
-}
-
 /// The result for an engine `response` to the analysis of `atoms`.
 ///
 /// The engine's warnings become envelope warnings. Without an analysis, a
@@ -139,27 +136,20 @@ fn analyzed(
     let mut warnings = warnings(messages);
     if analysis.is_none() {
         if !whole {
-            return Err(failed(NO_PROPERTIES));
+            return Err(OpError::failed(NO_PROPERTIES));
         }
         warnings.push(Warning {
             message: NO_PROPERTIES.to_owned(),
         });
     }
-    let value = envelope_json(&Envelope {
-        value: Analyzed {
+    Ok(ToolResult::valid(
+        Analyzed {
             analysis: analysis.map(AnalysisJson::from),
             analyzed_atoms: atoms.into_iter().map(ObjectId).collect(),
         },
         warnings,
-        validation: ValidationStatus::Valid,
         versions,
-    });
-    Ok(ToolResult {
-        value,
-        images: Vec::new(),
-        files: Vec::new(),
-        is_error: false,
-    })
+    ))
 }
 
 /// Analyzes the document, or the [`part`] `ids` select, with read access.
@@ -169,9 +159,7 @@ fn analyzed(
 /// never changes the session document, so its revision stays the same and
 /// its computed-label cache is not refreshed.
 ///
-/// `{value: {analysis, analyzed_atoms}, warnings, validation, versions}`.
-/// `analysis` has the fields of [`AnalysisJson`]; `analyzed_atoms` lists the
-/// [`Part::atoms`]. An engine error is [`ErrorKind::Failed`] with its message.
+/// The successful result contract is in [`super::catalog::RESULTS`].
 pub(crate) async fn analyze(
     ctx: Context,
     store: Arc<dyn Documents>,
@@ -191,7 +179,7 @@ pub(crate) async fn analyze(
     let response = engine
         .request(Request::molecule("analyze", doc))
         .await
-        .map_err(failed);
+        .map_err(OpError::failed);
     ctx.checkpoint()?;
     analyzed(response?, whole, atoms, versions)
 }

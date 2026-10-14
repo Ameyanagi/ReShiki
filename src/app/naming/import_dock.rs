@@ -1,33 +1,17 @@
 //! Chemical names share the ordinary Import dock. Insertion resolves and
 //! verifies locally in one action; opening the editable preview is optional.
-use super::super::workspace::muted_text;
+use super::super::workspace::{accessible_checkbox, accessible_command, muted_text};
 use super::*;
-use iced::widget::column;
+use iced::widget::{Space, column};
 
-fn compact_notice(message: &str) -> &str {
-    if message.contains("changed")
-        || message.contains("cancelled")
-        || message.contains("Apply")
-        || message.contains("Finish")
-        || message.contains("omitted")
-    {
-        message
-    } else if message.contains("could not interpret")
-        || message.contains("unsupported")
-        || message.contains("does not support")
-        || message.contains("disconnected")
-    {
-        "Unsupported or ambiguous name. Try a more specific name."
-    } else {
-        "Could not import this name. See Details."
-    }
-}
+const DETAILS: &str =
+    "Names are read on this computer. Ambiguous names and unsupported chemistry are rejected.";
 
 impl App {
     pub(in crate::app) fn cancel_name_import(&mut self) {
         if matches!(
             self.tab.naming.pending,
-            Some(Pending::Import(..) | Pending::Request(_) | Pending::Preview(_))
+            Some(Pending::Import { .. } | Pending::Request(_) | Pending::Preview(_))
         ) {
             let _ = self.naming_action(Action::Cancel);
         }
@@ -45,10 +29,10 @@ impl App {
             self.insert_import_preview(caption);
             return Task::none();
         }
-        let ticket = self.naming_ticket();
-        self.tab.naming.pending = Some(Pending::Import(ticket, caption));
-        let cancel = naming::Cancel::default();
-        self.tab.naming.local_cancel = Some(cancel.clone());
+        let (ticket, cancel) = self.begin_naming(|ticket| Pending::Import {
+            ticket,
+            add_caption: caption,
+        });
         let engine = self.engine.clone();
         let name = self.tab.naming.name.clone();
         Task::perform(resolve_preview(engine, name, cancel), move |result| {
@@ -58,28 +42,36 @@ impl App {
 
     pub(super) fn insert_import_preview(&mut self, caption: bool) {
         if !self.naming_can_edit() || self.tab.naming.pending.is_some() {
-            self.tab.naming.notice = Some("Finish the current edit, then try again.".into());
+            self.tab.naming.notice = Some(Notice::new(
+                NoticeKind::Retry,
+                "Finish the current edit, then try again.",
+            ));
             return;
         }
         let Some(preview) = self.tab.naming.preview.clone() else {
             return;
         };
         if self.tab.naming.smiles != preview.identity {
-            self.tab.naming.notice = Some("Apply the edited SMILES before inserting.".into());
+            self.tab.naming.notice = Some(Notice::new(
+                NoticeKind::Retry,
+                "Apply the edited SMILES before inserting.",
+            ));
             return;
         }
         if let Err(error) = naming::document_identity(&preview.document)
             .and_then(|actual| naming::verify_identity(&preview.identity, &actual.smiles))
         {
-            self.tab.naming.notice = Some(error);
+            self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
             return;
         }
         let mut document = preview.document;
         let omit_caption = caption && preview.identity != preview.record.canonical_smiles;
         let caption_text = if let Some(index) = self.tab.naming.import_alias {
             let Some(alias) = preview.record.synonyms.get(index) else {
-                self.tab.naming.notice =
-                    Some("The alias choice changed. Choose its name again.".into());
+                self.tab.naming.notice = Some(Notice::new(
+                    NoticeKind::Retry,
+                    "The alias choice changed. Choose its name again.",
+                ));
                 return;
             };
             alias.name.clone()
@@ -99,34 +91,31 @@ impl App {
                 preview.record.canonical_smiles,
                 self.tab.caption_format.clone(),
             ) {
-                self.tab.naming.notice = Some(error);
+                self.tab.naming.notice = Some(Notice::new(NoticeKind::Failed, error));
                 return;
             }
         }
-        let center = editing::center(&document, &document.all_ids());
-        let offset = if self.tab.doc.all_ids().is_empty() {
-            Point::new(
-                self.tab.camera.center.x - center.x,
-                self.tab.camera.center.y - center.y,
-            )
-        } else {
-            let (_, hi) = self.tab.doc.bounds();
-            let (lo, _) = document.bounds();
-            Point::new(
-                hi.x + self.tab.doc.drawing_style.bond_length_world - lo.x,
-                self.tab.camera.center.y - center.y,
-            )
-        };
         let before = self.tab.doc.clone();
-        self.tab.selected = editing::append(&mut self.tab.doc, &document, offset);
+        let Some(selected) = self.insert_beside_drawing(&document) else {
+            self.tab.doc = before;
+            self.error = true;
+            let title = &preview.record.title;
+            self.status = format!("Could not insert {title}");
+            return;
+        };
+        self.tab.selected = selected;
         self.changed(before);
         if self.error {
             return;
         }
         self.tool = Tool::Select;
         self.fit();
-        self.tab.naming.notice =
-            omit_caption.then(|| "Edited structure inserted; original name omitted.".into());
+        self.tab.naming.notice = omit_caption.then(|| {
+            Notice::new(
+                NoticeKind::Info,
+                "Edited structure inserted; original name omitted.",
+            )
+        });
         self.status = if omit_caption {
             "Inserted edited structure · Original name omitted · Undo removes it".into()
         } else {
@@ -149,29 +138,24 @@ impl App {
             .preview
             .as_ref()
             .is_some_and(|preview| preview.modified);
+        let caption = state.add_name_below && !changed;
         let mut content = column![
-            text_input("import-name", "Chemical name", "e.g. ethanol", &state.name)
-                .size(13)
-                .padding(8)
-                .on_input(|value| Message::Naming(Action::Name(value)))
-                .on_submit_maybe(ready.then_some(Message::Naming(Action::InsertName))),
-            button(
+            text_input(
+                "import-name",
+                "Chemical name",
+                "Chemical name, e.g. ethanol",
+                &state.name
+            )
+            .size(13)
+            .padding(8)
+            .on_input(|value| Message::Naming(Action::Name(value)))
+            .on_submit_maybe(ready.then_some(Message::Naming(Action::InsertName))),
+            accessible_checkbox(
                 "import-name-caption",
                 "Add name below",
-                text(if state.add_name_below && !changed {
-                    "✓ Add name below"
-                } else {
-                    "Add name below"
-                })
-                .size(12)
-            )
-            .checked(state.add_name_below && !changed)
-            .style(super::super::workspace::control(
-                state.add_name_below && !changed
-            ))
-            .on_press_maybe(
+                caption,
                 (idle && !changed)
-                    .then_some(Message::Naming(Action::AddNameBelow(!state.add_name_below)))
+                    .then_some(Message::Naming(Action::AddNameBelow(!state.add_name_below))),
             ),
             row![
                 button(
@@ -185,20 +169,25 @@ impl App {
                     .size(12)
                 )
                 .expanded(state.preview_open)
+                .padding([6, 10])
                 .style(crate::appearance::secondary)
                 .on_press_maybe(
                     (idle && has_name)
                         .then_some(Message::Naming(Action::PreviewOpen(!state.preview_open)))
                 ),
+                Space::new().width(Length::Fill),
+                // Right-aligned, as Insert is in Structure mode.
                 button(
                     "import-name-insert",
                     "Insert chemical name as structure",
                     text("Insert").size(12)
                 )
+                .padding([6, 12])
                 .style(crate::appearance::primary)
                 .on_press_maybe(ready.then_some(Message::InsertInput)),
             ]
-            .spacing(8),
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
         ]
         .spacing(10);
         if let Some(index) = state.import_alias
@@ -207,11 +196,15 @@ impl App {
                 .as_ref()
                 .and_then(|p| p.record.synonyms.get(index))
         {
-            content = content.push(text(format!("Name below: {}", alias.name)).size(11));
+            content = content.push(
+                text(format!("Name below: {}", alias.name))
+                    .size(11)
+                    .style(muted_text),
+            );
         }
         if let Some(notice) = &state.notice {
             content = content.push(
-                text(compact_notice(notice))
+                text(notice.summary())
                     .size(12)
                     .color(self.theme().palette().danger),
             );
@@ -220,14 +213,11 @@ impl App {
             content = content.push(
                 row![
                     text("Working…").size(12),
-                    button(
-                        "import-name-cancel",
-                        "Cancel name import",
-                        text("Cancel").size(12)
-                    )
-                    .on_press(Message::Naming(Action::Cancel)),
+                    accessible_command("import-name-cancel", "Cancel name import", "Cancel")
+                        .on_press(Message::Naming(Action::Cancel)),
                 ]
-                .spacing(10),
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
             );
         }
         if state.preview_open
@@ -236,113 +226,81 @@ impl App {
             content = content.push(self.compact_name_preview(preview));
         }
         content = content.push(
-            button(
+            accessible_command(
                 "import-name-details",
                 "Name import details",
-                text(if state.details_open {
-                    "Hide details"
+                if state.details_open {
+                    "▾ Details"
                 } else {
-                    "Details"
-                })
-                .size(11),
+                    "▸ Details"
+                },
             )
             .expanded(state.details_open)
-            .style(super::super::workspace::control(false))
             .on_press(Message::Naming(Action::DetailsOpen(!state.details_open))),
         );
         if state.details_open {
-            content = content.push(text("Names are parsed locally with the Rust OPSIN backend. Ambiguous names and unsupported chemical semantics are rejected.").size(11).style(muted_text));
-            if state.preview.is_none() {
-                content = content.push(
-                    button(
-                        "import-name-resolve",
-                        "Resolve chemical name without inserting",
-                        text("Resolve name").size(12),
-                    )
-                    .on_press_maybe((idle && has_name).then_some(Message::Naming(Action::Resolve))),
-                );
-            }
-            if let Some(notice) = &state.notice {
-                content = content.push(text(notice).size(11));
-            }
-            if let Some(preview) = &state.preview {
-                content = content.push(
-                    text(preview.record.provenance.label())
-                        .size(11)
-                        .style(muted_text),
-                );
-                for warning in preview.record.warnings.iter().chain(&preview.warnings) {
-                    content = content.push(text(warning).size(11));
-                }
-                if preview.modified {
-                    content = content.push(
-                        text("Edited preview: aliases from the original name cannot be used.")
-                            .size(11),
-                    );
-                } else {
-                    content =
-                        content.push(self.alias_controls(AliasTarget::Import, &preview.record));
-                }
-            }
-            content = content.push(
-                button(
-                    "import-name-generate",
-                    "Generate selected structure name locally",
-                    text("Generate selected name").size(12),
-                )
-                .on_press_maybe(
-                    (idle && !self.tab.selected.is_empty())
-                        .then_some(Message::Naming(Action::Generate)),
-                ),
-            );
-            content = content.push(self.generated_name_controls());
+            content = content.push(self.name_import_details(idle && has_name));
         }
         content.into()
     }
 
+    /// Details: what the parser does, its provenance, aliases and the
+    /// generated name of the selection.
+    fn name_import_details(&self, can_resolve: bool) -> Element<'_, Message> {
+        let state = &self.tab.naming;
+        let idle = state.pending.is_none();
+        let mut content = column![text(DETAILS).size(11).style(muted_text)].spacing(10);
+        if state.preview.is_none() {
+            content = content.push(
+                accessible_command(
+                    "import-name-resolve",
+                    "Resolve chemical name without inserting",
+                    "Resolve name",
+                )
+                .on_press_maybe(can_resolve.then_some(Message::Naming(Action::Resolve))),
+            );
+        }
+        if let Some(notice) = &state.notice {
+            content = content.push(text(&notice.detail).size(11));
+        }
+        if let Some(preview) = &state.preview {
+            content = content.push(
+                text(preview.record.provenance.label())
+                    .size(11)
+                    .style(muted_text),
+            );
+            for warning in preview.record.warnings.iter().chain(&preview.warnings) {
+                content = content.push(text(warning).size(11));
+            }
+            if preview.modified {
+                content = content.push(
+                    text("Edited preview · Aliases need the original name")
+                        .size(11)
+                        .style(muted_text),
+                );
+            } else {
+                content = content.push(self.alias_controls(AliasTarget::Import, &preview.record));
+            }
+        }
+        content = content.push(
+            accessible_command(
+                "import-name-generate",
+                "Generate selected structure name locally",
+                "Generate selected name",
+            )
+            .on_press_maybe(
+                (idle && !self.tab.selected.is_empty())
+                    .then_some(Message::Naming(Action::Generate)),
+            ),
+        );
+        content.push(self.generated_name_controls()).into()
+    }
+
     fn compact_name_preview<'a>(&'a self, preview: &'a Preview) -> Element<'a, Message> {
-        let drawing: Element<'_, Edit> = canvas(preview::Preview(MoleculeCanvas {
-            nmr: None,
-            optimizer: None,
-            keyboard_target: None,
-            joining: None,
-            hidden_annotation: None,
-            bond_drawing: self.tab.bond_drawing,
-            chain_drawing: self.tab.chain_drawing,
-            doc: &preview.document,
-            element: "C",
-            selected: &preview.selected,
-            tool: Tool::Select,
-            camera: preview.camera,
-            grid: false,
-            guides: Default::default(),
-            smart_guides: false,
-            ring_size: 6,
-            aromatic_ring: false,
-            template_connection: Default::default(),
-            template: None,
-            arrow_preset: self.tab.arrow_style,
-            arrow_style: &self.tab.arrows.style,
-            arrow_source: None,
-            attach_arrow_targets: false,
-            orbital_phase: self.tab.orbital_phase,
-            phase_flipped: false,
-            attach_symbols: false,
-            snap_orbitals: false,
-            graphic_constrain: false,
-            graphic_arc: Default::default(),
-            graphic_style: &self.tab.graphic_style,
-            graphic_point: None,
-            bracket_sides: self.tab.bracket_sides,
-        }))
-        .width(Length::Fill)
-        .height(160)
-        .into();
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
         let mut content = column![
-            container(drawing.map(|edit| Message::Naming(Action::PreviewEdit(edit))))
-                .style(container::bordered_box),
+            self.name_preview_canvas(preview, 160.),
             text(format!(
                 "{} atoms · {} bonds",
                 preview.document.atoms.len(),
@@ -357,22 +315,15 @@ impl App {
                 &state.smiles
             )
             .size(12)
+            .padding(7)
             .on_input(|value| Message::Naming(Action::Smiles(value))),
             row![
-                button(
-                    "import-name-apply",
-                    "Apply preview SMILES",
-                    text("Apply").size(11)
-                )
-                .on_press_maybe(idle.then_some(Message::Naming(Action::UpdatePreview))),
-                button(
-                    "import-name-reset",
-                    "Reset parsed structure",
-                    text("Reset").size(11)
-                )
-                .on_press_maybe(idle.then_some(Message::Naming(Action::RestorePreview))),
+                accessible_command("import-name-apply", "Apply preview SMILES", "Apply")
+                    .on_press_maybe(idle.then_some(Message::Naming(Action::UpdatePreview))),
+                accessible_command("import-name-reset", "Reset parsed structure", "Reset")
+                    .on_press_maybe(idle.then_some(Message::Naming(Action::RestorePreview))),
             ]
-            .spacing(6),
+            .spacing(4),
         ]
         .spacing(8);
         if preview.modified {
