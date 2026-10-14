@@ -12,6 +12,7 @@ import tempfile
 import tomllib
 import unittest
 import zipfile
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -441,6 +442,70 @@ class ReleaseTests(unittest.TestCase):
             self.assertTrue(is_macho(binary))
             binary.write_bytes(b"text file")
             self.assertFalse(is_macho(binary))
+
+
+class TransientRetryTests(unittest.TestCase):
+    @staticmethod
+    def failure(command):
+        return subprocess.CalledProcessError(68, command)
+
+    def test_stapler_retries_transient_failures_then_succeeds(self):
+        import sign_macos
+
+        outcomes = [self.failure(["xcrun"]), self.failure(["xcrun"]), "stapled"]
+
+        def fake(command):
+            outcome = outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        sleeps = []
+        with patch("sign_macos.run", side_effect=fake) as run, redirect_stdout(io.StringIO()):
+            self.assertEqual(
+                sign_macos.stapler("staple", "App.app", sleep=sleeps.append), "stapled"
+            )
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(run.call_args.args[0], ["xcrun", "stapler", "staple", "App.app"])
+        self.assertEqual(sleeps, [sign_macos.STAPLER_DELAY_SECONDS] * 2)
+
+    def test_stapler_raises_after_the_last_attempt(self):
+        import sign_macos
+
+        with (
+            patch("sign_macos.run", side_effect=self.failure(["xcrun"])) as run,
+            redirect_stdout(io.StringIO()),
+            self.assertRaises(subprocess.CalledProcessError),
+        ):
+            sign_macos.stapler("validate", "image.dmg", sleep=lambda _: None)
+        self.assertEqual(run.call_count, sign_macos.STAPLER_ATTEMPTS)
+
+    def test_disk_image_creation_retries_resource_busy(self):
+        import installers
+
+        outcomes = [self.failure(["hdiutil"]), None]
+
+        def fake(command):
+            outcome = outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+
+        with patch("installers.run", side_effect=fake) as run, redirect_stdout(io.StringIO()):
+            installers.create_disk_image(Path("contents"), Path("out.dmg"), sleep=lambda _: None)
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_args.args[0][:2], ["hdiutil", "create"])
+        self.assertIn("-ov", run.call_args.args[0])
+
+    def test_disk_image_creation_raises_after_the_last_attempt(self):
+        import installers
+
+        with (
+            patch("installers.run", side_effect=self.failure(["hdiutil"])) as run,
+            redirect_stdout(io.StringIO()),
+            self.assertRaises(subprocess.CalledProcessError),
+        ):
+            installers.create_disk_image(Path("contents"), Path("out.dmg"), sleep=lambda _: None)
+        self.assertEqual(run.call_count, installers.DISK_IMAGE_ATTEMPTS)
 
 
 if __name__ == "__main__":

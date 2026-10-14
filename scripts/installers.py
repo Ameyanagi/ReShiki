@@ -469,20 +469,7 @@ def mac_disk_image(folder, output_dir, signed=False):
             "https://reshiki.com/guide/install/\n",
             encoding="utf-8",
         )
-        run(
-            [
-                "hdiutil",
-                "create",
-                "-volname",
-                "ReShiki",
-                "-srcfolder",
-                staging,
-                "-format",
-                "UDZO",
-                "-ov",
-                output,
-            ]
-        )
+        create_disk_image(staging, output)
     if signed:
         from sign_macos import sign_disk_image
 
@@ -490,6 +477,39 @@ def mac_disk_image(folder, output_dir, signed=False):
     verify_mac_disk_image(output, signed, architecture=architecture)
     checksum(output)
     return output
+
+
+# hdiutil create fails intermittently on hosted runners with "Resource busy".
+# -ov makes another attempt safe; the last failure still stops the build.
+DISK_IMAGE_ATTEMPTS = 3
+DISK_IMAGE_DELAY_SECONDS = 10
+
+
+def create_disk_image(staging, output, *, sleep=time.sleep):
+    command = [
+        "hdiutil",
+        "create",
+        "-volname",
+        "ReShiki",
+        "-srcfolder",
+        staging,
+        "-format",
+        "UDZO",
+        "-ov",
+        output,
+    ]
+    for attempt in range(1, DISK_IMAGE_ATTEMPTS + 1):
+        try:
+            return run(command)
+        except subprocess.CalledProcessError as error:
+            if attempt == DISK_IMAGE_ATTEMPTS:
+                raise
+            print(
+                f"hdiutil create failed (exit {error.returncode}); "
+                f"retrying in {DISK_IMAGE_DELAY_SECONDS} s",
+                flush=True,
+            )
+            sleep(DISK_IMAGE_DELAY_SECONDS)
 
 
 def verify_mac_disk_image(output, signed, *, architecture):
