@@ -1,0 +1,31 @@
+name: Intel macOS panic diagnostic
+
+on:
+  push:
+    branches: [fix/intel-macos-panic-20261016]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.ref == 'refs/heads/fix/intel-macos-panic-20261016'
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the pinned native Intel compiler
+        run: rustup toolchain install 1.99.0 --profile minimal --target x86_64-apple-darwin
+      - name: Compare allocator alignment and panic unwinding
+        # Probe failures are evidence; the driver continues through every case.
+        run: python3 scripts/intel_panic_diagnostic.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: intel-panic-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/intel-panic-diagnostic/
+          if-no-files-found: error
+          retention-days: 14
