@@ -1,17 +1,23 @@
 //! Prefer Windows' native DX12 backend before considering software rendering.
 //! Avoid initializing unrelated graphics drivers just to discover CPU-only WARP.
 use iced::wgpu;
+use std::ffi::OsStr;
 
-fn requested_backends() -> wgpu::Backends {
-    wgpu::Backends::from_env().unwrap_or_else(|| {
-        if override_backend().is_none() && std::env::var_os("WGPU_BACKEND").is_none() {
-            wgpu::Backends::DX12
-        } else {
-            // Match Iced when an explicit renderer bypasses our configuration,
-            // or a non-Unicode backend value is ignored by WGPU's parser.
-            wgpu::Backends::all()
-        }
-    })
+fn requested_backends(iced_backend: Option<&str>, wgpu_backend: Option<&OsStr>) -> wgpu::Backends {
+    // Match WGPU's environment parser while retaining presence for non-Unicode
+    // values, which its parser ignores without making the variable absent.
+    wgpu_backend
+        .and_then(OsStr::to_str)
+        .map(wgpu::Backends::from_comma_list)
+        .unwrap_or_else(|| {
+            if override_backend(iced_backend).is_none() && wgpu_backend.is_none() {
+                wgpu::Backends::DX12
+            } else {
+                // Match Iced when an explicit renderer bypasses our configuration,
+                // or a non-Unicode backend value is ignored by WGPU's parser.
+                wgpu::Backends::all()
+            }
+        })
 }
 
 fn adapters(backends: wgpu::Backends) -> Vec<wgpu::AdapterInfo> {
@@ -33,24 +39,27 @@ fn software_only(devices: impl IntoIterator<Item = wgpu::DeviceType>) -> bool {
         .all(|device| device == wgpu::DeviceType::Cpu)
 }
 
-fn override_backend() -> Option<String> {
+fn override_backend(value: Option<&str>) -> Option<&str> {
     // Iced treats an empty candidate list as automatic selection too.
-    std::env::var("ICED_BACKEND")
-        .ok()
-        .filter(|value| value.split(',').any(|candidate| !candidate.is_empty()))
+    value.filter(|value| value.split(',').any(|candidate| !candidate.is_empty()))
 }
 
 pub fn configure() {
-    if override_backend().is_some() {
+    let iced_backend = std::env::var("ICED_BACKEND").ok();
+    if override_backend(iced_backend.as_deref()).is_some() {
         return;
     }
     // Iced also reads WGPU_BACKEND. Apply the same default to its later
     // initialization; changing only this probe would still initialize GL there.
     reshiki_windows::prefer_direct3d_backend();
+    let wgpu_backend = std::env::var_os("WGPU_BACKEND");
     if software_only(
-        adapters(requested_backends())
-            .iter()
-            .map(|adapter| adapter.device_type),
+        adapters(requested_backends(
+            iced_backend.as_deref(),
+            wgpu_backend.as_deref(),
+        ))
+        .iter()
+        .map(|adapter| adapter.device_type),
     ) {
         reshiki_windows::use_software_renderer();
     }
@@ -58,19 +67,27 @@ pub fn configure() {
 
 /// Report the startup preference, not a claim that a window/device was created.
 pub fn diagnostics() -> serde_json::Value {
-    let explicit = override_backend();
+    let iced_backend = std::env::var("ICED_BACKEND").ok();
+    let wgpu_backend = std::env::var_os("WGPU_BACKEND");
+    diagnostics_with(iced_backend.as_deref(), wgpu_backend.as_deref(), adapters)
+}
+
+fn diagnostics_with(
+    iced_backend: Option<&str>,
+    wgpu_backend: Option<&OsStr>,
+    probe_adapters: impl FnOnce(wgpu::Backends) -> Vec<wgpu::AdapterInfo>,
+) -> serde_json::Value {
+    let explicit = override_backend(iced_backend);
     // Do not initialize graphics drivers when the explicit renderer list cannot
     // select WGPU. Earlier candidates can fail, so consider the complete list.
-    let probe = explicit
-        .as_deref()
-        .is_none_or(|value| value.split(',').any(|candidate| candidate == "wgpu"));
+    let probe = explicit.is_none_or(|value| value.split(',').any(|candidate| candidate == "wgpu"));
     let backends = if probe {
-        requested_backends()
+        requested_backends(iced_backend, wgpu_backend)
     } else {
         wgpu::Backends::empty()
     };
     let adapters = if probe {
-        adapters(backends)
+        probe_adapters(backends)
     } else {
         Vec::new()
     };
@@ -83,9 +100,9 @@ pub fn diagnostics() -> serde_json::Value {
     });
     serde_json::json!({
         "automatic_preference": automatic,
-        "startup_preference": explicit.as_deref().or(automatic),
+        "startup_preference": explicit.or(automatic),
         "ICED_BACKEND": explicit,
-        "WGPU_BACKEND": std::env::var("WGPU_BACKEND").ok(),
+        "WGPU_BACKEND": wgpu_backend.and_then(OsStr::to_str),
         "adapter_probe_performed": probe,
         "requested_wgpu_backends": backends.iter_names().map(|(name, _)| name).collect::<Vec<_>>(),
         "adapters": adapters.iter().map(|adapter| serde_json::json!({

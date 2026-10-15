@@ -291,7 +291,11 @@ fn supervisor_fixture() {
         command.env("RESHIKI_PROCESS_TEST_EOF", path);
     }
     let mut child = spawn(&mut command, limits()).unwrap();
-    std::fs::write(pid_file, child.id().to_string()).unwrap();
+    // The observer treats this path's existence as readiness. Publish the
+    // complete PID from a sibling in the same unique temporary directory.
+    let pending_pid = std::path::PathBuf::from(&pid_file).with_extension("tmp");
+    std::fs::write(&pending_pid, child.id().to_string()).unwrap();
+    std::fs::rename(pending_pid, pid_file).unwrap();
     if mode == "eof" {
         child.close_input();
     }
