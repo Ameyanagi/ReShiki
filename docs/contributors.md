@@ -4,6 +4,9 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — Intel Mac panic recovery and native global-allocator
+regression coverage in [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328).
+
 Merged for nightly builds: @Ameyanagi — consistent Direct3D 12 Windows
 startup and graphics diagnostics in [PR #327](https://github.com/Ameyanagi/ReShiki/pull/327).
 The [security investigation](release-0.12.0-windows-security.md) records the
