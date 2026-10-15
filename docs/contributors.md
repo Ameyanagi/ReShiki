@@ -4,6 +4,11 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review for the next nightly: @Ameyanagi — consistent Direct3D 12 Windows
+startup and graphics diagnostics in [PR #327](https://github.com/Ameyanagi/ReShiki/pull/327).
+The [security investigation](release-0.12.0-windows-security.md) records the
+startup comparison and unresolved installer antivirus detections.
+
 Released in 0.12.0: @Ameyanagi — bounded Windows OLE clipboard acquisition and native
 contention regression coverage in [PR #305](https://github.com/Ameyanagi/ReShiki/pull/305).
 Included in [published Nightly 0.11.0-nightly.20261011.38123945065.1](https://github.com/Ameyanagi/ReShiki/releases/tag/nightly-0.11.0-nightly.20261011.38123945065.1),
