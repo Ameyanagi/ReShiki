@@ -7,6 +7,9 @@ It does not establish that a reported detection was incorrect, or that signing
 would resolve it. Browser delivery, installation, native execution, Bitdefender
 and reputation prompts require separate observations.
 
+The [v0.12.0 investigation](release-0.12.0-windows-security.md) records the
+2026-10-15 web-scanner results, exact release identities and signing blocker.
+
 ## Collect a row
 
 Use Python 3.11+ and Windows PowerShell on an isolated Windows test host with its

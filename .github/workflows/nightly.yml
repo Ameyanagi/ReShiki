@@ -87,7 +87,9 @@ jobs:
 
           macOS applications and disk images are signed with Developer ID, notarized and stapled. $WINDOWS_SIGNING_DESCRIPTION Linux packages remain unsigned.
 
-          Windows includes WGPU and Tiny Skia. Automatic selection uses Tiny Skia when only CPU adapters are available. To force WGPU in PowerShell, set \$env:ICED_BACKEND = 'wgpu' before launching the extracted executable. Run reshiki.exe --graphics-info to inspect available adapters; a CPU adapter is not hardware acceleration.
+          Windows includes WGPU and Tiny Skia. Automatic startup uses Direct3D 12 and selects Tiny Skia when only CPU adapters are available. Explicit backend preferences remain available. To force WGPU in PowerShell, set \$env:ICED_BACKEND = 'wgpu' before launching the extracted executable. Run reshiki.exe --graphics-info to inspect available adapters; a CPU adapter is not hardware acceleration.
+
+          Windows installer antivirus detections remain under vendor review. The startup fix and successful package checks do not establish antivirus clearance. See the [Windows security investigation](https://github.com/$GH_REPO/blob/$NIGHTLY_COMMIT/docs/release-0.12.0-windows-security.md) for observed results and limits.
 
           [Build and package checks]($RUN_URL). The build runners do not establish physical GPU performance. See [the Windows validation guide](https://github.com/$GH_REPO/blob/$NIGHTLY_COMMIT/docs/windows.md) for renderer testing.
 

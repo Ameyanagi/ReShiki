@@ -109,12 +109,14 @@ substantially more work in drawing and layout. Measure idle CPU after the
 drawing and chemistry finish loading.
 
 Windows includes both Iced's WGPU renderer and its Tiny Skia software fallback.
-At startup, ReShiki enumerates WGPU adapters. If none are available, or all are
-CPU adapters such as Microsoft's WARP, it selects Tiny Skia directly. Otherwise
-Iced tries WGPU first and falls back to Tiny Skia if initialization fails.
-An unclassified adapter is allowed to try WGPU. Other platforms retain their
-existing WGPU configuration. GPU rendering accelerates the interface and canvas;
-it does not move chemistry calculations or file export onto the GPU.
+Automatic startup uses Direct3D 12 for adapter discovery and WGPU initialization,
+avoiding unnecessary initialization of OpenGL and Vulkan drivers. If no adapters
+are available, or all are CPU adapters such as Microsoft's WARP, ReShiki selects
+Tiny Skia directly. Otherwise Iced tries WGPU first and falls back to Tiny Skia
+if initialization returns an error. An unclassified adapter is allowed to try
+WGPU. A native graphics driver crash cannot be recovered by this fallback.
+GPU rendering accelerates the interface and canvas; it does not move chemistry
+calculations or file export onto the GPU.
 
 To inspect the adapters and automatic startup preference in PowerShell:
 
@@ -122,8 +124,14 @@ To inspect the adapters and automatic startup preference in PowerShell:
 .\reshiki.exe --graphics-info | Write-Output
 ```
 
-This reports adapter discovery, not successful window or device creation. For
-an explicit comparison, set `ICED_BACKEND` before launching the same release
+This reports adapter discovery, not successful window or device creation.
+`requested_wgpu_backends` lists the APIs used for discovery and allowed when
+WGPU runs; `startup_preference` includes any explicit renderer preference.
+`automatic_preference` reports the choice based on the discovered adapters.
+When an explicit renderer list contains no `wgpu` candidate, discovery is
+skipped: `adapter_probe_performed` is false,
+`automatic_preference` is null and the adapter and backend lists are empty.
+For an explicit comparison, set `ICED_BACKEND` before launching the same release
 build. `wgpu` forces WGPU (including WARP when that is the only adapter), while
 `tiny-skia` forces software rendering. `wgpu,tiny-skia` tries both in that order.
 An explicit preference bypasses the automatic CPU-adapter check.
@@ -139,8 +147,14 @@ Remove-Item Env:ICED_BACKEND
 ```
 
 `WGPU_BACKEND` also constrains adapter discovery, matching Iced's WGPU backend
-selection. Software-only VMs cannot establish a hardware acceleration speedup;
-measure on a machine that exposes a hardware adapter to Windows as well.
+selection; for example, `dx12`, `vulkan`, or `gl,dx12`. Existing values are
+preserved. WGPU ignores unknown names; an empty value or a list containing no
+recognized names enables no backends. An empty or comma-only `ICED_BACKEND`
+uses automatic selection. A nonempty renderer preference bypasses both the
+automatic CPU-adapter check and the Direct3D 12 default, retaining Iced's usual
+backend selection unless `WGPU_BACKEND` is set. Software-only VMs cannot
+establish a hardware acceleration speedup; measure on a machine that exposes a
+hardware adapter to Windows as well.
 
 For a repeatable desktop CPU comparison, run this from an interactive Windows
 session after the release build finishes:

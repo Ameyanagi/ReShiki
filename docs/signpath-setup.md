@@ -9,6 +9,16 @@ signing passed on x64 and ARM64, and internal test signing is enabled for daily
 nightlies. Existing Windows downloads remain unsigned. This record describes
 the configuration inspected on **2026-10-09** and the remaining setup.
 
+### Certificate status rechecked on 2026-10-15
+
+The live portal still shows `Release certificate 2026` as `CSR PENDING` and
+`release-signing` as `INVALID`. The certificate has no validity dates yet.
+`SIGNPATH_ENABLED` and `SIGNPATH_NIGHTLY_ENABLED` remain `false`; internal
+nightly test signing remains enabled. Test signatures are not publicly trusted.
+The [Windows security investigation](release-0.12.0-windows-security.md) records
+the current installer detections and the separate proposed inner-executable
+signing extension, which is not part of the nightly startup fix.
+
 ## Confirm the SignPath project
 
 Open [SignPath](https://app.signpath.io/) using the maintainer account with MFA.
@@ -23,7 +33,7 @@ The inspected settings are:
 | Release policy           | `release-signing`, currently invalid while its certificate is pending                       |
 | Release certificate      | `Release certificate 2026`, HSM key, CSR pending                                            |
 | Release submitter        | `CI builds`                                                                                 |
-| Release approver         | `Ryuichi Shimogawa`, one approval required                                                  |
+| Release approver         | Project maintainer, one approval required                                                   |
 | Release verification     | Trusted build system and origin verification required                                       |
 | Release allowed branches | `**` at inspection; review before activation                                                |
 | Test policy              | `test-signing`, valid; no approval, trusted-build-system or origin-verification requirement |

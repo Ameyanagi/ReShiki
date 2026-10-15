@@ -28,6 +28,16 @@ pub use stdio::{
     Protected, StdHandle, StdioError, disinherit_standard_handles, standard_handle_inheritable,
 };
 
+/// Prefer DX12 for automatic startup without replacing an existing backend value.
+/// The caller preserves explicit ICED_BACKEND preferences before calling this.
+pub fn prefer_direct3d_backend() {
+    if std::env::var_os("WGPU_BACKEND").is_none() {
+        // SAFETY: Rust documents set_var as always safe on Windows, including
+        // in multithreaded programs. This crate is compiled only on Windows.
+        unsafe { std::env::set_var("WGPU_BACKEND", "dx12") };
+    }
+}
+
 /// Select Iced's CPU renderer for this process when startup finds no GPU.
 /// The caller preserves any explicit ICED_BACKEND override.
 pub fn use_software_renderer() {
