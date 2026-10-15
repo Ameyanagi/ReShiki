@@ -37,6 +37,10 @@ pub fn begin(bytes: usize) {
     BUDGET.store(bytes, Ordering::SeqCst);
 }
 fn layout(original: Layout) -> Option<(Layout, usize)> {
+    // The Intel macOS unwinder accesses Rust's 8-aligned exception allocation
+    // with 16-byte instructions. Preserve malloc alignment after our header.
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let original = original.align_to(16).ok()?;
     Layout::new::<usize>()
         .extend(original)
         .ok()

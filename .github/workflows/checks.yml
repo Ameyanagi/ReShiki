@@ -297,6 +297,10 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
+      - name: Test native heap allocation and panic unwinding
+        run: cargo test --release --locked -p reshiki-process-heap --no-default-features --target ${{ matrix.target }}
+      - name: Test panic unwinding through the measured application heap
+        run: cargo test --release --locked -p reshiki-process-heap --no-default-features --features allocation-metrics --test global_allocator_unwind --target ${{ matrix.target }}
       - name: Test the Rust geometry crate with the locked COSMolKit source
         run: cargo test --locked -p reshiki-geometry --features cosmolkit-core/op-contracts-strict --target ${{ matrix.target }}
       - name: Check native Rust naming backend and process portability
