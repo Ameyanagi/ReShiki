@@ -4,7 +4,7 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
-Under review: @Ameyanagi — Intel Mac panic recovery and native global-allocator
+Merged for nightly builds: @Ameyanagi — Intel Mac panic recovery and native global-allocator
 regression coverage in [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328).
 
 Merged for nightly builds: @Ameyanagi — consistent Direct3D 12 Windows
