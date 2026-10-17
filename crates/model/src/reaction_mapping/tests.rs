@@ -49,3 +49,65 @@ fn reset_label_offsets_clears_all_offsets_and_preserves_the_other_fields() {
     assert_eq!(reset_label_offsets(&source), expected);
     assert_eq!(source, labelled_document());
 }
+
+#[test]
+fn align_moves_only_the_product_plus_not_a_reagent_plus() {
+    use crate::{
+        document::{Annotation, Arrow},
+        reactions::Participant,
+    };
+    let mut doc = Document::default();
+    let mut part = |x: f32, map| {
+        let id = doc.add_atom("C", Point::new(x, 0.));
+        doc.atom_mut(id).unwrap().map_num = map;
+        Participant {
+            atoms: vec![id],
+            coefficient: 1,
+        }
+    };
+    let (mut r1, r2, p1, p2) = (part(0., 1), part(300., 2), part(500., 1), part(700., 2));
+    // An unmapped reactant atom shifts the lane, so the products move right.
+    r1.atoms.push(doc.add_atom("C", Point::new(-100., 0.)));
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(300., 0.),
+        Point::new(400., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    let plus = |doc: &mut Document, centre: Point| {
+        let id = doc.next_id();
+        let mut sign = Annotation {
+            id,
+            position: centre,
+            text: "+".into(),
+            format: Default::default(),
+        };
+        let (w, h) = sign.size();
+        sign.position = centre.offset(-w / 2., -h / 2.);
+        doc.annotations.push(sign);
+        id
+    };
+    // The product `+` sits off-centre; the reagent `+` projects onto the gap.
+    let product = plus(&mut doc, Point::new(560., 0.));
+    let reagent = plus(&mut doc, Point::new(600., -100.));
+    let (p1_id, p2_id) = (p1.atoms[0], p2.atoms[0]);
+    let mut reaction = Reaction::new(arrow);
+    reaction.reactants = vec![r1, r2];
+    reaction.products = vec![p1, p2];
+    reaction.annotations = vec![reagent, product];
+    doc.reactions.push(reaction);
+    let aligned = align(&doc, arrow).unwrap();
+    let centre = |id| {
+        let a = aligned.annotations.iter().find(|a| a.id == id).unwrap();
+        let (w, h) = a.size();
+        a.position.offset(w / 2., h / 2.)
+    };
+    // Lane 600 - 200/3: products land at 1600/3 and 2500/3, gap moves 250/3.
+    let x = |id| aligned.atom(id).unwrap().position.x;
+    assert!((x(p1_id) - 1600. / 3.).abs() < 0.01);
+    assert!((x(p2_id) - 2500. / 3.).abs() < 0.01);
+    assert!(centre(product).distance(Point::new(560. + 250. / 3., 0.)) < 0.01);
+    assert!(centre(reagent).distance(Point::new(600., -100.)) < 0.01);
+}

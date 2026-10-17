@@ -259,6 +259,89 @@ async fn proper_rigid_alignment_preserves_all_bonds_and_stereochemical_identity(
         assert!(delta[0].distance(delta[1]) < 0.001);
     }
 }
+/// Align, then require the last `+` to sit clear of both products, with one
+/// product wholly before it and the other wholly after it along the arrow.
+fn assert_product_plus_separates(doc: &Document) {
+    let plus = doc
+        .annotations
+        .iter()
+        .filter(|a| a.text == "+")
+        .map(|a| a.id)
+        .max_by(|a, b| {
+            let x = |id| {
+                let a = doc.annotations.iter().find(|a| a.id == id).unwrap();
+                let arrow = &doc.arrows[0];
+                let (dx, dy) = (arrow.end.x - arrow.start.x, arrow.end.y - arrow.start.y);
+                a.position.x * dx + a.position.y * dy
+            };
+            x(*a).total_cmp(&x(*b))
+        })
+        .unwrap();
+    let aligned = mapping::align(doc, doc.reactions[0].arrow).unwrap();
+    let arrow = &aligned.arrows[0];
+    let length = arrow.start.distance(arrow.end);
+    let axis = Point::new(
+        (arrow.end.x - arrow.start.x) / length,
+        (arrow.end.y - arrow.start.y) / length,
+    );
+    let along = |p: Point| p.x * axis.x + p.y * axis.y;
+    let plus = aligned.annotations.iter().find(|a| a.id == plus).unwrap();
+    let (w, h) = plus.size();
+    let centre = plus.position.offset(w / 2., h / 2.);
+    let sides: Vec<_> = aligned.reactions[0]
+        .products
+        .iter()
+        .map(|part| {
+            let points: Vec<_> = part
+                .atoms
+                .iter()
+                .map(|id| aligned.atom(*id).unwrap().position)
+                .collect();
+            for p in &points {
+                assert!(p.distance(centre) > 20., "+ at {centre:?} crowds {p:?}");
+            }
+            let before = points.iter().all(|p| along(*p) < along(centre));
+            let after = points.iter().all(|p| along(*p) > along(centre));
+            assert!(before || after, "+ at {centre:?} is inside a product");
+            before
+        })
+        .collect();
+    assert_ne!(
+        sides[0], sides[1],
+        "+ at {centre:?} is not between the products"
+    );
+    // Aligning an aligned scheme changes nothing.
+    let again = mapping::align(&aligned, aligned.reactions[0].arrow).unwrap();
+    for (a, b) in aligned.atoms.iter().zip(&again.atoms) {
+        assert!(
+            a.position.distance(b.position) < 0.01,
+            "atom {} drifted",
+            a.id
+        );
+    }
+    for (a, b) in aligned.annotations.iter().zip(&again.annotations) {
+        assert!(
+            a.position.distance(b.position) < 0.01,
+            "text {} drifted",
+            a.id
+        );
+    }
+}
+#[tokio::test]
+async fn alignment_keeps_the_product_plus_between_its_participants() {
+    // Issue #335: HCl moved left of the amide but the `+` stayed on the right.
+    let mut doc = import(
+        "[CH3:1][C:2](=[O:3])[Cl:4].[CH3:6][C@H:7]([NH2:5])[C:8](=[O:9])[O:10][CH3:11]>>[CH3:1][C:2](=[O:3])[NH:5][C@@H:7]([CH3:6])[C:8](=[O:9])[O:10][CH3:11].[ClH:4]",
+    )
+    .await;
+    let amide = doc.reactions[0].products[0].atoms.clone();
+    editing::transform(&mut doc, &amide, editing::Transform::Rotate(60.));
+    assert_product_plus_separates(&doc);
+    // A vertical scheme reads along its arrow, not along x.
+    let all = doc.reactions[0].ids();
+    editing::transform(&mut doc, &all, editing::Transform::Rotate(90.));
+    assert_product_plus_separates(&doc);
+}
 #[tokio::test]
 #[ignore = "Writes disposable before/after drawings for native GUI verification"]
 async fn write_reaction_mapping_gui_fixtures() {
