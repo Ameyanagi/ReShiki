@@ -657,3 +657,17 @@ fn boc_is_a_real_expandable_group_and_invalid_input_is_atomic()
     assert!(apply(&doc, endpoint, "Boc", Mode::Text).is_ok());
     Ok(())
 }
+
+#[test]
+fn finite_repeat_labels_are_described_as_repeats_not_dummy_text() {
+    const REPEAT: &str = "A repeat of one atom over the typed count range. Expand generic structures generates each count.";
+    for label in ["[CH2]1-3", "CH2 1-3", "(O)2"] {
+        assert_eq!(description(label, Mode::Auto), REPEAT, "{label}");
+    }
+    assert_eq!(
+        description("[CH2]1-3", Mode::Text),
+        "Text on a dummy atom; existing bonds stay connected."
+    );
+    assert_ne!(description("[CH2]n", Mode::Auto), REPEAT);
+    assert_ne!(description("NH4-2", Mode::Auto), REPEAT);
+}
