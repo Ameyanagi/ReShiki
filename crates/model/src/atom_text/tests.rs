@@ -657,3 +657,31 @@ fn boc_is_a_real_expandable_group_and_invalid_input_is_atomic()
     assert!(apply(&doc, endpoint, "Boc", Mode::Text).is_ok());
     Ok(())
 }
+
+#[test]
+fn lowered_counts_keep_a_known_group_chemical() -> Result<(), String> {
+    let run = |start, end, script| ScriptRun { start, end, script };
+    use Script::{Subscript as B, Superscript as P};
+    let mut source = Document::default();
+    let ring = source.add_atom("C", Point::default());
+    let id = source.add_atom("C", Point::new(42., 0.));
+    source.add_bond(ring, id, 1, "plain");
+    for (text, runs) in [
+        ("CO2Me", vec![run(2, 3, B)]),
+        ("  CO2Me ", vec![run(4, 5, B)]),
+        ("NO2", vec![run(2, 3, B)]),
+        ("OC2H5", vec![run(2, 3, B), run(4, 5, B)]),
+    ] {
+        let result = apply_with_scripts(&source, id, text, &runs, Mode::Auto)?;
+        assert_eq!(result, apply(&source, id, text, Mode::Auto)?, "{text}");
+        assert!(result.abbreviation(id).is_some(), "{text}");
+        assert!(result.atoms.len() > source.atoms.len(), "{text}");
+    }
+    // Any other script on a group name stays literal dummy text.
+    for runs in [vec![run(0, 1, B)], vec![run(2, 3, P)], vec![run(2, 4, B)]] {
+        let result = apply_with_scripts(&source, id, "CO2Me", &runs, Mode::Auto)?;
+        assert_eq!(result.atom(id).ok_or("Atom")?.element, "*", "{runs:?}");
+        assert!(result.abbreviations.is_empty(), "{runs:?}");
+    }
+    Ok(())
+}
