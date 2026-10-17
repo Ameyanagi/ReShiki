@@ -647,7 +647,7 @@ fn prepared_expansion_errors_keep_original_tab_history_and_status() {
     app.tab.doc.annotations.push(reshiki::document::Annotation {
         id: caption,
         position: Point::new(0., 200.),
-        text: "x".repeat(3_000_000),
+        text: "x".repeat(Limits::default().max_work),
         format: Default::default(),
     });
     let before = app.tab.doc.clone();
