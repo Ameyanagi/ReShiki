@@ -476,3 +476,25 @@ fn automatic_hydrogens_avoid_nearby_unbonded_labels_and_charges() {
     doc.atom_mut(2).unwrap().display.hydrogen_position = HydrogenPosition::Left;
     assert!(charge_run(&doc, 2, "H").x < n.x);
 }
+
+/// A replacement side must not put the hydrogens across an unrelated bond.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_nearby_bonds() {
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.atom_mut(n).unwrap().label_h = 2;
+    // A free O label blocks the usual left-hand H2.
+    doc.add_atom("O", Point::new(-35., 0.));
+    let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+    assert!(h.y < n_text.y && (h.x - n_text.x).abs() < 0.1);
+    // An unrelated shaft above the N leaves only the lower side clear.
+    let left = doc.add_atom("C", Point::new(-40., -25.));
+    let right = doc.add_atom("C", Point::new(40., -25.));
+    doc.add_bond(left, right, 1, "plain");
+    // Editing bonds clears computed hydrogen counts.
+    doc.atom_mut(n).unwrap().label_h = 2;
+    let h = charge_run(&doc, n, "H");
+    assert!(h.y > n_text.y && (h.x - n_text.x).abs() < 0.1);
+}

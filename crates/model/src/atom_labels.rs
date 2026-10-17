@@ -722,7 +722,7 @@ pub fn refresh_computed(doc: &mut Document, checked: &Document) {
 }
 
 /// Slab clipping catches a bond crossing a label between sample points.
-fn segment_hits_rect(a: Point, b: Point, lo: Point, hi: Point) -> bool {
+pub(crate) fn segment_hits_rect(a: Point, b: Point, lo: Point, hi: Point) -> bool {
     let (mut enter, mut exit) = (0_f32, 1_f32);
     for (start, end, low, high) in [(a.x, b.x, lo.x, hi.x), (a.y, b.y, lo.y, hi.y)] {
         let delta = end - start;

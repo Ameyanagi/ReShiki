@@ -598,14 +598,18 @@ fn push_hydrogens(
             parts
         };
         let mut parts = place(position);
-        if a.display.hydrogen_position == H::Auto {
-            let clear = clear_of_nearby_labels(a, doc, size);
-            if !clear(&parts)
-                && let Some((side, placed)) = crate::atom_labels::appendage_alternatives(a, doc)
-                    .into_iter()
-                    .filter(|side| *side != position)
-                    .map(|side| (side, place(side)))
-                    .find(|(_, placed)| clear(placed))
+        // Keep the bond-based side unless its ink meets a nearby label or
+        // charge; a replacement must also stay off nearby unrelated bonds.
+        if a.display.hydrogen_position == H::Auto
+            && let Some(labels) = nearby_label_ink(a, doc, size)
+            && !clear_of(&parts, &labels, &[], size)
+        {
+            let bonds = nearby_bonds(a, doc, size);
+            if let Some((side, placed)) = crate::atom_labels::appendage_alternatives(a, doc)
+                .into_iter()
+                .filter(|side| *side != position)
+                .map(|side| (side, place(side)))
+                .find(|(_, placed)| clear_of(placed, &labels, &bonds, size))
             {
                 position = side;
                 parts = placed;
@@ -630,28 +634,62 @@ thread_local! {
     static MEASURING_NEARBY_LABELS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// Whether automatic hydrogen ink stays clear of nearby atom labels and charges
-/// (for example an unbonded metal's 3+). Nested measurements report clear.
-fn clear_of_nearby_labels(a: &Atom, doc: &Document, size: f32) -> impl Fn(&[Primitive]) -> bool {
-    let nested = MEASURING_NEARBY_LABELS.with(|flag| flag.replace(true));
-    let occupied: Vec<_> = if nested {
-        vec![]
-    } else {
-        doc.atoms
-            .iter()
-            .filter(|other| other.id != a.id && a.position.distance(other.position) < size * 5.)
-            .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
-            .collect()
-    };
-    MEASURING_NEARBY_LABELS.with(|flag| flag.set(nested));
-    let gap = size * 0.12;
-    move |parts| {
-        label_ink_boxes(parts).iter().all(|(lo, hi)| {
-            occupied.iter().all(|(a, b)| {
-                hi.x <= a.x - gap || lo.x >= b.x + gap || hi.y <= a.y - gap || lo.y >= b.y + gap
-            })
-        })
+/// Reach of the nearby labels and bonds that automatic hydrogens avoid.
+fn nearby(a: &Atom, other: &Atom, size: f32) -> bool {
+    a.position.distance(other.position) < size * 5.
+}
+
+/// Ink of other atoms' labels and charges near `a` (for example an unbonded
+/// metal's 3+). `None` while already measuring, so neighbors do not recurse.
+fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+    if MEASURING_NEARBY_LABELS.with(|flag| flag.replace(true)) {
+        return None;
     }
+    let ink = doc
+        .atoms
+        .iter()
+        .filter(|other| other.id != a.id && nearby(a, other, size))
+        .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
+        .collect();
+    MEASURING_NEARBY_LABELS.with(|flag| flag.set(false));
+    Some(ink)
+}
+
+/// Visible bonds near `a` that do not end at it.
+fn nearby_bonds(a: &Atom, doc: &Document, size: f32) -> Vec<(Point, Point)> {
+    let positions: std::collections::HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .map(|atom| (atom.id, (atom.position, nearby(a, atom, size))))
+        .collect();
+    doc.bonds
+        .iter()
+        .filter(|b| b.a != a.id && b.b != a.id)
+        .filter_map(|b| {
+            let (p, p_near) = positions.get(&b.a)?;
+            let (q, q_near) = positions.get(&b.b)?;
+            ((p_near | q_near) && doc.bond_visible(b.a, b.b)).then_some((*p, *q))
+        })
+        .collect()
+}
+
+/// Whether ink, padded by a small gap, misses the label boxes and bond shafts.
+fn clear_of(
+    parts: &[Primitive],
+    labels: &[(Point, Point)],
+    bonds: &[(Point, Point)],
+    size: f32,
+) -> bool {
+    let gap = size * 0.12;
+    label_ink_boxes(parts).into_iter().all(|(lo, hi)| {
+        let (lo, hi) = (lo.offset(-gap, -gap), hi.offset(gap, gap));
+        labels
+            .iter()
+            .all(|(a, b)| hi.x <= a.x || lo.x >= b.x || hi.y <= a.y || lo.y >= b.y)
+            && !bonds
+                .iter()
+                .any(|&(p, q)| crate::atom_labels::segment_hits_rect(p, q, lo, hi))
+    })
 }
 
 /// The mass number, raised before the element symbol.
