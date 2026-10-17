@@ -445,3 +445,77 @@ fn implicit_carbon_charge_and_genuinely_covered_short_bonds_are_not_repositioned
         );
     }
 }
+
+/// Issue #337: unjoined en donors around Co³⁺ keep their automatic H₂ clear
+/// of the metal's 3+ and of each other; a manual side is still honored.
+#[test]
+fn automatic_hydrogens_avoid_nearby_unbonded_labels_and_charges() {
+    let mut doc: Document = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/coordination/co-en3-before.rsk"
+    ))
+    .unwrap();
+    let overlaps = |doc: &Document, a: u64, b: u64| {
+        let other = atom_label_ink_boxes(doc.atom(b).unwrap(), doc);
+        atom_label_ink_boxes(doc.atom(a).unwrap(), doc)
+            .iter()
+            .any(|(lo, hi)| {
+                other
+                    .iter()
+                    .any(|(a, b)| hi.x > a.x && lo.x < b.x && hi.y > a.y && lo.y < b.y)
+            })
+    };
+    for a in &doc.atoms {
+        for b in doc.atoms.iter().filter(|b| b.id > a.id) {
+            assert!(!overlaps(&doc, a.id, b.id), "Labels {} and {}", a.id, b.id);
+        }
+    }
+    // The upper-right NH₂ (atom 2) stacks its H₂ above rather than toward Co.
+    let n = charge_run(&doc, 2, "N");
+    let h = charge_run(&doc, 2, "H");
+    assert!(h.y < n.y && (h.x - n.x).abs() < 0.1, "N {n:?}, H {h:?}");
+    doc.atom_mut(2).unwrap().display.hydrogen_position = HydrogenPosition::Left;
+    assert!(charge_run(&doc, 2, "H").x < n.x);
+}
+
+/// A replacement side must not put the hydrogens across an unrelated bond.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_nearby_bonds() {
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.atom_mut(n).unwrap().label_h = 2;
+    // A free O label blocks the usual left-hand H2.
+    doc.add_atom("O", Point::new(-35., 0.));
+    let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+    assert!(h.y < n_text.y && (h.x - n_text.x).abs() < 0.1);
+    // An unrelated shaft above the N leaves only the lower side clear.
+    let left = doc.add_atom("C", Point::new(-40., -25.));
+    let right = doc.add_atom("C", Point::new(40., -25.));
+    doc.add_bond(left, right, 1, "plain");
+    // Editing bonds clears computed hydrogen counts.
+    doc.atom_mut(n).unwrap().label_h = 2;
+    let h = charge_run(&doc, n, "H");
+    assert!(h.y > n_text.y && (h.x - n_text.x).abs() < 0.1);
+}
+
+/// A replacement side must not cover an explicit mark on the atom.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_atom_marks() {
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.add_atom("O", Point::new(-35., 0.));
+    let atom = doc.atom_mut(n).unwrap();
+    atom.label_h = 2;
+    atom.marks.push(AtomMark {
+        id: None,
+        kind: MarkKind::LonePairBar,
+        offset: Point::new(0., -28.),
+        angle: 0.,
+        size_pt: None,
+    });
+    let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+    assert!(h.y > n_text.y && (h.x - n_text.x).abs() < 0.1);
+}

@@ -572,7 +572,7 @@ fn push_hydrogens(
         let h_width = frame.text_width("H", size);
         let width = h_width + frame.text_width(&count, small);
         use crate::atom_labels::HydrogenPosition as H;
-        let position = crate::atom_labels::appendage_position(a, doc);
+        let mut position = crate::atom_labels::appendage_position(a, doc);
         let mut parts = vec![frame.text(Point::default(), "H".into(), size)];
         if !count.is_empty() {
             parts.push(frame.text(Point::new(h_width, size * 0.40), count, small));
@@ -585,14 +585,38 @@ fn push_hydrogens(
                 }
             }
         }
-        place_appendage(
-            &cursor.runs,
-            &mut parts,
-            (origin, element_width),
-            (width, isotope_width),
-            size,
-            position,
-        );
+        let place = |position| {
+            let mut parts = parts.clone();
+            place_appendage(
+                &cursor.runs,
+                &mut parts,
+                (origin, element_width),
+                (width, isotope_width),
+                size,
+                position,
+            );
+            parts
+        };
+        let mut parts = place(position);
+        // Keep the bond-based side unless its ink meets a nearby label or
+        // charge; a replacement must also stay off nearby unrelated bonds.
+        if a.display.hydrogen_position == H::Auto
+            && let Some(labels) = nearby_label_ink(a, doc, size)
+            && !clear_of(&parts, &labels, &[], size)
+        {
+            let bonds = nearby_bonds(a, doc, size);
+            let mut reserved = labels;
+            reserved.extend(nearby_mark_ink(a, doc, size).unwrap_or_default());
+            if let Some((side, placed)) = crate::atom_labels::appendage_alternatives(a, doc)
+                .into_iter()
+                .filter(|side| *side != position)
+                .map(|side| (side, place(side)))
+                .find(|(_, placed)| clear_of(placed, &reserved, &bonds, size))
+            {
+                position = side;
+                parts = placed;
+            }
+        }
         if matches!(position, H::Above | H::Below) {
             if let Some(Primitive::Text { position, .. }) = parts.first() {
                 cursor.mark_y = position.y;
@@ -604,6 +628,102 @@ fn push_hydrogens(
             cursor.right += width;
         }
     }
+}
+
+thread_local! {
+    /// Set while measuring neighboring labels for hydrogen placement, so their
+    /// own automatic hydrogens keep the bond-based side instead of recursing.
+    static MEASURING_NEARBY_LABELS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Reach of the nearby labels and bonds that automatic hydrogens avoid.
+fn nearby(a: &Atom, other: &Atom, size: f32) -> bool {
+    a.position.distance(other.position) < size * 5.
+}
+
+/// Measure other labels or marks, or `None` while already measuring, so
+/// neighbors (and marks placed around this label) do not recurse.
+fn measuring<T>(measure: impl FnOnce() -> T) -> Option<T> {
+    if MEASURING_NEARBY_LABELS.with(|flag| flag.replace(true)) {
+        return None;
+    }
+    let measured = measure();
+    MEASURING_NEARBY_LABELS.with(|flag| flag.set(false));
+    Some(measured)
+}
+
+/// Ink of other atoms' labels and charges near `a` (for example an unbonded
+/// metal's 3+).
+fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+    measuring(|| {
+        doc.atoms
+            .iter()
+            .filter(|other| other.id != a.id && nearby(a, other, size))
+            .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
+            .collect()
+    })
+}
+
+/// Extents of the explicit marks on `a` and its nearby atoms.
+fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+    measuring(|| {
+        doc.atoms
+            .iter()
+            .filter(|other| !other.marks.is_empty() && nearby(a, other, size))
+            .flat_map(|other| crate::scientific::styled_mark_parts(other, &doc.drawing_style))
+            .filter_map(|part| {
+                let pad = part.style.width() * 0.5;
+                part.commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::iter_points)
+                    .map(|p| (p, p))
+                    .reduce(|(lo, hi), (p, _)| {
+                        (
+                            Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                            Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                        )
+                    })
+                    .map(|(lo, hi)| (lo.offset(-pad, -pad), hi.offset(pad, pad)))
+            })
+            .collect()
+    })
+}
+
+/// Visible bonds near `a` that do not end at it.
+fn nearby_bonds(a: &Atom, doc: &Document, size: f32) -> Vec<(Point, Point)> {
+    let positions: std::collections::HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .map(|atom| (atom.id, (atom.position, nearby(a, atom, size))))
+        .collect();
+    doc.bonds
+        .iter()
+        .filter(|b| b.a != a.id && b.b != a.id)
+        .filter_map(|b| {
+            let (p, p_near) = positions.get(&b.a)?;
+            let (q, q_near) = positions.get(&b.b)?;
+            ((p_near | q_near) && doc.bond_visible(b.a, b.b)).then_some((*p, *q))
+        })
+        .collect()
+}
+
+/// Whether ink, padded by a small gap, misses the label boxes and bond shafts.
+fn clear_of(
+    parts: &[Primitive],
+    labels: &[(Point, Point)],
+    bonds: &[(Point, Point)],
+    size: f32,
+) -> bool {
+    let gap = size * 0.12;
+    label_ink_boxes(parts).into_iter().all(|(lo, hi)| {
+        let (lo, hi) = (lo.offset(-gap, -gap), hi.offset(gap, gap));
+        labels
+            .iter()
+            .all(|(a, b)| hi.x <= a.x || lo.x >= b.x || hi.y <= a.y || lo.y >= b.y)
+            && !bonds
+                .iter()
+                .any(|&(p, q)| crate::atom_labels::segment_hits_rect(p, q, lo, hi))
+    })
 }
 
 /// The mass number, raised before the element symbol.
