@@ -596,3 +596,47 @@ fn selection_and_paste_preserve_manual_label_scripts() {
     assert_eq!(pasted.display, source.atom(id).unwrap().display);
     destination.validate().unwrap();
 }
+
+#[test]
+fn analysis_recalculates_fixed_hydrogens_only_at_cut_bonds() {
+    // ChemDraw labels carry NumHydrogens, imported as fixed hydrogens (#334).
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::default());
+    let c = doc.add_atom("C", Point::new(42., 0.));
+    let o = doc.add_atom("O", Point::new(84., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.add_bond(c, o, 2, "plain");
+    for atom in &mut doc.atoms {
+        atom.no_implicit = true;
+        atom.explicit_h = u32::from(atom.id == c);
+    }
+    let implicit = |part: &Document| {
+        let molecule = crate::chemistry::document::prepare(part).unwrap();
+        assert!(
+            molecule
+                .state
+                .graph
+                .atoms
+                .iter()
+                .all(|a| a.radical_electrons == 0)
+        );
+        molecule
+            .state
+            .valences
+            .iter()
+            .map(|v| v.implicit_hydrogens)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(implicit(&analysis_document(&doc, &[n])), [3]);
+    let part = analysis_document(&doc, &[c, o]);
+    assert_eq!(implicit(&part), [1, 0]);
+    assert_eq!(part.atom(c).unwrap().explicit_h, 1);
+    assert!(!part.atom(c).unwrap().no_implicit);
+    assert!(part.atom(o).unwrap().no_implicit);
+    // A cut dative bond removes no donor valence, so its fixed count stays.
+    let metal = doc.add_atom("Co", Point::new(0., 42.));
+    doc.add_bond(n, metal, 5, "plain");
+    let part = analysis_document(&doc, &[n, c, o]);
+    assert!(part.atom(n).unwrap().no_implicit);
+    assert!(!analysis_document(&doc, &[metal]).atoms[0].no_implicit);
+}
