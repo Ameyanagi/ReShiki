@@ -633,4 +633,10 @@ fn analysis_recalculates_fixed_hydrogens_only_at_cut_bonds() {
     assert_eq!(part.atom(c).unwrap().explicit_h, 1);
     assert!(!part.atom(c).unwrap().no_implicit);
     assert!(part.atom(o).unwrap().no_implicit);
+    // A cut dative bond removes no donor valence, so its fixed count stays.
+    let metal = doc.add_atom("Co", Point::new(0., 42.));
+    doc.add_bond(n, metal, 5, "plain");
+    let part = analysis_document(&doc, &[n, c, o]);
+    assert!(part.atom(n).unwrap().no_implicit);
+    assert!(!analysis_document(&doc, &[metal]).atoms[0].no_implicit);
 }

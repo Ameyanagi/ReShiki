@@ -231,11 +231,13 @@ pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
     let mut part = selection(doc, atoms);
     crate::atom_labels::clear_computed(&mut part);
     let kept: HashSet<_> = part.atoms.iter().map(|a| a.id).collect();
+    // A dative bond adds no valence to its donor `a`, so only its acceptor is capped.
     let cut: HashSet<_> = doc
         .bonds
         .iter()
         .filter(|b| b.order != 0 && kept.contains(&b.a) != kept.contains(&b.b))
-        .flat_map(|b| [b.a, b.b])
+        .flat_map(|b| [(b.order != 5).then_some(b.a), Some(b.b)])
+        .flatten()
         .collect();
     for atom in &mut part.atoms {
         if cut.contains(&atom.id) {
