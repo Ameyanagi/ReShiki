@@ -115,7 +115,7 @@ class Cleanup(unittest.TestCase):
     def test_scope_validation_and_abbreviation_selection_are_atomic(self):
         d = imported("COc1ccc(NC(=O)OC(C)(C)C)cc1")["document"]
         grouped = handle(dict(protocol=1, operation="abbreviate", document=d))["document"]
-        group = next(g for g in grouped["abbreviations"] if g["label"] == "Boc")
+        group = next(g for g in grouped["abbreviations"] if g["label"] == "NHBoc")
         result = clean(grouped, "selected_atoms", [group["anchor"]])["document"]
         self.assertEqual(result["abbreviations"], grouped["abbreviations"])
         for a, b in zip(grouped["atoms"], result["atoms"]):

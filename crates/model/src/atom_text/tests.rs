@@ -657,3 +657,96 @@ fn boc_is_a_real_expandable_group_and_invalid_input_is_atomic()
     assert!(apply(&doc, endpoint, "Boc", Mode::Text).is_ok());
     Ok(())
 }
+
+fn formula(doc: &Document) -> Result<String, Box<dyn std::error::Error>> {
+    let molecule = crate::chemistry::document::prepare(doc)?;
+    let facts: Vec<_> = molecule
+        .state
+        .graph
+        .atoms
+        .iter()
+        .zip(&molecule.state.valences)
+        .map(|(a, v)| crate::chemistry::AtomFacts {
+            atomic_number: a.atomic_number,
+            isotope: a.isotope,
+            charge: a.charge,
+            hydrogens: (u32::from(a.explicit_hydrogens) + v.implicit_hydrogens) as u8,
+            radical_electrons: a.radical_electrons,
+        })
+        .collect();
+    Ok(crate::chemistry::properties(&facts)?.formula)
+}
+
+#[test]
+fn protecting_group_labels_are_real_groups_that_expand_and_contract()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Formulas of the methyl compound CH3-R, written out independently.
+    for (label, reverse, expected) in [
+        ("OBn", "BnO", "C8H10O"),
+        ("PMB", "", "C9H12O"),
+        ("OPMB", "PMBO", "C9H12O2"),
+        ("OTBS", "TBSO", "C7H18OSi"),
+        ("TIPS", "", "C10H24Si"),
+        ("OTIPS", "TIPSO", "C10H24OSi"),
+        ("TES", "", "C7H18Si"),
+        ("OTES", "TESO", "C7H18OSi"),
+        ("Piv", "", "C6H12O"),
+        ("OPiv", "PivO", "C6H12O2"),
+        ("Lev", "", "C6H10O2"),
+        ("OLev", "LevO", "C6H10O3"),
+        ("Tol", "", "C8H10"),
+        ("SPh", "PhS", "C7H8S"),
+        ("STol", "TolS", "C8H10S"),
+        ("SEt", "EtS", "C3H8S"),
+        ("NPhth", "PhthN", "C9H7NO2"),
+        ("Troc", "", "C4H5Cl3O2"),
+        ("NHTroc", "TrocHN", "C4H6Cl3NO2"),
+        ("NHBoc", "BocHN", "C6H13NO2"),
+        ("NHAc", "AcHN", "C3H7NO"),
+        ("Tr", "", "C20H18"),
+        ("OTr", "TrO", "C20H18O"),
+        ("MOM", "", "C3H8O"),
+        ("OMOM", "MOMO", "C3H8O2"),
+        ("Tf", "", "C2H3F3O2S"),
+        ("OTf", "TfO", "C2H3F3O3S"),
+        ("All", "", "C4H8"),
+        ("OAll", "AllO", "C4H8O"),
+        ("CCl3", "Cl3C", "C2H3Cl3"),
+        ("OC(NH)CCl3", "Cl3CC(NH)O", "C3H4Cl3NO"),
+        ("N3", "", "CH3N3"),
+    ] {
+        let mut doc = Document::default();
+        let methyl = doc.add_atom("C", Point::new(0., 0.));
+        let endpoint = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(methyl, endpoint, 1, "plain");
+        let labelled = apply(&doc, endpoint, label, Mode::Auto)?;
+        let group = labelled.abbreviation(endpoint).ok_or(label)?.clone();
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (label, reverse)
+        );
+        assert_eq!(formula(&labelled)?, expected, "{label}");
+
+        let mut expanded = labelled.clone();
+        assert_eq!(expanded.expand_abbreviations(&[endpoint]), 1);
+        assert!(expanded.abbreviations.is_empty());
+        assert_eq!(formula(&expanded)?, expected, "{label} expanded");
+        if label == "N3" {
+            continue; // A separately built group, not a detectable preset.
+        }
+        let molecule = crate::chemistry::document::prepare(&expanded)?;
+        let contracted =
+            crate::chemistry::abbreviations::find(&expanded, &molecule, &[], Some(label))?;
+        let [found] = contracted.abbreviations.as_slice() else {
+            panic!("{label} was not detected again after expansion");
+        };
+        assert_eq!(
+            (found.label.as_str(), found.reverse_label.as_str()),
+            (label, reverse)
+        );
+        // p-Tolyl on methyl is symmetric, so compare the group size, not IDs.
+        assert_eq!(found.members.len(), group.members.len(), "{label}");
+        assert_eq!(formula(&contracted)?, expected, "{label} contracted");
+    }
+    Ok(())
+}

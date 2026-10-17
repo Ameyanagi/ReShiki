@@ -1,6 +1,6 @@
 # Abbreviation geometry references
 
-The 31 preset fragments use coordinates captured from RDKit 2026.03.6.
+The 62 preset fragments use coordinates captured from RDKit 2026.03.6.
 `abbreviation_replacement` compares each platform's table with freshly generated
 coordinates before checking complete replacement documents. These tables preserve
 the existing layout until the general Rust layout implementation replaces it.
