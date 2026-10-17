@@ -791,3 +791,49 @@ fn manual_cold_cage_attachment_queries_report_surviving_ink() {
         }
     }
 }
+#[test]
+fn double_bond_strokes_are_arrow_targets_not_only_the_gap() {
+    // Issue #330: acetone-style terminal C=O at 225% zoom (8 px pick radius).
+    let mut d = Document::default();
+    let length = d.drawing_style.bond_length_world;
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let o = d.add_atom("O", Point::new(length, 0.));
+    d.add_bond(c, o, 2, "plain");
+    let radius = 8. / 2.25;
+    let half = length * d.drawing_style.bond_spacing_ratio / 2.;
+    let mid = length / 2.;
+    for y in [0., -half, half] {
+        assert!(
+            matches!(
+                pick(&d, Point::new(mid, y), radius),
+                Some(Pick::Bond { .. })
+            ),
+            "stroke at offset {y} was not a target"
+        );
+    }
+    assert_eq!(pick(&d, Point::new(mid, length * 0.5), radius), None);
+
+    // A one-sided double bond is hit on its rail, not on its empty side.
+    let spacing = half * 2.;
+    let mut sided = d.clone();
+    sided.bonds[0].double_position = crate::bonds::DoublePosition::Left;
+    let hit = |y: f32| pick(&sided, Point::new(mid, y), radius).is_some();
+    assert!(hit(0.) && hit(-spacing / 2.) && hit(-spacing));
+    assert!(!hit(spacing));
+
+    // A bold secondary rail is targetable across its whole width.
+    let mut bold = d.clone();
+    bold.bonds[0].secondary_display = Some("bold".into());
+    assert_eq!(pick(&d, Point::new(mid, half + 5.), radius), None);
+    assert!(pick(&bold, Point::new(mid, half + 5.), radius).is_some());
+
+    // The widened band never steals a click on a nearby single bond's ink.
+    let s = d.add_atom("C", Point::new(0., -6.));
+    let t = d.add_atom("C", Point::new(length, -6.));
+    d.add_bond(s, t, 1, "plain");
+    d.bonds.swap(0, 1);
+    assert!(matches!(
+        pick(&d, Point::new(mid, -6.), radius),
+        Some(Pick::Bond { a, b, .. }) if a == s && b == t
+    ));
+}
