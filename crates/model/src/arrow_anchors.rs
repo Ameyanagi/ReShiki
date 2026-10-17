@@ -2,7 +2,7 @@
 //! chemical meaning. Stored endpoints are reconciled before history/export.
 use crate::{
     arrows::{ArrowStyle, Preset},
-    document::{Arrow, Document, Point},
+    document::{Arrow, Bond, Document, Point},
     scientific::{AtomMark, MarkKind},
     style::DEFAULT,
 };
@@ -336,7 +336,7 @@ fn pick_with_ink(
         .enumerate()
         .rev()
         .filter(|(_, b)| doc.bond_visible(b.a, b.b))
-        .find_map(|(index, bond)| {
+        .filter_map(|(index, bond)| {
             let (a, b) = if bond.a < bond.b {
                 (bond.a, bond.b)
             } else {
@@ -353,20 +353,75 @@ fn pick_with_ink(
             }
             let fraction = dot(delta(p, pa), v) / length;
             let q = pa.offset(v.x * fraction, v.y * fraction);
+            // Signed offset along the scene's rail normal of bond.a -> bond.b.
+            let sign = if bond.a == a { 1. } else { -1. };
+            let offset = sign * (v.x * (p.y - pa.y) - v.y * (p.x - pa.x)) / length.sqrt();
             // Reject remote candidates before any expensive visibility scene.
-            if !(0.0..=1.).contains(&fraction) || q.distance(p) > radius * 0.7 {
+            if !(0.0..=1.).contains(&fraction) {
                 return None;
             }
+            let distance = bond_ink_distance(doc, bond, offset, radius * 0.7)?;
             let (start, end) = ink.segment(bond)?;
             let from = dot(delta(start, pa), v) / length;
             let to = dot(delta(end, pa), v) / length;
             ((0.0..=1.).contains(&fraction)
                 && (from.min(to)..=from.max(to)).contains(&fraction)
-                && q.distance(p) <= radius * 0.7
                 && ink.label_hit(q, 0.).is_none()
                 && ink.bond(index, if bond.a == a { fraction } else { 1. - fraction }))
-            .then_some(Pick::Bond { a, b, fraction })
+            .then_some((distance, Pick::Bond { a, b, fraction }))
         })
+        // Ink under the pointer beats another bond's tolerance; ties keep the
+        // topmost bond.
+        .min_by(|x, y| x.0.total_cmp(&y.0))
+        .map(|(_, pick)| pick)
+}
+/// Distance from a point `offset` off the backbone, along the left normal of
+/// bond.a -> bond.b, to the bond's drawn strokes or the gaps between its
+/// rails; `None` beyond `tolerance`. Rail offsets mirror the scene's rails.
+fn bond_ink_distance(doc: &Document, bond: &Bond, offset: f32, tolerance: f32) -> Option<f32> {
+    use crate::bonds::DoublePosition;
+    let style = &doc.drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    let width = |display: &str| {
+        DEFAULT.world(
+            if matches!(
+                display,
+                "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
+            ) {
+                style.bold_width_pt
+            } else {
+                style.line_width_pt
+            },
+        )
+    };
+    let stroke =
+        width(&bond.display).max(bond.secondary_display.as_deref().map_or(0., width)) * 0.5;
+    let wave = if bond.display == "wavy" {
+        style.line_width() * 1.25
+    } else {
+        0.
+    };
+    let distance = |lo: f32, hi: f32| {
+        let d = ((lo.min(-wave) - offset).max(offset - hi.max(wave)) - stroke).max(0.);
+        (d <= tolerance).then_some(d)
+    };
+    match bond.order {
+        // Resolve an automatic side only near either possible rail.
+        2 | 7 => {
+            distance(-spacing, spacing)?;
+            match crate::scene::effective_double_position(doc, bond) {
+                DoublePosition::Left => distance(-spacing, 0.),
+                DoublePosition::Right => distance(0., spacing),
+                DoublePosition::Auto | DoublePosition::Center => {
+                    distance(-spacing / 2., spacing / 2.)
+                }
+            }
+        }
+        3 => distance(-spacing, spacing),
+        6 => distance(-spacing * 1.5, spacing * 1.5),
+        // Aromatic inner rails are optional and one-sided; keep the backbone.
+        _ => distance(0., 0.),
+    }
 }
 // Only new links require displayed ink. Target::center, Anchor::validate and
 // reconciliation must continue to retain links to temporarily hidden objects.
