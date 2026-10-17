@@ -164,3 +164,92 @@ fn display_colors_preserve_hue_and_alpha() {
     assert_eq!(shown.a, red.a);
     assert_eq!(color(false, red), red);
 }
+
+/// Escape closes an open pick list, as it does the app's own popovers, and is
+/// left alone while the list is closed (#336).
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn escape_closes_an_open_pick_list() {
+    use iced::advanced::renderer::Headless;
+    use iced::keyboard::{self, Key, Modifiers, key};
+    use iced::{Event, Size, mouse};
+    use iced_runtime::{UserInterface, user_interface::Cache};
+
+    #[derive(Debug, Clone, PartialEq)]
+    enum Msg {
+        Pick(&'static str),
+        Open,
+        Close,
+    }
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .expect("headless renderer");
+    let size = Size::new(400., 300.);
+    let mut cache = Cache::new();
+    let mut send = |event: Event, cursor: mouse::Cursor| {
+        // The status bar shows a hover hint with each list.
+        let view = iced::widget::tooltip(
+            close_on_escape(
+                pick_list(["Publication", "Pastel"], Some("Publication"), Msg::Pick)
+                    .on_open(Msg::Open)
+                    .on_close(Msg::Close),
+            ),
+            "Color theme",
+            iced::widget::tooltip::Position::Bottom,
+        );
+        let mut ui = UserInterface::build(view, size, std::mem::take(&mut cache), &mut renderer);
+        let mut messages = Vec::new();
+        let (_, statuses) = ui.update(
+            &[event],
+            cursor,
+            &mut renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut messages,
+        );
+        // Remaining overlays are laid out again once the menu has gone.
+        ui.draw(&mut renderer, &Theme::Light, &Default::default(), cursor);
+        cache = ui.into_cache();
+        (statuses[0], messages)
+    };
+    let escape = || {
+        Event::Keyboard(keyboard::Event::KeyPressed {
+            key: Key::Named(key::Named::Escape),
+            modified_key: Key::Named(key::Named::Escape),
+            physical_key: key::Physical::Code(key::Code::Escape),
+            location: keyboard::Location::Standard,
+            modifiers: Modifiers::empty(),
+            text: None,
+            repeat: false,
+        })
+    };
+    // Hovered throughout, so the hint shows beside the open menu.
+    let at = iced::Point::new(10., 10.);
+    let pointer = mouse::Cursor::Available(at);
+    let _ = send(
+        Event::Mouse(mouse::Event::CursorMoved { position: at }),
+        pointer,
+    );
+    let (_, opened) = send(
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        pointer,
+    );
+    assert_eq!(opened, [Msg::Open]);
+    // The open menu takes Escape, so nothing behind it acts on the key, and
+    // the list closes on the redraw that follows.
+    let (status, messages) = send(escape(), pointer);
+    assert!(messages.is_empty());
+    assert_eq!(status, iced::event::Status::Captured);
+    let redraw = Event::Window(iced::window::Event::RedrawRequested(
+        std::time::Instant::now(),
+    ));
+    let (_, closed) = send(redraw, pointer);
+    assert_eq!(closed, [Msg::Close]);
+    // Closed: Escape reaches the app's own shortcut.
+    let (status, ignored) = send(escape(), pointer);
+    assert!(ignored.is_empty());
+    assert_eq!(status, iced::event::Status::Ignored);
+}
