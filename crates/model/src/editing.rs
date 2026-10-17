@@ -224,10 +224,24 @@ pub fn analysis_atoms(doc: &Document, selected: &[u64]) -> Vec<u64> {
         .collect()
 }
 
-/// The fragment analyzed for `atoms`, without cached computed labels.
+/// The fragment analyzed for `atoms`, without cached computed labels. Atoms
+/// at cut covalent bonds get implicit hydrogens recalculated, so a fixed count
+/// such as an imported ChemDraw label does not leave open valences as radicals.
 pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
     let mut part = selection(doc, atoms);
     crate::atom_labels::clear_computed(&mut part);
+    let kept: HashSet<_> = part.atoms.iter().map(|a| a.id).collect();
+    let cut: HashSet<_> = doc
+        .bonds
+        .iter()
+        .filter(|b| b.order != 0 && kept.contains(&b.a) != kept.contains(&b.b))
+        .flat_map(|b| [b.a, b.b])
+        .collect();
+    for atom in &mut part.atoms {
+        if cut.contains(&atom.id) {
+            atom.no_implicit = false;
+        }
+    }
     part
 }
 
