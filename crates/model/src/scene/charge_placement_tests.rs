@@ -498,3 +498,24 @@ fn automatic_hydrogen_replacement_side_avoids_nearby_bonds() {
     let h = charge_run(&doc, n, "H");
     assert!(h.y > n_text.y && (h.x - n_text.x).abs() < 0.1);
 }
+
+/// A replacement side must not cover an explicit mark on the atom.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_atom_marks() {
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.add_atom("O", Point::new(-35., 0.));
+    let atom = doc.atom_mut(n).unwrap();
+    atom.label_h = 2;
+    atom.marks.push(AtomMark {
+        id: None,
+        kind: MarkKind::LonePairBar,
+        offset: Point::new(0., -28.),
+        angle: 0.,
+        size_pt: None,
+    });
+    let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+    assert!(h.y > n_text.y && (h.x - n_text.x).abs() < 0.1);
+}

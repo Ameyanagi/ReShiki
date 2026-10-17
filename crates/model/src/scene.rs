@@ -605,11 +605,13 @@ fn push_hydrogens(
             && !clear_of(&parts, &labels, &[], size)
         {
             let bonds = nearby_bonds(a, doc, size);
+            let mut reserved = labels;
+            reserved.extend(nearby_mark_ink(a, doc, size).unwrap_or_default());
             if let Some((side, placed)) = crate::atom_labels::appendage_alternatives(a, doc)
                 .into_iter()
                 .filter(|side| *side != position)
                 .map(|side| (side, place(side)))
-                .find(|(_, placed)| clear_of(placed, &labels, &bonds, size))
+                .find(|(_, placed)| clear_of(placed, &reserved, &bonds, size))
             {
                 position = side;
                 parts = placed;
@@ -639,20 +641,52 @@ fn nearby(a: &Atom, other: &Atom, size: f32) -> bool {
     a.position.distance(other.position) < size * 5.
 }
 
-/// Ink of other atoms' labels and charges near `a` (for example an unbonded
-/// metal's 3+). `None` while already measuring, so neighbors do not recurse.
-fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+/// Measure other labels or marks, or `None` while already measuring, so
+/// neighbors (and marks placed around this label) do not recurse.
+fn measuring<T>(measure: impl FnOnce() -> T) -> Option<T> {
     if MEASURING_NEARBY_LABELS.with(|flag| flag.replace(true)) {
         return None;
     }
-    let ink = doc
-        .atoms
-        .iter()
-        .filter(|other| other.id != a.id && nearby(a, other, size))
-        .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
-        .collect();
+    let measured = measure();
     MEASURING_NEARBY_LABELS.with(|flag| flag.set(false));
-    Some(ink)
+    Some(measured)
+}
+
+/// Ink of other atoms' labels and charges near `a` (for example an unbonded
+/// metal's 3+).
+fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+    measuring(|| {
+        doc.atoms
+            .iter()
+            .filter(|other| other.id != a.id && nearby(a, other, size))
+            .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
+            .collect()
+    })
+}
+
+/// Extents of the explicit marks on `a` and its nearby atoms.
+fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+    measuring(|| {
+        doc.atoms
+            .iter()
+            .filter(|other| !other.marks.is_empty() && nearby(a, other, size))
+            .flat_map(|other| crate::scientific::styled_mark_parts(other, &doc.drawing_style))
+            .filter_map(|part| {
+                let pad = part.style.width() * 0.5;
+                part.commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::iter_points)
+                    .map(|p| (p, p))
+                    .reduce(|(lo, hi), (p, _)| {
+                        (
+                            Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                            Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                        )
+                    })
+                    .map(|(lo, hi)| (lo.offset(-pad, -pad), hi.offset(pad, pad)))
+            })
+            .collect()
+    })
 }
 
 /// Visible bonds near `a` that do not end at it.
