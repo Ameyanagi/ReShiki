@@ -109,6 +109,18 @@ fn pi_ligands_keep_metal_focus_real_ring_chemistry_and_multicenter_targets()
     }
     assert_eq!(reshiki::attachments::composition(&doc)?.formula, "C10H10Fe");
     assert_eq!(doc.atoms.iter().map(|a| a.charge).sum::<i32>(), 0);
+    // Issue #317: two Cp⁻ on neutral Fe give neutral ferrocene with Fe²⁺.
+    let mut neutral = Document::default();
+    let iron = neutral.add_atom("Fe", Point::default());
+    for _ in 0..2 {
+        neutral = hotkeys::atom_edit(&neutral, iron, "j", 42.)
+            .ok_or("Cp shortcut")??
+            .0;
+    }
+    assert_eq!(neutral.atom(iron).ok_or("iron")?.charge, 2);
+    assert_eq!(neutral.atoms.iter().map(|a| a.charge).sum::<i32>(), 0);
+    let composition = reshiki::attachments::composition(&neutral)?;
+    assert_eq!(composition.formula, "C10H10Fe");
     let mut metal = Document::default();
     let ru = metal.add_atom("Ru", Point::default());
     let (arene, _) = hotkeys::atom_edit(&metal, ru, "J", 42.).ok_or("Arene shortcut")??;
@@ -163,9 +175,10 @@ fn pi_shortcuts_retain_a_retiltable_3d_plane_and_keep_contacts_behind_the_ring()
                 assert!(atom.display.hide_charge);
             }
         }
+        assert_eq!(doc.atoms.iter().map(|a| a.charge).sum::<i32>(), 0);
         assert_eq!(
-            doc.atoms.iter().map(|a| a.charge).sum::<i32>(),
-            if key == "j" { -1 } else { 0 }
+            doc.atom(metal).ok_or("metal")?.charge,
+            if key == "j" { 1 } else { 0 }
         );
         let circles = reshiki::aromatic::circles(&doc);
         assert_eq!(circles.len(), 1);

@@ -173,6 +173,26 @@ pub(super) fn add(
     if metal {
         result.add_bond(id, anchor, 1, "plain");
     }
+    // Cp is stored as Cp⁻. Balance it on the metal (Fe + 2 Cp⁻ → Fe²⁺)
+    // unless the complex already carries an entered positive charge.
+    if metal && size == 5 {
+        let complex = crate::molecule_names::component(doc, id);
+        let net: i32 = doc
+            .atoms
+            .iter()
+            .filter(|a| {
+                complex.contains(&a.id)
+                    || complex
+                        .iter()
+                        .any(|c| doc.atom(*c).is_some_and(|c| c.centroid.contains(&a.id)))
+            })
+            .map(|a| a.charge)
+            .sum();
+        if net <= 0 {
+            let metal = result.atom_mut(id).ok_or("Missing ligand target")?;
+            metal.charge = metal.charge.checked_add(1).ok_or("Invalid metal charge")?;
+        }
+    }
     for group in &mut result.groups {
         if group.members.contains(&id) {
             group.members.extend(ring.iter().copied());
