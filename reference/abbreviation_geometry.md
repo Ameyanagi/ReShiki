@@ -1,6 +1,6 @@
 # Abbreviation geometry references
 
-The 31 preset fragments use coordinates captured from RDKit 2026.03.6.
+The 62 preset fragments use coordinates captured from RDKit 2026.03.6.
 `abbreviation_replacement` compares each platform's table with freshly generated
 coordinates before checking complete replacement documents. These tables preserve
 the existing layout until the general Rust layout implementation replaces it.
@@ -10,6 +10,12 @@ in [capture run 36483117507](https://github.com/Ameyanagi/ReShiki/actions/runs/3
 All 29 earlier templates remained unchanged on every host. The macOS CI capture
 also exactly matched the local Apple Silicon capture. See
 [capture provenance and SHA-256 hashes](../tests/fixtures/tbdps-geometry-provenance.json).
+The 31 carbohydrate and protecting-group presets (OBn through OC(NH)CCl3) were
+captured the same way in
+[capture run 39077956792](https://github.com/Ameyanagi/ReShiki/actions/runs/39077956792);
+the 31 earlier templates remained unchanged on every host and the macOS CI
+capture again matched the local Apple Silicon capture. See
+[their provenance](../tests/fixtures/protecting-group-geometry-provenance.json).
 The Windows artifacts use CRLF; committed files normalize line endings to LF,
 so the provenance records both original capture and committed-file hashes.
 The narrowly triggered `Abbreviation geometry capture` workflow reproduces these

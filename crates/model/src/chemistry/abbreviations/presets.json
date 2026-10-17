@@ -2846,6 +2846,3488 @@
           "order": 0
         }
       ]
+    },
+    {
+      "label": "OBn",
+      "reverse_label": "BnO",
+      "smiles": "*OCc1ccccc1",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 7,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 8,
+          "b": 3,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "PMB",
+      "reverse_label": "",
+      "smiles": "*Cc1ccc(OC)cc1",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 8,
+          "b": 9,
+          "order": 0
+        },
+        {
+          "a": 9,
+          "b": 2,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "OPMB",
+      "reverse_label": "PMBO",
+      "smiles": "*OCc1ccc(OC)cc1",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 7,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 9,
+          "order": 0
+        },
+        {
+          "a": 9,
+          "b": 10,
+          "order": 0
+        },
+        {
+          "a": 10,
+          "b": 3,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "OTBS",
+      "reverse_label": "TBSO",
+      "smiles": "*O[Si](C)(C)C(C)(C)C",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 14,
+          "aromatic": null,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 8,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "TIPS",
+      "reverse_label": "",
+      "smiles": "*[Si](C(C)C)(C(C)C)C(C)C",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 14,
+          "aromatic": null,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 8,
+          "b": 9,
+          "order": 0
+        },
+        {
+          "a": 8,
+          "b": 10,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "OTIPS",
+      "reverse_label": "TIPSO",
+      "smiles": "*O[Si](C(C)C)(C(C)C)C(C)C",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 14,
+          "aromatic": null,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 9,
+          "order": 0
+        },
+        {
+          "a": 9,
+          "b": 10,
+          "order": 0
+        },
+        {
+          "a": 9,
+          "b": 11,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "TES",
+      "reverse_label": "",
+      "smiles": "*[Si](CC)(CC)CC",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 14,
+          "aromatic": null,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "OTES",
+      "reverse_label": "TESO",
+      "smiles": "*O[Si](CC)(CC)CC",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 14,
+          "aromatic": null,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 7,
+          "b": 8,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "Piv",
+      "reverse_label": "",
+      "smiles": "*C(=O)C(C)(C)C",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 2
+        },
+        {
+          "a": 1,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 6,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "OPiv",
+      "reverse_label": "PivO",
+      "smiles": "*OC(=O)C(C)(C)C",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 2
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 7,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "Lev",
+      "reverse_label": "",
+      "smiles": "*C(=O)CCC(C)=O",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 2
+        },
+        {
+          "a": 1,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 7,
+          "order": 2
+        }
+      ]
+    },
+    {
+      "label": "OLev",
+      "reverse_label": "LevO",
+      "smiles": "*OC(=O)CCC(C)=O",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 2
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 8,
+          "order": 2
+        }
+      ]
+    },
+    {
+      "label": "Tol",
+      "reverse_label": "",
+      "smiles": "*c1ccc(C)cc1",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 7,
+          "b": 1,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "SPh",
+      "reverse_label": "PhS",
+      "smiles": "*Sc1ccccc1",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 16,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 7,
+          "b": 2,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "STol",
+      "reverse_label": "TolS",
+      "smiles": "*Sc1ccc(C)cc1",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 16,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 7,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 8,
+          "b": 2,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "SEt",
+      "reverse_label": "EtS",
+      "smiles": "*SCC",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 16,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "NPhth",
+      "reverse_label": "PhthN",
+      "smiles": "*N1C(=O)c2ccccc2C1=O",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 7,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 2
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 2
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 2
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 7,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 8,
+          "b": 9,
+          "order": 0
+        },
+        {
+          "a": 9,
+          "b": 10,
+          "order": 0
+        },
+        {
+          "a": 10,
+          "b": 11,
+          "order": 2
+        },
+        {
+          "a": 10,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 9,
+          "b": 4,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "Troc",
+      "reverse_label": "",
+      "smiles": "*C(=O)OCC(Cl)(Cl)Cl",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 2
+        },
+        {
+          "a": 1,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 8,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "NHTroc",
+      "reverse_label": "TrocHN",
+      "smiles": "*NC(=O)OCC(Cl)(Cl)Cl",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 7,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 2
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 9,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "NHBoc",
+      "reverse_label": "BocHN",
+      "smiles": "*NC(=O)OC(C)(C)C",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 7,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 2
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 8,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "NHAc",
+      "reverse_label": "AcHN",
+      "smiles": "*NC(C)=O",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 7,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 2
+        }
+      ]
+    },
+    {
+      "label": "Tr",
+      "reverse_label": "",
+      "smiles": "*C(c1ccccc1)(c1ccccc1)c1ccccc1",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 8,
+          "b": 9,
+          "order": 0
+        },
+        {
+          "a": 9,
+          "b": 10,
+          "order": 0
+        },
+        {
+          "a": 10,
+          "b": 11,
+          "order": 0
+        },
+        {
+          "a": 11,
+          "b": 12,
+          "order": 0
+        },
+        {
+          "a": 12,
+          "b": 13,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 14,
+          "order": 0
+        },
+        {
+          "a": 14,
+          "b": 15,
+          "order": 0
+        },
+        {
+          "a": 15,
+          "b": 16,
+          "order": 0
+        },
+        {
+          "a": 16,
+          "b": 17,
+          "order": 0
+        },
+        {
+          "a": 17,
+          "b": 18,
+          "order": 0
+        },
+        {
+          "a": 18,
+          "b": 19,
+          "order": 0
+        },
+        {
+          "a": 7,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 13,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 19,
+          "b": 14,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "OTr",
+      "reverse_label": "TrO",
+      "smiles": "*OC(c1ccccc1)(c1ccccc1)c1ccccc1",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 3,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        },
+        {
+          "number": 6,
+          "aromatic": true,
+          "charge": null,
+          "degree": 2,
+          "rings": 1
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 7,
+          "b": 8,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 9,
+          "order": 0
+        },
+        {
+          "a": 9,
+          "b": 10,
+          "order": 0
+        },
+        {
+          "a": 10,
+          "b": 11,
+          "order": 0
+        },
+        {
+          "a": 11,
+          "b": 12,
+          "order": 0
+        },
+        {
+          "a": 12,
+          "b": 13,
+          "order": 0
+        },
+        {
+          "a": 13,
+          "b": 14,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 15,
+          "order": 0
+        },
+        {
+          "a": 15,
+          "b": 16,
+          "order": 0
+        },
+        {
+          "a": 16,
+          "b": 17,
+          "order": 0
+        },
+        {
+          "a": 17,
+          "b": 18,
+          "order": 0
+        },
+        {
+          "a": 18,
+          "b": 19,
+          "order": 0
+        },
+        {
+          "a": 19,
+          "b": 20,
+          "order": 0
+        },
+        {
+          "a": 8,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 14,
+          "b": 9,
+          "order": 0
+        },
+        {
+          "a": 20,
+          "b": 15,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "MOM",
+      "reverse_label": "",
+      "smiles": "*COC",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "OMOM",
+      "reverse_label": "MOMO",
+      "smiles": "*OCOC",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "Tf",
+      "reverse_label": "",
+      "smiles": "*S(=O)(=O)C(F)(F)F",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 16,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 9,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 9,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 9,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 2
+        },
+        {
+          "a": 1,
+          "b": 3,
+          "order": 2
+        },
+        {
+          "a": 1,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 7,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "OTf",
+      "reverse_label": "TfO",
+      "smiles": "*OS(=O)(=O)C(F)(F)F",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 16,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 9,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 9,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 9,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 2
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 2
+        },
+        {
+          "a": 2,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 7,
+          "order": 0
+        },
+        {
+          "a": 5,
+          "b": 8,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "All",
+      "reverse_label": "",
+      "smiles": "*CC=C",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 2
+        }
+      ]
+    },
+    {
+      "label": "OAll",
+      "reverse_label": "AllO",
+      "smiles": "*OCC=C",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 2
+        }
+      ]
+    },
+    {
+      "label": "CCl3",
+      "reverse_label": "Cl3C",
+      "smiles": "*C(Cl)(Cl)Cl",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 3,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 4,
+          "order": 0
+        }
+      ]
+    },
+    {
+      "label": "OC(NH)CCl3",
+      "reverse_label": "Cl3CC(NH)O",
+      "smiles": "*OC(=N)C(Cl)(Cl)Cl",
+      "atoms": [
+        {
+          "number": 0,
+          "aromatic": null,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 8,
+          "aromatic": false,
+          "charge": null,
+          "degree": 2,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 3,
+          "rings": 0
+        },
+        {
+          "number": 7,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 6,
+          "aromatic": false,
+          "charge": null,
+          "degree": 4,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        },
+        {
+          "number": 17,
+          "aromatic": false,
+          "charge": null,
+          "degree": 1,
+          "rings": 0
+        }
+      ],
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 0
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 0
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 2
+        },
+        {
+          "a": 2,
+          "b": 4,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 6,
+          "order": 0
+        },
+        {
+          "a": 4,
+          "b": 7,
+          "order": 0
+        }
+      ]
     }
   ]
 }
