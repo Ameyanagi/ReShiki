@@ -572,7 +572,7 @@ fn push_hydrogens(
         let h_width = frame.text_width("H", size);
         let width = h_width + frame.text_width(&count, small);
         use crate::atom_labels::HydrogenPosition as H;
-        let position = crate::atom_labels::appendage_position(a, doc);
+        let mut position = crate::atom_labels::appendage_position(a, doc);
         let mut parts = vec![frame.text(Point::default(), "H".into(), size)];
         if !count.is_empty() {
             parts.push(frame.text(Point::new(h_width, size * 0.40), count, small));
@@ -585,14 +585,32 @@ fn push_hydrogens(
                 }
             }
         }
-        place_appendage(
-            &cursor.runs,
-            &mut parts,
-            (origin, element_width),
-            (width, isotope_width),
-            size,
-            position,
-        );
+        let place = |position| {
+            let mut parts = parts.clone();
+            place_appendage(
+                &cursor.runs,
+                &mut parts,
+                (origin, element_width),
+                (width, isotope_width),
+                size,
+                position,
+            );
+            parts
+        };
+        let mut parts = place(position);
+        if a.display.hydrogen_position == H::Auto {
+            let clear = clear_of_nearby_labels(a, doc, size);
+            if !clear(&parts)
+                && let Some((side, placed)) = crate::atom_labels::appendage_alternatives(a, doc)
+                    .into_iter()
+                    .filter(|side| *side != position)
+                    .map(|side| (side, place(side)))
+                    .find(|(_, placed)| clear(placed))
+            {
+                position = side;
+                parts = placed;
+            }
+        }
         if matches!(position, H::Above | H::Below) {
             if let Some(Primitive::Text { position, .. }) = parts.first() {
                 cursor.mark_y = position.y;
@@ -603,6 +621,36 @@ fn push_hydrogens(
         if position == H::Right {
             cursor.right += width;
         }
+    }
+}
+
+thread_local! {
+    /// Set while measuring neighboring labels for hydrogen placement, so their
+    /// own automatic hydrogens keep the bond-based side instead of recursing.
+    static MEASURING_NEARBY_LABELS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether automatic hydrogen ink stays clear of nearby atom labels and charges
+/// (for example an unbonded metal's 3+). Nested measurements report clear.
+fn clear_of_nearby_labels(a: &Atom, doc: &Document, size: f32) -> impl Fn(&[Primitive]) -> bool {
+    let nested = MEASURING_NEARBY_LABELS.with(|flag| flag.replace(true));
+    let occupied: Vec<_> = if nested {
+        vec![]
+    } else {
+        doc.atoms
+            .iter()
+            .filter(|other| other.id != a.id && a.position.distance(other.position) < size * 5.)
+            .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
+            .collect()
+    };
+    MEASURING_NEARBY_LABELS.with(|flag| flag.set(nested));
+    let gap = size * 0.12;
+    move |parts| {
+        label_ink_boxes(parts).iter().all(|(lo, hi)| {
+            occupied.iter().all(|(a, b)| {
+                hi.x <= a.x - gap || lo.x >= b.x + gap || hi.y <= a.y - gap || lo.y >= b.y + gap
+            })
+        })
     }
 }
 

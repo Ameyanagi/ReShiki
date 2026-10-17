@@ -67,27 +67,7 @@ pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPositio
     if atom.display.hydrogen_position != H::Auto {
         return atom.display.hydrogen_position;
     }
-    let directions: Vec<_> = doc
-        .bonds
-        .iter()
-        .filter_map(|bond| {
-            let id = if bond.a == atom.id {
-                bond.b
-            } else if bond.b == atom.id {
-                bond.a
-            } else {
-                return None;
-            };
-            if !doc.bond_visible(atom.id, id) {
-                return None;
-            }
-            let other = doc.atom(id)?;
-            let dx = other.position.x - atom.position.x;
-            let dy = other.position.y - atom.position.y;
-            let length = dx.hypot(dy);
-            (length > 0.001).then(|| Point::new(dx / length, dy / length))
-        })
-        .collect();
+    let directions = bond_directions(atom, doc);
     let sum_x = directions.iter().map(|p| p.x).sum::<f32>();
     let sum_y = directions.iter().map(|p| p.y).sum::<f32>();
     let left = sum_x > 0.1;
@@ -139,6 +119,55 @@ pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPositio
         }
     }
     best.0
+}
+/// Unit directions of the visible bonds leaving an atom.
+fn bond_directions(atom: &Atom, doc: &Document) -> Vec<Point> {
+    doc.bonds
+        .iter()
+        .filter_map(|bond| {
+            let id = if bond.a == atom.id {
+                bond.b
+            } else if bond.b == atom.id {
+                bond.a
+            } else {
+                return None;
+            };
+            if !doc.bond_visible(atom.id, id) {
+                return None;
+            }
+            let other = doc.atom(id)?;
+            let dx = other.position.x - atom.position.x;
+            let dy = other.position.y - atom.position.y;
+            let length = dx.hypot(dy);
+            (length > 0.001).then(|| Point::new(dx / length, dy / length))
+        })
+        .collect()
+}
+
+/// Automatic sides that leave at least 60 degrees to every visible bond, with
+/// the greatest bond clearance first. Label layout uses these when the usual
+/// automatic side would collide with a nearby label or charge.
+pub(crate) fn appendage_alternatives(atom: &Atom, doc: &Document) -> Vec<HydrogenPosition> {
+    use HydrogenPosition as H;
+    let directions = bond_directions(atom, doc);
+    let mut sides: Vec<_> = [
+        (H::Above, 0., -1.),
+        (H::Below, 0., 1.),
+        (H::Left, -1., 0.),
+        (H::Right, 1., 0.),
+    ]
+    .into_iter()
+    .map(|(side, x, y)| {
+        let score = directions
+            .iter()
+            .map(|p| p.x * x + p.y * y)
+            .fold(f32::NEG_INFINITY, f32::max);
+        (side, score)
+    })
+    .filter(|(_, score)| *score <= 0.5 + 0.0001)
+    .collect();
+    sides.sort_by(|a, b| a.1.total_cmp(&b.1));
+    sides.into_iter().map(|(side, _)| side).collect()
 }
 fn yes() -> bool {
     true

@@ -445,3 +445,34 @@ fn implicit_carbon_charge_and_genuinely_covered_short_bonds_are_not_repositioned
         );
     }
 }
+
+/// Issue #337: unjoined en donors around Co³⁺ keep their automatic H₂ clear
+/// of the metal's 3+ and of each other; a manual side is still honored.
+#[test]
+fn automatic_hydrogens_avoid_nearby_unbonded_labels_and_charges() {
+    let mut doc: Document = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/coordination/co-en3-before.rsk"
+    ))
+    .unwrap();
+    let overlaps = |doc: &Document, a: u64, b: u64| {
+        let other = atom_label_ink_boxes(doc.atom(b).unwrap(), doc);
+        atom_label_ink_boxes(doc.atom(a).unwrap(), doc)
+            .iter()
+            .any(|(lo, hi)| {
+                other
+                    .iter()
+                    .any(|(a, b)| hi.x > a.x && lo.x < b.x && hi.y > a.y && lo.y < b.y)
+            })
+    };
+    for a in &doc.atoms {
+        for b in doc.atoms.iter().filter(|b| b.id > a.id) {
+            assert!(!overlaps(&doc, a.id, b.id), "Labels {} and {}", a.id, b.id);
+        }
+    }
+    // The upper-right NH₂ (atom 2) stacks its H₂ above rather than toward Co.
+    let n = charge_run(&doc, 2, "N");
+    let h = charge_run(&doc, 2, "H");
+    assert!(h.y < n.y && (h.x - n.x).abs() < 0.1, "N {n:?}, H {h:?}");
+    doc.atom_mut(2).unwrap().display.hydrogen_position = HydrogenPosition::Left;
+    assert!(charge_run(&doc, 2, "H").x < n.x);
+}
