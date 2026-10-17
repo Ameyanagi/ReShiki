@@ -215,7 +215,8 @@ the arrangement of the figure. To write one:
    it, and the [generated reference](agent-reference.md#proposal) shows it.
    Every object lists all of its properties: give `[]`, `""` or `null` for the
    parts you do not use. `replace_ids` must be empty, and every structure is
-   SMILES; chemical names are not looked up.
+   SMILES; chemical names are not looked up. Labels and `conditions` are drawn
+   as typed, so write formulas with Unicode subscripts: `H₂SO₄`, not `H2SO4`.
 3. Look at the layout:
 
    ```sh
@@ -321,6 +322,10 @@ Prints ReShiki's versions, the limits it enforces and the formats as one JSON
 line. `cli` lists the formats the command line reads and writes. `grants` and
 `files` describe the file tools of the MCP server; the command line uses
 neither.
+
+`reshiki --version` (or `reshiki --cli --version`) prints only the
+application version, such as `reshiki 0.12.0`, and exits without opening a
+window.
 
 <details>
 <summary>Output of <code>reshiki --cli info</code>, shown on several lines</summary>

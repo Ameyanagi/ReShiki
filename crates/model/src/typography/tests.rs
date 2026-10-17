@@ -171,3 +171,45 @@ fn stored_manual_label_ranges_reject_invalid_offsets_and_missing_text() {
         vec![(0..1, Script::Normal), (1..4, Script::Subscript)]
     );
 }
+
+#[test]
+fn wrapping_breaks_between_words_never_inside_one() {
+    use super::{TextFormat, layout};
+    let lines = |text: &str, width_pt: f32| {
+        let format = TextFormat {
+            width_pt: Some(width_pt),
+            ..TextFormat::default()
+        };
+        let layout = layout(text, &format);
+        let mut lines: Vec<(f32, String)> = vec![];
+        for fragment in &layout.fragments {
+            match lines.last_mut() {
+                Some((y, line)) if (*y - fragment.position.y).abs() < 0.001 => {
+                    line.push_str(&fragment.text);
+                }
+                _ => lines.push((fragment.position.y, fragment.text.clone())),
+            }
+        }
+        lines
+            .into_iter()
+            .map(|(_, line)| line.trim_end().to_owned())
+            .collect::<Vec<_>>()
+    };
+    // #313 and #329: a word wider than the box overflows it instead of
+    // being cut at an arbitrary character.
+    assert_eq!(lines("4-Bromoanisole", 30.), ["4-Bromoanisole"]);
+    assert_eq!(
+        lines("(2R)-2-hydroxypropanoic acid", 40.),
+        ["(2R)-2-hydroxypropanoic", "acid"]
+    );
+    assert_eq!(
+        lines("alpha beta gamma delta", 50.),
+        ["alpha beta", "gamma", "delta"]
+    );
+    // Text without spaces between words still wraps at CJK characters.
+    assert!(lines("日本語の長い説明文です", 30.).len() > 1);
+    // A voicing mark stays with its kana.
+    let kana = lines("ﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞ", 12.);
+    assert!(kana.len() > 1);
+    assert!(kana.iter().all(|line| !line.starts_with('ﾞ')), "{kana:?}");
+}
