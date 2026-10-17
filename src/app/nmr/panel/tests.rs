@@ -32,7 +32,7 @@ fn one_row_sets_minimum_and_preferred_height() {
 }
 
 #[test]
-fn fewer_than_preferred_rows_use_the_last_row() {
+fn several_rows_use_the_last_row() {
     assert_eq!(
         heights(10., 100., &[row(0.), row(24.5)]),
         Heights {
@@ -43,7 +43,7 @@ fn fewer_than_preferred_rows_use_the_last_row() {
 }
 
 #[test]
-fn more_than_preferred_rows_use_the_preferred_row() {
+fn every_measured_row_sets_the_preferred_height() {
     assert_eq!(
         heights(
             10.,
@@ -52,7 +52,7 @@ fn more_than_preferred_rows_use_the_preferred_row() {
         ),
         Heights {
             minimum: 32.,
-            preferred: 105.5,
+            preferred: 130.,
         }
     );
 }
@@ -118,13 +118,15 @@ fn floating_height_is_capped_by_maximum_content_height() {
 }
 
 #[test]
-fn row_measurement_stops_after_preferred_rows() {
+fn row_measurement_stops_once_a_row_reaches_the_height_cap() {
     let mut rows = Rows::default();
     let mut traversed = false;
     rows.traverse(&mut |_| traversed = true);
     assert!(traversed);
 
-    for index in 0..PREFERRED_ROWS + 3 {
+    // Rows at 0, 200, 400 and 600 (ending at 620, the cap); later rows
+    // cannot change the capped preferred height.
+    for index in 0..7 {
         let mut node = reshiki::accessibility::Node {
             id: format!("{SITE_ID_PREFIX}13C.{index}"),
             name: "Result row".into(),
@@ -134,12 +136,12 @@ fn row_measurement_stops_after_preferred_rows() {
             checked: None,
             expanded: None,
             value: None,
-            bounds: row(index as f32 * 24.5),
+            bounds: row(index as f32 * 200.),
             visible_bounds: None,
         };
         rows.custom(None, Rectangle::default(), &mut node);
     }
-    assert_eq!(rows.0, vec![row(0.), row(24.5), row(49.), row(73.5)]);
+    assert_eq!(rows.0, vec![row(0.), row(200.), row(400.), row(600.)]);
     rows.traverse(&mut |_| panic!("A full measurement must not descend"));
 }
 
@@ -197,18 +199,19 @@ async fn row_measurement_skips_later_rows_in_a_column() {
     )
     .await
     .unwrap();
-    let count = PREFERRED_ROWS + 3;
+    // 200px rows: the fourth ends past the 620px content cap.
+    let (count, measured_rows) = (7, 4);
     let mut table = Column::new();
     for index in 0..count {
         table = table.push(Space::new().height(1).width(Length::Fill));
         table = table.push(table_row(
-            index,
             reshiki::accessibility::button(
                 format!("{SITE_ID_PREFIX}13C.{index}"),
                 "Result row",
                 text("Row"),
             )
             .width(Length::Fill)
+            .height(200)
             .on_press(Message::Nmr(super::super::Action::SelectRow(index))),
         ));
     }
@@ -217,7 +220,7 @@ async fn row_measurement_skips_later_rows_in_a_column() {
     let node = table.as_widget_mut().layout(
         &mut tree,
         &renderer,
-        &layout::Limits::new(Size::ZERO, Size::new(200., 1000.)),
+        &layout::Limits::new(Size::ZERO, Size::new(200., 2000.)),
     );
     let bounds: Vec<Rectangle> = Layout::new(&node)
         .children()
@@ -231,8 +234,8 @@ async fn row_measurement_skips_later_rows_in_a_column() {
     table
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &renderer, &mut measured);
-    assert_eq!(measured.rows.0, bounds[..PREFERRED_ROWS]);
-    assert_eq!(measured.nodes, PREFERRED_ROWS);
+    assert_eq!(measured.rows.0, bounds[..measured_rows]);
+    assert_eq!(measured.nodes, measured_rows);
 
     let mut all = Nodes::default();
     table
