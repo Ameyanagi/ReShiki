@@ -622,6 +622,16 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
                     .flatten()
                     .collect(),
             };
+            // A map number beside an element label reads as a subscript,
+            // superscript or coefficient (O 3 → O₃), so stack it above or below.
+            // Any map number nearer another atom reads as that atom's.
+            let mapping = match owner {
+                Owner::Mapping(id) => Some(
+                    doc.atom(id)
+                        .and_then(|a| crate::scene::atom_label_ink_bounds(a, doc)),
+                ),
+                _ => None,
+            };
             let preferred = crate::editing::open_angle(anchor, &neighbors);
             let mut best = (f32::INFINITY, anchor.offset(0., -height));
             for radius in indicator_radii(height) {
@@ -630,6 +640,18 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
                     let center = anchor.offset(radius * angle.cos(), radius * angle.sin());
                     let (lo, hi) = bounds(center);
                     let mut score = radius * 0.08 + i as f32 * 0.001;
+                    if let Some(label) = mapping {
+                        let stacked = label.is_none_or(|(a, b)| {
+                            (hi.y <= a.y || lo.y >= b.y)
+                                && center.x - width / 2. < b.x
+                                && center.x + width / 2. > a.x
+                        });
+                        let distance = |p: &Point| (p.x - center.x).hypot(p.y - center.y);
+                        let owned = positions.values().all(|p| distance(p) >= distance(&anchor));
+                        if !stacked || !owned {
+                            score += 500.;
+                        }
+                    }
                     for (a, b) in &occupied {
                         let overlap = (hi.x.min(b.x) - lo.x.max(a.x)).max(0.)
                             * (hi.y.min(b.y) - lo.y.max(a.y)).max(0.);
@@ -766,3 +788,5 @@ pub fn condensed_label(text: &str) -> Option<(&str, &str)> {
     }
     (item && groups.is_empty()).then_some((core, suffix))
 }
+#[cfg(test)]
+mod tests;
