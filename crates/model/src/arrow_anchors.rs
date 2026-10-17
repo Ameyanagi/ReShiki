@@ -198,16 +198,7 @@ fn clearance(doc: &Document, target: &Target, direction: Point) -> Option<f32> {
         Target::Bond { a, b, .. } => {
             let (_, bond) = doc.bond_between(a, b)?;
             let style = &doc.drawing_style;
-            let stroke = DEFAULT.world(
-                if matches!(
-                    bond.display.as_str(),
-                    "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
-                ) {
-                    style.bold_width_pt
-                } else {
-                    style.line_width_pt
-                },
-            ) * 0.5;
+            let stroke = half_stroke(doc, &bond.display);
             let normal = doc.atom(a).zip(doc.atom(b)).map(|(a, b)| {
                 let tangent = unit(delta(b.position, a.position));
                 Point::new(-tangent.y, tangent.x)
@@ -241,6 +232,20 @@ fn clearance(doc: &Document, target: &Target, direction: Point) -> Option<f32> {
             }
         }
     })
+}
+/// Half the displayed stroke width of a bond line.
+fn half_stroke(doc: &Document, display: &str) -> f32 {
+    let style = &doc.drawing_style;
+    DEFAULT.world(
+        if matches!(
+            display,
+            "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
+        ) {
+            style.bold_width_pt
+        } else {
+            style.line_width_pt
+        },
+    ) * 0.5
 }
 impl Pick {
     pub fn center(&self, doc: &Document) -> Option<Point> {
@@ -390,6 +395,194 @@ fn new_target_visible(
         }),
     }
 }
+/// A drawn bond line segment and its half stroke width.
+type InkLine = (Point, Point, f32);
+/// Bond ink leaving `atom`: each bond's direction away from the atom, and the
+/// lines it draws.
+fn bond_ink(doc: &Document, atom: u64, center: Point) -> (Vec<Point>, Vec<InkLine>) {
+    use crate::bonds::DoublePosition;
+    let style = &doc.drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    let mut bonds = Vec::new();
+    let mut lines = Vec::new();
+    for bond in doc
+        .bonds
+        .iter()
+        .filter(|b| (b.a == atom || b.b == atom) && doc.bond_visible(b.a, b.b))
+    {
+        let Some((a, z)) = doc.atom(bond.a).zip(doc.atom(bond.b)) else {
+            continue;
+        };
+        let (a, z) = (a.position, z.position);
+        let length = a.distance(z);
+        if length < 0.00001 {
+            continue;
+        }
+        bonds.push(unit(delta(if bond.a == atom { z } else { a }, center)));
+        // A projected "_end" display is drawn as its reversed base style.
+        let display = bond.display.trim_end_matches("_end");
+        let wavy = display == "wavy";
+        // (normal offset at a, at z, setback from each end) as drawn by the
+        // bond scene, along the stored a -> b normal.
+        let rails: Vec<(f32, f32, f32)> = match bond.order {
+            2 if wavy => vec![
+                (-spacing / 2., spacing / 2., 0.),
+                (spacing / 2., -spacing / 2., 0.),
+            ],
+            2 | 7 => match crate::scene::effective_double_position(doc, bond) {
+                DoublePosition::Left => vec![(0., 0., 0.), (-spacing, -spacing, spacing * 0.75)],
+                DoublePosition::Right => vec![(0., 0., 0.), (spacing, spacing, spacing * 0.75)],
+                _ => vec![
+                    (-spacing / 2., -spacing / 2., 0.),
+                    (spacing / 2., spacing / 2., 0.),
+                ],
+            },
+            // The dashed aromatic rail lies on the automatic inner side, even
+            // when a stale explicit position was saved on the bond.
+            4 => match crate::scene::effective_double_position(
+                doc,
+                &crate::document::Bond {
+                    double_position: DoublePosition::Auto,
+                    ..bond.clone()
+                },
+            ) {
+                DoublePosition::Left => vec![(0., 0., 0.), (-spacing, -spacing, 0.)],
+                _ => vec![(0., 0., 0.), (spacing, spacing, 0.)],
+            },
+            3 => [-1., 0., 1.]
+                .map(|k| (spacing * k, spacing * k, 0.))
+                .to_vec(),
+            6 => [-1.5, -0.5, 0.5, 1.5]
+                .map(|k| (spacing * k, spacing * k, 0.))
+                .to_vec(),
+            _ => vec![(0., 0., 0.)],
+        };
+        let u = unit(delta(z, a));
+        let n = Point::new(-u.y, u.x);
+        let wave = if wavy && bond.order != 2 {
+            style.line_width() * 1.25
+        } else {
+            0.
+        };
+        // A short bond leaves no room for a set-back rail; the scene skips it.
+        lines.extend(
+            rails
+                .into_iter()
+                .enumerate()
+                .filter(|(_, (_, _, setback))| length > setback * 2.)
+                .map(|(index, (from, to, setback))| {
+                    // As in the scene, a second rail may have its own display.
+                    let display = match &bond.secondary_display {
+                        Some(secondary) if index == 1 && !wavy => secondary,
+                        _ => display,
+                    };
+                    (
+                        a.offset(n.x * from + u.x * setback, n.y * from + u.y * setback),
+                        z.offset(n.x * to - u.x * setback, n.y * to - u.y * setback),
+                        half_stroke(doc, display) + wave,
+                    )
+                }),
+        );
+    }
+    (bonds, lines)
+}
+/// Chooses the arrival direction at an atom, and any extra end gap, so the
+/// arrowhead lying along that direction stays off bond ink. Candidates face
+/// the source within [`OPEN_APPROACH`] and are reached from the default
+/// without turning across a bond, so the shaft keeps its opening. The
+/// smallest extra gap (up to another `gap`) wins, then the widest angle from
+/// the bonds (up to [`OPEN_APPROACH`]), then the default or nearest direction.
+fn open_approach(
+    doc: &Document,
+    atom: u64,
+    preferred: Point,
+    back: Point,
+    start: Point,
+    style: &ArrowStyle,
+    gap: f32,
+) -> (Point, f32) {
+    let Some(center) = doc.atom(atom).map(|a| a.position) else {
+        return (preferred, 0.);
+    };
+    let (bonds, lines) = bond_ink(doc, atom, center);
+    let head_length = DEFAULT.world(style.head_length_pt);
+    let head_width = DEFAULT.world(style.head_width_pt);
+    let pen = DEFAULT.world(style.width_pt) * 0.5;
+    // Samples the head from its tip back to its widest base; like the drawn
+    // head, it is shortened on a short arrow but keeps its width.
+    let touches = |d: Point, extra: f32| {
+        let tip = clearance(doc, &Target::Atom { atom }, d).unwrap_or(0.) + gap + pen + extra;
+        let length = head_length.min(start.distance(center.offset(d.x * tip, d.y * tip)) * 0.4);
+        // Neighboring sample disks overlap, so no line slips between them.
+        let samples = (length / pen.max(0.01)).ceil().max(8.) as usize;
+        (0..=samples).any(|i| {
+            let t = i as f32 / samples as f32;
+            let s = tip + length * t;
+            let p = center.offset(d.x * s, d.y * s);
+            lines.iter().any(|(first, last, half)| {
+                let v = delta(*last, *first);
+                let along = (dot(delta(p, *first), v) / dot(v, v)).clamp(0., 1.);
+                p.distance(first.offset(v.x * along, v.y * along)) < head_width * t + half + pen
+            })
+        })
+    };
+    let score = |d: Point| {
+        let extra = (0..=8)
+            .map(|i| gap * i as f32 / 8.)
+            .find(|e| !touches(d, *e));
+        let angle = bonds
+            .iter()
+            .map(|b| dot(d, *b).clamp(-1., 1.).acos())
+            .fold(OPEN_APPROACH, f32::min);
+        (extra, angle)
+    };
+    let better = |a: (Option<f32>, f32), b: (Option<f32>, f32)| match (a.0, b.0) {
+        (Some(x), Some(y)) if x != y => x < y,
+        (Some(_), None) => true,
+        (None, Some(_)) => false,
+        _ => a.1 > b.1 + 0.0001,
+    };
+    let rotated = |angle: f32| {
+        let (sin, cos) = angle.sin_cos();
+        Point::new(
+            preferred.x * cos - preferred.y * sin,
+            preferred.x * sin + preferred.y * cos,
+        )
+    };
+    let cross = |a: Point, b: Point| a.x * b.y - a.y * b.x;
+    // Turning onto or across a bond would route the shaft over that bond
+    // instead. Only a default lying exactly on a bond may leave it.
+    let crosses = |from: Point, to: Point| {
+        bonds.iter().any(|b| {
+            let (before, after) = (cross(*b, from), cross(*b, to));
+            let on_default = from == preferred && before.abs() <= 0.0001;
+            dot(*b, to) > 0. && !on_default && before * after <= 0.
+        })
+    };
+    let facing = OPEN_APPROACH.cos() - 0.0001;
+    let step = 5f32.to_radians();
+    let mut best = (preferred, score(preferred));
+    let mut sides = [Some(preferred), Some(preferred)];
+    for k in 1..=36 {
+        for (side, sign) in sides.iter_mut().zip([1., -1.]) {
+            let Some(previous) = *side else { continue };
+            let d = rotated(sign * k as f32 * step);
+            if dot(d, back) < facing || crosses(previous, d) {
+                *side = None;
+                continue;
+            }
+            *side = Some(d);
+            let s = score(d);
+            if better(s, best.1) {
+                best = (d, s);
+            }
+        }
+    }
+    (best.0, best.1.0.unwrap_or(0.))
+}
+/// Widest turn from the source and the angular bond clearance an
+/// atom-attached arrowhead aims for.
+const OPEN_APPROACH: f32 = std::f32::consts::FRAC_PI_3;
 /// Creates one independent cubic. IDs and mark IDs change only after success.
 pub fn create(
     doc: &mut Document,
@@ -439,30 +632,37 @@ pub fn create(
         }
         _ => unit(Point::new(chord.x - chord.y * 0.7, chord.y + chord.x * 0.7)),
     };
-    let end_direction =
-        bond_direction(destination, Point::new(-chord.x, -chord.y)).unwrap_or_else(|| {
-            unit(Point::new(
-                -chord.x - chord.y * 0.7,
-                -chord.y + chord.x * 0.7,
-            ))
-        });
+    let gap = DEFAULT.world(1.2);
+    let pen = DEFAULT.world(style.width_pt) * 0.5;
     let mut candidate = doc.clone();
     let mut start_anchor = Anchor {
         target: source.commit(&mut candidate)?,
         offset: Point::default(),
         direction: source_direction,
-        gap: DEFAULT.world(1.2),
+        gap,
+    };
+    let start = start_anchor
+        .resolved(&candidate, pen)
+        .ok_or("Missing arrow source")?;
+    let back = Point::new(-chord.x, -chord.y);
+    let preferred = unit(Point::new(
+        -chord.x - chord.y * 0.7,
+        -chord.y + chord.x * 0.7,
+    ));
+    let (end_direction, end_extra) = match destination {
+        Pick::Bond { .. } => (
+            bond_direction(destination, back).ok_or("Missing destination bond")?,
+            0.,
+        ),
+        Pick::Atom(atom) => open_approach(doc, *atom, preferred, back, start, &style, gap),
+        Pick::LonePair { .. } => (preferred, 0.),
     };
     let mut end_anchor = Anchor {
         target: destination.commit(&mut candidate)?,
         offset: Point::default(),
         direction: end_direction,
-        gap: DEFAULT.world(1.2),
+        gap: gap + end_extra,
     };
-    let pen = DEFAULT.world(style.width_pt) * 0.5;
-    let start = start_anchor
-        .resolved(&candidate, pen)
-        .ok_or("Missing arrow source")?;
     let end = end_anchor
         .resolved(&candidate, pen)
         .ok_or("Missing arrow destination")?;
