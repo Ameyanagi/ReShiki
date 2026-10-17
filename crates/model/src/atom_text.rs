@@ -48,6 +48,8 @@ pub fn description(text: &str, mode: Mode) -> &'static str {
         "A finite list of element or chemical group alternatives. Expand generic structures generates each combination."
     } else if mode == Mode::Text {
         "Text on a dummy atom; existing bonds stay connected."
+    } else if repeat_label(text.trim()) {
+        "A repeat of one atom over the typed count range. Expand generic structures generates each count."
     } else if crate::ligands::LABELS.contains(&text.trim()) {
         "A real Cp (C5H5−) or Cp* (C10H15−) ligand with a five-center attachment. Metal charge stays as entered."
     } else if formula_group(text.trim()).is_some()
@@ -66,6 +68,18 @@ pub fn description(text: &str, mode: Mode) -> &'static str {
     } else {
         "Text on a dummy atom; existing bonds stay connected."
     }
+}
+
+/// The finite link-node spelling that Apply turns into a repeat (`[CH2]1-3`).
+fn repeat_label(text: &str) -> bool {
+    crate::generic::split_link_label(text).is_ok_and(|split| {
+        split.is_some_and(|(_, range)| {
+            matches!(
+                crate::generic::RepeatCount::parse(range),
+                Ok(crate::generic::RepeatCount::Finite { .. })
+            )
+        })
+    })
 }
 
 /// Text in the charged element or hydride grammar (Pd2+, NH4-2) is one
