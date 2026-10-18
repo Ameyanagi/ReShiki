@@ -985,7 +985,7 @@ pub(crate) fn double_position(faces: &FaceIndex<'_>, bond: &Bond) -> crate::bond
         position => position,
     }
 }
-fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Option<f32> {
+pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Option<f32> {
     if matches!(bond.order, 2 | 7)
         && let Some(side) = faces.automatic_side(bond)
     {
@@ -1261,6 +1261,7 @@ fn push_ring_strokes(
     // Retain every ring here so its other edges do not gain fallback dashes.
     let circles = crate::aromatic::circles(doc);
     let mut crossing_gaps = crate::crossings::gaps_with_opacity(doc, opacity);
+    let sides = crate::crossings::Sides::new(doc);
     for circle in circles.iter().filter(|c| !arcs.intersects(c)) {
         for part in circle.graphic().parts() {
             let stroke = Primitive::Path {
@@ -1268,7 +1269,8 @@ fn push_ring_strokes(
                 style: part.style,
                 filled: part.filled,
             };
-            let (stroke, gaps) = crate::crossings::ring_stroke(doc, circle, stroke, ring_opacity());
+            let (stroke, gaps) =
+                crate::crossings::ring_stroke_with(doc, circle, stroke, ring_opacity(), &sides);
             out.extend(opacity.owned_parts(doc, &circle.atoms, vec![stroke]));
             for (index, gap) in gaps {
                 if let Some(gaps) = crossing_gaps.get_mut(index) {
