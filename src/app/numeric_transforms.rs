@@ -17,6 +17,8 @@ mod memory_tests;
 
 /// Size of the proportional lock beside H.
 const LOCK: f32 = 20.;
+/// Width of the context row's Rotate field.
+pub(super) const ROTATION_FIELD: f32 = 58.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
@@ -560,6 +562,37 @@ impl App {
                 self.tab.numeric_transforms.error = Some(error);
             }
         }
+    }
+
+    /// The Rotate field again, beside the context row's Rotate 180° button.
+    /// It shares the inspector field's draft, and Enter applies only it.
+    pub(super) fn rotation_field(&self, enabled: bool) -> Element<'_, Message> {
+        let field = Field::Rotation;
+        let input = reshiki::accessibility::text_input(
+            "arrange-rotation",
+            format!("{} ({})", field.name(), field.unit()),
+            "",
+            self.tab.numeric_transforms.value(field),
+        )
+        .style(crate::appearance::input_style)
+        .on_input_maybe(
+            enabled.then_some(move |value| Message::NumericTransform(Action::Input(field, value))),
+        )
+        .on_submit_maybe(enabled.then_some(Message::NumericTransform(Action::Apply(field))));
+        hover_hint(
+            container(accessible_unit_field(input, field.unit())).width(ROTATION_FIELD),
+            if enabled {
+                format!(
+                    "Rotate by an exact angle · Enter applies\n{} · {}",
+                    field.hint(),
+                    super::shortcuts::rotation_keys()
+                )
+            } else {
+                "Rotate by angle · Select objects first".to_owned()
+            },
+            tooltip::Position::Bottom,
+        )
+        .into()
     }
 
     /// Rotate | Scale and W 🔒 H, with tilt under More and one Apply.

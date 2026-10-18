@@ -36,6 +36,19 @@ pub(super) fn label(message: &Message) -> Option<String> {
     binding(message).map(|(mods, key)| keys(mods, key))
 }
 
+/// The step-rotation keys for hints, as `keys` shows them: ⌥←/⌥→ 1° and
+/// ⌥↑/⌥↓ 15° on macOS.
+pub(super) fn rotation_keys() -> String {
+    let alt = |key| keys(Modifiers::ALT, key);
+    format!(
+        "{}/{} 1° · {}/{} 15°",
+        alt("Left"),
+        alt("Right"),
+        alt("Up"),
+        alt("Down")
+    )
+}
+
 /// A shortcut as menus, tooltips and Help show it: key symbols on macOS
 /// (⇧R, ⌘G, ⌥⌘←, ↩, ⌫) and words elsewhere (Shift+R, Ctrl+G, Ctrl+Alt+Left,
 /// Enter, Delete). An empty key gives the modifiers alone, as in "⌥ drag".
