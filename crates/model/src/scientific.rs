@@ -7,27 +7,26 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-mod label_clearance;
+mod label_halo;
 mod mark_placement;
 #[cfg(test)]
 mod mark_placement_tests;
 #[cfg(test)]
 mod orbital_tests;
-pub(crate) use label_clearance::readable_orbital_parts;
+pub(crate) use label_halo::orbital_halos;
+pub use label_halo::{LABEL_HALO_PT, OrbitalHalos, label_halo_radius};
 
-/// Styled orbital vectors with the same transparent atom-label clearance as
-/// the figure scene. Exchange keeps these vectors rather than orbital controls.
-pub fn orbital_parts_with_label_clearance(
-    graphic: &Graphic,
-    doc: &crate::document::Document,
-) -> Vec<Part> {
-    let labels: Vec<_> = doc
-        .atoms
-        .iter()
-        .filter(|atom| doc.atom_visible(atom.id))
-        .flat_map(|atom| crate::scene::atom_label_ink_boxes(atom, doc))
-        .collect();
-    readable_orbital_parts(graphic, &labels)
+/// The atom labels orbitals reach, from the document's own label ink.
+/// Editable exchange and hit-testing stack them as the scene does.
+pub fn orbital_label_halos(doc: &crate::document::Document) -> OrbitalHalos {
+    let opacity = crate::rear_opacity::Paint::new(doc);
+    orbital_halos(doc, &doc.graphics, |atom| {
+        if doc.atom_visible(atom.id) && opacity.atom(atom.id) > 0. {
+            crate::scene::atom_label_ink_boxes(atom, doc)
+        } else {
+            Vec::new()
+        }
+    })
 }
 
 macro_rules! choices {
@@ -419,6 +418,7 @@ fn attach_inner(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), 
         SymbolKind::CirclePlus|SymbolKind::CircleMinus|SymbolKind::Plus|SymbolKind::Minus=>{
             let delta=if matches!(kind,SymbolKind::CirclePlus|SymbolKind::Plus) {1} else {-1};
             atom.charge=atom.charge.saturating_add(delta).clamp(-8,8);
+            atom.display.hide_charge=false;
             atom.marks.retain(|m|!m.kind.charge());
             if matches!(kind,SymbolKind::CirclePlus|SymbolKind::CircleMinus) {MarkKind::CircledCharge} else {MarkKind::Charge}
         }

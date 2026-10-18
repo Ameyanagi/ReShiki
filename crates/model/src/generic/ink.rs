@@ -272,6 +272,7 @@ impl<'a> LabelPlan<'a> {
                 &number.text,
                 number.offset,
                 &number.style,
+                true,
             );
         }
         if self.map_label {
@@ -281,6 +282,7 @@ impl<'a> LabelPlan<'a> {
                 &a.map_num.to_string(),
                 a.display.mapping.offset,
                 &a.display.mapping.style,
+                false,
             );
         }
         if self.stereo_label {
@@ -320,10 +322,10 @@ fn cip_bounds(
     style: &crate::typography::TextStyle,
 ) {
     if let Some(label) = saved {
-        indicator_bounds(bounds, anchor, &format!("({label})"), offset, style);
+        indicator_bounds(bounds, anchor, &format!("({label})"), offset, style, false);
     }
     for label in FUTURE_CIP_LABELS {
-        indicator_bounds(bounds, anchor, label, offset, style);
+        indicator_bounds(bounds, anchor, label, offset, style, false);
     }
 }
 
@@ -333,18 +335,28 @@ fn indicator_bounds(
     text: &str,
     offset: Option<Point>,
     style: &crate::typography::TextStyle,
+    number: bool,
 ) {
     let height = crate::style::DEFAULT.world(style.size_pt);
     let width = crate::style::styled_text_width(text, height, style);
-    // Automatic indicator candidates have five fixed radii, ending at 3.25h+6.
+    // Automatic indicator candidates have five fixed radii, ending at 3.25h+6,
+    // and long atom numbers are justified outward by up to `outward_extent`.
     // Their conservative envelope avoids a second label-placement pass.
     let [_, _, _, _, automatic_radius] = crate::atom_labels::indicator_radii(height);
-    let radius = offset.map_or(automatic_radius, |_| 0.);
+    let (radius, outward) = match offset {
+        Some(_) => (0., 0.),
+        None if number => (
+            automatic_radius,
+            crate::atom_labels::outward_extent(width, height),
+        ),
+        None => (automatic_radius, 0.),
+    };
+    let across = radius + outward;
     let center = offset.map_or(anchor, |p| anchor.offset(p.x, p.y));
     include(
         bounds,
-        center.offset(-width / 2. - radius, -height / 2. - radius),
-        center.offset(width / 2. + radius, height / 2. + radius),
+        center.offset(-width / 2. - across, -height / 2. - radius),
+        center.offset(width / 2. + across, height / 2. + radius),
     );
     // Actual font ink may overhang its logical advance (italic/underline).
     // Automatic placement can choose any of the fixed candidate centers; grow
@@ -353,8 +365,8 @@ fn indicator_bounds(
     for (lo, hi) in crate::style::text_ink_boxes(text, height, style) {
         include(
             bounds,
-            origin.offset(lo.x - radius, lo.y - radius),
-            origin.offset(hi.x + radius, hi.y + radius),
+            origin.offset(lo.x - across, lo.y - radius),
+            origin.offset(hi.x + across, hi.y + radius),
         );
     }
 }

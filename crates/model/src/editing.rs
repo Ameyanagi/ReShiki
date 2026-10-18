@@ -1408,6 +1408,20 @@ fn attached_ring_vertices(
     } else {
         neighbors.iter().map(|p| p.distance(anchor)).sum::<f32>() / neighbors.len() as f32
     };
+    // A drag on empty canvas: the first bond runs from the press toward the
+    // pointer and the ring lies counter-clockwise of it on screen.
+    if atom.is_none()
+        && let Some(toward) = direction.filter(|d| d.distance(p) > radius)
+    {
+        let mut angle = (toward.y - p.y).atan2(toward.x - p.x);
+        let mut vertex = p;
+        for _ in 0..n {
+            ids.push(result.add_atom("C", vertex));
+            vertex = vertex.offset(length * angle.cos(), length * angle.sin());
+            angle -= std::f32::consts::TAU / n as f32;
+        }
+        return;
+    }
     let r = length / (2.0 * (std::f32::consts::PI / n as f32).sin());
     // The center belongs in the open angular gap, opposite the substituent
     // at a terminal atom. Never assume that the ring lies to its left.

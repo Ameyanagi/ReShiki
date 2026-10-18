@@ -17,7 +17,6 @@ pub(super) const RESIZE_STEP: f32 = 40.;
 pub(super) const PANEL_PADDING: f32 = 10.;
 const TITLE_DRAG_HEIGHT: f32 = 36.;
 const RESIZE_HANDLE: Size = Size::new(24., 32.);
-pub(super) const PREFERRED_ROWS: usize = 4;
 pub(in crate::app) const OVERLAY_INSETS: iced::Padding = iced::Padding {
     top: 150.,
     right: 12.,
