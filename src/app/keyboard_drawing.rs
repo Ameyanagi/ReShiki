@@ -291,6 +291,16 @@ struct StartedDrawing {
     selected: Vec<u64>,
 }
 
+/// Whether `key` at an empty hotspot starts a drawing rather than choosing a tool.
+pub(super) fn starts_drawing(key: &str) -> bool {
+    hotkeys::atom_label(key).is_some()
+        || [
+            "d", "+", "-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "z", "K", "k", "v",
+            "u", "a", "j", "J",
+        ]
+        .contains(&key)
+}
+
 /// Seed and edit in one transaction: unsupported or rejected keys never leave
 /// an extra carbon in the document or create an Undo entry.
 fn begin_drawing(
@@ -299,13 +309,7 @@ fn begin_drawing(
     key: &str,
     length: f32,
 ) -> Option<Result<StartedDrawing, String>> {
-    if hotkeys::atom_label(key).is_none()
-        && ![
-            "d", "+", "-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "z", "K", "k", "v",
-            "u", "a", "j", "J",
-        ]
-        .contains(&key)
-    {
+    if !starts_drawing(key) {
         return None;
     }
     Some((|| {

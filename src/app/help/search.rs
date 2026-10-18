@@ -81,47 +81,62 @@ fn key_tokens(text: &str) -> Vec<String> {
     tokens
 }
 
-/// The chord's keys and every spelling of its modifiers, lower-cased beside
-/// the original so case can break ties ("r" before "R").
-fn chord_terms(keys: &str) -> Vec<String> {
-    let mut terms = key_tokens(keys);
-    // Ranges such as ⇧3–⇧8 or ⌘1–⌘8 include the keys between their ends.
-    let chars: Vec<char> = keys.chars().collect();
-    for (i, _) in chars.iter().enumerate().filter(|(_, c)| **c == '–') {
-        let first = i.checked_sub(1).and_then(|j| chars.get(j)?.to_digit(10));
-        let last = chars
-            .iter()
-            .skip(i + 1)
-            .find(|c| !modifier(**c) && !c.is_alphabetic() && **c != '+')
-            .and_then(|c| c.to_digit(10));
-        if let (Some(first), Some(last)) = (first, last) {
-            terms.extend((first + 1..last).map(|d| d.to_string()));
-        }
-    }
-    // An uppercase contextual key is Shift-letter. Chords with modifiers,
-    // such as ⌘C, already spell out Shift when they use it.
-    let modified = terms.iter().any(|t| {
-        MODIFIERS
-            .iter()
-            .take(4)
-            .any(|(symbol, words)| t == symbol || words.iter().any(|w| t.eq_ignore_ascii_case(w)))
-    });
-    let shifted = !modified
-        && terms
-            .iter()
-            .any(|t| t.len() == 1 && t.chars().all(|c| c.is_ascii_uppercase()));
-    if shifted {
-        terms.push("⇧".into());
-    }
-    for token in terms.clone() {
-        for (symbol, words) in MODIFIERS {
-            if token == *symbol || words.iter().any(|w| token.eq_ignore_ascii_case(w)) {
-                terms.push((*symbol).into());
-                terms.extend(words.iter().map(|w| (*w).into()));
+fn is_modifier(term: &str) -> bool {
+    MODIFIERS.iter().take(4).any(|(symbol, words)| {
+        term == *symbol || words.iter().any(|w| term.eq_ignore_ascii_case(w))
+    })
+}
+
+/// Each " / " alternative of a chord, as its keys and every spelling of its
+/// modifiers, lower-cased beside the original so case can break ties ("r"
+/// before "R"). A bare key after a modified one shares its modifiers, as in
+/// ⌘⇧⌥ L / C / R.
+fn chord_terms(keys: &str) -> Vec<Vec<String>> {
+    let modified = key_tokens(keys).iter().any(|t| is_modifier(t));
+    let mut modifiers: Vec<String> = vec![];
+    keys.split(" / ")
+        .map(|alternative| {
+            let mut terms = key_tokens(alternative);
+            let own: Vec<String> = terms.iter().filter(|t| is_modifier(t)).cloned().collect();
+            if own.is_empty() {
+                terms.extend(modifiers.iter().cloned());
+            } else {
+                modifiers = own;
             }
-        }
-    }
-    terms
+            // Ranges such as ⇧3–⇧8 or ⌘1–⌘8 include the keys between their ends.
+            let chars: Vec<char> = alternative.chars().collect();
+            for (i, _) in chars.iter().enumerate().filter(|(_, c)| **c == '–') {
+                let first = i.checked_sub(1).and_then(|j| chars.get(j)?.to_digit(10));
+                let last = chars
+                    .iter()
+                    .skip(i + 1)
+                    .find(|c| !modifier(**c) && !c.is_alphabetic() && **c != '+')
+                    .and_then(|c| c.to_digit(10));
+                if let (Some(first), Some(last)) = (first, last) {
+                    terms.extend((first + 1..last).map(|d| d.to_string()));
+                }
+            }
+            // An uppercase contextual key is Shift-letter, for that key only:
+            // in "C / l", Shift+L is not Chlorine. Chords with modifiers, such
+            // as ⌘C, already spell out Shift when they use it.
+            let shifted = !modified
+                && terms
+                    .iter()
+                    .any(|t| t.len() == 1 && t.chars().all(|c| c.is_ascii_uppercase()));
+            if shifted {
+                terms.push("⇧".into());
+            }
+            for token in terms.clone() {
+                for (symbol, words) in MODIFIERS {
+                    if token == *symbol || words.iter().any(|w| token.eq_ignore_ascii_case(w)) {
+                        terms.push((*symbol).into());
+                        terms.extend(words.iter().map(|w| (*w).into()));
+                    }
+                }
+            }
+            terms
+        })
+        .collect()
 }
 
 fn words(text: &str) -> impl Iterator<Item = String> + '_ {
@@ -184,16 +199,23 @@ fn query_tokens(query: &str) -> Vec<String> {
     let mut tokens = vec![];
     for part in query.split_whitespace() {
         let mut rest = String::new();
+        // "+" after a word or modifier separates, as in "shift+R" or "⇧+R".
+        let mut after_modifier = false;
         for c in part.chars() {
             if modifier(c) {
                 if !rest.is_empty() {
                     tokens.push(std::mem::take(&mut rest));
                 }
                 tokens.push(c.to_string());
-            } else if c == '+' && !rest.is_empty() {
-                tokens.push(std::mem::take(&mut rest));
+                after_modifier = true;
+            } else if c == '+' && (after_modifier || !rest.is_empty()) {
+                if !rest.is_empty() {
+                    tokens.push(std::mem::take(&mut rest));
+                }
+                after_modifier = false;
             } else {
                 rest.push(c);
+                after_modifier = false;
             }
         }
         if !rest.is_empty() {
@@ -205,14 +227,17 @@ fn query_tokens(query: &str) -> Vec<String> {
 
 /// The score of one entry, or None when some query word matches nothing.
 pub(crate) fn score(entry: &impl Searchable, query: &str) -> Option<u32> {
-    let chord = chord_terms(entry.keys());
-    let mut total = 0;
-    for token in query_tokens(query) {
-        match token_score(entry, &chord, &token) {
-            0 => return None,
-            score => total += score,
-        }
-    }
+    let tokens = query_tokens(query);
+    // Every query word must match within one alternative of the chord.
+    let mut total = chord_terms(entry.keys())
+        .iter()
+        .filter_map(|chord| {
+            tokens
+                .iter()
+                .map(|token| Some(token_score(entry, chord, token)).filter(|s| *s > 0))
+                .sum::<Option<u32>>()
+        })
+        .max()?;
     let query = query.trim().to_lowercase();
     let name = entry.name().to_lowercase();
     if !query.is_empty() && name == query {

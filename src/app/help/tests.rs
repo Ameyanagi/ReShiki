@@ -319,3 +319,49 @@ fn keyboard_navigation_moves_within_results_and_never_runs_commands() {
     let _ = app.update(Message::ToggleHelp);
     assert!(app.help_open && app.help.query.is_empty());
 }
+
+#[test]
+fn canvas_tool_keys_say_when_keyboard_drawing_takes_them() {
+    // Keyboard drawing is on by default, and at an empty hotspot these keys
+    // start a drawing instead of choosing a tool, so their rows must say so.
+    let shift = crate::app::shortcuts::keys(Modifiers::SHIFT, "");
+    for entry in entries()
+        .iter()
+        .filter(|e| e.scope == registry::Scope::Canvas)
+    {
+        let taken = entry.keys.split(" / ").any(|key| {
+            let key = key.strip_prefix(shift.as_str()).unwrap_or(key);
+            key.chars().count() == 1 && crate::app::keyboard_drawing::starts_drawing(key)
+        });
+        assert_eq!(
+            taken,
+            entry.description.contains("keyboard drawing off"),
+            "{}",
+            entry.name
+        );
+    }
+}
+
+#[test]
+fn shift_search_keeps_modifiers_with_their_key() {
+    let named = |name: &str| entries().iter().find(|e| e.name == name).unwrap();
+    // In "C / l" Shift belongs to C, so Shift+L is Lithium, not Chlorine.
+    assert!(search::score(named("Lithium"), "shift l").is_some());
+    assert!(search::score(named("Chlorine"), "shift l").is_none());
+    assert!(search::score(named("Chlorine"), "shift c").is_some());
+    // A bare key shares the modifiers written before it; other alternatives
+    // keep their own.
+    assert!(search::score(named("Align / distribute"), "cmd shift alt c").is_some());
+    let copy = named("Copy CDXML / chemical text / MOL");
+    assert!(search::score(copy, "cmd d").is_some());
+    assert!(search::score(copy, "cmd alt d").is_none());
+    // "+" separates a modifier symbol as it does a modifier word.
+    for query in ["⇧+R", "shift+R"] {
+        assert_eq!(
+            top(query).name,
+            "Toggle saturated / aromatic ring",
+            "{query}"
+        );
+    }
+    assert_eq!(top("=").name, "Edit atom label");
+}
