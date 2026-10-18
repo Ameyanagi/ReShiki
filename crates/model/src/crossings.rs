@@ -492,30 +492,34 @@ fn occlusion(
         // The rail's centerline, linear in the distance `s` along the bond.
         let (origin, direction) = rail.line(from, axis);
         let point = |s: f32| origin.offset(direction.x * s, direction.y * s);
-        // Whether the front ink covers the rear rail at `s`, by XYZ depth there.
+        // Whether the front ink covers the rear rail at `s`: it is in front
+        // by XYZ depth there, and opaque there, since transparent ink cannot
+        // knock out the ink beneath it.
         let behind = |s: f32| {
-            let t = (s / length).clamp(0., 1.);
-            depth::bond_over(doc, front, front_t(point(s)), rear, t)
+            let (t, front_t) = ((s / length).clamp(0., 1.), front_t(point(s)));
+            depth::bond_over(doc, front, front_t, rear, t)
+                && opacity.bond(front_bond, front_t) >= 1.
         };
         let range = (rail.span.0 - rail.width, rail.span.1 + rail.width);
         for (envelope, width) in &envelopes {
             let radius = (width + rail.width) * 0.5 + DEFAULT.world(1.1);
-            let Some((low, high, best)) = envelope.span(point(0.), direction, range, radius) else {
+            let Some((low, high, _)) = envelope.span(point(0.), direction, range, radius) else {
                 continue;
             };
-            // Transparent ink cannot knock out the ink beneath it.
-            if opacity.bond(front_bond, front_t(point(best))) < 1. {
-                continue;
-            }
             // Depth is linear in s between the points where either bond's
             // parameter clamps to an end, so the hidden set within each piece is
             // an interval touching a piece end: check those ends, then bisect.
+            // A front bond faded where it passes behind other ink changes
+            // opacity in between, so sample it more finely.
             let rate = direction.x * along.x + direction.y * along.y;
             let base = delta(over_from, point(0.));
             let base = base.x * along.x + base.y * along.y;
             let mut stops = vec![low, high, 0., length];
             if rate.abs() > 1e-6 {
                 stops.extend([-base / rate, (front_length - base) / rate]);
+            }
+            if opacity.manages_bond(front_bond) {
+                stops.extend((1..16).map(|i| low + (high - low) * i as f32 / 16.));
             }
             stops.retain(|s| (low..=high).contains(s));
             stops.sort_by(f32::total_cmp);
