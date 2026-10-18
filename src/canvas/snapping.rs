@@ -141,10 +141,22 @@ impl MoleculeCanvas<'_> {
         if attached && atom.is_none() {
             return (start, Some(end));
         }
+        let origin = atom.unwrap_or(start);
+        if origin.distance(end) <= radius {
+            return (start, None);
+        }
         let snap = self.bond_drawing.fixed_angles && !modifiers.alt();
+        // Only the angle matters. Keep the aim beyond the hit radius of an
+        // off-center press, so the model never mistakes the drag for a click.
+        let aim = arrow_endpoint(origin, end, snap);
+        let length = origin.distance(aim);
+        if length >= 2. * radius {
+            return (start, Some(aim));
+        }
+        let reach = 2. * radius / length.max(f32::EPSILON);
         (
             start,
-            Some(arrow_endpoint(atom.unwrap_or(start), end, snap)),
+            Some(origin.offset((aim.x - origin.x) * reach, (aim.y - origin.y) * reach)),
         )
     }
     pub(super) fn template_gesture(

@@ -274,6 +274,17 @@ fn regular_ring_drag_snaps_its_rotation_from_empty_space_and_atoms() {
         pointer_gesture_with(&canvas, Point::new(102., 151.), Point::new(102., 221.), Modifiers::ALT),
         Edit::Ring(_, Some(direction)) if direction == raw
     ));
+    // A short drag from an off-center press keeps its snapped aim beyond the
+    // hit radius of the press, so the model does not treat it as a click.
+    let press = World::new(-100., 9.);
+    let Edit::Ring(anchor, Some(aim)) =
+        pointer_gesture(&canvas, Point::new(100., 159.), Point::new(110.5, 159.))
+    else {
+        panic!("a short drag from an atom must still orient the ring");
+    };
+    assert_eq!(anchor, press);
+    assert!(aim.distance(press) > 10.);
+    assert!((chains::direction(origin, aim).to_degrees() - 45.).abs() < 0.001);
 }
 
 #[test]
