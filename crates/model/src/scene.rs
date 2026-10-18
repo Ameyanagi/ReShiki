@@ -206,9 +206,13 @@ fn atom_label_runs_with_charge_layout(
                 .iter()
                 .any(|(_, script)| *script != crate::typography::Script::Normal)
     });
+    // A free text label: its bonds meet the attachment glyph (O in MeO).
+    let free_text = internal_group.is_none() && crate::atom_labels::free_text(a, doc);
+    let attachment = a.display.label_attachment;
     let condensed = (internal_group.is_some() || a.element == "*" || is_link)
         .then(|| crate::atom_labels::condensed_label(label))
-        .flatten();
+        .flatten()
+        .filter(|_| !free_text || attachment.is_auto());
     let core_end = condensed.map_or(label.len(), |(core, _)| core.len());
     let layout = scripts
         .as_ref()
@@ -225,8 +229,24 @@ fn atom_label_runs_with_charge_layout(
     let element_width = layout
         .as_ref()
         .map_or_else(|| text_width(label, size), |layout| layout.width);
+    let attached = (free_text && condensed.is_none())
+        .then(|| {
+            attachment.range(
+                label,
+                crate::atom_labels::appendage_position(a, doc)
+                    == crate::atom_labels::HydrogenPosition::Left,
+            )
+        })
+        .flatten();
+    let anchor_x = attached.map_or(element_width / 2., |range| {
+        let width = |end: usize| match scripts.as_ref().filter(|_| layout.is_some()) {
+            Some(scripts) => free_label_layout(label, scripts, 0..end, &style).width,
+            None => text_width(label.get(..end).unwrap_or_default(), size),
+        };
+        (width(range.start) + width(range.end)) / 2.
+    });
     let origin = a.position.offset(
-        -element_width / 2.0,
+        -anchor_x,
         -crate::style::label_vertical_center(
             if layout.is_some() { &normal } else { label },
             size,
@@ -2090,6 +2110,8 @@ pub fn svg_with_background(doc: &Document) -> String {
 
 #[cfg(test)]
 mod charge_placement_tests;
+#[cfg(test)]
+mod label_attachment_tests;
 #[cfg(test)]
 mod label_parity_tests;
 #[cfg(test)]

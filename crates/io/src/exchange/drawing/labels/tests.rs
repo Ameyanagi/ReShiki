@@ -342,3 +342,36 @@ fn generic_owned_labels_keep_their_existing_runs() {
     let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
     assert_eq!(runs(&decoded, "LinkNode"), vec![("M2+".into(), 0)]);
 }
+
+#[test]
+fn flush_label_attachment_round_trips_as_chemdraw_justification() {
+    use crate::atom_labels::LabelAttachment;
+    for (attachment, justification, restored) in [
+        (LabelAttachment::Left, Some("Left"), LabelAttachment::Left),
+        (
+            LabelAttachment::Right,
+            Some("Right"),
+            LabelAttachment::Right,
+        ),
+        (LabelAttachment::Auto, None, LabelAttachment::Auto),
+        // A chosen character has no ChemDraw equivalent.
+        (LabelAttachment::Character(1), None, LabelAttachment::Auto),
+    ] {
+        let mut document = dummy("MeO");
+        document.atoms.first_mut().unwrap().display.label_attachment = attachment;
+        let (xml, _) = super::super::write_clipboard(&document).unwrap();
+        let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+        for xml in [&xml, &decoded] {
+            let tree = roxmltree::Document::parse(xml).unwrap();
+            let text = tree
+                .descendants()
+                .find(|node| node.has_tag_name("t"))
+                .unwrap();
+            assert_eq!(text.attribute("LabelJustification"), justification);
+            let restored_doc = import_variable(xml);
+            let atom = restored_doc.atoms.first().unwrap();
+            assert_eq!(atom.display.variable.as_deref(), Some("MeO"));
+            assert_eq!(atom.display.label_attachment, restored, "{attachment}");
+        }
+    }
+}

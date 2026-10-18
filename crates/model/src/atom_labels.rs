@@ -60,6 +60,72 @@ impl std::fmt::Display for HydrogenPosition {
     }
 }
 
+/// The glyph of a free text label (MeO, AcS, SPh) that its bonds meet.
+/// Flush left/right choose the first/last attachment atom, as for abbreviations.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LabelAttachment {
+    /// The attachment atom nearest the bonds, skipping nicknames, H and counts.
+    #[default]
+    Auto,
+    Left,
+    Right,
+    /// A zero-based character of the label, clamped to its last character.
+    Character(u8),
+}
+impl LabelAttachment {
+    pub const SIDES: [Self; 3] = [Self::Auto, Self::Left, Self::Right];
+    pub fn is_auto(&self) -> bool {
+        *self == Self::Auto
+    }
+    /// Byte range of the attachment glyph in `text`. `faces_left` is the
+    /// automatic side: true when the bonds arrive from the right. Automatic
+    /// text naming no atom (Boc, M, custom text) stays centered: None.
+    pub fn range(self, text: &str, faces_left: bool) -> Option<std::ops::Range<usize>> {
+        match self {
+            Self::Auto => crate::abbreviations::atom_anchor(text, faces_left),
+            Self::Left => Some(crate::abbreviations::anchor_range(text, false)),
+            Self::Right => Some(crate::abbreviations::anchor_range(text, true)),
+            Self::Character(index) => text
+                .char_indices()
+                .nth(usize::from(index))
+                .or_else(|| text.char_indices().next_back())
+                .map(|(i, c)| i..i + c.len_utf8()),
+        }
+    }
+    /// ChemDraw text justification, when this choice has one.
+    pub fn cdxml(self) -> Option<&'static str> {
+        match self {
+            Self::Left => Some("Left"),
+            Self::Right => Some("Right"),
+            Self::Auto | Self::Character(_) => None,
+        }
+    }
+    pub fn from_cdxml(value: &str) -> Self {
+        match value {
+            "Left" => Self::Left,
+            "Right" => Self::Right,
+            _ => Self::Auto,
+        }
+    }
+}
+impl std::fmt::Display for LabelAttachment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Auto => f.write_str("Automatic"),
+            Self::Left => f.write_str("Flush left"),
+            Self::Right => f.write_str("Flush right"),
+            Self::Character(index) => write!(f, "Character {}", u16::from(*index) + 1),
+        }
+    }
+}
+
+/// A free text label on a wildcard atom, the one kind of label whose bond
+/// attachment is a display choice. Generic lists and link nodes keep theirs.
+pub fn free_text(atom: &Atom, doc: &Document) -> bool {
+    atom.element == "*" && atom.display.variable.is_some() && !doc.generic.owns_label(atom.id)
+}
+
 /// Resolve the side of an atom-label appendage without changing chemistry or
 /// saved preferences. Terminal labels retain the usual inline form.
 pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPosition {
@@ -210,6 +276,9 @@ pub struct AtomDisplay {
     pub carbons: Option<Carbons>,
     pub hydrogens: Option<bool>,
     pub hydrogen_position: HydrogenPosition,
+    /// Which glyph of a free text label meets its bonds.
+    #[serde(skip_serializing_if = "LabelAttachment::is_auto")]
+    pub label_attachment: LabelAttachment,
     pub number: Option<Number>,
     #[serde(skip_serializing_if = "MappingDisplay::is_default")]
     pub mapping: MappingDisplay,
@@ -263,6 +332,9 @@ impl AtomDisplay {
     pub fn set_variable(&mut self, variable: Option<String>) {
         self.variable = variable;
         self.label_scripts.clear();
+        if matches!(self.label_attachment, LabelAttachment::Character(_)) {
+            self.label_attachment = LabelAttachment::Auto;
+        }
     }
     pub fn is_default(&self) -> bool {
         self == &Self::default()
@@ -279,6 +351,11 @@ impl AtomDisplay {
                 .as_deref()
                 .ok_or("Atom label scripts require a variable label")?;
             crate::typography::validate_label_scripts(text, &self.label_scripts)?;
+        }
+        if let LabelAttachment::Character(index) = self.label_attachment
+            && index >= 32
+        {
+            return Err("The label attachment must be one of its 32 characters".into());
         }
         self.stereo.validate()?;
         self.mapping.validate()?;
@@ -728,7 +805,10 @@ pub fn condensed_label(text: &str) -> Option<(&str, &str)> {
         1
     };
     let (core, suffix) = text.split_at(end);
-    if !crate::editing::ELEMENTS.contains(&core) || suffix.is_empty() {
+    if !crate::editing::ELEMENTS.contains(&core)
+        || crate::abbreviations::NICKNAMES.contains(&core)
+        || suffix.is_empty()
+    {
         return None;
     }
     let mut rest = suffix;

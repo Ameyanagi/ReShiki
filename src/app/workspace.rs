@@ -2068,27 +2068,37 @@ impl App {
             .placeholder("Mixed")
             .text_size(12)
             .width(Length::Fill),
-            text("Display settings keep the molecular composition intact.")
-                .size(11)
-                .style(muted_text),
-            horizontal_line(),
-            section("ATOM NUMBERS"),
-            row![
-                crate::appearance::text_input("1, atom1, a, α…", &self.tab.labels.seed)
-                    .on_input(|s| Message::Labels(A::Seed(s)))
-                    .on_submit(Message::Labels(A::Number))
-                    .size(12)
-                    .padding(7),
-                command("Number", Message::Labels(A::Number))
-                    .on_press_maybe((!ids.is_empty()).then_some(Message::Labels(A::Number)))
-            ]
-            .spacing(5),
-            text("Sequence follows atom creation/import order.")
-                .size(11)
-                .style(muted_text),
-            command("Clear numbers", Message::Labels(A::ClearNumbers)),
         ]
         .spacing(9);
+        if let Some(attachment) = self.label_attachment_picker(&atoms) {
+            body = body
+                .push(text("Bond attachment (text labels)").size(12))
+                .push(attachment);
+        }
+        body = body.push(
+            column![
+                text("Display settings keep the molecular composition intact.")
+                    .size(11)
+                    .style(muted_text),
+                horizontal_line(),
+                section("ATOM NUMBERS"),
+                row![
+                    crate::appearance::text_input("1, atom1, a, α…", &self.tab.labels.seed)
+                        .on_input(|s| Message::Labels(A::Seed(s)))
+                        .on_submit(Message::Labels(A::Number))
+                        .size(12)
+                        .padding(7),
+                    command("Number", Message::Labels(A::Number))
+                        .on_press_maybe((!ids.is_empty()).then_some(Message::Labels(A::Number)))
+                ]
+                .spacing(5),
+                text("Sequence follows atom creation/import order.")
+                    .size(11)
+                    .style(muted_text),
+                command("Clear numbers", Message::Labels(A::ClearNumbers)),
+            ]
+            .spacing(9),
+        );
         if ids.len() == 1 {
             body = body.push(text("Custom atom number").size(12)).push(
                 row![
