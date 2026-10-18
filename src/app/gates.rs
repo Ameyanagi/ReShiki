@@ -199,6 +199,10 @@ impl App {
             self.help_open = false;
             return Break(Task::none());
         }
+        if self.commands.open && matches!(message, Message::Escape) {
+            self.commands.open = false;
+            return Break(Task::none());
+        }
         if let Message::ContextMenu(action) = message {
             return Break(self.context_action(action));
         }

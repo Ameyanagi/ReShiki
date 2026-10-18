@@ -125,6 +125,7 @@ impl App {
 
     fn keyboard_drawing_blocked(&self) -> bool {
         self.help_open
+            || self.commands.open
             || self.updates.open
             || self.assistant.viewed_image.is_some()
             || self.tab.atom_text.is_some()

@@ -174,6 +174,24 @@ fn straighten_alkyne(doc: &mut Document, a: u64, b: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// Label an atom as an element hotkey or group hotkey does; an element shows
+/// its hydrogens.
+pub fn label_edit(
+    doc: &Document,
+    id: u64,
+    label: &str,
+    mode: Mode,
+) -> Result<(Document, u64), String> {
+    atom_text::apply(doc, id, label, mode).map(|mut candidate| {
+        if mode == Mode::Auto
+            && let Some(atom) = candidate.atom_mut(id)
+        {
+            atom.display.hydrogens = Some(true);
+        }
+        (candidate, id)
+    })
+}
+
 /// Returns None for an unassigned key. Errors leave the source unchanged.
 pub fn atom_edit(
     doc: &Document,
@@ -190,14 +208,7 @@ pub fn atom_edit(
         ));
     }
     if let Some((label, mode)) = atom_label(key) {
-        return Some(atom_text::apply(doc, id, label, mode).map(|mut candidate| {
-            if mode == Mode::Auto
-                && let Some(atom) = candidate.atom_mut(id)
-            {
-                atom.display.hydrogens = Some(true);
-            }
-            (candidate, id)
-        }));
+        return Some(label_edit(doc, id, label, mode));
     }
     if ![
         "d", "+", "-", "0", "1", "2", "4", "5", "8", "9", "z", "K", "k",

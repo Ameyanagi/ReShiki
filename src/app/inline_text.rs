@@ -730,6 +730,9 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Tool(_)
             | Message::Palette(_)
             | Message::ContextKey(_)
+            | Message::Commands(
+                super::command_palette::Action::Run(_) | super::command_palette::Action::Submit
+            )
             | Message::Shortcut(
                 super::shortcuts::Action::FixedLength
                     | super::shortcuts::Action::FixedAngles

@@ -1164,6 +1164,7 @@ async fn keyboard_drawing_mode_keeps_real_fields_in_charge_of_typing_arrows_and_
             ("N", Code::KeyN, Modifiers::SHIFT),
             ("[", Code::BracketLeft, Modifiers::empty()),
             ("]", Code::BracketRight, Modifiers::empty()),
+            (":", Code::Semicolon, Modifiers::SHIFT),
         ] {
             let (status, messages) = ui.event(
                 &app,
@@ -1178,7 +1179,10 @@ async fn keyboard_drawing_mode_keeps_real_fields_in_charge_of_typing_arrows_and_
             assert!(
                 !messages.iter().any(|message| matches!(
                     message,
-                    Message::ContextKey(_) | Message::KeyboardDrawing(_) | Message::Shortcut(_)
+                    Message::ContextKey(_)
+                        | Message::KeyboardDrawing(_)
+                        | Message::Shortcut(_)
+                        | Message::Commands(_)
                 )),
                 "{panel}: {messages:?}"
             );
@@ -1594,4 +1598,33 @@ async fn join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur(
             assert_eq!(app.tab.doc, completed);
         }
     }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_search_field_types_colon() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(super::command_palette::Action::Open));
+    let field = ui.input(&app, "command-palette-search").0;
+    ui.click(&mut app, field.center());
+    for (text, code, modifiers) in [
+        (":", Code::Semicolon, Modifiers::SHIFT),
+        ("w", Code::KeyW, Modifiers::empty()),
+    ] {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Character(text.into()), code, modifiers, Some(text)),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(
+            status,
+            iced::event::Status::Captured,
+            "{text}: {messages:?}"
+        );
+        apply(&mut app, messages);
+    }
+    assert!(app.commands.open);
+    assert_eq!(app.commands.query, ":w");
 }
