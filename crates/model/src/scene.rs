@@ -1096,22 +1096,20 @@ pub fn primitives_with_opacity(
         paint_rear_before_front(&mut out, bond_paint_start);
     }
     let runs = &pass.labels.runs;
-    push_atom_labels(&mut out, doc, runs, opacity, &halos.atoms);
-    if halos.above.is_none() {
-        push_label_halo(&mut out, doc, runs, opacity, &halos.atoms);
-    }
+    push_atom_labels(&mut out, doc, runs, opacity, &halos);
+    push_label_halo(&mut out, doc, runs, opacity, &halos.above(None));
     push_arrows_and_annotations(&mut out, doc);
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
         out.extend(graphic_primitive(graphic));
-        if halos.above == Some(graphic.id) {
-            push_label_halo(&mut out, doc, runs, opacity, &halos.atoms);
+        if halos.front.contains(&graphic.id) {
+            push_label_halo(&mut out, doc, runs, opacity, &halos.above(Some(graphic.id)));
         }
     }
     out
 }
 
 /// Orbitals keep complete lobes. The labels they reach are drawn above the
-/// topmost of them, readable inside a paper-colored halo.
+/// topmost one reaching each, readable inside a paper-colored halo.
 fn push_label_halo(
     out: &mut Vec<Primitive>,
     doc: &Document,
@@ -1413,9 +1411,9 @@ fn push_atom_labels(
     doc: &Document,
     labels: &std::collections::HashMap<u64, Vec<Primitive>>,
     opacity: &crate::rear_opacity::Paint,
-    haloed: &[u64],
+    haloed: &crate::scientific::OrbitalHalos,
 ) {
-    for a in doc.atoms.iter().filter(|a| !haloed.contains(&a.id)) {
+    for a in doc.atoms.iter().filter(|a| !haloed.contains(a.id)) {
         out.extend(atom_label_parts(doc, labels, opacity, a));
     }
     for indicator in crate::atom_labels::indicators(doc) {

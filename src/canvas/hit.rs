@@ -187,16 +187,34 @@ fn hit_object_with_orbital(
     // Only precompute label ownership when a foreground orbital may need to
     // pass through it. Ordinary foreground graphics retain their fast path.
     let orbital_label = foreground_orbital.then(|| reshiki::scene::atom_label_hit(doc, p, 0.));
+    // A label an orbital reaches is painted right above the topmost front
+    // orbital reaching it; graphics stacked at or below that point lie under
+    // the visible label, which must reach the atom that owns it.
+    let label_rank = orbital_label.flatten().map(|atom| {
+        reshiki::scientific::orbital_label_halos(doc)
+            .atoms
+            .into_iter()
+            .find(|(id, _)| *id == atom)
+            .and_then(|(_, above)| above)
+            .and_then(|orbital| {
+                doc.graphics
+                    .iter()
+                    .enumerate()
+                    .find(|(_, g)| g.id == orbital)
+                    .map(|(i, g)| (g.layer, i))
+            })
+    });
     let graphic = |front| {
         doc.graphics
             .iter()
             .enumerate()
-            .filter(|(_, g)| {
+            .filter(|(i, g)| {
                 (g.layer >= 0) == front
-                    // Orbital ink leaves these glyphs transparent. Selecting
-                    // a readable label must reach the atom that owns it.
                     && !(orbital_label.flatten().is_some()
                         && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
+                    && !label_rank
+                        .flatten()
+                        .is_some_and(|rank| (g.layer, *i) <= rank)
                     && g.hit(p, r)
             })
             .max_by_key(|(i, g)| (g.layer, *i))

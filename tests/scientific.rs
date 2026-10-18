@@ -298,7 +298,7 @@ async fn complete_orbital_lobes_and_labels_above_them_survive_editable_vector_ex
             request.format = Some(format.into());
             let exported = engine.request(request).await.unwrap().output.unwrap();
             if format == "cdxml" {
-                // The labelled N node and its text stack above the orbital ink.
+                // The orbital reaching N goes behind the molecule.
                 let z = |element: &str| {
                     element
                         .split_once(" Z=\"")
@@ -338,6 +338,10 @@ async fn complete_orbital_lobes_and_labels_above_them_survive_editable_vector_ex
             assert_eq!(imported_n.charge, 1);
             assert_eq!(imported_n.isotope, 15);
             assert!(!imported.graphics.is_empty());
+            assert!(
+                imported.graphics.iter().all(|graphic| graphic.layer < 0),
+                "{phase:?}/{format}: the orbital curves re-import behind the labelled molecule"
+            );
             assert_eq!(
                 imported
                     .graphics

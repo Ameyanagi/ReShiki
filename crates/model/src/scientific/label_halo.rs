@@ -18,13 +18,28 @@ pub fn label_halo_radius() -> f32 {
     DEFAULT.world(LABEL_HALO_PT)
 }
 
-/// Which atom labels an orbital's complete lobes reach, and the topmost
-/// foreground orbital reaching one: the scene draws those labels in a halo
-/// right above it (or at their usual place when only underlays reach them).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The atom labels orbitals' complete lobes reach. Each label is drawn in a
+/// halo right above the topmost front orbital reaching it, or at its usual
+/// place above the bonds when only orbitals behind the molecule reach it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct OrbitalHalos {
-    pub atoms: Vec<u64>,
-    pub above: Option<u64>,
+    /// Each reached atom with the topmost front orbital reaching it.
+    pub atoms: Vec<(u64, Option<u64>)>,
+    /// Every front orbital reaching a label, bottom to top.
+    pub front: Vec<u64>,
+}
+impl OrbitalHalos {
+    /// The atoms drawn right above `orbital` (`None`: above the bonds).
+    pub fn above(&self, orbital: Option<u64>) -> Vec<u64> {
+        self.atoms
+            .iter()
+            .filter(|(_, above)| *above == orbital)
+            .map(|(atom, _)| *atom)
+            .collect()
+    }
+    pub fn contains(&self, atom: u64) -> bool {
+        self.atoms.iter().any(|(id, _)| *id == atom)
+    }
 }
 
 pub(crate) fn orbital_halos<'a>(
@@ -32,36 +47,40 @@ pub(crate) fn orbital_halos<'a>(
     graphics: impl IntoIterator<Item = &'a Graphic>,
     label_ink: impl Fn(&crate::document::Atom) -> Vec<Box2>,
 ) -> OrbitalHalos {
-    let orbitals: Vec<_> = graphics
+    let mut orbitals: Vec<_> = graphics
         .into_iter()
         .filter(|graphic| matches!(graphic.kind, crate::graphics::GraphicKind::Orbital(_)))
-        .map(|graphic| (graphic, OrbitalInk::new(graphic)))
         .collect();
-    let mut halos = OrbitalHalos {
-        atoms: Vec::new(),
-        above: None,
-    };
+    // Paint order: stable by layer, as the scene and exchange stack graphics.
+    orbitals.sort_by_key(|graphic| graphic.layer);
+    let mut halos = OrbitalHalos::default();
     if orbitals.is_empty() {
         return halos;
     }
-    let mut above: Option<(i32, usize, u64)> = None;
+    let lobes: Vec<_> = orbitals.iter().map(|g| OrbitalInk::new(g)).collect();
+    let mut front = std::collections::HashSet::new();
     for atom in &doc.atoms {
         let ink = label_ink(atom);
         let mut reached = false;
-        for (index, (graphic, lobes)) in orbitals.iter().enumerate() {
+        let mut above = None;
+        for (graphic, lobes) in orbitals.iter().zip(&lobes) {
             if lobes.reaches(&ink) {
                 reached = true;
-                let rank = (graphic.layer, index, graphic.id);
-                if graphic.layer >= 0 && above.is_none_or(|top| (top.0, top.1) < (rank.0, rank.1)) {
-                    above = Some(rank);
+                if graphic.layer >= 0 {
+                    above = Some(graphic.id);
+                    front.insert(graphic.id);
                 }
             }
         }
         if reached {
-            halos.atoms.push(atom.id);
+            halos.atoms.push((atom.id, above));
         }
     }
-    halos.above = above.map(|(_, _, id)| id);
+    halos.front = orbitals
+        .iter()
+        .map(|graphic| graphic.id)
+        .filter(|id| front.contains(id))
+        .collect();
     halos
 }
 

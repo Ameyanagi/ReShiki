@@ -80,9 +80,9 @@ glyph's ink box is covered too, so the inside of an O stays clear. The rule is
 the same for the orbital's own atom and for neighboring atoms, and for
 orbitals behind molecular content (the default) or in front of it. A label
 reached only by orbitals behind the molecule keeps its usual place above the
-bonds. Otherwise the reached labels are drawn right above the topmost front
-orbital that reaches them, so graphics stacked above that orbital still cover
-them, matching what a click selects. Clicking these visible labels selects
+bonds. Otherwise each reached label is drawn right above the topmost front
+orbital that reaches it, so graphics stacked above that orbital still cover
+it, and a click on the label selects what is drawn on top. Clicking these visible labels selects
 their atom through a foreground orbital. The atom positions, orbital node,
 axes and layer remain exactly as placed, and the halo follows later label
 edits. Bonds, text captions and other annotations keep their ordinary
@@ -106,11 +106,12 @@ the whole lobe without a halo.
 - SMILES/MOL/CDXML keep supported one/two-unpaired-electron chemistry;
   molecular formats omit drawing annotations.
 - Free symbols and orbitals export to CDXML/CDX as grouped editable vector
-  curves with whole lobes. The atoms whose labels a front orbital reaches, with
-  their label text, are stacked just above that orbital, as on the canvas.
-  No halo shapes are written: they would become stray editable objects, and
-  the reading application draws its own atom labels. Importing those vectors
-  keeps their appearance, but not their parametric orbital/symbol controls.
+  curves with whole lobes. A front orbital that reaches an atom label is
+  stacked just behind the molecule, so the reading application draws the
+  labels (and, unlike the canvas, the bonds) over it, and a re-import places
+  the curves behind the molecule too. No halo shapes are written: they would
+  become stray editable objects. Importing those vectors keeps their
+  appearance, but not their parametric orbital/symbol controls or the halo.
 - CDXML plain/solid orbital and supported free-symbol objects import as
   editable ReShiki objects. Gradient-shaded orbitals are rejected explicitly.
 - CDXML atom-owned single charges, radical dots and supported lone pairs use

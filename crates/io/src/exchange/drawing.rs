@@ -266,7 +266,7 @@ fn write_impl(
     w.crossings(middle)?;
     w.groups()?;
     w.abbreviations()?;
-    w.orbital_labels_on_top()?;
+    w.orbitals_behind_labels()?;
     // Abbreviations move bonds into nested fragments. Native areas must be
     // created beside their final bond owners.
     w.ring_fills()?;
@@ -545,48 +545,57 @@ impl<'a> Writer<'a> {
             .map(|i| (i + 3).to_string())
             .ok_or_else(|| invalid("Missing drawing atom ID"))
     }
-    /// Orbitals keep complete lobes. As in the scene, the atoms whose labels
-    /// they reach (with their label text) stack right above the topmost
-    /// foreground orbital reaching one; underlays already lie beneath them.
-    /// The reader paints its own label background, so no halo shapes are added.
-    fn orbital_labels_on_top(&mut self) -> Result<()> {
+    /// Orbitals keep complete lobes. A front orbital reaching an atom label
+    /// goes just behind the molecule, so every reader (and a re-import, where
+    /// the curves become plain paths) draws the labels over it. No halo shapes
+    /// are written; they would become stray editable objects.
+    fn orbitals_behind_labels(&mut self) -> Result<()> {
         let halos = crate::scientific::orbital_label_halos(self.doc);
-        let Some(orbital) = halos.above.and_then(|id| {
-            self.objects
+        for id in halos.front {
+            let Some(orbital) = self
+                .objects
                 .iter()
                 .find(|(object, _)| *object == id)
                 .map(|(_, key)| *key)
-        }) else {
-            return Ok(());
-        };
-        let z = |w: &Self, key| -> Result<Option<usize>> {
-            w.tree
-                .get(key, "Z")?
-                .map(|z| {
-                    z.parse::<usize>()
-                        .map_err(|_| invalid("Invalid stacking order"))
-                })
-                .transpose()
-        };
-        let above = z(self, orbital)?.ok_or_else(|| invalid("Missing orbital stacking order"))?;
-        for key in self.tree.descendants(self.page)? {
-            if let Some(value) = z(self, key)?
-                && value > above
-            {
-                self.tree.set(key, "Z", (value + 1).to_string())?;
-            }
-        }
-        for id in halos.atoms {
-            let Ok(node) = self.atom_node(id) else {
+            else {
                 continue;
             };
-            for key in self.tree.descendants(node)? {
-                if matches!(self.tree.node(key)?.tag, "n" | "t") {
-                    self.tree.set(key, "Z", (above + 1).to_string())?;
+            let mut molecule = None;
+            let keys = self.tree.descendants(self.page)?;
+            for &key in &keys {
+                if self.tree.node(key)?.tag == "fragment"
+                    && let Some(z) = self.z(key)?
+                {
+                    molecule = Some(molecule.map_or(z, |m: usize| m.min(z)));
+                }
+            }
+            let Some(molecule) = molecule else {
+                return Ok(());
+            };
+            let lowered = self.tree.descendants(orbital)?;
+            for key in keys {
+                if let Some(z) = self.z(key)? {
+                    let z = if lowered.contains(&key) {
+                        molecule
+                    } else if z >= molecule {
+                        z + 1
+                    } else {
+                        continue;
+                    };
+                    self.tree.set(key, "Z", z.to_string())?;
                 }
             }
         }
         Ok(())
+    }
+    fn z(&self, key: Key) -> Result<Option<usize>> {
+        self.tree
+            .get(key, "Z")?
+            .map(|z| {
+                z.parse::<usize>()
+                    .map_err(|_| invalid("Invalid stacking order"))
+            })
+            .transpose()
     }
     fn atom_node(&self, id: u64) -> Result<Key> {
         self.atom_indices

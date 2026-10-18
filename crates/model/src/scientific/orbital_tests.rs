@@ -153,8 +153,12 @@ fn all_orbital_shapes_phases_layers_and_colors_keep_complete_lobes_under_haloed_
                         assert_eq!(
                             orbital_label_halos(&doc),
                             OrbitalHalos {
-                                atoms: vec![n],
-                                above: (layer >= 0).then_some(doc.graphics[0].id),
+                                atoms: vec![(n, (layer >= 0).then_some(doc.graphics[0].id))],
+                                front: if layer >= 0 {
+                                    vec![doc.graphics[0].id]
+                                } else {
+                                    vec![]
+                                },
                             }
                         );
                         let canonical = crate::canvas_theme::canonical_document(&doc);
@@ -194,13 +198,7 @@ fn distant_labels_keep_their_place_without_a_halo() {
     tool(true)
         .place(&mut doc, p(0., 0.), p(0., -42.), false, 10.)
         .unwrap();
-    assert_eq!(
-        orbital_label_halos(&doc),
-        OrbitalHalos {
-            atoms: vec![],
-            above: None
-        }
-    );
+    assert_eq!(orbital_label_halos(&doc), OrbitalHalos::default());
     let scene = crate::scene::primitives(&doc);
     assert!(
         !scene
@@ -229,8 +227,8 @@ fn formaldehyde_oxygen_p_orbital_keeps_complete_lobes_and_a_readable_label() {
     assert_eq!(
         orbital_label_halos(&doc),
         OrbitalHalos {
-            atoms: vec![o],
-            above: None
+            atoms: vec![(o, None)],
+            front: vec![]
         }
     );
     let scene = crate::scene::primitives(&doc);
@@ -340,7 +338,7 @@ fn haloed_labels_sit_right_above_the_topmost_orbital_reaching_them() {
     cover.layer = 2;
     let cover_parts = cover.parts();
     doc.graphics.push(cover);
-    assert_eq!(orbital_label_halos(&doc).above, Some(orbital));
+    assert_eq!(orbital_label_halos(&doc).atoms, vec![(n, Some(orbital))]);
     let scene = crate::scene::primitives(&doc);
     assert_haloed_label(&scene, &doc.graphics[0].parts(), "N");
     let label = scene.iter().rposition(|p| text_is(p, "N")).unwrap();
@@ -354,4 +352,62 @@ fn haloed_labels_sit_right_above_the_topmost_orbital_reaching_them() {
         label < ellipse,
         "A graphic stacked above the orbital still covers the label, as hit testing expects"
     );
+}
+
+#[test]
+fn each_haloed_label_stacks_by_the_orbitals_that_reach_it() {
+    // Codex review: a distant front orbital must not lift an unrelated label
+    // above a graphic that covers it.
+    let mut doc = Document::default();
+    let near = doc.add_atom("N", p(0., 0.));
+    let far = doc.add_atom("N", p(300., 0.));
+    for (atom, at, layer) in [(near, p(0., 0.), -1), (far, p(300., 0.), 2)] {
+        doc.atom_mut(atom).unwrap().no_implicit = true;
+        tool(true)
+            .place(&mut doc, at, at.offset(0., -42.), false, 10.)
+            .unwrap();
+        doc.graphics.last_mut().unwrap().layer = layer;
+    }
+    let far_orbital = doc.graphics[1].id;
+    let mut cover = crate::graphics::Graphic::dragged(
+        doc.next_id(),
+        GraphicKind::Rectangle,
+        p(-20., -20.),
+        p(20., 20.),
+        GraphicStyle {
+            fill: Some(Color::Ink),
+            ..Default::default()
+        },
+        crate::graphics::BracketSides::Both,
+        false,
+    );
+    cover.layer = 1;
+    let cover_parts = cover.parts();
+    doc.graphics.push(cover);
+    assert_eq!(
+        orbital_label_halos(&doc),
+        OrbitalHalos {
+            atoms: vec![(near, None), (far, Some(far_orbital))],
+            front: vec![far_orbital],
+        }
+    );
+    let scene = crate::scene::primitives(&doc);
+    let halos: Vec<_> = scene
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| matches!(p, Primitive::Halo { .. }))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(halos.len(), 2);
+    let cover = scene
+        .iter()
+        .position(|primitive| {
+            matches!(primitive, Primitive::Path { commands, .. } if *commands == cover_parts[0].commands)
+        })
+        .unwrap();
+    assert!(
+        halos[0] < cover,
+        "The near label stays under its covering rectangle"
+    );
+    assert!(halos[1] > cover);
 }
