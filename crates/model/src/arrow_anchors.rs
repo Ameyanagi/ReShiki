@@ -397,14 +397,20 @@ fn new_target_visible(
 }
 /// A drawn bond line segment and its half stroke width.
 type InkLine = (Point, Point, f32);
-/// Bond ink leaving `atom`: each bond's direction away from the atom, and the
-/// lines it draws.
-fn bond_ink(doc: &Document, atom: u64, center: Point) -> (Vec<Point>, Vec<InkLine>) {
+/// Bond ink leaving `atom`: each bond's direction away from the atom, the
+/// lines it draws, and its filled outlines.
+fn bond_ink(
+    doc: &Document,
+    atom: u64,
+    center: Point,
+) -> (Vec<Point>, Vec<InkLine>, Vec<Vec<Point>>) {
     use crate::bonds::DoublePosition;
     let style = &doc.drawing_style;
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    let joins = crate::bond_joins::Joins::new(doc);
     let mut bonds = Vec::new();
     let mut lines = Vec::new();
+    let mut fills = Vec::new();
     for bond in doc
         .bonds
         .iter()
@@ -483,6 +489,22 @@ fn bond_ink(doc: &Document, atom: u64, center: Point) -> (Vec<Point>, Vec<InkLin
                     )
                 }),
         );
+        // A joined bond is filled as a mitered outline, which can reach past
+        // its stroke on the far side of a narrow junction.
+        if matches!(bond.display.as_str(), "plain" | "bold" | "wedge")
+            && !matches!(bond.order, 2 | 7)
+            && joins.needed(bond)
+            && let Some((start, end)) = crate::scene::bond_segment(doc, bond, None)
+        {
+            let outline = joins.polygon(bond, start, end);
+            lines.extend(
+                outline
+                    .iter()
+                    .zip(outline.iter().cycle().skip(1))
+                    .map(|(p, q)| (*p, *q, 0.)),
+            );
+            fills.push(outline);
+        }
         // A plain dative also fills its head at the label-trimmed acceptor
         // end; a line as wide as the head's base covers that triangle.
         if bond.is_dative()
@@ -497,7 +519,19 @@ fn bond_ink(doc: &Document, atom: u64, center: Point) -> (Vec<Point>, Vec<InkLin
             ));
         }
     }
-    (bonds, lines)
+    (bonds, lines, fills)
+}
+/// Even-odd containment of `p` in a filled outline.
+fn inside(p: Point, outline: &[Point]) -> bool {
+    outline
+        .iter()
+        .zip(outline.iter().cycle().skip(1))
+        .filter(|(a, b)| {
+            (a.y > p.y) != (b.y > p.y) && p.x < a.x + (p.y - a.y) / (b.y - a.y) * (b.x - a.x)
+        })
+        .count()
+        % 2
+        == 1
 }
 /// Chooses the arrival direction at an atom, and any extra end gap, so the
 /// arrowhead lying along that direction stays off bond ink. Candidates face
@@ -517,7 +551,7 @@ fn open_approach(
     let Some(center) = doc.atom(atom).map(|a| a.position) else {
         return (preferred, 0.);
     };
-    let (bonds, lines) = bond_ink(doc, atom, center);
+    let (bonds, lines, fills) = bond_ink(doc, atom, center);
     let head_length = DEFAULT.world(style.head_length_pt);
     let head_width = DEFAULT.world(style.head_width_pt);
     let pen = DEFAULT.world(style.width_pt) * 0.5;
@@ -536,7 +570,7 @@ fn open_approach(
                 let v = delta(*last, *first);
                 let along = (dot(delta(p, *first), v) / dot(v, v)).clamp(0., 1.);
                 p.distance(first.offset(v.x * along, v.y * along)) < head_width * t + half + pen
-            })
+            }) || fills.iter().any(|outline| inside(p, outline))
         })
     };
     let score = |d: Point| {
@@ -573,10 +607,10 @@ fn open_approach(
         })
     };
     let facing = OPEN_APPROACH.cos() - 0.0001;
-    let step = 5f32.to_radians();
+    let step = 1f32.to_radians();
     let mut best = (preferred, score(preferred));
     let mut sides = [Some(preferred), Some(preferred)];
-    for k in 1..=36 {
+    for k in 1..=180 {
         for (side, sign) in sides.iter_mut().zip([1., -1.]) {
             let Some(previous) = *side else { continue };
             let d = rotated(sign * k as f32 * step);
