@@ -131,7 +131,7 @@ hand or share it:
 ```
 
 Only `label` and `smiles` are required. `smiles` must start with the single
-`*` attachment point. Labels are 1–32 characters without spaces. If you give
+`*` attachment point, joined by a single bond. Labels are 1–32 characters without spaces and cannot be an element symbol or a spelling ReShiki builds itself (N3, MgBr, Cp, OCH3). If you give
 a `formula`, ReShiki checks it against the SMILES. `aliases`, `names`,
 `category` and `"contract": false` work as in the bundled catalog.
 

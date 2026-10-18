@@ -167,3 +167,19 @@ fn user_groups_win_label_clashes_and_keep_the_bundled_order() {
     assert_eq!(merged.last().unwrap().label, "Mine");
     assert!(lookup_in(builtin, "Mine").is_none());
 }
+
+/// Typing resolves these before the catalog, so a user group could be saved
+/// but never created under them.
+#[test]
+fn user_groups_cannot_take_reserved_spellings() {
+    for spelling in ["N3", "MgBr", "Cp", "OCH3", "C2H5", "Fe", "Np"] {
+        let text = format!(
+            r#"{{"format": 1, "groups": [{{"label": "{spelling}", "smiles": "*OC"}},
+            {{"label": "Fine", "smiles": "*OC", "aliases": ["{spelling}"]}}]}}"#
+        );
+        let (presets, errors) = parse(&text, true);
+        assert!(presets.is_empty(), "{spelling}");
+        assert_eq!(errors.len(), 2, "{spelling}: {errors:?}");
+        assert!(errors[0].contains("already means"), "{errors:?}");
+    }
+}

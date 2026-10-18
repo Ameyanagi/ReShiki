@@ -111,6 +111,15 @@ impl Preset {
         for alias in &entry.aliases {
             check_label(alias, "Alias", false)?;
         }
+        if user
+            && let Some(spelling) = std::iter::once(&entry.label)
+                .chain(&entry.aliases)
+                .find(|spelling| reserved(spelling))
+        {
+            return Err(format!(
+                "\"{spelling}\" already means an element or a built-in group; choose another label"
+            ));
+        }
         if entry.smiles.matches('*').count() != 1 || !entry.smiles.starts_with('*') {
             return Err("SMILES must start with the single * attachment point".into());
         }
@@ -182,6 +191,15 @@ impl Preset {
     pub fn spellings(&self) -> impl Iterator<Item = &str> {
         std::iter::once(self.label.as_str()).chain(self.aliases.iter().map(String::as_str))
     }
+}
+
+/// Spellings that typing resolves before the catalog: elements and the
+/// groups built in code (N3, MgBr, Cp) or from fixed formulas (OCH3).
+fn reserved(spelling: &str) -> bool {
+    crate::editing::ELEMENTS.contains(&spelling)
+        || crate::common_groups::LABELS.contains(&spelling)
+        || crate::ligands::LABELS.contains(&spelling)
+        || crate::atom_text::is_formula_group(spelling)
 }
 
 /// Reject what a planar collapsed group cannot carry: stereo, atom maps,
@@ -378,6 +396,11 @@ fn merge(builtin: &[Arc<Preset>], user: Vec<Preset>) -> Catalog {
 /// Find the group created by a typed spelling. The flag is true for an alias.
 pub fn lookup(text: &str) -> Result<Option<(Arc<Preset>, bool)>> {
     Ok(lookup_in(&presets()?, text))
+}
+
+/// Find a spelling in the bundled catalog only, ignoring user overrides.
+pub fn lookup_bundled(text: &str) -> Result<Option<(Arc<Preset>, bool)>> {
+    Ok(lookup_in(builtin()?, text))
 }
 
 /// User groups win over a bundled label or alias with the same spelling.

@@ -33,6 +33,23 @@ pub fn from_selection(
     if members.is_empty() {
         return Err("Select the atoms of the group first".into());
     }
+    // A repeat, link or alternative stands for more than the drawn atoms.
+    let generic = &doc.generic;
+    if generic
+        .repeats
+        .iter()
+        .any(|unit| unit.members.iter().any(|id| members.contains(id)))
+        || generic
+            .links
+            .iter()
+            .any(|link| members.contains(&link.atom))
+        || generic
+            .alternatives
+            .iter()
+            .any(|site| members.contains(&site.atom))
+    {
+        return Err("Expand the generic structure before defining a group from it".into());
+    }
     let boundary: Vec<_> = doc
         .bonds
         .iter()
