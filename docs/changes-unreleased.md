@@ -1,6 +1,6 @@
 # Unreleased changes
 
-- **Under review — Discoverable fine rotation:** dragging the rotation handle now shows the applied angle and the step keys (Shift for 15° steps, Alt/Option+Left/Right for 1°, Alt/Option+Up/Down for 15°), and a **°** field after Rotate 180° in the Select context row rotates the selection by a typed angle. Help and the selection tooltip list the same keys. [Selection handles](selection-transforms.md) · PR pending · @Ameyanagi.
+- **Under review — Discoverable fine rotation:** dragging the rotation handle now shows the applied angle and the step keys (Shift for 15° steps, Alt/Option+Left/Right for 1°, Alt/Option+Up/Down for 15°), and a **°** field after Rotate 180° in the Select context row rotates the selection by a typed angle. Help and the selection tooltip list the same keys. [Selection handles](selection-transforms.md) · [PR #358](https://github.com/Ameyanagi/ReShiki/pull/358) · @Ameyanagi.
 
 - **Merged — Intel Mac panic recovery:** preserve the allocation alignment required by the native unwinder so recoverable background panics do not crash the application. Native Intel comparison reproduces the original crash and passes with the corrected alignment; global-allocator regression coverage now runs on all six supported native targets. [Diagnostic evidence](https://github.com/Ameyanagi/ReShiki/actions/runs/38822804581) · [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328) · @Ameyanagi.
 
