@@ -70,6 +70,7 @@ fn retained_metafile_is_used_for_vector_export_and_preview_for_printing() {
         1.,
         &mut primitives,
         &metafile_sources(&doc),
+        doc.canvas_theme.background(),
     )
     .unwrap();
     let source = primitives

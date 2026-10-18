@@ -14,7 +14,7 @@ Reaction roles connect editable molecules to a drawing arrow. They stay attached
 
 Role edits are undoable. **Remove reaction roles** keeps all drawing objects. Deleting an arrow removes its reaction definition; deleting atoms prunes the corresponding membership. Extending an assigned molecule also extends its membership. A bond edit that joins separate participants is rejected: clear their roles first if you intend to combine them. Reversing a defined arrow swaps reactants and products in the same Undo step.
 
-Assistant-generated schemes already contain reactant and product roles, including their coefficients. Reaction conditions remain editable captions. Text conditions do not automatically become chemical reagent structures; draw and assign a reagent when it should be included in reaction data.
+Assistant-generated schemes already contain reactant and product roles, including their coefficients. Reaction conditions remain editable captions. Text written above or below a straight arrow attaches to it, and the arrow keeps itself long enough for the text; see [conditions on an arrow](arrows.md#write-conditions-on-an-arrow). Text conditions do not automatically become chemical reagent structures; draw and assign a reagent when it should be included in reaction data.
 
 ## Copy a drawn reaction
 
@@ -101,7 +101,7 @@ Choose one arrow in the reaction inspector to export it. Export controls remain 
 
 | Format                    | Retained data                                                                                             | Limits                                                                                                                     |
 | ------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `.rsk`                    | Complete drawing, reaction roles, coefficients, captions, styles and groups                               | Use this for continued editing.                                                                                            |
+| `.rsk`                    | Complete drawing, reaction roles, coefficients, captions, arrow conditions, styles and groups             | Use this for continued editing.                                                                                            |
 | RXN V3000                 | Reactants, products, separate agents, atom maps, supported molecular stereochemistry and atom coordinates | Arrow appearance, captions and page layout are not stored.                                                                 |
 | Reaction SMILES (`.rsmi`) | Reactants, products, agents, atom maps and supported molecular stereochemistry                            | Coordinates and drawing appearance are not stored. Disconnected components can become separate participants when reopened. |
 
