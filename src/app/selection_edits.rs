@@ -113,7 +113,8 @@ impl App {
     }
     pub(super) fn delete_selection(&mut self) {
         let before = self.tab.doc.clone();
-        self.tab.doc.delete(&self.tab.selected);
+        let ids = reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected);
+        self.tab.doc.delete(&ids);
         self.changed(before);
     }
     pub(super) fn select_all_objects(&mut self) {

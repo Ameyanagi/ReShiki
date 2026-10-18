@@ -2,12 +2,28 @@
 use super::*;
 use crate::document::Atom;
 
-pub(super) fn hidden_charge(atom: &Atom) -> bool {
+/// A hidden Cp⁻ ring charge, or the hidden balancing charge on a metal that
+/// carries haptic rings (ferrocene's Fe²⁺), exported as an invisible symbol.
+pub(super) fn hidden_charge(atom: &Atom, doc: &Document) -> bool {
     atom.display.hide_charge
-        && atom.charge.unsigned_abs() == 1
-        && atom.element == "C"
-        && atom.aromatic
+        && atom.charge != 0
         && atom.marks.is_empty()
+        && (atom.charge.unsigned_abs() == 1 && atom.element == "C" && atom.aromatic
+            || haptic_metal(atom, doc))
+}
+
+fn haptic_metal(atom: &Atom, doc: &Document) -> bool {
+    doc.bonds.iter().any(|b| {
+        let other = if b.a == atom.id {
+            b.b
+        } else if b.b == atom.id {
+            b.a
+        } else {
+            return false;
+        };
+        doc.atom(other)
+            .is_some_and(|a| a.attachment == Some(crate::attachments::Kind::MultiCenter))
+    })
 }
 
 // Explicit NumHydrogens forces an atom label in external readers. These
@@ -32,7 +48,7 @@ pub(super) fn implicit_carbon(atom: &Atom, doc: &Document) -> bool {
 
 impl Writer<'_> {
     pub(super) fn hidden_charges(&mut self) -> Result<()> {
-        for atom in self.doc.atoms.iter().filter(|a| hidden_charge(a)) {
+        for atom in self.doc.atoms.iter().filter(|a| hidden_charge(a, self.doc)) {
             // Native symbol association depends on proximity as well as the
             // explicit owner reference. Keep the invisible mark beside its atom.
             let unit = real(self.doc.drawing_style.font_size_pt) / self.scale;

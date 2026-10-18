@@ -17,8 +17,10 @@ changes the explanation and icon geometry, while retaining chain behavior.
 Orbitals have an explicit **Snap to atoms** control, independent of chemical
 symbol attachment. Hold **Option/Alt** while placing a new orbital to bypass
 snapping temporarily. Its preview identifies the chosen atom or free node.
-Transparent clearance around visible atom-label ink keeps labels readable in
-front and back layers, without moving atoms or the orbital's node and axis.
+Labels stay readable in front and back layers, without moving atoms or the
+orbital's node and axis. Since #318 the lobes are drawn whole and a reached
+label sits above the orbital in a paper-colored halo, replacing the
+transparent clearance shown below.
 Clicking a revealed atom label selects that atom; ordinary filled graphics
 retain their existing selection behavior.
 
