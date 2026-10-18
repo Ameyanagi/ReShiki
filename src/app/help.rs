@@ -219,8 +219,16 @@ impl App {
                 row![
                     text("↑ ↓ move · Esc closes · Uppercase means Shift-letter · Reference only: nothing runs")
                         .size(12)
-                        .style(muted_text),
-                    Space::new().width(Length::Fill),
+                        .style(muted_text)
+                        .width(Length::Fill),
+                    reshiki::accessibility::button(
+                        "help-examples",
+                        "Open shortcut examples: one editable drawing with labeled examples, in a new tab",
+                        text("Open shortcut examples").size(13)
+                    )
+                    .padding([7, 14])
+                    .on_press(Message::OpenShortcutExamples)
+                    .style(control(false)),
                     reshiki::accessibility::button(
                         "help-done",
                         "Done; close Help and shortcuts",
@@ -349,7 +357,7 @@ fn drawing(label: &'static str, doc: reshiki::document::Document) -> Element<'st
         text(label).size(11).style(muted_text),
         crate::canvas::layered::canvas(crate::canvas::OwnedDrawingPreview(doc))
             .width(Length::Fill)
-            .height(116),
+            .height(100),
     ]
     .spacing(3)
     .into()
@@ -400,24 +408,8 @@ fn preview(entry: Option<&'static Entry>) -> Element<'static, Message> {
             ),
         });
     }
-    pane.push(Space::new().height(Length::Fill))
-        .push(
-            column![
-                reshiki::accessibility::button(
-                    "help-examples",
-                    "Open shortcut examples",
-                    text("Open shortcut examples").size(13)
-                )
-                .padding([8, 14])
-                .on_press(Message::OpenShortcutExamples)
-                .style(control(false)),
-                text("One editable drawing with labeled examples, in a new tab.")
-                    .size(11)
-                    .style(muted_text),
-            ]
-            .spacing(6),
-        )
-        .into()
+    // Clip rather than squeeze: the footer keeps the examples action.
+    pane.clip(true).into()
 }
 
 #[cfg(test)]

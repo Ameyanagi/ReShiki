@@ -323,6 +323,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["revert", "history"],
         ),
         entry(
+            "Drag side / corner handle",
+            "Resize",
+            "Drag a side handle to change width or height, or a corner handle to resize proportionally",
+            Selection,
+            &["scale", "stretch", "size"],
+        ),
+        entry(
             "Drag",
             "Smart guides",
             "Snap to other objects' edges, centers and equal gaps",
@@ -439,7 +446,7 @@ pub(crate) fn entries() -> Vec<Entry> {
         entry(
             keys(none, "Enter"),
             "Edit atom label",
-            "Edit the selected atom's label (M, L, X, Boc…); with several atoms, contract them",
+            "Edit the selected atom's label (M, L, X, Boc…); with keyboard drawing off (F8), several selected atoms are contracted",
             Atom,
             &["rename", "abbreviation", "type label", "="],
         ),

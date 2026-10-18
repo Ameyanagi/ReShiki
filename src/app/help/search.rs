@@ -43,9 +43,10 @@ fn key_tokens(text: &str) -> Vec<String> {
             tokens.push(rest);
         }
     }
-    // A bare "/" or "+" is a key, not only a separator.
+    // A final "/" or "+" is a key, as in ⌘/ or +; elsewhere " / " separates
+    // alternatives.
     for key in ["/", "+"] {
-        if text.split_whitespace().any(|part| part == key) || text.ends_with(key) {
+        if text.ends_with(key) {
             tokens.push(key.into());
         }
     }
@@ -69,10 +70,18 @@ fn chord_terms(keys: &str) -> Vec<String> {
             terms.extend((first + 1..last).map(|d| d.to_string()));
         }
     }
-    // An uppercase contextual key is Shift-letter.
-    let shifted = terms
-        .iter()
-        .any(|t| t.len() == 1 && t.chars().all(|c| c.is_ascii_uppercase()));
+    // An uppercase contextual key is Shift-letter. Chords with modifiers,
+    // such as ⌘C, already spell out Shift when they use it.
+    let modified = terms.iter().any(|t| {
+        MODIFIERS
+            .iter()
+            .take(4)
+            .any(|(symbol, words)| t == symbol || words.iter().any(|w| t.eq_ignore_ascii_case(w)))
+    });
+    let shifted = !modified
+        && terms
+            .iter()
+            .any(|t| t.len() == 1 && t.chars().all(|c| c.is_ascii_uppercase()));
     if shifted {
         terms.push("⇧".into());
     }

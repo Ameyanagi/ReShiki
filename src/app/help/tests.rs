@@ -197,6 +197,16 @@ fn search_ranks_names_keys_and_synonyms() {
     assert!(search::rank(entries(), "zzzz").is_empty());
     assert!(search::rank(entries(), "copy").len() > search::rank(entries(), "copy image").len());
     assert_eq!(top("copy image").name, "Copy as image");
+    // Command chords spell out Shift; " / " separates alternatives, not keys.
+    assert_eq!(top("cmd shift c").name, "Copy as image");
+    assert_eq!(top("/").name, "Shortcut finder");
+    assert!(position("/", "Fit drawing") < 2);
+    assert!(
+        search::rank(entries(), "/")
+            .iter()
+            .all(|i| entries()[*i].name != "Select tool")
+    );
+    assert_eq!(top("resize").name, "Resize");
     // An empty query lists the whole registry in order.
     assert_eq!(
         search::rank(entries(), "  "),
