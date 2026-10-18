@@ -232,7 +232,16 @@ fn atom_label_runs_with_charge_layout(
     let attached = (free_text && condensed.is_none())
         .then(|| crate::atom_labels::attachment_range(a, doc, label))
         .flatten();
-    let anchor_x = attached.map_or(element_width / 2., |range| {
+    // A generic label meets its single horizontal bond with its near edge.
+    let generic_side = (internal_group.is_none() && condensed.is_none())
+        .then(|| crate::atom_labels::generic_label_side(a, doc))
+        .flatten();
+    let centered = match generic_side {
+        Some(true) => element_width,
+        Some(false) => 0.,
+        None => element_width / 2.,
+    };
+    let anchor_x = attached.map_or(centered, |range| {
         let width = |end: usize| match scripts.as_ref().filter(|_| layout.is_some()) {
             Some(scripts) => free_label_layout(label, scripts, 0..end, &style).width,
             None => text_width(label.get(..end).unwrap_or_default(), size),

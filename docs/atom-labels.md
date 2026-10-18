@@ -40,6 +40,11 @@ choice as `label_attachment`; CDXML/CDX write and read flush left/center/right a
 text's `LabelJustification`. A chosen character has no ChemDraw equivalent and
 is native only; changing the text returns it to Automatic.
 
+Generic labels (alternative lists such as `[Cl,Br,I]`, link nodes) with a
+single horizontal bond meet it with their near edge, so the text extends away
+from the molecule and the bond is trimmed at the label instead of running
+through it. Vertical and internal generic labels stay centered.
+
 Number assigns one sequence in creation/import order. Starts include `1`,
 `atom1`, `a`, `A`, `α` and `Α`; letter sequences continue beyond the alphabet.
 A single selected atom also accepts a custom number such as `Cα` or `12a`.
