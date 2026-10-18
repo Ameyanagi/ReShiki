@@ -750,3 +750,39 @@ fn protecting_group_labels_are_real_groups_that_expand_and_contract()
     }
     Ok(())
 }
+
+#[test]
+fn catalog_aliases_create_the_same_group_under_the_typed_spelling()
+-> Result<(), Box<dyn std::error::Error>> {
+    for (alias, label) in [("TBDMS", "TBS"), ("MPM", "PMB"), ("Trt", "Tr")] {
+        let mut doc = Document::default();
+        let methyl = doc.add_atom("C", Point::new(0., 0.));
+        let endpoint = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(methyl, endpoint, 1, "plain");
+        let typed = apply(&doc, endpoint, alias, Mode::Auto)?;
+        let canonical = apply(&doc, endpoint, label, Mode::Auto)?;
+        let group = typed.abbreviation(endpoint).ok_or(alias)?;
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (alias, "")
+        );
+        assert_eq!(formula(&typed)?, formula(&canonical)?, "{alias}");
+        assert_eq!(typed.atoms.len(), canonical.atoms.len(), "{alias}");
+    }
+    Ok(())
+}
+
+#[test]
+fn the_public_group_list_covers_every_typed_group() {
+    let groups: Vec<_> = crate::abbreviations::groups().collect();
+    let tbs = groups.iter().find(|g| g.label == "TBS").unwrap();
+    assert_eq!(tbs.category, "silyl");
+    assert_eq!(tbs.aliases, ["TBDMS"]);
+    assert!(tbs.names.iter().any(|n| n == "tert-butyldimethylsilyl"));
+    assert_eq!(tbs.formula, "C6H15Si");
+    assert!(groups.iter().any(|g| g.label == "N3"));
+    for label in crate::abbreviations::group_labels() {
+        assert!(crate::abbreviations::is_group_label(&label), "{label}");
+    }
+    assert!(!crate::abbreviations::is_group_label("NotAGroup"));
+}

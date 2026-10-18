@@ -3,16 +3,14 @@
 //! AbbreviationsUtils.cpp, Abbreviations.cpp and Substruct/vf2.hpp.
 //! Copyright (C) 2020 Greg Landrum and T5 Informatics GmbH; RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
+mod catalog;
 mod matcher;
 mod replacement;
 use super::{RDKIT_VERSION, document::Molecule};
 use crate::{abbreviations::Abbreviation, document::Document};
+pub use catalog::{BUILTIN, Catalog, Entry, FORMAT, File, Preset, lookup, parse, presets};
 pub use replacement::{Error as ReplacementError, replace, replace_with_policy};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::OnceLock,
-};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
@@ -64,47 +62,6 @@ fn check_size(document: &Document) -> Result<()> {
         }
     }
     Ok(())
-}
-
-/// Native adjusted SMARTS predicates for the application's fixed definitions.
-/// Exposed labels/SMILES also let replacement use this same preset catalog.
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Preset {
-    pub label: String,
-    pub reverse_label: String,
-    pub smiles: String,
-    atoms: Vec<matcher::Atom>,
-    bonds: Vec<matcher::Bond>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Data {
-    rdkit_version: String,
-    presets: Vec<Preset>,
-}
-
-pub fn presets() -> Result<&'static [Preset]> {
-    static DATA: OnceLock<Result<Data>> = OnceLock::new();
-    DATA.get_or_init(|| {
-        let data: Data = serde_json::from_str(include_str!("abbreviations/presets.json"))
-            .map_err(|error| invalid(format!("Invalid preset data: {error}")))?;
-        if data.rdkit_version != RDKIT_VERSION
-            || data.presets.len() != crate::abbreviations::PRESETS.len()
-        {
-            return Err(invalid("Preset data version or count mismatch"));
-        }
-        for (preset, expected) in data.presets.iter().zip(crate::abbreviations::PRESETS) {
-            if preset.label != *expected || preset.smiles.is_empty() {
-                return Err(invalid("Invalid preset definition"));
-            }
-            matcher::validate(preset)?;
-        }
-        Ok(data)
-    })
-    .as_ref()
-    .map(|data| data.presets.as_slice())
-    .map_err(Clone::clone)
 }
 
 /// The original preset interface accepts terminal groups only. Desktop
@@ -218,9 +175,12 @@ pub fn find_with_policy(
     label: Option<&str>,
     policy: AttachmentPolicy,
 ) -> Result<Document> {
-    let mut available: Vec<_> = presets()?
+    let catalog = presets()?;
+    let label = label.filter(|label| !label.is_empty());
+    // A named search may use any group; Contract all skips opted-out groups.
+    let mut available: Vec<_> = catalog
         .iter()
-        .filter(|preset| label.is_none_or(|label| label.is_empty() || label == preset.label))
+        .filter(|preset| label.map_or(preset.contract, |label| label == preset.label))
         .collect();
     if available.is_empty() {
         return Err(Error::Unknown);

@@ -1,12 +1,11 @@
 //! Text at an atom endpoint: an element, a real collapsed group, or a named dummy.
 use crate::{
-    abbreviations::PRESETS,
     document::Document,
     editing::ELEMENTS,
     typography::{Script, ScriptRun},
 };
 fn known_group(text: &str) -> bool {
-    PRESETS.contains(&text) || crate::common_groups::LABELS.contains(&text)
+    crate::abbreviations::is_group_label(text)
 }
 mod hydride;
 pub use hydride::entry;

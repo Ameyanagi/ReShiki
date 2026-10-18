@@ -732,6 +732,7 @@ pub fn condensed_label(text: &str) -> Option<(&str, &str)> {
         return None;
     }
     let mut rest = suffix;
+    let catalog = crate::chemistry::abbreviations::presets().unwrap_or_else(|_| Vec::new().into());
     let mut groups = Vec::new();
     let mut item = false;
     while let Some(c) = rest.chars().next() {
@@ -753,12 +754,14 @@ pub fn condensed_label(text: &str) -> Option<(&str, &str)> {
                     .then_some((core, suffix));
             }
             'A'..='Z' => {
-                let token = crate::editing::ELEMENTS
+                let length = crate::editing::ELEMENTS
                     .iter()
-                    .chain(crate::abbreviations::PRESETS)
-                    .filter(|token| rest.starts_with(**token))
-                    .max_by_key(|token| token.len())?;
-                rest = &rest[token.len()..];
+                    .copied()
+                    .chain(catalog.iter().flat_map(|preset| preset.spellings()))
+                    .filter(|token| rest.starts_with(token))
+                    .map(str::len)
+                    .max()?;
+                rest = &rest[length..];
                 item = true;
             }
             _ => return None,

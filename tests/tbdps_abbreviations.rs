@@ -135,7 +135,7 @@ fn assert_group(doc: &Document, anchor: u64, label: &str) {
 fn typed_and_preset_groups_attach_through_the_correct_element() -> Result<(), String> {
     let (source, end) = propane();
     for label in ["TBDPS", "OTBDPS"] {
-        assert!(reshiki::abbreviations::PRESETS.contains(&label));
+        assert!(reshiki::abbreviations::is_group_label(label));
         assert!(atom_text::description(label, Mode::Auto).starts_with("A real chemical group."));
         for mode in [Mode::Auto, Mode::Group] {
             let doc = atom_text::apply(&source, end, label, mode)?;

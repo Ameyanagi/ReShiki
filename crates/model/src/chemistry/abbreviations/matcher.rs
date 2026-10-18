@@ -4,13 +4,12 @@ use super::{Error, Preset, Result, at, invalid};
 use crate::chemistry::{
     graph::Graph,
     rings,
-    stereo::perception::{RingCache, RingKind},
+    stereo::perception::{self, RingCache, RingKind},
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub(super) struct Atom {
     number: u8,
     aromatic: Option<bool>,
@@ -18,14 +17,90 @@ pub(super) struct Atom {
     degree: usize,
     rings: usize,
 }
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub(super) struct Bond {
     a: usize,
     b: usize,
     /// Zero is the implicit SMARTS single-or-aromatic predicate.
     order: u8,
 }
+/// Elements that RDKit's SMARTS reader types as aliphatic or aromatic even in
+/// brackets. Other bracket elements (Si, Sn, Mg...) match on atomic number only.
+const TYPED: [u8; 10] = [5, 6, 7, 8, 9, 15, 16, 17, 35, 53];
+
+/// Derive the adjusted abbreviation query from a prepared `*`-first SMILES.
+/// This reproduces RDKit ParseAbbreviations for the catalog's SMILES style:
+/// written aromaticity, charge only when nonzero, explicit degree and ring
+/// count. Implicit single-or-aromatic bonds become order zero; a single bond
+/// between two aromatic atoms (the fluorene biaryl bond) stays an explicit single.
+/// Bracket hydrogen counts are not part of the query; degree and charge
+/// already fix them for neutral catalog atoms.
+pub(super) fn query(state: &perception::State) -> Result<(Vec<Atom>, Vec<Bond>)> {
+    let graph = &state.graph;
+    let mut degree = vec![0usize; graph.atoms.len()];
+    for bond in &graph.bonds {
+        for index in [bond.a, bond.b] {
+            *degree
+                .get_mut(index)
+                .ok_or_else(|| invalid("Invalid preset endpoint"))? += 1;
+        }
+    }
+    let mut rings = vec![0usize; graph.atoms.len()];
+    for ring in &state.rings.atoms {
+        for &index in ring {
+            *rings
+                .get_mut(index)
+                .ok_or_else(|| invalid("Invalid preset ring"))? += 1;
+        }
+    }
+    let atoms = graph
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(index, atom)| {
+            if index == 0 {
+                return Atom {
+                    number: 0,
+                    aromatic: None,
+                    charge: None,
+                    degree: degree.first().copied().unwrap_or(0),
+                    rings: 0,
+                };
+            }
+            Atom {
+                number: atom.atomic_number,
+                aromatic: (atom.aromatic || TYPED.contains(&atom.atomic_number))
+                    .then_some(atom.aromatic),
+                charge: (atom.charge != 0).then_some(atom.charge),
+                degree: degree.get(index).copied().unwrap_or(0),
+                rings: rings.get(index).copied().unwrap_or(0),
+            }
+        })
+        .collect();
+    let bonds = graph
+        .bonds
+        .iter()
+        .map(|bond| {
+            let aromatic = |index: usize| {
+                index != 0 && graph.atoms.get(index).is_some_and(|atom| atom.aromatic)
+            };
+            let order = match bond.order {
+                4 => 0,
+                1 if aromatic(bond.a) && aromatic(bond.b) => 1,
+                1 => 0,
+                order @ (2 | 3) => order,
+                _ => return Err(invalid("Unsupported preset bond order")),
+            };
+            Ok(Bond {
+                a: bond.a,
+                b: bond.b,
+                order,
+            })
+        })
+        .collect::<Result<_>>()?;
+    Ok((atoms, bonds))
+}
+
 pub(super) fn validate(preset: &Preset) -> Result<()> {
     if !(2..=32).contains(&preset.atoms.len())
         || preset.bonds.len() > 40

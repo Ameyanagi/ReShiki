@@ -175,7 +175,7 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
             label_color_override: false,
             highlight: None,
             label: text.to_owned(),
-            reverse_label: preview_group_reverse_label(text).ok_or(())?.to_owned(),
+            reverse_label: preview_group_reverse_label(text).ok_or(())?,
             anchor: atom,
             members: vec![atom],
             alignment: Default::default(),
@@ -205,19 +205,24 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
     Ok(())
 }
 
-fn preview_group_reverse_label(text: &str) -> Option<&str> {
+fn preview_group_reverse_label(text: &str) -> Option<String> {
     if let Some((_, reverse)) = super::formula_group(text) {
-        return Some(reverse);
+        return Some(reverse.into());
     }
     match text {
-        "Cp" | "Cp*" => Some(text),
-        "MgBr" => Some("BrMg"),
-        "N3" => Some(""),
-        _ => crate::chemistry::abbreviations::presets()
-            .ok()?
-            .iter()
-            .find(|preset| preset.label == text)
-            .map(|preset| preset.reverse_label.as_str()),
+        "Cp" | "Cp*" => Some(text.into()),
+        "MgBr" => Some("BrMg".into()),
+        "N3" => Some(String::new()),
+        _ => crate::chemistry::abbreviations::lookup(text)
+            .ok()
+            .flatten()
+            .map(|(preset, alias)| {
+                if alias {
+                    String::new()
+                } else {
+                    preset.reverse_label.clone()
+                }
+            }),
     }
 }
 

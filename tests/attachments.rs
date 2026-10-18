@@ -358,7 +358,8 @@ fn v3000_all_and_any_preserve_targets_through_cdxml() -> anyhow::Result<()> {
 
 #[test]
 fn common_groups_keep_the_real_graph_in_chemdraw_interchange() -> anyhow::Result<()> {
-    for label in reshiki::abbreviations::PRESETS {
+    for preset in reshiki::chemistry::abbreviations::presets()?.iter() {
+        let label = preset.label.as_str();
         let mut doc = Document::default();
         let n = doc.add_atom("N", Point::new(0., 0.));
         let c = doc.add_atom("C", Point::new(42., 0.));

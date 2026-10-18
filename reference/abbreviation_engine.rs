@@ -81,7 +81,7 @@ async fn all_presets_preserve_complete_app_responses_selection_and_undo() -> any
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut cases = 0;
-    for preset in abbreviations::presets()? {
+    for preset in abbreviations::presets()?.iter() {
         let tail = preset
             .smiles
             .strip_prefix('*')
@@ -203,7 +203,7 @@ async fn replacement_preserves_full_responses_geometry_selection_and_undo() -> a
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
     let mut cases = 0;
-    for preset in abbreviations::presets()? {
+    for preset in abbreviations::presets()?.iter() {
         for (origin, outside) in [
             ((0.1, -0.2), (25.3, 33.4)),
             ((21.25, -17.5), (-3.95, 16.1)),

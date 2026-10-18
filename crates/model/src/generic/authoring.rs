@@ -44,11 +44,7 @@ pub fn alternative(text: &str) -> Result<Option<(Vec<Alternative>, bool)>, Strin
                 symbol: "H".into(),
                 isotope: if item == "D" { 2 } else { 3 },
             }
-        } else if !excluded
-            && (crate::abbreviations::PRESETS.contains(&item)
-                || crate::common_groups::LABELS.contains(&item)
-                || item == "OPh")
-        {
+        } else if !excluded && (crate::abbreviations::is_group_label(item) || item == "OPh") {
             Alternative::Group { label: item.into() }
         } else if !excluded
             && (item == "R"

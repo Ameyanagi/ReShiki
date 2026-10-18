@@ -1,0 +1,109 @@
+use super::*;
+
+const CATEGORIES: &[&str] = &[
+    "alkyl",
+    "alkoxy",
+    "aryl",
+    "heteroaryl",
+    "protecting group",
+    "silyl",
+    "carbonyl",
+    "sulfonyl",
+    "sulfur",
+    "phosphorus",
+    "boron",
+    "metal",
+    "nitrogen",
+    "halogen",
+];
+
+#[test]
+fn bundled_entries_are_complete_and_rdkit_comparable() {
+    let (presets, errors) = parse(BUILTIN, false);
+    assert!(errors.is_empty(), "{errors:#?}");
+    let file: File = serde_json::from_str(BUILTIN).unwrap();
+    assert_eq!(file.groups.len(), presets.len());
+    for (entry, preset) in file.groups.iter().zip(&presets) {
+        let label = &entry.label;
+        // Every bundled formula is written independently of the SMILES and
+        // checked by from_entry, so a SMILES typo cannot slip through.
+        assert!(entry.formula.is_some(), "{label} needs a formula");
+        assert!(
+            CATEGORIES.contains(&entry.category.as_str()),
+            "{label}: unknown category {}",
+            entry.category
+        );
+        assert!(!entry.names.is_empty(), "{label} needs a full name");
+        // Bracket hydrogens become RDKit query predicates that the native
+        // matcher does not model, so bundled SMILES avoid them.
+        let prepared = smiles::prepare(&entry.smiles).unwrap();
+        assert!(
+            prepared
+                .state
+                .graph
+                .atoms
+                .iter()
+                .all(|atom| atom.explicit_hydrogens == 0),
+            "{label}: write hydrogens implicitly"
+        );
+        assert_eq!(
+            preset.smiles.matches('*').count(),
+            1,
+            "{label}: one attachment"
+        );
+        assert!(preset.positions().is_ok(), "{label}: layout");
+    }
+}
+
+#[test]
+fn formulas_are_hill_order_substituents() {
+    for (smiles, formula) in [
+        ("*C", "CH3"),
+        ("*C(F)(F)F", "CF3"),
+        ("*[N+](=O)[O-]", "NO2"),
+        ("*O[Si](C)(C)C(C)(C)C", "C6H15OSi"),
+        ("*S(=O)(=O)C(F)(F)F", "CF3O2S"),
+        ("*[N+](C)(C)C", "C3H9N+"),
+        ("*C(=O)[O-]", "CO2-"),
+        ("*Br", "Br"),
+    ] {
+        let prepared = smiles::prepare(smiles).unwrap();
+        assert_eq!(substituent_formula(&prepared).unwrap(), formula, "{smiles}");
+    }
+}
+
+#[test]
+fn invalid_entries_are_reported_and_valid_ones_kept() {
+    let text = r#"{"format": 1, "groups": [
+        {"label": "Good", "smiles": "*CC(C)(C)C", "formula": "C5H11"},
+        {"label": "Two", "smiles": "*CC*"},
+        {"label": "Late", "smiles": "C*"},
+        {"label": "Bad", "smiles": "*C(("},
+        {"label": "Wrong", "smiles": "*CC", "formula": "C3H7"},
+        {"label": "Good", "smiles": "*C"},
+        {"label": "has space", "smiles": "*C"},
+        {"label": "Chiral", "smiles": "*[C@H](F)Cl"},
+        {"label": "Alias", "smiles": "*CC", "aliases": ["Good"]},
+        {"label": "Ring", "smiles": "*C1CC1", "contract": false}
+    ]}"#;
+    let (presets, errors) = parse(text, true);
+    let labels: Vec<_> = presets.iter().map(|p| p.label.as_str()).collect();
+    assert_eq!(labels, ["Good", "Ring"]);
+    assert!(presets.iter().all(|p| p.user));
+    assert!(!presets[1].contract);
+    assert_eq!(errors.len(), 8, "{errors:#?}");
+    for (error, expected) in errors.iter().zip([
+        "Group 2 (Two): SMILES must start with the single *",
+        "Group 3 (Late): SMILES must start",
+        "Group 4 (Bad): Invalid SMILES",
+        "Group 5 (Wrong): Formula C3H7 does not match the SMILES (C2H5)",
+        "Group 6 (Good): \"Good\" is defined twice",
+        "Group 7 (has space): Label \"has space\"",
+        "Group 8 (Chiral): Stereo",
+        "Group 9 (Alias): \"Good\" is defined twice",
+    ]) {
+        assert!(error.starts_with(expected), "{error}");
+    }
+    assert!(parse("{", true).1[0].starts_with("Invalid catalog file"));
+    assert!(parse(r#"{"format": 2, "groups": []}"#, true).1[0].contains("format 2"));
+}

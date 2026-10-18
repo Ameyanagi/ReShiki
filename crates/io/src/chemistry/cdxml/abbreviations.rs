@@ -793,7 +793,7 @@ fn label_names(tree: &Tree, text: usize) -> Result<(String, String)> {
     // Presets without an alternate spelling leave both strings alone.
     let presets = crate::chemistry::abbreviations::presets()
         .map_err(|error| Error::Invalid(error.to_string()))?;
-    for preset in presets {
+    for preset in presets.iter() {
         if label == preset.label
             || !preset.reverse_label.is_empty() && label == preset.reverse_label
         {

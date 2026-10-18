@@ -3,7 +3,6 @@
 import argparse
 import copy
 import json
-import platform
 import random
 import struct
 import sys
@@ -134,11 +133,7 @@ def main():
     modes.add_argument("--geometry", action="store_true")
     modes.add_argument("--wire", action="store_true")
     modes.add_argument("--math", action="store_true")
-    modes.add_argument("--write-geometry", action="store_true")
-    parser.add_argument("--target-arch", choices=("x86_64", "aarch64"))
     args = parser.parse_args()
-    if args.target_arch and not args.write_geometry:
-        parser.error("--target-arch requires --write-geometry")
     if args.math:
         trace_math(json.load(sys.stdin))
         return
@@ -156,22 +151,6 @@ def main():
             response = worker.handle(request)
             assert before == request
             print(json.dumps(dict(request=request, edit=edit, response=response)), flush=True)
-        return
-    if args.write_geometry:
-        system = platform.system().lower().replace("darwin", "macos")
-        if system == "windows" and not args.target_arch:
-            parser.error(
-                "Choose --target-arch for the Windows host, not the emulated Python process"
-            )
-        arch = args.target_arch or (
-            platform.machine().lower().replace("amd64", "x86_64").replace("arm64", "aarch64")
-        )
-        path = (
-            Path(__file__).resolve().parents[1]
-            / "crates/model/src/chemistry/abbreviations"
-            / f"geometry-{system}-{arch}.json"
-        )
-        path.write_text(json.dumps(geometry(), indent=2) + "\n")
         return
     print(json.dumps(geometry()))
     for label in abbreviations.PRESETS:

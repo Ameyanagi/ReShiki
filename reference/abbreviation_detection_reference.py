@@ -1,7 +1,8 @@
 """Independent RDKit abbreviation oracle and pinned native query export.
 
-Regenerate the production catalog with --write-presets. Expected detection and
-validation call the Python reference functions, never Rust or its data. Selection
+The header exports RDKit's adjusted query for every catalog entry; the Rust test
+compares it with the queries ReShiki derives from the same SMILES. Expected
+detection and validation call the Python reference functions, never Rust code. Selection
 eligibility deliberately precedes overlap arbitration in both implementations.
 """
 
@@ -155,13 +156,6 @@ def reorder_bonds(mol, order):
 
 def main():
     RDLogger.DisableLog("rdApp.*")
-    if "--write-presets" in sys.argv:
-        path = (
-            Path(__file__).resolve().parents[1]
-            / "crates/model/src/chemistry/abbreviations/presets.json"
-        )
-        path.write_text(json.dumps(catalog(), indent=2) + "\n")
-        return
     print(json.dumps(catalog()))
     rng = random.Random(48361)
     for label, (smiles, _) in abbreviations.PRESETS.items():
