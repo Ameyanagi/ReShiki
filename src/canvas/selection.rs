@@ -183,6 +183,23 @@ impl SelectionBox {
     }
 }
 
+/// The live readout beside a rotation-handle drag: the angle being applied
+/// (positive is clockwise, as in the numeric Rotate field) and how to change
+/// its step. Shift snaps to 15°; the Alt/Option arrow keys turn the selection
+/// by 1° or 15° without the mouse.
+pub fn rotation_readout(angle: f32) -> [String; 2] {
+    let keys = if cfg!(target_os = "macos") {
+        "⌥←/→ 1° · ⌥↑/↓ 15°"
+    } else {
+        "Alt+←/→ 1° · Alt+↑/↓ 15°"
+    };
+    // Adding zero turns a rounded −0 into 0.
+    [
+        format!("Rotate {}°", angle.round() + 0.),
+        format!("Shift: 15° steps · {keys}"),
+    ]
+}
+
 #[derive(Debug)]
 pub(super) struct TransformDrag {
     pub ids: Vec<u64>,

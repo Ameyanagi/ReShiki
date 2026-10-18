@@ -1450,8 +1450,9 @@ impl App {
                 hover_hint(
                     text(self.selection_summary()).size(11).style(muted_text),
                     format!(
-                        "Click a bond's middle to select it; Shift-click adds. {} selects the whole drawing.",
-                        keys(Modifiers::COMMAND, "A")
+                        "Click a bond's middle to select it; Shift-click adds. {} selects the whole drawing.\nRotate: drag the round handle (Shift: 15° steps) · {}",
+                        keys(Modifiers::COMMAND, "A"),
+                        super::shortcuts::rotation_keys()
                     ),
                     tooltip::Position::Bottom,
                 )
@@ -2382,29 +2383,33 @@ impl App {
         let dark = self.tab.doc.canvas_theme.is_dark();
         [
             hover_hint(
-                crate::appearance::pick_list(
-                    Preset::ALL
-                        .into_iter()
-                        .map(Choice::Journal)
-                        .chain([Choice::Details])
-                        .collect::<Vec<_>>(),
-                    Some(current),
-                    Message::QuickDrawingStyle,
-                )
-                .text_size(11)
-                .padding([4, 8]),
+                crate::appearance::close_on_escape(
+                    crate::appearance::pick_list(
+                        Preset::ALL
+                            .into_iter()
+                            .map(Choice::Journal)
+                            .chain([Choice::Details])
+                            .collect::<Vec<_>>(),
+                        Some(current),
+                        Message::QuickDrawingStyle,
+                    )
+                    .text_size(11)
+                    .padding([4, 8]),
+                ),
                 "Journal preset · Bond length, line widths and label font",
                 tooltip::Position::Top,
             )
             .into(),
             hover_hint(
-                crate::appearance::pick_list(themes, Some(theme.clone()), |choice| {
-                    Message::ThemeFile(super::theme_files::Action::Choose(choice))
-                })
-                // Sizes the list for an embedded theme's name, which is not an option.
-                .placeholder(theme.to_string())
-                .text_size(11)
-                .padding([4, 8]),
+                crate::appearance::close_on_escape(
+                    crate::appearance::pick_list(themes, Some(theme.clone()), |choice| {
+                        Message::ThemeFile(super::theme_files::Action::Choose(choice))
+                    })
+                    // Sizes the list for an embedded theme's name, which is not an option.
+                    .placeholder(theme.to_string())
+                    .text_size(11)
+                    .padding([4, 8]),
+                ),
                 "Color theme",
                 tooltip::Position::Top,
             )

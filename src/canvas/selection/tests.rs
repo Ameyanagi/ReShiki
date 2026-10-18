@@ -249,3 +249,18 @@ fn repeated_asymmetric_rotation_drags_keep_the_pivot_and_preview_geometry() {
         }
     }
 }
+
+#[test]
+fn rotation_readout_shows_the_applied_angle_and_the_step_keys() {
+    let [angle, hint] = rotation_readout(22.4);
+    assert_eq!(angle, "Rotate 22°");
+    assert_eq!(rotation_readout(-0.3)[0], "Rotate 0°");
+    assert_eq!(rotation_readout(-15.)[0], "Rotate -15°");
+    assert!(hint.starts_with("Shift: 15° steps · "));
+    let keys = if cfg!(target_os = "macos") {
+        "⌥←/→ 1° · ⌥↑/↓ 15°"
+    } else {
+        "Alt+←/→ 1° · Alt+↑/↓ 15°"
+    };
+    assert!(hint.ends_with(keys), "{hint}");
+}
