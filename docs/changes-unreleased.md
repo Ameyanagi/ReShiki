@@ -1,5 +1,7 @@
 # Unreleased changes
 
+- **Under review — Command palette:** press **:** to search every command (insertions such as benzene, OMe or bromine; bond and atom edits such as double bond; menu, panel and tool actions such as Predict NMR, export formats and zoom) and run it with Enter on the selection or the pointed atom or bond, as one Undo step. Rows show their shortcuts; vim-style **:w**, **:q**, **:wq** and others run file commands. Stacked on the shortcut finder. [Shortcuts guide](contextual-shortcuts.md#run-a-command) · [PR #TBD](https://github.com/Ameyanagi/ReShiki/pulls) · @Ameyanagi.
+
 - **Under review — Shortcut finder:** Help (?, F1 or Cmd/Ctrl+Shift+/) is now a searchable list of every shortcut by action, key, description or synonym, showing where each applies, with live before/after drawings for atom and bond keys made by the keys' own edits. Selecting a row never runs the command. [Shortcuts guide](contextual-shortcuts.md) · [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357) · @Ameyanagi.
 
 - **Merged — Intel Mac panic recovery:** preserve the allocation alignment required by the native unwinder so recoverable background panics do not crash the application. Native Intel comparison reproduces the original crash and passes with the corrected alignment; global-allocator regression coverage now runs on all six supported native targets. [Diagnostic evidence](https://github.com/Ameyanagi/ReShiki/actions/runs/38822804581) · [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328) · @Ameyanagi.
