@@ -447,11 +447,11 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["kekule", "delocalized", "benzene"],
         ),
         entry(
-            keys(none, "Enter"),
+            format!("{} / =", keys(none, "Enter")),
             "Edit atom label",
             "Edit the selected atom's label (M, L, X, Boc…); with keyboard drawing off (F8), several selected atoms are contracted",
             Atom,
-            &["rename", "abbreviation", "type label", "="],
+            &["rename", "abbreviation", "type label"],
         ),
         entry(
             "g / ?",

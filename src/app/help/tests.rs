@@ -349,6 +349,19 @@ fn shift_search_keeps_modifiers_with_their_key() {
     assert!(search::score(named("Lithium"), "shift l").is_some());
     assert!(search::score(named("Chlorine"), "shift l").is_none());
     assert!(search::score(named("Chlorine"), "shift c").is_some());
-    // Modifiers written once before a list apply to each key.
+    // A bare key shares the modifiers written before it; other alternatives
+    // keep their own.
     assert!(search::score(named("Align / distribute"), "cmd shift alt c").is_some());
+    let copy = named("Copy CDXML / chemical text / MOL");
+    assert!(search::score(copy, "cmd d").is_some());
+    assert!(search::score(copy, "cmd alt d").is_none());
+    // "+" separates a modifier symbol as it does a modifier word.
+    for query in ["⇧+R", "shift+R"] {
+        assert_eq!(
+            top(query).name,
+            "Toggle saturated / aromatic ring",
+            "{query}"
+        );
+    }
+    assert_eq!(top("=").name, "Edit atom label");
 }
