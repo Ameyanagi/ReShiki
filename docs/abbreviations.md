@@ -16,7 +16,7 @@ override, and Undo/Redo restores it. See the [illustrated PR review](changes-pr1
 Properties → Chemical abbreviations provides compact labels while retaining the complete atom/bond graph. Formula, mass, SMILES and molecular identity use the full structure.
 
 - Select one terminal atom and choose a common group such as OMe, Boc, Ph, TBS, TBDPS or OTBDPS, then **Replace selected endpoint**. This changes the chemistry and preserves the outside connecting bond.
-- **Contract common groups** finds supported groups in the selected atoms, or the whole drawing when nothing is selected.
+- **Contract common groups** finds supported groups in the selected atoms, or the whole drawing when nothing is selected. A group only claims atoms whose charge, unpaired electrons, isotope and hydrogen count match its definition, so a charged or labelled atom stays visible. When a larger group cannot apply because a smaller group takes its outside atom, the smaller candidates are used instead (MeNHBoc contracts to Boc and Me).
 - Select a connected fragment whose outside bonds all meet the same selected atom, enter a name and optional reversed label, and choose **Contract selection**. This changes presentation only.
 - **Expand selected** or **Expand all** restores the internal atoms for editing. A collapsed group selects, moves, copies and deletes as a unit. Individual atom-property changes require expansion.
 
