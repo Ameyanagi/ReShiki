@@ -188,7 +188,7 @@ impl App {
             editing::selection(&self.tab.doc, &self.tab.selected)
         };
         let cut_ids = if cut {
-            self.tab.selected.clone()
+            reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected)
         } else {
             vec![]
         };
@@ -374,7 +374,8 @@ impl App {
         if let Ok(json) = serde_json::to_string(&selection.current()) {
             if cut {
                 let before = self.tab.doc.clone();
-                self.tab.doc.delete(&self.tab.selected);
+                let ids = reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected);
+                self.tab.doc.delete(&ids);
                 self.tab.selected.clear();
                 self.changed(before);
             }

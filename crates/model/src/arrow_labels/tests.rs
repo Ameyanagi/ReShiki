@@ -331,3 +331,67 @@ fn cdxml_notice_names_the_omitted_links() {
     type_text(&mut doc, "Δ", Point::new(60., -12.));
     assert_eq!(export_notice(&doc).as_deref(), Some(EXPORT_NOTICE));
 }
+
+#[test]
+fn an_arrow_grown_to_its_text_follows_it_back_down() {
+    let mut doc = scheme();
+    doc.arrows[0].end = Point::new(20., 0.);
+    let id = type_text(&mut doc, "MeOH", Point::new(10., -12.));
+    let grown = length(&doc);
+    assert!((grown - minimum_length(&doc, ARROW).unwrap()).abs() < 1e-3);
+    edit(&mut doc, |doc| {
+        doc.annotations
+            .iter_mut()
+            .find(|a| a.id == id)
+            .unwrap()
+            .text = "rt".into();
+    });
+    assert!(length(&doc) < grown);
+    assert!((length(&doc) - minimum_length(&doc, ARROW).unwrap()).abs() < 1e-3);
+}
+
+#[test]
+fn retyping_text_beside_an_arrow_attaches_it() {
+    let mut doc = scheme();
+    doc.annotations.push(Annotation {
+        id: 9,
+        position: Point::new(40., -45.),
+        text: "heat".into(),
+        format: TextFormat::default(),
+    });
+    edit(&mut doc, |doc| doc.annotations[0].text = "heat, 2 h".into());
+    assert_eq!(side(&doc, 9), Some(Side::Above));
+    assert_centred(&doc, 9);
+}
+
+#[test]
+fn delete_and_cut_take_owned_text_with_the_arrow() {
+    let mut doc = scheme();
+    let id = type_text(&mut doc, "Δ", Point::new(60., -12.));
+    let free = type_text(&mut doc, "note", Point::new(60., -400.));
+    let ids = with_labels(&doc, &[ARROW]);
+    assert!(ids.contains(&id) && !ids.contains(&free));
+    assert_eq!(with_labels(&doc, &[id]), vec![id]);
+}
+
+#[test]
+fn dragging_onto_an_occupied_side_keeps_the_label_already_there() {
+    let mut doc = scheme();
+    let above = type_text(&mut doc, "a", Point::new(60., -12.));
+    let below = type_text(&mut doc, "b", Point::new(60., 14.));
+    edit(&mut doc, |doc| doc.translate(&[above], 0., 70.));
+    assert_eq!(side(&doc, below), Some(Side::Below));
+    assert_eq!(side(&doc, above), None);
+}
+
+#[test]
+fn collapsing_an_end_onto_the_other_stops_at_the_label() {
+    let mut doc = scheme();
+    let id = type_text(&mut doc, "H2O", Point::new(60., -12.));
+    let start = arrow(&doc).start;
+    edit(&mut doc, |doc| doc.arrows[0].end = start);
+    assert_eq!(side(&doc, id), Some(Side::Above));
+    assert_eq!(arrow(&doc).start, start);
+    assert!(arrow(&doc).end.x > start.x);
+    assert!((length(&doc) - minimum_length(&doc, ARROW).unwrap()).abs() < 1e-3);
+}

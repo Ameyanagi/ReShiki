@@ -63,6 +63,8 @@ reversing the arrow carries its labels.
 Each side holds one label; use line breaks for several lines of conditions.
 Drag the text across the arrow to move it to the other side, or away from the
 arrow to detach it. Vertical arrows take labels on their left and right.
+Copying, cutting or deleting an arrow includes its condition text; copying or
+deleting the text alone leaves the arrow.
 
 ### Style an arrow
 
@@ -117,7 +119,7 @@ caption. Every edit re-checks the labels in the same Undo step:
 
 1. Text dragged on its own re-centres in its slot, changes side, or detaches
    once it leaves both slots.
-2. New or moved text attaches when its centre lies within the arrow span (or
+2. New, moved or retyped text attaches when its centre lies within the arrow span (or
    the text spans the arrow midpoint) and it is no more than one bond length
    beyond the attached position. The nearest free side wins. Arrows that the
    same edit created or moved, such as pasted schemes, do not capture text.
@@ -129,8 +131,9 @@ caption. Every edit re-checks the labels in the same Undo step:
 4. Labels sit 0.45 bond lengths beyond the arrow ink, including heads and
    equilibrium shafts.
 
-Copying or duplicating an arrow copies its labels; copying the text alone
-gives ordinary text. Molecule-name captions never attach. CDXML/CDX export
+Copying or duplicating an arrow copies its labels, and **Delete** or Cut
+removes them with it; copying the text alone gives ordinary text. Dragging one
+end onto the other keeps the arrow's direction and stops at the label width. Molecule-name captions never attach. CDXML/CDX export
 reports that the links are omitted. ChemDraw records similar links as
 `ReactionStepObjectsAboveArrow`/`BelowArrow` in reaction steps; ReShiki does not
 yet read or write them.

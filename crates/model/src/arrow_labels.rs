@@ -62,32 +62,35 @@ fn sub(a: Point, b: Point) -> Point {
 }
 /// Only straight, free arrows carry labels.
 pub fn supports(arrow: &Arrow) -> bool {
-    arrow.cubic.is_none()
-        && arrow.control_point().is_none()
-        && !arrow.is_attached()
-        && arrow.start.distance(arrow.end) > 1e-3
+    arrow.cubic.is_none() && arrow.control_point().is_none() && !arrow.is_attached()
 }
 fn frame(arrow: &Arrow) -> Option<Frame> {
-    if !supports(arrow) {
+    let len = arrow.start.distance(arrow.end);
+    if !supports(arrow) || len <= 1e-3 {
         return None;
     }
+    Some(frame_along(
+        arrow,
+        Point::new(
+            (arrow.end.x - arrow.start.x) / len,
+            (arrow.end.y - arrow.start.y) / len,
+        ),
+    ))
+}
+fn frame_along(arrow: &Arrow, dir: Point) -> Frame {
     let len = arrow.start.distance(arrow.end);
-    let dir = Point::new(
-        (arrow.end.x - arrow.start.x) / len,
-        (arrow.end.y - arrow.start.y) / len,
-    );
     // Screen y points down. "Above" is up, or left for a vertical arrow, for
     // either arrow direction.
     let mut up = Point::new(dir.y, -dir.x);
     if up.y > 1e-6 || (up.y.abs() <= 1e-6 && up.x > 0.) {
         up = Point::new(-up.x, -up.y);
     }
-    Some(Frame {
+    Frame {
         mid: arrow.start.lerp(arrow.end, 0.5),
         dir,
         up,
         len,
-    })
+    }
 }
 /// Extent of a text box measured along a unit vector.
 fn extent(size: (f32, f32), along: Point) -> f32 {
@@ -147,16 +150,17 @@ fn widest(doc: &Document, arrow: u64, dir: Point) -> Option<f32> {
         .map(|a| extent(a.size(), dir))
         .reduce(f32::max)
 }
+/// The shortest arrow that fits its labels, and the length an arrow that
+/// follows its text takes, or `None` without labels.
+fn lengths(doc: &Document, arrow: u64, dir: Point) -> Option<(f32, f32)> {
+    let widest = widest(doc, arrow, dir)?;
+    let s = spacing(doc);
+    Some((widest + 2. * s.pad, widest.max(s.floor) + 2. * s.pad))
+}
 /// The shortest arrow that fits its labels, or `None` without labels.
 pub fn minimum_length(doc: &Document, arrow: u64) -> Option<f32> {
     let frame = frame(doc.arrows.iter().find(|a| a.id == arrow)?)?;
-    Some(widest(doc, arrow, frame.dir)? + 2. * spacing(doc).pad)
-}
-/// The length an arrow that follows its text takes.
-fn fitted_length(doc: &Document, arrow: u64) -> Option<f32> {
-    let frame = frame(doc.arrows.iter().find(|a| a.id == arrow)?)?;
-    let s = spacing(doc);
-    Some(widest(doc, arrow, frame.dir)?.max(s.floor) + 2. * s.pad)
+    lengths(doc, arrow, frame.dir).map(|(minimum, _)| minimum)
 }
 
 /// Remove links whose arrow or text is gone, or whose arrow can no longer
@@ -208,10 +212,18 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             .is_some_and(|a| old_arrows.get(&id) == Some(&(a.start, a.end)))
     };
     let moved = |a: &Annotation| old_texts.get(&a.id) != Some(&a.position);
+    let retyped = |a: &Annotation| {
+        before
+            .annotations
+            .iter()
+            .find(|b| b.id == a.id)
+            .is_some_and(|b| b.text != a.text || b.format != a.format)
+    };
     // 1. Independently dragged labels.
-    let mut labels = std::mem::take(&mut doc.arrow_labels);
+    let labels = std::mem::take(&mut doc.arrow_labels);
     let mut kept: Vec<ArrowLabel> = Vec::with_capacity(labels.len());
-    for mut label in labels.drain(..) {
+    let mut dragged: Vec<ArrowLabel> = Vec::new();
+    for mut label in labels {
         let text = doc.annotations.iter().find(|a| a.id == label.annotation);
         if text.is_some_and(moved) && arrow_unchanged(doc, label.arrow) {
             let arrow = doc.arrows.iter().find(|a| a.id == label.arrow);
@@ -219,12 +231,19 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
                 Some((side, _)) => label.side = side,
                 None => continue,
             }
+            dragged.push(label);
+        } else {
+            kept.push(label);
         }
-        kept.push(label);
     }
-    // A side holds one label; a label dragged onto an occupied side detaches.
-    let mut sides = HashSet::new();
-    kept.retain(|l| sides.insert((l.arrow, l.side)));
+    // A side holds one label; a label dragged onto an occupied side detaches
+    // and the label already there stays.
+    let mut sides: HashSet<_> = kept.iter().map(|l| (l.arrow, l.side)).collect();
+    kept.extend(
+        dragged
+            .into_iter()
+            .filter(|l| sides.insert((l.arrow, l.side))),
+    );
     doc.arrow_labels = kept;
     // 2. Newly dropped or typed text.
     let attached: HashSet<_> = doc.arrow_labels.iter().map(|l| l.annotation).collect();
@@ -236,7 +255,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             !attached.contains(&a.id)
                 && !captions.contains(&a.id)
                 && !a.text.trim().is_empty()
-                && moved(a)
+                && (moved(a) || retyped(a))
         })
         .map(|a| a.id)
         .collect();
@@ -282,35 +301,43 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
 }
 
 fn layout(doc: &mut Document, before: &Document, id: u64) {
-    let Some(minimum) = minimum_length(doc, id) else {
-        return;
-    };
     let Some(arrow) = doc.arrows.iter().find(|a| a.id == id).cloned() else {
         return;
     };
-    let len = arrow.start.distance(arrow.end);
     let old = before.arrows.iter().find(|a| a.id == id);
-    // Edited text resynchronises an arrow that was fitted to its labels.
+    let old_frame = old.and_then(frame);
+    // An end dragged onto the other keeps the previous direction.
+    let Some(f) = frame(&arrow).or_else(|| old_frame.as_ref().map(|o| frame_along(&arrow, o.dir)))
+    else {
+        return;
+    };
+    let Some((minimum, fitted)) = lengths(doc, id, f.dir) else {
+        return;
+    };
+    // Edited text resynchronises an arrow that was fitted to its labels:
+    // one at its follow length keeps following, one at its minimum keeps
+    // hugging the text. Other arrows only grow.
     let edited = of(doc, id).any(|l| {
         let now = doc.annotations.iter().find(|a| a.id == l.annotation);
         let then = before.annotations.iter().find(|a| a.id == l.annotation);
         now.zip(then)
             .is_some_and(|(a, b)| a.text != b.text || a.format != b.format)
     });
-    let fitted = |doc: &Document, arrow: &Arrow| {
-        fitted_length(doc, arrow.id).is_some_and(|fit| {
-            (arrow.start.distance(arrow.end) - fit).abs()
-                <= doc.drawing_style.bond_length_world * 0.01
-        })
-    };
-    let mut target = len;
-    if edited && old.is_some_and(|old| fitted(before, old)) {
-        target = fitted_length(doc, id).unwrap_or(len);
+    let mut target = f.len;
+    if edited
+        && let Some((o, (old_minimum, old_fitted))) = old_frame
+            .as_ref()
+            .and_then(|o| lengths(before, id, o.dir).map(|l| (o, l)))
+    {
+        let near = |a: f32, b: f32| (a - b).abs() <= doc.drawing_style.bond_length_world * 0.01;
+        if near(o.len, old_fitted) {
+            target = fitted;
+        } else if near(o.len, old_minimum) {
+            target = minimum;
+        }
     }
     let target = target.max(minimum);
-    if (target - len).abs() > 1e-4
-        && let Some(f) = frame(&arrow)
-    {
+    if (target - f.len).abs() > 1e-4 {
         // Keep the end the user did not drag, or the midpoint otherwise.
         let (start, end) = match old {
             Some(o) if o.start == arrow.start && o.end != arrow.end => (
@@ -384,6 +411,18 @@ pub fn include_labels(doc: &Document, ids: &mut HashSet<u64>) {
             ids.insert(label.annotation);
         }
     }
+}
+
+/// `ids` plus the labels their arrows own, for Delete and Cut: an arrow takes
+/// its condition text with it, as Copy does.
+pub fn with_labels(doc: &Document, ids: &[u64]) -> Vec<u64> {
+    let mut all = ids.to_vec();
+    for label in &doc.arrow_labels {
+        if ids.contains(&label.arrow) && !all.contains(&label.annotation) {
+            all.push(label.annotation);
+        }
+    }
+    all
 }
 
 #[cfg(test)]
