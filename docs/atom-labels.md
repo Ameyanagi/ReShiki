@@ -36,8 +36,9 @@ a group without a reverse spelling still attaches at its anchor (OAc read
 from the right attaches at O, not at Ac). **Bond attachment (text labels)**
 overrides it per atom: **Centered** centers the label, **Flush left**/**Flush right** attach at the first or
 last atom, and **Character N** at that character. Native files store the
-choice as `label_attachment`; CDXML/CDX write and read flush left/center/right as the
-text's `LabelJustification`. A chosen character has no ChemDraw equivalent and
+choice as `label_attachment`; editable CDXML/CDX clipboard data writes and reads
+flush left/center/right as the text's `LabelJustification` (CDXML/CDX file
+export still refuses free text labels). A chosen character has no ChemDraw equivalent and
 is native only; changing the text returns it to Automatic.
 
 Alternative lists such as `[Cl,Br,I]` with a single horizontal bond meet it
