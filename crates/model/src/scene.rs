@@ -691,8 +691,8 @@ fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Po
     })
 }
 
-/// The drawn rails of visible bonds that do not end at `a`, each with half
-/// its stroke width.
+/// The drawn strokes of visible bonds that do not end at `a`, each with how
+/// far its ink reaches beyond the stroke's center line.
 fn unrelated_bonds(a: &Atom, doc: &Document) -> Vec<(Point, Point, f32)> {
     use crate::bonds::DoublePosition as P;
     let style = &doc.drawing_style;
@@ -709,36 +709,44 @@ fn unrelated_bonds(a: &Atom, doc: &Document) -> Vec<(Point, Point, f32)> {
         .filter(|b| b.a != a.id && b.b != a.id && doc.bond_visible(b.a, b.b))
         .filter_map(|b| Some((b, *positions.get(&b.a)?, *positions.get(&b.b)?)))
         .flat_map(|(b, p, q)| {
-            // Rail offsets along the normal, as `push_bond_rails` draws them.
-            let offsets = match b.order {
+            // Each stroke's start and end offsets along the normal, as
+            // `push_bond` and `push_bond_rails` draw them.
+            let wavy = b.display == "wavy";
+            let rails = |offsets: &[f32]| offsets.iter().map(|o| (*o, *o)).collect::<Vec<_>>();
+            let strokes = match b.order {
+                // A wavy double bond is two strokes crossing at the middle.
+                2 if wavy => vec![(spacing / 2., -spacing / 2.), (-spacing / 2., spacing / 2.)],
                 2 | 7 => match double_position(faces(), b) {
-                    P::Left => vec![0., -spacing],
-                    P::Right => vec![0., spacing],
-                    _ => vec![-spacing / 2., spacing / 2.],
+                    P::Left => rails(&[0., -spacing]),
+                    P::Right => rails(&[0., spacing]),
+                    _ => rails(&[-spacing / 2., spacing / 2.]),
                 },
-                3 => vec![-spacing, 0., spacing],
-                4 => vec![
+                3 => rails(&[-spacing, 0., spacing]),
+                4 => rails(&[
                     0.,
                     spacing * automatic_double_side(faces(), b).unwrap_or(1.),
-                ],
-                6 => vec![-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
-                _ => vec![0.],
+                ]),
+                6 => rails(&[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5]),
+                _ => rails(&[0.]),
             };
             let bold = matches!(
                 b.display.as_str(),
                 "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
             ) || b.secondary_display.as_deref() == Some("bold");
             let ink = if bold {
-                style.world(style.bold_width_pt)
+                style.world(style.bold_width_pt) / 2.
+            } else if wavy && b.order != 2 {
+                // The wave's amplitude.
+                style.line_width() * 1.75
             } else {
-                style.line_width()
-            } / 2.;
+                style.line_width() / 2.
+            };
             let length = p.distance(q).max(0.001);
             let (nx, ny) = (-(q.y - p.y) / length, (q.x - p.x) / length);
-            offsets.into_iter().map(move |offset| {
+            strokes.into_iter().map(move |(from, to)| {
                 (
-                    p.offset(nx * offset, ny * offset),
-                    q.offset(nx * offset, ny * offset),
+                    p.offset(nx * from, ny * from),
+                    q.offset(nx * to, ny * to),
                     ink,
                 )
             })

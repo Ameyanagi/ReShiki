@@ -606,3 +606,37 @@ fn automatic_hydrogen_replacement_side_avoids_outer_bond_strokes() {
         above(&mut doc, 2, DoublePosition::Right)
     );
 }
+
+/// A wavy double bond's two strokes cross, so near its ends they reach both
+/// sides whatever its double position says.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_crossed_wavy_double_bonds() {
+    use crate::bonds::DoublePosition;
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.atom_mut(n).unwrap().label_h = 2;
+    doc.add_atom("O", Point::new(-35., 0.));
+    let label = atom_label_runs(doc.atom(n).unwrap(), &doc);
+    let size = doc.drawing_style.font_size();
+    let top = label_ink_boxes(&label[1..])
+        .iter()
+        .map(|(lo, _)| lo.y)
+        .fold(f32::INFINITY, f32::min);
+    let style = &doc.drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    // The center line, and a rail on the far side, clear the hydrogens; the
+    // crossing stroke's end above the N does not.
+    let y = top - size * 0.12 - spacing * 0.25;
+    let start = doc.add_atom("C", Point::new(0., y));
+    let end = doc.add_atom("C", Point::new(80., y));
+    for position in [DoublePosition::Left, DoublePosition::Right] {
+        doc.bonds.retain(|b| b.a != start);
+        doc.add_bond(start, end, 2, "wavy");
+        doc.bonds.last_mut().unwrap().double_position = position;
+        doc.atom_mut(n).unwrap().label_h = 2;
+        let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+        assert!(h.y > n_text.y, "{position:?}");
+    }
+}
