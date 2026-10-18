@@ -142,8 +142,11 @@ fn selected_chemdraw_amine_nitrogen_is_capped_with_hydrogens() {
     assert!(n.no_implicit);
     let part = reshiki_model::editing::analysis_document(doc, &[n.id]);
     let molecule = reshiki_model::chemistry::document::prepare(&part).unwrap();
-    assert_eq!(molecule.state.graph.atoms[0].radical_electrons, 0);
-    assert_eq!(molecule.state.valences[0].implicit_hydrogens, 3);
+    let atom = &molecule.state.graph.atoms[0];
+    assert_eq!(atom.radical_electrons, 0);
+    let hydrogens =
+        u32::from(atom.explicit_hydrogens) + molecule.state.valences[0].implicit_hydrogens;
+    assert_eq!(hydrogens, 3);
 }
 
 enum Fault {

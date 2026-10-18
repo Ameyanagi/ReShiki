@@ -224,24 +224,54 @@ pub fn analysis_atoms(doc: &Document, selected: &[u64]) -> Vec<u64> {
         .collect()
 }
 
-/// The fragment analyzed for `atoms`, without cached computed labels. Atoms
-/// at cut covalent bonds get implicit hydrogens recalculated, so a fixed count
-/// such as an imported ChemDraw label does not leave open valences as radicals.
+/// The fragment analyzed for `atoms`, without cached computed labels. Cut
+/// covalent bonds are capped with hydrogens. Atoms with a fixed hydrogen
+/// count, such as an imported ChemDraw label, get explicit ones, so the open
+/// valences do not read as radicals while intended radicals stay.
 pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
     let mut part = selection(doc, atoms);
     crate::atom_labels::clear_computed(&mut part);
     let kept: HashSet<_> = part.atoms.iter().map(|a| a.id).collect();
-    // A dative bond adds no valence to its donor `a`, so only its acceptor is capped.
-    let cut: HashSet<_> = doc
+    // Preparation may turn a single bond to a metal into a dative bond that
+    // takes no valence from its donor, and an aromatic bond has no whole
+    // valence, so atoms at such cuts recalculate their hydrogens instead.
+    let metal = |id| {
+        doc.atom(id)
+            .and_then(|a| ELEMENTS.iter().position(|e| *e == a.element))
+            .is_some_and(
+                |i| !matches!(i + 1, 1..=2 | 5..=10 | 14..=18 | 33..=36 | 52..=54 | 85..=86),
+            )
+    };
+    // Valence lost per kept atom, as in the chemistry graph: a dative bond
+    // adds none to its donor `a`, a hydrogen bond none at all. `None` asks
+    // for recalculated hydrogens.
+    let mut lost: HashMap<u64, Option<u32>> = HashMap::new();
+    for b in doc
         .bonds
         .iter()
-        .filter(|b| b.order != 0 && kept.contains(&b.a) != kept.contains(&b.b))
-        .flat_map(|b| [(b.order != 5).then_some(b.a), Some(b.b)])
-        .flatten()
-        .collect();
-    for atom in &mut part.atoms {
-        if cut.contains(&atom.id) {
-            atom.no_implicit = false;
+        .filter(|b| kept.contains(&b.a) != kept.contains(&b.b))
+    {
+        let (atom, other) = if kept.contains(&b.a) {
+            (b.a, b.b)
+        } else {
+            (b.b, b.a)
+        };
+        let valence = match b.order {
+            1 if metal(other) => None,
+            4 | 7 => None,
+            1..=3 => Some(u32::from(b.order)),
+            5 if atom == b.b => Some(1),
+            6 => Some(4),
+            _ => Some(0),
+        };
+        let total = lost.entry(atom).or_insert(Some(0));
+        *total = total.zip(valence).map(|(total, valence)| total + valence);
+    }
+    for atom in part.atoms.iter_mut().filter(|a| a.no_implicit) {
+        match lost.get(&atom.id) {
+            Some(Some(valence)) => atom.explicit_h += valence,
+            Some(_) => atom.no_implicit = false,
+            None => {}
         }
     }
     part
