@@ -104,7 +104,11 @@ impl App {
         let content = panel::view(
             header,
             scrollable(
-                container(body).padding(iced::Padding::ZERO.bottom(panel::CONTENT_END_INSET)),
+                container(body).padding(
+                    iced::Padding::ZERO
+                        .bottom(panel::CONTENT_END_INSET)
+                        .right(panel::SCROLLBAR_GUTTER),
+                ),
             )
             .id("nmr-results")
             .height(Length::Shrink),
@@ -383,10 +387,15 @@ fn results_table<'a>(
     ];
     for (index, item) in report.rows.iter().enumerate() {
         table = table.push(container(Space::new().height(1).width(Length::Fill)).style(rule));
-        table = table.push(panel::table_row(
+        table = table.push(panel::table_row(site_row(
+            state,
+            report,
+            item,
             index,
-            site_row(state, report, item, index, presentation, document, selected),
-        ));
+            presentation,
+            document,
+            selected,
+        )));
     }
     container(table).style(table_surface).into()
 }

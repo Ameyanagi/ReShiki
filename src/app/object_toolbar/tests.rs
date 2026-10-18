@@ -214,3 +214,35 @@ async fn arrange_buttons_match_their_menu_anchors_in_a_fixed_height_row() {
         ));
     }
 }
+
+#[test]
+fn rotation_field_messages_rotate_by_the_typed_angle_in_one_undo_step() {
+    use super::super::numeric_transforms::{Action as Numeric, Field};
+    let mut app = fixture();
+    app.sync_numeric_transforms();
+    let before = app.tab.doc.clone();
+    let mut expected = before.clone();
+    reshiki::editing::transform(&mut expected, &app.tab.selected, Transform::Rotate(-7.5));
+    // The messages the context row's field sends while typing and on Enter.
+    let _ = app.update(Message::NumericTransform(Numeric::Input(
+        Field::Rotation,
+        "-7.5".into(),
+    )));
+    assert_eq!(app.tab.doc, before, "Typing is only a draft");
+    let _ = app.update(Message::NumericTransform(Numeric::Apply(Field::Rotation)));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, expected);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn rotation_hints_name_the_step_rotation_keys() {
+    let keys = super::super::shortcuts::rotation_keys();
+    if cfg!(target_os = "macos") {
+        assert_eq!(keys, "⌥←/⌥→ 1° · ⌥↑/⌥↓ 15°");
+    } else {
+        assert_eq!(keys, "Alt+Left/Alt+Right 1° · Alt+Up/Alt+Down 15°");
+    }
+}

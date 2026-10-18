@@ -367,6 +367,51 @@ fn rejected_rings_name_the_blocking_atom_and_keep_their_outline() {
 }
 
 #[test]
+fn free_ring_drag_starts_at_the_press_and_points_its_first_bond_at_the_pointer() {
+    let start = Point::new(10.0, 10.0);
+    for n in [3_u8, 5, 6, 8] {
+        let (doc, ids) = ring_placement(
+            &Document::default(),
+            start,
+            n,
+            false,
+            5.0,
+            Some(Point::new(70.0, 10.0)),
+        )
+        .unwrap();
+        assert_eq!(ids.len(), n as usize);
+        let position = |id: u64| doc.atom(id).unwrap().position;
+        assert!(position(ids[0]).distance(start) < 0.001);
+        assert!(position(ids[1]).distance(Point::new(52.0, 10.0)) < 0.001);
+        // Dragging right puts the ring above the first bond on screen.
+        for id in &ids[2..] {
+            assert!(position(*id).y < 10.0);
+        }
+        for bond in &doc.bonds {
+            assert!((position(bond.a).distance(position(bond.b)) - 42.0).abs() < 0.001);
+        }
+    }
+}
+
+#[test]
+fn rings_dragged_from_an_atom_aim_exactly_at_the_pointer() {
+    // Free (Option/Alt) drags pass any angle; neither ring path quantizes it.
+    for aromatic in [false, true] {
+        let mut doc = Document::default();
+        let atom = doc.add_atom("C", Point::default());
+        let angle = 20_f32.to_radians();
+        let aim = Point::new(80. * angle.cos(), 80. * angle.sin());
+        let (result, ids) =
+            ring_placement(&doc, Point::default(), 6, aromatic, 5., Some(aim)).unwrap();
+        assert!(ids.contains(&atom));
+        let added: Vec<_> = result.atoms.iter().filter(|a| a.id != atom).collect();
+        let x = added.iter().map(|a| a.position.x).sum::<f32>() / added.len() as f32;
+        let y = added.iter().map(|a| a.position.y).sum::<f32>() / added.len() as f32;
+        assert!((y.atan2(x) - angle).abs() < 0.001, "aromatic: {aromatic}");
+    }
+}
+
+#[test]
 fn ring_drag_chooses_the_requested_side_and_matches_the_target_edge() {
     for side in [-1.0, 1.0] {
         let mut doc = Document::default();

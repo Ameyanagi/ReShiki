@@ -335,3 +335,45 @@ fn mechanism_attachment_92_figures_retain_resolved_curve_and_report_link_loss() 
     let (_, notices) = crate::exchange::drawing::write_clipboard(&d).unwrap();
     assert!(notices.iter().any(|n| n == arrow_anchors::EXPORT_NOTICE));
 }
+
+#[test]
+fn transparent_label_halo_reaches_vector_readers_as_a_named_knockout_mask() {
+    use crate::{
+        document::Point,
+        graphics::{GraphicKind, GraphicStyle},
+        scientific::{Drawing, OrbitalKind, Phase},
+    };
+    let mut doc = Document::default();
+    doc.add_atom("O", Point::default());
+    Drawing {
+        kind: GraphicKind::Orbital(OrbitalKind::P),
+        style: GraphicStyle::default(),
+        phase: Phase::Solid,
+        flipped: false,
+        attach: false,
+        snap_orbitals: true,
+    }
+    .place(&mut doc, Point::default(), Point::new(0., -42.), false, 10.)
+    .unwrap();
+    // The Windows metafile writer paints this named mask content in paper.
+    fn halo(group: &resvg::usvg::Group) -> bool {
+        group.mask().is_some_and(|mask| {
+            mask.root().children().iter().any(|node| {
+                matches!(node, resvg::usvg::Node::Group(ink)
+                    if ink.id().starts_with("reshiki-label-halo") && ink.has_children())
+            })
+        }) || group.children().iter().any(|node| match node {
+            resvg::usvg::Node::Group(group) => halo(group),
+            _ => false,
+        })
+    }
+    assert!(halo(parse_svg(scene::svg(&doc)).unwrap().root()));
+    assert!(!halo(
+        parse_svg(scene::svg_with_background(&doc)).unwrap().root()
+    ));
+    let pdf = clipboard_drawing(&doc, "pdf").unwrap();
+    assert!(
+        pdf.windows(6).any(|window| window == b"/SMask"),
+        "A transparent PDF knocks the halo out with a soft mask"
+    );
+}
