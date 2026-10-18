@@ -94,6 +94,9 @@ impl<'d> Sides<'d> {
         };
         let spacing = style.bond_length_world * style.bond_spacing_ratio;
         let offsets = match bond.order {
+            // Crossed doubles run their diagonals between centered offsets
+            // whatever their double position.
+            2 if display == "wavy" => vec![-spacing / 2., spacing / 2.],
             2 | 7 => match crate::scene::double_position(self.faces(), bond) {
                 side @ (Left | Right) => {
                     let offset = if side == Left { -spacing } else { spacing };

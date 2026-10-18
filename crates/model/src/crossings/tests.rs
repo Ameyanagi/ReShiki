@@ -841,6 +841,41 @@ fn crossed_rear_double_strokes_clear_a_front_bond() {
 }
 
 #[test]
+fn side_positioned_crossed_doubles_cut_and_are_cut_like_centered_ones() {
+    // Crossed doubles draw their diagonals between centered offsets
+    // whatever their double position.
+    for (crossed, single) in [(20., -20.), (-20., 20.)] {
+        let mut doc = Document::default();
+        let atoms: Vec<_> = [
+            (Point::new(-30., 0.), crossed),
+            (Point::new(30., 0.), crossed),
+            (Point::new(-15., -30.), single),
+            (Point::new(-15., 30.), single),
+        ]
+        .into_iter()
+        .map(|(p, z)| {
+            let id = doc.add_atom("C", p);
+            doc.atom_mut(id).unwrap().depth = z;
+            id
+        })
+        .collect();
+        doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+        doc.add_bond(atoms[2], atoms[3], 1, "plain");
+        tag(&mut doc);
+        let centered = format!("{:?}", super::gaps(&doc));
+        for position in [
+            crate::bonds::DoublePosition::Left,
+            crate::bonds::DoublePosition::Right,
+        ] {
+            doc.bonds[0].double_position = position;
+            let label = format!("crossed at depth {crossed}, {position:?}");
+            assert_eq!(format!("{:?}", super::gaps(&doc)), centered, "{label}");
+            assert_eq!(assert_occluded(&doc, &label), 2);
+        }
+    }
+}
+
+#[test]
 fn a_nearly_edge_on_warped_ring_keeps_its_depth_gradient() {
     // A slightly warped aromatic ring seen almost edge-on: its circle lies
     // far behind a bond that crosses it.
