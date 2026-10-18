@@ -77,10 +77,13 @@ fn label(message: Message) -> String {
     shortcuts::label(&message).unwrap_or_default()
 }
 
-/// The shortcut that opens Help, besides F1. Command+/ already fits the
-/// drawing, so Help takes Command+? (Command+Shift+/), macOS's Help key.
+/// The shortcuts that open Help: ? away from atoms and bonds, F1, and
+/// Command+? (Command+Shift+/), macOS's Help key, since Command+/ fits the drawing.
 pub(crate) fn finder_keys() -> String {
-    format!("F1 / {}", keys(Modifiers::COMMAND | Modifiers::SHIFT, "/"))
+    format!(
+        "? / F1 / {}",
+        keys(Modifiers::COMMAND | Modifiers::SHIFT, "/")
+    )
 }
 
 pub(crate) fn entries() -> Vec<Entry> {
