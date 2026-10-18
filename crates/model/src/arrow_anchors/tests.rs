@@ -827,7 +827,16 @@ fn double_bond_strokes_are_arrow_targets_not_only_the_gap() {
     assert_eq!(pick(&d, Point::new(mid, half + 5.), radius), None);
     assert!(pick(&bold, Point::new(mid, half + 5.), radius).is_some());
 
-    // The widened band never steals a click on a nearby single bond's ink.
+    // The widened band never steals a click on a nearby single bond's ink,
+    // including on the thin side of a bold-secondary double bond.
+    let s = bold.add_atom("C", Point::new(0., -6.));
+    let t = bold.add_atom("C", Point::new(length, -6.));
+    bold.add_bond(s, t, 1, "plain");
+    bold.bonds.swap(0, 1);
+    assert!(matches!(
+        pick(&bold, Point::new(mid, -6.), radius),
+        Some(Pick::Bond { a, b, .. }) if a == s && b == t
+    ));
     let s = d.add_atom("C", Point::new(0., -6.));
     let t = d.add_atom("C", Point::new(length, -6.));
     d.add_bond(s, t, 1, "plain");
@@ -835,5 +844,80 @@ fn double_bond_strokes_are_arrow_targets_not_only_the_gap() {
     assert!(matches!(
         pick(&d, Point::new(mid, -6.), radius),
         Some(Pick::Bond { a, b, .. }) if a == s && b == t
+    ));
+
+    // A single bond inside a later quadruple bond's rail gap keeps its clicks.
+    let mut q = Document::default();
+    let s = q.add_atom("C", Point::new(0., spacing));
+    let t = q.add_atom("C", Point::new(length, spacing));
+    q.add_bond(s, t, 1, "plain");
+    let qa = q.add_atom("C", Point::new(0., 0.));
+    let qb = q.add_atom("C", Point::new(length, 0.));
+    q.add_bond(qa, qb, 6, "plain");
+    assert!(matches!(
+        pick(&q, Point::new(mid, spacing), radius),
+        Some(Pick::Bond { a, b, .. }) if a == s && b == t
+    ));
+}
+#[test]
+fn nearby_bonds_rank_by_their_drawn_ink() {
+    // Each case draws a plain single bond at `y` first and the shaped bond
+    // along y = 0 later; a false zero distance would let the later bond win.
+    let single_wins = |order: u8, display: &str, y: f32, at: Point| {
+        let mut d = Document::default();
+        let length = d.drawing_style.bond_length_world;
+        let s = d.add_atom("C", Point::new(0., y));
+        let t = d.add_atom("C", Point::new(length, y));
+        d.add_bond(s, t, 1, "plain");
+        let a = d.add_atom("C", Point::new(0., 0.));
+        let b = d.add_atom("C", Point::new(length, 0.));
+        d.add_bond(a, b, order, display);
+        d.bonds[1].double_position = crate::bonds::DoublePosition::Left;
+        match pick(&d, at, 2.) {
+            Some(Pick::Bond { a, .. }) => a == s,
+            other => panic!("expected a bond at {at:?}, got {other:?}"),
+        }
+    };
+    let style = Document::default().drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    // Beyond the shortened end of a one-sided double's inner rail.
+    assert!(single_wins(2, "plain", -spacing, Point::new(3., -spacing)));
+    // Beside the narrow end of a wedge.
+    assert!(single_wins(1, "wedge", 2.6, Point::new(10., 2.6)));
+    // Beside a wave's trough the single bond wins; on its crest the wave does.
+    assert!(single_wins(1, "wavy", 2.9, Point::new(18.375, 2.9)));
+    assert!(!single_wins(1, "wavy", 3.5, Point::new(23.625, 2.1875)));
+    // Hashed bars keep a constant bold width.
+    assert!(!single_wins(1, "hashed", 4., Point::new(7.291667, 2.4)));
+
+    // A ring-arc double draws only its backbone.
+    let mut d = Document::default();
+    let length = d.drawing_style.bond_length_world;
+    let s = d.add_atom("C", Point::new(0., 3.));
+    let t = d.add_atom("C", Point::new(length, 3.));
+    d.add_bond(s, t, 1, "plain");
+    let a = d.add_atom("C", Point::new(0., 0.));
+    let b = d.add_atom("C", Point::new(length, 0.));
+    d.add_bond(a, b, 2, "plain");
+    d.bonds[1].ring_arc = true;
+    assert!(matches!(
+        pick(&d, Point::new(length / 2., 0.), 8. / 2.25),
+        Some(Pick::Bond { a: x, .. }) if x == a
+    ));
+
+    // A crossed C=O crosses at the middle of its label-trimmed segment.
+    let mut d = Document::default();
+    let length = d.drawing_style.bond_length_world;
+    let s = d.add_atom("C", Point::new(0., 1.2));
+    let t = d.add_atom("C", Point::new(length, 1.2));
+    d.add_bond(s, t, 1, "plain");
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let o = d.add_atom("O", Point::new(length, 0.));
+    d.add_bond(c, o, 2, "wavy");
+    let (start, end) = crate::scene::bond_segment(&d, &d.bonds[1], None).unwrap();
+    let cross = Point::new((start.x + end.x) / 2., (start.y + end.y) / 2.);
+    assert!(matches!(
+        pick(&d, cross, 2.),
+        Some(Pick::Bond { a, b, .. }) if a == c && b == o
     ));
 }
