@@ -525,3 +525,61 @@ fn a_ring_circle_cut_behind_keeps_the_same_bond_in_front_elsewhere() {
     let at = Point::new(-8., 49.5);
     assert_eq!(rear_touches(&circle, &bond, at, 6., &[from, to]), None);
 }
+
+#[test]
+fn crossed_rear_double_strokes_clear_a_front_bond() {
+    // Wavy doubles draw two diagonal strokes, not parallel rails.
+    let mut doc = Document::default();
+    let (sin, cos) = 40_f32.to_radians().sin_cos();
+    let atoms: Vec<_> = [
+        (Point::new(-30., 0.), -20.),
+        (Point::new(30., 0.), -20.),
+        (Point::new(-15. - 30. * cos, -30. * sin), 20.),
+        (Point::new(-15. + 30. * cos, 30. * sin), 20.),
+    ]
+    .into_iter()
+    .map(|(p, z)| {
+        let id = doc.add_atom("C", p);
+        doc.atom_mut(id).unwrap().depth = z;
+        id
+    })
+    .collect();
+    doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    tag(&mut doc);
+    assert_eq!(assert_whiteout(&doc, "wavy"), 1);
+}
+
+#[test]
+fn a_nearly_edge_on_warped_ring_keeps_its_depth_gradient() {
+    // A slightly warped aromatic ring seen almost edge-on: its circle lies
+    // far behind a bond that crosses it.
+    let mut doc = Document::default();
+    let ring: Vec<_> = (0..6)
+        .map(|k| {
+            let angle = k as f32 * std::f32::consts::FRAC_PI_3;
+            let id = doc.add_atom("C", Point::new(80. * angle.cos(), 5. * angle.sin()));
+            doc.atom_mut(id).unwrap().depth = 80. * angle.sin() + 0.1 * (2. * angle).cos();
+            id
+        })
+        .collect();
+    for k in 0..6 {
+        doc.add_bond(ring[k], ring[(k + 1) % 6], 4, "plain");
+    }
+    let (from, to) = (Point::new(-80., -2.), Point::new(80., -2.));
+    let a = doc.add_atom("C", from);
+    let b = doc.add_atom("C", to);
+    doc.atom_mut(a).unwrap().depth = -10.;
+    doc.atom_mut(b).unwrap().depth = -10.;
+    doc.add_bond(a, b, 1, "plain");
+    // Listed first, so index order alone would put the bond behind the ring.
+    let last = doc.bonds.len() - 1;
+    doc.bonds.swap(0, last);
+    tag(&mut doc);
+    let inks = inks(&crate::scene::primitives(&doc));
+    let bond: Vec<&Ink> = inks.iter().filter(|i| i.owner == Some(0)).collect();
+    assert_eq!(crate::aromatic::circles(&doc).len(), 1);
+    for x in [-44.6, 44.6] {
+        assert!(front_continuous(&bond, from, to, Point::new(x, -2.)));
+    }
+}

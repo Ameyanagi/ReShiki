@@ -29,6 +29,9 @@ fn delta(a: Point, b: Point) -> Point {
 pub(crate) struct Rails {
     offsets: Vec<f32>,
     width: f32,
+    /// Parallel rails a gap can cut one at a time. Crossed (wavy) double
+    /// strokes run diagonally between the offsets, so every gap cuts them.
+    parallel: bool,
 }
 impl Rails {
     fn lo(&self) -> f32 {
@@ -47,7 +50,10 @@ impl Rails {
         }
         self.offsets
             .iter()
-            .map(|q| (*q, (self.offsets.len() > 1).then_some((*q, nearest * 0.5))))
+            .map(|q| {
+                let filter = self.parallel && self.offsets.len() > 1;
+                (*q, filter.then_some((*q, nearest * 0.5)))
+            })
             .collect()
     }
 }
@@ -112,7 +118,11 @@ impl<'d> Sides<'d> {
             6 => vec![-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
             _ => vec![0.],
         };
-        Rails { offsets, width }
+        Rails {
+            offsets,
+            width,
+            parallel: !matches!(display, "wavy" | "hash" | "hashed" | "hollow_wedge"),
+        }
     }
     /// The screen offset of an automatic double bond's rail within its
     /// projected face: `None` keeps the 2D offset, `Some(None)` omits it.

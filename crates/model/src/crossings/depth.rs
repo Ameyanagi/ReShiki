@@ -92,8 +92,8 @@ impl Plane {
     /// Least-squares plane through a slightly warped 3D ring, such as an
     /// optimized fullerene face whose atoms miss the exact fit by more than
     /// its tolerance. Without it, rear cage rings fall back to bond index
-    /// order and can cut front bonds. A ring seen edge-on keeps its mean
-    /// depth; a ring without depth variation stays undecided.
+    /// order and can cut front bonds. A ring projected to a line keeps its
+    /// mean depth; a ring without depth variation stays undecided.
     pub(super) fn least_squares(doc: &Document, ids: &[u64]) -> Option<Self> {
         let atoms: Option<Vec<_>> = ids.iter().map(|id| doc.atom(*id)).collect();
         let atoms = atoms?;
@@ -123,7 +123,8 @@ impl Plane {
             yz += y * w;
         }
         let det = xx * yy - xy * xy;
-        let (dx, dy) = if det > 0.01 * (xx + yy).powi(2) {
+        // Only a ring collapsed to a line has no depth gradient to fit.
+        let (dx, dy) = if det > 1e-6 * (xx + yy).powi(2) {
             ((xz * yy - yz * xy) / det, (yz * xx - xz * xy) / det)
         } else {
             (0., 0.)
