@@ -80,7 +80,13 @@ impl App {
     pub(super) fn discard_generic_expansion(&mut self, source: TabId, epoch: u64) {
         if self.generic.pending == Some((source, epoch)) {
             self.generic.pending = None;
-            self.in_tab(source, |app| app.status = EXPANSION_DISCARDED.into());
+            // A replaced source keeps its newer status.
+            self.in_tab(source, |app| {
+                if app.tab.file_epoch == epoch {
+                    app.status = EXPANSION_DISCARDED.into();
+                    app.error = false;
+                }
+            });
             self.status = EXPANSION_DISCARDED.into();
             self.error = false;
         }

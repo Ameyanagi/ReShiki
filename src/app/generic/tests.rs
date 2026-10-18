@@ -288,6 +288,29 @@ fn finished_expansion_settles_the_source_tab_status() {
     assert_eq!(app.tab.id, source);
     assert_eq!(app.status, "controlled expansion failure");
     assert!(app.error);
+
+    // A discard settles a background source that showed an older error.
+    let (mut app, _) = pending_expansion();
+    let (source, epoch) = app.generic.pending.unwrap();
+    app.error = true;
+    app.add_tab();
+    app.discard_generic_expansion(source, epoch);
+    app.select_tab(0);
+    assert_eq!(app.tab.id, source);
+    assert_eq!(app.status, EXPANSION_DISCARDED);
+    assert!(!app.error);
+
+    // A source whose file was replaced since then keeps its newer status.
+    let (mut app, _) = pending_expansion();
+    let (source, epoch) = app.generic.pending.unwrap();
+    app.begin_file_epoch();
+    app.status = "Newer source warning".into();
+    app.error = true;
+    app.add_tab();
+    app.discard_generic_expansion(source, epoch);
+    app.select_tab(0);
+    assert_eq!(app.status, "Newer source warning");
+    assert!(app.error);
 }
 
 #[test]
