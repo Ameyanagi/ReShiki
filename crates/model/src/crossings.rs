@@ -29,13 +29,14 @@ fn delta(a: Point, b: Point) -> Point {
 }
 /// One stroke of a bond as the scene draws it: the part of the bond it
 /// covers (distance from the bond's start), its centerline offsets across
-/// the bond's scene normal (-uy, ux) at the two ends of that part, and its
-/// width.
+/// the bond's scene normal (-uy, ux) at the two ends of that part, its
+/// width, and whether it is a crossed double's diagonal.
 #[derive(Debug, Clone, Copy)]
 struct Rail {
     span: (f32, f32),
     offset: (f32, f32),
     width: f32,
+    crossed: bool,
 }
 impl Rail {
     /// The centerline offset at distance `s` from the bond's start.
@@ -137,12 +138,14 @@ impl<'d> Sides<'d> {
             span: (0., length),
             offset: (offset, offset),
             width,
+            crossed: false,
         };
         let spacing = style.bond_length_world * style.bond_spacing_ratio;
         let strokes = match bond.order {
             2 if display == "wavy" => [-spacing / 2., spacing / 2.]
                 .map(|from| Rail {
                     offset: (from, -from),
+                    crossed: true,
                     ..rail(0., width)
                 })
                 .to_vec(),
@@ -211,6 +214,7 @@ impl<'d> Sides<'d> {
                 span: (along(first), along(last)),
                 offset: (cross(axis, first), cross(axis, last)),
                 width,
+                crossed: false,
             }
         }))
     }
@@ -448,19 +452,31 @@ fn occlusion(
         let d = delta(over_from, p);
         ((d.x * along.x + d.y * along.y) / front_length).clamp(0., 1.)
     };
-    let envelope = Envelope::new(
+    let ends = |stroke: &Rail| {
+        [stroke.span.0, stroke.span.1].map(|u| {
+            let offset = stroke.at(u);
+            over_from.offset(
+                along.x * u - along.y * offset,
+                along.y * u + along.x * offset,
+            )
+        })
+    };
+    // The hull padded by the thinnest front rail covers the space between
+    // rails; a wider rail also clears by its own width.
+    let thinnest = over
+        .strokes
+        .iter()
+        .map(|r| r.width)
+        .fold(f32::INFINITY, f32::min);
+    let mut envelopes = vec![(
+        Envelope::new(over.strokes.iter().flat_map(ends).collect()),
+        thinnest,
+    )];
+    envelopes.extend(
         over.strokes
             .iter()
-            .flat_map(|stroke| {
-                [stroke.span.0, stroke.span.1].map(|u| {
-                    let offset = stroke.at(u);
-                    over_from.offset(
-                        along.x * u - along.y * offset,
-                        along.y * u + along.x * offset,
-                    )
-                })
-            })
-            .collect(),
+            .filter(|r| over.strokes.len() > 1 && r.width > thinnest)
+            .map(|r| (Envelope::new(ends(r).to_vec()), r.width)),
     );
     let mut spans = vec![];
     for (rail, filter) in under.filters() {
@@ -473,79 +489,81 @@ fn occlusion(
             depth::bond_over(doc, front, front_t(point(s)), rear, t)
         };
         let range = (rail.span.0 - rail.width, rail.span.1 + rail.width);
-        let radius = (over.width() + rail.width) * 0.5 + DEFAULT.world(1.1);
-        let Some((low, high, best)) = envelope.span(point(0.), direction, range, radius) else {
-            continue;
-        };
-        // Transparent ink cannot knock out the ink beneath it.
-        if opacity.bond(front_bond, front_t(point(best))) < 1. {
-            continue;
-        }
-        // Depth is linear in s between the points where either bond's
-        // parameter clamps to an end, so the hidden set within each piece is
-        // an interval touching a piece end: check those ends, then bisect.
-        let rate = direction.x * along.x + direction.y * along.y;
-        let base = delta(over_from, point(0.));
-        let base = base.x * along.x + base.y * along.y;
-        let mut stops = vec![low, high, 0., length];
-        if rate.abs() > 1e-6 {
-            stops.extend([-base / rate, (front_length - base) / rate]);
-        }
-        stops.retain(|s| (low..=high).contains(s));
-        stops.sort_by(f32::total_cmp);
-        stops.dedup();
-        // Flat drawings, layered or not, order bonds without XYZ depth; there
-        // only real crossings knock out ink, not bonds that merely pass close.
-        let flat = stops.iter().all(|s| {
-            let t = (s / length).clamp(0., 1.);
-            let z = depth::at(doc, rear_bond, t);
-            let front_z = depth::at(doc, front_bond, front_t(point(*s)));
-            z.zip(front_z)
-                .is_none_or(|(z, front_z)| (z - front_z).abs() <= 0.001)
-        });
-        if flat && !centerlines_cross(from, to, over_from, over_to) {
-            continue;
-        }
-        let boundary = |hidden: f32, shown: f32| {
-            let (mut hidden, mut shown) = (hidden, shown);
-            for _ in 0..16 {
-                let middle = (hidden + shown) * 0.5;
-                if behind(middle) {
-                    hidden = middle;
-                } else {
-                    shown = middle;
-                }
+        for (envelope, width) in &envelopes {
+            let radius = (width + rail.width) * 0.5 + DEFAULT.world(1.1);
+            let Some((low, high, best)) = envelope.span(point(0.), direction, range, radius) else {
+                continue;
+            };
+            // Transparent ink cannot knock out the ink beneath it.
+            if opacity.bond(front_bond, front_t(point(best))) < 1. {
+                continue;
             }
-            shown
-        };
-        // Pieces shorter than a painted stroke are dropped. Hashes and hollow
-        // wedges draw thin strokes across a bold-width envelope.
-        let min = if under.separate {
-            rail.width
-        } else {
-            doc.drawing_style.line_width().min(rail.width)
-        };
-        let mut run: Option<f32> = None;
-        let mut previous = low;
-        for stop in stops {
-            match (run, behind(stop)) {
-                (None, true) => {
-                    run = Some(if stop == low {
-                        low
+            // Depth is linear in s between the points where either bond's
+            // parameter clamps to an end, so the hidden set within each piece is
+            // an interval touching a piece end: check those ends, then bisect.
+            let rate = direction.x * along.x + direction.y * along.y;
+            let base = delta(over_from, point(0.));
+            let base = base.x * along.x + base.y * along.y;
+            let mut stops = vec![low, high, 0., length];
+            if rate.abs() > 1e-6 {
+                stops.extend([-base / rate, (front_length - base) / rate]);
+            }
+            stops.retain(|s| (low..=high).contains(s));
+            stops.sort_by(f32::total_cmp);
+            stops.dedup();
+            // Flat drawings, layered or not, order bonds without XYZ depth; there
+            // only real crossings knock out ink, not bonds that merely pass close.
+            let flat = stops.iter().all(|s| {
+                let t = (s / length).clamp(0., 1.);
+                let z = depth::at(doc, rear_bond, t);
+                let front_z = depth::at(doc, front_bond, front_t(point(*s)));
+                z.zip(front_z)
+                    .is_none_or(|(z, front_z)| (z - front_z).abs() <= 0.001)
+            });
+            if flat && !centerlines_cross(from, to, over_from, over_to) {
+                continue;
+            }
+            let boundary = |hidden: f32, shown: f32| {
+                let (mut hidden, mut shown) = (hidden, shown);
+                for _ in 0..16 {
+                    let middle = (hidden + shown) * 0.5;
+                    if behind(middle) {
+                        hidden = middle;
                     } else {
-                        boundary(stop, previous)
-                    })
+                        shown = middle;
+                    }
                 }
-                (Some(start), false) => {
-                    spans.push((start, boundary(previous, stop), filter, min));
-                    run = None;
+                shown
+            };
+            // Pieces shorter than a painted stroke are dropped. Hashes and hollow
+            // wedges draw thin strokes across a bold-width envelope.
+            let min = if under.separate {
+                rail.width
+            } else {
+                doc.drawing_style.line_width().min(rail.width)
+            };
+            let mut run: Option<f32> = None;
+            let mut previous = low;
+            for stop in stops {
+                match (run, behind(stop)) {
+                    (None, true) => {
+                        run = Some(if stop == low {
+                            low
+                        } else {
+                            boundary(stop, previous)
+                        })
+                    }
+                    (Some(start), false) => {
+                        spans.push((start, boundary(previous, stop), filter, min));
+                        run = None;
+                    }
+                    _ => {}
                 }
-                _ => {}
+                previous = stop;
             }
-            previous = stop;
-        }
-        if let Some(start) = run {
-            spans.push((start, high, filter, min));
+            if let Some(start) = run {
+                spans.push((start, high, filter, min));
+            }
         }
     }
     spans
@@ -742,19 +760,14 @@ fn on_rail(primitive: &Primitive, gap: &Gap) -> bool {
         return true;
     };
     let off = |p: &Point| cross(gap.axis, delta(gap.origin, *p)) - rail.at(projection(*p, *gap));
-    // Cuts keep a line's direction, which tells crossed strokes apart even
-    // for a short piece near where they cross, or one trimmed at a label.
-    if let Primitive::Line(a, b, _) = primitive {
-        let run = projection(*b, *gap) - projection(*a, *gap);
-        let slope = rail.at(1.) - rail.at(0.);
-        if run.abs() > 0.01
-            && ((cross(gap.axis, delta(*a, *b)) / run) - slope).abs() > slope.abs().max(0.05)
-        {
-            return false;
-        }
-        return ((off(a) + off(b)) * 0.5).abs() <= tolerance;
+    // Crossed diagonals lean opposite ways, and cuts and label trimming keep
+    // that, even for a short piece near where they cross.
+    if let (true, Primitive::Line(a, b, _)) = (rail.crossed, primitive) {
+        let rise = cross(gap.axis, delta(*a, *b)) * (projection(*b, *gap) - projection(*a, *gap));
+        return rise * (rail.offset.1 - rail.offset.0) > 0.;
     }
     let points: Vec<Point> = match primitive {
+        Primitive::Line(a, b, _) => vec![*a, *b],
         Primitive::Polygon(points) => points.clone(),
         Primitive::Path { commands, .. } => commands
             .iter()

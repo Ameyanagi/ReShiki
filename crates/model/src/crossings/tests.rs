@@ -1010,13 +1010,71 @@ fn a_crossed_rear_bond_trimmed_at_a_label_is_still_cut() {
             (Point::new(5., 30.), 20.),
         ],
     );
-    let atom = doc.atom_mut(atoms[0]).unwrap();
-    atom.element = "N".into();
-    atom.no_implicit = true;
+    doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    for (end, x) in [(atoms[0], 5.), (atoms[1], 0.)] {
+        let atom = doc.atom_mut(end).unwrap();
+        atom.element = "N".into();
+        atom.no_implicit = true;
+        let mut doc = doc.clone();
+        for atom in [atoms[2], atoms[3]] {
+            doc.atom_mut(atom).unwrap().position.x = x;
+        }
+        tag(&mut doc);
+        assert_eq!(
+            assert_occluded(&doc, &format!("labelled crossed at {x}")),
+            2
+        );
+    }
+}
+
+#[test]
+fn shallow_crossed_rear_strokes_keep_their_own_gaps() {
+    let mut doc = Document::default();
+    doc.drawing_style.bond_spacing_ratio = 0.05;
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-50., 0.), -20.),
+            (Point::new(50., 0.), -20.),
+            (Point::new(-20., -16.), 20.),
+            (Point::new(40., 14.), 20.),
+        ],
+    );
     doc.add_bond(atoms[0], atoms[1], 2, "wavy");
     doc.add_bond(atoms[2], atoms[3], 1, "plain");
     tag(&mut doc);
-    assert_eq!(assert_occluded(&doc, "labelled crossed"), 2);
+    assert_eq!(assert_occluded(&doc, "shallow crossed"), 2);
+    let half = doc.drawing_style.bond_length_world * 0.025;
+    // The stroke from (-50, half) to (50, -half), clear of the front bond.
+    let p = Point::new(23., -23. * half / 50.);
+    assert!(
+        inks(&crate::scene::primitives(&doc))
+            .iter()
+            .any(|i| i.owner == Some(0) && i.shape.covers(p)),
+        "no rear ink at {p:?}"
+    );
+}
+
+#[test]
+fn a_bold_inner_rail_widens_clearance_only_around_itself() {
+    let mut doc = Document::default();
+    let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+    let y = -spacing / 2. - 6.;
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-30., 0.), 20.),
+            (Point::new(30., 0.), 20.),
+            (Point::new(-20., y), -20.),
+            (Point::new(20., y), -20.),
+        ],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "plain");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    doc.bonds[0].double_position = crate::bonds::DoublePosition::Center;
+    doc.bonds[0].secondary_display = Some("bold".into());
+    assert!(super::gaps(&doc)[1].is_empty());
 }
 
 #[test]
