@@ -222,13 +222,13 @@ pub const NICKNAMES: &[&str] = &[
 ];
 
 /// Element glyphs a bond can meet, in reading order: nicknames, H, counts,
-/// brackets and charge signs are skipped. None when the text is not a formula.
+/// brackets, charge signs and a charge separator space are skipped. None when the text is not a formula.
 fn atom_glyphs(text: &str) -> Option<Vec<std::ops::Range<usize>>> {
     let mut atoms = Vec::new();
     let mut i = 0;
     while let Some(rest) = text.get(i..).filter(|rest| !rest.is_empty()) {
         let c = rest.chars().next()?;
-        if c.is_ascii_digit() || ('₀'..='₉').contains(&c) || "()[]+-−⁺⁻".contains(c) {
+        if c.is_ascii_digit() || ('₀'..='₉').contains(&c) || "()[]+-−⁺⁻ ".contains(c) {
             i += c.len_utf8();
             continue;
         }

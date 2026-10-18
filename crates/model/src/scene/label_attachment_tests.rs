@@ -57,6 +57,9 @@ fn text_labels_attach_bonds_to_their_attachment_atom() -> Result<(), String> {
         ("MeO2C", false, 'C'),
         ("BnO", false, 'O'),
         ("tBuS", false, 'S'),
+        ("MeO+", false, 'O'),
+        ("MeO +", false, 'O'),
+        ("MeO 2+", false, 'O'),
     ] {
         let (doc, id) = labeled(text, Mode::Text, from_left)?;
         let side = if from_left { "left" } else { "right" };
