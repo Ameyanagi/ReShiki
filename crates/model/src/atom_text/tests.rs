@@ -786,3 +786,115 @@ fn the_public_group_list_covers_every_typed_group() {
     }
     assert!(!crate::abbreviations::is_group_label("NotAGroup"));
 }
+
+/// Hill formula of CH3–R from the catalog's independently written formula
+/// of R, so a typed group is checked against the hand-written composition.
+fn methyl_formula(group: &str) -> String {
+    let (body, charge) = match group.find(['+', '-']) {
+        Some(index) => group.split_at(index),
+        None => (group, ""),
+    };
+    let mut counts = std::collections::BTreeMap::<String, u32>::new();
+    let mut chars = body.chars().peekable();
+    while let Some(c) = chars.next() {
+        let mut symbol = c.to_string();
+        while let Some(&next) = chars.peek().filter(|n| n.is_ascii_lowercase()) {
+            symbol.push(next);
+            chars.next();
+        }
+        let mut digits = String::new();
+        while let Some(&next) = chars.peek().filter(|n| n.is_ascii_digit()) {
+            digits.push(next);
+            chars.next();
+        }
+        *counts.entry(symbol).or_default() += digits.parse().unwrap_or(1);
+    }
+    *counts.entry("C".into()).or_default() += 1;
+    *counts.entry("H".into()).or_default() += 3;
+    let mut text = String::new();
+    for symbol in ["C", "H"] {
+        if let Some(count) = counts.remove(symbol) {
+            text.push_str(symbol);
+            if count > 1 {
+                text.push_str(&count.to_string());
+            }
+        }
+    }
+    for (symbol, count) in counts {
+        text.push_str(&symbol);
+        if count > 1 {
+            text.push_str(&count.to_string());
+        }
+    }
+    text + charge
+}
+
+/// Every bundled label and alias, typed on the endpoint of CH3–C, creates
+/// its group with the catalog formula. Groups that Contract may find are
+/// found again after expansion. No spelling takes over an element or an
+/// atom-with-hydrogens label such as NH2.
+#[test]
+fn every_bundled_spelling_types_as_its_group() -> Result<(), Box<dyn std::error::Error>> {
+    let catalog = crate::chemistry::abbreviations::presets()?;
+    let mut checked = 0;
+    for preset in catalog.iter() {
+        for spelling in preset.spellings() {
+            // Acetyl and tosyl predate the catalog: "Ac" and "Ts" alone type
+            // actinium and tennessine, so these groups need Chemical
+            // abbreviation mode. No other spelling may shadow an element.
+            let mode = if ["Ac", "Ts"].contains(&spelling) {
+                Mode::Group
+            } else {
+                Mode::Auto
+            };
+            assert!(
+                mode == Mode::Group || !ELEMENTS.contains(&spelling),
+                "{spelling} is an element"
+            );
+            assert!(
+                !matches!(hydride::parse(spelling), Ok(Some(_))),
+                "{spelling} is an atom label"
+            );
+            assert!(
+                description(spelling, mode).starts_with("A real chemical group"),
+                "{spelling}: {}",
+                description(spelling, mode)
+            );
+            let mut doc = Document::default();
+            let methyl = doc.add_atom("C", Point::new(0., 0.));
+            let endpoint = doc.add_atom("C", Point::new(42., 0.));
+            doc.add_bond(methyl, endpoint, 1, "plain");
+            let labelled =
+                apply(&doc, endpoint, spelling, mode).map_err(|e| format!("{spelling}: {e}"))?;
+            let group = labelled.abbreviation(endpoint).ok_or(spelling)?;
+            assert_eq!(group.label, spelling);
+            assert_eq!(group.members.len(), preset.atom_count(), "{spelling}");
+            assert_eq!(
+                formula(&labelled)?,
+                methyl_formula(&preset.formula),
+                "{spelling}"
+            );
+            checked += 1;
+        }
+        if !preset.contract {
+            continue;
+        }
+        let mut doc = Document::default();
+        let methyl = doc.add_atom("C", Point::new(0., 0.));
+        let endpoint = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(methyl, endpoint, 1, "plain");
+        let mut expanded = apply(&doc, endpoint, &preset.label, Mode::Group)?;
+        expanded.expand_abbreviations(&[endpoint]);
+        let molecule = crate::chemistry::document::prepare(&expanded)?;
+        let found =
+            crate::chemistry::abbreviations::find(&expanded, &molecule, &[], Some(&preset.label))?;
+        assert_eq!(
+            found.abbreviations.len(),
+            1,
+            "{} not found again",
+            preset.label
+        );
+    }
+    assert!(checked > 350, "{checked}");
+    Ok(())
+}

@@ -89,7 +89,8 @@ fn native_hypot(x: f64, y: f64) -> f64 {
 /// Restore the fixed fragment's chemistry after deleting its outside dummy.
 /// No template contains stereo tags, so its full CIP result is provably empty;
 /// this condition is checked before supplying empty labels to reconstruction.
-fn fragment(preset: &Preset) -> Result<perception::State> {
+/// Also returns whether the attachment atom received a temporary hydrogen.
+fn fragment(preset: &Preset) -> Result<(perception::State, bool)> {
     let prepared = smiles::prepare(&preset.smiles)?;
     if at(&prepared.state.graph.atoms, 0)?.atomic_number != 0
         || prepared
@@ -129,6 +130,13 @@ fn fragment(preset: &Preset) -> Result<perception::State> {
         .ok_or_else(|| Error::Definition("Missing attachment atom".into()))?;
     root.no_implicit = false;
     root.radical_electrons = 0;
+    // An aromatic N-linked azole (pyrrol-1-yl, imidazol-1-yl...) needs its
+    // hydrogen written while it stands alone, or the ring cannot kekulize.
+    // build_replacement_part removes it again once the bond is restored.
+    let added_hydrogen = root.aromatic && root.atomic_number != 6;
+    if added_hydrogen {
+        root.explicit_hydrogens += 1;
+    }
     let bonds = graph
         .bonds
         .into_iter()
@@ -146,7 +154,7 @@ fn fragment(preset: &Preset) -> Result<perception::State> {
         &vec![Direction::None; graph.bonds.len()],
     )?;
     let properties = perception::Properties::unspecified(&sanitized.graph);
-    Ok(perception::State {
+    let state = perception::State {
         graph: sanitized.graph,
         metadata: sanitized.metadata,
         directions: sanitized.directions,
@@ -158,7 +166,8 @@ fn fragment(preset: &Preset) -> Result<perception::State> {
             atoms: sanitized.rings,
         },
         properties,
-    })
+    };
+    Ok((state, added_hydrogen))
 }
 
 /// Mirror the original replacement edit. It retains the existing attachment ID,
@@ -362,11 +371,12 @@ fn build_replacement_part(
     target: u64,
     anchor: &crate::document::Atom,
 ) -> Result<Document> {
+    let (state, added_hydrogen) = fragment(preset)?;
     let molecule = Molecule {
         rdkit_version: RDKIT_VERSION,
         ids,
         positions,
-        state: fragment(preset)?,
+        state,
     };
     let drawing = document::for_import(&molecule, false, &vec![None; molecule.ids.len()])?;
     let state = &drawing.molecule().state;
@@ -402,6 +412,11 @@ fn build_replacement_part(
         if atom.id == target {
             atom.text_style = anchor.text_style.clone();
             atom.display.highlight = anchor.display.highlight;
+            // Reconstruction may kekulize the root, so track the hydrogen
+            // itself rather than the aromatic flag.
+            if added_hydrogen {
+                atom.explicit_h = atom.explicit_h.saturating_sub(1);
+            }
         }
     }
     Ok(part)

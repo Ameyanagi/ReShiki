@@ -183,3 +183,66 @@ fn user_groups_cannot_take_reserved_spellings() {
         assert!(errors[0].contains("already means"), "{errors:?}");
     }
 }
+
+/// Two groups with the same structure would compete in Contract common
+/// groups; only the first may be detectable, the rest are typed spellings.
+#[test]
+fn detectable_groups_have_distinct_structures() {
+    let mut seen = std::collections::HashMap::new();
+    for preset in presets().unwrap().iter() {
+        let prepared = smiles::prepare(&preset.smiles).unwrap();
+        let canonical = smiles::write::write(&prepared.state, Default::default())
+            .unwrap()
+            .text;
+        if !preset.contract {
+            continue;
+        }
+        if let Some(first) = seen.insert(canonical, preset.label.clone()) {
+            panic!(
+                "{} repeats {first}; mark one \"contract\": false",
+                preset.label
+            );
+        }
+    }
+}
+
+/// Bond lengths and the closest non-bonded contact of a group layout, in
+/// units of the 1.5 depiction bond length.
+fn layout_quality(preset: &Preset) -> (f64, f64) {
+    let p = preset.positions().unwrap();
+    let distance = |i: usize, j: usize| (p[i].x - p[j].x).hypot(p[i].y - p[j].y) / 1.5;
+    let mut stretch = 0.0f64;
+    let mut bonded = HashSet::new();
+    for bond in &preset.bonds {
+        stretch = stretch.max((distance(bond.a, bond.b) - 1.0).abs());
+        bonded.insert((bond.a.min(bond.b), bond.a.max(bond.b)));
+    }
+    let mut closest = f64::MAX;
+    for i in 0..p.len() {
+        for j in i + 1..p.len() {
+            if !bonded.contains(&(i, j)) {
+                closest = closest.min(distance(i, j));
+            }
+        }
+    }
+    (stretch, closest)
+}
+
+/// Every layout keeps regular bond lengths and separated atoms. TBDPS, the
+/// tightest bundled layout before the catalog, sets the contact limit.
+#[test]
+fn bundled_layouts_are_regular() {
+    for preset in presets().unwrap().iter() {
+        let (stretch, closest) = layout_quality(preset);
+        assert!(
+            stretch < 0.05,
+            "{}: bond length off by {stretch:.2}",
+            preset.label
+        );
+        assert!(
+            closest > 0.5,
+            "{}: atoms {closest:.2} bonds apart",
+            preset.label
+        );
+    }
+}

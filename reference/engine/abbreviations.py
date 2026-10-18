@@ -17,6 +17,9 @@ CATALOG = json.loads(
     ).read_text(encoding="utf-8")
 )["groups"]
 PRESETS = {group["label"]: (group["smiles"], group.get("reverse", "")) for group in CATALOG}
+# Pairwise oracle cases use the 62 groups bundled before the catalog grew,
+# which keeps their count bounded; every group still gets the linear cases.
+CORE = list(PRESETS)[:62]
 # Groups that Contract all skips unless they are requested by label.
 NAMED_ONLY = {group["label"] for group in CATALOG if not group.get("contract", True)}
 
@@ -190,15 +193,23 @@ def replace(doc, selection, label, to_document):
     rw = Chem.RWMol(template)
     rw.RemoveAtom(dummy.GetIdx())
     fragment = rw.GetMol()
+    added_hydrogen = False
     for a in fragment.GetAtoms():
         if a.HasProp("reshiki_id") and int(a.GetProp("reshiki_id")) == target:
             a.SetNoImplicit(False)
             a.SetNumRadicalElectrons(0)
+            # A standalone N-linked azole needs its NH written to kekulize;
+            # the restored attachment bond replaces it again below.
+            if a.GetIsAromatic() and a.GetAtomicNum() != 6:
+                a.SetNumExplicitHs(a.GetNumExplicitHs() + 1)
+                added_hydrogen = True
     Chem.SanitizeMol(fragment)
     part = to_document(fragment)
     for a in part["atoms"]:
         if a["id"] == target and atoms[target].get("text_style"):
             a["text_style"] = copy.deepcopy(atoms[target]["text_style"])
+        if a["id"] == target and added_hydrogen:
+            a["explicit_h"] = max(0, a.get("explicit_h", 0) - 1)
     result = copy.deepcopy(doc)
     result["atoms"] = [a for a in result["atoms"] if a["id"] not in remove] + part["atoms"]
     result["bonds"] = [b for b in result["bonds"] if not ({b["a"], b["b"]} <= remove)] + part[
