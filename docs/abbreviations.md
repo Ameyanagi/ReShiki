@@ -70,8 +70,9 @@ layout comes from the same 2D depiction that SMILES import uses. Adding a
 group is one new entry; no separate geometry file is needed. The optional
 `aliases` list adds other typed spellings, such as TBDMS for TBS. Set
 `"contract": false` for a group that should only be created by typing, never
-found by **Contract common groups**. Groups cannot carry stereochemistry and
-attach through one single bond.
+found by **Contract common groups**. Groups cannot carry stereochemistry,
+isotopes, radicals or `[H]` atoms, and attach through one single bond. Every
+label, alias and reverse label must be unique and cannot reuse N3 or MgBr.
 
 When groups overlap, **Contract common groups** prefers the larger group, for
 example NHBoc over Boc. Groups of the same size are tried in catalog order.
