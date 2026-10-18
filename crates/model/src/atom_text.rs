@@ -320,20 +320,29 @@ pub fn apply_with_scripts(
 fn manual_chemical_entry(text: &str, runs: &[ScriptRun]) -> Result<Option<String>, String> {
     if let Some(chemical) = manual_chemical_text(text, runs) {
         let element = ELEMENTS.contains(&chemical.as_str()) || chemical == "*";
+        let digit = |c: char| {
+            c.is_ascii_digit()
+                || ('₀'..='₉').contains(&c)
+                || matches!(c, '⁰' | '¹' | '²' | '³' | '⁴' | '⁵' | '⁶' | '⁷' | '⁸' | '⁹')
+        };
+        let lowered = |run: &ScriptRun| {
+            text.get(run.start..run.end)
+                .filter(|_| run.script == Script::Subscript)
+        };
+        // Lowered counts in a known group (CO2Me) are its ordinary formula
+        // look, so the label stays the real group rather than dummy text.
+        if !element
+            && (known_group(&chemical) || formula_group(&chemical).is_some())
+            && runs
+                .iter()
+                .all(|run| lowered(run).is_some_and(|s| s.chars().all(digit)))
+        {
+            return Ok(Some(chemical));
+        }
         // A manually lowered digit is a count, never an element charge.
-        let lowered_count = runs.iter().any(|run| {
-            run.script == Script::Subscript
-                && text.get(run.start..run.end).is_some_and(|s| {
-                    s.chars().any(|c| {
-                        c.is_ascii_digit()
-                            || ('₀'..='₉').contains(&c)
-                            || matches!(
-                                c,
-                                '⁰' | '¹' | '²' | '³' | '⁴' | '⁵' | '⁶' | '⁷' | '⁸' | '⁹'
-                            )
-                    })
-                })
-        });
+        let lowered_count = runs
+            .iter()
+            .any(|run| lowered(run).is_some_and(|s| s.chars().any(digit)));
         let lowered_element_count = lowered_count
             && chemical
                 .find(|c: char| !c.is_ascii_alphabetic())
