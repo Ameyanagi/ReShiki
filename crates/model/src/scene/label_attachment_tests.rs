@@ -269,7 +269,7 @@ fn generic_labels_stay_centered_on_vertical_or_internal_bonds() -> Result<(), St
     for text in ["[Cl,Br,I]", "[CH2]1-3"] {
         let mut doc = Document::default();
         let id = doc.add_atom("C", Point::new(0., 0.));
-        for x in [-42., 42.] {
+        for x in [-120., 120.] {
             let other = doc.add_atom("C", Point::new(x, 0.));
             doc.add_bond(other, id, 1, "plain");
         }
