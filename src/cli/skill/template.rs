@@ -272,6 +272,8 @@ stay empty then.\n\
 - `replace_ids` must be empty: `compose` always creates a new document.\n\
 - Write valid SMILES yourself: ReShiki does not look up chemical names. `label` is the caption \
 drawn under a structure; leave it empty for none.\n\
+- `label` and `conditions` are drawn as typed: write formulas with Unicode subscripts and \
+superscripts, such as `H₂SO₄` or `Pd(PPh₃)₄`, never `H2SO4`.\n\
 - `composition` sets the arrangement, the columns and the figure width in points.\n\
 - Follow the schema's `description` texts: they are the layout rules ReShiki's own assistant \
 follows.\n\n",

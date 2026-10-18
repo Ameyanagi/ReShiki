@@ -2548,6 +2548,106 @@ fn mechanism_attachment_92_mark_drag_preview_resolves_same_geometry_as_commit() 
 }
 
 #[test]
+fn haloed_labels_painted_over_lower_graphics_select_their_atom() {
+    use reshiki::{graphics::GraphicKind, palette::Color, scientific::OrbitalKind};
+    let mut doc = Document::default();
+    let atom = doc.add_atom("N", World::default());
+    doc.atom_mut(atom).unwrap().no_implicit = true;
+    let probe = reshiki::scene::primitives(&doc)
+        .into_iter()
+        .find_map(|primitive| match primitive {
+            reshiki::scene::Primitive::Text {
+                position,
+                text,
+                size,
+                style,
+                ..
+            } => reshiki::style::text_ink_boxes(&text, size, &style)
+                .first()
+                .map(|(lo, hi)| position.offset((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5)),
+            _ => None,
+        })
+        .unwrap();
+    let filled = GraphicStyle {
+        fill: Some(Color::Ink),
+        ..Default::default()
+    };
+    let mut cover = Graphic::dragged(
+        doc.next_id(),
+        GraphicKind::Rectangle,
+        World::new(-20., -20.),
+        World::new(20., 20.),
+        filled.clone(),
+        BracketSides::Both,
+        false,
+    );
+    cover.layer = 0;
+    let cover_id = cover.id;
+    doc.graphics.push(cover);
+    let mut orbital = Graphic::dragged(
+        doc.next_id(),
+        GraphicKind::Orbital(OrbitalKind::S),
+        World::default(),
+        World::new(0., -42.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    orbital.layer = 1;
+    doc.graphics.push(orbital);
+    assert_eq!(
+        hit::hit_object(&doc, probe, 1.),
+        Some(atom),
+        "The label is painted above the rectangle beneath its orbital"
+    );
+    doc.graphics[0].layer = 2;
+    assert_eq!(hit::hit_object(&doc, probe, 1.), Some(cover_id));
+}
+
+#[test]
+fn marks_raised_with_a_haloed_label_select_their_atom_over_the_orbital() {
+    use reshiki::{
+        graphics::GraphicKind,
+        palette::Color,
+        scientific::{OrbitalKind, SymbolKind},
+    };
+    let mut doc = Document::default();
+    let atom = doc.add_atom("N", World::default());
+    let a = doc.atom_mut(atom).unwrap();
+    a.no_implicit = true;
+    reshiki::scientific::attach(a, SymbolKind::LonePair, World::new(0., -18.)).unwrap();
+    let mut orbital = Graphic::dragged(
+        doc.next_id(),
+        GraphicKind::Orbital(OrbitalKind::S),
+        World::default(),
+        World::new(0., -42.),
+        GraphicStyle {
+            fill: Some(Color::Ink),
+            ..Default::default()
+        },
+        BracketSides::Both,
+        false,
+    );
+    orbital.layer = 1;
+    let orbital_id = orbital.id;
+    doc.graphics.push(orbital);
+    let a = doc.atom(atom).unwrap();
+    let probe = reshiki::graphics::flattened(
+        &reshiki::scientific::styled_mark_parts(a, &doc.drawing_style)[0].commands,
+    )[0][0];
+    assert_eq!(reshiki::scene::atom_label_hit(&doc, probe, 0.), None);
+    assert_eq!(
+        hit::hit_object(&doc, World::new(0., 30.), 1.),
+        Some(orbital_id)
+    );
+    assert_eq!(
+        hit::hit_object(&doc, probe, 1.),
+        Some(atom),
+        "The mark is painted above the orbital with its label"
+    );
+}
+
+#[test]
 fn readable_foreground_orbital_labels_select_the_atom_and_other_filled_graphics_keep_precedence() {
     use reshiki::{
         graphics::GraphicKind, palette::Color, scene::Primitive, scientific::OrbitalKind,
