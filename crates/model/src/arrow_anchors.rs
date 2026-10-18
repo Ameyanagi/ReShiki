@@ -331,7 +331,12 @@ fn pick_with_ink(
     {
         return Some(Pick::Atom(id));
     }
-    let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+    let style = &doc.drawing_style;
+    // The widest band: a quadruple bond's outer rails plus a bold half width.
+    let reach = style.bond_length_world * style.bond_spacing_ratio * 1.5
+        + DEFAULT.world(style.bold_width_pt) / 2.
+        + radius;
+    let arcs = std::cell::OnceCell::new();
     doc.bonds
         .iter()
         .enumerate()
@@ -357,9 +362,8 @@ fn pick_with_ink(
             // Signed offset along the scene's rail normal of bond.a -> bond.b.
             let sign = if bond.a == a { 1. } else { -1. };
             let offset = sign * (v.x * (p.y - pa.y) - v.y * (p.x - pa.x)) / length.sqrt();
-            // Reject remote candidates before any expensive visibility scene;
-            // no rail band reaches two spacings off the backbone.
-            if !(0.0..=1.).contains(&fraction) || offset.abs() > spacing * 2. + radius {
+            // Reject remote candidates before any expensive visibility scene.
+            if !(0.0..=1.).contains(&fraction) || offset.abs() > reach {
                 return None;
             }
             let (start, end) = ink.segment(bond)?;
@@ -368,7 +372,12 @@ fn pick_with_ink(
             // Position along the drawn segment, measured from bond.a.
             let along = (fraction - from) / (to - from);
             let drawn = start.distance(end);
-            let distance = bond_ink_distance(doc, bond, offset, along, drawn, radius * 0.7)?;
+            // Like the scene, only a resolved ring arc replaces the rails.
+            let arc = bond.ring_arc
+                && arcs
+                    .get_or_init(|| crate::ring_arcs::uncut(doc))
+                    .contains(bond.a, bond.b);
+            let distance = bond_ink_distance(doc, bond, arc, offset, along, drawn, radius * 0.7)?;
             ((from.min(to)..=from.max(to)).contains(&fraction)
                 && ink.label_hit(q, 0.).is_none()
                 && ink.bond(index, if bond.a == a { fraction } else { 1. - fraction }))
@@ -384,10 +393,12 @@ fn pick_with_ink(
 /// pointer's position on the `drawn` (label-trimmed) segment, from bond.a.
 /// The bond qualifies anywhere within `tolerance` of its rail band, gaps
 /// included; `None` beyond. Rails mirror the scene's `push_bond_rails`:
-/// (offset, half width), with the secondary display on the second rail.
+/// (offset, half width), with the secondary display on the second rail;
+/// a ring `arc` bond draws only its backbone.
 fn bond_ink_distance(
     doc: &Document,
     bond: &Bond,
+    arc: bool,
     offset: f32,
     along: f32,
     drawn: f32,
@@ -434,8 +445,7 @@ fn bond_ink_distance(
             &rails[..1]
         })
     };
-    // Ring-arc bonds draw only their backbone; the arc carries the order.
-    let order = if bond.ring_arc { 1 } else { bond.order };
+    let order = if arc { 1 } else { bond.order };
     match (order, bond.display.as_str()) {
         // Crossed double: two straight strokes swap sides along the bond.
         (2, "wavy") => {

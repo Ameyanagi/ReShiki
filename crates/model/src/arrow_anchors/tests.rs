@@ -890,20 +890,63 @@ fn nearby_bonds_rank_by_their_drawn_ink() {
     // Hashed bars keep a constant bold width.
     assert!(!single_wins(1, "hashed", 4., Point::new(7.291667, 2.4)));
 
-    // A ring-arc double draws only its backbone.
+    // A double bond under a resolved ring arc draws only its backbone.
     let mut d = Document::default();
     let length = d.drawing_style.bond_length_world;
     let s = d.add_atom("C", Point::new(0., 3.));
     let t = d.add_atom("C", Point::new(length, 3.));
     d.add_bond(s, t, 1, "plain");
-    let a = d.add_atom("C", Point::new(0., 0.));
-    let b = d.add_atom("C", Point::new(length, 0.));
-    d.add_bond(a, b, 2, "plain");
-    d.bonds[1].ring_arc = true;
-    assert!(matches!(
-        pick(&d, Point::new(length / 2., 0.), 8. / 2.25),
-        Some(Pick::Bond { a: x, .. }) if x == a
-    ));
+    let h = length * 3f32.sqrt() / 2.;
+    let ring: Vec<_> = [
+        (0., 0.),
+        (length, 0.),
+        (length * 1.5, -h),
+        (length, -h * 2.),
+        (0., -h * 2.),
+        (-length / 2., -h),
+    ]
+    .into_iter()
+    .map(|(x, y)| d.add_atom("C", Point::new(x, y)))
+    .collect();
+    for (i, &a) in ring.iter().enumerate() {
+        d.add_bond(
+            a,
+            ring[(i + 1) % 6],
+            if i % 2 == 0 { 2 } else { 1 },
+            "plain",
+        );
+    }
+    assert_eq!(
+        crate::ring_arcs::toggle(&mut d, &[ring[5], ring[0], ring[1], ring[2]]),
+        Ok(true)
+    );
+    // Centred rails would leave the pointer nearer the single bond.
+    d.bonds[1].double_position = crate::bonds::DoublePosition::Center;
+    let ring_bond = Some(Pick::Bond {
+        a: ring[0],
+        b: ring[1],
+        fraction: 0.5,
+    });
+    assert_eq!(pick(&d, Point::new(length / 2., 0.), 8. / 2.25), ring_bond);
+    // A ring_arc flag left on a bond with no resolved arc keeps its rails.
+    let spacing_half = spacing / 2.;
+    let mut open = Document::default();
+    let a = open.add_atom("C", Point::new(0., 0.));
+    let b = open.add_atom("C", Point::new(length, 0.));
+    open.add_bond(a, b, 2, "plain");
+    open.bonds[0].ring_arc = true;
+    assert!(pick(&open, Point::new(length / 2., spacing_half), 8. / 2.25).is_some());
+
+    // A bold quadruple bond's outer ink stays a target with tight spacing.
+    let mut quad = Document::default();
+    quad.drawing_style.bond_spacing_ratio = 0.05;
+    let a = quad.add_atom("C", Point::new(0., 0.));
+    let b = quad.add_atom("C", Point::new(length, 0.));
+    quad.add_bond(a, b, 6, "bold");
+    let style = &quad.drawing_style;
+    let edge = style.bond_length_world * style.bond_spacing_ratio * 1.5
+        + DEFAULT.world(style.bold_width_pt) / 2.;
+    assert!(pick(&quad, Point::new(length / 2., edge - 0.1), 8. / 2.25).is_some());
 
     // A crossed C=O crosses at the middle of its label-trimmed segment.
     let mut d = Document::default();
