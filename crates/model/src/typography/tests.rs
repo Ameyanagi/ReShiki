@@ -202,12 +202,17 @@ fn wrapping_breaks_between_words_never_inside_one() {
         lines("(2R)-2-hydroxypropanoic acid", 40.),
         ["(2R)-2-hydroxypropanoic", "acid"]
     );
+    // Measured, not hard-coded: glyph advances come from the system fonts.
+    let alpha_beta = layout("alpha beta ", &TextFormat::default()).width
+        * crate::style::DEFAULT.points_per_world();
     assert_eq!(
-        lines("alpha beta gamma delta", 50.),
-        ["alpha beta", "gamma", "delta"]
+        lines("alpha beta alpha beta", alpha_beta + 0.5),
+        ["alpha beta", "alpha beta"]
     );
     // Text without spaces between words still wraps at CJK characters.
-    assert!(lines("日本語の長い説明文です", 30.).len() > 1);
+    let cjk = lines("日本語の長い説明文です", 30.);
+    assert!(cjk.len() > 1);
+    assert_eq!(cjk.concat(), "日本語の長い説明文です");
     // A voicing mark stays with its kana.
     let kana = lines("ﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞ", 12.);
     assert!(kana.len() > 1);
