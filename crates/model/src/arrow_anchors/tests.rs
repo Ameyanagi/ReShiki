@@ -1207,3 +1207,32 @@ fn mechanism_attachment_312_head_clears_double_bond_rails() {
     let gap = head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
+#[test]
+fn mechanism_attachment_312_bond_ink_covers_plain_dative_head() {
+    // The filled head drawn at the acceptor is much wider than the dative
+    // line, and starts past the acceptor's label when it has one.
+    for acceptor in ["C", "Pd"] {
+        let mut d = Document::default();
+        let c = d.add_atom(acceptor, Point::new(0., 0.));
+        let donor = d.add_atom("N", Point::new(-30., 30.));
+        d.add_bond(donor, c, 5, "plain");
+        let (_, lines) = bond_ink(&d, c, Point::new(0., 0.));
+        let corners: Vec<Point> = crate::scene::primitives(&d)
+            .into_iter()
+            .filter_map(|p| match p {
+                crate::scene::Primitive::Polygon(points) if points.len() == 3 => Some(points),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        assert_eq!(corners.len(), 3, "{acceptor}: one drawn dative head");
+        for p in corners {
+            let covered = lines.iter().any(|(a, b, half)| {
+                let v = delta(*b, *a);
+                let t = (dot(delta(p, *a), v) / dot(v, v)).clamp(0., 1.);
+                p.distance(a.offset(v.x * t, v.y * t)) <= half + 0.01
+            });
+            assert!(covered, "{acceptor}: head corner {p:?} outside bond ink");
+        }
+    }
+}

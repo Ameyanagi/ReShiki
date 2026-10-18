@@ -483,6 +483,19 @@ fn bond_ink(doc: &Document, atom: u64, center: Point) -> (Vec<Point>, Vec<InkLin
                     )
                 }),
         );
+        // A plain dative also fills its head at the label-trimmed acceptor
+        // end; a line as wide as the head's base covers that triangle.
+        if bond.is_dative()
+            && bond.display == "plain"
+            && let Some((_, end)) = crate::scene::bond_segment(doc, bond, None)
+        {
+            let length = crate::scene::DATIVE_HEAD_LENGTH;
+            lines.push((
+                end,
+                end.offset(-u.x * length, -u.y * length),
+                crate::scene::DATIVE_HEAD_HALF_WIDTH,
+            ));
+        }
     }
     (bonds, lines)
 }
