@@ -691,29 +691,57 @@ fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Po
     })
 }
 
-/// Visible bonds that do not end at `a`, with the distance from the center
-/// line to their outermost stroke edge.
+/// The drawn rails of visible bonds that do not end at `a`, each with half
+/// its stroke width.
 fn unrelated_bonds(a: &Atom, doc: &Document) -> Vec<(Point, Point, f32)> {
+    use crate::bonds::DoublePosition as P;
     let style = &doc.drawing_style;
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
-    let ink = style.world(style.bold_width_pt).max(style.line_width()) / 2.;
     let positions: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
         .map(|atom| (atom.id, atom.position))
         .collect();
+    let faces = std::cell::OnceCell::new();
+    let faces = || faces.get_or_init(|| FaceIndex::new(doc));
     doc.bonds
         .iter()
-        .filter(|b| b.a != a.id && b.b != a.id)
-        .filter_map(|b| {
-            let p = positions.get(&b.a)?;
-            let q = positions.get(&b.b)?;
-            let offset = match b.order {
-                2 | 3 | 4 | 7 => spacing,
-                6 => spacing * 1.5,
-                _ => 0.,
+        .filter(|b| b.a != a.id && b.b != a.id && doc.bond_visible(b.a, b.b))
+        .filter_map(|b| Some((b, *positions.get(&b.a)?, *positions.get(&b.b)?)))
+        .flat_map(|(b, p, q)| {
+            // Rail offsets along the normal, as `push_bond_rails` draws them.
+            let offsets = match b.order {
+                2 | 7 => match double_position(faces(), b) {
+                    P::Left => vec![0., -spacing],
+                    P::Right => vec![0., spacing],
+                    _ => vec![-spacing / 2., spacing / 2.],
+                },
+                3 => vec![-spacing, 0., spacing],
+                4 => vec![
+                    0.,
+                    spacing * automatic_double_side(faces(), b).unwrap_or(1.),
+                ],
+                6 => vec![-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
+                _ => vec![0.],
             };
-            doc.bond_visible(b.a, b.b).then_some((*p, *q, offset + ink))
+            let bold = matches!(
+                b.display.as_str(),
+                "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
+            ) || b.secondary_display.as_deref() == Some("bold");
+            let ink = if bold {
+                style.world(style.bold_width_pt)
+            } else {
+                style.line_width()
+            } / 2.;
+            let length = p.distance(q).max(0.001);
+            let (nx, ny) = (-(q.y - p.y) / length, (q.x - p.x) / length);
+            offsets.into_iter().map(move |offset| {
+                (
+                    p.offset(nx * offset, ny * offset),
+                    q.offset(nx * offset, ny * offset),
+                    ink,
+                )
+            })
         })
         .collect()
 }

@@ -566,9 +566,10 @@ fn automatic_hydrogen_replacement_side_ignores_hidden_marks() {
 }
 
 /// The outer stroke of a multiple bond blocks a replacement side even when
-/// its center line clears the hydrogens.
+/// its center line clears the hydrogens, at the rail offsets actually drawn.
 #[test]
 fn automatic_hydrogen_replacement_side_avoids_outer_bond_strokes() {
+    use crate::bonds::DoublePosition;
     let mut doc = Document::default();
     let n = doc.add_atom("N", Point::new(0., 0.));
     let c = doc.add_atom("C", Point::new(60., 0.));
@@ -583,15 +584,25 @@ fn automatic_hydrogen_replacement_side_avoids_outer_bond_strokes() {
         .fold(f32::INFINITY, f32::min);
     let style = &doc.drawing_style;
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
-    // Just above the padded hydrogen ink, but within one bond spacing of it.
-    let y = top - size * 0.12 - spacing * 0.5;
+    // A centered double bond's rails (half a spacing out) clear the padded
+    // hydrogen ink; a rail a full spacing toward it does not.
+    let y = top - size * 0.12 - spacing * 0.5 - style.line_width();
     let left = doc.add_atom("C", Point::new(-40., y));
     let right = doc.add_atom("C", Point::new(40., y));
-    for (order, above) in [(1, true), (2, false)] {
+    let above = |doc: &mut Document, order, position| {
         doc.bonds.retain(|b| b.a != left);
         doc.add_bond(left, right, order, "plain");
+        doc.bonds.last_mut().unwrap().double_position = position;
         doc.atom_mut(n).unwrap().label_h = 2;
-        let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
-        assert_eq!(h.y < n_text.y, above, "order {order}");
-    }
+        charge_run(doc, n, "H").y < charge_run(doc, n, "N").y
+    };
+    assert!(above(&mut doc, 1, DoublePosition::Auto));
+    assert!(above(&mut doc, 2, DoublePosition::Center));
+    assert!(above(&mut doc, 2, DoublePosition::Auto));
+    assert!(!above(&mut doc, 3, DoublePosition::Auto));
+    // Exactly one side puts the second rail toward the hydrogens.
+    assert_ne!(
+        above(&mut doc, 2, DoublePosition::Left),
+        above(&mut doc, 2, DoublePosition::Right)
+    );
 }
