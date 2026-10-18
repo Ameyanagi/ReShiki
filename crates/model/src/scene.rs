@@ -35,6 +35,14 @@ pub enum Primitive {
         color: [u8; 3],
         style: crate::typography::TextStyle,
     },
+    /// Paper-colored ink spread `radius` around the shapes of `primitives`
+    /// (atom labels drawn right after it), covering everything painted before.
+    /// Without a background, backends knock that earlier ink out instead, so
+    /// whatever lies behind the drawing shows through the halo.
+    Halo {
+        radius: f32,
+        primitives: Vec<Primitive>,
+    },
 }
 fn visible(a: &Atom, doc: &Document) -> bool {
     crate::atom_labels::visible(a, doc)
@@ -1052,10 +1060,10 @@ pub fn primitives_with_opacity(
     let doc = inputs.doc();
     let style = &doc.drawing_style;
     let mut out = vec![];
-    let orbital_label_boxes = orbital_label_boxes(doc, &inputs.labels().runs, opacity);
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
-    push_underlays(&mut out, doc, &graphics, opacity, &orbital_label_boxes);
+    let halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
+    push_underlays(&mut out, doc, &graphics, opacity);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
     let doc = pass.doc;
@@ -1087,41 +1095,73 @@ pub fn primitives_with_opacity(
     if opacity.has_visibility() {
         paint_rear_before_front(&mut out, bond_paint_start);
     }
-    push_atom_labels(&mut out, doc, &pass.labels.runs, opacity);
+    let runs = &pass.labels.runs;
+    push_atom_labels(&mut out, doc, runs, opacity, &halos.atoms);
+    if halos.above.is_none() {
+        push_label_halo(&mut out, doc, runs, opacity, &halos.atoms);
+    }
     push_arrows_and_annotations(&mut out, doc);
-    out.extend(
-        graphics
-            .iter()
-            .filter(|g| g.layer >= 0)
-            .flat_map(|graphic| graphic_primitive(graphic, &orbital_label_boxes)),
-    );
+    for graphic in graphics.iter().filter(|g| g.layer >= 0) {
+        out.extend(graphic_primitive(graphic));
+        if halos.above == Some(graphic.id) {
+            push_label_halo(&mut out, doc, runs, opacity, &halos.atoms);
+        }
+    }
     out
 }
 
-/// Visible label ink that orbital lobes keep clear of; empty without orbitals.
-fn orbital_label_boxes(
+/// Orbitals keep complete lobes. The labels they reach are drawn above the
+/// topmost of them, readable inside a paper-colored halo.
+fn push_label_halo(
+    out: &mut Vec<Primitive>,
     doc: &Document,
+    runs: &std::collections::HashMap<u64, Vec<Primitive>>,
+    opacity: &crate::rear_opacity::Paint,
+    haloed: &[u64],
+) {
+    let haloed: Vec<_> = haloed.iter().filter_map(|id| doc.atom(*id)).collect();
+    let labels: Vec<_> = haloed
+        .iter()
+        .flat_map(|a| atom_label_parts(doc, runs, opacity, a))
+        .collect();
+    if labels.is_empty() {
+        return;
+    }
+    // A glyph-shaped halo leaves wide counters (the middle of an O) open;
+    // also cover the middle of every glyph's ink box.
+    let middles = haloed
+        .iter()
+        .filter_map(|a| runs.get(&a.id))
+        .flat_map(|runs| label_ink_boxes(runs))
+        .map(|(lo, hi)| {
+            let inset = (hi.x - lo.x).min(hi.y - lo.y) * 0.25;
+            let (lo, hi) = (lo.offset(inset, inset), hi.offset(-inset, -inset));
+            Primitive::Polygon(vec![lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)])
+        });
+    out.push(Primitive::Halo {
+        radius: crate::scientific::label_halo_radius(),
+        primitives: labels.iter().cloned().chain(middles).collect(),
+    });
+    out.extend(labels);
+}
+
+/// Visible labels the orbitals reach; empty without orbitals.
+fn orbital_halos(
+    doc: &Document,
+    graphics: &[&crate::graphics::Graphic],
     labels: &std::collections::HashMap<u64, Vec<Primitive>>,
     opacity: &crate::rear_opacity::Paint,
-) -> Vec<(Point, Point)> {
-    if doc
-        .graphics
-        .iter()
-        .any(|graphic| matches!(graphic.kind, crate::graphics::GraphicKind::Orbital(_)))
-    {
-        doc.atoms
-            .iter()
-            .filter(|atom| doc.atom_visible(atom.id) && opacity.atom(atom.id) > 0.)
-            .flat_map(|atom| {
-                labels
-                    .get(&atom.id)
-                    .map(|runs| label_ink_boxes(runs))
-                    .unwrap_or_default()
-            })
-            .collect()
-    } else {
-        Vec::new()
-    }
+) -> crate::scientific::OrbitalHalos {
+    crate::scientific::orbital_halos(doc, graphics.iter().copied(), |atom| {
+        if doc.atom_visible(atom.id) && opacity.atom(atom.id) > 0. {
+            labels
+                .get(&atom.id)
+                .map(|runs| label_ink_boxes(runs))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    })
 }
 
 /// Projection tip orientation is independent of dative donor→acceptor
@@ -1154,19 +1194,11 @@ fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
     out.extend(front);
 }
 
-fn graphic_primitive(
-    g: &&crate::graphics::Graphic,
-    label_boxes: &[(Point, Point)],
-) -> Vec<Primitive> {
+fn graphic_primitive(g: &&crate::graphics::Graphic) -> Vec<Primitive> {
     if g.kind == crate::graphics::GraphicKind::Picture {
         vec![Primitive::Picture((*g).clone())]
     } else {
-        let parts = if matches!(g.kind, crate::graphics::GraphicKind::Orbital(_)) {
-            crate::scientific::readable_orbital_parts(g, label_boxes)
-        } else {
-            g.parts()
-        };
-        parts
+        g.parts()
             .into_iter()
             .map(|p| Primitive::Path {
                 commands: p.commands,
@@ -1181,13 +1213,12 @@ fn push_underlays(
     doc: &Document,
     graphics: &[&crate::graphics::Graphic],
     opacity: &crate::rear_opacity::Paint,
-    label_boxes: &[(Point, Point)],
 ) {
     out.extend(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(|graphic| graphic_primitive(graphic, label_boxes)),
+            .flat_map(graphic_primitive),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(
@@ -1382,19 +1413,10 @@ fn push_atom_labels(
     doc: &Document,
     labels: &std::collections::HashMap<u64, Vec<Primitive>>,
     opacity: &crate::rear_opacity::Paint,
+    haloed: &[u64],
 ) {
-    for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
-        let mut parts: Vec<_> = labels.get(&a.id).into_iter().flatten().cloned().collect();
-        parts.extend(
-            crate::scientific::styled_mark_parts(a, &doc.drawing_style)
-                .into_iter()
-                .map(|p| Primitive::Path {
-                    commands: p.commands,
-                    style: p.style,
-                    filled: p.filled,
-                }),
-        );
-        out.extend(opacity.atom_parts(a.id, parts));
+    for a in doc.atoms.iter().filter(|a| !haloed.contains(&a.id)) {
+        out.extend(atom_label_parts(doc, labels, opacity, a));
     }
     for indicator in crate::atom_labels::indicators(doc) {
         use crate::atom_labels::Owner;
@@ -1411,6 +1433,28 @@ fn push_atom_labels(
             alpha,
         ));
     }
+}
+/// A visible atom's label runs and attached marks under its rear opacity.
+fn atom_label_parts(
+    doc: &Document,
+    labels: &std::collections::HashMap<u64, Vec<Primitive>>,
+    opacity: &crate::rear_opacity::Paint,
+    a: &Atom,
+) -> Vec<Primitive> {
+    if !doc.atom_visible(a.id) {
+        return Vec::new();
+    }
+    let mut parts: Vec<_> = labels.get(&a.id).into_iter().flatten().cloned().collect();
+    parts.extend(
+        crate::scientific::styled_mark_parts(a, &doc.drawing_style)
+            .into_iter()
+            .map(|p| Primitive::Path {
+                commands: p.commands,
+                style: p.style,
+                filled: p.filled,
+            }),
+    );
+    opacity.atom_parts(a.id, parts)
 }
 fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
     for unit in &doc.generic.repeats {
@@ -2050,6 +2094,8 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
             }
             Primitive::Line(a, b, _) => points.extend([*a, *b]),
             Primitive::Polygon(p) => points.extend(p),
+            // The haloed labels follow it; the margin covers the halo.
+            Primitive::Halo { .. } => {}
             Primitive::Text {
                 position,
                 text,

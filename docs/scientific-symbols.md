@@ -34,8 +34,9 @@ color, and each edit is one Undo step.
 **Snap to atoms** in the context row snaps the orbital's node to the nearest
 atom. A green ring marks the chosen atom. Hold Option/Alt to place an orbital
 freely. An orbital stays a drawing object; group it with the molecule when they
-should move together. Orbitals leave a small gap around atom labels so the
-labels stay readable.
+should move together. Orbital lobes are always drawn whole. An atom label that
+a lobe reaches is drawn on top of the orbital inside a thin halo of the paper
+color, so the label stays readable over filled lobes.
 
 ## Limits
 
@@ -70,14 +71,31 @@ the current document; New restores snapping. Option/Alt places freely inside
 the snap radius, and the drag preview names the snapped target or free
 placement.
 
-Orbital fills and outlines leave a transparent gap around visible atom-label
-ink, including hydrogen, isotope and charge labels. This applies to orbitals
-both behind and in front of molecular content. Clicking these visible labels
-selects their atom through a foreground orbital. The atom positions, orbital
-node, axes and layer remain exactly as placed. The gap follows subsequent label
-edits; it is rendering clearance rather than a change to orbital size or
-attachment. Overlap with bonds, text captions and other annotations still
-follows ordinary object layering.
+Orbital fills and outlines are never cut around atom labels. When a lobe's
+fill or outline comes within 1 pt of visible atom-label ink (including
+hydrogen, isotope and charge labels), that atom's label and its attached marks
+are drawn above the orbital inside a halo in the paper color. The halo follows
+the glyphs: each glyph is filled and stroked 1 pt wider, and the middle of each
+glyph's ink box is covered too, so the inside of an O stays clear. The rule is
+the same for the orbital's own atom and for neighboring atoms, and for
+orbitals behind molecular content (the default) or in front of it. A label
+reached only by orbitals behind the molecule keeps its usual place above the
+bonds. Otherwise the reached labels are drawn right above the topmost front
+orbital that reaches them, so graphics stacked above that orbital still cover
+them, matching what a click selects. Clicking these visible labels selects
+their atom through a foreground orbital. The atom positions, orbital node,
+axes and layer remain exactly as placed, and the halo follows later label
+edits. Bonds, text captions and other annotations keep their ordinary
+layering against orbitals.
+
+The canvas and exports with a background (SVG, PDF, PNG and EMF files) paint
+the halo in the canvas background color. Transparent output, such as copied
+SVG, PDF and PNG, paints no paper: the halo shape is knocked out of everything
+drawn beneath the label (an SVG mask, a soft mask in PDF), so whatever lies
+behind the pasted drawing shows through and the surround stays transparent.
+EMF has no soft masks, so a transparent EMF paints the halo in the canvas
+background color instead. SVG readers that ignore masks show the label over
+the whole lobe without a halo.
 
 ### Persistence and exchange
 
@@ -88,13 +106,11 @@ follows ordinary object layering.
 - SMILES/MOL/CDXML keep supported one/two-unpaired-electron chemistry;
   molecular formats omit drawing annotations.
 - Free symbols and orbitals export to CDXML/CDX as grouped editable vector
-  curves, including orbital label-clearance gaps. Importing those vectors keeps
-  their appearance, but not their parametric orbital/symbol controls or dynamic
-  clearance after later label edits.
-- ReShiki's external-curve importer currently applies a minimum 0.1 pt outline
-  to fill-only curves. Orbital clearance includes padding that keeps these
-  re-imported pieces clear of label ink; this can expand a filled vector edge
-  by up to 0.05 pt.
+  curves with whole lobes. The atoms whose labels a front orbital reaches, with
+  their label text, are stacked just above that orbital, as on the canvas.
+  No halo shapes are written: they would become stray editable objects, and
+  the reading application draws its own atom labels. Importing those vectors
+  keeps their appearance, but not their parametric orbital/symbol controls.
 - CDXML plain/solid orbital and supported free-symbol objects import as
   editable ReShiki objects. Gradient-shaded orbitals are rejected explicitly.
 - CDXML atom-owned single charges, radical dots and supported lone pairs use

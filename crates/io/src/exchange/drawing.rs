@@ -266,6 +266,7 @@ fn write_impl(
     w.crossings(middle)?;
     w.groups()?;
     w.abbreviations()?;
+    w.orbital_labels_on_top()?;
     // Abbreviations move bonds into nested fragments. Native areas must be
     // created beside their final bond owners.
     w.ring_fills()?;
@@ -543,6 +544,49 @@ impl<'a> Writer<'a> {
             .get(&id)
             .map(|i| (i + 3).to_string())
             .ok_or_else(|| invalid("Missing drawing atom ID"))
+    }
+    /// Orbitals keep complete lobes. As in the scene, the atoms whose labels
+    /// they reach (with their label text) stack right above the topmost
+    /// foreground orbital reaching one; underlays already lie beneath them.
+    /// The reader paints its own label background, so no halo shapes are added.
+    fn orbital_labels_on_top(&mut self) -> Result<()> {
+        let halos = crate::scientific::orbital_label_halos(self.doc);
+        let Some(orbital) = halos.above.and_then(|id| {
+            self.objects
+                .iter()
+                .find(|(object, _)| *object == id)
+                .map(|(_, key)| *key)
+        }) else {
+            return Ok(());
+        };
+        let z = |w: &Self, key| -> Result<Option<usize>> {
+            w.tree
+                .get(key, "Z")?
+                .map(|z| {
+                    z.parse::<usize>()
+                        .map_err(|_| invalid("Invalid stacking order"))
+                })
+                .transpose()
+        };
+        let above = z(self, orbital)?.ok_or_else(|| invalid("Missing orbital stacking order"))?;
+        for key in self.tree.descendants(self.page)? {
+            if let Some(value) = z(self, key)?
+                && value > above
+            {
+                self.tree.set(key, "Z", (value + 1).to_string())?;
+            }
+        }
+        for id in halos.atoms {
+            let Ok(node) = self.atom_node(id) else {
+                continue;
+            };
+            for key in self.tree.descendants(node)? {
+                if matches!(self.tree.node(key)?.tag, "n" | "t") {
+                    self.tree.set(key, "Z", (above + 1).to_string())?;
+                }
+            }
+        }
+        Ok(())
     }
     fn atom_node(&self, id: u64) -> Result<Key> {
         self.atom_indices
