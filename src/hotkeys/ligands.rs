@@ -174,22 +174,36 @@ pub(super) fn add(
         result.add_bond(id, anchor, 1, "plain");
     }
     // Cp is stored as Cp⁻. Balance it on the metal (Fe + 2 Cp⁻ → Fe²⁺)
-    // unless the complex already carries an entered positive charge.
+    // unless the complex already carries an entered positive charge. Like the
+    // Cp⁻ charge, the balancing charge is hidden so the drawing reads as plain
+    // ferrocene; a charge the user entered and showed on the metal stays shown.
     if metal && size == 5 {
-        let complex = crate::molecule_names::component(doc, id);
+        // Count only the metal and the rings hapto-bound to it. Substituent or
+        // other ligand charges stay their own, so the result is independent of
+        // the order in which they and the rings were drawn.
+        let rings: Vec<u64> = doc
+            .bonds
+            .iter()
+            .filter_map(|b| match (b.a == id, b.b == id) {
+                (true, _) => Some(b.b),
+                (_, true) => Some(b.a),
+                _ => None,
+            })
+            .filter_map(|other| doc.atom(other))
+            .filter(|a| a.attachment == Some(Kind::MultiCenter))
+            .flat_map(|a| std::iter::once(a.id).chain(a.centroid.iter().copied()))
+            .collect();
         let net: i32 = doc
             .atoms
             .iter()
-            .filter(|a| {
-                complex.contains(&a.id)
-                    || complex
-                        .iter()
-                        .any(|c| doc.atom(*c).is_some_and(|c| c.centroid.contains(&a.id)))
-            })
+            .filter(|a| a.id == id || rings.contains(&a.id))
             .map(|a| a.charge)
             .sum();
         if net <= 0 {
             let metal = result.atom_mut(id).ok_or("Missing ligand target")?;
+            if metal.charge == 0 {
+                metal.display.hide_charge = true;
+            }
             metal.charge = metal.charge.checked_add(1).ok_or("Invalid metal charge")?;
         }
     }

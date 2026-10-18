@@ -110,17 +110,86 @@ fn pi_ligands_keep_metal_focus_real_ring_chemistry_and_multicenter_targets()
     assert_eq!(reshiki::attachments::composition(&doc)?.formula, "C10H10Fe");
     assert_eq!(doc.atoms.iter().map(|a| a.charge).sum::<i32>(), 0);
     // Issue #317: two Cp⁻ on neutral Fe give neutral ferrocene with Fe²⁺.
+    // Every balancing charge is stored but hidden, so the drawing reads as
+    // plain ferrocene with no charge text on Fe or the Cp carbons.
     let mut neutral = Document::default();
     let iron = neutral.add_atom("Fe", Point::default());
     for _ in 0..2 {
         neutral = hotkeys::atom_edit(&neutral, iron, "j", 42.)
             .ok_or("Cp shortcut")??
             .0;
+        let fe = neutral.atom(iron).ok_or("iron")?;
+        assert!(fe.charge > 0 && fe.display.hide_charge);
     }
     assert_eq!(neutral.atom(iron).ok_or("iron")?.charge, 2);
     assert_eq!(neutral.atoms.iter().map(|a| a.charge).sum::<i32>(), 0);
+    assert!(
+        neutral
+            .atoms
+            .iter()
+            .filter(|a| a.charge != 0)
+            .all(|a| a.display.hide_charge)
+    );
     let composition = reshiki::attachments::composition(&neutral)?;
     assert_eq!(composition.formula, "C10H10Fe");
+    let texts: Vec<_> = reshiki::scene::primitives(&neutral)
+        .into_iter()
+        .filter_map(|p| match p {
+            reshiki::scene::Primitive::Text { text, .. } => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert!(texts.iter().any(|t| t == "Fe"), "{texts:?}");
+    assert!(
+        texts
+            .iter()
+            .all(|t| !t.contains(['+', '−', '-']) && !t.starts_with('2')),
+        "{texts:?}"
+    );
+    // A charge the user entered and showed on the metal stays visible.
+    let mut shown = Document::default();
+    let anion = shown.add_atom("Fe", Point::default());
+    shown.atom_mut(anion).ok_or("anion")?.charge = -1;
+    let (shown, _) = hotkeys::atom_edit(&shown, anion, "j", 42.).ok_or("Cp shortcut")??;
+    let fe = shown.atom(anion).ok_or("anion")?;
+    assert_eq!(fe.charge, 0);
+    assert!(!fe.display.hide_charge);
+    // A charged Cp substituent keeps its own charge: the second Cp is still
+    // balanced on the metal, as it would be if the substituent came last.
+    let mut substituted = Document::default();
+    let iron = substituted.add_atom("Fe", Point::default());
+    substituted = hotkeys::atom_edit(&substituted, iron, "j", 42.)
+        .ok_or("Cp shortcut")??
+        .0;
+    let carbon = substituted
+        .atoms
+        .iter()
+        .find(|a| a.element == "C" && a.charge == 0)
+        .ok_or("ring carbon")?;
+    let (carbon, far) = (carbon.id, carbon.position.offset(0., -42.));
+    let ammonium = substituted.add_atom("N", far);
+    substituted.atom_mut(ammonium).ok_or("N")?.charge = 1;
+    substituted.add_bond(carbon, ammonium, 1, "plain");
+    let (substituted, _) =
+        hotkeys::atom_edit(&substituted, iron, "j", 42.).ok_or("Cp shortcut")??;
+    let fe = substituted.atom(iron).ok_or("iron")?;
+    assert!(fe.charge == 2 && fe.display.hide_charge);
+    // A ring charge owned by the attachment point counts like one on a carbon.
+    let mut owned = Document::default();
+    let iron = owned.add_atom("Fe", Point::default());
+    owned = hotkeys::atom_edit(&owned, iron, "j", 42.)
+        .ok_or("Cp shortcut")??
+        .0;
+    for atom in &mut owned.atoms {
+        if atom.attachment.is_some() {
+            atom.charge = -1;
+        } else if atom.element == "C" {
+            atom.charge = 0;
+        }
+    }
+    let (owned, _) = hotkeys::atom_edit(&owned, iron, "j", 42.).ok_or("Cp shortcut")??;
+    assert_eq!(owned.atom(iron).ok_or("iron")?.charge, 2);
+    assert_eq!(owned.atoms.iter().map(|a| a.charge).sum::<i32>(), 0);
     let mut metal = Document::default();
     let ru = metal.add_atom("Ru", Point::default());
     let (arene, _) = hotkeys::atom_edit(&metal, ru, "J", 42.).ok_or("Arene shortcut")??;
@@ -179,6 +248,10 @@ fn pi_shortcuts_retain_a_retiltable_3d_plane_and_keep_contacts_behind_the_ring()
         assert_eq!(
             doc.atom(metal).ok_or("metal")?.charge,
             if key == "j" { 1 } else { 0 }
+        );
+        assert_eq!(
+            doc.atom(metal).ok_or("metal")?.display.hide_charge,
+            key == "j"
         );
         let circles = reshiki::aromatic::circles(&doc);
         assert_eq!(circles.len(), 1);
