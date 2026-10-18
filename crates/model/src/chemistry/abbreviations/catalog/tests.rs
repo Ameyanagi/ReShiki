@@ -55,6 +55,24 @@ fn bundled_entries_are_complete_and_rdkit_comparable() {
     }
 }
 
+/// A neutral bracket-hydrogen atom cannot match its deprotonated anion.
+#[test]
+fn bracket_hydrogens_pin_the_neutral_charge() {
+    let entry = Entry {
+        label: "Pyr3".into(),
+        reverse: String::new(),
+        smiles: "*c1cc[nH]c1".into(),
+        formula: None,
+        category: String::new(),
+        names: Vec::new(),
+        aliases: Vec::new(),
+        contract: true,
+    };
+    let preset = Preset::from_entry(entry, true).unwrap();
+    let nitrogen = preset.atoms.iter().find(|a| a.number == 7).unwrap();
+    assert_eq!(nitrogen.charge, Some(0));
+}
+
 #[test]
 fn formulas_are_hill_order_substituents() {
     for (smiles, formula) in [
@@ -84,14 +102,15 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         {"label": "has space", "smiles": "*C"},
         {"label": "Chiral", "smiles": "*[C@H](F)Cl"},
         {"label": "Alias", "smiles": "*CC", "aliases": ["Good"]},
-        {"label": "Ring", "smiles": "*C1CC1", "contract": false}
+        {"label": "Ring", "smiles": "*C1CC1", "contract": false},
+        {"label": "Double", "smiles": "*=CC"}
     ]}"#;
     let (presets, errors) = parse(text, true);
     let labels: Vec<_> = presets.iter().map(|p| p.label.as_str()).collect();
     assert_eq!(labels, ["Good", "Ring"]);
     assert!(presets.iter().all(|p| p.user));
     assert!(!presets[1].contract);
-    assert_eq!(errors.len(), 8, "{errors:#?}");
+    assert_eq!(errors.len(), 9, "{errors:#?}");
     for (error, expected) in errors.iter().zip([
         "Group 2 (Two): SMILES must start with the single *",
         "Group 3 (Late): SMILES must start",
@@ -101,6 +120,7 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         "Group 7 (has space): Label \"has space\"",
         "Group 8 (Chiral): Stereo",
         "Group 9 (Alias): \"Good\" is defined twice",
+        "Group 11 (Double): The * attachment must use a single bond",
     ]) {
         assert!(error.starts_with(expected), "{error}");
     }

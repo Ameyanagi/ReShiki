@@ -189,6 +189,14 @@ impl Preset {
 fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
     let state = &prepared.state;
     let graph = &state.graph;
+    // Replacement keeps the drawing's single attachment bond.
+    if graph
+        .bonds
+        .iter()
+        .any(|bond| (bond.a == 0 || bond.b == 0) && bond.order != 1)
+    {
+        return Err("The * attachment must use a single bond".into());
+    }
     if graph
         .atoms
         .first()

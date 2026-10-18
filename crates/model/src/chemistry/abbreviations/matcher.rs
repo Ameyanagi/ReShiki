@@ -11,9 +11,9 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub(super) struct Atom {
-    number: u8,
+    pub(super) number: u8,
     aromatic: Option<bool>,
-    charge: Option<i8>,
+    pub(super) charge: Option<i8>,
     degree: usize,
     rings: usize,
 }
@@ -33,8 +33,7 @@ const TYPED: [u8; 10] = [5, 6, 7, 8, 9, 15, 16, 17, 35, 53];
 /// written aromaticity, charge only when nonzero, explicit degree and ring
 /// count. Implicit single-or-aromatic bonds become order zero; a single bond
 /// between two aromatic atoms (the fluorene biaryl bond) stays an explicit single.
-/// Bracket hydrogen counts are not part of the query; degree and charge
-/// already fix them for neutral catalog atoms.
+/// Bundled SMILES avoid bracket hydrogens, which are approximated below.
 pub(super) fn query(state: &perception::State) -> Result<(Vec<Atom>, Vec<Bond>)> {
     let graph = &state.graph;
     let mut degree = vec![0usize; graph.atoms.len()];
@@ -71,7 +70,11 @@ pub(super) fn query(state: &perception::State) -> Result<(Vec<Atom>, Vec<Bond>)>
                 number: atom.atomic_number,
                 aromatic: (atom.aromatic || TYPED.contains(&atom.atomic_number))
                     .then_some(atom.aromatic),
-                charge: (atom.charge != 0).then_some(atom.charge),
+                // RDKit keeps a bracket hydrogen count ([nH]) as a query. The
+                // native matcher has no hydrogen predicate, so such an atom
+                // instead pins its charge: degree and charge then fix its
+                // hydrogens, and a neutral [nH] never matches a pyrrolide [n-].
+                charge: (atom.charge != 0 || atom.explicit_hydrogens > 0).then_some(atom.charge),
                 degree: degree.get(index).copied().unwrap_or(0),
                 rings: rings.get(index).copied().unwrap_or(0),
             }
