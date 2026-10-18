@@ -664,6 +664,32 @@ fn analysis_caps_fixed_hydrogen_atoms_only_at_cut_bonds() {
     let ligand = ammine.atom_mut(n).unwrap();
     (ligand.no_implicit, ligand.explicit_h) = (true, 3);
     assert_eq!(analyse(&analysis_document(&ammine, &[n])), [(3, 0)]);
+    // A fixed CH2 on a metal keeps a covalent bond and its radical.
+    let methylene = ammine.add_atom("C", Point::new(84., 0.));
+    ammine.add_bond(metal, methylene, 1, "plain");
+    let carbon = ammine.atom_mut(methylene).unwrap();
+    (carbon.no_implicit, carbon.explicit_h) = (true, 2);
+    assert_eq!(analyse(&analysis_document(&ammine, &[methylene])), [(3, 1)]);
+    // Only one bond of a bridging chloride becomes dative.
+    let chloride = ammine.add_atom("Cl", Point::new(42., 42.));
+    let iron = ammine.add_atom("Fe", Point::new(84., 42.));
+    ammine.add_bond(metal, chloride, 1, "plain");
+    ammine.add_bond(chloride, iron, 1, "plain");
+    ammine.atom_mut(chloride).unwrap().no_implicit = true;
+    assert_eq!(analyse(&analysis_document(&ammine, &[chloride])), [(1, 0)]);
+    // A neutral pentavalent nitro N on a metal is reinterpreted by
+    // preparation, so capping it would exceed its valence: it recalculates.
+    let nitro = ammine.add_atom("N", Point::new(0., 84.));
+    let oxygens = [(-42., 126.), (42., 126.)].map(|(x, y)| ammine.add_atom("O", Point::new(x, y)));
+    ammine.add_bond(metal, nitro, 1, "plain");
+    for oxygen in oxygens {
+        ammine.add_bond(nitro, oxygen, 2, "plain");
+    }
+    for id in [nitro, oxygens[0], oxygens[1]] {
+        ammine.atom_mut(id).unwrap().no_implicit = true;
+    }
+    let part = analysis_document(&ammine, &[nitro, oxygens[0]]);
+    assert_eq!(analyse(&part), [(1, 0), (0, 0)]);
 
     // Aromatic bonds have no whole valence: a typed NH in aromatic pyrrole
     // recalculates its hydrogens when cut.

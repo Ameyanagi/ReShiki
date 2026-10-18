@@ -232,46 +232,53 @@ pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
     let mut part = selection(doc, atoms);
     crate::atom_labels::clear_computed(&mut part);
     let kept: HashSet<_> = part.atoms.iter().map(|a| a.id).collect();
-    // Preparation may turn a single bond to a metal into a dative bond that
-    // takes no valence from its donor, and an aromatic bond has no whole
-    // valence, so atoms at such cuts recalculate their hydrogens instead.
-    let metal = |id| {
-        doc.atom(id)
-            .and_then(|a| ELEMENTS.iter().position(|e| *e == a.element))
-            .is_some_and(
-                |i| !matches!(i + 1, 1..=2 | 5..=10 | 14..=18 | 33..=36 | 52..=54 | 85..=86),
-            )
+    // Twice the valence `b` gives `atom`, as in the chemistry graph: a
+    // dative bond gives none to its donor `a`, a hydrogen bond none at all.
+    let twice = |b: &crate::document::Bond, atom: u64| match b.order {
+        1..=3 => u32::from(b.order) * 2,
+        4 | 7 => 3,
+        5 if atom == b.b => 2,
+        6 => 8,
+        _ => 0,
     };
-    // Valence lost per kept atom, as in the chemistry graph: a dative bond
-    // adds none to its donor `a`, a hydrogen bond none at all. `None` asks
-    // for recalculated hydrogens.
-    let mut lost: HashMap<u64, Option<u32>> = HashMap::new();
-    for b in doc
-        .bonds
-        .iter()
-        .filter(|b| kept.contains(&b.a) != kept.contains(&b.b))
-    {
-        let (atom, other) = if kept.contains(&b.a) {
-            (b.a, b.b)
-        } else {
-            (b.b, b.a)
-        };
-        let valence = match b.order {
-            1 if metal(other) => None,
-            4 | 7 => None,
-            1..=3 => Some(u32::from(b.order)),
-            5 if atom == b.b => Some(1),
-            6 => Some(4),
-            _ => Some(0),
-        };
-        let total = lost.entry(atom).or_insert(Some(0));
-        *total = total.zip(valence).map(|(total, valence)| total + valence);
+    // (valence kept, valence cut) per atom at a cut; `None` when a cut bond
+    // is aromatic, which has no whole valence.
+    let mut valence: HashMap<u64, (u32, Option<u32>)> = HashMap::new();
+    for b in &doc.bonds {
+        for (atom, other) in [(b.a, b.b), (b.b, b.a)] {
+            if kept.contains(&atom) {
+                let entry = valence.entry(atom).or_insert((0, Some(0)));
+                if kept.contains(&other) {
+                    entry.0 += twice(b, atom);
+                } else {
+                    let cut = (!matches!(b.order, 4 | 7)).then(|| twice(b, atom));
+                    entry.1 = entry.1.zip(cut).map(|(sum, cut)| sum + cut);
+                }
+            }
+        }
     }
     for atom in part.atoms.iter_mut().filter(|a| a.no_implicit) {
-        match lost.get(&atom.id) {
-            Some(Some(valence)) => atom.explicit_h += valence,
-            Some(_) => atom.no_implicit = false,
-            None => {}
+        let Some(&(bonds, cut)) = valence.get(&atom.id) else {
+            continue;
+        };
+        // RDKit's largest valence for the charge-adjusted element; -1 (any)
+        // for metals.
+        let largest = crate::chemistry::ELEMENTS
+            .iter()
+            .position(|e| e.symbol == atom.element)
+            .and_then(|n| usize::try_from(n as i32 - atom.charge).ok())
+            .and_then(|n| crate::chemistry::ELEMENTS.get(n))
+            .and_then(|e| e.valences.last())
+            .map_or(-1, |v| *v);
+        match cut {
+            Some(0) => {}
+            // Preparation may reinterpret a capped atom that would exceed its
+            // valence, for example as a dative metal ligand or a charged
+            // nitro N, so such atoms recalculate their hydrogens instead.
+            Some(cut) if largest < 0 || (bonds + cut) / 2 + atom.explicit_h <= largest as u32 => {
+                atom.explicit_h += cut / 2
+            }
+            _ => atom.no_implicit = false,
         }
     }
     part
