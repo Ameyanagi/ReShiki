@@ -117,14 +117,21 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         {"label": "Ring", "smiles": "*C1CC1", "contract": false},
         {"label": "Double", "smiles": "*=CC"},
         {"label": "Radical", "smiles": "*[CH2]"},
-        {"label": "A,B", "smiles": "*C"}
+        {"label": "A,B", "smiles": "*C"},
+        {"label": "Heavy", "smiles": "*[13CH3]"},
+        {"label": "Typo", "smile": "*C"},
+        {"label": "Late2", "smiles": "*CC"},
+        {"label": "Azide", "smiles": "*C", "aliases": ["N3"]},
+        {"label": "GoodO", "smiles": "*CC", "reverse": "Late2"},
+        {"label": "Twice", "smiles": "*CC", "smiles": "*C"},
+        {"label": "ExplicitH", "smiles": "*C[H]"}
     ]}"#;
     let (presets, errors) = parse(text, true);
     let labels: Vec<_> = presets.iter().map(|p| p.label.as_str()).collect();
-    assert_eq!(labels, ["Good", "Ring"]);
+    assert_eq!(labels, ["Good", "Ring", "Late2"]);
     assert!(presets.iter().all(|p| p.user));
     assert!(!presets[1].contract);
-    assert_eq!(errors.len(), 11, "{errors:#?}");
+    assert_eq!(errors.len(), 17, "{errors:#?}");
     for (error, expected) in errors.iter().zip([
         "Group 2 (Two): SMILES must start with the single *",
         "Group 3 (Late): SMILES must start",
@@ -137,6 +144,12 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         "Group 11 (Double): The * attachment must use a single bond",
         "Group 12 (Radical): Radicals are not supported",
         "Group 13 (A,B): Label \"A,B\" must be 1-32 characters without spaces or commas",
+        "Group 14 (Heavy): Isotopes are not supported",
+        "Group 15 (Typo): unknown field `smile`",
+        "Group 17 (Azide): \"N3\" is a built-in group",
+        "Group 18 (GoodO): \"Late2\" is defined twice",
+        "Group 19 (Twice): duplicate field `smiles`",
+        "Group 20 (ExplicitH): Write hydrogens implicitly",
     ]) {
         assert!(error.starts_with(expected), "{error}");
     }
