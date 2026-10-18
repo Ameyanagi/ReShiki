@@ -69,12 +69,14 @@ pub enum LabelAttachment {
     #[default]
     Auto,
     Left,
+    /// Centered on the atom, as before attachment glyphs existed.
+    Center,
     Right,
     /// A zero-based character of the label, clamped to its last character.
     Character(u8),
 }
 impl LabelAttachment {
-    pub const SIDES: [Self; 3] = [Self::Auto, Self::Left, Self::Right];
+    pub const SIDES: [Self; 4] = [Self::Auto, Self::Left, Self::Center, Self::Right];
     pub fn is_auto(&self) -> bool {
         *self == Self::Auto
     }
@@ -97,6 +99,7 @@ impl LabelAttachment {
                     .then_some(range)
             }
             Self::Left => Some(crate::abbreviations::anchor_range(text, false)),
+            Self::Center => None,
             Self::Right => Some(crate::abbreviations::anchor_range(text, true)),
             Self::Character(index) => text
                 .char_indices()
@@ -109,6 +112,7 @@ impl LabelAttachment {
     pub fn cdxml(self) -> Option<&'static str> {
         match self {
             Self::Left => Some("Left"),
+            Self::Center => Some("Center"),
             Self::Right => Some("Right"),
             Self::Auto | Self::Character(_) => None,
         }
@@ -116,6 +120,7 @@ impl LabelAttachment {
     pub fn from_cdxml(value: &str) -> Self {
         match value {
             "Left" => Self::Left,
+            "Center" => Self::Center,
             "Right" => Self::Right,
             _ => Self::Auto,
         }
@@ -126,6 +131,7 @@ impl std::fmt::Display for LabelAttachment {
         match self {
             Self::Auto => f.write_str("Automatic"),
             Self::Left => f.write_str("Flush left"),
+            Self::Center => f.write_str("Centered"),
             Self::Right => f.write_str("Flush right"),
             Self::Character(index) => write!(f, "Character {}", u16::from(*index) + 1),
         }
@@ -162,14 +168,26 @@ fn bond_directions(atom: &Atom, doc: &Document) -> Vec<Point> {
         .collect()
 }
 
-/// The horizontal side a label's bonds arrive from: Some(true) from the
-/// right, Some(false) from the left, None within 22.5 degrees of vertical.
-pub(crate) fn bond_side(atom: &Atom, doc: &Document) -> Option<bool> {
+/// The glyph of this atom's free text label that its bonds meet, or None to
+/// center the label. The side is horizontal unless the bond is within 22.5
+/// degrees of vertical. Automatic internal labels (two or more bonds) stay
+/// centered, since text toward either side could hide a bond.
+pub(crate) fn attachment_range(
+    atom: &Atom,
+    doc: &Document,
+    text: &str,
+) -> Option<std::ops::Range<usize>> {
+    let attachment = atom.display.label_attachment;
     let directions = bond_directions(atom, doc);
+    if attachment.is_auto() && directions.len() > 1 {
+        return None;
+    }
     let sum_x = directions.iter().map(|p| p.x).sum::<f32>();
     let sum_y = directions.iter().map(|p| p.y).sum::<f32>();
     let vertical_cone = (22.5_f32).to_radians().tan();
-    (sum_x.abs() > 0.1 && sum_x.abs() >= sum_y.abs() * vertical_cone).then_some(sum_x > 0.)
+    let side =
+        (sum_x.abs() > 0.1 && sum_x.abs() >= sum_y.abs() * vertical_cone).then_some(sum_x > 0.);
+    attachment.range(text, side)
 }
 
 /// Resolve the side of an atom-label appendage without changing chemistry or

@@ -30,12 +30,13 @@ nearest the bonds: the first atom when they arrive from the left, the last
 when they arrive from the right (the first atom for vertical bonds). Text
 naming no atom (Boc, M) stays centered, as does text whose other letters
 would lie between the atom and a horizontal bond (MeO bonded from the left),
-which would otherwise hide the bond. Contracted groups use the same rule on their displayed spelling, so
+which would otherwise hide the bond. Automatic labels with two or more bonds
+stay centered too. Contracted groups use the same rule on their displayed spelling, so
 a group without a reverse spelling still attaches at its anchor (OAc read
 from the right attaches at O, not at Ac). **Bond attachment (text labels)**
-overrides it per atom: **Flush left**/**Flush right** attach at the first or
+overrides it per atom: **Centered** centers the label, **Flush left**/**Flush right** attach at the first or
 last atom, and **Character N** at that character. Native files store the
-choice as `label_attachment`; CDXML/CDX write and read flush left/right as the
+choice as `label_attachment`; CDXML/CDX write and read flush left/center/right as the
 text's `LabelJustification`. A chosen character has no ChemDraw equivalent and
 is native only; changing the text returns it to Automatic.
 

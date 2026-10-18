@@ -375,6 +375,11 @@ fn flush_label_attachment_round_trips_as_chemdraw_justification() {
             LabelAttachment::Right,
         ),
         (LabelAttachment::Auto, None, LabelAttachment::Auto),
+        (
+            LabelAttachment::Center,
+            Some("Center"),
+            LabelAttachment::Center,
+        ),
         // A chosen character has no ChemDraw equivalent.
         (LabelAttachment::Character(1), None, LabelAttachment::Auto),
     ] {

@@ -82,6 +82,25 @@ fn text_spelled_for_the_other_side_stays_centered_and_keeps_its_bond() -> Result
 }
 
 #[test]
+fn automatic_internal_labels_stay_centered_and_keep_both_bonds() -> Result<(), String> {
+    let mut doc = Document::default();
+    let id = doc.add_atom("C", Point::new(0., 0.));
+    let left = doc.add_atom("C", Point::new(-42., 0.));
+    let right = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(left, id, 1, "plain");
+    doc.add_bond(id, right, 1, "plain");
+    let mut doc = apply(&doc, id, "MeO", Mode::Text)?;
+    assert_eq!(glyph_at_atom(&doc, id)?, 'e');
+    for bond in &doc.bonds {
+        assert!(bond_segment(&doc, bond, None).is_some());
+    }
+    // An explicit choice still applies to an internal label.
+    doc.atom_mut(id).ok_or("Atom")?.display.label_attachment = LabelAttachment::Right;
+    assert_eq!(glyph_at_atom(&doc, id)?, 'O');
+    Ok(())
+}
+
+#[test]
 fn vertical_bonds_attach_at_the_first_atom() -> Result<(), String> {
     for text in ["MeO", "AcS"] {
         let mut doc = Document::default();
@@ -130,6 +149,7 @@ fn label_attachment_overrides_choose_flush_side_or_character() -> Result<(), Str
         ("MeO", LabelAttachment::Character(30), 'O'),
         ("SPh", LabelAttachment::Character(2), 'h'),
         ("Boc", LabelAttachment::Left, 'B'),
+        ("MeO", LabelAttachment::Center, 'e'),
     ] {
         let (mut doc, id) = labeled(text, Mode::Text, false)?;
         doc.atom_mut(id).ok_or("Atom")?.display.label_attachment = attachment;

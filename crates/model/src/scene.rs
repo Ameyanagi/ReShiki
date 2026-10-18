@@ -230,7 +230,7 @@ fn atom_label_runs_with_charge_layout(
         .as_ref()
         .map_or_else(|| text_width(label, size), |layout| layout.width);
     let attached = (free_text && condensed.is_none())
-        .then(|| attachment.range(label, crate::atom_labels::bond_side(a, doc)))
+        .then(|| crate::atom_labels::attachment_range(a, doc, label))
         .flatten();
     let anchor_x = attached.map_or(element_width / 2., |range| {
         let width = |end: usize| match scripts.as_ref().filter(|_| layout.is_some()) {
