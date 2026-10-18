@@ -85,8 +85,8 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
   [CDXML exchange](#cdxml-exchange).
 - Only straight arrows without target attachments carry condition text.
   Bending an arrow or attaching its ends releases its labels as ordinary
-  text. Text that was already beside an arrow attaches only when you move or
-  retype it.
+  text. Text that was already beside an arrow attaches only when you move it;
+  editing it in place leaves it unattached.
 - Only `.rsk` files keep the link between an arrow and its condition text.
   CDXML/CDX, SVG, PDF and PNG keep the text and the arrow where they are.
 
@@ -120,7 +120,7 @@ caption. Every edit re-checks the labels in the same Undo step:
 
 1. Text dragged on its own re-centres in its slot, changes side, or detaches
    once it leaves both slots.
-2. New, moved or retyped text attaches when its centre lies within the arrow span (or
+2. New or moved text attaches when its centre lies within the arrow span (or
    the text spans the arrow midpoint) and it is no more than one bond length
    beyond the attached position. The nearest free side wins. Arrows that the
    same edit created or moved, such as pasted schemes, do not capture text.

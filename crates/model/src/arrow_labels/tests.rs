@@ -367,7 +367,7 @@ fn an_arrow_grown_to_its_text_follows_it_back_down() {
 }
 
 #[test]
-fn retyping_text_beside_an_arrow_attaches_it() {
+fn editing_text_already_beside_an_arrow_leaves_it_in_place() {
     let mut doc = scheme();
     doc.annotations.push(Annotation {
         id: 9,
@@ -375,9 +375,13 @@ fn retyping_text_beside_an_arrow_attaches_it() {
         text: "heat".into(),
         format: TextFormat::default(),
     });
+    let before = doc.annotations[0].position;
     edit(&mut doc, |doc| doc.annotations[0].text = "heat, 2 h".into());
+    assert!(doc.arrow_labels.is_empty());
+    assert_eq!(doc.annotations[0].position, before);
+    // Moving it attaches.
+    edit(&mut doc, |doc| doc.translate(&[9], 1., 0.));
     assert_eq!(side(&doc, 9), Some(Side::Above));
-    assert_centred(&doc, 9);
 }
 
 #[test]

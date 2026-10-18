@@ -226,13 +226,6 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             .is_some_and(|a| old_arrows.get(&id) == Some(&(a.start, a.end)))
     };
     let moved = |a: &Annotation| old_texts.get(&a.id) != Some(&a.position);
-    let retyped = |a: &Annotation| {
-        before
-            .annotations
-            .iter()
-            .find(|b| b.id == a.id)
-            .is_some_and(|b| b.text != a.text || b.format != a.format)
-    };
     // 1. Independently dragged labels.
     let labels = std::mem::take(&mut doc.arrow_labels);
     let mut kept: Vec<ArrowLabel> = Vec::with_capacity(labels.len());
@@ -269,7 +262,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             !attached.contains(&a.id)
                 && !captions.contains(&a.id)
                 && !a.text.trim().is_empty()
-                && (moved(a) || retyped(a))
+                && moved(a)
         })
         .map(|a| a.id)
         .collect();
