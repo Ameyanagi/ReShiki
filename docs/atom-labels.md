@@ -27,8 +27,10 @@ Bonds meet the attachment atom inside a multi-atom text label (MeO, AcS,
 SPh), not the label's center. Automatic attachment skips substituent
 nicknames (Me, Ac, Bn, Ph, TBS…), hydrogens and counts, and uses the atom
 nearest the bonds: the first atom when they arrive from the left, the last
-when they arrive from the right. Text naming no atom (Boc, M) stays
-centered. Contracted groups use the same rule on their displayed spelling, so
+when they arrive from the right (the first atom for vertical bonds). Text
+naming no atom (Boc, M) stays centered, as does text whose other letters
+would lie between the atom and a horizontal bond (MeO bonded from the left),
+which would otherwise hide the bond. Contracted groups use the same rule on their displayed spelling, so
 a group without a reverse spelling still attaches at its anchor (OAc read
 from the right attaches at O, not at Ac). **Bond attachment (text labels)**
 overrides it per atom: **Flush left**/**Flush right** attach at the first or

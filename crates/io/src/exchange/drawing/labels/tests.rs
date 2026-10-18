@@ -344,6 +344,27 @@ fn generic_owned_labels_keep_their_existing_runs() {
 }
 
 #[test]
+fn text_label_justification_is_inherited_from_the_document() {
+    use crate::atom_labels::LabelAttachment;
+    for (root, text, expected) in [
+        (" LabelJustification='Left'", "", LabelAttachment::Left),
+        (
+            " LabelJustification='Left'",
+            " LabelJustification='Right'",
+            LabelAttachment::Right,
+        ),
+        ("", "", LabelAttachment::Auto),
+    ] {
+        let xml = format!(
+            "<CDXML BondLength='30'{root}><page><fragment id='1'><n id='3' p='0 0' NodeType='Unspecified' Element='0'><t{text}><s>MeO2C</s></t></n></fragment></page></CDXML>"
+        );
+        let document = import_variable(&xml);
+        let atom = document.atoms.first().unwrap();
+        assert_eq!(atom.display.label_attachment, expected, "{root}{text}");
+    }
+}
+
+#[test]
 fn flush_label_attachment_round_trips_as_chemdraw_justification() {
     use crate::atom_labels::LabelAttachment;
     for (attachment, justification, restored) in [

@@ -78,12 +78,24 @@ impl LabelAttachment {
     pub fn is_auto(&self) -> bool {
         *self == Self::Auto
     }
-    /// Byte range of the attachment glyph in `text`. `faces_left` is the
-    /// automatic side: true when the bonds arrive from the right. Automatic
-    /// text naming no atom (Boc, M, custom text) stays centered: None.
-    pub fn range(self, text: &str, faces_left: bool) -> Option<std::ops::Range<usize>> {
+    /// Byte range of the attachment glyph in `text`. `side` is where the
+    /// bonds arrive from: Some(true) the right, Some(false) the left, None
+    /// vertically. Automatic text stays centered (None) when it names no atom
+    /// (Boc, M) or when other text would lie between the atom and its bond
+    /// (MeO bonded from the left), which would hide the bond.
+    pub fn range(self, text: &str, side: Option<bool>) -> Option<std::ops::Range<usize>> {
         match self {
-            Self::Auto => crate::abbreviations::atom_anchor(text, faces_left),
+            Self::Auto => {
+                let range = crate::abbreviations::atom_anchor(text, side == Some(true))?;
+                let between = match side {
+                    Some(true) => text.get(range.end..),
+                    Some(false) => text.get(..range.start),
+                    None => None,
+                };
+                between
+                    .is_none_or(|between| !between.chars().any(char::is_alphabetic))
+                    .then_some(range)
+            }
             Self::Left => Some(crate::abbreviations::anchor_range(text, false)),
             Self::Right => Some(crate::abbreviations::anchor_range(text, true)),
             Self::Character(index) => text
@@ -126,15 +138,9 @@ pub fn free_text(atom: &Atom, doc: &Document) -> bool {
     atom.element == "*" && atom.display.variable.is_some() && !doc.generic.owns_label(atom.id)
 }
 
-/// Resolve the side of an atom-label appendage without changing chemistry or
-/// saved preferences. Terminal labels retain the usual inline form.
-pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPosition {
-    use HydrogenPosition as H;
-    if atom.display.hydrogen_position != H::Auto {
-        return atom.display.hydrogen_position;
-    }
-    let directions: Vec<_> = doc
-        .bonds
+/// Unit directions from the atom toward each visibly bonded neighbor.
+fn bond_directions(atom: &Atom, doc: &Document) -> Vec<Point> {
+    doc.bonds
         .iter()
         .filter_map(|bond| {
             let id = if bond.a == atom.id {
@@ -153,7 +159,27 @@ pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPositio
             let length = dx.hypot(dy);
             (length > 0.001).then(|| Point::new(dx / length, dy / length))
         })
-        .collect();
+        .collect()
+}
+
+/// The horizontal side a label's bonds arrive from: Some(true) from the
+/// right, Some(false) from the left, None within 22.5 degrees of vertical.
+pub(crate) fn bond_side(atom: &Atom, doc: &Document) -> Option<bool> {
+    let directions = bond_directions(atom, doc);
+    let sum_x = directions.iter().map(|p| p.x).sum::<f32>();
+    let sum_y = directions.iter().map(|p| p.y).sum::<f32>();
+    let vertical_cone = (22.5_f32).to_radians().tan();
+    (sum_x.abs() > 0.1 && sum_x.abs() >= sum_y.abs() * vertical_cone).then_some(sum_x > 0.)
+}
+
+/// Resolve the side of an atom-label appendage without changing chemistry or
+/// saved preferences. Terminal labels retain the usual inline form.
+pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPosition {
+    use HydrogenPosition as H;
+    if atom.display.hydrogen_position != H::Auto {
+        return atom.display.hydrogen_position;
+    }
+    let directions = bond_directions(atom, doc);
     let sum_x = directions.iter().map(|p| p.x).sum::<f32>();
     let sum_y = directions.iter().map(|p| p.y).sum::<f32>();
     let left = sum_x > 0.1;
@@ -329,12 +355,15 @@ impl Default for StereoDisplay {
 }
 impl AtomDisplay {
     /// Replacing a label also discards formatting tied to its old byte offsets.
+    /// A chosen attachment character is reset only when the text changes.
     pub fn set_variable(&mut self, variable: Option<String>) {
-        self.variable = variable;
-        self.label_scripts.clear();
-        if matches!(self.label_attachment, LabelAttachment::Character(_)) {
+        if self.variable != variable
+            && matches!(self.label_attachment, LabelAttachment::Character(_))
+        {
             self.label_attachment = LabelAttachment::Auto;
         }
+        self.variable = variable;
+        self.label_scripts.clear();
     }
     pub fn is_default(&self) -> bool {
         self == &Self::default()

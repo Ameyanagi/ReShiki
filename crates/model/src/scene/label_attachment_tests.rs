@@ -9,7 +9,7 @@ use crate::{
 fn labeled(text: &str, mode: Mode, from_left: bool) -> Result<(Document, u64), String> {
     let mut doc = Document::default();
     let id = doc.add_atom("C", Point::new(40., 20.));
-    let other = doc.add_atom("C", Point::new(if from_left { 20. } else { 60. }, 20.));
+    let other = doc.add_atom("C", Point::new(if from_left { -2. } else { 82. }, 20.));
     doc.add_bond(other, id, 1, "plain");
     Ok((apply(&doc, id, text, mode)?, id))
 }
@@ -45,10 +45,8 @@ fn text_labels_attach_bonds_to_their_attachment_atom() -> Result<(), String> {
     for (text, from_left, expected) in [
         ("SPh", true, 'S'),
         ("SPh", false, 'S'),
-        ("AcS", true, 'S'),
         ("AcS", false, 'S'),
         ("PhS", false, 'S'),
-        ("MeO", true, 'O'),
         ("MeO", false, 'O'),
         ("OMe", true, 'O'),
         ("OMe", false, 'O'),
@@ -67,6 +65,32 @@ fn text_labels_attach_bonds_to_their_attachment_atom() -> Result<(), String> {
             expected,
             "{text}, bond from {side}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn text_spelled_for_the_other_side_stays_centered_and_keeps_its_bond() -> Result<(), String> {
+    // A bond from the left would have to cross Me or Ac to reach O or S.
+    for (text, centered) in [("MeO", 'e'), ("AcS", 'c')] {
+        let (doc, id) = labeled(text, Mode::Text, true)?;
+        assert_eq!(glyph_at_atom(&doc, id)?, centered, "{text}");
+        let bond = doc.bonds.first().ok_or("Bond")?;
+        assert!(bond_segment(&doc, bond, None).is_some(), "{text}");
+    }
+    Ok(())
+}
+
+#[test]
+fn vertical_bonds_attach_at_the_first_atom() -> Result<(), String> {
+    for text in ["MeO", "AcS"] {
+        let mut doc = Document::default();
+        let id = doc.add_atom("C", Point::new(40., 20.));
+        let other = doc.add_atom("C", Point::new(40., 62.));
+        doc.add_bond(other, id, 1, "plain");
+        let doc = apply(&doc, id, text, Mode::Text)?;
+        let expected = text.chars().last().ok_or("Text")?;
+        assert_eq!(glyph_at_atom(&doc, id)?, expected, "{text}");
     }
     Ok(())
 }
@@ -163,6 +187,10 @@ fn changing_the_text_resets_a_character_attachment_only() {
         label_attachment: LabelAttachment::Character(2),
         ..Default::default()
     };
+    display.variable = Some("MeO".into());
+    // Formatting-only edits reapply the same text.
+    display.set_variable(Some("MeO".into()));
+    assert_eq!(display.label_attachment, LabelAttachment::Character(2));
     display.set_variable(Some("OMe".into()));
     assert_eq!(display.label_attachment, LabelAttachment::Auto);
     display.label_attachment = LabelAttachment::Right;

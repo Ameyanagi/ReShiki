@@ -83,11 +83,17 @@ pub(crate) fn drawing_variables(xml: &str) -> Result<(String, Variables)> {
             && (node.attr("Element") == Some("0") || missing_element)
         {
             let mut label = String::new();
-            let attachment = tree
-                .children(index, "t")?
-                .first()
-                .and_then(|t| tree.node(*t).ok())
-                .and_then(|t| t.attr("LabelJustification"))
+            // The text's justification, else one inherited from its node,
+            // fragment, page or document.
+            let mut owner = tree.children(index, "t")?.first().copied().or(Some(index));
+            let mut justification = None;
+            while let Some(current) = owner.filter(|_| justification.is_none()) {
+                let element = tree.node(current)?;
+                justification = element.attr("LabelJustification").map(str::to_owned);
+                owner = element.parent;
+            }
+            let attachment = justification
+                .as_deref()
                 .map(crate::atom_labels::LabelAttachment::from_cdxml)
                 .unwrap_or_default();
             for text in tree.children(index, "t")? {
